@@ -1,0 +1,22 @@
+#!/bin/sh
+# loft-node .deb postrm: reload systemd; purge removes data and the loft user.
+set -e
+
+case "$1" in
+remove)
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl daemon-reload >/dev/null 2>&1 || true
+	fi
+	;;
+purge)
+	rm -rf /var/lib/loft /etc/loft
+	if id loft >/dev/null 2>&1; then
+		deluser --system loft >/dev/null 2>&1 || true
+	fi
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl daemon-reload >/dev/null 2>&1 || true
+	fi
+	;;
+esac
+
+exit 0

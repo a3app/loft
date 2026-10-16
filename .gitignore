@@ -1,0 +1,39 @@
+/loft
+/loft-node
+/loft-front
+/loft-probe
+/bin/
+dist/
+*.o
+clients/macOS/build/
+clients/macOS/design/shots/
+clients/mobile/build/
+clients/Android/.gradle/
+clients/Android/app/build/
+clients/Android/build/
+brand/__pycache__/
+brand/concepts/
+.DS_Store
+
+# keys, certs, env
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.pass
+.env
+*.env
+!.env.example
+
+# local / operator secrets
+secrets/
+private/
+*.local.yaml
+*.local.yml
+*.instance
+
+# research and other local-only notes (never push)
+research_notes/
+reports/

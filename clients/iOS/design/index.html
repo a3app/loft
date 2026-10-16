@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — iOS</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --ink-2: #241f1b;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+      --ios-bg: #f2f2f7;
+      --ios-card: #ffffff;
+      --ios-ink: #1c1c1e;
+      --ios-mute: #6c6c70;
+      --ios-line: #c6c6c8;
+      --ios-blue: #007aff;
+      --ios-green: #34c759;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      min-height: 100%;
+    }
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+      overflow: auto;
+    }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 14px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav button {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 6px 10px; border-radius: 8px; cursor: pointer;
+    }
+    nav button:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang { display: flex; gap: 4px; margin: 4px 8px 10px; }
+    .lang button { flex: 1; text-align: center; padding: 6px 0; font-weight: 600; font-size: 12px; }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage-wrap {
+      padding: 28px; display: flex; align-items: center; justify-content: center;
+      min-height: 0;
+    }
+
+    .phone {
+      width: 320px; height: 660px;
+      background: #181512;
+      border: 10px solid #2c2622;
+      border-radius: 42px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      color: var(--snow);
+    }
+    .island {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 96px; height: 22px; background: #0a0908; border-radius: 12px; z-index: 4;
+    }
+    .sb {
+      height: 48px; padding: 14px 22px 0;
+      display: flex; justify-content: space-between; font-size: 12px; font-weight: 600;
+      color: var(--snow);
+    }
+    .home-ind {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      width: 110px; height: 4px; background: #3a332e; border-radius: 2px; z-index: 4;
+    }
+    .screen {
+      position: absolute; inset: 0;
+      padding: 48px 16px 22px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .screen .scroll { flex: 1; overflow: auto; min-height: 0; padding-bottom: 8px; }
+    .hidden { display: none !important; }
+
+    .lamp {
+      width: 12px; height: 12px; border-radius: 3px; background: var(--mute);
+      display: inline-block; vertical-align: middle;
+    }
+    .lamp.on { background: var(--lamp); box-shadow: 0 0 12px rgba(232,184,74,.55); }
+    .lamp.wait { background: var(--lamp-hi); box-shadow: 0 0 8px rgba(243,210,122,.35); }
+
+    .hero { text-align: center; padding: 4px 8px 0; }
+    .hero .mark { width: 56px; height: 56px; margin: 0 auto 8px; }
+    .hero h1 { margin: 0; font-size: 22px; letter-spacing: -0.04em; font-weight: 600; }
+    .hero .sub { color: var(--mute); font-size: 12px; margin-top: 6px; line-height: 1.4; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin: 10px auto 0; padding: 4px 12px 4px 8px;
+      background: #211c19; border-radius: 12px; cursor: pointer;
+      font-size: 11.5px; color: var(--mute);
+    }
+    .pill i {
+      width: 7px; height: 7px; border-radius: 3.5px; background: var(--mute);
+    }
+    .pill.on i { background: var(--lamp); }
+    .pill.err i { background: var(--err); }
+
+    .go, .ghost, .danger {
+      border: 0; border-radius: 14px; padding: 12px 16px; cursor: pointer;
+      font: 600 15px var(--ui); width: 100%;
+    }
+    .go { background: var(--lamp); color: var(--ink); }
+    .ghost { background: #2a2420; color: var(--snow); }
+    .danger { background: rgba(226,75,75,.15); color: #f0a0a0; }
+    .btns { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 10px 0 0; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+
+    .cards { display: flex; gap: 6px; margin-top: 16px; }
+    .plate {
+      flex: 1; background: #211c19; border-radius: 10px; padding: 8px 8px 10px; min-width: 0;
+    }
+    .plate .k {
+      font-size: 9px; letter-spacing: .08em; color: var(--mute); text-transform: uppercase; font-weight: 600;
+    }
+    .plate .v {
+      font-family: var(--mono); font-size: 11px; margin-top: 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .spark {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-top: 12px; color: var(--mute); font-size: 11.5px;
+    }
+    .spark .l { letter-spacing: .12em; color: var(--lamp); }
+    .home.simple .cards, .home.simple .spark { display: none; }
+    .home.busy .spark .r { display: none; }
+    .home.busy .spark .l { letter-spacing: 0; color: var(--mute); }
+
+    .foot {
+      display: flex; gap: 6px; margin-top: auto; padding-top: 12px;
+      border-top: 1px solid var(--line); flex-shrink: 0;
+    }
+    .foot button {
+      flex: 1; border: 0; border-radius: 10px; padding: 8px 4px;
+      font: 600 9.5px var(--ui); background: #2a2420; color: var(--snow); cursor: pointer;
+      white-space: normal; line-height: 1.2; min-height: 36px;
+    }
+
+    .head {
+      display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
+    }
+    .head .title {
+      font-size: 20px; font-weight: 600; letter-spacing: -0.03em; margin: 0; flex: 1;
+    }
+    .head .plus {
+      width: 28px; height: 28px; border: 0; border-radius: 8px; cursor: pointer;
+      background: var(--lamp); color: var(--ink); font: 600 16px var(--ui);
+    }
+    .head .qr {
+      border: 0; border-radius: 8px; padding: 6px 8px; cursor: pointer;
+      background: #2a2420; color: var(--snow); font: 600 10px var(--ui);
+      max-width: 118px; line-height: 1.15; white-space: normal;
+    }
+    .subline { color: var(--mute); font-size: 12.5px; margin: 0 0 12px; }
+
+    label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
+    label.field input, label.field select, label.field textarea {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 10px; padding: 10px 12px; font: 400 14px var(--ui);
+    }
+    label.field input.mono, label.field textarea { font-family: var(--mono); font-size: 12px; }
+    .secret {
+      display: flex; align-items: stretch; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; border-radius: 10px;
+    }
+    .secret input {
+      flex: 1; background: none; border: 0; color: var(--snow); padding: 10px 12px;
+      font: 400 11px var(--mono); min-width: 0;
+    }
+    .secret .eye {
+      border: 0; background: none; color: var(--mute); font: 600 11px var(--ui);
+      padding: 0 12px; cursor: pointer; white-space: nowrap;
+    }
+
+    .seg {
+      display: flex; background: #211c19; border-radius: 10px; padding: 3px; gap: 2px; margin: 0 0 14px;
+    }
+    .seg button {
+      flex: 1; border: 0; background: none; color: var(--stone);
+      font: 600 11px var(--ui); padding: 8px 2px; border-radius: 8px; cursor: pointer;
+    }
+    .seg button.on { background: #2a2420; color: var(--snow); }
+    .seg.cap { background: transparent; padding: 0; gap: 6px; justify-content: flex-end; }
+    .type-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
+    .type-row .k { flex: 1; font-size: 13.5px; }
+    .type-row .seg.cap { flex: 0 0 auto; width: 168px; margin: 0; }
+    .seg.cap button {
+      background: #211c19; border-radius: 999px; padding: 7px 8px; font-size: 12px;
+    }
+    .seg.cap button.on { background: var(--lamp); color: var(--ink); }
+
+    .set-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--line);
+    }
+    .set-row .k { font-size: 14px; }
+    .set-row .s { color: var(--mute); font-size: 11px; margin-top: 2px; line-height: 1.35; }
+    .set-row select {
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 8px; padding: 6px 8px; font: 400 12px var(--ui); max-width: 120px;
+    }
+    .toggle {
+      width: 42px; height: 26px; border-radius: 13px; background: #3a332e; position: relative; flex-shrink: 0;
+    }
+    .toggle i {
+      position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #d8cfc4;
+    }
+    .toggle.on { background: var(--lamp); }
+    .toggle.on i { left: 19px; background: var(--ink); }
+    .links {
+      display: flex; justify-content: center; gap: 12px; margin-top: 16px;
+    }
+    .links button {
+      background: none; border: 0; color: var(--mute); font: 500 11.5px var(--ui); cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .card {
+      background: #211c19; border: 1px solid #2e2824; border-radius: 12px;
+      padding: 8px 10px; margin-bottom: 0; display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; gap: 8px;
+    }
+    .card .n { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card .m { color: var(--mute); font-size: 11px; margin-top: 2px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card.on { border-color: rgba(232,184,74,.45); }
+    .card .grow { flex: 1; min-width: 0; overflow: hidden; }
+    .card .side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+    .card .sk { font-size: 10.5px; color: var(--stone); }
+    .card.on .sk { color: var(--lamp); }
+    .mini {
+      flex-shrink: 0; width: 90px; height: 28px; border: 0; border-radius: 10px;
+      padding: 0 4px; font: 600 10px var(--ui); cursor: pointer;
+      background: #2a2420; color: var(--snow);
+      display: flex; align-items: center; justify-content: center;
+      white-space: nowrap;
+    }
+    .mini.lamp { background: var(--lamp); color: var(--ink); }
+    .ghost-link {
+      background: none; border: 0; color: var(--mute); font: 500 11.5px var(--ui);
+      cursor: pointer; padding: 0;
+    }
+    .chip {
+      display: none; border: 0; border-radius: 8px; padding: 4px 7px; cursor: pointer;
+      font: 600 10px var(--ui); background: rgba(232,184,74,.16); color: var(--lamp);
+      white-space: nowrap;
+    }
+    .card.on .chip { display: inline-block; }
+    .swipe {
+      position: relative; margin-bottom: 8px; border-radius: 12px; overflow: hidden;
+      touch-action: pan-y;
+    }
+    .swipe .behind {
+      position: absolute; inset: 0;
+      display: flex; justify-content: space-between;
+    }
+    .swipe .act {
+      width: 84px; display: flex; align-items: center; justify-content: center;
+      font: 600 12px var(--ui); border: 0; cursor: pointer; color: var(--ink);
+    }
+    .swipe .act-edit { background: var(--lamp); }
+    .swipe .act-del { background: var(--err); color: #fff; margin-left: auto; }
+    .swipe .card { margin: 0; position: relative; z-index: 1; transition: transform .18s ease; }
+    .swipe.open-l .card { transform: translateX(84px); }
+    .swipe.open-r .card { transform: translateX(-84px); }
+    .scrim {
+      position: absolute; inset: 0; background: rgba(10,9,8,.5);
+      z-index: 6; display: flex; align-items: flex-end; padding: 16px 16px 28px;
+    }
+    .scrim.mid { align-items: center; }
+    .sheet {
+      background: #2a2420; border-radius: 16px; width: 100%; overflow: hidden;
+    }
+    .sheet h3 { margin: 0; padding: 16px 16px 6px; font-size: 13px; color: var(--mute); font-weight: 600; }
+    .sheet p.sub { margin: 0 16px 10px; font-size: 12px; color: var(--stone); line-height: 1.4; }
+    .sheet button.row {
+      display: flex; width: 100%; justify-content: space-between; align-items: center;
+      padding: 14px 16px; background: none; border: 0; border-top: 1px solid var(--line);
+      color: var(--snow); font: 500 15px var(--ui); cursor: pointer; text-align: left;
+    }
+    .sheet button.row .s { color: var(--mute); font-size: 11px; font-weight: 400; }
+    .sheet button.row.danger { color: #f0a0a0; }
+    .scrim button.cancel {
+      display: block; width: 100%; margin-top: 8px; border: 0;
+      background: #211c19; color: var(--snow); border-radius: 14px;
+      padding: 14px 16px; font: 600 15px var(--ui); cursor: pointer;
+    }
+    .ctx {
+      position: absolute; left: 36px; right: 36px; top: 168px; z-index: 7;
+      background: #2e2824; border-radius: 14px; overflow: hidden;
+      box-shadow: 0 18px 40px rgba(0,0,0,.45);
+    }
+    .ctx .preview { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+    .ctx button {
+      display: flex; width: 100%; justify-content: space-between; align-items: center;
+      padding: 13px 16px; background: none; border: 0; border-bottom: 1px solid var(--line);
+      color: var(--snow); font: 500 15px var(--ui); cursor: pointer;
+    }
+    .ctx button:last-child { border-bottom: 0; }
+    .ctx button.danger { color: #f0a0a0; }
+    .row-2 { display: flex; gap: 8px; }
+    .row-2 .go, .row-2 .ghost { flex: 1; }
+    .finder {
+      position: relative;
+      height: 220px; margin: 8px 0 12px;
+      background: #0a0908;
+      border-radius: 16px; overflow: hidden;
+    }
+    .finder .noise {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 40% 35%, rgba(232,184,74,.12), transparent 50%),
+        repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(243,237,228,.03) 3px, rgba(243,237,228,.03) 4px);
+    }
+    .finder .frame { position: absolute; inset: 28px; border: 0; }
+    .finder .frame i {
+      position: absolute; width: 22px; height: 22px; border-color: var(--lamp); border-style: solid;
+    }
+    .finder .frame i:nth-child(1) { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .finder .frame i:nth-child(2) { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    .finder .frame i:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+    .finder .frame i:nth-child(4) { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+    .qr-fake {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 92px; height: 92px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+      padding: 6px; background: #f3ede4; border-radius: 4px;
+    }
+    .qr-fake b { background: #1a1714; border-radius: 0.5px; }
+    .qr-fake b.off { background: transparent; }
+    .paste {
+      display: block; width: 100%; min-height: 64px; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 10px; padding: 10px 12px; font: 400 11px var(--mono);
+      resize: none;
+    }
+    .spin {
+      width: 22px; height: 22px; border: 2px solid #2e2824; border-top-color: var(--lamp);
+      border-radius: 50%; margin: 0 auto 10px; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .log {
+      flex: 1; background: #211c19; border-radius: 12px; padding: 12px;
+      font: 400 11px var(--mono); color: var(--stone); line-height: 1.55;
+      overflow: auto; white-space: pre-wrap; min-height: 0;
+    }
+    .about { text-align: center; }
+    .about .ver { color: var(--mute); font-size: 12.5px; margin-top: 4px; }
+    .about .kick { color: var(--mute); font-size: 11px; margin: 18px 0 8px; }
+    .protos { max-width: 280px; margin: 0 auto; }
+    .proto {
+      display: grid; grid-template-columns: 52px 1fr; gap: 4px 8px;
+      font-size: 12.5px; margin: 3px 0; text-align: left;
+    }
+    .proto .k { color: var(--mute); text-align: right; }
+    .proto .v { font-family: var(--mono); font-size: 10px; line-height: 1.35; }
+    .blurb { color: var(--stone); font-size: 13.5px; line-height: 1.4; margin: 22px 16px 0; white-space: pre-line; }
+    .made { color: var(--mute); font-size: 12px; margin-top: 28px; }
+    .made .heart { color: var(--lamp); }
+
+    .pair { display: flex; gap: 8px; margin-top: 8px; }
+    .pair .ghost, .pair .go { flex: 1; }
+    .end-row { display: flex; justify-content: space-between; margin-top: 8px; }
+    .end-row button {
+      background: none; border: 0; color: var(--mute); font: 500 12.5px var(--ui); cursor: pointer; padding: 8px 0;
+    }
+    .end-row button.danger { color: var(--copper); }
+
+    /* iOS Settings frame */
+    .ios {
+      width: 320px; height: 660px;
+      background: var(--ios-bg); color: var(--ios-ink);
+      border: 10px solid #2c2622; border-radius: 42px;
+      overflow: hidden; position: relative;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      font-size: 13px;
+    }
+    .ios .island { background: #111; }
+    .ios .sb { color: var(--ios-ink); }
+    .ios .home-ind { background: #c6c6c8; }
+    .ios main { padding: 52px 16px 24px; }
+    .ios h2 { margin: 0 0 4px; font-size: 28px; font-weight: 700; letter-spacing: -0.03em; }
+    .ios .cap { color: var(--ios-mute); margin: 0 0 14px; font-size: 12px; }
+    .ios-group { background: var(--ios-card); border-radius: 12px; overflow: hidden; }
+    .ios-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 14px; border-bottom: 0.5px solid var(--ios-line);
+    }
+    .ios-row:last-child { border-bottom: 0; }
+    .ios-row .l { font-size: 15px; }
+    .ios-row .r { color: var(--ios-mute); font-size: 14px; }
+    .ios-sw {
+      width: 48px; height: 30px; border-radius: 15px; background: var(--ios-green); position: relative;
+    }
+    .ios-sw i {
+      position: absolute; top: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fff;
+    }
+    .ios-status { color: var(--ios-green); font-size: 13px; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+        <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+        <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+      </svg>
+      loft
+    </div>
+    <p data-i="navCap">Макет iOS по живому GUI macOS. Туннель — Packet Tunnel.</p>
+    <div class="lang">
+      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+    </div>
+    <h4 data-i="hApp">Приложение</h4>
+    <button type="button" class="on" data-go="home" data-mode="on" data-i="nHome">Дом · в сети</button>
+    <button type="button" data-go="home" data-mode="off" data-i="nOff">Дом · выкл</button>
+    <button type="button" data-go="home" data-mode="connecting" data-i="nOpen">Дом · подключение</button>
+    <button type="button" data-go="home" data-mode="simple" data-i="nSimple">Дом · упрощенный</button>
+    <button type="button" data-go="list" data-i="nList">Подключения</button>
+    <button type="button" data-go="list" data-list="swipe" data-i="nSwipe">Список · свайп</button>
+    <button type="button" data-go="list" data-list="ctx" data-i="nCtx">Список · меню</button>
+    <button type="button" data-go="list" data-list="export" data-i="nExp">Список · экспорт</button>
+    <button type="button" data-go="edit" data-vpn="loft" data-edittab="main" data-i="nEdit">Правка</button>
+    <button type="button" data-go="edit" data-vpn="loft" data-edittab="adv" data-i="nEditAdv">Правка · расширенные</button>
+    <button type="button" data-go="edit" data-vpn="sstp" data-edittab="main" data-i="nEditSstp">Правка · SSTP</button>
+    <button type="button" data-go="edit" data-vpn="vless" data-edittab="main" data-i="nEditVless">Правка · VLESS</button>
+    <button type="button" data-go="scan" data-i="nScan">Сканер QR</button>
+    <button type="button" data-go="share" data-i="nShare">QR для шаринга</button>
+    <button type="button" data-go="onboard" data-step="1" data-i="nOnb">Онбординг · ключ</button>
+    <button type="button" data-go="onboard" data-step="2" data-i="nOnb2">Онбординг · адрес</button>
+    <button type="button" data-go="settings" data-settab="0" data-i="nSet">Настройки · общие</button>
+    <button type="button" data-go="settings" data-settab="1" data-i="nSetR">Настройки · маршрут</button>
+    <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · клиент</button>
+    <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
+    <button type="button" data-go="about" data-i="nAbout">О программе</button>
+    <h4>iOS</h4>
+    <button type="button" data-go="iosvpn" data-i="nIos">Настройки → VPN</button>
+  </nav>
+
+  <div class="stage-wrap">
+    <div class="phone" id="phone">
+      <div class="island"></div>
+      <div class="sb"><span>9:41</span><span>LTE</span></div>
+      <div class="home-ind"></div>
+
+      <div class="screen home" id="home">
+        <div class="scroll" style="display:flex;flex-direction:column">
+          <div class="hero">
+            <svg class="mark" id="homeMark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+              <path id="homeBody" fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+              <path id="homeWin" fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+            </svg>
+            <h1>loft</h1>
+            <div class="pill on" id="homePill" data-go="list">
+              <i></i><span id="homePillT" data-i="pillOn">Подключено: Home 0:12</span>
+            </div>
+          </div>
+          <div class="btns">
+            <button type="button" class="danger" id="homeAct" data-i="disconnect">Отключить</button>
+          </div>
+          <div class="cards" id="homeCards">
+            <div class="plate"><div class="k">OVERLAY</div><div class="v" id="overV">10.8.0.14</div></div>
+            <div class="plate"><div class="k" data-i="frontK">ФРОНТ</div><div class="v" id="frontV">get</div></div>
+            <div class="plate"><div class="k" data-i="tunK">ТУННЕЛЬ</div><div class="v" id="tunV">1280</div></div>
+          </div>
+          <div class="spark" id="homeSpark">
+            <span class="l" id="sparkL">▃▅▂▇▄▆▃▅▂▇</span>
+            <span class="r" id="sparkR">↓ 12.4 Мбит/с</span>
+          </div>
+        </div>
+        <div class="foot">
+          <button type="button" data-go="journal" data-i="journal">Журнал</button>
+          <button type="button" data-i="reset">Сбросить маршруты</button>
+          <button type="button" data-go="settings" data-i="settings">Настройки</button>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="list">
+        <div class="head">
+          <div class="title" data-i="conns">Подключения</div>
+          <button type="button" class="plus" data-go="edit" title="+">+</button>
+        </div>
+        <p class="subline" data-i="connsSub">Каждое — свой ключ и адрес. Активное одно.</p>
+        <div class="scroll">
+          <div class="swipe" data-id="home" data-kind="loft">
+            <div class="behind">
+              <button type="button" class="act act-edit" data-go="edit" data-i="edit">Править</button>
+              <button type="button" class="act act-del" data-del="Home" data-i="delete">Удалить</button>
+            </div>
+            <div class="card on">
+              <button type="button" class="mini lamp" data-i="disconnect">Отключить</button>
+              <div class="grow">
+                <div class="n">Home</div>
+                <div class="m">cdn.example.com</div>
+              </div>
+              <div class="side">
+                <span class="sk" data-i="active">активно</span>
+                <button type="button" class="ghost-link" data-go="edit" data-i="edit">Править</button>
+                <button type="button" class="chip" data-sheet="export" data-i="export">Экспорт</button>
+              </div>
+            </div>
+          </div>
+          <div class="swipe" data-id="office" data-kind="sstp">
+            <div class="behind">
+              <button type="button" class="act act-edit" data-go="edit" data-vpn="sstp" data-i="edit">Править</button>
+              <button type="button" class="act act-del" data-del="Office" data-i="delete">Удалить</button>
+            </div>
+            <div class="card">
+              <button type="button" class="mini" data-i="popConnect">Подключить</button>
+              <div class="grow">
+                <div class="n">Office</div>
+                <div class="m">vpn.example.com</div>
+              </div>
+              <div class="side">
+                <span class="sk">sstp</span>
+                <button type="button" class="ghost-link" data-go="edit" data-vpn="sstp" data-i="edit">Править</button>
+                <button type="button" class="chip" data-sheet="export" data-i="export">Экспорт</button>
+              </div>
+            </div>
+          </div>
+          <div class="swipe" data-id="travel" data-kind="vless">
+            <div class="behind">
+              <button type="button" class="act act-edit" data-go="edit" data-vpn="vless" data-i="edit">Править</button>
+              <button type="button" class="act act-del" data-del="Travel" data-i="delete">Удалить</button>
+            </div>
+            <div class="card">
+              <button type="button" class="mini" data-i="popConnect">Подключить</button>
+              <div class="grow">
+                <div class="n">Travel</div>
+                <div class="m">de1.example.com</div>
+              </div>
+              <div class="side">
+                <span class="sk">vless</span>
+                <button type="button" class="ghost-link" data-go="edit" data-vpn="vless" data-i="edit">Править</button>
+                <button type="button" class="chip" data-sheet="export" data-i="export">Экспорт</button>
+              </div>
+            </div>
+          </div>
+          <p class="hint" data-i="listHint">Свайп влево — удалить, вправо — править. Долгое нажатие — меню. Выбранное экспортируется как .loft. Тап по Office отключит Home: туннель на iOS один.</p>
+        </div>
+        <div class="foot">
+          <button type="button" data-go="scan" data-i="import">Импорт</button>
+          <button type="button" data-sheet="export" data-i="export">Экспорт</button>
+          <button type="button" data-go="settings" data-i="settings">Настройки</button>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="edit">
+        <div class="head">
+          <div class="title" data-i="editTitle">Подключение</div>
+          <button type="button" class="qr" data-go="scan" data-i="qr">QR</button>
+        </div>
+        <div class="scroll">
+          <label class="field"><span data-i="name">Имя</span>
+            <input value="Home" />
+          </label>
+          <div class="type-row">
+            <div class="k" data-i="vpnType">Тип VPN</div>
+            <div class="seg cap" id="vpnSeg">
+              <button type="button" class="on" data-vpn="loft" data-i="vpnLoft">loft</button>
+              <button type="button" data-vpn="sstp" data-i="vpnSstp">SSTP</button>
+              <button type="button" data-vpn="vless" data-i="vpnVless">VLESS</button>
+            </div>
+          </div>
+          <div class="seg" id="editTabs">
+            <button type="button" class="on" data-edittab="main" data-i="editMain">Основные</button>
+            <button type="button" data-edittab="adv" data-i="editAdv">Расширенные</button>
+          </div>
+
+          <div id="edit-main-loft">
+            <label class="field"><span data-i="loftUri">Адрес loft://</span>
+              <div class="secret">
+                <input class="mono" type="password" value="loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" />
+                <button type="button" class="eye" data-i="showSecret">Показать</button>
+              </div>
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="tun">Интерфейс туннеля</div>
+                <div class="s" data-i="tunD">Packet Tunnel. Маршрут машины — в Настройках.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-main-sstp" class="hidden">
+            <label class="field"><span data-i="sstpUser">Пользователь</span>
+              <input value="alice" />
+            </label>
+            <label class="field"><span data-i="sstpPass">Пароль</span>
+              <div class="secret">
+                <input type="password" value="••••••••" />
+                <button type="button" class="eye" data-i="showSecret">Показать</button>
+              </div>
+            </label>
+            <label class="field"><span data-i="sstpUrl">Сервер</span>
+              <input class="mono" value="https://vpn.example.com" />
+            </label>
+            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+              <input class="mono" value="vpn.example.com" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sstpTls">Проверка сертификата</div>
+                <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sstpPap">PAP / CHAP</div>
+                <div class="s" data-i="sstpPapD">Менее безопасно. По умолчанию только MSCHAPv2.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="tun">Интерфейс туннеля</div>
+                <div class="s" data-i="sstpTunD">Адрес с сервера на интерфейсе.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-main-vless" class="hidden">
+            <label class="field"><span data-i="vlessUuid">UUID</span>
+              <div class="secret">
+                <input class="mono" type="password" value="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                <button type="button" class="eye" data-i="showSecret">Показать</button>
+              </div>
+            </label>
+            <label class="field"><span data-i="vlessUrl">Сервер</span>
+              <input class="mono" value="vless://uuid@de1.example.com:443?security=tls" />
+            </label>
+            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+              <input class="mono" value="www.example.com" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sstpTls">Проверка сертификата</div>
+                <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="tun">Интерфейс туннеля</div>
+                <div class="s" data-i="sstpTunD">Адрес с сервера на интерфейсе.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-adv-loft" class="hidden">
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="mux">Мультиплекс</div>
+                <div class="s" data-i="muxD">Несколько TCP в одной GET-сессии.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <label class="field"><span data-i="dns">DNS</span>
+              <input class="mono" placeholder="пусто — с ноды" data-ph="dnsPhLoft" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsSys">DNS в систему</div>
+                <div class="s" data-i="dnsSysD">Пока туннель поднят, прописать резолверы в Packet Tunnel.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-adv-sstp" class="hidden">
+            <label class="field"><span data-i="dns">DNS</span>
+              <input class="mono" placeholder="пусто — с сервера, иначе шлюз" data-ph="dnsPhSstp" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsRep">Только эти адреса</div>
+                <div class="s" data-i="dnsRepD">Не брать DNS с сервера и шлюз PPP.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsSys">DNS в систему</div>
+                <div class="s" data-i="dnsSysD">Пока туннель поднят, прописать резолверы в Packet Tunnel.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-adv-vless" class="hidden">
+            <label class="field"><span data-i="dns">DNS</span>
+              <input class="mono" placeholder="адреса через запятую" data-ph="dnsPhVless" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsSys">DNS в систему</div>
+                <div class="s" data-i="dnsSysD">Пока туннель поднят, прописать резолверы в Packet Tunnel.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
+          <div class="btns">
+            <button type="button" class="go" data-i="save">Сохранить</button>
+          </div>
+          <div class="end-row">
+            <button type="button" data-go="list" data-i="back">Назад</button>
+            <button type="button" class="danger" data-del="Home" data-i="delete">Удалить</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="settings">
+        <div class="head">
+          <div class="title" data-i="settings">Настройки</div>
+          <button type="button" class="qr" data-i="reset">Сбросить маршруты</button>
+        </div>
+        <div class="seg" id="setTabs">
+          <button type="button" class="on" data-settab="0" data-i="setGen">Общие</button>
+          <button type="button" data-settab="1" data-i="setRoute">Маршрут</button>
+          <button type="button" data-settab="2" data-i="setClient">Клиент</button>
+        </div>
+        <div class="scroll">
+          <div id="set-0">
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="simple">Упрощенный интерфейс</div>
+                <div class="s" data-i="simpleD">Дом — открыть и закрыть.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="rateUnit">Единицы скорости</div>
+                <div class="s" data-i="rateUnitD">Как показывать ↑↓ на доме.</div>
+              </div>
+              <select>
+                <option data-i="uKbit">кбит/с</option>
+                <option data-i="uKb">КБ/с</option>
+              </select>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="lang">Язык интерфейса</div>
+                <div class="s" data-i="langD">меняется сразу</div>
+              </div>
+              <select id="langSel" onchange="setLang(this.value)">
+                <option value="ru" data-i="langRu">Русский</option>
+                <option value="en" data-i="langEn">English</option>
+              </select>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="diag">Расширенный журнал</div>
+                <div class="s" data-i="diagD">Маршруты, DNS, loft-priv. Файл с ротацией.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+          <div id="set-1" class="hidden">
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="defRoute">Маршрут по умолчанию</div>
+                <div class="s" data-i="defRouteD">Весь интернет через лофт. Выкл — только сеть лофта.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="hold">Не открывать прямой интернет</div>
+                <div class="s" data-i="holdD">Последний туннель умер — сеть закрыта.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="split">Раздельная маршрутизация</div>
+                <div class="s" data-i="splitD">Мимо — через прямой маршрут до лофта.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+          <div id="set-2" class="hidden">
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="auto">Подключать автоматически</div>
+                <div class="s" data-i="autoD">После ключа и живого фронта</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="reconnect">Автоматический реконнект</div>
+                <div class="s" data-i="reconnectD">Оборвалось — снова открыть лофт.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="extIp">Показывать внешний IP</div>
+                <div class="s" data-i="extIpD">После подключения спросить адрес у сервиса через это соединение.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+          <div class="links">
+            <button type="button" data-i="defaults">По умолчанию</button>
+            <button type="button" data-go="journal" data-i="journal">Журнал</button>
+            <button type="button" data-go="about" data-i="about">О программе</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="onboard">
+        <div class="scroll" style="display:flex;flex-direction:column">
+          <div class="hero" style="padding-top:4px">
+            <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+              <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+              <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+            </svg>
+            <div class="sub" id="onbStep" data-i="keyStep">Шаг 1 из 2</div>
+            <h1 id="onbTitle" data-i="keyTitle">Ключ доступа</h1>
+            <p class="hint" id="onbBody" data-i="keyBody">Введите ключ доступа, который вам выдали.</p>
+          </div>
+          <div id="onb1">
+            <label class="field">
+              <input class="mono" placeholder="lt_" />
+            </label>
+            <p class="hint" data-i="keyHint">Начинается с lt_. Его показывают один раз — сохраните.</p>
+            <div class="btns">
+              <button type="button" class="go" data-go="onboard" data-step="2" data-i="continue">Продолжить</button>
+              <button type="button" class="ghost" data-go="scan" data-i="keyOrfile">Или импортировать файл или QR</button>
+            </div>
+          </div>
+          <div id="onb2" class="hidden">
+            <label class="field"><span data-i="url">URL</span>
+              <input class="mono" placeholder="https://" value="https://" />
+            </label>
+            <label class="field"><span data-i="urlType">Как подключаться</span></label>
+            <div class="seg" id="onbKind">
+              <button type="button" class="on">GET</button>
+              <button type="button">WS</button>
+              <button type="button">H2</button>
+              <button type="button">QUIC</button>
+              <button type="button">H3</button>
+            </div>
+            <label class="field"><span data-i="path">Путь (если давали)</span>
+              <input class="mono" value="/static/v3/build" />
+            </label>
+            <p class="hint" data-i="urlHint">HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.</p>
+            <div class="btns">
+              <button type="button" class="go" data-i="urlGo">Открыть лофт</button>
+              <button type="button" class="ghost" data-go="onboard" data-step="1" data-i="back">Назад</button>
+            </div>
+            <p class="hint" data-i="onbVpn">Дальше — стоковый лист VPN iOS. Один раз.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="scan">
+        <div class="title" data-i="scanT" style="font-size:20px;font-weight:600;letter-spacing:-0.03em;margin:0 0 8px">Сканер QR</div>
+        <div class="scroll">
+          <div class="finder">
+            <div class="noise"></div>
+            <div class="qr-fake" aria-hidden="true">
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b></b><b class="off"></b><b></b><b></b><b></b><b class="off"></b><b></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b class="off"></b><b></b><b class="off"></b><b></b><b class="off"></b><b></b><b class="off"></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b></b><b class="off"></b><b></b><b></b><b></b><b class="off"></b><b></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+            </div>
+            <div class="frame"><i></i><i></i><i></i><i></i></div>
+          </div>
+          <p class="hint" data-i="scanHint">Камера. loft://, sstp://, vless:// или .loft.</p>
+          <div class="btns">
+            <div class="row-2">
+              <button type="button" class="ghost" data-i="fromFile">Из файла</button>
+              <button type="button" class="ghost" data-i="fromPhotos">Из Фото</button>
+            </div>
+          </div>
+          <label class="field"><span data-i="pasteL">Или вставить URI</span>
+            <textarea class="paste" placeholder="loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home"></textarea>
+          </label>
+          <div class="btns">
+            <button type="button" class="go" data-i="scanAdd">Добавить</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="share">
+        <div class="title" data-i="shareT" style="font-size:20px;font-weight:600;letter-spacing:-0.03em;margin:0 0 8px">QR</div>
+        <div class="scroll">
+          <div class="finder" style="height:240px">
+            <div class="noise"></div>
+            <div class="qr-fake" style="width:120px;height:120px;gap:3px;padding:8px" aria-hidden="true">
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b></b><b class="off"></b><b></b><b></b><b></b><b class="off"></b><b></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b class="off"></b><b></b><b class="off"></b><b></b><b class="off"></b><b></b><b class="off"></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b></b><b class="off"></b><b></b><b></b><b></b><b class="off"></b><b></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+            </div>
+          </div>
+          <p class="hint mono" style="word-break:break-all">loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home</p>
+          <p class="hint" data-i="shareHint">Адрес — loft://, один фронт. Ключ в URI — секрет. Несколько фронтов или несколько подключений — файл .loft.</p>
+          <p class="hint" data-i="warnExport">В файле есть ключ доступа. Не передавайте посторонним.</p>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="journal">
+        <div class="hero" style="padding-top:4px">
+          <h1 data-i="journal">Журнал</h1>
+          <p class="hint" data-i="journalD">Строки фронта и сессии. Ключ сокращается.</p>
+        </div>
+        <pre class="log">get   cdn.example.com  hello ok
+status  ip=10.8.0.14  mtu=1280  front=get
+tun   packet-tunnel  up
+hold  armed</pre>
+        <div class="foot">
+          <button type="button" data-i="copy">Скопировать</button>
+          <button type="button" data-i="clearLog">Очистить</button>
+          <button type="button" data-go="home" data-i="back">Назад</button>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="about">
+        <div class="scroll about">
+          <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true" style="width:72px;height:72px;margin:8px auto 10px;display:block">
+            <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+            <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+          </svg>
+          <h1 style="margin:0;font-size:22px;letter-spacing:-0.04em">loft</h1>
+          <div class="ver">1.0.3</div>
+          <div class="kick" data-i="protos">протоколы</div>
+          <div class="protos">
+            <div class="proto"><span class="k">loft/1.0</span><span class="v">get · ws · h2 · quic · h3 · mask</span></div>
+            <div class="proto"><span class="k">SSTP</span><span class="v">ppp · mschapv2 · pap</span></div>
+            <div class="proto"><span class="k">VLESS</span><span class="v">tcp · tls</span></div>
+          </div>
+          <p class="blurb" data-i="blurb">С улицы — обычный HTTPS.
+Внутри горит своя сеть.</p>
+          <p class="made">Made with love <span class="heart">♥</span> by A³</p>
+        </div>
+      </div>
+
+      <div class="scrim hidden" id="ctxScrim">
+        <div class="ctx" id="ctxMenu">
+          <div class="preview">
+            <div class="n">Home</div>
+            <div class="m" style="color:var(--mute);font-size:11px;margin-top:2px;font-family:var(--mono)">cdn.example.com</div>
+          </div>
+          <button type="button" data-go="edit"><span data-i="edit">Править</span></button>
+          <button type="button" data-sheet="export"><span data-i="export">Экспорт</span><span class="s">.loft</span></button>
+          <button type="button" class="danger" data-del="Home"><span data-i="delete">Удалить</span></button>
+        </div>
+      </div>
+      <div class="scrim hidden" id="exportScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 data-i="expSheet">Экспорт Home</h3>
+            <p class="sub" data-i="warnExport">В файле есть ключ доступа. Не передавайте посторонним.</p>
+            <button type="button" class="row"><span data-i="expLoft">Home.loft</span><span class="s" data-i="expLoftS">это подключение</span></button>
+            <button type="button" class="row" data-go="share"><span data-i="expQr">QR loft://</span><span class="s" data-i="expQrS">один фронт</span></button>
+            <button type="button" class="row"><span data-i="expAll">Family.loft</span><span class="s" data-i="expAllS">все три · loft + sstp + vless</span></button>
+          </div>
+          <button type="button" class="cancel" data-close="exportScrim" data-i="cancel">Отмена</button>
+        </div>
+      </div>
+      <div class="scrim mid hidden" id="delScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 id="delTitle">Удалить Office?</h3>
+            <p class="sub" data-i="delSub">Подключение пропадёт с устройства. Сессия, если она эта, закроется.</p>
+            <button type="button" class="row danger" data-close="delScrim" data-i="delete">Удалить</button>
+          </div>
+          <button type="button" class="cancel" data-close="delScrim" data-i="cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ios hidden" id="iosvpn">
+      <div class="island"></div>
+      <div class="sb"><span>9:41</span><span>LTE</span></div>
+      <div class="home-ind"></div>
+      <main>
+        <h2>VPN</h2>
+        <p class="cap" data-i="iosCap">Системный список. Тумблер — Packet Tunnel loft, не второй выключатель в приложении.</p>
+        <div class="ios-group">
+          <div class="ios-row">
+            <div>
+              <div class="l">loft</div>
+              <div class="ios-status" data-i="iosOn">Connected</div>
+            </div>
+            <div class="ios-sw"><i></i></div>
+          </div>
+          <div class="ios-row">
+            <span class="l" data-i="iosType">Type</span>
+            <span class="r">loft</span>
+          </div>
+          <div class="ios-row">
+            <span class="l" data-i="iosServer">Server</span>
+            <span class="r">cdn.example.com</span>
+          </div>
+        </div>
+        <p class="cap" style="margin-top:16px" data-i="iosIke">IKEv2 Office — штатный клиент iOS, не пакет loft.</p>
+        <div class="ios-group">
+          <div class="ios-row">
+            <div>
+              <div class="l">IKEv2 Office</div>
+              <div class="r" data-i="iosNot">Not Connected</div>
+            </div>
+            <div class="ios-sw" style="background:#e5e5ea"><i style="right:auto;left:2px"></i></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const I = {
+      ru: {
+        navCap: "Макет iOS по живому GUI macOS. Туннель — Packet Tunnel.",
+        hApp: "Приложение",
+        nHome: "Дом · в сети", nOff: "Дом · выкл", nOpen: "Дом · подключение", nSimple: "Дом · упрощенный",
+        nList: "Подключения", nSwipe: "Список · свайп", nCtx: "Список · меню", nExp: "Список · экспорт",
+        nEdit: "Правка", nEditAdv: "Правка · расширенные", nEditSstp: "Правка · SSTP", nEditVless: "Правка · VLESS",
+        nScan: "Сканер QR", nShare: "QR для шаринга",
+        nOnb: "Онбординг · ключ", nOnb2: "Онбординг · адрес",
+        nSet: "Настройки · общие", nSetR: "Настройки · маршрут", nSetC: "Настройки · клиент",
+        nJournal: "Журнал", nAbout: "О программе", nIos: "Настройки → VPN",
+        connect: "Открыть лофт", popConnect: "Подключить", disconnect: "Отключить",
+        connecting: "Подключение…", disconnecting: "Отключение…", cancel: "Отмена",
+        pillOn: "Подключено: Home 0:12", pillOff: "Не подключено",
+        frontK: "ФРОНТ", tunK: "ТУННЕЛЬ",
+        journal: "Журнал", reset: "Сбросить маршруты", settings: "Настройки",
+        conns: "Подключения", connsSub: "Каждое — свой ключ и адрес. Активное одно.",
+        active: "активно", edit: "Править", delete: "Удалить", export: "Экспорт", import: "Импорт",
+        listHint: "Свайп влево — удалить, вправо — править. Долгое нажатие — меню. Выбранное экспортируется как .loft. Тап по Office отключит Home: туннель на iOS один.",
+        expSheet: "Экспорт Home",
+        warnExport: "В файле есть ключ доступа. Не передавайте посторонним.",
+        expLoft: "Home.loft", expLoftS: "это подключение",
+        expQr: "QR loft://", expQrS: "один фронт",
+        expAll: "Family.loft", expAllS: "все три · loft + sstp + vless",
+        delSub: "Подключение пропадёт с устройства. Сессия, если она эта, закроется.",
+        editTitle: "Подключение", name: "Имя", vpnType: "Тип VPN",
+        vpnLoft: "loft", vpnSstp: "SSTP", vpnVless: "VLESS",
+        editMain: "Основные", editAdv: "Расширенные", loftUri: "Адрес loft://",
+        showSecret: "Показать", hideSecret: "Скрыть",
+        tun: "Интерфейс туннеля", tunD: "Packet Tunnel. Маршрут машины — в Настройках.",
+        sstpTunD: "Адрес с сервера на интерфейсе.",
+        sstpUser: "Пользователь", sstpPass: "Пароль", sstpUrl: "Сервер", sstpSni: "Имя хоста TLS",
+        sstpTls: "Проверка сертификата", sstpTlsD: "Проверять сертификат HTTPS-сервера.",
+        sstpPap: "PAP / CHAP", sstpPapD: "Менее безопасно. По умолчанию только MSCHAPv2.",
+        vlessUuid: "UUID", vlessUrl: "Сервер",
+        mux: "Мультиплекс", muxD: "Несколько TCP в одной GET-сессии.",
+        dns: "DNS", dnsPhLoft: "пусто — с ноды", dnsPhSstp: "пусто — с сервера, иначе шлюз", dnsPhVless: "адреса через запятую",
+        dnsSys: "DNS в систему", dnsSysD: "Пока туннель поднят, прописать резолверы в Packet Tunnel.",
+        dnsRep: "Только эти адреса", dnsRepD: "Не брать DNS с сервера и шлюз PPP.",
+        save: "Сохранить", back: "Назад", qr: "QR",
+        setGen: "Общие", setRoute: "Маршрут", setClient: "Клиент",
+        simple: "Упрощенный интерфейс", simpleD: "Дом — открыть и закрыть.",
+        rateUnit: "Единицы скорости", rateUnitD: "Как показывать ↑↓ на доме.",
+        uKbit: "кбит/с", uKb: "КБ/с",
+        lang: "Язык интерфейса", langD: "меняется сразу", langRu: "Русский", langEn: "English",
+        diag: "Расширенный журнал", diagD: "Маршруты, DNS, loft-priv. Файл с ротацией.",
+        defRoute: "Маршрут по умолчанию", defRouteD: "Весь интернет через лофт. Выкл — только сеть лофта.",
+        hold: "Не открывать прямой интернет", holdD: "Последний туннель умер — сеть закрыта.",
+        split: "Раздельная маршрутизация", splitD: "Мимо — через прямой маршрут до лофта.",
+        auto: "Подключать автоматически", autoD: "После ключа и живого фронта",
+        reconnect: "Автоматический реконнект", reconnectD: "Оборвалось — снова открыть лофт.",
+        extIp: "Показывать внешний IP", extIpD: "После подключения спросить адрес у сервиса через это соединение.",
+        defaults: "По умолчанию", about: "О программе",
+        keyStep: "Шаг 1 из 2", keyTitle: "Ключ доступа",
+        keyBody: "Введите ключ доступа, который вам выдали.",
+        keyHint: "Начинается с lt_. Его показывают один раз — сохраните.",
+        continue: "Продолжить", keyOrfile: "Или импортировать файл или QR",
+        urlStep: "Шаг 2 из 2", urlTitle: "Адрес",
+        urlBody: "Введите адрес, который выдали вместе с ключом.",
+        url: "URL", urlType: "Как подключаться", path: "Путь (если давали)",
+        urlHint: "HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.",
+        urlGo: "Открыть лофт",
+        onbVpn: "Дальше — стоковый лист VPN iOS. Один раз.",
+        scanT: "Сканер QR",
+        scanHint: "Камера. loft://, sstp://, vless:// или .loft.",
+        fromFile: "Из файла", fromPhotos: "Из Фото",
+        pasteL: "Или вставить URI", scanAdd: "Добавить",
+        shareT: "QR",
+        shareHint: "Адрес — loft://, один фронт. Ключ в URI — секрет. Несколько фронтов или несколько подключений — файл .loft.",
+        journalD: "Строки фронта и сессии. Ключ сокращается.",
+        copy: "Скопировать", clearLog: "Очистить",
+        protos: "протоколы",
+        blurb: "С улицы — обычный HTTPS.\nВнутри горит своя сеть.",
+        handshake: "рукопожатие",
+        iosCap: "Системный список. Тумблер — Packet Tunnel loft, не второй выключатель в приложении.",
+        iosOn: "Подключено", iosType: "Тип", iosServer: "Сервер",
+        iosIke: "IKEv2 Office — штатный клиент iOS, не пакет loft.",
+        iosNot: "Не подключено"
+      },
+      en: {
+        navCap: "iOS mock of the live macOS GUI. Tunnel is Packet Tunnel.",
+        hApp: "App",
+        nHome: "Home · up", nOff: "Home · down", nOpen: "Home · connecting", nSimple: "Home · simplified",
+        nList: "Connections", nSwipe: "List · swipe", nCtx: "List · menu", nExp: "List · export",
+        nEdit: "Edit", nEditAdv: "Edit · advanced", nEditSstp: "Edit · SSTP", nEditVless: "Edit · VLESS",
+        nScan: "Scan QR", nShare: "Share QR",
+        nOnb: "Onboard · key", nOnb2: "Onboard · address",
+        nSet: "Settings · general", nSetR: "Settings · route", nSetC: "Settings · client",
+        nJournal: "Journal", nAbout: "About", nIos: "Settings → VPN",
+        connect: "Open loft", popConnect: "Connect", disconnect: "Disconnect",
+        connecting: "Connecting…", disconnecting: "Disconnecting…", cancel: "Cancel",
+        pillOn: "Connected: Home 0:12", pillOff: "Not connected",
+        frontK: "FRONT", tunK: "TUNNEL",
+        journal: "Journal", reset: "Reset routes", settings: "Settings",
+        conns: "Connections", connsSub: "Each has its own key and address. One is active.",
+        active: "active", edit: "Edit", delete: "Delete", export: "Export", import: "Import",
+        listHint: "Swipe left to delete, right to edit. Long-press for the menu. The selected row exports as .loft. Tapping Office disconnects Home: one tunnel on iOS.",
+        expSheet: "Export Home",
+        warnExport: "The file contains the key. Do not give it away.",
+        expLoft: "Home.loft", expLoftS: "this connection",
+        expQr: "QR loft://", expQrS: "one front",
+        expAll: "Family.loft", expAllS: "all three · loft + sstp + vless",
+        delSub: "The connection leaves this device. If it is the live session, that session closes.",
+        editTitle: "Connection", name: "Name", vpnType: "VPN type",
+        vpnLoft: "loft", vpnSstp: "SSTP", vpnVless: "VLESS",
+        editMain: "Main", editAdv: "Advanced", loftUri: "loft:// address",
+        showSecret: "Show", hideSecret: "Hide",
+        tun: "Tunnel interface", tunD: "Packet Tunnel. The machine route is in Settings.",
+        sstpTunD: "The address from the server on the interface.",
+        sstpUser: "Username", sstpPass: "Password", sstpUrl: "Server", sstpSni: "TLS hostname",
+        sstpTls: "TLS server verification", sstpTlsD: "Verify the HTTPS server certificate.",
+        sstpPap: "PAP / CHAP", sstpPapD: "Less secure. Default is MSCHAPv2 only.",
+        vlessUuid: "UUID", vlessUrl: "Server",
+        mux: "Mux", muxD: "Several TCP in one GET session.",
+        dns: "DNS", dnsPhLoft: "empty — from the node", dnsPhSstp: "empty — from the server, else the gateway", dnsPhVless: "comma-separated addresses",
+        dnsSys: "DNS into the system", dnsSysD: "While the tunnel is up, write resolvers into the Packet Tunnel.",
+        dnsRep: "These addresses only", dnsRepD: "Skip the server and the PPP gateway.",
+        save: "Save", back: "Back", qr: "QR",
+        setGen: "General", setRoute: "Route", setClient: "Client",
+        simple: "Simplified interface", simpleD: "Home: open and close.",
+        rateUnit: "Speed units", rateUnitD: "How ↑↓ is shown on Home.",
+        uKbit: "kbps", uKb: "kB/s",
+        lang: "Interface language", langD: "changes at once", langRu: "Russian", langEn: "English",
+        diag: "Extended journal", diagD: "Routes, DNS, loft-priv. Rotating file.",
+        defRoute: "Allow default route", defRouteD: "Send all internet through loft. Off — loft net only.",
+        hold: "Don’t restore direct internet", holdD: "Last tunnel died — the machine stays dark.",
+        split: "Split routing", splitD: "Around loft uses the direct route from before loft.",
+        auto: "Connect automatically", autoD: "After a key and a live front",
+        reconnect: "Automatic reconnect", reconnectD: "If it drops, open loft again.",
+        extIp: "Show external IP", extIpD: "After connect, ask a service for the address through this session.",
+        defaults: "Defaults", about: "About",
+        keyStep: "Step 1 of 2", keyTitle: "Access key",
+        keyBody: "Enter the access key you were given.",
+        keyHint: "It starts with lt_. Shown once — keep it.",
+        continue: "Continue", keyOrfile: "Or import a file or QR",
+        urlStep: "Step 2 of 2", urlTitle: "Address",
+        urlBody: "Enter the address you were given with the key.",
+        url: "URL", urlType: "How to connect", path: "Path (if they gave you one)",
+        urlHint: "HTTPS. GET file, WS channel, H2/H3 CONNECT, QUIC UDP.",
+        urlGo: "Open loft",
+        onbVpn: "Next is the stock iOS VPN sheet. Once.",
+        scanT: "Scan QR",
+        scanHint: "Camera. loft://, sstp://, vless://, or a .loft.",
+        fromFile: "From file", fromPhotos: "From Photos",
+        pasteL: "Or paste a URI", scanAdd: "Add",
+        shareT: "QR",
+        shareHint: "The address is loft://, one front. The key in the URI is a secret. Several fronts or several connections: a .loft file.",
+        journalD: "Front and session lines. The key is shortened.",
+        copy: "Copy", clearLog: "Clear",
+        protos: "protocols",
+        blurb: "From the street — ordinary HTTPS.\nInside, a network of its own.",
+        handshake: "handshake",
+        iosCap: "System list. The switch is loft’s Packet Tunnel, not a second toggle in the app.",
+        iosOn: "Connected", iosType: "Type", iosServer: "Server",
+        iosIke: "IKEv2 Office is the stock iOS client, not the loft package.",
+        iosNot: "Not Connected"
+      }
+    };
+    let lang = "ru";
+    let vpn = "loft";
+    let editTab = "main";
+    let setTab = 0;
+    let onbStep = 1;
+    let homeMode = "on";
+
+    function setLang(l) {
+      lang = l;
+      document.getElementById("lang-ru").classList.toggle("on", l === "ru");
+      document.getElementById("lang-en").classList.toggle("on", l === "en");
+      document.documentElement.lang = l;
+      const sel = document.getElementById("langSel");
+      if (sel) sel.value = l;
+      document.querySelectorAll("[data-i]").forEach((el) => {
+        const k = el.getAttribute("data-i");
+        if (I[l][k] != null) el.textContent = I[l][k];
+      });
+      document.querySelectorAll("[data-ph]").forEach((el) => {
+        const k = el.getAttribute("data-ph");
+        if (I[l][k] != null) el.setAttribute("placeholder", I[l][k]);
+      });
+      paintHome();
+      paintOnboard();
+      document.querySelectorAll(".eye").forEach((b) => {
+        const inp = b.parentElement.querySelector("input");
+        b.textContent = inp && inp.type === "text" ? I[l].hideSecret : I[l].showSecret;
+      });
+    }
+
+    function paintHome() {
+      const root = document.getElementById("home");
+      const act = document.getElementById("homeAct");
+      const pill = document.getElementById("homePill");
+      const pillT = document.getElementById("homePillT");
+      const body = document.getElementById("homeBody");
+      const win = document.getElementById("homeWin");
+      const over = document.getElementById("overV");
+      const front = document.getElementById("frontV");
+      const tun = document.getElementById("tunV");
+      const sparkL = document.getElementById("sparkL");
+      const sparkR = document.getElementById("sparkR");
+      root.classList.toggle("simple", homeMode === "simple");
+      root.classList.toggle("busy", homeMode === "connecting");
+      const on = homeMode === "on" || homeMode === "simple";
+      pill.classList.toggle("on", on);
+      pillT.textContent = on ? I[lang].pillOn : I[lang].pillOff;
+      if (homeMode === "connecting") {
+        act.className = "ghost";
+        act.textContent = I[lang].connecting;
+        body.setAttribute("fill", "#8A7E72");
+        win.setAttribute("fill", "#3A332E");
+        over.textContent = "—";
+        front.textContent = "auto";
+        tun.textContent = "—";
+        sparkL.textContent = I[lang].handshake;
+        sparkR.textContent = "";
+      } else if (on) {
+        act.className = "danger";
+        act.textContent = I[lang].disconnect;
+        body.setAttribute("fill", "#F3EDE4");
+        win.setAttribute("fill", "#E8B84A");
+        over.textContent = "10.8.0.14";
+        front.textContent = "get";
+        tun.textContent = "1280";
+        sparkL.textContent = "▃▅▂▇▄▆▃▅▂▇";
+        sparkR.textContent = lang === "ru" ? "↓ 12.4 Мбит/с" : "↓ 12.4 Mbit/s";
+      } else {
+        act.className = "go";
+        act.textContent = I[lang].connect;
+        body.setAttribute("fill", "#8A7E72");
+        win.setAttribute("fill", "#3A332E");
+        over.textContent = "—";
+        front.textContent = "auto";
+        tun.textContent = "—";
+        sparkL.textContent = "";
+        sparkR.textContent = "";
+      }
+    }
+
+    function paintEdit() {
+      document.querySelectorAll("#vpnSeg button").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-vpn") === vpn);
+      });
+      document.querySelectorAll("#editTabs button").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-edittab") === editTab);
+      });
+      ["loft", "sstp", "vless"].forEach((k) => {
+        document.getElementById("edit-main-" + k).classList.toggle("hidden", !(editTab === "main" && vpn === k));
+        document.getElementById("edit-adv-" + k).classList.toggle("hidden", !(editTab === "adv" && vpn === k));
+      });
+    }
+
+    function paintSettings() {
+      document.querySelectorAll("#setTabs button").forEach((b) => {
+        b.classList.toggle("on", Number(b.getAttribute("data-settab")) === setTab);
+      });
+      [0, 1, 2].forEach((i) => {
+        document.getElementById("set-" + i).classList.toggle("hidden", i !== setTab);
+      });
+    }
+
+    function paintOnboard() {
+      document.getElementById("onb1").classList.toggle("hidden", onbStep !== 1);
+      document.getElementById("onb2").classList.toggle("hidden", onbStep !== 2);
+      document.getElementById("onbStep").textContent = onbStep === 1 ? I[lang].keyStep : I[lang].urlStep;
+      document.getElementById("onbTitle").textContent = onbStep === 1 ? I[lang].keyTitle : I[lang].urlTitle;
+      document.getElementById("onbBody").textContent = onbStep === 1 ? I[lang].keyBody : I[lang].urlBody;
+    }
+
+    const SHEETS = ["ctxScrim", "exportScrim", "delScrim"];
+    function hideSheets() {
+      SHEETS.forEach((id) => document.getElementById(id).classList.add("hidden"));
+      document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
+    }
+    function show(id, extra) {
+      extra = extra || {};
+      hideSheets();
+      document.querySelectorAll("nav button[data-go]").forEach((b) => {
+        const same = b.getAttribute("data-go") === id &&
+          (b.getAttribute("data-list") || "") === (extra.list || "") &&
+          (b.getAttribute("data-mode") || "") === (extra.mode || "") &&
+          (b.getAttribute("data-vpn") || "") === (extra.vpn || "") &&
+          (b.getAttribute("data-edittab") || "") === (extra.edittab || "") &&
+          (b.getAttribute("data-settab") || "") === (extra.settab != null ? String(extra.settab) : "") &&
+          (b.getAttribute("data-step") || "") === (extra.step != null ? String(extra.step) : "");
+        b.classList.toggle("on", same);
+      });
+      const phone = document.getElementById("phone");
+      const ios = document.getElementById("iosvpn");
+      if (id === "iosvpn") {
+        phone.classList.add("hidden");
+        ios.classList.remove("hidden");
+        return;
+      }
+      ios.classList.add("hidden");
+      phone.classList.remove("hidden");
+      phone.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
+      document.getElementById(id).classList.remove("hidden");
+      if (id === "home") {
+        homeMode = extra.mode || "on";
+        paintHome();
+      }
+      if (id === "edit") {
+        if (extra.vpn) vpn = extra.vpn;
+        if (extra.edittab) editTab = extra.edittab;
+        paintEdit();
+      }
+      if (id === "settings") {
+        if (extra.settab != null && extra.settab !== "") setTab = Number(extra.settab);
+        paintSettings();
+      }
+      if (id === "onboard") {
+        if (extra.step) onbStep = Number(extra.step);
+        paintOnboard();
+      }
+      if (id === "list") {
+        if (extra.list === "swipe") {
+          const office = document.querySelector('.swipe[data-id="office"]');
+          if (office) office.classList.add("open-r");
+        } else if (extra.list === "ctx") {
+          document.getElementById("ctxScrim").classList.remove("hidden");
+        } else if (extra.list === "export") {
+          document.getElementById("exportScrim").classList.remove("hidden");
+        }
+      }
+    }
+    function attrsOf(el) {
+      return {
+        list: el.getAttribute("data-list") || "",
+        mode: el.getAttribute("data-mode") || "",
+        vpn: el.getAttribute("data-vpn") || "",
+        edittab: el.getAttribute("data-edittab") || "",
+        settab: el.getAttribute("data-settab"),
+        step: el.getAttribute("data-step")
+      };
+    }
+    function openSheet(id) {
+      SHEETS.forEach((s) => document.getElementById(s).classList.toggle("hidden", s !== id));
+    }
+    document.querySelectorAll("[data-go]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        show(b.getAttribute("data-go"), attrsOf(b));
+      });
+    });
+    document.querySelectorAll("[data-sheet]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (b.getAttribute("data-sheet") === "export") openSheet("exportScrim");
+      });
+    });
+    document.querySelectorAll("[data-close]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        document.getElementById(b.getAttribute("data-close")).classList.add("hidden");
+      });
+    });
+    document.querySelectorAll("[data-del]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const name = b.getAttribute("data-del");
+        document.getElementById("delTitle").textContent = lang === "en" ? "Delete " + name + "?" : "Удалить " + name + "?";
+        openSheet("delScrim");
+      });
+    });
+    document.getElementById("ctxScrim").addEventListener("click", (e) => {
+      if (e.target.id === "ctxScrim") hideSheets();
+    });
+    document.querySelectorAll(".toggle").forEach((t) => {
+      t.addEventListener("click", () => t.classList.toggle("on"));
+    });
+    document.querySelectorAll("#vpnSeg button").forEach((b) => {
+      b.addEventListener("click", () => { vpn = b.getAttribute("data-vpn"); paintEdit(); });
+    });
+    document.querySelectorAll("#editTabs button").forEach((b) => {
+      b.addEventListener("click", () => { editTab = b.getAttribute("data-edittab"); paintEdit(); });
+    });
+    document.querySelectorAll("#setTabs button").forEach((b) => {
+      b.addEventListener("click", () => { setTab = Number(b.getAttribute("data-settab")); paintSettings(); });
+    });
+    document.querySelectorAll("#onbKind button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#onbKind button").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+      });
+    });
+    document.querySelectorAll(".eye").forEach((b) => {
+      b.addEventListener("click", () => {
+        const inp = b.parentElement.querySelector("input");
+        if (!inp) return;
+        const show = inp.type === "password";
+        inp.type = show ? "text" : "password";
+        b.textContent = show ? I[lang].hideSecret : I[lang].showSecret;
+      });
+    });
+
+    const THRESH = 48;
+    document.querySelectorAll(".swipe").forEach((row) => {
+      let x0 = 0, y0 = 0, dx = 0, armed = false, moved = false, hold = null;
+      const card = row.querySelector(".card");
+      function endHold() { if (hold) { clearTimeout(hold); hold = null; } }
+      row.addEventListener("pointerdown", (e) => {
+        if (e.button && e.button !== 0) return;
+        if (e.target.closest("button")) return;
+        x0 = e.clientX; y0 = e.clientY; dx = 0; armed = true; moved = false;
+        endHold();
+        hold = setTimeout(() => {
+          hold = null; armed = false;
+          document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
+          const n = row.querySelector(".n").textContent;
+          const m = row.querySelector(".m").textContent;
+          const prev = document.querySelector("#ctxMenu .preview");
+          prev.querySelector(".n").textContent = n;
+          prev.querySelector(".m").textContent = m;
+          const exp = document.querySelector('#ctxMenu [data-sheet="export"]');
+          exp.style.display = card.classList.contains("on") ? "" : "none";
+          document.querySelector('#ctxMenu [data-del]').setAttribute("data-del", n);
+          openSheet("ctxScrim");
+        }, 480);
+      });
+      row.addEventListener("pointermove", (e) => {
+        if (!armed) return;
+        dx = e.clientX - x0;
+        const dy = e.clientY - y0;
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) { moved = true; endHold(); }
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 6) {
+          card.style.transition = "none";
+          card.style.transform = "translateX(" + Math.max(-84, Math.min(84, dx)) + "px)";
+        }
+      });
+      function finish() {
+        if (!armed) return;
+        armed = false;
+        endHold();
+        card.style.transition = "";
+        card.style.transform = "";
+        document.querySelectorAll(".swipe").forEach((s) => {
+          if (s !== row) s.classList.remove("open-l", "open-r");
+        });
+        if (dx > THRESH) { row.classList.add("open-l"); row.classList.remove("open-r"); }
+        else if (dx < -THRESH) { row.classList.add("open-r"); row.classList.remove("open-l"); }
+        else if (!moved) {
+          if (row.classList.contains("open-l") || row.classList.contains("open-r")) {
+            row.classList.remove("open-l", "open-r");
+            return;
+          }
+          document.querySelectorAll(".swipe .card").forEach((c) => c.classList.remove("on"));
+          document.querySelectorAll(".swipe .mini").forEach((m) => m.classList.remove("lamp"));
+          card.classList.add("on");
+          const mini = card.querySelector(".mini");
+          if (mini) mini.classList.add("lamp");
+        } else {
+          row.classList.remove("open-l", "open-r");
+        }
+        dx = 0;
+      }
+      row.addEventListener("pointerup", finish);
+      row.addEventListener("pointercancel", finish);
+      row.addEventListener("pointerleave", () => { if (armed) finish(); });
+    });
+    setLang("ru");
+    paintHome();
+    const boot = new URLSearchParams(location.search);
+    const s = boot.get("s");
+    const g = boot.get("g");
+    if (s) {
+      const extra = { list: g || "" };
+      if (boot.get("mode")) extra.mode = boot.get("mode");
+      if (boot.get("vpn")) extra.vpn = boot.get("vpn");
+      if (boot.get("tab")) extra.edittab = boot.get("tab");
+      if (boot.get("set")) extra.settab = boot.get("set");
+      if (boot.get("step")) extra.step = boot.get("step");
+      show(s, extra);
+    }
+  </script>
+</body>
+</html>

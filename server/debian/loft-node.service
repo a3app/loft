@@ -1,0 +1,47 @@
+[Unit]
+Description=loft overlay node
+Documentation=file:///usr/share/doc/loft-node/README.md
+After=network-online.target
+Wants=network-online.target
+
+# A binary that cannot start must not fill the journal until the disk is gone.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=loft
+Group=loft
+EnvironmentFile=-/etc/loft/loft.env
+# RFC 8441 CONNECT for the h2 front (/api/v1/tunnel).
+Environment=GODEBUG=http2xconnect=1
+ExecStart=/usr/bin/loft-node -c /etc/loft/node.conf -dir /var/lib/loft
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
+
+# Bind TCP/UDP 443 without running as root. CAP_NET_RAW is the fallback
+# when ping_group_range is not applied yet (internet ICMP echo).
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=true
+
+LimitNOFILE=65536
+
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/loft
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

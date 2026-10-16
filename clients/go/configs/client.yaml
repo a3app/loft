@@ -1,0 +1,69 @@
+listen:
+  socks5: 127.0.0.1:1080
+  tun: auto
+  # Mask only: the address on the TUN is the overlay IP from Status.
+  tun_addr: 10.8.0.0/24
+  kill_switch: true
+
+# member_id: alice
+# instance_id is stored in client.instance next to this file.
+token: "change-me-long-random"
+
+# auto tries in list order
+select: auto
+
+# signed roster of this network (no member key in the file)
+# bootstrap: https://cdn.example.com/static/v3/manifest.json
+# controller_pub: # 64 hex chars of controller Ed25519 pub
+# lists_url: https://cdn.example.com/static/v3/lists.json
+# p2p: false   # hub splice only; skip a direct TCP attempt to another member
+# pause: starlink  # skip mux Data around LEO handover seconds; local, not on the wire
+# default: via
+# use:
+#   sber: direct
+#   youtube: via
+#   drop: drop
+#   direct: direct
+
+# decoy SNI is not set here: the node advertises it in Status (and the
+# client may read the certificate a probe would see). CDN fronts keep
+# the CDN hostname.
+#
+# fronts: enabled transports. Empty = every outbound type below.
+# Drop a name to refuse it even if the node offers it.
+# fronts: [get, ws, h2, quic, h3]
+
+outbounds:
+  - name: cdn-get
+    type: get
+    cdn: yandex
+    url: https://cdn.example.com
+    path: /static/v3/build
+    fingerprint: chrome
+    header_budget: 12288
+    inflight: 4
+    insecure_skip_verify: false
+
+  - name: cdn-ws
+    type: ws
+    url: wss://app.example.com/api/v1/sync
+    fingerprint: chrome
+    insecure_skip_verify: false
+
+  - name: quic
+    type: quic
+    url: https://app.example.com:443
+    fingerprint: chrome
+    insecure_skip_verify: false
+
+  - name: h2
+    type: h2
+    url: https://app.example.com
+    path: /api/v1/tunnel
+    fingerprint: chrome
+
+  - name: h3
+    type: h3
+    url: https://app.example.com
+    path: /api/v1/tunnel
+    fingerprint: chrome

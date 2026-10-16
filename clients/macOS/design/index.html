@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — macOS client</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --ink-2: #241f1b;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      height: 100%;
+    }
+    html { scrollbar-width: none; }
+    html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; }
+
+    /* ── board chrome ── */
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+    }
+    nav::-webkit-scrollbar { width: 0; height: 0; }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 18px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav button {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 5px 10px; border-radius: 8px; cursor: pointer;
+    }
+    nav button:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang {
+      display: flex; gap: 4px; margin: 4px 8px 10px;
+    }
+    .lang button {
+      flex: 1; text-align: center; padding: 6px 0; font-weight: 600;
+      letter-spacing: 0.04em; font-size: 12px;
+    }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage-wrap {
+      padding: 28px; display: flex; align-items: center; justify-content: center;
+      min-height: 0; overflow: hidden;
+    }
+    .desktop {
+      width: min(1080px, 100%);
+      aspect-ratio: 16 / 10;
+      max-height: calc(100vh - 56px);
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      background:
+        radial-gradient(1200px 500px at 70% -10%, #3a2a1c 0%, transparent 55%),
+        radial-gradient(800px 600px at 10% 120%, #1c1814 0%, transparent 50%),
+        linear-gradient(180deg, #2a221c 0%, #12100e 70%);
+      box-shadow: 0 40px 80px rgba(0,0,0,.45);
+    }
+    .menubar {
+      height: 28px;
+      display: flex; align-items: center;
+      padding: 0 14px;
+      background: rgba(20,16,14,.55);
+      backdrop-filter: blur(18px);
+      color: #f4efe8;
+      font-size: 13px;
+      font-weight: 500;
+      user-select: none;
+    }
+    .menubar .left { display: flex; gap: 16px; align-items: center; }
+    .menubar .right { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+    .menubar .loft-item {
+      display: flex; align-items: center; height: 22px; padding: 0 6px;
+      border-radius: 5px; cursor: pointer;
+    }
+    .menubar .loft-item:hover, .menubar .loft-item.open { background: rgba(255,255,255,.12); }
+    .menubar .loft-item svg { width: 18px; height: 18px; }
+
+    .desktop-body { position: absolute; inset: 28px 0 0 0; }
+
+    /* ── windows ── */
+    .win, .popover {
+      scrollbar-width: none;
+    }
+    .win::-webkit-scrollbar, .popover::-webkit-scrollbar { width: 0; height: 0; }
+    .win {
+      position: absolute;
+      background: var(--ink);
+      border: 1px solid #2e2824;
+      border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04) inset;
+      overflow: hidden;
+      color: var(--snow);
+    }
+    .win.light {
+      background: #f6f1ea;
+      color: var(--ink);
+      border-color: #e2d8cc;
+    }
+    .traffic { display: flex; gap: 7px; padding: 12px 14px 0; }
+    .traffic i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+    .traffic .r { background: #ff5f57; }
+    .traffic .y { background: #febc2e; }
+    .traffic .g { background: #28c840; }
+    .win h1 {
+      margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.04em;
+    }
+    .muted { color: var(--mute); }
+    .win.light .muted { color: #8a7e72; }
+
+    /* popover */
+    .popover {
+      position: absolute;
+      top: 8px; right: 86px;
+      width: 300px;
+      z-index: 6;
+      background: rgba(32,28,25,.92);
+      backdrop-filter: blur(28px) saturate(140%);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.45);
+      color: var(--snow);
+      padding: 14px 14px 10px;
+    }
+    .popover.light {
+      background: rgba(246,241,234,.94);
+      color: var(--ink);
+      border-color: rgba(0,0,0,.06);
+    }
+    .popover::before {
+      content: "";
+      position: absolute; top: -6px; right: 48px;
+      width: 12px; height: 12px;
+      background: inherit;
+      transform: rotate(45deg);
+      border-left: 1px solid rgba(255,255,255,.08);
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .pop-head { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .pop-head .mark { width: 36px; height: 36px; }
+    .pop-head .t { font-weight: 600; letter-spacing: -0.03em; font-size: 15px; }
+    .pop-head .s { font-size: 12px; color: var(--mute); }
+    .pop-rate { margin-left: auto; text-align: right; font-size: 11.5px; color: var(--mute); line-height: 1.35; }
+    .btn {
+      width: 100%; border: 0; border-radius: 10px;
+      padding: 11px 14px; font: 600 14px var(--ui);
+      letter-spacing: -0.02em; cursor: pointer;
+      transition: filter 0.08s ease, transform 0.08s ease;
+    }
+    .btn:active {
+      filter: brightness(0.78);
+      transform: scale(0.96);
+    }
+    .btn.connect { background: var(--slate); color: var(--snow); }
+    .btn.connect.on { background: var(--lamp); color: var(--ink); }
+    .btn.ghost { background: transparent; color: var(--mute); font-weight: 500; font-size: 12.5px; }
+    .rows { margin: 12px 0 4px; }
+    .row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12.5px; padding: 6px 2px;
+    }
+    .row .k { color: var(--mute); }
+    .row .v { font-family: var(--mono); font-size: 11.5px; }
+    .spark { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--mute); padding: 8px 2px 4px; }
+    .spark .err { color: var(--err); }
+    .pop-foot {
+      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px;
+    }
+    .pop-foot a { color: var(--stone); text-decoration: none; font-size: 12.5px; }
+
+    /* main window */
+    .main {
+      width: 400px; height: 500px;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+    }
+    .main.aside {
+      left: 38%;
+    }
+    .win.main.simple, .win.conns.simple {
+      height: auto;
+      max-height: calc(100% - 24px);
+    }
+    .win.main.simple .body { padding-bottom: 22px; }
+    .foot {
+      margin-top: 18px; font-size: 11.5px; color: var(--mute); text-align: center;
+    }
+    .main .body { padding: 8px 22px 22px; }
+    .hero {
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; padding: 12px 0 18px;
+    }
+    .hero .mark { width: 72px; height: 72px; margin-bottom: 10px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11.5px; color: var(--mute);
+      background: #211c19; border-radius: 99px; padding: 4px 10px; margin-top: 8px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mute); }
+    .dot.on { background: var(--lamp); box-shadow: 0 0 8px var(--lamp); }
+    .dot.err { background: var(--err); box-shadow: 0 0 8px var(--err); }
+    .stats {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+      margin: 16px 0;
+    }
+    .stat {
+      background: #211c19; border-radius: 10px; padding: 10px 10px 8px;
+    }
+    .stat .k { font-size: 10.5px; color: var(--mute); text-transform: uppercase; letter-spacing: .06em; }
+    .stat .v { font-family: var(--mono); font-size: 12px; margin-top: 4px; }
+    .list { margin-top: 6px; }
+    .item {
+      display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
+      padding: 10px 10px; border-radius: 10px; cursor: pointer;
+    }
+    .item:hover { background: #211c19; }
+    .item .n { font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; }
+    .item .u { font-size: 11.5px; color: var(--mute); font-family: var(--mono); }
+    .item .tag { font-size: 10.5px; color: var(--stone); align-self: center; }
+    .item.live { background: #211c19; }
+    .item.live .tag { color: var(--lamp); }
+    .item.err .tag, .item .u.err { color: var(--err); }
+
+    /* onboarding */
+    .onb {
+      width: 440px; height: 520px;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+    }
+    .onb.tall { height: 580px; }
+    .onb .body { padding: 8px 36px 28px; text-align: center; }
+    .onb .mark { display: block; width: 64px; height: 64px; margin: 8px auto 12px; }
+    .onb p { color: var(--mute); font-size: 13.5px; line-height: 1.5; }
+    .field {
+      width: 100%; margin: 18px 0 8px;
+      background: #211c19; border: 1px solid #3a332e; border-radius: 10px;
+      padding: 12px 14px; color: var(--snow); font: 500 14px var(--mono);
+      outline: none;
+    }
+    .field:focus { border-color: var(--lamp); }
+    .hint { font-size: 12px; color: var(--mute); text-align: left; }
+    .steps { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); margin-bottom: 6px; }
+    .label { font-size: 11.5px; color: var(--mute); text-align: left; margin: 14px 0 6px; }
+    .seg { display: flex; gap: 6px; }
+    .seg button {
+      flex: 1; border: 1px solid #3a332e; background: #211c19; color: var(--stone);
+      border-radius: 9px; padding: 9px 8px; font: 600 12.5px var(--ui); cursor: pointer;
+    }
+    .seg button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
+    .rate-bits { display: flex; flex-direction: column; gap: 4px; }
+    .rate-bits button {
+      min-width: 72px; padding: 3px 8px; font: 600 11px var(--ui);
+      border-radius: 7px; border: 1px solid #3a332e; background: #211c19;
+      color: var(--stone); cursor: pointer;
+    }
+    .rate-bits button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
+    .loft-select {
+      appearance: none; -webkit-appearance: none;
+      min-width: 168px; max-width: 200px;
+      background: #211c19 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path fill='%238A7E72' d='M0 0l5 6 5-6z'/></svg>") no-repeat right 10px center;
+      color: var(--snow); border: 1px solid #3a332e; border-radius: 10px;
+      padding: 7px 28px 7px 12px; font: 600 12.5px var(--ui); cursor: pointer;
+    }
+    .field.sm { margin: 0; padding: 10px 12px; font-size: 13px; }
+    .btn.back { background: transparent; color: var(--mute); font-weight: 500; margin-top: 8px; }
+
+    /* settings */
+    .sheet {
+      width: 440px; height: auto; max-height: calc(100% - 24px);
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .sheet .body { padding: 0 22px 12px; }
+    .sheet h1 { margin: 14px 0 8px; font-size: 1.2rem; }
+    .sheet .head-row { margin: 14px 0 8px; align-items: center; }
+    .sheet .head-row h1 { margin: 0; line-height: 28px; }
+    .sheet .head-row .btn { height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; }
+    .pref { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .pref .n { font-size: 13.5px; }
+    .pref .d { font-size: 11.5px; color: var(--mute); line-height: 1.3; max-width: 280px; }
+    .pref-group {
+      font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--mute); font-weight: 600; margin: 8px 0 0;
+    }
+    .sheet-foot { padding-top: 10px; margin-top: 4px; }
+    .pref.pick { cursor: pointer; }
+    .pref .chev { color: var(--mute); font-size: 16px; }
+
+    .win.split {
+      width: 440px; height: 520px;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      display: flex; flex-direction: column;
+    }
+    .win.split .body {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+      padding: 4px 20px 0;
+    }
+    .win.split h1 { margin: 4px 0 2px; font-size: 1.2rem; }
+    .split-sub { font-size: 12.5px; color: var(--mute); margin: 0 0 6px; }
+    .split-native { font: 500 11.5px var(--mono); color: var(--stone); margin: 0 0 10px; }
+    .split-list.dim { opacity: .4; }
+    .split-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+    .split-tabs button {
+      flex: 1; border: 1px solid #3a332e; background: #211c19; color: var(--stone);
+      border-radius: 9px; padding: 7px 8px; font: 600 12px var(--ui); cursor: pointer;
+    }
+    .split-tabs button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
+    .split-tabs button .n { font-weight: 500; opacity: .7; }
+    .split-list { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; }
+    .split-list::-webkit-scrollbar { width: 0; height: 0; }
+    .rrow {
+      display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
+      padding: 8px 4px; border-bottom: 1px solid var(--line);
+    }
+    .rrow .n { font-size: 13.5px; font-weight: 600; }
+    .rrow .u { font-size: 11.5px; color: var(--mute); font-family: var(--mono); }
+    .rrow .meta { text-align: right; font-size: 11px; color: var(--mute); }
+    .rrow .src { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--copper); }
+    .win.split .actions {
+      margin: auto -20px 0;
+      padding: 12px 20px 14px;
+      border-top: 1px solid var(--line);
+    }
+    .fmt {
+      font-family: var(--mono); font-size: 11px; background: #211c19;
+      border-radius: 8px; padding: 10px 12px; margin: 10px 0; text-align: left;
+      white-space: pre-wrap; line-height: 1.45; color: var(--stone);
+    }
+    .route-tag {
+      display: inline-block; margin-left: 6px;
+      font-size: 10px; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--lamp); vertical-align: 1px;
+    }
+    .pop-badge {
+      display: inline-block; margin-left: 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--ink); background: var(--lamp);
+      border-radius: 3.5px; padding: 2px 7px; vertical-align: middle; line-height: 1.15;
+    }
+    .toggle { width: 36px; height: 22px; border-radius: 11px; background: #3a332e; position: relative; transition: background-color .2s ease; }
+    .toggle.on { background: var(--lamp); }
+    .toggle i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .2s ease; }
+    .toggle.on i { left: 16px; }
+
+    .about {
+      width: 360px; height: 360px; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      text-align: center; display: flex; flex-direction: column;
+    }
+    .about .body {
+      padding: 8px 32px 14px;
+      display: flex; flex-direction: column;
+      min-height: 0; flex: 1;
+    }
+    .about .mark { width: 72px; height: 72px; margin: 8px auto 10px; }
+    .about .ver { margin: 2px 0 0; font-size: 12.5px; color: var(--mute); }
+    .about .spec-cap {
+      margin: 20px 0 6px; font-size: 11px; color: var(--mute); font-weight: 500;
+    }
+    .about .spec {
+      display: grid; grid-template-columns: auto 1fr; gap: 3px 10px;
+      width: 100%; margin: 0; box-sizing: border-box;
+      text-align: left; font-size: 12.5px;
+    }
+    .about .spec .k { color: var(--mute); }
+    .about .spec .v { font-family: var(--mono); font-size: 12px; }
+    .about .blurb {
+      margin: auto 0; font-size: 13.5px; line-height: 1.45;
+      letter-spacing: -0.02em; color: var(--stone); font-weight: 500;
+    }
+    .about .madeby {
+      margin-top: 0; font-size: 12px; font-weight: 500;
+      color: var(--mute); letter-spacing: -0.01em;
+    }
+    .about .madeby .heart {
+      color: var(--lamp); vertical-align: -1px; margin: 0 3px;
+    }
+    .about .madeby sup { font-size: 0.65em; }
+
+    .hide { display: none !important; }
+
+    /* mark */
+    .mark .body { fill: #B7A99A; }
+    .mark .lamp { fill: #3A332E; }
+    .mark.on .lamp { fill: var(--lamp); }
+    .mark.err .lamp { fill: var(--err); }
+    .mark.ink .body { fill: var(--ink); }
+    .mark.ink.on .lamp { fill: var(--lamp); }
+    .mb-mark { color: #f4efe8; }
+    .mb-mark .body { fill: currentColor; }
+    .mb-mark .lamp { fill: #3a332e; }
+    .mb-mark.on .lamp { fill: var(--lamp); filter: drop-shadow(0 0 2px var(--lamp-hi)); }
+    .mb-mark.err .lamp { fill: var(--err); filter: drop-shadow(0 0 2px var(--err)); }
+    .btn.connect.err { background: var(--slate); color: var(--snow); }
+    .btn.reset {
+      background: var(--slate); color: var(--snow);
+      margin-top: 6px;
+    }
+    .popover .list + .btn.reset, .popover .btn.reset:first-of-type { margin-top: 0; margin-bottom: 10px; }
+
+    .pick { cursor: pointer; }
+    .pick .v { color: var(--stone); }
+    .chev { opacity: .5; margin-left: 4px; }
+    .actions { display: flex; gap: 8px; margin-top: 12px; }
+    .actions .btn { padding: 9px 10px; font-size: 12.5px; background: #211c19; color: var(--snow); }
+    .win.conns { display: flex; flex-direction: column; }
+    .win.conns .body {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+      padding: 8px 20px 0;
+    }
+    .win.conns .list { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; }
+    .win.conns .list::-webkit-scrollbar { width: 0; height: 0; }
+    .win.conns .actions {
+      margin: auto -20px 0;
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--line);
+    }
+    .drop {
+      margin-top: 16px; border: 1px dashed #3a332e; border-radius: 12px;
+      padding: 28px 16px; text-align: center; color: var(--mute); font-size: 13px; line-height: 1.45;
+    }
+    .drop strong { color: var(--stone); font-weight: 600; }
+    .file {
+      font-family: var(--mono); font-size: 11.5px; background: #211c19;
+      border-radius: 8px; padding: 12px 14px; margin-top: 14px; text-align: left;
+      white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; overflow: hidden;
+    }
+    .warn { font-size: 12px; color: var(--copper); text-align: left; margin-top: 12px; line-height: 1.45; }
+    .plist .item { grid-template-columns: 8px 1fr auto; align-items: center; }
+    .plist .side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .plist .side-btns { display: flex; gap: 2px; align-items: center; }
+    .plist .side-btns:empty { display: none; }
+    .win.conns { width: 400px; height: 520px; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+    .win.conns h1 { margin: 8px 0 0; }
+    .win.conns.simple .head-row { margin-bottom: 8px; }
+    .subline { font-size: 12.5px; color: var(--mute); margin: 4px 0 12px; }
+    .head-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .multi-switch {
+      flex: 0 0 auto;
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 8px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .multi-cap {
+      font-size: 12.5px; font-weight: 500; color: var(--mute);
+      line-height: 1; white-space: nowrap;
+    }
+    .mini {
+      border: 0; border-radius: 8px; padding: 6px 10px; font: 600 11.5px var(--ui);
+      background: var(--slate); color: var(--snow); cursor: pointer; white-space: nowrap;
+    }
+    .mini.on { background: var(--lamp); color: var(--ink); }
+    .plist.sess .item { padding: 8px 6px; }
+    .pop-head .s.err { color: var(--err); }
+    .ghost-sm { background: none; border: 0; color: var(--mute); font: 500 11.5px var(--ui); cursor: pointer; padding: 4px 6px; }
+    .toggle { cursor: pointer; flex-shrink: 0; }
+    .plist .side-btns { flex-direction: column; align-items: flex-end; gap: 2px; }
+    .onb.edit {
+      height: auto; width: 440px; max-height: calc(100% - 24px);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .onb.edit .body {
+      padding: 2px 28px 14px;
+      display: flex; flex-direction: column; min-height: 0;
+    }
+    .onb.edit h1 { margin: 2px 0 8px; font-size: 1.2rem; }
+    .onb.edit .label { margin: 6px 0 3px; }
+    .onb.edit .field.sm { padding: 7px 12px; }
+    .onb.edit .seg button { padding: 8px 8px; }
+    .edit-status { display: flex; justify-content: space-between; align-items: center; margin: 0 0 4px; }
+    .edit-status .st { font-size: 12.5px; color: var(--mute); }
+    .edit-status .st.on { color: var(--lamp); }
+    .edit-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .edit-foot {
+      margin-top: 8px; padding-top: 10px;
+      border-top: 1px solid var(--line); flex-shrink: 0;
+    }
+    .edit-foot .btn.connect { margin: 0; }
+    .edit-alt { display: flex; justify-content: space-between; gap: 8px; }
+    .edit-alt .btn { width: auto; flex: 1; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" class="mark on"><path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/><path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/></svg>
+      loft · macOS
+    </div>
+    <p id="board-sub">Menu-bar agent. Mock v1: key, front, SOCKS5.</p>
+    <h4 id="board-lang">Language</h4>
+    <div class="lang">
+      <button type="button" data-lang="en" class="on">EN</button>
+      <button type="button" data-lang="ru">RU</button>
+    </div>
+    <h4 id="board-scenes">Scenes</h4>
+    <button class="on" data-scene="hero" data-i18n="nav.hero">Overview</button>
+    <button data-scene="onboard" data-i18n="nav.onboard">Key</button>
+    <button data-scene="url" data-i18n="nav.url">Address</button>
+    <button data-scene="off" data-i18n="nav.off">Popover · closed</button>
+    <button data-scene="on" data-i18n="nav.on">Popover · open</button>
+    <button data-scene="err" data-i18n="nav.err">Popover · error</button>
+    <button data-scene="hold" data-i18n="nav.hold">Popover · route</button>
+    <button data-scene="main" data-i18n="nav.main">Status</button>
+    <button data-scene="out" data-i18n="nav.out">Fronts</button>
+    <button data-scene="list" data-i18n="nav.list">Connections</button>
+    <button data-scene="edit" data-i18n="nav.edit">Edit</button>
+    <button data-scene="editvless" data-i18n="nav.editvless">Edit · VLESS</button>
+    <button data-scene="switch" data-i18n="nav.switch">Popover · switch</button>
+    <button data-scene="import" data-i18n="nav.import">Import</button>
+    <button data-scene="export" data-i18n="nav.export">Export</button>
+    <button data-scene="set" data-i18n="nav.set">Settings</button>
+    <button data-scene="split" data-i18n="nav.split">Routes</button>
+    <button data-scene="splitin" data-i18n="nav.splitin">Import routes</button>
+    <button data-scene="splitout" data-i18n="nav.splitout">Export routes</button>
+    <button data-scene="splitrepo" data-i18n="nav.splitrepo">Repository</button>
+    <button data-scene="about" data-i18n="nav.about">About</button>
+  </nav>
+
+  <div class="stage-wrap">
+    <div class="desktop" id="desk">
+      <div class="menubar">
+        <div class="left">
+          <strong></strong>
+          <span>Finder</span>
+          <span>File</span>
+          <span>Edit</span>
+        </div>
+        <div class="right">
+          <span id="mb-loft" class="loft-item open" title="loft">
+            <svg viewBox="0 0 18 18" class="mb-mark" id="mb-svg">
+              <path class="body" d="M7.005 0.741 A0.187 0.187 0 0 1 7.245 0.746 L10.872 5.248 L10.872 12.026 A0.858 0.858 0 0 0 11.73 12.884 L16.176 12.884 A0.624 0.624 0 0 1 16.8 13.508 L16.8 16.451 A0.749 0.749 0 0 1 16.051 17.2 L3.821 17.2 A0.749 0.749 0 0 1 3.072 16.451 L3.072 5.248 Z"/>
+              <path class="lamp" d="M5.755 6.576 H8.189 A0.499 0.499 0 0 1 8.688 7.075 V10.393 A0.499 0.499 0 0 1 8.189 10.892 H5.755 A0.499 0.499 0 0 1 5.256 10.393 V7.075 A0.499 0.499 0 0 1 5.755 6.576 Z"/>
+            </svg>
+          </span>
+          <span>Wi-Fi</span>
+          <span>🔋</span>
+          <span>Thu 21:14</span>
+        </div>
+      </div>
+      <div class="desktop-body" id="scene"></div>
+    </div>
+  </div>
+
+  <script>
+    const I18N = {
+      ru: {
+        "board.sub": "Menu-bar agent. Макет v1: ключ, фронт, SOCKS5.",
+        "board.lang": "Язык",
+        "board.scenes": "Сцены",
+        "nav.hero": "Обзор",
+        "nav.onboard": "Ключ",
+        "nav.url": "Адрес",
+        "nav.off": "Popover · закрыт",
+        "nav.on": "Popover · открыт",
+        "nav.err": "Popover · ошибка",
+        "nav.hold": "Popover · маршрут",
+        "nav.main": "Окно статуса",
+        "nav.out": "Фронты",
+        "nav.list": "Подключения",
+        "nav.edit": "Правка",
+        "nav.editvless": "Правка · VLESS",
+        "edit.vless.link": "Ссылка",
+        "edit.vless.manual": "Вручную",
+        "edit.vless.url": "Ссылка vless://",
+        "edit.vless.uuid": "UUID",
+        "edit.vless.host": "Адрес",
+        "edit.vless.port": "Порт",
+        "edit.vless.sec": "Защита",
+        "edit.vless.tls": "TLS",
+        "edit.vless.reality": "REALITY",
+        "edit.vless.net": "Транспорт",
+        "edit.vless.tcp": "TCP",
+        "edit.vless.xhttp": "XHTTP",
+        "edit.vless.sni": "Имя хоста TLS",
+        "edit.vless.fp": "Отпечаток TLS",
+        "edit.vless.pbk": "Публичный ключ",
+        "edit.vless.sid": "Short ID",
+        "edit.vless.vision": "Vision",
+        "edit.vless.vision.d": "xtls-rprx-vision на TCP.",
+        "edit.main": "Соединение",
+        "edit.adv": "Расширенные",
+        "vpn.type": "Тип VPN",
+        "nav.switch": "Popover · смена",
+        "nav.import": "Импорт",
+        "nav.export": "Экспорт",
+        "nav.set": "Настройки",
+        "nav.split": "Маршруты",
+        "nav.splitin": "Импорт маршрутов",
+        "nav.splitout": "Экспорт маршрутов",
+        "nav.splitrepo": "Репозиторий",
+        "nav.about": "О программе",
+        "status.off": "лофт закрыт",
+        "status.closed": "закрыт",
+        "connect": "Открыть лофт",
+        "disconnect": "Отключить",
+        "front": "Фронт",
+        "session.none": "нет сессии",
+        "open": "Открыть loft",
+        "quit": "Выйти",
+        "key.title": "Ключ доступа",
+        "key.body": "Введите ключ доступа, который вам выдали.",
+        "key.hint": "Начинается с lt_. Его показывают один раз — сохраните.",
+        "key.step": "Шаг 1 из 2",
+        "continue": "Продолжить",
+        "back": "Назад",
+        "url.title": "Адрес",
+        "url.body": "Введите адрес, который выдали вместе с ключом.",
+        "url.step": "Шаг 2 из 2",
+        "url.label": "URL",
+        "url.type": "Как подключаться",
+        "url.get": "GET",
+        "url.ws": "WS",
+        "url.h2": "H2",
+        "url.quic": "QUIC",
+        "url.h3": "H3",
+        "url.path": "Путь (если давали)",
+        "url.hint": "HTTPS. GET — как файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.",
+        "url.go": "Открыть лофт",
+        "settings": "Настройки",
+        "set.gen": "Общие",
+        "set.client": "Клиент",
+        "journal": "Журнал",
+        "pref.defaults": "По умолчанию",
+        "pref.login": "Открывать при входе",
+        "pref.login.d": "Login item, без окна",
+        "pref.dock": "Отображать значок в Dock",
+        "pref.dock.d": "В строке меню остаётся.",
+        "pref.dock.always": "всегда",
+        "pref.dock.window": "когда открыто окно",
+        "pref.dock.never": "никогда",
+        "pref.auto": "Подключать автоматически",
+        "pref.auto.d": "После ключа и живого фронта",
+        "pref.reconnect": "Автоматический реконнект",
+        "pref.reconnect.d": "Оборвалось — снова открыть лофт.",
+        "pref.simple": "Упрощенный интерфейс",
+        "pref.simple.d": "Меню и окна — открыть и закрыть.",
+        "pref.rate": "Единицы скорости",
+        "pref.rate.d": "Как показывать ↑↓ в меню и окне статуса.",
+        "pref.rate.kbit": "кбит/с",
+        "pref.rate.kb": "КБ/с",
+        "pref.socks.d": "локальный вход приложений",
+        "pref.socks.share": "Общий SOCKS",
+        "pref.socks.share.d": "Один порт из настроек. Раздельная — если включена.",
+        "pref.socks.share.off": "У каждого свой порт.",
+        "pref.socks.port": "Порт SOCKS5",
+        "pref.socks.port.d": "Локальный вход. У подключения можно задать свой.",
+        "pref.tun.d": "следующий шаг, сейчас tun2socks",
+        "pref.off": "выкл",
+        "pop.overlay": "Overlay IP",
+        "pref.route": "Маршрут",
+        "edit.tun": "Интерфейс туннеля",
+        "edit.tun.d": "Свой адрес на интерфейсе. Маршрут машины — в Настройках, выкл. по умолчанию.",
+        "pop.tun": "Туннель",
+        "pop.setup": "Настройка",
+        "pref.fail": "Передать живому",
+        "pref.fail.d": "Оборвалось — маршрут на другой туннель.",
+        "pref.default_route": "Маршрут по умолчанию",
+        "pref.default_route.d": "Весь интернет через лофт. Выкл — только сеть лофта.",
+        "pref.hold": "Не открывать прямой интернет",
+        "pref.hold.d": "Последний туннель умер — сеть закрыта.",
+        "route.reset": "Сбросить маршруты",
+        "route.reset.d": "Вернуть прямой интернет.",
+
+        "route.held": "маршрут закрыт",
+        "route.tag": "маршрут",
+        "split": "Раздельная маршрутизация",
+        "split.d": "Мимо — через прямой маршрут до лофта.",
+        "split.sub": "Мимо идёт через прямой маршрут, запомненный до лофта. Даже если лофт закрыт.",
+        "split.sub.off": "Выкл — списки не ставятся в систему.",
+        "split.native": "прямой 192.168.1.1 · en0",
+        "split.via": "Через лофт",
+        "split.bypass": "Мимо лофта",
+        "split.add": "Добавить",
+        "split.nets": "сетей",
+        "split.net": "сеть",
+        "split.src.repo": "репо",
+        "split.src.me": "свои",
+        "split.repo": "Репозиторий",
+        "split.import.title": "Импорт маршрутов",
+        "split.import.body": "Keenetic .bat или loft-routes. Комментарий :: rem — имя сервиса.",
+        "split.import.drop": "Перетащите .bat или .loft-routes",
+        "split.import.detect": "Keenetic · 214 строк · без направления",
+        "split.import.where": "Куда положить",
+        "split.import.go": "Добавить 214 маршрутов",
+        "split.export.title": "Экспорт маршрутов",
+        "split.export.body": "Keenetic поймёт оба. Loft пишет имя сервиса и направление в комментарии.",
+        "split.export.fmt": "Формат",
+        "split.export.keen": "Keenetic .bat",
+        "split.export.loft": "Loft",
+        "split.export.which": "Какой список",
+        "split.export.save": "Сохранить loft-routes.bat",
+        "split.export.save.keen": "Сохранить YouTube.bat",
+        "split.repo.body": "Raw .bat с GitHub или своего хоста. Обычно это «через лофт».",
+        "split.repo.url": "Адрес списка",
+        "split.repo.auto": "Обновлять самим",
+        "split.repo.auto.d": "Раз в сутки, свои записи не затирает.",
+        "split.repo.last": "Сегодня · 214 маршрутов",
+        "split.repo.pull": "Обновить сейчас",
+        "split.add.title": "Сеть",
+        "split.add.body": "Адрес или CIDR. Имя сервиса — чтобы в списке было понятно.",
+        "split.add.net": "Сеть или адрес",
+        "split.add.name": "Сервис",
+        "split.add.go": "Добавить",
+        "pref.select.d": "порядок outbound в YAML",
+        "pref.lang": "Язык интерфейса",
+        "pref.lang.d": "меняется сразу",
+        "pref.lang.ru": "Русский",
+        "pref.lang.en": "English",
+        "pref.diag": "Расширенный журнал",
+        "pref.diag.d": "Маршруты, DNS, loft-priv. Файл с ротацией.",
+        "about.ver": "1.0.3",
+        "about.proto": "протоколы",
+        "about.loft": "loft/1.0",
+        "about.loft.v": "get · ws · h2 · quic · h3 · mask",
+        "about.sstp": "SSTP",
+        "about.sstp.v": "ppp · mschapv2 · pap",
+        "about.vless": "VLESS",
+        "about.vless.v": "tcp · tls · reality · xhttp",
+        "about.trojan": "Trojan",
+        "about.trojan.v": "tcp · tls · reality · xhttp",
+        "about.blurb": "С улицы — обычный HTTPS.<br>Внутри горит своя сеть.",
+        "live": "get · live",
+        "conn": "Подключение",
+        "conns": "Подключения",
+        "conns.sub": "Каждое — свой ключ и адрес. Активное одно.",
+        "conns.sub.multi": "Каждое открывается отдельно.",
+        "conns.multi": "Несколько",
+        "conn.active": "активно",
+        "conn.up": "открыто",
+        "conn.down": "закрыто",
+        "conn.err": "ошибка",
+        "conn.fail": "не удалось",
+        "conn.retry": "Повторить",
+        "conn.retry.wait": "Повтор (%d)",
+        "conn.cancel": "Отмена",
+        "edit": "Править",
+        "edit.title": "Подключение",
+        "edit.name": "Имя",
+        "edit.save": "Сохранить",
+        "edit.delete": "Удалить",
+        "edit.socks": "SOCKS5",
+        "edit.sstp.dns": "DNS",
+        "edit.sstp.dns.ph": "пусто — с сервера, иначе шлюз",
+        "edit.sstp.dns.replace": "Только эти адреса",
+        "edit.sstp.dns.replace.d": "Не брать DNS с сервера и шлюз PPP.",
+        "edit.dns.ph.loft": "пусто — с ноды",
+        "edit.dns.ph.vless": "адреса через запятую",
+        "edit.dns.system": "DNS в систему",
+        "edit.dns.system.d": "Пока туннель поднят, прописать резолверы в службы сети Mac.",
+        "pref.multi": "Несколько исходящих",
+        "pref.multi.d": "Своё «открыть» и статус у каждого.",
+        "pref.socks.each": "у каждого своё",
+        "open.one": "Открыть",
+        "close.one": "Отключить",
+        "conn.count": "открыто",
+        "conn.add": "Вручную",
+        "import": "Импорт",
+        "export": "Экспорт",
+        "import.title": "Импорт",
+        "import.body": "Файл с ключом и адресом, который вам выдали.",
+        "import.drop": "Перетащите сюда client.yaml, .loft или .vpn",
+        "import.pick": "Выбрать файл…",
+        "export.title": "Экспорт",
+        "export.body": "Сохранить текущее подключение файлом.",
+        "export.save": "Сохранить Офис.loft",
+        "export.warn": "В файле есть ключ доступа. Не передавайте посторонним.",
+        "key.orfile": "Или импортировать файл",
+      },
+      en: {
+        "board.sub": "Menu-bar agent. Mock v1: key, front, SOCKS5.",
+        "board.lang": "Language",
+        "board.scenes": "Scenes",
+        "nav.hero": "Overview",
+        "nav.onboard": "Key",
+        "nav.url": "Address",
+        "nav.off": "Popover · closed",
+        "nav.on": "Popover · open",
+        "nav.err": "Popover · error",
+        "nav.hold": "Popover · route",
+        "nav.main": "Status",
+        "nav.out": "Fronts",
+        "nav.list": "Connections",
+        "nav.edit": "Edit",
+        "nav.editvless": "Edit · VLESS",
+        "edit.vless.link": "Link",
+        "edit.vless.manual": "Manual",
+        "edit.vless.url": "vless:// link",
+        "edit.vless.uuid": "UUID",
+        "edit.vless.host": "Address",
+        "edit.vless.port": "Port",
+        "edit.vless.sec": "Security",
+        "edit.vless.tls": "TLS",
+        "edit.vless.reality": "REALITY",
+        "edit.vless.net": "Transport",
+        "edit.vless.tcp": "TCP",
+        "edit.vless.xhttp": "XHTTP",
+        "edit.vless.sni": "TLS hostname",
+        "edit.vless.fp": "TLS fingerprint",
+        "edit.vless.pbk": "Public key",
+        "edit.vless.sid": "Short ID",
+        "edit.vless.vision": "Vision",
+        "edit.vless.vision.d": "xtls-rprx-vision on TCP.",
+        "edit.main": "Connection",
+        "edit.adv": "Advanced",
+        "vpn.type": "VPN type",
+        "nav.switch": "Popover · switch",
+        "nav.import": "Import",
+        "nav.export": "Export",
+        "nav.set": "Settings",
+        "nav.split": "Routes",
+        "nav.splitin": "Import routes",
+        "nav.splitout": "Export routes",
+        "nav.splitrepo": "Repository",
+        "nav.about": "About",
+        "status.off": "loft closed",
+        "status.closed": "closed",
+        "connect": "Open loft",
+        "disconnect": "Disconnect",
+        "front": "Front",
+        "session.none": "no session",
+        "open": "Open loft",
+        "quit": "Quit",
+        "key.title": "Access key",
+        "key.body": "Enter the access key you were given.",
+        "key.hint": "It starts with lt_. Shown once — keep it.",
+        "key.step": "Step 1 of 2",
+        "continue": "Continue",
+        "back": "Back",
+        "url.title": "Address",
+        "url.body": "Enter the address you were given with the key.",
+        "url.step": "Step 2 of 2",
+        "url.label": "URL",
+        "url.type": "How to connect",
+        "url.get": "GET",
+        "url.ws": "WS",
+        "url.h2": "H2",
+        "url.quic": "QUIC",
+        "url.h3": "H3",
+        "url.path": "Path (if they gave you one)",
+        "url.hint": "HTTPS. GET looks like a file, WS is a channel, H2/H3 are CONNECT, QUIC is UDP.",
+        "url.go": "Open loft",
+        "settings": "Settings",
+        "set.gen": "General",
+        "set.client": "Client",
+        "journal": "Journal",
+        "pref.defaults": "Defaults",
+        "pref.login": "Open at login",
+        "pref.login.d": "Login item, no window",
+        "pref.dock": "Show Dock icon",
+        "pref.dock.d": "The menu-bar icon stays.",
+        "pref.dock.always": "Always",
+        "pref.dock.window": "When a window is open",
+        "pref.dock.never": "Never",
+        "pref.auto": "Connect automatically",
+        "pref.auto.d": "After a key and a live front",
+        "pref.reconnect": "Automatic reconnect",
+        "pref.reconnect.d": "If it drops, open loft again.",
+        "pref.simple": "Simplified interface",
+        "pref.simple.d": "Menu and windows: open and close.",
+        "pref.rate": "Speed units",
+        "pref.rate.d": "How ↑↓ is shown in the menu and status window.",
+        "pref.rate.kbit": "kbps",
+        "pref.rate.kb": "kB/s",
+        "pref.socks.d": "local app inbound",
+        "pref.socks.share": "Shared SOCKS",
+        "pref.socks.share.d": "One port from Settings. Split rules, if split is on.",
+        "pref.socks.share.off": "A port per connection.",
+        "pref.socks.port": "SOCKS5 port",
+        "pref.socks.port.d": "Local inbound. A connection can set its own.",
+        "pref.tun.d": "next, tun2socks for now",
+        "pref.off": "off",
+        "pop.overlay": "Overlay IP",
+        "pref.route": "Route",
+        "edit.tun": "Tunnel interface",
+        "edit.tun.d": "Our address on the interface. The machine default is in Settings, off unless you turn it on.",
+        "pop.tun": "Tunnel",
+        "pop.setup": "Settings",
+        "pref.fail": "Hand off to a live one",
+        "pref.fail.d": "If it drops, the route moves to another tunnel.",
+        "pref.default_route": "Allow default route",
+        "pref.default_route.d": "Send all internet through loft. Off — loft net only.",
+        "pref.hold": "Don’t restore direct internet",
+        "pref.hold.d": "Last tunnel died — the machine stays dark.",
+        "route.reset": "Reset routes",
+        "route.reset.d": "Give this machine its direct internet back.",
+
+        "route.held": "route held",
+        "route.tag": "route",
+        "split": "Split routing",
+        "split.d": "Around loft uses the direct route from before loft.",
+        "split.sub": "Around loft uses the direct route remembered before loft. Works even when loft is closed.",
+        "split.sub.off": "Off — lists stay out of the system table.",
+        "split.native": "direct 192.168.1.1 · en0",
+        "split.via": "Through loft",
+        "split.bypass": "Around loft",
+        "split.add": "Add",
+        "split.nets": "nets",
+        "split.net": "net",
+        "split.src.repo": "repo",
+        "split.src.me": "mine",
+        "split.repo": "Repository",
+        "split.import.title": "Import routes",
+        "split.import.body": "Keenetic .bat or loft-routes. :: rem is the service name.",
+        "split.import.drop": "Drop a .bat or .loft-routes file",
+        "split.import.detect": "Keenetic · 214 lines · no direction",
+        "split.import.where": "Put them",
+        "split.import.go": "Add 214 routes",
+        "split.export.title": "Export routes",
+        "split.export.body": "Keenetic reads both. Loft writes the service name and direction in the rem.",
+        "split.export.fmt": "Format",
+        "split.export.keen": "Keenetic .bat",
+        "split.export.loft": "Loft",
+        "split.export.which": "Which list",
+        "split.export.save": "Save loft-routes.bat",
+        "split.export.save.keen": "Save YouTube.bat",
+        "split.repo.body": "Raw .bat from GitHub or your host. Usually the through-loft list.",
+        "split.repo.url": "List URL",
+        "split.repo.auto": "Update on its own",
+        "split.repo.auto.d": "Once a day. Leaves your own rows alone.",
+        "split.repo.last": "Today · 214 routes",
+        "split.repo.pull": "Update now",
+        "split.add.title": "Network",
+        "split.add.body": "Address or CIDR. Service name is what you see in the list.",
+        "split.add.net": "Network or address",
+        "split.add.name": "Service",
+        "split.add.go": "Add",
+        "pref.select.d": "outbound order in YAML",
+        "pref.lang": "Language",
+        "pref.lang.d": "takes effect immediately",
+        "pref.lang.ru": "Russian",
+        "pref.lang.en": "English",
+        "pref.diag": "Extended journal",
+        "pref.diag.d": "Routes, DNS, loft-priv. Rotating file.",
+        "about.ver": "1.0.3",
+        "about.proto": "protocols",
+        "about.loft": "loft/1.0",
+        "about.loft.v": "get · ws · h2 · quic · h3 · mask",
+        "about.sstp": "SSTP",
+        "about.sstp.v": "ppp · mschapv2 · pap",
+        "about.vless": "VLESS",
+        "about.vless.v": "tcp · tls · reality · xhttp",
+        "about.trojan": "Trojan",
+        "about.trojan.v": "tcp · tls · reality · xhttp",
+        "about.blurb": "From the street — ordinary HTTPS.<br>Inside, a network of your own.",
+        "live": "get · live",
+        "conn": "Connection",
+        "conns": "Connections",
+        "conns.sub": "Each has its own key and address. One is active.",
+        "conns.sub.multi": "Each opens on its own.",
+        "conns.multi": "Multiple",
+        "conn.active": "active",
+        "conn.up": "open",
+        "conn.down": "closed",
+        "conn.err": "error",
+        "conn.fail": "failed",
+        "conn.retry": "Retry",
+        "conn.retry.wait": "Retry (%d)",
+        "conn.cancel": "Cancel",
+        "edit": "Edit",
+        "edit.title": "Connection",
+        "edit.name": "Name",
+        "edit.save": "Save",
+        "edit.delete": "Delete",
+        "edit.socks": "SOCKS5",
+        "edit.sstp.dns": "DNS",
+        "edit.sstp.dns.ph": "empty — from the server, else the gateway",
+        "edit.sstp.dns.replace": "These addresses only",
+        "edit.sstp.dns.replace.d": "Skip the server and the PPP gateway.",
+        "edit.dns.ph.loft": "empty — from the node",
+        "edit.dns.ph.vless": "comma-separated addresses",
+        "edit.dns.system": "DNS into the system",
+        "edit.dns.system.d": "While the tunnel is up, write resolvers into the Mac network services.",
+        "pref.multi": "Multiple outbounds",
+        "pref.multi.d": "Each has its own Open and status.",
+        "pref.socks.each": "per connection",
+        "open.one": "Open",
+        "close.one": "Disconnect",
+        "conn.count": "open",
+        "conn.add": "Manual",
+        "import": "Import",
+        "export": "Export",
+        "import.title": "Import",
+        "import.body": "The file with the key and address you were given.",
+        "import.drop": "Drop a client.yaml, .loft or .vpn here",
+        "import.pick": "Choose file…",
+        "export.title": "Export",
+        "export.body": "Save the current connection as a file.",
+        "export.save": "Save Office.loft",
+        "export.warn": "The file contains the access key. Don’t share it with anyone.",
+        "key.orfile": "Or import a file",
+      },
+    };
+
+    const params = new URLSearchParams(location.search);
+    let lang = params.get("lang") === "ru" ? "ru" : "en";
+    let current = "hero";
+    const t = (k) => I18N[lang][k] || k;
+    const PROFILES = [
+      { id: "office", ru: "Офис", en: "Office", host: "cdn.example.com", path: "/static/v3/build", kind: "get", file: "office.loft", socks: "1080", ip: "10.8.17.4", gw: "10.8.17.1", up: true, err: false, tun: true },
+      { id: "lab", ru: "Lab", en: "Lab", host: "app.example.com", path: "/api/v1/sync", kind: "ws", file: "lab.loft", socks: "1081", ip: "10.8.18.2", gw: "10.8.18.1", up: true, err: false, tun: true },
+      { id: "home", ru: "Дом", en: "Home", host: "edge.home.lan", path: "", kind: "get", file: "home.loft", socks: "1082", ip: "10.8.19.3", gw: "10.8.19.1", up: false, err: false, tun: false },
+    ];
+    let activeId = "office";
+    let multi = params.get("multi") === "1";
+    let editingId = "office";
+    let vlessMode = params.get("vless") === "manual" ? "manual" : "link";
+    let holdOn = params.get("hold") === "1";
+    let defaultRouteOn = params.get("defroute") !== "0";
+    let failoverOn = params.get("fail") !== "0";
+    let heldNow = params.get("scene") === "hold";
+    let splitTab = params.get("stab") === "bypass" ? "bypass" : "via";
+    let splitFmt = params.get("sfmt") === "keen" ? "keen" : "loft";
+    let splitAuto = params.get("sauto") !== "0";
+    let splitOn = params.get("split") === "1";
+    let sharedSocks = params.get("socks") !== "0";
+    let simpleOn = params.get("simple") === "1";
+    let dockMode = ["always", "window", "never"].includes(params.get("dock")) ? params.get("dock") : "window";
+    let reconnectOn = params.get("reconnect") !== "0";
+    let setTab = ["gen", "route", "client"].includes(params.get("settab")) ? params.get("settab") : "gen";
+    let socksPort = Number(params.get("sport")) > 0 && Number(params.get("sport")) < 65536 ? Number(params.get("sport")) : 1080;
+    const dedicatedPort = (p) => {
+      const d = String(p.socks || "");
+      return d && d !== String(socksPort) ? d : "";
+    };
+    const gwOf = (p) => {
+      if (p.gw) return p.gw;
+      const a = String(p.ip || "").split(".");
+      if (a.length === 4 && a[3] !== "1") return a[0] + "." + a[1] + "." + a[2] + ".1";
+      return t("pop.tun");
+    };
+    const routeOf = (p, on, fail, locked) => {
+      if (locked) return t("route.held");
+      if (on && !fail && p.tun) return gwOf(p);
+      if (p.tun) return defaultRouteOn ? t("edit.tun") : t("pop.tun");
+      return "SOCKS5";
+    };
+    const socksOf = (p) => {
+      const d = dedicatedPort(p);
+      if (d) return d;
+      if (sharedSocks) return String(socksPort);
+      let n = socksPort;
+      for (const x of PROFILES) {
+        if (x.id === p.id) return String(n);
+        if (!dedicatedPort(x)) n += 1;
+      }
+      return String(socksPort);
+    };
+    const ROUTES = [
+      { id: "yt", ru: "YouTube", en: "YouTube", via: true, cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
+      { id: "cf", ru: "Cloudflare", en: "Cloudflare", via: true, cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
+      { id: "gpt", ru: "ChatGPT", en: "ChatGPT", via: true, cidrs: ["104.18.32.0/24"], src: "me" },
+      { id: "gos", ru: "Госуслуги", en: "Gov services", via: false, cidrs: ["91.226.245.0/24", "5.61.16.0/21"], src: "me" },
+      { id: "lan", ru: "Локальная сеть", en: "LAN", via: false, cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
+    ];
+    const rname = (r) => (lang === "en" ? r.en : r.ru);
+    const routesVia = () => ROUTES.filter((r) => r.via);
+    const routesBypass = () => ROUTES.filter((r) => !r.via);
+    const routeCount = (list) => list.reduce((n, r) => n + r.cidrs.length, 0);
+    const pname = (p) => (lang === "en" ? p.en : p.ru);
+    const active = () => PROFILES.find((p) => p.id === activeId);
+    const anyUp = () => PROFILES.some((p) => p.up);
+    const anyErr = () => PROFILES.some((p) => p.err);
+    const liveTuns = () => PROFILES.filter((p) => p.tun && p.up && !p.err);
+    const routeOwner = () => {
+      if (multi) return liveTuns()[0] || null;
+      const p = active();
+      return p && p.tun ? p : null;
+    };
+    const markClass = (on, err) => (err ? "err" : on ? "on" : "");
+    const multiSummary = (on) => {
+      if (!on) return t("status.off");
+      const n = PROFILES.filter((x) => x.up).length;
+      const e = PROFILES.filter((x) => x.err).length;
+      if (e && n) return t("conn.count") + " · " + n + " · " + t("conn.err");
+      if (e) return t("conn.fail");
+      if (n) return t("conn.count") + " · " + n;
+      return t("status.off");
+    };
+
+    const HEART = `<svg class="heart" viewBox="0 0 7 6" width="12" height="10" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>
+      <rect x="0" y="1" width="7" height="2"/><rect x="1" y="3" width="5" height="1"/>
+      <rect x="2" y="4" width="3" height="1"/><rect x="3" y="5" width="1" height="1"/>
+    </svg>`;
+    const MARK = `<svg viewBox="0 0 96 96" class="mark MARKCLASS">
+      <path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/>
+      <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+    </svg>`;
+
+    const popover = (on, err, held) => {
+      const p = active();
+      const locked = !!(held || heldNow);
+      const showReset = locked;
+      const resetBtn = showReset ? `<button class="btn reset" data-reset>${t("route.reset")}</button>` : "";
+      if (multi) {
+        const n = on && !locked ? PROFILES.filter((x) => x.up).length : 0;
+        const e = on && !locked && anyErr();
+        const lamp = locked || e ? "err" : n > 0 ? "on" : "";
+        const sub = locked ? t("route.held") : on ? multiSummary(true) : t("status.off");
+        return `
+      <div class="popover">
+        <div class="pop-head">
+          ${MARK.replace("MARKCLASS", lamp)}
+          <div>
+            <div class="t">loft</div>
+            <div class="s ${locked || e ? "err" : ""}">${sub}</div>
+          </div>
+        </div>
+        ${resetBtn}
+        <div class="list plist sess">${profileRows({ compact: true, forceDown: !on || locked })}</div>
+        <div class="pop-foot">
+          <a href="#" data-go="list">${t("open")}</a>
+          <button class="btn ghost" style="width:auto;padding:6px 8px">${t("quit")}</button>
+        </div>
+      </div>`;
+      }
+      const fail = !!err;
+      const primary = fail
+        ? `<button class="btn connect err" data-go="on">${t("conn.retry.wait").replace("%d", "3")}</button>`
+        : on && !locked
+          ? `<button class="btn connect on">${t("disconnect")}</button>`
+          : `<button class="btn connect" data-go="on">${t("connect")}</button>`;
+      return `
+      <div class="popover">
+        <div class="pop-head">
+          ${MARK.replace("MARKCLASS", locked || fail ? "err" : on ? "on" : "")}
+          <div>
+            <div class="t">loft</div>
+            <div class="s ${locked || fail ? "err" : ""}">${locked ? t("route.held") : fail ? t("conn.fail") : on ? pname(p) : t("status.off")}</div>
+          </div>
+          ${on && !fail && !locked ? `<div class="pop-rate"><div>↑ 12 kb/s</div><div>↓ 48 kb/s</div></div>` : ""}
+        </div>
+        ${primary}
+        ${resetBtn}
+        <div class="rows">
+          <div class="row pick" data-go="switch"><span class="k">${t("conn")}</span><span class="v">${pname(p)} <span class="chev">›</span></span></div>
+          ${simpleOn ? "" : on && !fail && !locked ? `<div class="row"><span class="k">${t("pop.overlay")}${p.tun ? `<span class="pop-badge">${t("pop.tun")}</span>` : ""}</span><span class="v">${p.ip}</span></div>
+          <div class="row"><span class="k">${t("pref.route")}</span><span class="v">${routeOf(p, on, fail, locked)}</span></div>
+          ${p.socks ? `<div class="row"><span class="k">SOCKS5</span><span class="v">127.0.0.1:${socksOf(p)}</span></div>` : ""}` : ""}
+        </div>
+        ${simpleOn ? "" : `<div class="spark">${locked ? `<span class="err">${t("route.held")}</span>` : fail ? `<span class="err">${t("conn.err")}</span>` : on ? `<span>loft/1.0  ·  ${p.kind}  ·  mux  ·  mask</span>` : `<span>${t("session.none")}</span>`}</div>`}
+        <div class="pop-foot">
+          <a href="#" data-go="list">${t("open")}</a>
+          <button class="btn ghost" style="width:auto;padding:6px 8px">${t("quit")}</button>
+        </div>
+      </div>`;
+    };
+
+    function profileRows(opts = {}) {
+      const compact = !!opts.compact;
+      return PROFILES.map((p) => {
+        const selected = p.id === activeId;
+        const err = multi && !opts.forceDown && p.err;
+        const up = err ? false : (multi ? (opts.forceDown ? false : p.up) : selected);
+        const port = socksOf(p);
+        const host = err ? t("conn.fail") : (up ? p.ip + " · " + port : p.host + " · " + port);
+        const tag = err
+          ? t("conn.err")
+          : multi
+            ? (up ? t("conn.up") : t("conn.down")) + (simpleOn || sharedSocks ? "" : " · " + port)
+            : (selected ? t("conn.active") : simpleOn ? "" : p.kind);
+        const action = err
+          ? `<button class="mini" data-retry="${p.id}">${t("conn.retry")}</button>`
+          : multi
+            ? `<button class="mini ${up ? "on" : ""}" data-toggle="${p.id}">${up ? t("close.one") : t("open.one")}</button>`
+            : "";
+        const editBtn = compact ? "" : `<button class="ghost-sm" data-edit="${p.id}">${t("edit")}</button>`;
+        const owns = up && p.tun && routeOwner() && routeOwner().id === p.id && !opts.forceDown;
+        const nameLine = simpleOn
+          ? pname(p)
+          : `${pname(p)}${owns ? `<span class="route-tag">${t("route.tag")}</span>` : p.tun && !compact ? `<span class="route-tag" style="color:var(--mute)">${t("pop.tun")}</span>` : ""}`;
+        const sub = simpleOn
+          ? (err ? `<div class="u err">${t("conn.fail")}</div>` : "")
+          : `<div class="u ${err ? "err" : ""}">${compact && multi ? host : (multi ? host : p.host)}</div>`;
+        if (compact && multi) {
+          return `<div class="item ${up ? "live" : ""} ${err ? "err" : ""}" data-profile="${p.id}">
+            <span class="dot ${err ? "err" : up ? "on" : ""}"></span>
+            <div><div class="n">${nameLine}</div>${sub}</div>
+            ${action}
+          </div>`;
+        }
+        return `<div class="item ${up ? "live" : ""} ${err ? "err" : ""}" data-profile="${p.id}">
+          <span class="dot ${err ? "err" : up ? "on" : ""}"></span>
+          <div><div class="n">${nameLine}</div>${sub}</div>
+          <div class="side">
+            ${tag ? `<div class="tag">${tag}</div>` : ""}
+            <div class="side-btns">${action}${editBtn}</div>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    const scenes = {
+      hero: () => popover(true) + mainWin(true, false, true),
+      off: () => popover(false),
+      on: () => popover(true),
+      err: () => popover(multi ? true : false, true),
+      hold: () => popover(false, false, true),
+      onboard: () => `
+        <div class="win onb">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            ${MARK.replace("MARKCLASS", "on")}
+            <div class="steps">${t("key.step")}</div>
+            <h1>${t("key.title")}</h1>
+            <p>${t("key.body")}</p>
+            <input class="field" placeholder="lt_…" value="lt_" spellcheck="false" />
+            <div class="hint">${t("key.hint")}</div>
+            <button class="btn connect on" style="margin-top:22px" data-go="url">${t("continue")}</button>
+            <button class="btn back" data-go="import">${t("key.orfile")}</button>
+          </div>
+        </div>`,
+      url: () => `
+        <div class="win onb tall">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left">
+            ${MARK.replace("MARKCLASS", "on")}
+            <div class="steps" style="text-align:center">${t("url.step")}</div>
+            <h1 style="text-align:center">${t("url.title")}</h1>
+            <p style="text-align:center">${t("url.body")}</p>
+            <div class="label">${t("url.label")}</div>
+            <input class="field sm" placeholder="https://" value="https://" spellcheck="false" />
+            <div class="label">${t("url.type")}</div>
+            <div class="seg">
+              ${["get","ws","h2","quic","h3"].map((id) => `<button type="button" class="${id === "get" ? "on" : ""}" data-type="${id}">${t("url." + id)}</button>`).join("")}
+            </div>
+            <div class="label">${t("url.path")}</div>
+            <input class="field sm" placeholder="/static/v3/build" spellcheck="false" />
+            <div class="hint" style="margin-top:10px">${t("url.hint")}</div>
+            <button class="btn connect on" style="margin-top:18px" data-go="on">${t("url.go")}</button>
+            <button class="btn back" data-go="onboard">${t("back")}</button>
+          </div>
+        </div>`,
+      main: () => mainWin(true, false),
+      out: () => mainWin(true, true),
+      list: () => `
+        <div class="win conns${simpleOn ? " simple" : ""}">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            <div class="head-row">
+              <h1>${t("conns")}</h1>
+              ${simpleOn ? "" : `<div class="multi-switch" data-multi title="${t("pref.multi")}">
+                <span class="multi-cap">${t("conns.multi")}</span>
+                <div class="toggle ${multi ? "on" : ""}"><i></i></div>
+              </div>`}
+            </div>
+            ${simpleOn ? "" : `<div class="subline">${multi ? t("conns.sub.multi") : t("conns.sub")}</div>`}
+            <div class="list plist ${multi ? "multi" : ""}">${profileRows()}</div>
+            <div class="actions">
+              <button class="btn" data-go="import">${t("import")}</button>
+              <button class="btn" data-go="export">${t("export")}</button>
+              <button class="btn" data-go="onboard">${t("conn.add")}</button>
+            </div>
+          </div>
+        </div>`,
+      edit: () => {
+        const p = PROFILES.find((x) => x.id === editingId) || active();
+        const up = multi ? p.up : p.id === activeId;
+        return `
+        <div class="win onb edit">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left">
+            <h1 style="text-align:center">${t("edit.title")}</h1>
+            <div class="edit-status">
+              <span class="st ${up ? "on" : ""}">${up ? t("conn.up") : t("conn.down")}${multi && !simpleOn ? " · " + socksOf(p) : ""}</span>
+              ${multi ? `<button class="mini ${up ? "on" : ""}" data-toggle="${p.id}">${up ? t("close.one") : t("open.one")}</button>` : ""}
+            </div>
+            <div class="label">${t("edit.name")}</div>
+            <input class="field sm" value="${pname(p)}" />
+            <div class="label">${t("key.title")}</div>
+            <input class="field sm" value="lt_••••••••" spellcheck="false" />
+            <div class="label">${t("url.label")}</div>
+            <input class="field sm" value="https://${p.host}" spellcheck="false" />
+            ${simpleOn ? "" : `<div class="label">${t("url.type")}</div>
+            <div class="seg">
+              ${["get","ws","h2","quic","h3"].map((id) => `<button type="button" class="${p.kind === id ? "on" : ""}" data-type="${id}">${t("url." + id)}</button>`).join("")}
+            </div>
+            <div class="edit-pair">
+              <div>
+                <div class="label">${t("url.path")}</div>
+                <input class="field sm" value="${p.path}" placeholder="/static/v3/build" />
+              </div>
+              <div>
+                <div class="label">${t("edit.socks")}</div>
+                <input class="field sm" value="${dedicatedPort(p) ? "127.0.0.1:" + dedicatedPort(p) : ""}" placeholder="127.0.0.1:${socksPort}" />
+              </div>
+            </div>
+            <div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("edit.tun")}</div><div class="d">${t("edit.tun.d")}</div></div>
+              <div class="toggle ${p.tun ? "on" : ""}" data-tun="${p.id}"><i></i></div>
+            </div>
+            <div class="label">${t("edit.sstp.dns")}</div>
+            <input class="field sm" value="${p.dns || ""}" placeholder="${p.kind === "sstp" ? t("edit.sstp.dns.ph") : p.kind === "vless" ? t("edit.dns.ph.vless") : t("edit.dns.ph.loft")}" spellcheck="false" />
+            ${p.kind === "sstp" ? `<div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("edit.sstp.dns.replace")}</div><div class="d">${t("edit.sstp.dns.replace.d")}</div></div>
+              <div class="toggle ${p.dnsReplace ? "on" : ""}"><i></i></div>
+            </div>` : ""}
+            <div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("edit.dns.system")}</div><div class="d">${t("edit.dns.system.d")}</div></div>
+              <div class="toggle ${p.dnsSystem ? "on" : ""}"><i></i></div>
+            </div>`}
+            <div class="edit-foot">
+              <button class="btn connect on" data-go="list">${t("edit.save")}</button>
+              <div class="edit-alt">
+                <button class="btn back" data-go="list">${t("back")}</button>
+                <button class="btn back" style="color:var(--copper)">${t("edit.delete")}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      },
+      editvless: () => {
+        const manual = vlessMode === "manual";
+        const linkFields = `
+            <div class="label">${t("edit.vless.url")}</div>
+            <input class="field sm" value="vless://11111111-1111-1111-1111-111111111111@de1.example.com:443?security=reality&sni=www.example.com&fp=chrome&pbk=…&sid=abcd" spellcheck="false" />`;
+        const manualFields = `
+            <div class="label">${t("edit.vless.uuid")}</div>
+            <input class="field sm" value="11111111-1111-1111-1111-111111111111" spellcheck="false" />
+            <div class="edit-pair">
+              <div>
+                <div class="label">${t("edit.vless.host")}</div>
+                <input class="field sm" value="de1.example.com" spellcheck="false" />
+              </div>
+              <div>
+                <div class="label">${t("edit.vless.port")}</div>
+                <input class="field sm" value="443" />
+              </div>
+            </div>
+            <div class="label">${t("edit.vless.sec")}</div>
+            <div class="seg">
+              <button type="button">${t("edit.vless.tls")}</button>
+              <button type="button" class="on">${t("edit.vless.reality")}</button>
+            </div>
+            <div class="label">${t("edit.vless.net")}</div>
+            <div class="seg">
+              <button type="button" class="on">${t("edit.vless.tcp")}</button>
+              <button type="button">${t("edit.vless.xhttp")}</button>
+            </div>
+            <div class="label">${t("edit.vless.sni")}</div>
+            <input class="field sm" value="www.example.com" spellcheck="false" />
+            <div class="label">${t("edit.vless.fp")}</div>
+            <input class="field sm" value="chrome" spellcheck="false" />
+            <div class="label">${t("edit.vless.pbk")}</div>
+            <input class="field sm" value="" placeholder="pbk" spellcheck="false" />
+            <div class="label">${t("edit.vless.sid")}</div>
+            <input class="field sm" value="abcd" spellcheck="false" />
+            <div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("edit.vless.vision")}</div><div class="d">${t("edit.vless.vision.d")}</div></div>
+              <div class="toggle"><i></i></div>
+            </div>`;
+        return `
+        <div class="win onb edit">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left">
+            <h1 style="text-align:center">${t("edit.title")}</h1>
+            <div class="label">${t("edit.name")}</div>
+            <input class="field sm" value="Travel" />
+            <div class="label">${t("vpn.type")}</div>
+            <div class="seg">
+              <button type="button">loft</button>
+              <button type="button">SSTP</button>
+              <button type="button" class="on">VLESS</button>
+              <button type="button">Trojan</button>
+            </div>
+            <div class="seg" style="margin-top:10px">
+              <button type="button" class="on">${t("edit.main")}</button>
+              <button type="button">${t("edit.adv")}</button>
+            </div>
+            <div class="seg" style="margin-top:10px">
+              <button type="button" class="${manual ? "" : "on"}" data-vless-mode="link">${t("edit.vless.link")}</button>
+              <button type="button" class="${manual ? "on" : ""}" data-vless-mode="manual">${t("edit.vless.manual")}</button>
+            </div>
+            ${manual ? manualFields : linkFields}
+            <div class="label">${t("edit.socks")}</div>
+            <input class="field sm" placeholder="127.0.0.1:${socksPort}" />
+            <div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("edit.tun")}</div><div class="d">${t("edit.tun.d")}</div></div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="edit-foot">
+              <button class="btn connect on" data-go="list">${t("edit.save")}</button>
+              <div class="edit-alt">
+                <button class="btn back" data-go="list">${t("back")}</button>
+                <button class="btn back" style="color:var(--copper)">${t("edit.delete")}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      },
+      switch: () => `
+        <div class="popover" style="width:300px">
+          <div class="pop-head">
+            ${MARK.replace("MARKCLASS", markClass(multi ? anyUp() : true, anyErr()))}
+            <div>
+              <div class="t">${t("conns")}</div>
+              <div class="s ${anyErr() ? "err" : ""}">${multi ? multiSummary(true) : (simpleOn ? pname(active()) : t("conns.sub"))}</div>
+            </div>
+          </div>
+          <div class="list plist ${multi ? "sess" : ""}">${profileRows({ compact: true })}</div>
+          <div class="pop-foot">
+            <a href="#" data-go="import">${t("import")}</a>
+            <a href="#" data-go="edit">${t("edit")}</a>
+          </div>
+        </div>`,
+      import: () => `
+        <div class="win onb">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            ${MARK.replace("MARKCLASS", "on")}
+            <h1>${t("import.title")}</h1>
+            <p>${t("import.body")}</p>
+            <div class="drop">${t("import.drop")}</div>
+            <button class="btn connect on" style="margin-top:18px" data-go="list">${t("import.pick")}</button>
+            <button class="btn back" data-go="onboard">${t("back")}</button>
+          </div>
+        </div>`,
+      export: () => {
+        const p = active();
+        const fname = pname(p) + ".loft";
+        return `
+        <div class="win onb">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            ${MARK.replace("MARKCLASS", "on")}
+            <h1>${t("export.title")}</h1>
+            <p>${t("export.body")}</p>
+            <div class="file">${fname}
+token: lt_…
+select: auto
+outbounds:
+  - type: ${p.kind}
+    url: https://${p.host}</div>
+            <div class="warn">${t("export.warn")}</div>
+            <button class="btn connect on" style="margin-top:18px" data-go="list">${lang === "en" ? "Save " : "Сохранить "}${fname}</button>
+            <button class="btn back" data-go="list">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      set: () => {
+        const tabBtn = (id, label) => `<button type="button" class="${setTab === id ? "on" : ""}" data-settab="${id}">${label}</button>`;
+        const gen = `
+            <div class="pref"><div><div class="n">${t("pref.login")}</div><div class="d">${t("pref.login.d")}</div></div><div class="toggle on"><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("pref.dock")}</div><div class="d">${t("pref.dock.d")}</div></div><select class="loft-select" data-dock>${["always","window","never"].map((id) => `<option value="${id}" ${dockMode === id ? "selected" : ""}>${t("pref.dock." + id)}</option>`).join("")}</select></div>
+            <div class="pref"><div><div class="n">${t("pref.auto")}</div><div class="d">${t("pref.auto.d")}</div></div><div class="toggle on"><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("pref.simple")}</div><div class="d">${t("pref.simple.d")}</div></div><div class="toggle ${simpleOn ? "on" : ""}" data-simple><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("pref.rate")}</div><div class="d">${t("pref.rate.d")}</div></div><div class="rate-bits"><button type="button" class="on">${t("pref.rate.kbit")}</button><button type="button">${t("pref.rate.kb")}</button></div></div>
+            <div class="pref"><div><div class="n">${t("pref.lang")}</div><div class="d">${t("pref.lang.d")}</div></div><select class="loft-select" data-uilang>${[["ru", t("pref.lang.ru")],["en", t("pref.lang.en")]].map(([id, lab]) => `<option value="${id}" ${lang === id ? "selected" : ""}>${lab}</option>`).join("")}</select></div>
+            <div class="pref" style="border:0"><div><div class="n">${t("pref.diag")}</div><div class="d">${t("pref.diag.d")}</div></div><div class="toggle"><i></i></div></div>`;
+        const route = `
+            <div class="pref"><div><div class="n">${t("pref.default_route")}</div><div class="d">${t("pref.default_route.d")}</div></div><div class="toggle ${defaultRouteOn ? "on" : ""}" data-defroute><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("pref.fail")}</div><div class="d">${t("pref.fail.d")}</div></div><div class="toggle ${failoverOn ? "on" : ""}" data-fail><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("pref.hold")}</div><div class="d">${t("pref.hold.d")}</div></div><div class="toggle ${holdOn ? "on" : ""}" data-hold><i></i></div></div>
+            <div class="pref"><div class="pick" data-go="split" style="min-width:0;flex:1;cursor:pointer"><div class="n">${t("split")}</div><div class="d">${t("split.d")}</div></div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>`;
+        const client = `
+            <div class="pref"><div><div class="n">${t("pref.reconnect")}</div><div class="d">${t("pref.reconnect.d")}</div></div><div class="toggle ${reconnectOn ? "on" : ""}" data-reconnect><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("pref.multi")}</div><div class="d">${t("pref.multi.d")}</div></div><div class="toggle ${multi ? "on" : ""}" data-multi><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("pref.socks.share")}</div><div class="d">${sharedSocks ? t("pref.socks.share.d") : t("pref.socks.share.off")}</div></div><div class="toggle ${sharedSocks ? "on" : ""}" data-socks><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("pref.socks.port")}</div><div class="d">${t("pref.socks.port.d")}</div></div><span class="muted" style="font-size:12px">${socksPort}</span></div>`;
+        const body = setTab === "route" ? route : setTab === "client" ? client : gen;
+        const foot = `
+            <div class="sheet-foot" style="display:flex;justify-content:center;gap:20px">
+              <button class="btn back" type="button" style="margin:0" data-defaults>${t("pref.defaults")}</button>
+              <button class="btn back" type="button" style="margin:0">${t("journal")}</button>
+              <button class="btn back" data-go="about" style="margin:0">${t("nav.about")}</button>
+            </div>`;
+        return `
+        <div class="win sheet">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            <div class="head-row">
+              <h1>${t("settings")}</h1>
+              <button class="btn" data-reset style="background:#3a332e;color:var(--snow);padding:5px 10px;font-size:11.5px;margin:0;flex-shrink:0">${t("route.reset")}</button>
+            </div>
+            <div class="split-tabs" style="margin:8px 0 10px">
+              ${tabBtn("gen", t("set.gen"))}
+              ${tabBtn("route", t("pref.route"))}
+              ${tabBtn("client", t("set.client"))}
+            </div>
+            ${body}
+            ${foot}
+          </div>
+        </div>`;
+      },
+      split: () => {
+        const list = splitTab === "bypass" ? routesBypass() : routesVia();
+        const rows = list.map((r) => {
+          const n = r.cidrs.length;
+          const net = n === 1 ? t("split.net") : t("split.nets");
+          return `<div class="rrow">
+            <div><div class="n">${rname(r)}</div><div class="u">${r.cidrs.slice(0, 2).join(" · ")}${n > 2 ? " · …" : ""}</div></div>
+            <div class="meta">${n} ${net}<div class="src">${r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div></div>
+          </div>`;
+        }).join("");
+        return `
+        <div class="win split">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            <div class="head-row">
+              <h1>${t("split")}</h1>
+              <div class="toggle ${splitOn ? "on" : ""}" data-split title="${t("split")}"><i></i></div>
+            </div>
+            <div class="split-sub">${splitOn ? t("split.sub") : t("split.sub.off")}</div>
+            ${splitOn ? `<div class="split-native">${t("split.native")}</div>` : ""}
+            <div class="split-tabs">
+              <button type="button" class="${splitTab === "via" ? "on" : ""}" data-stab="via">${t("split.via")} <span class="n">${routeCount(routesVia())}</span></button>
+              <button type="button" class="${splitTab === "bypass" ? "on" : ""}" data-stab="bypass">${t("split.bypass")} <span class="n">${routeCount(routesBypass())}</span></button>
+            </div>
+            <div class="split-list ${splitOn ? "" : "dim"}">${rows}</div>
+            <button class="ghost-sm" data-go="splitadd" style="align-self:flex-start;margin:8px 0 4px">+ ${t("split.add")}</button>
+            <div class="actions">
+              <button class="btn" data-go="splitin">${t("import")}</button>
+              <button class="btn" data-go="splitout">${t("export")}</button>
+              <button class="btn" data-go="splitrepo">${t("split.repo")}</button>
+            </div>
+          </div>
+        </div>`;
+      },
+      splitin: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.import.title")}</h1>
+            <p>${t("split.import.body")}</p>
+            <div class="drop">${t("split.import.drop")}</div>
+            <div class="hint" style="margin-top:10px">${t("split.import.detect")}</div>
+            <div class="label">${t("split.import.where")}</div>
+            <div class="seg">
+              <button type="button" class="on" data-stab="via">${t("split.via")}</button>
+              <button type="button" data-stab="bypass">${t("split.bypass")}</button>
+            </div>
+            <button class="btn connect on" style="margin-top:16px" data-go="split">${t("split.import.go")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`,
+      splitout: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.export.title")}</h1>
+            <p>${t("split.export.body")}</p>
+            <div class="label">${t("split.export.fmt")}</div>
+            <div class="seg">
+              <button type="button" class="${splitFmt === "loft" ? "on" : ""}" data-sfmt="loft">${t("split.export.loft")}</button>
+              <button type="button" class="${splitFmt === "keen" ? "on" : ""}" data-sfmt="keen">${t("split.export.keen")}</button>
+            </div>
+            ${splitFmt === "keen" ? `<div class="label">${t("split.export.which")}</div>
+            <div class="seg">
+              <button type="button" class="${splitTab === "via" ? "on" : ""}" data-stab="via">${t("split.via")}</button>
+              <button type="button" class="${splitTab === "bypass" ? "on" : ""}" data-stab="bypass">${t("split.bypass")}</button>
+            </div>` : ""}
+            <div class="fmt">${splitFmt === "loft"
+              ? "route ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube | via"
+              : "route ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube"}</div>
+            <button class="btn connect on" data-go="split">${splitFmt === "loft" ? t("split.export.save") : t("split.export.save.keen")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`,
+      splitrepo: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.repo")}</h1>
+            <p>${t("split.repo.body")}</p>
+            <div class="label">${t("split.repo.url")}</div>
+            <input class="field sm" value="https://raw.githubusercontent.com/loft/routes/main/via.bat" spellcheck="false" />
+            <div class="label">${t("split.import.where")}</div>
+            <div class="seg">
+              <button type="button" class="on">${t("split.via")}</button>
+              <button type="button">${t("split.bypass")}</button>
+            </div>
+            <div class="pref" style="margin-top:10px;padding:8px 0;border:0">
+              <div><div class="n">${t("split.repo.auto")}</div><div class="d">${t("split.repo.auto.d")}</div></div>
+              <div class="toggle ${splitAuto ? "on" : ""}" data-sauto><i></i></div>
+            </div>
+            <div class="hint">${t("split.repo.last")}</div>
+            <button class="btn connect on" style="margin-top:14px" data-go="split">${t("split.repo.pull")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`,
+      splitadd: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.add.title")}</h1>
+            <p>${t("split.add.body")}</p>
+            <div class="label">${t("split.add.net")}</div>
+            <input class="field sm" placeholder="142.250.0.0/16" spellcheck="false" />
+            <div class="label">${t("split.add.name")}</div>
+            <input class="field sm" placeholder="YouTube" />
+            <div class="label">${t("split.import.where")}</div>
+            <div class="seg">
+              <button type="button" class="${splitTab === "via" ? "on" : ""}" data-stab="via">${t("split.via")}</button>
+              <button type="button" class="${splitTab === "bypass" ? "on" : ""}" data-stab="bypass">${t("split.bypass")}</button>
+            </div>
+            <button class="btn connect on" style="margin-top:16px" data-go="split">${t("split.add.go")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`,
+      about: () => `
+        <div class="win about">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            ${MARK.replace("MARKCLASS", "on")}
+            <h1>loft</h1>
+            <p class="ver">${t("about.ver")}</p>
+            <div class="spec-cap">${t("about.proto")}</div>
+            <div class="spec">
+              <span class="k">${t("about.loft")}</span><span class="v">${t("about.loft.v")}</span>
+              <span class="k">${t("about.sstp")}</span><span class="v">${t("about.sstp.v")}</span>
+              <span class="k">${t("about.vless")}</span><span class="v">${t("about.vless.v")}</span>
+              <span class="k">${t("about.trojan")}</span><span class="v">${t("about.trojan.v")}</span>
+            </div>
+            <p class="blurb">${t("about.blurb")}</p>
+            <p class="madeby">Made with love ${HEART} by A<sup>3</sup></p>
+          </div>
+        </div>`,
+    };
+
+    function mainWin(on, showOut, aside) {
+      if (multi) {
+        const n = PROFILES.filter((x) => x.up).length;
+        return `
+        <div class="win main ${aside ? "aside" : ""}${simpleOn ? " simple" : ""}">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            <div class="hero">
+              ${MARK.replace("MARKCLASS", n ? "on" : "")}
+              <h1>loft</h1>
+              <div class="pill pick" data-go="list"><span class="dot ${n ? "on" : ""}"></span> ${t("conn.count")} · ${n}</div>
+            </div>
+            <div class="list plist multi">${profileRows()}</div>
+          </div>
+        </div>`;
+      }
+      return `
+        <div class="win main ${aside ? "aside" : ""}${simpleOn ? " simple" : ""}">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            <div class="hero">
+              ${MARK.replace("MARKCLASS", on ? "on" : "")}
+              <h1>loft</h1>
+              <div class="pill pick" data-go="list"><span class="dot ${on ? "on" : ""}"></span> ${on ? pname(active()) : t("status.closed")}</div>
+            </div>
+            <button class="btn connect ${on ? "on" : ""}">${on ? t("disconnect") : t("connect")}</button>
+            ${simpleOn ? "" : `<div class="stats">
+              <div class="stat"><div class="k">${t("pop.overlay")}</div><div class="v">${on ? "10.8.17.4" : "—"}</div></div>
+              <div class="stat"><div class="k">${t("front")}</div><div class="v">${on ? "cdn-get" : "auto"}</div></div>
+              <div class="stat"><div class="k">SOCKS5</div><div class="v">:${socksOf(active())}</div></div>
+            </div>
+            ${showOut ? `
+              <div class="list">
+                <div class="item live"><div><div class="n">cdn-get</div><div class="u">cdn.example.com · /static/v3/build</div></div><div class="tag">${t("live")}</div></div>
+                <div class="item"><div><div class="n">cdn-ws</div><div class="u">app.example.com · /api/v1/sync</div></div><div class="tag">ws</div></div>
+              </div>` : `<div class="spark" style="padding:12px 2px 0"><span>↑ 12 kb/s</span><span>↓ 48 kb/s</span></div>`}`}
+
+          </div>
+        </div>`;
+    }
+
+    const sceneEl = document.getElementById("scene");
+    const mb = document.getElementById("mb-loft");
+
+    function paintBoard() {
+      document.documentElement.lang = lang;
+      document.getElementById("board-sub").textContent = t("board.sub");
+      document.getElementById("board-lang").textContent = t("board.lang");
+      document.getElementById("board-scenes").textContent = t("board.scenes");
+      document.querySelectorAll("nav button[data-i18n]").forEach((b) => {
+        b.textContent = t(b.dataset.i18n);
+      });
+      document.querySelectorAll(".lang button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.lang === lang);
+      });
+    }
+
+    function paintMenuLamp(name) {
+      const svg = document.getElementById("mb-svg");
+      svg.classList.remove("on", "err");
+      const hide = ["onboard", "url", "about", "import", "export"].includes(name);
+      let st = "off";
+      if (hide) st = "off";
+      else if (heldNow || name === "hold" || name === "err" || (multi && name !== "off" && anyErr())) st = "err";
+      else if (multi) st = name !== "off" && anyUp() ? "on" : "off";
+      else if (["on", "hero", "main", "out", "switch", "list", "edit", "editvless"].includes(name)) st = "on";
+      if (st !== "off") svg.classList.add(st);
+      svg.style.opacity = "1";
+    }
+
+    function show(name, keep) {
+      current = name;
+      if (!keep) {
+        PROFILES.forEach((p) => {
+          p.err = false;
+          p.up = p.id === "office" || p.id === "lab";
+        });
+      }
+      if (name === "err") {
+        const lab = PROFILES.find((p) => p.id === "lab");
+        lab.err = true;
+        lab.up = false;
+      }
+      if (name === "hold") {
+        PROFILES.forEach((p) => { p.up = false; p.err = false; });
+        heldNow = true;
+      } else if (!keep) {
+        heldNow = name === "off" && holdOn;
+      }
+      sceneEl.innerHTML = scenes[name]();
+      document.querySelectorAll("nav button[data-scene]").forEach((b) => b.classList.toggle("on", b.dataset.scene === name));
+      mb.classList.toggle("open", name === "on" || name === "off" || name === "hero" || name === "switch" || name === "err" || name === "hold");
+      paintMenuLamp(name);
+      sceneEl.querySelectorAll("[data-go]").forEach((b) => {
+        b.onclick = () => show(b.dataset.go);
+      });
+      sceneEl.querySelectorAll(".seg").forEach((seg) => {
+        seg.querySelectorAll("button").forEach((b) => {
+          b.onclick = () => {
+            seg.querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+            b.classList.add("on");
+          };
+        });
+      });
+      sceneEl.querySelectorAll("[data-vless-mode]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          vlessMode = el.dataset.vlessMode === "manual" ? "manual" : "link";
+          show("editvless", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-stab]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          splitTab = el.dataset.stab;
+          if (current === "split" || current === "splitout") show(current, true);
+          else {
+            const wrap = el.closest(".seg, .split-tabs");
+            if (wrap) wrap.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === el));
+          }
+        };
+      });
+      sceneEl.querySelectorAll("[data-sfmt]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          splitFmt = el.dataset.sfmt;
+          show("splitout", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-sauto]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          splitAuto = !splitAuto;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-split]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          splitOn = !splitOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-socks]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          sharedSocks = !sharedSocks;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-simple]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          simpleOn = !simpleOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-dock]").forEach((el) => {
+        el.onchange = (ev) => {
+          ev.stopPropagation();
+          dockMode = el.value || "window";
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-uilang]").forEach((el) => {
+        el.onchange = (ev) => {
+          ev.stopPropagation();
+          setLang(el.value === "en" ? "en" : "ru");
+        };
+      });
+      sceneEl.querySelectorAll("[data-profile]").forEach((el) => {
+        el.onclick = (ev) => {
+          if (ev.target.closest("[data-toggle],[data-edit],[data-retry]")) return;
+          if (multi) {
+            editingId = el.dataset.profile;
+            if (current === "list" || current === "main") show("edit");
+            return;
+          }
+          activeId = el.dataset.profile;
+          show(current === "switch" ? "on" : current);
+        };
+      });
+      sceneEl.querySelectorAll("[data-toggle]").forEach((b) => {
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          const p = PROFILES.find((x) => x.id === b.dataset.toggle);
+          if (p) {
+            p.up = !p.up;
+            p.err = false;
+          }
+          if (holdOn && liveTuns().length === 0) heldNow = true;
+          if (liveTuns().length > 0) heldNow = false;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-retry]").forEach((b) => {
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          const p = PROFILES.find((x) => x.id === b.dataset.retry);
+          if (p) {
+            p.err = false;
+            p.up = true;
+          }
+          show("on");
+        };
+      });
+      sceneEl.querySelectorAll("[data-edit]").forEach((b) => {
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          editingId = b.dataset.edit;
+          show("edit");
+        };
+      });
+      sceneEl.querySelectorAll("[data-multi]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          multi = !multi;
+          if (!multi) {
+            const firstUp = PROFILES.find((x) => x.up);
+            if (firstUp) activeId = firstUp.id;
+          }
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-reconnect]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          reconnectOn = !reconnectOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-tun]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const p = PROFILES.find((x) => x.id === el.dataset.tun);
+          if (p) p.tun = !p.tun;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-defroute]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          defaultRouteOn = !defaultRouteOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-fail]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          failoverOn = !failoverOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-hold]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          holdOn = !holdOn;
+          if (!holdOn) heldNow = false;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-reset]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          heldNow = false;
+          show("off", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-defaults]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          multi = false;
+          holdOn = false;
+          defaultRouteOn = true;
+          failoverOn = true;
+          splitOn = false;
+          sharedSocks = true;
+          simpleOn = false;
+          dockMode = "window";
+          reconnectOn = true;
+          socksPort = 1080;
+          heldNow = false;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-settab]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          setTab = el.dataset.settab || "gen";
+          show("set", true);
+        };
+      });
+      try {
+        const u = new URL(location.href);
+        u.searchParams.set("scene", name);
+        u.searchParams.set("lang", lang);
+        u.searchParams.set("multi", multi ? "1" : "0");
+        u.searchParams.set("stab", splitTab);
+        u.searchParams.set("sfmt", splitFmt);
+        u.searchParams.set("split", splitOn ? "1" : "0");
+        u.searchParams.set("socks", sharedSocks ? "1" : "0");
+        u.searchParams.set("sport", String(socksPort));
+        u.searchParams.set("simple", simpleOn ? "1" : "0");
+        u.searchParams.set("dock", dockMode);
+        u.searchParams.set("reconnect", reconnectOn ? "1" : "0");
+        u.searchParams.set("settab", setTab);
+        history.replaceState(null, "", u);
+      } catch (_) {}
+    }
+
+    function setLang(next) {
+      lang = next;
+      paintBoard();
+      show(current);
+    }
+
+    document.querySelectorAll("nav button[data-scene]").forEach((b) => {
+      b.onclick = () => show(b.dataset.scene);
+    });
+    document.querySelectorAll(".lang button").forEach((b) => {
+      b.onclick = () => setLang(b.dataset.lang);
+    });
+
+    const qScene = params.get("scene");
+    try {
+      paintBoard();
+      show(qScene && scenes[qScene] ? qScene : "hero");
+    } catch (e) {
+      sceneEl.textContent = String(e && e.stack || e);
+    }
+  </script>
+
+</body>
+</html>
