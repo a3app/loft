@@ -4,7 +4,7 @@
 
 Entware client: one **OpkgTun** interface that KeeneticOS uses in connection priorities and policy routing. Settings live on a LAN port; login is the Keenetic web-admin session.
 
-Wire: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/keenetic.md](../../docs/keenetic.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
+Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/keenetic.md](../../docs/keenetic.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
 
 This directory is the catalog. No binary yet.
 

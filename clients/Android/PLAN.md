@@ -2,7 +2,7 @@
 
 **English** · [Русский](PLAN_ru.md)
 
-Software 1.0.0. Protocol 1.0. This plan does not bump either.
+Software 1.0.0. Protocol 1.0. This plan does not raise either version.
 
 ## Goal
 
@@ -19,7 +19,7 @@ Google TV is the launcher on top of Android TV. One `tv` flavor, one AAR, one `V
 - IKEv2 / WireGuard inside this app. SSTP is in-process Go on the same service.
 - **VIDAA, Tizen, webOS, Roku.** No TUN. Those TVs use Keenetic (or an HDMI stick that runs this client).
 - Fire TV as a separate store listing in the first TV drop (same APK can sideload).
-- Play Store listing in the first binary drop (sideload is enough).
+- Play Store listing in the first shipping build (sideload is enough).
 - Dist / APK on the `v*` GitHub Release until a later tag.
 
 ## Phases

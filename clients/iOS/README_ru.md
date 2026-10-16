@@ -2,9 +2,9 @@
 
 [English](README.md) · **Русский**
 
-Клиент iOS: один **Packet Tunnel**, который система видит как Personal VPN. Контейнер держит профили и лампу; Network Extension крутит сессию Go (loft, SSTP или VLESS).
+Клиент iOS: один **Packet Tunnel**, который система видит как Personal VPN. Контейнер держит профили и лампу; Network Extension ведёт сессию Go (loft, SSTP или VLESS).
 
-Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/ios.md](../../docs/ios.md). URI шаринга: [docs/share_ru.md](../../docs/share_ru.md). План: [PLAN_ru.md](PLAN_ru.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
+Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/ios.md](../../docs/ios.md). URI импорта: [docs/share_ru.md](../../docs/share_ru.md). План: [PLAN_ru.md](PLAN_ru.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
 
 Тонкий хост и Packet Tunnel в этом дереве. Сначала bind движка: `make -C ../mobile ios`.
 
@@ -35,13 +35,13 @@ clients/iOS/
   ../mobile/         общий движок Go (iOS + Android)
 ```
 
-Сессия — [`clients/mobile`](../mobile/) (`internal/` + inbound-стек) в appex. Процесса `loft-front` нет. На macOS хелпер остаётся; на iOS сессия в процессе расширения.
+Сессия — [`clients/mobile`](../mobile/) (`internal/` + inbound-стек) в appex. Процесса `loft-front` нет. На macOS `loft-front` остаётся отдельным процессом; на iOS сессия в процессе расширения.
 
 ## Требования
 
 | | Версия |
 |--|--|
-| Движок Go (`clients/mobile`) | **iOS 15+** (пол Xcode 26 для загрузки в App Store) |
+| Движок Go (`clients/mobile`) | **iOS 15+** (минимум Xcode 26 для загрузки в App Store) |
 | Контейнер SwiftUI | **iOS 16+** (`NavigationStack`, макет) |
 | Загрузка в Store | Xcode 26+, iOS 26 SDK. Deployment 15 — минимум toolchain. |
 

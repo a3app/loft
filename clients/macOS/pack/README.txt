@@ -1,7 +1,7 @@
 loft
 ====
 
-Menu-bar client for loft overlay for TLS, protocol loft/1.0.
+Menu-bar client. Overlay inside TLS, protocol loft/1.0.
 macOS 10.13 or later.
 
 Install

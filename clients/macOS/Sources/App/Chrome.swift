@@ -1264,7 +1264,9 @@ final class SegBit: NSButton {
         let total = sz.width + (hasIcon ? iconSide + iconGap : 0)
         let x0 = max(4, (bounds.width - total) / 2)
         if hasIcon {
-            let iy = round(y + (sz.height - iconSide) / 2)
+            // Geometric pill center, then 2pt toward the visual bottom: stroke glyphs sit optically high.
+            let down: CGFloat = yDown ? 2 : -2
+            let iy = round((bounds.height - iconSide) / 2 + press + down)
             icon.stroke(in: NSRect(x: x0, y: iy, width: iconSide, height: iconSide), color: face)
         }
         t.draw(

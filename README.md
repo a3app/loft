@@ -2,19 +2,15 @@
 
 **English** · [Русский](README_ru.md)
 
-From the street, ordinary HTTPS. Inside, a holdable admin channel for lossy and intermittent paths.
+loft is an overlay that runs inside TLS. Streams are multiplexed over GET, WebSocket, HTTP/2, QUIC, or HTTP/3 and sealed with ChaCha20-Poly1305. On the public path the session looks like ordinary HTTPS, so it passes CDNs, reverse proxies, and TLS terminators. The session holds through short disconnects and packet loss.
 
-**Inside:** loft overlay for TLS · protocol loft/1.0 · HTTPS-shaped fronts · mux · ChaCha20-Poly1305 · spec and reference node/clients.
+Protocol **loft/1.0**. Share URI **`loft://`**. YAML `kind: loft`.
 
-**loft** is loft overlay for TLS. Protocol **loft/1.0**. Share URI **`loft://`**.
-
-A private overlay in the on-wire shape of ordinary HTTPS: multiplexed streams over GET, WebSocket, HTTP/2, QUIC, or HTTP/3, sealed with ChaCha20-Poly1305. This repository is the open specification and a reference node plus clients (macOS app, Linux and macOS CLI).
-
-Software `1.0.3`. Protocol `loft/1.0`. Anyone can implement loft from [docs/protocol.md](docs/protocol.md).
+This repository is the open specification and a reference node plus clients (macOS app, Linux and macOS CLI). Software `1.0.4`. A third party can implement loft from [docs/protocol.md](docs/protocol.md).
 
 ## Operators
 
-loft is a private overlay for people who run networks. The job is a stable channel for secure server administration when the public path is lossy or drops for a few seconds: lab LAN from outside, a server fleet, site-to-site. Traffic on the public path is ordinary HTTPS, so it works through the CDNs, reverse proxies, and TLS middleboxes those sites already use. The path canary is the origin’s testimony that TLS is still ordinary HTTPS. If a middlebox mangles the handshake, the session does not come up.
+Typical use is operator access: a lab LAN from outside, a server fleet, site-to-site. Members present a browser-shaped ClientHello. If a middlebox rewrites the handshake, the session does not come up.
 
 ## Download
 
@@ -29,12 +25,6 @@ Files from the [latest GitHub Release](https://github.com/a3app/loft/releases/la
 
 Checksums: [clients](https://github.com/a3app/loft/releases/latest/download/loft-clients-SHA256SUMS.txt) · [node](https://github.com/a3app/loft/releases/latest/download/loft-node-SHA256SUMS.txt). macOS DMG is the menu-bar app (ad-hoc signed). CLI archives are `loft`, `loft-front`, `loft-probe`, `loft-bench`.
 
-### Why loft?
-
-**loft overlay for TLS.** Recursive: the product is the expansion. The word is an attic, a floor above ordinary HTTPS.
-
-Share URI `loft://`. YAML `kind: loft`. Protocol version `loft/1.0`.
-
 ## Protocol
 
 ```
@@ -48,14 +38,14 @@ application → SOCKS5 / TUN
 
 | | |
 |--|--|
-| [docs/protocol.md](docs/protocol.md) | Wire. A third party can implement from this file. |
-| [docs/architecture.md](docs/architecture.md) | How this tree is laid out. |
+| [docs/protocol.md](docs/protocol.md) | Wire protocol. Sufficient to implement a third-party client or node. |
+| [docs/architecture.md](docs/architecture.md) | Layout of this tree. |
 | [docs/guide.md](docs/guide.md) | Build, configure, run, Debian. |
 | [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN operator guide (RU). |
 | [docs/keenetic.md](docs/keenetic.md) | KeeneticOS Entware client (OpkgTun). Catalog: [clients/Keenetic/](clients/Keenetic/). |
 | [docs/ios.md](docs/ios.md) | iOS Packet Tunnel client. Catalog: [clients/iOS/](clients/iOS/). |
 | [docs/android.md](docs/android.md) | Android VpnService client. Catalog: [clients/Android/](clients/Android/). |
-| [docs/share.md](docs/share.md) | Client share URI `loft://` and `.loft` (one or several connections). |
+| [docs/share.md](docs/share.md) | Import URI `loft://` and `.loft` files (one or several connections). |
 
 ## Repository
 

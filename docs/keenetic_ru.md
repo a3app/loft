@@ -2,9 +2,9 @@
 
 [English](keenetic.md) · **Русский**
 
-Как loft сидит на роутере Keenetic. Каталог: [clients/Keenetic/](../clients/Keenetic/). План: [clients/Keenetic/PLAN_ru.md](../clients/Keenetic/PLAN_ru.md). Макет: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
+Как loft работает на роутере Keenetic. Каталог: [clients/Keenetic/](../clients/Keenetic/). План: [clients/Keenetic/PLAN_ru.md](../clients/Keenetic/PLAN_ru.md). Макет: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
 
-Пакета ещё нет. Этот файл — договорённость.
+Пакета ещё нет. Этот файл — спецификация интеграции.
 
 ---
 
@@ -58,7 +58,7 @@ interface OpkgTun0 up
 
 ## 5. Вход в панель
 
-HTTP `http://<lan>:8090/`. Процесс прокидывает `Cookie` браузера на `127.0.0.1/auth`. 200 и роль admin/configurator — UI. 401 — редирект на стоковую вебадминку.
+HTTP `http://<lan>:8090/`. Процесс прокидывает `Cookie` браузера на `127.0.0.1/auth`. 200 и роль admin/configurator — UI. 401 — редирект на штатную веб-админку.
 
 Cookie привязана к хосту, `Path=/`, поэтому `:80` и `:8090` её делят. `localhost:79` (RCI без пароля) остаётся только демону.
 

@@ -2,11 +2,11 @@
 
 **English** · [Русский](protocol_ru.md)
 
-**loft** is loft overlay for TLS. The wire protocol is **loft/1.0**.
+**loft** is an overlay that occupies the same place on the wire as ordinary HTTPS. The wire protocol is **loft/1.0**.
 
 **Protocol 1.0.** A third-party implementation that follows this document can speak to a loft node. The Go tree in this repository is one implementation. Licensed [Apache-2.0](../LICENSE).
 
-Software version (`VERSION`, currently 1.0.3) is independent of protocol version. Handshake carries both. Keywords **MUST**, **SHOULD**, **MAY** follow RFC 2119. Unknown trailing fields in Hello and Status MUST be ignored.
+Software version (`VERSION`, currently 1.0.4) is independent of protocol version. Handshake carries both. Keywords **MUST**, **SHOULD**, **MAY** follow RFC 2119. Unknown trailing fields in Hello and Status MUST be ignored.
 
 ---
 
@@ -124,7 +124,7 @@ ALPN `h3`. CONNECT to the same path shape as `h2`.
 
 Status MAY set `canary_flags`: bit 0 fat ClientHello, bit 1 ClientHello split across two TLS records (the node concatenates). `canary_pad` is extra padding bytes, 0–2048.
 
-The canary is the origin’s testimony of a healthy TLS path. Members present a browser-shaped ClientHello so CDNs, reverse proxies, and TLS middleboxes see ordinary HTTPS. If a middlebox rewrites the handshake, the session does not come up. This is path integrity: protection against a man-in-the-middle that mangles TLS. It does not hide SNI from a reassembling inspector.
+Members present a browser-shaped ClientHello so CDNs, reverse proxies, and TLS middleboxes see ordinary HTTPS. If a middlebox rewrites the handshake, the session does not come up. This is path integrity: the node refuses a mangled TLS path. It does not hide SNI from a reassembling inspector.
 
 ### 3.9 CONNECT splice (`connect`)
 

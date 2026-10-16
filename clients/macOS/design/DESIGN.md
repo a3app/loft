@@ -2,9 +2,9 @@
 
 **English** · [Русский](DESIGN_ru.md)
 
-Menu-bar agent. The window is secondary. Mark, palette, and Avenir Next: [`brand/`](../../../brand/). Interactive mock: [`index.html`](index.html). Wire: [docs/protocol.md](../../../../docs/protocol.md).
+Menu-bar agent. The window is secondary. Mark, palette, and Avenir Next: [`brand/`](../../../brand/). Interactive mock: [`index.html`](index.html). Protocol: [docs/protocol.md](../../../../docs/protocol.md).
 
-The Swift 5 + AppKit binary lives in [`../Sources/`](../Sources/). A live session is the Go helper `loft-front` copied into `loft.app/Contents/MacOS/`. In-process `GETFront.swift` is not the path the app uses. Hello of the helper is the Go client (GET, WS, H2, QUIC, H3, protocol 1.0). SSTP is a separate PPP-over-HTTPS VPN in the same GUI. VLESS is a third type (TCP+TLS, REALITY, Vision, XHTTP). The VLESS editor is Link (`vless://`) or Manual (fields); both store the DuckSoft share. Trojan/Shadowsocks share that family later.
+The Swift 5 + AppKit binary lives in [`../Sources/`](../Sources/). A live session is the Go process `loft-front` copied into `loft.app/Contents/MacOS/`. In-process `GETFront.swift` is not the path the app uses. Hello of `loft-front` is the Go client (GET, WS, H2, QUIC, H3, protocol 1.0). SSTP is a separate PPP-over-HTTPS VPN in the same GUI. VLESS is a third type (TCP+TLS, REALITY, Vision, XHTTP). The VLESS editor is Link (`vless://`) or Manual (fields); both store the DuckSoft URI. Trojan/Shadowsocks share that family later.
 
 ---
 
@@ -16,13 +16,13 @@ v1 shipped: key, outbound `get` / `ws` / `h2` / `quic` / `h3` via `loft-front`, 
 
 A connection is one named `client.yaml`. Several connections are several sessions. They are distinct from cap `multi` (several `instance_id` values on one key).
 
-Family share (all loft apps): a `.loft` file holds **one or several connections**, mixed kinds `loft` / `sstp` / `vless` / `trojan`. The list subtitle is **kind · transport · host**. The loft address is `loft://`. Spec: [docs/share.md](../../../docs/share.md).
+Shared file (all loft apps): a `.loft` file holds **one or several connections**, mixed kinds `loft` / `sstp` / `vless` / `trojan`. The list subtitle is **kind · transport · host**. The loft address is `loft://`. Spec: [docs/share.md](../../../docs/share.md).
 
 ---
 
 ## 2. Protocol join (1.0)
 
-Software `1.0.3`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
+Software `1.0.4`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
 
 | In the application | On the wire |
 |--------------------|-------------|
@@ -354,7 +354,7 @@ Canonical locale is English. The interactive mock defaults to English (`?lang=ru
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.3 |
+| about.ver | 1.0.4 |
 | about.proto | protocols |
 | about.loft | loft/1.0 · get · ws · h2 · quic · h3 · mask |
 | about.sstp | SSTP · ppp · mschapv2 · pap |

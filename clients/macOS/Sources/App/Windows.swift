@@ -277,6 +277,7 @@ final class ConnectionsWindowController: NSWindowController {
     private let multiCap = DrawLab(frame: .zero)
     private let multiSw = ToggleSwitch(frame: .zero)
     private let sub = NSTextField(labelWithString: "")
+    private var listScroll: NSScrollView!
     private let list = FlippedView(frame: .zero)
     private let imp = PillButton(frame: .zero)
     private let exp = PillButton(frame: .zero)
@@ -334,7 +335,9 @@ final class ConnectionsWindowController: NSWindowController {
         set.target = self; set.action = #selector(setTap)
         dropPlate.radius = 12
         dropPlate.stroke = Palette.slate
-        for v in [titleLab, addBtn, multiCap, multiSw, sub, list, dropPlate, drop, footLine, imp, exp, set] as [NSView] {
+        listScroll = loftOverlayScroll(frame: .zero)
+        listScroll.documentView = list
+        for v in [titleLab, addBtn, multiCap, multiSw, sub, listScroll, dropPlate, drop, footLine, imp, exp, set] as [NSView] {
             c.addSubview(v)
         }
         c.registerForDraggedTypes([.fileURL])
@@ -384,15 +387,11 @@ final class ConnectionsWindowController: NSWindowController {
         let actTitles = [L10n.t("pop_connect"), L10n.t("disconnect"), L10n.t("connecting"), L10n.t("disconnecting"), L10n.t("retry"), L10n.t("cancel"), String(format: L10n.t("retry_wait"), 15)]
         let actW = max(72, (actTitles.map { Palette.textWidth($0, font: actFont) }.max() ?? 72) + 18)
         let actH: CGFloat = 26
-        if engine.store.profiles.isEmpty {
-            drop.isHidden = false
-            dropPlate.isHidden = false
-            drop.frame = NSRect(x: 20, y: 80, width: w - 40, height: 80)
-            dropPlate.frame = drop.frame
-        } else {
-            drop.isHidden = true
-            dropPlate.isHidden = true
-        }
+        let empty = engine.store.profiles.isEmpty
+        drop.isHidden = !empty
+        dropPlate.isHidden = !empty
+        listScroll.isHidden = empty
+        let kept = listScroll.contentView.bounds.origin
         for p in engine.profilesByFreshness() {
             let rowH: CGFloat = simple ? 44 : 52
             let rowW = w - 40
@@ -505,12 +504,40 @@ final class ConnectionsWindowController: NSWindowController {
             list.addSubview(row)
             y += row.frame.height + 4
         }
-        list.frame = NSRect(x: 10, y: 66, width: w - 20, height: min(y, 340))
-        footLine.frame = NSRect(x: 0, y: 430, width: w, height: 1)
+        let header: CGFloat = 66
+        let footer: CGFloat = 12 + 1 + 14 + 36 + 20
+        let contentH: CGFloat = empty ? 80 : max(1, y)
+        if empty {
+            drop.frame = NSRect(x: 20, y: header, width: w - 40, height: contentH)
+            dropPlate.frame = drop.frame
+        }
+        let vis = (window?.screen ?? NSScreen.main)?.visibleFrame.height ?? 800
+        let maxBody = max(280, vis - 28 - 20)
+        let want = header + contentH + footer
+        let scrollH: CGFloat
+        let bodyH: CGFloat
+        if want <= maxBody {
+            scrollH = contentH
+            bodyH = want
+        } else {
+            scrollH = max(80, maxBody - header - footer)
+            bodyH = header + scrollH + footer
+        }
+        if !empty {
+            let listW = w - 20
+            list.frame = NSRect(x: 0, y: 0, width: listW, height: max(contentH, scrollH))
+            listScroll.frame = NSRect(x: 10, y: header, width: listW, height: scrollH)
+            let maxY = max(0, list.frame.height - listScroll.contentView.bounds.height)
+            listScroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, kept.y), maxY)))
+            listScroll.reflectScrolledClipView(listScroll.contentView)
+        }
+        footLine.frame = NSRect(x: 0, y: header + scrollH + 12, width: w, height: 1)
+        let btnY = footLine.frame.maxY + 14
         let parts = loftSplit(w - 40, count: 3, gap: 8)
-        imp.frame = NSRect(x: 20, y: 444, width: parts[0], height: 36)
-        exp.frame = NSRect(x: 20 + parts[0] + 8, y: 444, width: parts[1], height: 36)
-        set.frame = NSRect(x: 20 + parts[0] + 8 + parts[1] + 8, y: 444, width: parts[2], height: 36)
+        imp.frame = NSRect(x: 20, y: btnY, width: parts[0], height: 36)
+        exp.frame = NSRect(x: 20 + parts[0] + 8, y: btnY, width: parts[1], height: 36)
+        set.frame = NSRect(x: 20 + parts[0] + 8 + parts[1] + 8, y: btnY, width: parts[2], height: 36)
+        loftResize(window!, bodyHeight: bodyH)
     }
 
     /// Selects the profile on this row without connecting.

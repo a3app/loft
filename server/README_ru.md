@@ -4,7 +4,7 @@
 
 Реализация ноды: controller или relay. Один бинарник, роль выбирается в YAML.
 
-Эксплуатация: [docs/guide_ru.md](../docs/guide_ru.md). Провод: [docs/protocol_ru.md](../docs/protocol_ru.md). Раскладка: [docs/architecture_ru.md](../docs/architecture_ru.md).
+Эксплуатация: [docs/guide_ru.md](../docs/guide_ru.md). Протокол: [docs/protocol_ru.md](../docs/protocol_ru.md). Устройство: [docs/architecture_ru.md](../docs/architecture_ru.md).
 
 ```bash
 go build -o loft-node ./server/cmd/loft-node
@@ -23,7 +23,7 @@ go build -o loft-node ./server/cmd/loft-node
 
 `server/origin` отдаёт HTTPS-источник: cover, GET, WebSocket, HTTP/2 CONNECT, публичный roster и списки. Пресеты края: `internal/cdn`.
 
-Контроллер держит ключи, аренды и Ed25519 seed. Relay завершает публичный TLS и копирует plaintext на транк (`hub:1` / `hub:2`, `ctl:1`). Идентичность члена остаётся на контроллере.
+Контроллер держит ключи, аренды и Ed25519 seed. Relay завершает публичный TLS и копирует plaintext на транк (`hub:1` / `hub:2`, `ctl:1`). Удостоверение участника остаётся на контроллере.
 
 Хост Debian (systemd, установщик, `.deb`): [debian/README_ru.md](debian/README_ru.md).
 

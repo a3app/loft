@@ -4,7 +4,7 @@
 
 Node implementation: controller or relay. One binary, role selected in YAML.
 
-Operation: [docs/guide.md](../docs/guide.md). Wire: [docs/protocol.md](../docs/protocol.md). Layout: [docs/architecture.md](../docs/architecture.md).
+Operation: [docs/guide.md](../docs/guide.md). Protocol: [docs/protocol.md](../docs/protocol.md). Layout: [docs/architecture.md](../docs/architecture.md).
 
 ```bash
 go build -o loft-node ./server/cmd/loft-node

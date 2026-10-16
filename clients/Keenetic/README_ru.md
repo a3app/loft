@@ -2,11 +2,11 @@
 
 [English](README.md) · **Русский**
 
-Клиент Entware: один интерфейс **OpkgTun**, который KeeneticOS ставит в приоритеты подключений и политики. Настройки — на LAN-порту; вход — сессия вебадминки Keenetic.
+Клиент Entware: один интерфейс **OpkgTun**, который KeeneticOS ставит в приоритеты подключений и политики. Настройки — на LAN-порту; вход — сессия веб-админки Keenetic.
 
 Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/keenetic_ru.md](../../docs/keenetic_ru.md). План: [PLAN_ru.md](PLAN_ru.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
 
-Это каталог. Бинаря ещё нет.
+Это каталог. Сборки ещё нет.
 
 ## Рамки
 
@@ -26,7 +26,7 @@ clients/Keenetic/
   PLAN.md            фазы сборки
   design/            UX и HTML-макет
   cmd/               (позже) loft-keenetic: сессия + панель
-  pack/              (позже) init.d, ipk, хелперы ndmc
+  pack/              (позже) init.d, ipk, утилиты ndmc
 ```
 
 Сессия — клиент Go в `clients/go` с TUN и выключенным `default_route`. Панель — маленький HTTP, проверяет cookie Keenetic `/auth`.

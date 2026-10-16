@@ -4,7 +4,7 @@
 
 Thin host + `VpnService`. The session is Go [`clients/mobile`](../mobile/). **Java**, not Kotlin: gomobile already emits Java; this process does not load the Kotlin runtime.
 
-Wire: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/android.md](../../docs/android.md). Share URI: [docs/share.md](../../docs/share.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
+Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/android.md](../../docs/android.md). Import URI: [docs/share.md](../../docs/share.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
 
 ## Layout
 

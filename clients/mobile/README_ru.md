@@ -2,15 +2,15 @@
 
 [English](README.md) · **Русский**
 
-Общая сессия Go для **iOS Packet Tunnel** и **Android VpnService**. Позже тот же bind растит flavor Android TV / Google TV (тот же AAR) и слайс tvOS (Apple TV, фаза 6 плана). Без GUI. Без `loft-front`. Протокол 1.0 не меняется.
+Общая сессия Go для **iOS Packet Tunnel** и **Android VpnService**. Позже тот же bind даёт flavor Android TV / Google TV (тот же AAR) и слайс tvOS (Apple TV, фаза 6 плана). Без GUI. Без `loft-front`. Протокол 1.0 не меняется.
 
-Каталог iOS: [../iOS/](../iOS/). Каталог Android: [../Android/](../Android/). URI шаринга: [docs/share_ru.md](../../docs/share_ru.md).
+Каталог iOS: [../iOS/](../iOS/). Каталог Android: [../Android/](../Android/). URI импорта: [docs/share_ru.md](../../docs/share_ru.md).
 
 ## Исходящие
 
 Один процесс, одна строка системного VPN. YAML `outbounds[].type` выбирает путь:
 
-| type | Провод | Внутренний IP | Пакеты |
+| type | Протокол | Внутренний IP | Пакеты |
 |------|--------|---------------|--------|
 | `get` `ws` `h2` `quic` `h3` | loft | оверлей из Status | gVisor → `Holder.Open` |
 | `sstp` | TLS + PPP (`internal/sstp`) | IPCP | L3-памп в `sstp.Session` |
@@ -33,7 +33,7 @@ Snapshot() *Snapshot        // также Status()
 ParseShare(s) (yaml, error) // loft://, sstp://, vless://, trojan://, YAML, .loft, .vpn
 ```
 
-`WatchPath` внутри полного туннеля не крутить (egress стал бы оверлеем). Адаптер OS вызывает `NotifyPathChange`. Смена пути loft — билет `0x03` и тот же `instance_id`. SSTP/VLESS/Trojan — повторный набор; IPCP может выдать новый IP, адаптер OS заново ставит настройки туннеля.
+`WatchPath` внутри полного туннеля не запускать (egress стал бы оверлеем). Адаптер OS вызывает `NotifyPathChange`. Смена пути loft — билет `0x03` и тот же `instance_id`. SSTP/VLESS/Trojan — повторный набор; IPCP может выдать новый IP, адаптер OS заново ставит настройки туннеля.
 
 IP фронта / сервера SSTP / VLESS — в `Snapshot.FrontIPs` (через запятую), адаптер исключает их из туннеля (без петли).
 
@@ -48,7 +48,7 @@ make android    # build/engine.aar           (NDK, API 24, страницы 16 �
 
 Swift `PacketTunnelProvider` и Java `VpnService` качают пакеты и ставят маршруты/DNS из `Snapshot()`. Android зовёт `SetProtector` (`VpnService.protect`). iOS исключает IP фронтов в `NEPacketTunnelNetworkSettings`.
 
-## Полы OS
+## Минимальные версии ОС
 
 | | Движок (этот пакет) | GUI | Загрузка в магазин |
 |--|--|--|--|

@@ -2,9 +2,9 @@
 
 **English** · [Русский](architecture_ru.md)
 
-Software 1.0.3. Protocol 1.0 (loft/1.0). Wire: [protocol.md](protocol.md). Operation: [guide.md](guide.md).
+Software 1.0.4. Protocol 1.0 (loft/1.0). Spec: [protocol.md](protocol.md). Operation: [guide.md](guide.md).
 
-This document describes the Go tree in this repository. A third-party implementation MAY differ in layout and still speak the wire.
+This document describes the Go tree in this repository. A third-party implementation MAY differ in layout and still speak the protocol.
 
 ---
 

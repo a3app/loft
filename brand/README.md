@@ -4,7 +4,7 @@
 
 Build and run: [docs/guide.md](../docs/guide.md). Protocol: [docs/protocol.md](../docs/protocol.md).
 
-The mark is an L-roof with a lamp: letter L, an overlay attic over HTTPS, a lit window when the tunnel is up.
+The mark is an L-roof with a lamp: the letter L, and a window that is lit when the tunnel is up.
 
 Solid fills only on the mark and in the tray. A light glow on the window is used only on the app icon.
 

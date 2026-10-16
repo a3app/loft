@@ -2,9 +2,9 @@
 
 **English** · [Русский](README_ru.md)
 
-Shared Go session for **iOS Packet Tunnel** and **Android VpnService**. Later the same bind grows an Android TV / Google TV flavor (same AAR) and a tvOS slice (Apple TV, PLAN phase 6). No GUI. No `loft-front`. Protocol 1.0 is unchanged.
+Shared Go session for **iOS Packet Tunnel** and **Android VpnService**. Later the same bind produces an Android TV / Google TV flavor (same AAR) and a tvOS slice (Apple TV, PLAN phase 6). No GUI. No `loft-front`. Protocol 1.0 is unchanged.
 
-iOS catalog: [../iOS/](../iOS/). Android catalog: [../Android/](../Android/). Share URI: [docs/share.md](../../docs/share.md).
+iOS catalog: [../iOS/](../iOS/). Android catalog: [../Android/](../Android/). Import URI: [docs/share.md](../../docs/share.md).
 
 ## Outbounds
 
@@ -48,7 +48,7 @@ From the repo root: `make mobile-ios` / `make mobile-android`.
 
 Swift `PacketTunnelProvider` and Java `VpnService` pump packets and install routes/DNS from `Snapshot()`. Android calls `SetProtector` (`VpnService.protect`). iOS excludes front IPs in `NEPacketTunnelNetworkSettings`.
 
-## OS floors
+## OS minimums
 
 | | Engine (this package) | GUI | Store upload |
 |--|--|--|--|

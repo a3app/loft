@@ -1,10 +1,10 @@
-# URI для шаринга
+# URI импорта
 
 [English](share.md) · **Русский**
 
-Строка импорта на клиенте. Это **не** возможность протокола loft/1.0 и канал не поднимает. Нода этот URL не видит.
+Строка импорта на клиенте. Это **не** возможность протокола loft/1.0 и сессию не устанавливает. Нода этот URL не видит.
 
-Адрес loft — `loft://`: тип подключения и транспорт в одной строке. Один исходящий на URI. Файл `.loft` (YAML) держит **одно или несколько подключений** и MAY смешивать все поддерживаемые типы (`loft`, `sstp`, `vless`, `trojan`). Формат файла: [§8](#8-файл-loft).
+Адрес loft — `loft://`: тип подключения и транспорт в одной строке. Один исходящий на URI. Файл `.loft` (YAML) держит **одно или несколько подключений** и **может** смешивать все поддерживаемые типы (`loft`, `sstp`, `vless`, `trojan`). Формат файла: [§8](#8-файл-loft).
 
 Протокол: [protocol_ru.md](protocol_ru.md). UX iOS: [clients/iOS/design/DESIGN_ru.md](../clients/iOS/design/DESIGN_ru.md). UX Android: [clients/Android/design/DESIGN_ru.md](../clients/Android/design/DESIGN_ru.md). UX macOS: [clients/macOS/design/DESIGN_ru.md](../clients/macOS/design/DESIGN_ru.md).
 
@@ -16,9 +16,9 @@
 
 1. Обрезать UTF-8. Снять BOM.
 2. `loft://` → [§2](#2-loft).
-3. `vless://` → шаринг VLESS ([§5](#5-vless)).
-4. `trojan://` → шаринг Trojan ([§6](#6-trojan)).
-5. `sstp://` → шаринг SSTP ([§7](#7-sstp)).
+3. `vless://` → ссылка VLESS ([§5](#5-vless)).
+4. `trojan://` → ссылка Trojan ([§6](#6-trojan)).
+5. `sstp://` → ссылка SSTP ([§7](#7-sstp)).
 6. YAML с `token:` / `password:` / `outbounds:` / `connections:` → импорт как `.loft` ([§8](#8-файл-loft)).
 7. Иначе отказ.
 
@@ -136,7 +136,7 @@ iOS регистрирует схему URL `loft`. Android — тот же фи
 
 ## 5. VLESS
 
-Обычная строка шаринга существующих клиентов VLESS. Тип `vless`. Транспорт — VLESS `type` / `security`. Поддерживаются TCP+TLS, REALITY, Vision (`xtls-rprx-vision`), XHTTP. Подпись списка: `vless · reality · host.example.com`.
+Обычная строка импорта существующих клиентов VLESS. Тип `vless`. Транспорт — VLESS `type` / `security`. Поддерживаются TCP+TLS, REALITY, Vision (`xtls-rprx-vision`), XHTTP. Подпись списка: `vless · reality · host.example.com`.
 
 ```
 vless://<uuid>@<host>[:port]?security=…&sni=…&type=…&flow=…&pbk=…&sid=…&fp=…#Name
@@ -144,7 +144,7 @@ vless://<uuid>@<host>[:port]?security=…&sni=…&type=…&flow=…&pbk=…&sid=
 
 Разбор теми же правилами, что `internal/vless` (`ParseURL`): `security` `tls` / `xtls` / `reality`, `type` (`tcp`, `xhttp`), `flow` с `vision`, `pbk` / `sid` включают Reality. Порт по умолчанию 443.
 
-В редакторе две проекции той же шаринг-строки, как в v2rayN / NekoBox / Hiddify / 3x-ui:
+В редакторе две проекции той же строки импорта, как в v2rayN / NekoBox / Hiddify / 3x-ui:
 
 - **Ссылка** — одна строка `vless://` (вставка из панели или Telegram).
 - **Вручную** — адрес, порт, UUID, TLS/REALITY, TCP/XHTTP, затем поля режима (SNI, отпечаток, `pbk` / `sid`, Vision, путь/Host XHTTP).
@@ -157,7 +157,7 @@ vless://<uuid>@<host>[:port]?security=…&sni=…&type=…&flow=…&pbk=…&sid=
 
 ## 6. Trojan
 
-Обычная строка шаринга существующих клиентов Trojan (trojan-gfw / Xray). Тип `trojan`. Пароль — userinfo URI. Поддерживаются TCP+TLS, REALITY, XHTTP stream-one, UDP ASSOCIATE. WS / gRPC / kcp нет. Подпись списка: `trojan · reality · host.example.com`.
+Обычная строка импорта существующих клиентов Trojan (trojan-gfw / Xray). Тип `trojan`. Пароль — userinfo URI. Поддерживаются TCP+TLS, REALITY, XHTTP stream-one, UDP ASSOCIATE. WS / gRPC / kcp нет. Подпись списка: `trojan · reality · host.example.com`.
 
 ```
 trojan://<password>@<host>[:port]?security=…&sni=…&type=…&pbk=…&sid=…&fp=…#Name
@@ -220,7 +220,7 @@ outbounds:
 
 ### Несколько подключений
 
-Верхний `connections:` — список. Каждый элемент — одно подключение любого типа. Один файл MAY смешать loft, SSTP, VLESS и Trojan.
+Верхний `connections:` — список. Каждый элемент — одно подключение любого типа. Один файл **может** смешать loft, SSTP, VLESS и Trojan.
 
 ```yaml
 connections:
@@ -269,6 +269,6 @@ connections:
 | Выбранное подключение | `Name.loft` (один документ) |
 | Несколько / все подключения | `Family.loft` (`connections:`) |
 
-Экспорт выбранного подключения — действие списка (iOS/Android: чип на строке с лампой; долгое нажатие; macOS: контекстное меню строки). Настройки MAY по-прежнему экспортировать все.
+Экспорт выбранного подключения — действие списка (iOS/Android: чип на строке с лампой; долгое нажатие; macOS: контекстное меню строки). Настройки **могут** по-прежнему экспортировать все.
 
 Описание подключения в UI — **тип · транспорт · хост**, никогда транспорт один.

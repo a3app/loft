@@ -2,7 +2,7 @@
 
 [English](PLAN.md) · **Русский**
 
-ПО 1.0.0. Протокол 1.0. План их не поднимает.
+ПО 1.0.0. Протокол 1.0. План версии не повышает.
 
 ## Цель
 
@@ -10,11 +10,11 @@
 
 ## Вне рамок
 
-- Запуск `loft-front` как хелпера (модель macOS). Appex *и есть* сессия.
+- Запуск `loft-front` как отдельного процесса (модель macOS). Appex *и есть* сессия.
 - SOCKS5 как вход, которым пользуются чужие приложения.
 - Несколько Packet Tunnel сразу (iOS держит один Personal VPN).
 - IKEv2 / WireGuard внутри этого приложения. SSTP — Go в процессе (`internal/sstp`) на том же Packet Tunnel.
-- Страница App Store в первой выкладке бинаря (достаточно TestFlight).
+- Страница App Store в первой выкладке сборки (достаточно TestFlight).
 - Виджеты, Пункт управления, Apple Watch, вёрстка «сначала iPad».
 - Dist / IPA в GitHub Release `v*` до следующего тега.
 - VIDAA / Tizen / webOS (Packet Tunnel нет). Эти телевизоры — Keenetic или HDMI-стик.
@@ -23,7 +23,7 @@
 
 ### 0. Каталог — это дерево
 
-Документы, план, HTML-макет. URI шаринга [docs/share_ru.md](../../docs/share_ru.md). Проекта Xcode нет.
+Документы, план, HTML-макет. URI импорта [docs/share_ru.md](../../docs/share_ru.md). Проекта Xcode нет.
 
 ### 1. Контейнер + пустой туннель
 
@@ -75,7 +75,7 @@ SSTP — L3: IP-пакеты из `packetFlow` идут в `sstp.Session` (PPP/I
 
 1. API [`clients/mobile`](../mobile/) — `Engine.Start` YAML, Stop, Inject/Pull, Snapshot, ParseShare. Без флагов CLI. Написано.
 2. loft: билет `0x03` / `RememberGateway`. SSTP: повторный набор. Смена пути — `NotifyPathChange` от OS. Возможности протокола не добавлять.
-3. Разбор `loft://`, `sstp://`, `vless://` (URI шаринга, не протокол). Написано в `share.go`.
+3. Разбор `loft://`, `sstp://`, `vless://` (URI импорта, не протокол). Написано в `share.go`.
 4. `loft-front` оставить для macOS. Не учить его iOS или tvOS.
 5. Bind tvOS — поздний слайс [`clients/mobile`](../mobile/), после стабильного appex iPhone.
 

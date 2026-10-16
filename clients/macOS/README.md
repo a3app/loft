@@ -37,13 +37,13 @@ CODESIGN_IDENTITY="Developer ID Application: Name (TEAMID)" make dmg
 CODESIGN_IDENTITY=auto NOTARY_PROFILE=loft make dmg
 ```
 
-`pack/sign.sh` signs `loft-priv`, `loft-front`, Swift dylibs, then the bundle. Entitlements: [`pack/entitlements.plist`](pack/entitlements.plist) (network + unsigned executable memory for the Go helper). No App Sandbox — TUN and the setuid helper need it off.
+`pack/sign.sh` signs `loft-priv`, `loft-front`, Swift dylibs, then the bundle. Entitlements: [`pack/entitlements.plist`](pack/entitlements.plist) (network + unsigned executable memory for `loft-front`). No App Sandbox — TUN and the setuid helper need it off.
 
 `build/` is compiler scratch (`.o`, `test_aead`). The app is not there. The AEAD test source is [`tests/test_aead.c`](tests/test_aead.c). `--probe` and `--shot` stay on the app binary because they need AppKit.
 
 Each `make app` raises the patch in [`VERSION`](VERSION) (`1.0.0` → `0.9.1` → `0.9.2`) and stamps `Info.plist`. About reads that string. Protocol software stays the repo-root `VERSION`. `BUMP=0` stamps the current file and does not write it. The DMG name includes `ARCH` (`arm64` / `x86_64`), default `uname -m`. CI (`make macos-dmgs BUMP=0`) builds both on the Apple Silicon runner: native arm64 and `ARCH=x86_64` cross.
 
-The UI binary is Swift 5 + AppKit (Go 1.20 was the last toolchain that could target 10.13). Swift stdlib is copied into `Contents/Frameworks`. The overlay session is **`loft-front`** (Go) in `Contents/MacOS/` next to `loft`. That helper speaks GET, WS, H2, QUIC and H3, mux, clockless auth, mask, CmdLeave, overlay ICMP as Dgram `:1`. Hello caps come from the Go client, not from `GETFront.swift`.
+The UI binary is Swift 5 + AppKit (Go 1.20 was the last toolchain that could target 10.13). Swift stdlib is copied into `Contents/Frameworks`. The overlay session is **`loft-front`** (Go) in `Contents/MacOS/` next to `loft`. `loft-front` speaks GET, WS, H2, QUIC and H3, mux, clockless auth, mask, CmdLeave, overlay ICMP as Dgram `:1`. Hello caps come from the Go client, not from `GETFront.swift`.
 
 | Local | On the wire |
 |-------|-------------|

@@ -2,9 +2,9 @@
 
 [English](architecture.md) · **Русский**
 
-ПО 1.0.3. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Эксплуатация: [guide_ru.md](guide_ru.md).
+ПО 1.0.4. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Эксплуатация: [guide_ru.md](guide_ru.md).
 
-Документ описывает дерево на Go в этом репозитории. Сторонняя реализация **может** отличаться раскладкой и всё равно говорить по протоколу.
+Документ описывает дерево на Go в этом репозитории. Сторонняя реализация **может** отличаться устройством каталогов и всё равно говорить по протоколу.
 
 ---
 
@@ -42,7 +42,7 @@ clients/
   macOS/pack          DMG (симлинк Applications), подпись, entitlements
   macOS/design        спецификация UX и макет
   macOS/tests         вектор RFC 8439 AEAD (make -C clients/macOS test-crypto)
-  Keenetic/           каталог Entware OpkgTun (план и макет; бинаря ещё нет)
+  Keenetic/           каталог Entware OpkgTun (план и макет; сборки ещё нет)
   iOS/                Packet Tunnel (тонкий хост + appex; gomobile xcframework; Apple TV в плане, фаза 6)
   Android/            VpnService (тонкий хост Java; gomobile AAR; UX-макет; Android TV / Google TV в плане, фаза 4)
   mobile/             общий движок Go для iOS/Android (loft, SSTP, VLESS)
@@ -143,7 +143,7 @@ UDP
 
 Куда стыковать — конфигурация ноды. Клиент это узнаёт. Имена хостов в YAML — примеры. Константами протокола они не являются.
 
-Mask чеканит лист ECDSA P-256 с личностью origin и подписывает CertificateVerify как `ecdsa_secp256r1_sha256`. Серийник привязан к ECDH с X25519 ноды. Зонды по-прежнему стыкуются. Записи приложения MAY следовать длинам ciphertext origin.
+Mask выпускает лист ECDSA P-256 с личностью origin и подписывает CertificateVerify как `ecdsa_secp256r1_sha256`. Серийник привязан к ECDH с X25519 ноды. Зонды по-прежнему стыкуются. Записи приложения **могут** следовать длинам ciphertext origin.
 
 ---
 

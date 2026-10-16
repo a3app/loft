@@ -2,15 +2,15 @@
 
 [English](ios.md) · **Русский**
 
-Как loft сидит на iPhone, позже Apple TV (tvOS 17+). Каталог: [clients/iOS/](../clients/iOS/). План: [clients/iOS/PLAN_ru.md](../clients/iOS/PLAN_ru.md) (Apple TV — фаза 6). Макет: [clients/iOS/design/index.html](../clients/iOS/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md). URI шаринга: [share_ru.md](share_ru.md).
+Как loft работает на iPhone, позже Apple TV (tvOS 17+). Каталог: [clients/iOS/](../clients/iOS/). План: [clients/iOS/PLAN_ru.md](../clients/iOS/PLAN_ru.md) (Apple TV — фаза 6). Макет: [clients/iOS/design/index.html](../clients/iOS/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md). URI импорта: [share_ru.md](share_ru.md).
 
-Приложения ещё нет. Этот файл — договор.
+Приложения ещё нет. Этот файл — спецификация интеграции.
 
 ---
 
 ## 1. Два процесса
 
-iOS решает **когда** туннель можно (Personal VPN, один сразу, On Demand). Движок Go решает **как** туннель выглядит в канале.
+iOS решает **когда** туннель можно (Personal VPN, один сразу, On Demand). Движок Go решает **как** туннель выглядит на канале.
 
 ```
 приложение (Safari, Почта, …)
@@ -23,7 +23,7 @@ iOS решает **когда** туннель можно (Personal VPN, оди�
                   → IP сервера вне туннеля
 ```
 
-Контейнер (`app.loft.ios`) канал не поднимает. Он пишет YAML в App Group и вызывает `startVPNTunnel`. loft, SSTP и VLESS — исходящие того же провайдера. IKEv2 остаётся штатным клиентом Настроек.
+Контейнер (`app.loft.ios`) сессию не устанавливает. Он пишет YAML в App Group и вызывает `startVPNTunnel`. loft, SSTP и VLESS — исходящие того же провайдера. IKEv2 остаётся штатным клиентом Настроек.
 
 ## 2. Packet Tunnel
 
@@ -37,7 +37,7 @@ iOS решает **когда** туннель можно (Personal VPN, оди�
 | `dns` | `NEDNSSettings` |
 | `ip6` / `gateway6` | `NEIPv6Settings`, если есть |
 
-IP фронтов ДОЛЖНЫ быть в `excludedRoutes`, чтобы сессия не зациклилась. Списки протокола — в `includedRoutes` (`via`) и `excludedRoutes` (`direct`). `drop` — отброс в провайдере, не маршрут OS.
+IP фронтов **должны** быть в `excludedRoutes`, чтобы сессия не зациклилась. Списки протокола — в `includedRoutes` (`via`) и `excludedRoutes` (`direct`). `drop` — отброс в провайдере, не маршрут OS.
 
 Удержание — `includeAllNetworks`: если сессия умерла, у телефона нет пути сотовой/Wi-Fi, пока снова Подключить или сброс в Настройках.
 
@@ -45,7 +45,7 @@ IP фронтов ДОЛЖНЫ быть в `excludedRoutes`, чтобы сесс
 
 Wi-Fi → LTE (и обратно) — новый путь по умолчанию. Адаптер OS вызывает `NotifyPathChange`. loft: закрыть живой фронт и продолжить билетом `0x03` и тем же `instance_id` (IP оверлея тот же). SSTP: повторный набор TLS+PPP; настройки применить снова, если IPCP выдал новый IP. Внутренний TCP всё равно RST.
 
-Это тот же договор, что смена пути на macOS / CLI. Новой возможности протокола нет. `WatchPath` внутри Packet Tunnel не крутить (egress стал бы оверлеем).
+Это то же поведение, что смена пути на macOS / CLI. Новой возможности протокола нет. `WatchPath` внутри Packet Tunnel не запускать (egress стал бы оверлеем).
 
 ## 4. Идентификаторы
 

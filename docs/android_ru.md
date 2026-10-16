@@ -2,7 +2,7 @@
 
 [English](android.md) · **Русский**
 
-Как loft сидит на телефоне, затем на Android TV / Google TV. Каталог: [clients/Android/](../clients/Android/). План: [clients/Android/PLAN_ru.md](../clients/Android/PLAN_ru.md). Движок: [clients/mobile/](../clients/mobile/). Провод: [protocol.md](protocol.md). URI: [share.md](share.md). UX: [clients/Android/design/DESIGN_ru.md](../clients/Android/design/DESIGN_ru.md). Макет: [clients/Android/design/index.html](../clients/Android/design/index.html).
+Как loft работает на телефоне, затем на Android TV / Google TV. Каталог: [clients/Android/](../clients/Android/). План: [clients/Android/PLAN_ru.md](../clients/Android/PLAN_ru.md). Движок: [clients/mobile/](../clients/mobile/). Протокол: [protocol.md](protocol.md). URI импорта: [share.md](share.md). UX: [clients/Android/design/DESIGN_ru.md](../clients/Android/design/DESIGN_ru.md). Макет: [clients/Android/design/index.html](../clients/Android/design/index.html).
 
 Адаптер — Java. Сессия — Go.
 

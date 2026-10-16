@@ -2,9 +2,9 @@
 
 **English** · [Русский](ios_ru.md)
 
-How loft sits on an iPhone, later Apple TV (tvOS 17+). Catalog: [clients/iOS/](../clients/iOS/). Plan: [clients/iOS/PLAN.md](../clients/iOS/PLAN.md) (Apple TV is phase 6). Mock: [clients/iOS/design/index.html](../clients/iOS/design/index.html). Wire: [protocol.md](protocol.md). Share URI: [share.md](share.md).
+How loft runs on iPhone, later Apple TV (tvOS 17+). Catalog: [clients/iOS/](../clients/iOS/). Plan: [clients/iOS/PLAN.md](../clients/iOS/PLAN.md) (Apple TV is phase 6). Mock: [clients/iOS/design/index.html](../clients/iOS/design/index.html). Protocol: [protocol.md](protocol.md). Import URI: [share.md](share.md).
 
-The app is not built yet. This file is the contract.
+The app is not built yet. This file is the integration specification.
 
 ---
 
@@ -23,7 +23,7 @@ app (Safari, Mail, …)
                   → exclude server IP from the tunnel
 ```
 
-The container (`app.loft.ios`) does not speak the wire. It writes YAML into the App Group and calls `startVPNTunnel`. loft, SSTP, and VLESS are outbounds of the same provider. IKEv2 stays the stock Settings client.
+The container (`app.loft.ios`) does not speak the protocol. It writes YAML into the App Group and calls `startVPNTunnel`. loft, SSTP, and VLESS are outbounds of the same provider. IKEv2 stays the stock Settings client.
 
 ## 2. Packet Tunnel
 

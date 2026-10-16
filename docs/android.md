@@ -2,7 +2,7 @@
 
 **English** · [Русский](android_ru.md)
 
-How loft sits on a phone, then Android TV / Google TV. Catalog: [clients/Android/](../clients/Android/). Plan: [clients/Android/PLAN.md](../clients/Android/PLAN.md). Engine: [clients/mobile/](../clients/mobile/). Wire: [protocol.md](protocol.md). Share URI: [share.md](share.md). UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). Mock: [clients/Android/design/index.html](../clients/Android/design/index.html).
+How loft runs on a phone, then Android TV / Google TV. Catalog: [clients/Android/](../clients/Android/). Plan: [clients/Android/PLAN.md](../clients/Android/PLAN.md). Engine: [clients/mobile/](../clients/mobile/). Protocol: [protocol.md](protocol.md). Import URI: [share.md](share.md). UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). Mock: [clients/Android/design/index.html](../clients/Android/design/index.html).
 
 The adapter is Java. The session is Go.
 

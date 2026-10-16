@@ -5,7 +5,7 @@
 | | |
 |--|--|
 | [`go/cmd/loft`](go/cmd/loft/) | CLI: SOCKS5, TUN. Protocol 1.0 reference |
-| [`go/cmd/loft-front`](go/cmd/loft-front/) | Session helper. The macOS app launches this |
+| [`go/cmd/loft-front`](go/cmd/loft-front/) | Session process. The macOS app launches this |
 | [`go/cmd/loft-probe`](go/cmd/loft-probe/) | ICMP/TCP/UDP/DNS/HTTP through a session |
 | [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Automated GET/WS throughput vs the macOS connect path |
 | [`macOS/`](macOS/) | Menu-bar app. UX: [`macOS/design/DESIGN.md`](macOS/design/DESIGN.md) |
@@ -27,4 +27,4 @@ make macos-dmgs # both arm64 and x86_64 DMGs (CI)
 make dist-clients # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
 ```
 
-Wire: [docs/protocol.md](../docs/protocol.md). Run: [docs/guide.md](../docs/guide.md).
+Protocol: [docs/protocol.md](../docs/protocol.md). Run: [docs/guide.md](../docs/guide.md).

@@ -2,7 +2,7 @@
 
 **English** · [Русский](DESIGN_ru.md)
 
-Phone app plus a `VpnService`. Mark, palette, and Avenir Next: [`brand/`](../../../brand/). Interactive mock: [`index.html`](index.html). Wire: [docs/protocol.md](../../../docs/protocol.md). Share URI: [docs/share.md](../../../docs/share.md).
+Phone app plus a `VpnService`. Mark, palette, and Avenir Next: [`brand/`](../../../brand/). Interactive mock: [`index.html`](index.html). Protocol: [docs/protocol.md](../../../docs/protocol.md). Import URI: [docs/share.md](../../../docs/share.md).
 
 The Java container lives in [`../app/`](../app/). A live session is Go inside `LoftVpnService`, not `loft-front`. The thin host already pastes YAML; this mock is the GUI that replaces that paste screen.
 
@@ -99,7 +99,7 @@ System surfaces in the mock (Settings, Connection request, shade, tiles) keep st
 | Scan QR | Сканировать QR |
 | From file | Из файла |
 | From gallery | Из галереи |
-| Share QR | QR для шаринга |
+| Share QR | QR of the import URI |
 | Edit | Править |
 | Delete | Удалить |
 | Export | Экспорт |

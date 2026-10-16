@@ -2,7 +2,7 @@
 
 **English** · [Русский](PLAN_ru.md)
 
-Software 1.0.0. Protocol 1.0. This plan does not bump either.
+Software 1.0.0. Protocol 1.0. This plan does not raise either version.
 
 ## Goal
 

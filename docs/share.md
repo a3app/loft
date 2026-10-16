@@ -1,12 +1,12 @@
-# Share URI
+# Import URI
 
 **English** · [Русский](share_ru.md)
 
 Client-side import string. It is **not** a loft/1.0 wire feature and does not bump the protocol. The node never sees this URL.
 
-The loft address is `loft://` — kind plus transport in one string. One outbound per URI. A `.loft` YAML file holds **one or several connections** and MAY mix every supported kind (`loft`, `sstp`, `vless`, `trojan`). Spec of the file: [§8](#8-loft-file).
+The loft address is `loft://` — kind plus transport in one string. One outbound per URI. A `.loft` YAML file holds **one or several connections** and MAY mix every supported kind (`loft`, `sstp`, `vless`, `trojan`). File format: [§8](#8-loft-file).
 
-Wire: [protocol.md](protocol.md). iOS UX: [clients/iOS/design/DESIGN.md](../clients/iOS/design/DESIGN.md). Android UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). macOS UX: [clients/macOS/design/DESIGN.md](../clients/macOS/design/DESIGN.md).
+Protocol: [protocol.md](protocol.md). iOS UX: [clients/iOS/design/DESIGN.md](../clients/iOS/design/DESIGN.md). Android UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). macOS UX: [clients/macOS/design/DESIGN.md](../clients/macOS/design/DESIGN.md).
 
 ---
 

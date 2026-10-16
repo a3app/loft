@@ -4,7 +4,7 @@
 
 iOS client: one **Packet Tunnel** that the system treats as a Personal VPN. The container app holds profiles and the lamp; the Network Extension runs the Go session (loft, SSTP, or VLESS).
 
-Wire: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/ios.md](../../docs/ios.md). Share URI: [docs/share.md](../../docs/share.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
+Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/ios.md](../../docs/ios.md). Import URI: [docs/share.md](../../docs/share.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
 
 Thin host + Packet Tunnel are in this tree. Bind the Go engine first: `make -C ../mobile ios`.
 

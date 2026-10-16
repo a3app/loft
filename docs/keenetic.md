@@ -2,9 +2,9 @@
 
 **English** · [Русский](keenetic_ru.md)
 
-How loft sits on a Keenetic router. Catalog: [clients/Keenetic/](../clients/Keenetic/). Plan: [clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md). Mock: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Wire: [protocol.md](protocol.md).
+How loft runs on a Keenetic router. Catalog: [clients/Keenetic/](../clients/Keenetic/). Plan: [clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md). Mock: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Protocol: [protocol.md](protocol.md).
 
-The package is not built yet. This file is the contract.
+The package is not built yet. This file is the integration specification.
 
 ---
 

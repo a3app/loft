@@ -2,19 +2,15 @@
 
 [English](README.md) · **Русский**
 
-Снаружи — обычный HTTPS. Внутри — устойчивый канал до серверов: короткие обрывы и потери пакетов сессию не рвут.
+loft — оверлей внутри TLS. Потоки мультиплексируются поверх GET, WebSocket, HTTP/2, QUIC или HTTP/3 и шифруются ChaCha20-Poly1305. Снаружи сессия выглядит как обычный HTTPS, поэтому её пропускают CDN, обратные прокси и TLS-терминаторы. Сессия переживает короткие обрывы и потери пакетов.
 
-**Состав:** overlay поверх TLS · протокол loft/1.0 · фронты под HTTPS · mux · ChaCha20-Poly1305 · спецификация, нода и клиенты.
+Протокол **loft/1.0**. Ссылка **`loft://`**. В YAML `kind: loft`.
 
-**loft** — overlay поверх TLS. Протокол **loft/1.0**. Ссылка для импорта **`loft://`**.
+В этом репозитории открытая спецификация, эталонная нода и клиенты (приложение для macOS, CLI для Linux и macOS). Версия ПО `1.0.4`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
 
-Снаружи это обычный HTTPS: потоки идут поверх GET, WebSocket, HTTP/2, QUIC или HTTP/3, внутри — mux и ChaCha20-Poly1305. Здесь открытая спецификация, нода и клиенты (приложение для macOS, CLI для Linux и macOS).
+## Для операторов
 
-Версия `1.0.3`. Протокол `loft/1.0`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
-
-## Для админов
-
-loft — канал безопасного администрирования, когда интернет нестабильный: пакеты теряются, связь на секунды пропадает. Зайти в лабораторку снаружи, держать парк серверов, связать две площадки. Снаружи это обычный HTTPS, поэтому его пропускают те же CDN, обратные прокси и TLS-терминаторы, что уже стоят у сайта. Канарейка — как origin показывает TLS. Если рукопожатие на пути переписали, сессия не встанет.
+Обычные задачи: доступ в лабораторию снаружи, парк серверов, связь двух площадок. Участники предъявляют ClientHello в форме браузера. Если посредник переписывает рукопожатие, сессия не поднимается.
 
 ## Скачать
 
@@ -28,12 +24,6 @@ loft — канал безопасного администрирования, �
 | Нода | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-node-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-node_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-node-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-node_amd64.deb) |
 
 Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/latest/download/loft-clients-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/latest/download/loft-node-SHA256SUMS.txt). DMG — приложение в строке меню, подпись ad-hoc. В архивах CLI: `loft`, `loft-front`, `loft-probe`, `loft-bench`.
-
-### Почему loft?
-
-**loft overlay for TLS.** loft — чердак, этаж над обычным HTTPS. Имя продукта, протокола и ссылки одно.
-
-Ссылка `loft://`. В YAML `kind: loft`. Протокол `loft/1.0`.
 
 ## Протокол
 
@@ -55,7 +45,7 @@ application → SOCKS5 / TUN
 | [docs/keenetic_ru.md](docs/keenetic_ru.md) | Клиент KeeneticOS (Entware, OpkgTun). Каталог: [clients/Keenetic/](clients/Keenetic/). |
 | [docs/ios_ru.md](docs/ios_ru.md) | Клиент iOS (Packet Tunnel). Каталог: [clients/iOS/](clients/iOS/). |
 | [docs/android_ru.md](docs/android_ru.md) | Клиент Android (VpnService). Каталог: [clients/Android/](clients/Android/). |
-| [docs/share_ru.md](docs/share_ru.md) | Ссылка `loft://` и файлы `.loft` (одно или несколько подключений). |
+| [docs/share_ru.md](docs/share_ru.md) | Ссылка импорта `loft://` и файлы `.loft` (одно или несколько подключений). |
 
 ## Репозиторий
 

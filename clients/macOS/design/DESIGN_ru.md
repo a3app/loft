@@ -2,9 +2,9 @@
 
 [English](DESIGN.md) · **Русский**
 
-Агент в меню-баре. Окно вторично. Марка, палитра и Avenir Next: [`brand/`](../../../brand/). Интерактивный макет: [`index.html`](index.html). Провод: [docs/protocol_ru.md](../../../../docs/protocol_ru.md).
+Агент в строке меню. Окно вторично. Марка, палитра и Avenir Next: [`brand/`](../../../brand/). Интерактивный макет: [`index.html`](index.html). Протокол: [docs/protocol_ru.md](../../../../docs/protocol_ru.md).
 
-Бинарник Swift 5 + AppKit живёт в [`../Sources/`](../Sources/). Живая сессия — Go-хелпер `loft-front`, скопированный в `loft.app/Contents/MacOS/`. In-process `GETFront.swift` — не тот путь, которым ходит приложение. Hello хелпера — Go-клиент (GET, WS, H2, QUIC, H3, протокол 1.0). SSTP — отдельный VPN PPP-over-HTTPS в том же GUI. VLESS — третий тип (TCP+TLS, REALITY, Vision, XHTTP). Редактор VLESS: **Ссылка** (`vless://`) или **Вручную** (поля); обе проекции пишут DuckSoft-шаринг. Trojan/Shadowsocks — то же семейство, позже.
+Программа Swift 5 + AppKit живёт в [`../Sources/`](../Sources/). Живая сессия — процесс `loft-front` на Go, скопированный в `loft.app/Contents/MacOS/`. In-process `GETFront.swift` — не тот путь, которым ходит приложение. Hello `loft-front` — Go-клиент (GET, WS, H2, QUIC, H3, протокол 1.0). SSTP — отдельный VPN PPP-over-HTTPS в том же GUI. VLESS — третий тип (TCP+TLS, REALITY, Vision, XHTTP). Редактор VLESS: **Ссылка** (`vless://`) или **Вручную** (поля); обе проекции пишут строку DuckSoft. Trojan/Shadowsocks — то же семейство, позже.
 
 ---
 
@@ -12,17 +12,17 @@
 
 Клиент говорит протокол 1.0. Локально отдаёт SOCKS5 и TUN (уже есть в Go CLI). Учётные данные — ключ члена `lt_…`. Пароля нет.
 
-В v1 уехало: ключ, outbound `get` / `ws` / `h2` / `quic` / `h3` через `loft-front`, несколько **подключений** (профили), импорт/экспорт `.loft`, правка профиля, connect/disconnect, TUN и hold. `select: auto` внутри профиля остаётся в Go CLI.
+В v1 вошло: ключ, исходящие `get` / `ws` / `h2` / `quic` / `h3` через `loft-front`, несколько **подключений** (профили), импорт/экспорт `.loft`, правка профиля, connect/disconnect, TUN и hold. `select: auto` внутри профиля остаётся в Go CLI.
 
 Подключение — один именованный `client.yaml`. Несколько подключений — несколько сессий. Это отдельно от cap `multi` (несколько `instance_id` на одном ключе).
 
-Семейный шаринг (все приложения loft): файл `.loft` держит **одно или несколько подключений**, типы `loft` / `sstp` / `vless` / `trojan` смешиваются. Подпись в списке — **тип · транспорт · хост**. Адрес loft — `loft://`. Спека: [docs/share_ru.md](../../../docs/share_ru.md).
+Общий файл (все приложения loft): `.loft` держит **одно или несколько подключений**, типы `loft` / `sstp` / `vless` / `trojan` смешиваются. Подпись в списке — **тип · транспорт · хост**. Адрес loft — `loft://`. Спецификация: [docs/share_ru.md](../../../docs/share_ru.md).
 
 ---
 
 ## 2. Вход в протокол (1.0)
 
-ПО `1.0.3`. Протокол `1.0` (`0x0100` в Hello). SOCKS и TUN остаются локальными. Спека: roster, decoy, mask, **именованные списки адресов** и форвардинг оверлея обязательны для клиента на фильтрованном пути.
+ПО `1.0.4`. Протокол `1.0` (`0x0100` в Hello). SOCKS и TUN остаются локальными. Спецификация: roster, decoy, mask, **именованные списки адресов** и пересылка оверлея обязательны для клиента на фильтрованном пути.
 
 | В приложении | В канале |
 |--------------|------------|
@@ -44,13 +44,13 @@
 | TUN UDP | Cap `dgram`, mux `CmdDgram` |
 | Оверлей к другому члену | Status `peers` hub\|mesh\|vlan. Cap `p2p` опционален; `p2p: false` = только hub-сплайс |
 
-Hello живого хелпера (`loft-front`, член, не relay): фронты, которые включает профиль (`get` / `ws` / `h2` / `quic` / `h3`), плюс `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. Cap `p2p` только если профиль разрешает слушать. Cap `relay` выкл. `hub:*` и `ctl:1` никогда не открываются.
+Hello живого `loft-front` (член, не relay): фронты, которые включает профиль (`get` / `ws` / `h2` / `quic` / `h3`), плюс `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. Cap `p2p` только если профиль разрешает слушать. Cap `relay` выкл. `hub:*` и `ctl:1` никогда не открываются.
 
 После первого Status — только пересечение фронтов, в порядке этого клиента. Не-OK Status запрещает mux. GET 404 на auth — `auth_bad_key`.
 
 Списки: Status `lists_serial` / `lists_hash` → `GET {lists_path}` (дефолт `/static/v3/lists.json`), тот же ключ Ed25519, что у roster. SOCKS матчит hostname; TUN матчит CIDR. Несколько попаданий: **drop, затем direct, затем via**.
 
-Hold, failover, Packet Tunnel vs хелпер, «reset routes» — политика машины поверх этого маппинга. Это не caps.
+Hold, failover, Packet Tunnel vs привилегированный помощник, «reset routes» — политика машины поверх этого маппинга. Это не caps.
 
 **Макет ещё отстаёт от протокола:** ручной экран только GET\|WS; нет `bootstrap` / `controller_pub`; нет fetch именованных списков; split UI имеет via/bypass и нет `drop`; нет смены живого фронта после failover. Полный `.loft` уже несёт поля YAML.
 
@@ -78,7 +78,7 @@ Hold, failover, Packet Tunnel vs хелпер, «reset routes» — полити
 | Prefs | `~/Library/Application Support/loft/prefs.yaml` (`multi: true`) |
 | Ключ | Keychain. UI после сохранения не показывает ключ постоянным полем plaintext. |
 
-Импорт: `.loft` или `client.yaml`. `.loft` MAY быть сегодняшним одним документом **или** пакетом с `connections:` (одно или несколько, смешанные протоколы). Каждый элемент становится профилем. Экспорт выбранного — `Office.loft`; нескольких — `Family.loft`. В файле ключи; UI предупреждает не раздавать.
+Импорт: `.loft` или `client.yaml`. `.loft` **может** быть сегодняшним одним документом **или** пакетом с `connections:` (одно или несколько, смешанные протоколы). Каждый элемент становится профилем. Экспорт выбранного — `Office.loft`; нескольких — `Family.loft`. В файле ключи; UI предупреждает не раздавать.
 
 Адрес loft — `loft://<token>@host…`. Один фронт → QR `loft://`. Несколько фронтов одного подключения → `.loft` этого подключения.
 
@@ -88,7 +88,7 @@ Hold, failover, Packet Tunnel vs хелпер, «reset routes» — полити
 
 ## 4. Маршрут / TUN
 
-У машины один маршрут по умолчанию. SOCKS MAY быть на профиль. TUN — нет.
+У машины один маршрут по умолчанию. SOCKS **может** быть на профиль. TUN — нет.
 
 | Что | Где | Зачем |
 |-----|-----|-------|
@@ -110,7 +110,7 @@ Hold и failover — политика машины. Класть их на по�
 3. Живого TUN нет, hold вкл → сеть закрыта, лампа красная, «route closed». Если «В меню при обрыве» вкл, popover показывает «Reset routes»; иначе только Настройки.
 4. Hold выкл → на последнем обрыве нативный маршрут возвращается (реальный IP достижим).
 
-Копирайт говорит *route*, *direct Internet*, *reset*. Не говорит «kill switch» и «shield».
+Формулировки говорят *route*, *direct Internet*, *reset*. Не говорят «kill switch» и «shield».
 
 ### 4.1 Бэкенды
 
@@ -121,13 +121,13 @@ Hold и failover — политика машины. Класть их на по�
 | 10.13–10.14 | privileged helper (`SMJobBless`) | Packet Tunnel с Developer ID недоступен: appex только App Store. |
 | 10.15+ | Packet Tunnel, **system extension** | С Catalina Apple пускает Network Extension вне стора только как sysex. |
 
-SOCKS-хелпер не ставится. Движок стартует на первом «весь трафик».
+Отдельный процесс SOCKS не ставится. Движок стартует на первом «весь трафик».
 
-На 10.15+ хелпер не bless'ится, даже если sysex отказали: TUN остаётся выкл, SOCKS жив. Два способа править таблицу на одной машине запрещены.
+На 10.15+ привилегированный помощник не bless'ится, даже если sysex отказали: TUN остаётся выкл, SOCKS жив. Два способа править таблицу на одной машине запрещены.
 
 Политика маршрута — один объект (`RouteEngine`). Меняется только путь в систему.
 
-**Helper (10.13–10.14).** Приложение открывает `utun` и крутит стек. Хелпер по XPC: `ifconfig`, `route add/delete`, снимок шлюза, hold, reset. Трафик не читает. Один админ-диалог при первой установке.
+**Помощник (10.13–10.14).** Приложение открывает `utun` и ведёт стек. Помощник по XPC: `ifconfig`, `route add/delete`, снимок шлюза, hold, reset. Трафик не читает. Один админ-диалог при первой установке.
 
 **Packet Tunnel (10.15+).** System extension, entitlement `packet-tunnel-provider-systemextension`. Первый TUN: активировать sysex и сохранить конфигурацию. В Системных настройках это сетевой профиль; в UI loft это «route», имя профиля `loft`.
 
@@ -137,12 +137,12 @@ SOCKS-хелпер не ставится. Движок стартует на п�
 |-----------|----------------|----------------|----------|
 | loft жив, весь трафик | default | bypass (+ хост фронта) | запущен |
 | loft жив, split | via | bypass | запущен |
-| Hold, loft мёртв | default (пакеты в utun **дропаются**) | bypass | **оставить работать** |
+| Hold, loft мёртв | default (пакеты в utun **отбрасываются**) | bypass | **оставить работать** |
 | Reset / hold выкл на обрыве | — | — | стоп |
 
 Hold и «мимо loft, пока loft закрыт» на Network Extension работают, только пока provider запущен. Остановка возвращает нативный default.
 
-App Store, если появится: тот же Packet Tunnel (appex или sysex по правилам стора). Хелпер из MAS выкинут.
+App Store, если появится: тот же Packet Tunnel (appex или sysex по правилам стора). Привилегированный помощник из MAS выкинут.
 
 ---
 
@@ -204,7 +204,7 @@ route ADD 77.88.8.8 MASK 255.255.255.255 0.0.0.0 :: rem Yandex DNS | bypass
 
 Импорт: `.bat`, `.txt`, `.loft-routes`. Смешанный файл loft режется сам. Голый Keenetic открывает диалог «куда».
 
-Эти файлы — локальные таблицы маршрутов. Они отдельно от списков адресов контроллера (`use:` в `client.yaml`), которые публикует протокол. Поздняя ревизия MAY импортировать список контроллера в ту же таблицу.
+Эти файлы — локальные таблицы маршрутов. Они отдельно от списков адресов контроллера (`use:` в `client.yaml`), которые публикует протокол. Поздняя ревизия **может** импортировать список контроллера в ту же таблицу.
 
 ### 5.2 Репозиторий
 
@@ -313,7 +313,7 @@ Multi: вместо одного Connect список профилей, у ка�
 
 ---
 
-## 10. Копирайт
+## 10. Тексты
 
 Каноническая локаль — английская. Интерактивный макет по умолчанию английский (`?lang=ru` для русской локали). Скриншоты в `shots/` включают обе.
 
@@ -355,7 +355,7 @@ Multi: вместо одного Connect список профилей, у ка�
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.3 |
+| about.ver | 1.0.4 |
 | about.proto | protocol · 1.0 |
 | about.fronts | fronts · get · ws · quic · h2 · h3 |
 | about.opts | options · mask |

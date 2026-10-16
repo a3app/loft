@@ -4,7 +4,7 @@
 
 Сборка и запуск: [docs/guide_ru.md](../docs/guide_ru.md). Протокол: [docs/protocol_ru.md](../docs/protocol_ru.md).
 
-Марка — L-крыша с лампой: буква L, чердак оверлея над HTTPS, зажжённое окно, когда туннель жив.
+Марка — L-крыша с лампой: буква L и окно, которое горит, когда туннель поднят.
 
 Сплошные заливки только на марке и в трее. Лёгкое свечение окна — только на иконке приложения.
 
@@ -60,14 +60,14 @@ Ultra Light, Heavy и курсив в lockup не использовать.
 | `app/loft.ico` | приложение Windows |
 | `tray/loft-tray-16.png` | notify Windows, подключено |
 | `tray/loft-tray-off-16.png` | notify Windows, отключено |
-| `menubar/loftTemplate.png` (`@2x` `@3x`) | меню-бар macOS, подключено |
-| `menubar/loftTemplate-off-*.png` | меню-бар macOS, отключено |
+| `menubar/loftTemplate.png` (`@2x` `@3x`) | строка меню macOS, подключено |
+| `menubar/loftTemplate-off-*.png` | строка меню macOS, отключено |
 
 ## Правила
 
 1. Крыша закрывает только ножку L; ступня уходит вправо. Это L.
 2. При ≤16px — сетка `PIX16` в `generate.py`. Не уменьшать с 1024.
-3. Меню-бар macOS — **template image** (чёрное + альфа). Система красит сама.
+3. Строка меню macOS — **template image** (чёрное + альфа). Система красит сама.
 4. Трей Windows по умолчанию — **copper + lamp**.
 5. Подключено: лампа горит. Отключено: то же L, окно погашено (macOS: без выреза).
 6. Слово *loft* — строчными, Avenir Next Demi, трекинг −0.04em.

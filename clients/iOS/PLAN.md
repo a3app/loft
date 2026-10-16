@@ -2,7 +2,7 @@
 
 **English** · [Русский](PLAN_ru.md)
 
-Software 1.0.0. Protocol 1.0. This plan does not bump either.
+Software 1.0.0. Protocol 1.0. This plan does not raise either version.
 
 ## Goal
 
@@ -14,7 +14,7 @@ A loft / SSTP / VLESS client on iPhone that installs as a Personal VPN. The user
 - SOCKS5 as the inbound other apps use.
 - Several Packet Tunnels at once (iOS allows one Personal VPN).
 - IKEv2 / WireGuard inside this app. SSTP is in-process Go (`internal/sstp`) on the same Packet Tunnel.
-- App Store listing in the first binary drop (TestFlight is enough).
+- App Store listing in the first shipping build (TestFlight is enough).
 - Widgets, Control Center, Apple Watch, iPad-first layout.
 - Dist / IPA on the `v*` GitHub Release until a later tag.
 - VIDAA / Tizen / webOS (no Packet Tunnel). Those TVs use Keenetic or an HDMI stick.
@@ -23,7 +23,7 @@ A loft / SSTP / VLESS client on iPhone that installs as a Personal VPN. The user
 
 ### 0. Catalog — this tree
 
-Docs, plan, HTML mock. Share URI [docs/share.md](../../docs/share.md). No Xcode project.
+Docs, plan, HTML mock. Import URI [docs/share.md](../../docs/share.md). No Xcode project.
 
 ### 1. Container + empty tunnel
 
