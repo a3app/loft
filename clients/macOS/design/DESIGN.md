@@ -22,7 +22,7 @@ Shared file (all loft apps): a `.loft` file holds **one or several connections**
 
 ## 2. Protocol join (1.0)
 
-Software `1.0.6`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
+Software `1.0.7`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
 
 | In the application | On the wire |
 |--------------------|-------------|
@@ -241,13 +241,15 @@ Main / Connections   — list; bottom Import / Export / Manual; multi toggle
 Edit                 — name, loft:// (or SSTP/VLESS fields), SOCKS, tunnel;
                        Advanced tab — mux, DNS
 Onboarding           — key → address, or import a file
-Settings             — login, auto-connect, simple view, multi, shared SOCKS,
+Settings             — login, auto-connect, check for updates at launch, simple view, multi, shared SOCKS,
                        route (failover / hold / in the menu on break / split / reset)
 Split                — via loft / past loft, Keenetic+loft import, repository
 About                — client version, protocol 1.0, fronts and options this
                        client implements, colophon A³. On open, checks
                        GitHub `a3app/loft` latest release; the pill installs
-                       the matching macOS DMG and relaunches.
+                       the matching macOS DMG and relaunches. Launch check
+                       (Settings) opens a small offer: Update / Later / don’t
+                       ask again (turns the launch pref off).
 ```
 
 The application is an `LSUIElement`.
@@ -354,13 +356,17 @@ Canonical locale is English. The interactive mock defaults to English (`?lang=ru
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.6 |
+| about.ver | 1.0.7 |
 | about.proto | protocols |
 | about.loft | loft/1.0 · get · ws · h2 · quic · h3 · mask |
 | about.sstp | SSTP · ppp · mschapv2 · pap |
 | about.blurb | From the street, ordinary HTTPS. Inside, a private network. |
 | about.sig | A3 |
-| about.upd | Check GitHub latest; Update to N; checksum + swap + relaunch |
+| about.upd | One pill: check / latest / Update to N / download % / install. No status line above it. |
+| pref.upd | Check for updates at launch |
+| upd.offer.title | loft update |
+| upd.later | Later |
+| upd.quiet | Don’t ask again (turns the launch check off) |
 
 Vocabulary on these surfaces: overlay, loft, front, key. About is two lines and the signature A3. It does not discuss the construction of the mark. It does not say “VPN”, “protected”, or “shield”.
 
@@ -376,6 +382,7 @@ Vocabulary on these surfaces: overlay, loft, front, key. About is two lines and 
 | Edit | 440 × hug | name, type, tabs; overlay-scrolls fields if taller than the screen. Save stays pinned. VLESS TLS/REALITY and TCP/XHTTP share one row. |
 | Settings | 480 × hug | sheet on main |
 | About | 360 × 448 | version, protocols, blurb, GitHub update, A³ |
+| Offer | 360 × hug | launch found a newer DMG: Update / Later / don’t ask again |
 
 Windows and popover **hug** their content. The client has no permanent scroll gutter. If a list outgrows the window: system overlay (`NSScrollView`, appears on gesture).
 

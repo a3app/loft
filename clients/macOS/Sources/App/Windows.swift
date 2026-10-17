@@ -913,6 +913,7 @@ final class SettingsWindowController: NSWindowController {
             pref("simple", "simple_d", engine.store.simple)
             rateRow()
             langRow()
+            pref("upd_launch", "upd_launch_d", engine.store.checkUpdates)
             pref("diag", "diag_d", engine.store.diag)
         }
         y += 10
@@ -956,6 +957,7 @@ final class SettingsWindowController: NSWindowController {
         case "ext_ip":
             engine.store.showExtIP = on
             engine.refreshExtIP()
+        case "upd_launch": engine.store.checkUpdates = on
         default: break
         }
         engine.store.savePrefs()

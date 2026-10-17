@@ -22,7 +22,7 @@
 
 ## 2. Вход в протокол (1.0)
 
-ПО `1.0.6`. Протокол `1.0` (`0x0100` в Hello). SOCKS и TUN остаются локальными. Спецификация: roster, decoy, mask, **именованные списки адресов** и пересылка оверлея обязательны для клиента на фильтрованном пути.
+ПО `1.0.7`. Протокол `1.0` (`0x0100` в Hello). SOCKS и TUN остаются локальными. Спецификация: roster, decoy, mask, **именованные списки адресов** и пересылка оверлея обязательны для клиента на фильтрованном пути.
 
 | В приложении | В канале |
 |--------------|------------|
@@ -241,13 +241,15 @@ Main / Connections   — список; внизу Import / Export / Manual; ту
 Edit                 — имя, loft:// (или поля SSTP/VLESS), SOCKS, туннель;
                        вкладка «Расширенные» — mux, DNS
 Onboarding           — ключ → адрес, или импорт файла
-Settings             — логин, авто-connect, простой вид, multi, общий SOCKS,
+Settings             — логин, авто-connect, проверка обновлений при запуске, простой вид, multi, общий SOCKS,
                        маршрут (failover / hold / в меню при обрыве / split / reset)
 Split                — via loft / past loft, импорт Keenetic+loft, репозиторий
 About                — версия клиента, протокол 1.0, фронты и опции, которые
                        этот клиент реализует, колофон A³. При открытии
                        спрашивает latest у GitHub `a3app/loft`; кнопка
-                       ставит macOS DMG этой машины и перезапускает.
+                       ставит macOS DMG этой машины и перезапускает. Проверка
+                       при запуске (Настройки) открывает окно: Обновить / Позже /
+                       не спрашивать снова (выключает преф).
 ```
 
 Приложение — `LSUIElement`.
@@ -355,13 +357,17 @@ Multi: вместо одного Connect список профилей, у ка�
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.6 |
+| about.ver | 1.0.7 |
 | about.proto | protocol · 1.0 |
 | about.fronts | fronts · get · ws · quic · h2 · h3 |
 | about.opts | options · mask |
 | about.blurb | From the street, ordinary HTTPS. Inside, a private network. |
 | about.sig | A3 |
-| about.upd | Проверка GitHub latest; Обновить до N; сумма + замена + перезапуск |
+| about.upd | Одна кнопка: проверка / последняя / Обновить до N / скачивание % / установка. Строки над ней нет. |
+| pref.upd | Проверять обновления при запуске |
+| upd.offer.title | Обновление loft |
+| upd.later | Позже |
+| upd.quiet | Не спрашивать снова (выключает проверку при запуске) |
 
 Словарь на этих поверхностях: overlay, loft, front, key. About — две строки и подпись A3. Устройство марки не обсуждает. Не говорит «VPN», «protected» и «shield».
 
@@ -377,6 +383,7 @@ Multi: вместо одного Connect список профилей, у ка�
 | Edit | 440 × hug | имя, тип, вкладки; поля с overlay-скроллом, если выше экрана. Save прижат снизу. VLESS TLS/REALITY и TCP/XHTTP в одной строке. |
 | Settings | 480 × hug | sheet на main |
 | About | 360 × 448 | версия, протоколы, blurb, обновление с GitHub, A³ |
+| Offer | 360 × hug | при запуске найден новый DMG: Обновить / Позже / не спрашивать снова |
 
 Окна и popover **hug** контент. У клиента нет постоянного скролл-гуттера. Если список перерос окно: системный overlay (`NSScrollView`, появляется на жесте).
 

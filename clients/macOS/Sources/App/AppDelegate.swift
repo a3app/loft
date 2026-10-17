@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var splitExportWC: SplitExportWindowController?
     private var splitRepoWC: SplitRepoWindowController?
     private var splitAddWC: SplitAddWindowController?
+    private var updateOfferWC: UpdateOfferWindowController?
+    private var launchUpdater: Updater?
     private var localMon: Any?
     private var globalMon: Any?
     private var sparkTimer: Timer?
@@ -121,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refresh()
         LoftLog.shared.diag = engine.store.diag
         syncDock()
+        maybeOfferUpdate()
     }
 
     /// Tears the session down so loft-priv and loft-front die before quit.
@@ -326,6 +329,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if listWC == nil { listWC = ConnectionsWindowController(engine: engine) }
         listWC?.rebuild()
         present(listWC)
+    }
+
+    /// Reloads Settings if that window is open (quiet checkbox wrote prefs).
+    func settingsWCReload() {
+        settingsWC?.reload()
+    }
+
+    /// GitHub latest in the background when the launch pref is on. Dialog only if a newer DMG exists.
+    private func maybeOfferUpdate() {
+        guard engine.store.checkUpdates else { return }
+        if launchUpdater == nil { launchUpdater = Updater() }
+        launchUpdater?.check(current: engine.software) { [weak self] result in
+            guard let self = self, self.engine.store.checkUpdates else { return }
+            if self.aboutWC?.window?.isVisible == true { return }
+            if self.updateOfferWC?.window?.isVisible == true { return }
+            guard case .success(let offer?) = result else { return }
+            self.showUpdateOffer(offer)
+        }
+    }
+
+    /// Offer window: Update / Later / don’t ask again.
+    private func showUpdateOffer(_ offer: Updater.Offer) {
+        if updateOfferWC == nil || updateOfferWC?.window?.isVisible != true {
+            updateOfferWC = UpdateOfferWindowController(offer: offer)
+        }
+        present(updateOfferWC)
     }
 
     /// Shows the settings window.

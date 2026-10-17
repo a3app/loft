@@ -6,7 +6,6 @@ import AppKit
 final class AboutWindowController: NSWindowController {
     private let software: String
     private let updater = Updater()
-    private let statusLab = NSTextField(labelWithString: "")
     private let actionBtn = PillButton(frame: .zero)
     private var offer: Updater.Offer?
     private var busy = false
@@ -29,39 +28,19 @@ final class AboutWindowController: NSWindowController {
         guard !busy else { return }
         busy = true
         offer = nil
-        statusLab.stringValue = L10n.t("upd_checking")
-        statusLab.textColor = Palette.mute
-        actionBtn.title = L10n.t("upd_check")
-        actionBtn.lampOn = false
-        actionBtn.isEnabled = false
-        actionBtn.isHidden = false
+        setBtn(L10n.t("upd_checking"), lamp: false, enabled: false)
         updater.check(current: software) { [weak self] result in
             guard let self = self else { return }
             self.busy = false
             switch result {
             case .failure(let e):
-                self.statusLab.stringValue = self.failText(e)
-                self.statusLab.textColor = Palette.err
-                self.actionBtn.title = L10n.t("upd_check")
-                self.actionBtn.lampOn = false
-                self.actionBtn.isEnabled = true
-                self.actionBtn.isHidden = false
+                self.setBtn(self.failText(e), lamp: false, enabled: true)
             case .success(let offer):
                 if let offer = offer {
                     self.offer = offer
-                    self.statusLab.stringValue = String(format: L10n.t("upd_available"), offer.version)
-                    self.statusLab.textColor = Palette.snow
-                    self.actionBtn.title = String(format: L10n.t("upd_install"), offer.version)
-                    self.actionBtn.lampOn = true
-                    self.actionBtn.isEnabled = true
-                    self.actionBtn.isHidden = false
+                    self.setBtn(String(format: L10n.t("upd_install"), offer.version), lamp: true, enabled: true)
                 } else {
-                    self.statusLab.stringValue = L10n.t("upd_current")
-                    self.statusLab.textColor = Palette.mute
-                    self.actionBtn.title = L10n.t("upd_check")
-                    self.actionBtn.lampOn = false
-                    self.actionBtn.isEnabled = true
-                    self.actionBtn.isHidden = false
+                    self.setBtn(L10n.t("upd_current"), lamp: false, enabled: true)
                 }
             }
         }
@@ -114,16 +93,9 @@ final class AboutWindowController: NSWindowController {
         blurb.alignment = .center
         blurb.frame = NSRect(x: 28, y: blurbY, width: 304, height: blurbH)
 
-        statusLab.font = Palette.body(12)
-        statusLab.textColor = Palette.mute
-        statusLab.alignment = .center
-        statusLab.frame = NSRect(x: 20, y: 284, width: 320, height: 16)
-        statusLab.stringValue = L10n.t("upd_checking")
-        Palette.fitLine(statusLab)
-
         actionBtn.compact = true
-        actionBtn.frame = NSRect(x: 28, y: 308, width: 304, height: 36)
-        actionBtn.title = L10n.t("upd_check")
+        actionBtn.frame = NSRect(x: 28, y: 284, width: 304, height: 36)
+        actionBtn.title = L10n.t("upd_checking")
         actionBtn.lampOn = false
         actionBtn.isEnabled = false
         actionBtn.target = self
@@ -145,7 +117,16 @@ final class AboutWindowController: NSWindowController {
         x += heartW + gap
         let right = Palette.label(rightStr, font: madeFont, color: Palette.mute, frame: NSRect(x: x - 1, y: madeY, width: rightW, height: madeH))
 
-        for v in [mark, title, ver, blurb, statusLab, actionBtn, left, heart, right] as [NSView] { c.addSubview(v) }
+        for v in [mark, title, ver, blurb, actionBtn, left, heart, right] as [NSView] { c.addSubview(v) }
+    }
+
+    /// Title, lamp, and enabled on the one update pill. No status line above it.
+    private func setBtn(_ title: String, lamp: Bool, enabled: Bool) {
+        actionBtn.title = title
+        actionBtn.lampOn = lamp
+        actionBtn.isEnabled = enabled
+        actionBtn.isHidden = false
+        actionBtn.needsDisplay = true
     }
 
     @objc private func tapUpdate() {
@@ -159,30 +140,22 @@ final class AboutWindowController: NSWindowController {
     private func startInstall(_ offer: Updater.Offer) {
         guard !busy else { return }
         busy = true
-        actionBtn.isEnabled = false
-        actionBtn.isHidden = true
-        statusLab.textColor = Palette.mute
-        statusLab.stringValue = String(format: L10n.t("upd_downloading"), 0)
+        setBtn(String(format: L10n.t("upd_downloading"), 0), lamp: false, enabled: false)
         updater.install(offer, progress: { [weak self] p in
             guard let self = self else { return }
             if p >= 1 {
-                self.statusLab.stringValue = L10n.t("upd_installing")
+                self.setBtn(L10n.t("upd_installing"), lamp: false, enabled: false)
             } else {
-                self.statusLab.stringValue = String(format: L10n.t("upd_downloading"), Int((p * 100).rounded()))
+                self.setBtn(String(format: L10n.t("upd_downloading"), Int((p * 100).rounded())), lamp: false, enabled: false)
             }
         }, done: { [weak self] err in
             guard let self = self else { return }
             if let err = err {
                 self.busy = false
-                self.statusLab.stringValue = self.failText(err)
-                self.statusLab.textColor = Palette.err
-                self.actionBtn.title = String(format: L10n.t("upd_install"), offer.version)
-                self.actionBtn.lampOn = true
-                self.actionBtn.isEnabled = true
-                self.actionBtn.isHidden = false
+                self.setBtn(self.failText(err), lamp: false, enabled: true)
                 return
             }
-            self.statusLab.stringValue = L10n.t("upd_relaunch")
+            self.setBtn(L10n.t("upd_relaunch"), lamp: false, enabled: false)
             NSApp.terminate(nil)
         })
     }

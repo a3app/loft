@@ -779,6 +779,55 @@ final class ToggleSwitch: FlippedView {
     override var intrinsicContentSize: NSSize { NSSize(width: 36, height: 22) }
 }
 
+/// 18×18 lamp plate with a check. Click flips `on`.
+final class LoftCheck: FlippedView {
+    var on = false { didSet { needsDisplay = true } }
+    var onChange: ((Bool) -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: NSRect(x: frameRect.origin.x, y: frameRect.origin.y, width: 18, height: 18))
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        var keep = true
+        while keep {
+            guard let e = window?.nextEvent(matching: [.leftMouseUp, .leftMouseDragged]) else { break }
+            if e.type == .leftMouseUp {
+                keep = false
+                if bounds.contains(convert(e.locationInWindow, from: nil)) {
+                    on.toggle()
+                    onChange?(on)
+                }
+            }
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let box = bounds.insetBy(dx: 0.5, dy: 0.5)
+        let path = loftRound(box, radius: 4)
+        (on ? Palette.lamp : Palette.slate).setFill()
+        path.fill()
+        guard on else { return }
+        let mark = NSBezierPath()
+        mark.lineWidth = 1.6
+        mark.lineCapStyle = .round
+        mark.lineJoinStyle = .round
+        mark.move(to: NSPoint(x: 4.5, y: 9.5))
+        mark.line(to: NSPoint(x: 7.5, y: 12.5))
+        mark.line(to: NSPoint(x: 13.5, y: 5.5))
+        Palette.ink.setStroke()
+        mark.stroke()
+    }
+}
+
 /// Rounded single-line field. `secure` bullets the value and adds a reveal control.
 final class LoftField: FlippedView, NSTextFieldDelegate {
     private(set) var field: NSTextField

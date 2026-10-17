@@ -165,6 +165,7 @@ final class ProfileStore {
     var showExtIP = true
     var extIPURL = ProfileStore.defaultExtIPURL
     var lang = "ru"
+    var checkUpdates = true
     let routes = SplitStore()
 
     /// Plain-text echo used when the pref is empty or garbage.
@@ -254,6 +255,7 @@ final class ProfileStore {
             if let v = strVal("lang"), L10n.Lang(rawValue: v.lowercased()) != nil {
                 lang = v.lowercased()
             }
+            if let v = flag("check_updates") { checkUpdates = v }
         }
         let activeFile = dir.appendingPathComponent("active")
         activeID = (try? String(contentsOf: activeFile, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -297,6 +299,7 @@ final class ProfileStore {
         reconnect = true
         showExtIP = true
         extIPURL = Self.defaultExtIPURL
+        checkUpdates = true
         savePrefs()
     }
 
@@ -321,6 +324,7 @@ final class ProfileStore {
         ext_ip: \(showExtIP)
         ext_ip_url: \(extIPURL)
         lang: \(lang)
+        check_updates: \(checkUpdates)
         """
         try? s.write(to: dir.appendingPathComponent("prefs.yaml"), atomically: true, encoding: .utf8)
         try? activeID.write(to: dir.appendingPathComponent("active"), atomically: true, encoding: .utf8)

@@ -377,7 +377,7 @@
     .toggle.on i { left: 16px; }
 
     .about {
-      width: 360px; height: 360px; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 360px; height: auto; left: 50%; top: 50%; transform: translate(-50%, -50%);
       text-align: center; display: flex; flex-direction: column;
     }
     .about .body {
@@ -409,6 +409,39 @@
       color: var(--lamp); vertical-align: -1px; margin: 0 3px;
     }
     .about .madeby sup { font-size: 0.65em; }
+    .about .upd { margin: 8px 0 16px; }
+
+    .offer {
+      width: 360px; height: auto;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .offer .body { padding: 8px 28px 22px; }
+    .offer h1 { margin: 8px 0 10px; font-size: 1.2rem; }
+    .offer p { color: var(--mute); font-size: 13.5px; line-height: 1.45; margin: 0 0 16px; }
+    .offer .btn.connect { margin: 0; }
+    .offer .btn.ghost { margin-top: 8px; }
+    .offer .quiet {
+      display: flex; gap: 10px; align-items: flex-start;
+      text-align: left; margin-top: 16px; cursor: pointer;
+    }
+    .offer .quiet .n { font-size: 13px; color: var(--snow); }
+    .offer .quiet .d { font-size: 11.5px; color: var(--mute); line-height: 1.3; }
+    .loft-check {
+      width: 18px; height: 18px; border-radius: 4px;
+      background: var(--slate); flex-shrink: 0; margin-top: 1px;
+      position: relative;
+    }
+    .loft-check.on { background: var(--lamp); }
+    .loft-check.on::after {
+      content: "";
+      position: absolute;
+      left: 5px; top: 3px;
+      width: 4px; height: 8px;
+      border-right: 1.6px solid var(--ink);
+      border-bottom: 1.6px solid var(--ink);
+      transform: rotate(40deg);
+    }
 
     .hide { display: none !important; }
 
@@ -553,6 +586,7 @@
     <button data-scene="splitout" data-i18n="nav.splitout">Export routes</button>
     <button data-scene="splitrepo" data-i18n="nav.splitrepo">Repository</button>
     <button data-scene="about" data-i18n="nav.about">About</button>
+    <button data-scene="upd" data-i18n="nav.upd">Update</button>
   </nav>
 
   <div class="stage-wrap">
@@ -628,6 +662,7 @@
         "nav.splitout": "Экспорт маршрутов",
         "nav.splitrepo": "Репозиторий",
         "nav.about": "О программе",
+        "nav.upd": "Обновление",
         "status.off": "лофт закрыт",
         "status.closed": "закрыт",
         "connect": "Открыть лофт",
@@ -751,7 +786,15 @@
         "pref.lang.zh": "中文",
         "pref.diag": "Расширенный журнал",
         "pref.diag.d": "Маршруты, DNS, loft-priv. Файл с ротацией.",
-        "about.ver": "1.0.6",
+        "pref.upd": "Проверять обновления при запуске",
+        "pref.upd.d": "GitHub latest, когда loft открывается.",
+        "upd.later": "Позже",
+        "upd.quiet": "Не спрашивать снова",
+        "upd.quiet.d": "Выключит проверку при запуске.",
+        "upd.offer.title": "Обновление loft",
+        "upd.offer.body": "Скачать и заменить это приложение.",
+        "upd.install": "Обновить до 1.0.8",
+        "about.ver": "1.0.7",
         "about.proto": "протоколы",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -855,6 +898,7 @@
         "nav.splitout": "Export routes",
         "nav.splitrepo": "Repository",
         "nav.about": "About",
+        "nav.upd": "Update",
         "status.off": "loft closed",
         "status.closed": "closed",
         "connect": "Open loft",
@@ -978,7 +1022,15 @@
         "pref.lang.zh": "中文",
         "pref.diag": "Extended journal",
         "pref.diag.d": "Routes, DNS, loft-priv. Rotating file.",
-        "about.ver": "1.0.6",
+        "pref.upd": "Check for updates at launch",
+        "pref.upd.d": "GitHub latest when loft opens.",
+        "upd.later": "Later",
+        "upd.quiet": "Don’t ask again",
+        "upd.quiet.d": "Turns off check at launch.",
+        "upd.offer.title": "loft update",
+        "upd.offer.body": "Download and replace this app.",
+        "upd.install": "Update to 1.0.8",
+        "about.ver": "1.0.7",
         "about.proto": "protocols",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1082,6 +1134,7 @@
         "nav.splitout": "Routen exportieren",
         "nav.splitrepo": "Repository",
         "nav.about": "Über loft",
+        "nav.upd": "Update",
         "status.off": "loft geschlossen",
         "status.closed": "geschlossen",
         "connect": "Loft öffnen",
@@ -1204,7 +1257,15 @@
         "pref.lang.zh": "中文",
         "pref.diag": "Erweitertes Journal",
         "pref.diag.d": "Routen, DNS, loft-priv. Rotierende Datei.",
-        "about.ver": "1.0.6",
+        "pref.upd": "Beim Start nach Updates suchen",
+        "pref.upd.d": "GitHub latest, wenn loft startet.",
+        "upd.later": "Später",
+        "upd.quiet": "Nicht mehr fragen",
+        "upd.quiet.d": "Schaltet die Prüfung beim Start aus.",
+        "upd.offer.title": "loft-Update",
+        "upd.offer.body": "Diese App herunterladen und ersetzen.",
+        "upd.install": "Aktualisieren auf 1.0.8",
+        "about.ver": "1.0.7",
         "about.proto": "Protokolle",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1308,6 +1369,7 @@
         "nav.splitout": "Exporter des routes",
         "nav.splitrepo": "Dépôt",
         "nav.about": "À propos",
+        "nav.upd": "Mise à jour",
         "status.off": "loft fermé",
         "status.closed": "fermé",
         "connect": "Ouvrir loft",
@@ -1430,7 +1492,15 @@
         "pref.lang.zh": "中文",
         "pref.diag": "Journal étendu",
         "pref.diag.d": "Routes, DNS, loft-priv. Fichier rotatif.",
-        "about.ver": "1.0.6",
+        "pref.upd": "Vérifier les mises à jour au lancement",
+        "pref.upd.d": "GitHub latest à l’ouverture de loft.",
+        "upd.later": "Plus tard",
+        "upd.quiet": "Ne plus demander",
+        "upd.quiet.d": "Désactive la vérification au lancement.",
+        "upd.offer.title": "Mise à jour loft",
+        "upd.offer.body": "Télécharger et remplacer cette app.",
+        "upd.install": "Mettre à jour vers 1.0.8",
+        "about.ver": "1.0.7",
         "about.proto": "protocoles",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1534,6 +1604,7 @@
         "nav.splitout": "Exportar rotas",
         "nav.splitrepo": "Repositório",
         "nav.about": "Sobre",
+        "nav.upd": "Atualização",
         "status.off": "loft fechado",
         "status.closed": "fechado",
         "connect": "Abrir loft",
@@ -1656,7 +1727,15 @@
         "pref.lang.zh": "中文",
         "pref.diag": "Diário estendido",
         "pref.diag.d": "Rotas, DNS, loft-priv. Arquivo rotativo.",
-        "about.ver": "1.0.6",
+        "pref.upd": "Buscar atualizações ao abrir",
+        "pref.upd.d": "GitHub latest quando o loft abre.",
+        "upd.later": "Depois",
+        "upd.quiet": "Não perguntar de novo",
+        "upd.quiet.d": "Desliga a verificação ao abrir.",
+        "upd.offer.title": "Atualização do loft",
+        "upd.offer.body": "Baixar e substituir este aplicativo.",
+        "upd.install": "Atualizar para 1.0.8",
+        "about.ver": "1.0.7",
         "about.proto": "protocolos",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1760,6 +1839,7 @@
         "nav.splitout": "导出路由",
         "nav.splitrepo": "仓库",
         "nav.about": "关于",
+        "nav.upd": "更新",
         "status.off": "loft 已关闭",
         "status.closed": "已关闭",
         "connect": "打开 loft",
@@ -1882,7 +1962,15 @@
         "pref.lang.zh": "中文",
         "pref.diag": "扩展日志",
         "pref.diag.d": "路由、DNS、loft-priv。轮转文件。",
-        "about.ver": "1.0.6",
+        "pref.upd": "启动时检查更新",
+        "pref.upd.d": "打开 loft 时查 GitHub latest。",
+        "upd.later": "稍后",
+        "upd.quiet": "不再询问",
+        "upd.quiet.d": "关闭启动时检查。",
+        "upd.offer.title": "loft 更新",
+        "upd.offer.body": "下载并替换这个应用。",
+        "upd.install": "更新到 1.0.8",
+        "about.ver": "1.0.7",
         "about.proto": "协议",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -2399,6 +2487,7 @@ outbounds:
             <div class="pref"><div><div class="n">${t("pref.simple")}</div><div class="d">${t("pref.simple.d")}</div></div><div class="toggle ${simpleOn ? "on" : ""}" data-simple><i></i></div></div>
             <div class="pref"><div><div class="n">${t("pref.rate")}</div><div class="d">${t("pref.rate.d")}</div></div><div class="rate-bits"><button type="button" class="on">${t("pref.rate.kbit")}</button><button type="button">${t("pref.rate.kb")}</button></div></div>
             <div class="pref"><div><div class="n">${t("pref.lang")}</div><div class="d">${t("pref.lang.d")}</div></div><select class="loft-select" data-uilang>${[["ru","pref.lang.ru"],["en","pref.lang.en"],["de","pref.lang.de"],["fr","pref.lang.fr"],["pt","pref.lang.pt"],["zh","pref.lang.zh"]].map(([id, k]) => `<option value="${id}" ${lang === id ? "selected" : ""}>${t(k)}</option>`).join("")}</select></div>
+            <div class="pref"><div><div class="n">${t("pref.upd")}</div><div class="d">${t("pref.upd.d")}</div></div><div class="toggle on"><i></i></div></div>
             <div class="pref" style="border:0"><div><div class="n">${t("pref.diag")}</div><div class="d">${t("pref.diag.d")}</div></div><div class="toggle"><i></i></div></div>`;
         const route = `
             <div class="pref"><div><div class="n">${t("pref.default_route")}</div><div class="d">${t("pref.default_route.d")}</div></div><div class="toggle ${defaultRouteOn ? "on" : ""}" data-defroute><i></i></div></div>
@@ -2565,7 +2654,25 @@ outbounds:
               <span class="k">${t("about.trojan")}</span><span class="v">${t("about.trojan.v")}</span>
             </div>
             <p class="blurb">${t("about.blurb")}</p>
+            <button class="btn connect on upd">${t("upd.install")}</button>
             <p class="madeby">Made with love ${HEART} by A<sup>3</sup></p>
+          </div>
+        </div>`,
+      upd: () => `
+        <div class="win offer">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            <h1>${t("upd.offer.title")}</h1>
+            <p>${t("upd.offer.body")}</p>
+            <button class="btn connect on">${t("upd.install")}</button>
+            <button class="btn ghost">${t("upd.later")}</button>
+            <div class="quiet" data-quiet>
+              <div class="loft-check" data-check></div>
+              <div>
+                <div class="n">${t("upd.quiet")}</div>
+                <div class="d">${t("upd.quiet.d")}</div>
+              </div>
+            </div>
           </div>
         </div>`,
     };
@@ -2665,6 +2772,12 @@ outbounds:
       paintMenuLamp(name);
       sceneEl.querySelectorAll("[data-go]").forEach((b) => {
         b.onclick = () => show(b.dataset.go);
+      });
+      sceneEl.querySelectorAll("[data-quiet]").forEach((row) => {
+        row.onclick = () => {
+          const box = row.querySelector("[data-check]");
+          if (box) box.classList.toggle("on");
+        };
       });
       sceneEl.querySelectorAll(".seg").forEach((seg) => {
         seg.querySelectorAll("button").forEach((b) => {
