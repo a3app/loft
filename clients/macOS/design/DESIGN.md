@@ -22,7 +22,7 @@ Shared file (all loft apps): a `.loft` file holds **one or several connections**
 
 ## 2. Protocol join (1.0)
 
-Software `1.0.5`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
+Software `1.0.6`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
 
 | In the application | On the wire |
 |--------------------|-------------|
@@ -315,7 +315,7 @@ Multi: instead of one Connect, a list of profiles, each with lamp, overlay IP, S
 
 ## 10. Copy
 
-Canonical locale is English. The interactive mock defaults to English (`?lang=ru` for the Russian locale). Screenshots under `shots/` include both.
+Canonical locale is English. The interactive mock defaults to English (`?lang=ru`, `de`, `fr`, `pt`, `zh`). Screenshots under `shots/` include Russian and English. The app ships Russian, English, German, French, Portuguese, and Simplified Chinese.
 
 | id | English |
 |----|---------|
@@ -354,7 +354,7 @@ Canonical locale is English. The interactive mock defaults to English (`?lang=ru
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.5 |
+| about.ver | 1.0.6 |
 | about.proto | protocols |
 | about.loft | loft/1.0 · get · ws · h2 · quic · h3 · mask |
 | about.sstp | SSTP · ppp · mschapv2 · pap |

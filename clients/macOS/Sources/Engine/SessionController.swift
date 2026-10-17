@@ -78,7 +78,7 @@ final class SessionController {
     }
 
     var software: String {
-        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0.5"
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0.6"
     }
 
     /// Popover session: last successful connect, else the list pick.
@@ -122,6 +122,7 @@ final class SessionController {
         FrontHelper.reapOrphans()
         Priv.reapStale()
         lastPathGW = Priv.physicalGateway()
+        store.routes.maybePull()
     }
 
     /// Session for `id`, creating a slot if needed.

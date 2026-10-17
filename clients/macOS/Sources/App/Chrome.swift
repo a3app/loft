@@ -40,24 +40,7 @@ final class DrawLab: FlippedView {
 
     /// Centers the glyph ink, so a caption without descenders still sits on the toggle mid-line.
     private func drawInk(_ attrs: [NSAttributedString.Key: Any]) {
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        let ink = CTLineGetImageBounds(line, nil)
-        if ink.width < 0.5 || ink.height < 0.5 { return }
-        let x: CGFloat
-        switch alignment {
-        case .right: x = bounds.width - ink.width - ink.origin.x
-        case .center: x = (bounds.width - ink.width) / 2 - ink.origin.x
-        default: x = -ink.origin.x
-        }
-        let y = (bounds.height - ink.height) / 2 - ink.origin.y
-        ctx.saveGState()
-        ctx.translateBy(x: 0, y: bounds.height)
-        ctx.scaleBy(x: 1, y: -1)
-        ctx.textMatrix = .identity
-        ctx.textPosition = CGPoint(x: round(x), y: round(y))
-        CTLineDraw(line, ctx)
-        ctx.restoreGState()
+        loftDrawInk(text, attrs: attrs, in: bounds, alignment: alignment, flipped: true)
     }
 }
 
@@ -1254,25 +1237,23 @@ final class SegBit: NSButton {
         let t = title as NSString
         let sz = t.size(withAttributes: attrs)
         let yDown = NSGraphicsContext.current?.isFlipped ?? isFlipped
-        // Avenir Next sits optically low; lift toward the visual top of the pill.
-        let lift: CGFloat = yDown ? -2 : 2
         let press: CGFloat = pressed ? (yDown ? 1 : -1) : 0
-        let y = round((bounds.height - sz.height) / 2 + lift + press)
         let iconSide: CGFloat = lampThumb ? 14 : (compact || capsule ? 12 : 13)
         let iconGap: CGFloat = lampThumb ? 7 : 5
         let hasIcon = icon != .none
         let total = sz.width + (hasIcon ? iconSide + iconGap : 0)
         let x0 = max(4, (bounds.width - total) / 2)
+        var inkBox = bounds
+        inkBox.origin.y += press
         if hasIcon {
-            // Geometric pill center, then 2pt toward the visual bottom: stroke glyphs sit optically high.
-            let down: CGFloat = yDown ? 2 : -2
-            let iy = round((bounds.height - iconSide) / 2 + press + down)
+            let iy = round((bounds.height - iconSide) / 2 + press)
             icon.stroke(in: NSRect(x: x0, y: iy, width: iconSide, height: iconSide), color: face)
+            inkBox.origin.x = x0 + iconSide + iconGap
+            inkBox.size.width = max(4, sz.width + 2)
+            loftDrawInk(title, attrs: attrs, in: inkBox, alignment: .left, flipped: yDown)
+        } else {
+            loftDrawInk(title, attrs: attrs, in: inkBox, alignment: .center, flipped: yDown)
         }
-        t.draw(
-            in: NSRect(x: x0 + (hasIcon ? iconSide + iconGap : 0), y: y, width: sz.width + 2, height: sz.height),
-            withAttributes: attrs
-        )
     }
 }
 
@@ -1643,6 +1624,32 @@ func loftInkSize(_ s: String, font: NSFont) -> NSSize {
     let line = CTLineCreateWithAttributedString(NSAttributedString(string: s, attributes: [.font: font]))
     let r = CTLineGetImageBounds(line, nil)
     return NSSize(width: ceil(r.width), height: ceil(r.height))
+}
+
+/// Draws `text` so glyph ink is vertically centered in `box`.
+func loftDrawInk(_ text: String, attrs: [NSAttributedString.Key: Any], in box: NSRect, alignment: NSTextAlignment, flipped: Bool) {
+    let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+    guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+    let ink = CTLineGetImageBounds(line, nil)
+    if ink.width < 0.5 || ink.height < 0.5 { return }
+    let x: CGFloat
+    switch alignment {
+    case .right: x = box.width - ink.width - ink.origin.x
+    case .center: x = (box.width - ink.width) / 2 - ink.origin.x
+    default: x = -ink.origin.x
+    }
+    let y = (box.height - ink.height) / 2 - ink.origin.y
+    ctx.saveGState()
+    if flipped {
+        ctx.translateBy(x: box.minX, y: box.maxY)
+        ctx.scaleBy(x: 1, y: -1)
+    } else {
+        ctx.translateBy(x: box.minX, y: box.minY)
+    }
+    ctx.textMatrix = .identity
+    ctx.textPosition = CGPoint(x: round(x), y: round(y))
+    CTLineDraw(line, ctx)
+    ctx.restoreGState()
 }
 
 /// Vertical origin that optically centers `text` in `height`.

@@ -26,7 +26,7 @@ if CommandLine.arguments.contains("--probe") {
 if CommandLine.arguments.contains("--shot") {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
-    L10n.ru = true
+    L10n.lang = .ru
     let engine = SessionController()
     engine.boot()
     let dir = "/tmp/loft-shots"
@@ -81,6 +81,23 @@ if CommandLine.arguments.contains("--shot") {
     let set = SettingsWindowController(engine: engine)
     set.showWindow(nil)
     if let v = set.window?.contentView { dump(v, "settings") }
+
+    engine.store.routes.seedShot()
+    let split = SplitWindowController(engine: engine)
+    split.showWindow(nil)
+    if let v = split.window?.contentView { dump(v, "split") }
+    let splitin = SplitImportWindowController(engine: engine)
+    splitin.showWindow(nil)
+    if let v = splitin.window?.contentView { dump(v, "splitin") }
+    let splitout = SplitExportWindowController(engine: engine)
+    splitout.showWindow(nil)
+    if let v = splitout.window?.contentView { dump(v, "splitout") }
+    let splitrepo = SplitRepoWindowController(engine: engine)
+    splitrepo.showWindow(nil)
+    if let v = splitrepo.window?.contentView { dump(v, "splitrepo") }
+    let splitadd = SplitAddWindowController(engine: engine, set: nil, via: true)
+    splitadd.showWindow(nil)
+    if let v = splitadd.window?.contentView { dump(v, "splitadd") }
 
     if let p = engine.store.active() {
         let edit = EditWindowController(engine: engine, profile: p)

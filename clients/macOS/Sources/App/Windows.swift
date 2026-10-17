@@ -1,4 +1,5 @@
 // Loft windows: status, connections list, settings, profile editor, and onboard.
+// Split-routing sheets live in SplitWindows.swift.
 
 import AppKit
 
@@ -776,12 +777,13 @@ final class SettingsWindowController: NSWindowController {
             c.addSubview(n); c.addSubview(d); c.addSubview(sel); c.addSubview(line)
             y += rowH
         }
-        /// RU/EN as a dropdown on the right, same chrome as Dock.
+        /// UI language as a dropdown on the right, same chrome as Dock.
         func langRow() {
             let padT: CGFloat = 10
             let padB: CGFloat = 10
             let nameH: CGFloat = 20
-            let titles = [L10n.t("lang_ru"), L10n.t("lang_en")]
+            let langs = L10n.Lang.allCases
+            let titles = langs.map { $0.nativeName }
             let face = Palette.body(12.5)
             let selW = min(200, max(148, (titles.map { Palette.textWidth($0, font: face) }.max() ?? 148) + 36))
             let selH: CGFloat = 32
@@ -794,11 +796,12 @@ final class SettingsWindowController: NSWindowController {
             let rowH = max(padT + nameH + dH + padB, padT + selH + padB)
             let sel = LoftSelect(frame: NSRect(x: 22 + 396 - selW, y: y + round((rowH - selH) / 2), width: selW, height: selH))
             sel.titles = titles
-            sel.value = L10n.ru ? 0 : 1
+            sel.value = langs.firstIndex(of: L10n.lang) ?? 0
             sel.onChange = { [weak self] v in
-                guard v == 0 || v == 1 else { return }
-                self?.engine.store.lang = v == 0 ? "ru" : "en"
-                L10n.ru = v == 0
+                guard langs.indices.contains(v) else { return }
+                let next = langs[v]
+                self?.engine.store.lang = next.rawValue
+                L10n.lang = next
                 self?.engine.store.savePrefs()
                 self?.reload()
                 NotificationCenter.default.post(name: .loftState, object: self?.engine)
@@ -920,6 +923,10 @@ final class SettingsWindowController: NSWindowController {
     /// Flips the toggle for the pref whose identifier is on `sender`.
     @objc private func prefHit(_ sender: NSButton) {
         let key = sender.identifier?.rawValue ?? ""
+        if key == "split" {
+            AppDelegate.shared?.showSplit()
+            return
+        }
         guard let sw = switches[key] else { return }
         sw.flip()
     }
@@ -1078,16 +1085,23 @@ final class EditWindowController: NSWindowController {
         c.subviews.forEach { $0.removeFromSuperview() }
         let qrTitle = L10n.t("qr")
         let qrW = min(88, Palette.textWidth(qrTitle, font: Palette.font(11.5)) + 22)
-        let title = Palette.label(L10n.t("edit_title"), font: Palette.font(20), color: Palette.snow, frame: NSRect(x: 28, y: 6, width: 384 - qrW - 12, height: 26))
+        // 14pt matches the Back/Delete footer so the title is not cramped under the lights.
+        let headY: CGFloat = 14
+        let headH: CGFloat = 28
+        let title = DrawLab(frame: NSRect(x: 28, y: headY, width: 384 - qrW - 12, height: headH))
+        title.text = L10n.t("edit_title")
+        title.font = Palette.font(20)
+        title.color = Palette.snow
         title.alignment = .left
+        title.pillNudge = false
         c.addSubview(title)
-        let qr = PillButton(frame: NSRect(x: 28 + 384 - qrW, y: 5, width: qrW, height: 28))
+        let qr = PillButton(frame: NSRect(x: 28 + 384 - qrW, y: headY, width: qrW, height: headH))
         qr.compact = true
         qr.title = qrTitle
         qr.target = self
         qr.action = #selector(qrTap)
         c.addSubview(qr)
-        var y: CGFloat = 40
+        var y: CGFloat = headY + headH + 8
         let nl = Palette.label(L10n.t("name"), font: Palette.body(11.5), color: Palette.mute, frame: NSRect(x: 28, y: y, width: 384, height: 16))
         c.addSubview(nl)
         y += 18

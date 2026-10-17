@@ -165,6 +165,7 @@ final class ProfileStore {
     var showExtIP = true
     var extIPURL = ProfileStore.defaultExtIPURL
     var lang = "ru"
+    let routes = SplitStore()
 
     /// Plain-text echo used when the pref is empty or garbage.
     static let defaultExtIPURL = "https://api.ipify.org"
@@ -250,7 +251,9 @@ final class ProfileStore {
             if let v = flag("reconnect") { reconnect = v }
             if let v = flag("ext_ip") { showExtIP = v }
             if let v = strVal("ext_ip_url"), !v.isEmpty { extIPURL = Self.normalizeExtIPURL(v) }
-            if s.contains("lang: en") { lang = "en" }
+            if let v = strVal("lang"), L10n.Lang(rawValue: v.lowercased()) != nil {
+                lang = v.lowercased()
+            }
         }
         let activeFile = dir.appendingPathComponent("active")
         activeID = (try? String(contentsOf: activeFile, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -261,6 +264,7 @@ final class ProfileStore {
             }
         }
         profiles = list.sorted { $0.name < $1.name }
+        routes.load(dir: dir)
         ensureActive()
         if !hadSocksPort {
             for i in profiles.indices {

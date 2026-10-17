@@ -17,14 +17,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var editWC: EditWindowController?
     private var onboardWC: OnboardWindowController?
     private var journalWC: JournalWindowController?
+    private var splitWC: SplitWindowController?
+    private var splitImportWC: SplitImportWindowController?
+    private var splitExportWC: SplitExportWindowController?
+    private var splitRepoWC: SplitRepoWindowController?
+    private var splitAddWC: SplitAddWindowController?
     private var localMon: Any?
     private var globalMon: Any?
     private var sparkTimer: Timer?
+    private var menuLang: L10n.Lang?
 
     /// Boots the engine, status item, popover, and optional auto-connect.
     func applicationDidFinishLaunching(_ notification: Notification) {
         engine.boot()
-        L10n.ru = engine.store.lang != "en"
+        L10n.apply(engine.store.lang)
         installKeyMenu()
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -170,23 +176,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// Key equivalents while the app is key (Dock / Force Quit when a window is open).
+    /// App and Edit menus while loft is key (Dock / a loft window). Titles follow L10n.
     private func installKeyMenu() {
+        if menuLang == L10n.lang, NSApp.mainMenu != nil { return }
+        menuLang = L10n.lang
         let main = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "Hide loft", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        appMenu.addItem(withTitle: "Quit loft", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let about = NSMenuItem(title: L10n.t("menu_about"), action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        appMenu.addItem(about)
+        appMenu.addItem(NSMenuItem.separator())
+        let settings = NSMenuItem(title: L10n.t("settings"), action: #selector(showSettings), keyEquivalent: ",")
+        settings.target = self
+        appMenu.addItem(settings)
+        let journal = NSMenuItem(title: L10n.t("journal"), action: #selector(showJournal), keyEquivalent: "")
+        journal.target = self
+        appMenu.addItem(journal)
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: L10n.t("menu_hide"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthers = NSMenuItem(title: L10n.t("menu_hide_others"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(withTitle: L10n.t("menu_show_all"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: L10n.t("menu_quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(appItem)
         let editItem = NSMenuItem()
-        let edit = NSMenu(title: "Edit")
+        let edit = NSMenu(title: L10n.t("menu_edit"))
         editItem.submenu = edit
-        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: L10n.t("menu_cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: L10n.t("copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: L10n.t("menu_paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         edit.addItem(NSMenuItem.separator())
-        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        edit.addItem(withTitle: L10n.t("menu_select_all"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         main.addItem(editItem)
         NSApp.mainMenu = main
     }
@@ -263,7 +287,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Updates language, status-item icon, popover size, and the connections list.
     private func refresh() {
-        L10n.ru = engine.store.lang != "en"
+        L10n.apply(engine.store.lang)
+        installKeyMenu()
         let on = engine.store.multi ? engine.anyOn : engine.state == .on
         let err = engine.store.multi
             ? (engine.anyError || engine.holdArmed)
@@ -328,6 +353,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showEdit(_ p: LoftProfile) {
         editWC = EditWindowController(engine: engine, profile: p)
         present(editWC)
+    }
+
+    /// Opens the split-routing lists. The Settings row is the door; the toggle stays on the row.
+    func showSplit() {
+        if splitWC == nil { splitWC = SplitWindowController(engine: engine) }
+        splitWC?.reload()
+        present(splitWC)
+    }
+
+    /// Keenetic / loft-routes import sheet.
+    func showSplitImport() {
+        splitImportWC = SplitImportWindowController(engine: engine)
+        present(splitImportWC)
+    }
+
+    /// Keenetic / loft-routes export sheet.
+    func showSplitExport() {
+        splitExportWC = SplitExportWindowController(engine: engine)
+        present(splitExportWC)
+    }
+
+    /// Raw .bat repository sheet.
+    func showSplitRepo() {
+        splitRepoWC = SplitRepoWindowController(engine: engine)
+        present(splitRepoWC)
+    }
+
+    /// Add or edit one named CIDR set. `via` is the list tab when adding.
+    func showSplitAdd(_ set: SplitSet?, via: Bool) {
+        splitAddWC = SplitAddWindowController(engine: engine, set: set, via: via)
+        present(splitAddWC)
     }
 
     /// Opens the two-step key/URL onboard window.
