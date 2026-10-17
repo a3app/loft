@@ -25,16 +25,24 @@ loft — оверлей внутри TLS. Потоки мультиплекси�
 
 Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/latest/download/loft-clients-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/latest/download/loft-node-SHA256SUMS.txt). DMG — приложение в строке меню, подпись ad-hoc. В архивах CLI: `loft`, `loft-front`, `loft-probe`, `loft-bench`.
 
-## Протокол
+## Как это устроено
 
+```mermaid
+flowchart LR
+    subgraph Client["клиент loft"]
+        App["SSH · браузер · curl"] --> In["SOCKS5 / TUN"]
+        In --> Mux["mux<br/>Open / Data / Close / Dgram"]
+        Mux --> Seal["ChaCha20-Poly1305"]
+        Seal --> Front["get · ws · h2 · quic · h3"]
+    end
+    Front -- "TLS 1.3 HTTPS" --> Edge["CDN / обратный прокси"] --> Node["loft-node"]
+    Node --> Dest["лаборатория · парк · площадки"]
 ```
-application → SOCKS5 / TUN
-    mux (Open / Data / Close / Dgram / Leave)
-      ChaCha20-Poly1305
-        get | ws | h2 | quic | h3
-          TLS 1.3
-            TCP 443 or UDP 443
-```
+
+1. Приложения ходят в локальный SOCKS5 или TUN. `Holder` держит этот слушатель, пока фронт меняется.
+2. Потоки живут в одном mux и шифруются ChaCha20-Poly1305.
+3. Снаружи это обычный HTTPS, поэтому перед нодой может стоять CDN или обратный прокси.
+4. Короткий обрыв паркует mux на `gap_hold_ms` (по умолчанию 8 с). Возобновление — билет `0x03` и тот же `instance_id`; внутренний TCP не рвётся.
 
 | | |
 |--|--|
