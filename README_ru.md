@@ -84,7 +84,7 @@ make macos-dmgs # оба DMG, arm64 и x86_64 (CI)
 make dist       # tarball/.deb ноды + архивы CLI
 ```
 
-Тег `vX.Y.Z` (как в `VERSION`) запускает GitHub Actions: тесты, `make dist`, DMG для arm64 и x86_64 (подпись ad-hoc) и Release. Вручную: Actions → Dist.
+Тег `vX.Y.Z` (как в `VERSION`) запускает GitHub Actions: тесты, `make dist`, DMG для arm64 и x86_64 (подпись ad-hoc), Release и пинг pkg.go.dev. Вручную: Actions → Dist.
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'

@@ -33,6 +33,55 @@ jobs:
             exit 1
           fi
 
+  # Module proxy and pkg.go.dev lag the git tag. Dist asks both so
+  # https://pkg.go.dev/github.com/a3app/loft follows the release.
+  # 408 from POST /fetch/… is pkgsite still building, not an error.
+  go-index:
+    name: pkg.go.dev
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Fetch module into proxy.golang.org
+        env:
+          MOD: github.com/${{ github.repository }}
+        run: |
+          set -eu
+          ver=$GITHUB_REF_NAME
+          proxy="https://proxy.golang.org/${MOD}/@v/${ver}"
+          ok=0
+          for i in 1 2 3 4 5 6 7 8; do
+            if curl -fsS -o /tmp/mod.info "$proxy.info"; then
+              ok=1
+              break
+            fi
+            echo "proxy miss ${i}, retry" >&2
+            sleep 15
+          done
+          [ "$ok" = 1 ]
+          cat /tmp/mod.info
+          curl -fsS -o /tmp/mod.mod "$proxy.mod"
+          curl -fsS -o /dev/null "$proxy.zip"
+          curl -fsS "https://sum.golang.org/lookup/${MOD}@${ver}"
+
+      - name: Request pkg.go.dev docs
+        env:
+          MOD: github.com/${{ github.repository }}
+        run: |
+          set -eu
+          ver=$GITHUB_REF_NAME
+          url="https://pkg.go.dev/fetch/${MOD}@${ver}"
+          code=$(curl -sS -o /tmp/pkg-fetch.txt -w '%{http_code}' -X POST -A 'loft-dist' "$url" || true)
+          cat /tmp/pkg-fetch.txt || true
+          echo "pkg.go.dev fetch HTTP ${code}"
+          case "$code" in
+            200|408) ;;
+            *) echo "pkg.go.dev fetch returned ${code} (non-fatal)" >&2 ;;
+          esac
+          curl -sS -o /dev/null -w "pkg.go.dev page %{http_code}\n" \
+            -A 'loft-dist' "https://pkg.go.dev/${MOD}@${ver}" || true
+
   linux:
     needs: test
     runs-on: ubuntu-24.04

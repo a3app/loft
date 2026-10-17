@@ -347,6 +347,6 @@ Push и pull request в `main` запускают `make test`.
 - архивы CLI (`loft`, `loft-front`, `loft-probe`, `loft-bench` для linux/darwin, amd64/arm64)
 - macOS DMG, ad-hoc подпись: `loft-*-macos-arm64.dmg` и `loft-*-macos-x86_64.dmg` (`BUMP=0`, CI не переписывает `clients/macOS/VERSION`). Раннер — Apple Silicon; Intel — кросс-сборка Swift/Go (`ARCH=x86_64`).
 
-и публикует GitHub Release. Те же файлы ещё кладутся без версии в имени (`loft-macos-arm64.dmg`, `loft-linux-amd64.tar.gz`, …), чтобы [ссылки в README](../README_ru.md#скачать) на `/releases/latest/download/…` шли в текущий тег. Повторный прогон на том же теге заменяет файлы. Без тега Actions → Dist → Run workflow только кладёт артефакты.
+и публикует GitHub Release. Dist ещё забирает тег в [proxy.golang.org](https://proxy.golang.org) и просит [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft) собрать страницу модуля под этот релиз. Те же файлы ещё кладутся без версии в имени (`loft-macos-arm64.dmg`, `loft-linux-amd64.tar.gz`, …), чтобы [ссылки в README](../README_ru.md#скачать) на `/releases/latest/download/…` шли в текущий тег. Повторный прогон на том же теге заменяет файлы. Без тега Actions → Dist → Run workflow только кладёт артефакты.
 
 Локальные пакеты: `make dist`. Локальный DMG без повышения маркетинговой версии macOS: `make macos-dmg BUMP=0`. Developer ID и нотаризация остаются на Маке со связкой; в Actions их нет.

@@ -347,6 +347,6 @@ A tag `vX.Y.Z` must match the root `VERSION` file. That tag builds:
 - CLI archives (`loft`, `loft-front`, `loft-probe`, `loft-bench` for linux/darwin, amd64/arm64)
 - macOS DMGs, ad-hoc signed: `loft-*-macos-arm64.dmg` and `loft-*-macos-x86_64.dmg` (`BUMP=0` so CI does not rewrite `clients/macOS/VERSION`). The runner is Apple Silicon; Intel is a Swift/Go cross-compile (`ARCH=x86_64`).
 
-and publishes a GitHub Release. The same files are also uploaded without the version in the name (`loft-macos-arm64.dmg`, `loft-linux-amd64.tar.gz`, …) so [README download links](../README.md#download) at `/releases/latest/download/…` follow the current tag. Re-running the workflow on the same tag replaces the files. Without a tag, Actions → Dist → Run workflow only uploads artifacts.
+and publishes a GitHub Release. Dist also fetches the tag into [proxy.golang.org](https://proxy.golang.org) and requests [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft) so the module page follows the release. The same files are also uploaded without the version in the name (`loft-macos-arm64.dmg`, `loft-linux-amd64.tar.gz`, …) so [README download links](../README.md#download) at `/releases/latest/download/…` follow the current tag. Re-running the workflow on the same tag replaces the files. Without a tag, Actions → Dist → Run workflow only uploads artifacts.
 
 Local packages: `make dist`. Local DMG without bumping the macOS marketing version: `make macos-dmg BUMP=0`. Developer ID and notarization stay on a Mac with a keychain; they are not in Actions.
