@@ -14,6 +14,25 @@ Protocol **loft/1.0**. Share URI **`loft://`**. Apache License 2.0.
 
 This site is the open specification. The reference node and clients are in the [repository](https://github.com/a3app/loft).
 
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph Client["loft client"]
+        App["SSH · browser · curl"] --> In["SOCKS5 / TUN"]
+        In --> Mux["mux<br/>Open / Data / Close / Dgram"]
+        Mux --> Seal["ChaCha20-Poly1305"]
+        Seal --> Front["get · ws · h2 · quic · h3"]
+    end
+    Front -- "TLS 1.3 HTTPS" --> Edge["CDN / reverse proxy"] --> Node["loft-node"]
+    Node --> Dest["lab · fleet · site"]
+```
+
+1. Apps talk to local SOCKS5 or TUN. `Holder` keeps that listener while the front rotates.
+2. Streams share one mux and are sealed with ChaCha20-Poly1305.
+3. On the public path the session is ordinary HTTPS, so a CDN or reverse proxy can sit in front of the node.
+4. A short disconnect parks the mux for `gap_hold_ms` (default 8 s). Resume uses ticket `0x03` and the same `instance_id`; inner TCP stays up.
+
 ## Spec
 
 | | |

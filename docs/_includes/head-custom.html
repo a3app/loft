@@ -1,0 +1,43 @@
+<!-- start custom head snippets -->
+{% include head-custom-google-analytics.html %}
+<link rel="icon" href="https://raw.githubusercontent.com/a3app/loft/main/brand/svg/loft-favicon.svg" type="image/svg+xml">
+<style>
+  .markdown-body .mermaid { background: transparent; text-align: center; overflow-x: auto; }
+  .markdown-body .mermaid svg { max-width: 100%; height: auto; }
+</style>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "base",
+    securityLevel: "strict",
+    themeVariables: {
+      fontFamily: "ui-sans-serif, system-ui, sans-serif",
+      primaryColor: "#F3EDE4",
+      primaryTextColor: "#1A1714",
+      primaryBorderColor: "#C67B3A",
+      lineColor: "#8A7E72",
+      secondaryColor: "#E8DFD2",
+      tertiaryColor: "#F3EDE4",
+      clusterBkg: "#F3EDE4",
+      clusterBorder: "#B7A99A"
+    }
+  });
+  function renderMermaid() {
+    document.querySelectorAll("pre > code.language-mermaid").forEach(function (code) {
+      var div = document.createElement("div");
+      div.className = "mermaid";
+      div.textContent = code.textContent;
+      code.parentElement.replaceWith(div);
+    });
+    if (document.querySelector(".mermaid")) {
+      mermaid.run({ querySelector: ".mermaid" });
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", renderMermaid);
+  } else {
+    renderMermaid();
+  }
+</script>
+<!-- end custom head snippets -->

@@ -1,8 +1,38 @@
-# Документация
+---
+title: loft
+lang: ru
+---
 
-[English](README.md) · **Русский**
+# loft
 
-loft/1.0. Версия ПО — `../VERSION`. Apache License 2.0.
+[English](index.md) · **Русский**
+
+loft — оверлей внутри TLS. Потоки мультиплексируются поверх GET, WebSocket, HTTP/2, QUIC или HTTP/3 и шифруются ChaCha20-Poly1305. Снаружи сессия выглядит как обычный HTTPS, поэтому её пропускают CDN, обратные прокси и TLS-терминаторы. Сессия переживает короткие обрывы и потери пакетов.
+
+Протокол **loft/1.0**. Ссылка **`loft://`**. Apache License 2.0.
+
+Это сайт спецификации. Эталонная нода и клиенты — в [репозитории](https://github.com/a3app/loft).
+
+## Как это устроено
+
+```mermaid
+flowchart LR
+    subgraph Client["клиент loft"]
+        App["SSH · браузер · curl"] --> In["SOCKS5 / TUN"]
+        In --> Mux["mux<br/>Open / Data / Close / Dgram"]
+        Mux --> Seal["ChaCha20-Poly1305"]
+        Seal --> Front["get · ws · h2 · quic · h3"]
+    end
+    Front -- "TLS 1.3 HTTPS" --> Edge["CDN / обратный прокси"] --> Node["loft-node"]
+    Node --> Dest["лаборатория · парк · площадки"]
+```
+
+1. Приложения ходят в локальный SOCKS5 или TUN. `Holder` держит этот слушатель, пока фронт меняется.
+2. Потоки живут в одном mux и шифруются ChaCha20-Poly1305.
+3. Снаружи это обычный HTTPS, поэтому перед нодой может стоять CDN или обратный прокси.
+4. Короткий обрыв паркует mux на `gap_hold_ms` (по умолчанию 8 с). Возобновление — билет `0x03` и тот же `instance_id`; внутренний TCP не рвётся.
+
+## Спецификация
 
 | | |
 |--|--|
