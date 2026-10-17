@@ -18,12 +18,14 @@ func ntPasswordHash(pass string) []byte {
 	for i, r := range u {
 		binary.LittleEndian.PutUint16(raw[i*2:], r)
 	}
+	// NT hash is MD4 (RFC 2759). codeql[go/weak-sensitive-data-hashing]
 	h := md4.New()
 	h.Write(raw)
 	return h.Sum(nil)
 }
 
 func md4sum(b []byte) []byte {
+	// codeql[go/weak-sensitive-data-hashing]
 	h := md4.New()
 	h.Write(b)
 	return h.Sum(nil)
@@ -46,11 +48,13 @@ func samUser(user string) string {
 }
 
 func desHash(key7, chal []byte) []byte {
+	// MS-CHAPv2 challenge DES (RFC 2759). codeql[go/weak-cryptographic-algorithm]
 	block, err := des.NewCipher(desKey(key7))
 	if err != nil {
 		return make([]byte, 8)
 	}
 	out := make([]byte, 8)
+	// codeql[go/weak-cryptographic-algorithm]
 	block.Encrypt(out, chal)
 	return out
 }

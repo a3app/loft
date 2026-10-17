@@ -100,8 +100,7 @@ func (s *Session) Open(target string) (*Stream, error) {
 		st.kill()
 		return nil, err
 	}
-	p, _ := strconv.Atoi(portStr)
-	if err := s.send(wire.Frame{Cmd: wire.CmdOpen, StreamID: id, Payload: EncodeTarget(host, uint16(p))}); err != nil {
+	if err := s.send(wire.Frame{Cmd: wire.CmdOpen, StreamID: id, Payload: EncodeTarget(host, wire.Port(portStr))}); err != nil {
 		st.Close()
 		return nil, err
 	}
@@ -513,8 +512,7 @@ func (s *Session) WriteDgram(addr string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	p, _ := strconv.Atoi(portStr)
-	pl := append(EncodeTarget(host, uint16(p)), data...)
+	pl := append(EncodeTarget(host, wire.Port(portStr)), data...)
 	if len(pl) > wire.MaxPayload {
 		pl = pl[:wire.MaxPayload]
 	}

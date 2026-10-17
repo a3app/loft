@@ -141,11 +141,11 @@ func tryP2P(target string) net.Conn {
 // p2pWriteHello sends LFT2 || HMAC(token, nonce||port)[0:16] || nonce || dest_port.
 func p2pWriteHello(c net.Conn, destPort string) error {
 	_ = c.SetDeadline(time.Now().Add(time.Second))
-	p, _ := strconv.Atoi(destPort)
+	p := wire.Port(destPort)
 	var nonce [16]byte
 	_, _ = rand.Read(nonce[:])
 	var pb [2]byte
-	binary.BigEndian.PutUint16(pb[:], uint16(p))
+	binary.BigEndian.PutUint16(pb[:], p)
 	mac := hmac.New(sha256.New, p2pTok)
 	mac.Write(nonce[:])
 	mac.Write(pb[:])

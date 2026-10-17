@@ -1,0 +1,5 @@
+name: loft
+
+# Default query suite. Protocol-mandated crypto (SSTP MS-CHAPv2, Trojan SHA224)
+# and dest-shaped TLS are annotated in source with // codeql[rule-id].
+# Do not exclude those queries globally: a new MD5 of lt_ should still fire.

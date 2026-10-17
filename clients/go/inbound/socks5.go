@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/a3app/loft/internal/transport"
+	"github.com/a3app/loft/internal/wire"
 )
 
 // ListenSOCKS5 accepts SOCKS5 CONNECT and UDP ASSOCIATE on addr.
@@ -323,7 +324,7 @@ func encodeSocksUDP(addr string, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, _ := strconv.Atoi(portStr)
+	p := wire.Port(portStr)
 	ip := net.ParseIP(host)
 	out := []byte{0, 0, 0}
 	if v4 := ip.To4(); v4 != nil {
@@ -334,7 +335,7 @@ func encodeSocksUDP(addr string, data []byte) ([]byte, error) {
 		out = append(out, host...)
 	}
 	var pb [2]byte
-	binary.BigEndian.PutUint16(pb[:], uint16(p))
+	binary.BigEndian.PutUint16(pb[:], p)
 	out = append(out, pb[:]...)
 	return append(out, data...), nil
 }

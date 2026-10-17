@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"time"
+
+	"github.com/a3app/loft/internal/wire"
 )
 
 // socksHandshake offers SOCKS5 with no authentication.
@@ -56,11 +57,11 @@ func socksConnect(c net.Conn, hostport string) error {
 	if err != nil {
 		return err
 	}
-	p, _ := strconv.Atoi(portStr)
+	p := wire.Port(portStr)
 	if err := socksHandshake(c); err != nil {
 		return err
 	}
-	return socksRequest(c, 0x01, host, p)
+	return socksRequest(c, 0x01, host, int(p))
 }
 
 // socksUDPAssociate requests UDP ASSOCIATE and returns the relay address.
@@ -115,7 +116,7 @@ func socksAddr(cmd byte, host string, port int) ([]byte, error) {
 		out = append(out, host...)
 	}
 	var pb [2]byte
-	binary.BigEndian.PutUint16(pb[:], uint16(port))
+	binary.BigEndian.PutUint16(pb[:], wire.U16(port))
 	return append(out, pb[:]...), nil
 }
 
@@ -171,7 +172,7 @@ func encodeSocksUDP(host string, port int, data []byte) ([]byte, error) {
 		out = append(out, host...)
 	}
 	var pb [2]byte
-	binary.BigEndian.PutUint16(pb[:], uint16(port))
+	binary.BigEndian.PutUint16(pb[:], wire.U16(port))
 	out = append(out, pb[:]...)
 	return append(out, data...), nil
 }

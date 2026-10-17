@@ -28,6 +28,7 @@ const TunIP = "198.18.0.1"
 
 // hexSHA224 is the 56-byte hex(SHA224(password)) Trojan hash.
 func hexSHA224(password string) []byte {
+	// Trojan hash is hex(SHA224(password)). codeql[go/weak-sensitive-data-hashing]
 	sum := sha256.Sum224([]byte(password))
 	out := make([]byte, 56)
 	hex.Encode(out, sum[:])

@@ -407,6 +407,9 @@ func DecodeStatus(b []byte) (Status, error) {
 			if off < len(b) {
 				nh := int(b[off])
 				off++
+				if nh > 64 {
+					nh = 64
+				}
 				for i := 0; i < nh && off < len(b); i++ {
 					ip, k := getStr(b[off:])
 					off += k
@@ -418,6 +421,7 @@ func DecodeStatus(b []byte) (Status, error) {
 					port := binary.BigEndian.Uint16(b[off : off+2])
 					vlan := binary.BigEndian.Uint16(b[off+2 : off+4])
 					off += 4
+					// Count is a u8, clipped above. codeql[go/allocation-size-overflow]
 					s.PeerHints = append(s.PeerHints, PeerHint{IP: ip, Host: host, Port: port, VLAN: vlan})
 				}
 			}

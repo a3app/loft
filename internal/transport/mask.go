@@ -144,7 +144,8 @@ func (m *Mask) refresh() error {
 	_ = raw.SetDeadline(time.Now().Add(8 * time.Second))
 	spy := &recordCollector{Conn: raw}
 	cfg := &tls.Config{
-		ServerName:         m.sni,
+		ServerName: m.sni,
+		// Dest-shaped TLS: trust is lt_ / pbk. codeql[go/disabled-certificate-check]
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"h2", "http/1.1"},
 		MinVersion:         tls.VersionTLS12,

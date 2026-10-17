@@ -78,7 +78,8 @@ func Dial(ctx context.Context, cfg Config) (*Session, error) {
 		Config: &tls.Config{
 			ServerName:         sni,
 			InsecureSkipVerify: cfg.Insecure,
-			MinVersion:         tls.VersionTLS10,
+			// SSTP on old Windows. codeql[go/insecure-tls]
+			MinVersion: tls.VersionTLS10,
 		},
 	}
 	c, err := d.DialContext(ctx, "tcp", addr)

@@ -5,7 +5,6 @@ package transport
 import (
 	"io"
 	"net"
-	"strconv"
 	"sync"
 
 	"github.com/a3app/loft/internal/mux"
@@ -55,8 +54,7 @@ func remoteAddr(s string) net.Addr {
 		return nil
 	}
 	ip := net.ParseIP(host)
-	p, _ := strconv.Atoi(port)
-	return &net.TCPAddr{IP: ip, Port: p}
+	return &net.TCPAddr{IP: ip, Port: int(wire.Port(port))}
 }
 
 // stampOverlay binds overlay from Hello without a member token.
@@ -113,7 +111,7 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 			st.IP = ip
 			st.InstanceID = inst2
 			st.Gateway = o.Net.Gateway
-			st.MTU = uint16(o.Net.MTU)
+			st.MTU = wire.U16(o.Net.MTU)
 			st.DNS = o.Net.DNSServers()
 			o.attach(ip, 0, sess, remote, "", inst2)
 			st.PeerHints = o.hints(ip)
@@ -125,14 +123,14 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 	vlan := 0
 	if m := o.Net.MemberByID(member); m != nil {
 		vlan = m.VLAN
-		st.VLAN = uint16(vlan)
+		st.VLAN = wire.U16(vlan)
 	}
 	st.Code = code
 	st.IP = ip
 	st.InstanceID = inst2
 	st.Gateway = o.Net.Gateway
 	if o.Net.MTU > 0 {
-		st.MTU = uint16(o.Net.MTU)
+		st.MTU = wire.U16(o.Net.MTU)
 	}
 	st.DNS = o.Net.DNSServers()
 	o.attach(ip, vlan, sess, remote, member, inst2)
@@ -220,7 +218,7 @@ func (o *Overlay) hints(except string) []wire.PeerHint {
 		if ip == except || p.listen == 0 || p.seen == "" {
 			continue
 		}
-		out = append(out, wire.PeerHint{IP: ip, Host: p.seen, Port: p.listen, VLAN: uint16(p.vlan)})
+		out = append(out, wire.PeerHint{IP: ip, Host: p.seen, Port: p.listen, VLAN: wire.U16(p.vlan)})
 		if len(out) >= 16 {
 			break
 		}
@@ -320,11 +318,11 @@ func parsePeerAnnounce(target string) (uint16, bool) {
 	if err != nil || host != "loft.peer" {
 		return 0, false
 	}
-	p, err := strconv.Atoi(port)
-	if err != nil || p <= 0 || p > 65535 {
+	p := wire.Port(port)
+	if p == 0 {
 		return 0, false
 	}
-	return uint16(p), true
+	return p, true
 }
 
 // Handle is overlay Open: loft.peer announce, gateway:53 DNS TCP, or CIDR Forward.

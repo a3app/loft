@@ -126,7 +126,12 @@ func runTCP(ctx context.Context, v via, sp spec, timeout time.Duration) result {
 	}
 	switch port {
 	case 443:
-		cfg := &tls.Config{ServerName: sp.host, InsecureSkipVerify: true, NextProtos: []string{"http/1.1"}}
+		cfg := &tls.Config{
+			ServerName: sp.host,
+			// Probe of a dest, not a trust decision. codeql[go/disabled-certificate-check]
+			InsecureSkipVerify: true,
+			NextProtos:         []string{"http/1.1"},
+		}
 		tc := tls.Client(c, cfg)
 		if err := tc.HandshakeContext(cctx); err != nil {
 			r.RTT = time.Since(t0)
@@ -295,7 +300,12 @@ func runHTTP(ctx context.Context, v via, sp spec, timeout time.Duration, insecur
 	}
 	defer c.Close()
 	if sp.proto == "https" {
-		cfg := &tls.Config{ServerName: sp.host, InsecureSkipVerify: insecure, NextProtos: []string{"http/1.1"}}
+		cfg := &tls.Config{
+			ServerName: sp.host,
+			// -insecure probe flag. codeql[go/disabled-certificate-check]
+			InsecureSkipVerify: insecure,
+			NextProtos:         []string{"http/1.1"},
+		}
 		tc := tls.Client(c, cfg)
 		if err := tc.HandshakeContext(cctx); err != nil {
 			r.RTT = time.Since(t0)
@@ -496,6 +506,7 @@ func printResults(rs []result) int {
 		} else {
 			rtt = "       "
 		}
+		// Detail is RTT/status of the probe. codeql[go/clear-text-logging]
 		fmt.Printf("%-4s %-5s %-28s %s  %s\n", state, r.Proto, r.Target, rtt, r.Detail)
 	}
 	return fails
