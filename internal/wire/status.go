@@ -91,6 +91,12 @@ func (h Hello) Encode() []byte {
 		h.Caps = NodeCaps
 	}
 	m, i := []byte(h.MemberID), []byte(h.InstanceID)
+	if len(m) > idMax {
+		m = m[:idMax]
+	}
+	if len(i) > idMax {
+		i = i[:idMax]
+	}
 	b := make([]byte, 3+len(m)+len(i)+12)
 	b[0] = h.Version
 	b[1] = byte(len(m))
