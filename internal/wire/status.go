@@ -97,7 +97,7 @@ func (h Hello) Encode() []byte {
 	if len(i) > idMax {
 		i = i[:idMax]
 	}
-	b := make([]byte, 3+len(m)+len(i)+12)
+	b := make([]byte, 3+idMax+idMax+12)
 	b[0] = h.Version
 	b[1] = byte(len(m))
 	copy(b[2:], m)
@@ -107,6 +107,7 @@ func (h Hello) Encode() []byte {
 	binary.BigEndian.PutUint16(b[off:], h.Min)
 	binary.BigEndian.PutUint16(b[off+2:], h.Max)
 	binary.BigEndian.PutUint64(b[off+4:], uint64(h.Caps))
+	b = b[:off+12]
 	b = append(b, putStr(h.Program)...)
 	return append(b, putStr(h.Software)...)
 }
