@@ -278,6 +278,7 @@
     .seg button {
       flex: 1; border: 1px solid #3a332e; background: #211c19; color: var(--stone);
       border-radius: 9px; padding: 9px 8px; font: 600 12.5px var(--ui); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
     }
     .seg button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
     .rate-bits { display: flex; flex-direction: column; gap: 4px; }
@@ -337,6 +338,7 @@
     .split-tabs button {
       flex: 1; border: 1px solid #3a332e; background: #211c19; color: var(--stone);
       border-radius: 9px; padding: 7px 8px; font: 600 12px var(--ui); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
     }
     .split-tabs button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
     .split-tabs button .n { font-weight: 500; opacity: .7; }
@@ -377,7 +379,7 @@
     .toggle.on i { left: 16px; }
 
     .about {
-      width: 360px; height: auto; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 360px; height: 448px; left: 50%; top: 50%; transform: translate(-50%, -50%);
       text-align: center; display: flex; flex-direction: column;
     }
     .about .body {
@@ -398,9 +400,16 @@
     .about .spec .k { color: var(--mute); }
     .about .spec .v { font-family: var(--mono); font-size: 12px; }
     .about .blurb {
-      margin: auto 0; font-size: 13.5px; line-height: 1.45;
+      margin: 16px 0 0; font-size: 13.5px; line-height: 1.45;
       letter-spacing: -0.02em; color: var(--stone); font-weight: 500;
     }
+    .about .upd-slot {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+    }
+    .about .upd { margin: 0; }
     .about .madeby {
       margin-top: 0; font-size: 12px; font-weight: 500;
       color: var(--mute); letter-spacing: -0.01em;
@@ -409,7 +418,6 @@
       color: var(--lamp); vertical-align: -1px; margin: 0 3px;
     }
     .about .madeby sup { font-size: 0.65em; }
-    .about .upd { margin: 8px 0 16px; }
 
     .offer {
       width: 360px; height: auto;
@@ -793,8 +801,8 @@
         "upd.quiet.d": "Выключит проверку при запуске.",
         "upd.offer.title": "Обновление loft",
         "upd.offer.body": "Скачать и заменить это приложение.",
-        "upd.install": "Обновить до 1.0.8",
-        "about.ver": "1.0.7",
+        "upd.install": "Обновить до 1.0.9",
+        "about.ver": "1.0.8",
         "about.proto": "протоколы",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1029,8 +1037,8 @@
         "upd.quiet.d": "Turns off check at launch.",
         "upd.offer.title": "loft update",
         "upd.offer.body": "Download and replace this app.",
-        "upd.install": "Update to 1.0.8",
-        "about.ver": "1.0.7",
+        "upd.install": "Update to 1.0.9",
+        "about.ver": "1.0.8",
         "about.proto": "protocols",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1264,8 +1272,8 @@
         "upd.quiet.d": "Schaltet die Prüfung beim Start aus.",
         "upd.offer.title": "loft-Update",
         "upd.offer.body": "Diese App herunterladen und ersetzen.",
-        "upd.install": "Aktualisieren auf 1.0.8",
-        "about.ver": "1.0.7",
+        "upd.install": "Aktualisieren auf 1.0.9",
+        "about.ver": "1.0.8",
         "about.proto": "Protokolle",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1499,8 +1507,8 @@
         "upd.quiet.d": "Désactive la vérification au lancement.",
         "upd.offer.title": "Mise à jour loft",
         "upd.offer.body": "Télécharger et remplacer cette app.",
-        "upd.install": "Mettre à jour vers 1.0.8",
-        "about.ver": "1.0.7",
+        "upd.install": "Mettre à jour vers 1.0.9",
+        "about.ver": "1.0.8",
         "about.proto": "protocoles",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1734,8 +1742,8 @@
         "upd.quiet.d": "Desliga a verificação ao abrir.",
         "upd.offer.title": "Atualização do loft",
         "upd.offer.body": "Baixar e substituir este aplicativo.",
-        "upd.install": "Atualizar para 1.0.8",
-        "about.ver": "1.0.7",
+        "upd.install": "Atualizar para 1.0.9",
+        "about.ver": "1.0.8",
         "about.proto": "protocolos",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1969,8 +1977,8 @@
         "upd.quiet.d": "关闭启动时检查。",
         "upd.offer.title": "loft 更新",
         "upd.offer.body": "下载并替换这个应用。",
-        "upd.install": "更新到 1.0.8",
-        "about.ver": "1.0.7",
+        "upd.install": "更新到 1.0.9",
+        "about.ver": "1.0.8",
         "about.proto": "协议",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -2654,7 +2662,7 @@ outbounds:
               <span class="k">${t("about.trojan")}</span><span class="v">${t("about.trojan.v")}</span>
             </div>
             <p class="blurb">${t("about.blurb")}</p>
-            <button class="btn connect on upd">${t("upd.install")}</button>
+            <div class="upd-slot"><button class="btn connect on upd">${t("upd.install")}</button></div>
             <p class="madeby">Made with love ${HEART} by A<sup>3</sup></p>
           </div>
         </div>`,

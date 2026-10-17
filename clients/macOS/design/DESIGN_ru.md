@@ -22,7 +22,7 @@
 
 ## 2. Вход в протокол (1.0)
 
-ПО `1.0.7`. Протокол `1.0` (`0x0100` в Hello). SOCKS и TUN остаются локальными. Спецификация: roster, decoy, mask, **именованные списки адресов** и пересылка оверлея обязательны для клиента на фильтрованном пути.
+ПО `1.0.8`. Протокол `1.0` (`0x0100` в Hello). SOCKS и TUN остаются локальными. Спецификация: roster, decoy, mask, **именованные списки адресов** и пересылка оверлея обязательны для клиента на фильтрованном пути.
 
 | В приложении | В канале |
 |--------------|------------|
@@ -357,13 +357,13 @@ Multi: вместо одного Connect список профилей, у ка�
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.7 |
+| about.ver | 1.0.8 |
 | about.proto | protocol · 1.0 |
 | about.fronts | fronts · get · ws · quic · h2 · h3 |
 | about.opts | options · mask |
 | about.blurb | From the street, ordinary HTTPS. Inside, a private network. |
 | about.sig | A3 |
-| about.upd | Одна кнопка: проверка / последняя / Обновить до N / скачивание % / установка. Строки над ней нет. |
+| about.upd | Одна кнопка, по вертикали посередине между протоколами и колофоном. Окно само спрашивает GitHub при открытии. Проверка / последняя / Обновить до N / скачивание % / установка. Строки над ней нет. |
 | pref.upd | Проверять обновления при запуске |
 | upd.offer.title | Обновление loft |
 | upd.later | Позже |

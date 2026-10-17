@@ -38,7 +38,7 @@ final class DrawLab: FlippedView {
         t.draw(in: NSRect(x: 0, y: y, width: bounds.width, height: sz.height + 2), withAttributes: attrs)
     }
 
-    /// Centers the glyph ink, so a caption without descenders still sits on the toggle mid-line.
+    /// Cap-height center, so the title sits on the same mid-line as a toggle.
     private func drawInk(_ attrs: [NSAttributedString.Key: Any]) {
         loftDrawInk(text, attrs: attrs, in: bounds, alignment: alignment, flipped: true)
     }
@@ -1237,6 +1237,9 @@ final class SegBit: NSButton {
     /// Storyboard path is unused.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Same y-down as `SegControl`, so the title mid-line is the bit mid-line.
+    override var isFlipped: Bool { true }
+
     /// Lets a first click fire without an extra focus click.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -1675,7 +1678,8 @@ func loftInkSize(_ s: String, font: NSFont) -> NSSize {
     return NSSize(width: ceil(r.width), height: ceil(r.height))
 }
 
-/// Draws `text` so glyph ink is vertically centered in `box`.
+/// Draws `text` in `box`: ink centered horizontally, cap-height centered vertically.
+/// Descenders (ф, y) hang below the mid-line and do not lift the title.
 func loftDrawInk(_ text: String, attrs: [NSAttributedString.Key: Any], in box: NSRect, alignment: NSTextAlignment, flipped: Bool) {
     let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
     guard let ctx = NSGraphicsContext.current?.cgContext else { return }
@@ -1687,7 +1691,9 @@ func loftDrawInk(_ text: String, attrs: [NSAttributedString.Key: Any], in box: N
     case .center: x = (box.width - ink.width) / 2 - ink.origin.x
     default: x = -ink.origin.x
     }
-    let y = (box.height - ink.height) / 2 - ink.origin.y
+    let font = (attrs[.font] as? NSFont) ?? Palette.font(12.5)
+    let cap = max(1, font.capHeight)
+    let y = (box.height - cap) / 2
     ctx.saveGState()
     if flipped {
         ctx.translateBy(x: box.minX, y: box.maxY)

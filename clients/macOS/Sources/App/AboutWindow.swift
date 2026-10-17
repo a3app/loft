@@ -18,10 +18,17 @@ final class AboutWindowController: NSWindowController {
         super.init(window: w)
         build()
         w.center()
+        checkNow()
     }
 
     /// Storyboard path is unused.
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Starts the GitHub check whenever this window is shown.
+    override func showWindow(_ sender: Any?) {
+        super.showWindow(sender)
+        checkNow()
+    }
 
     /// Asks GitHub for a newer DMG. Skips while a check or install is running.
     func checkNow() {
@@ -93,8 +100,11 @@ final class AboutWindowController: NSWindowController {
         blurb.alignment = .center
         blurb.frame = NSRect(x: 28, y: blurbY, width: 304, height: blurbH)
 
+        // Middle of the gap between blurb (ends 276) and the colophon (madeY).
+        let btnH: CGFloat = 36
+        let btnY = round(blurbY + blurbH + (madeY - (blurbY + blurbH) - btnH) / 2)
         actionBtn.compact = true
-        actionBtn.frame = NSRect(x: 28, y: 284, width: 304, height: 36)
+        actionBtn.frame = NSRect(x: 28, y: btnY, width: 304, height: btnH)
         actionBtn.title = L10n.t("upd_checking")
         actionBtn.lampOn = false
         actionBtn.isEnabled = false

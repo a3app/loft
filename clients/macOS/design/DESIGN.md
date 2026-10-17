@@ -22,7 +22,7 @@ Shared file (all loft apps): a `.loft` file holds **one or several connections**
 
 ## 2. Protocol join (1.0)
 
-Software `1.0.7`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
+Software `1.0.8`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
 
 | In the application | On the wire |
 |--------------------|-------------|
@@ -356,13 +356,13 @@ Canonical locale is English. The interactive mock defaults to English (`?lang=ru
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.7 |
+| about.ver | 1.0.8 |
 | about.proto | protocols |
 | about.loft | loft/1.0 · get · ws · h2 · quic · h3 · mask |
 | about.sstp | SSTP · ppp · mschapv2 · pap |
 | about.blurb | From the street, ordinary HTTPS. Inside, a private network. |
 | about.sig | A3 |
-| about.upd | One pill: check / latest / Update to N / download % / install. No status line above it. |
+| about.upd | One pill, vertically centered between protocols and the colophon. The window checks GitHub when it opens. Check / latest / Update to N / download % / install. No status line above it. |
 | pref.upd | Check for updates at launch |
 | upd.offer.title | loft update |
 | upd.later | Later |
