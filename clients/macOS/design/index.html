@@ -321,7 +321,7 @@
     .pref .chev { color: var(--mute); font-size: 16px; }
 
     .win.split {
-      width: 440px; height: 520px;
+      width: 440px; height: 600px; max-height: calc(100% - 24px);
       left: 50%; top: 50%; transform: translate(-50%, -50%);
       display: flex; flex-direction: column;
     }
@@ -338,7 +338,7 @@
     .split-tabs button {
       flex: 1; border: 1px solid #3a332e; background: #211c19; color: var(--stone);
       border-radius: 9px; padding: 7px 8px; font: 600 12px var(--ui); cursor: pointer;
-      display: flex; align-items: center; justify-content: center; line-height: 1;
+      display: flex; align-items: center; justify-content: center; gap: 6px; line-height: 1;
     }
     .split-tabs button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
     .split-tabs button .n { font-weight: 500; opacity: .7; }
@@ -347,15 +347,31 @@
     .rrow {
       display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
       padding: 8px 4px; border-bottom: 1px solid var(--line);
+      align-items: center; cursor: pointer;
     }
     .rrow .n { font-size: 13.5px; font-weight: 600; }
     .rrow .u { font-size: 11.5px; color: var(--mute); font-family: var(--mono); }
     .rrow .meta { text-align: right; font-size: 11px; color: var(--mute); }
     .rrow .src { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--copper); }
+    .split-def { margin: 0 0 8px; }
+    .split-def .label { margin: 2px 0 6px; }
+    .split-search { margin: 0 0 8px; padding: 8px 12px; font-size: 13px; }
+    .rrow .dir {
+      display: flex; gap: 4px; justify-self: end; align-items: center;
+    }
+    .rrow .dir button {
+      font: 600 10.5px var(--ui); letter-spacing: .02em;
+      border: 1px solid #3a332e; background: #211c19; color: var(--stone);
+      border-radius: 99px; padding: 5px 9px; cursor: pointer; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .rrow .dir button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
+    .rrow .dir button.on.over { background: var(--copper); color: var(--snow); border-color: var(--copper); }
     .win.split .actions {
       margin: auto -20px 0;
       padding: 12px 20px 14px;
       border-top: 1px solid var(--line);
+      flex-shrink: 0;
     }
     .fmt {
       font-family: var(--mono); font-size: 11px; background: #211c19;
@@ -752,6 +768,19 @@
         "split.native": "прямой 192.168.1.1 · en0",
         "split.via": "Через лофт",
         "split.bypass": "Мимо лофта",
+        "split.via.short": "через",
+        "split.bypass.short": "мимо",
+        "split.region": "Регион",
+        "split.region.ru": "RU",
+        "split.region.ch": "CH",
+        "split.region.global": "Global",
+        "split.region.ru.d": "Россия",
+        "split.region.ch.d": "Китай",
+        "split.region.global.d": "Мир",
+        "split.rdef": "По умолчанию",
+        "split.inherit": "Как регион",
+        "split.search": "Найти сервис",
+        "split.empty": "В этом регионе пока пусто.",
         "split.add": "Добавить",
         "split.nets": "сетей",
         "split.net": "сеть",
@@ -801,8 +830,8 @@
         "upd.quiet.d": "Выключит проверку при запуске.",
         "upd.offer.title": "Обновление loft",
         "upd.offer.body": "Скачать и заменить это приложение.",
-        "upd.install": "Обновить до 1.0.9",
-        "about.ver": "1.0.8",
+        "upd.install": "Обновить до 1.0.10",
+        "about.ver": "1.0.9",
         "about.proto": "протоколы",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -988,6 +1017,19 @@
         "split.native": "direct 192.168.1.1 · en0",
         "split.via": "Through loft",
         "split.bypass": "Around loft",
+        "split.via.short": "through",
+        "split.bypass.short": "around",
+        "split.region": "Region",
+        "split.region.ru": "RU",
+        "split.region.ch": "CH",
+        "split.region.global": "Global",
+        "split.region.ru.d": "Russia",
+        "split.region.ch.d": "China",
+        "split.region.global.d": "World",
+        "split.rdef": "Default",
+        "split.inherit": "As the region",
+        "split.search": "Find a service",
+        "split.empty": "Nothing in this region yet.",
         "split.add": "Add",
         "split.nets": "nets",
         "split.net": "net",
@@ -1037,8 +1079,8 @@
         "upd.quiet.d": "Turns off check at launch.",
         "upd.offer.title": "loft update",
         "upd.offer.body": "Download and replace this app.",
-        "upd.install": "Update to 1.0.9",
-        "about.ver": "1.0.8",
+        "upd.install": "Update to 1.0.10",
+        "about.ver": "1.0.9",
         "about.proto": "protocols",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1223,6 +1265,19 @@
         "split.native": "direkt 192.168.1.1 · en0",
         "split.via": "Durch loft",
         "split.bypass": "An loft vorbei",
+        "split.via.short": "durch",
+        "split.bypass.short": "vorbei",
+        "split.region": "Region",
+        "split.region.ru": "RU",
+        "split.region.ch": "CH",
+        "split.region.global": "Global",
+        "split.region.ru.d": "Russland",
+        "split.region.ch.d": "China",
+        "split.region.global.d": "Welt",
+        "split.rdef": "Standard",
+        "split.inherit": "Wie die Region",
+        "split.search": "Dienst suchen",
+        "split.empty": "In dieser Region noch nichts.",
         "split.add": "Hinzufügen",
         "split.nets": "Netze",
         "split.net": "Netz",
@@ -1272,8 +1327,8 @@
         "upd.quiet.d": "Schaltet die Prüfung beim Start aus.",
         "upd.offer.title": "loft-Update",
         "upd.offer.body": "Diese App herunterladen und ersetzen.",
-        "upd.install": "Aktualisieren auf 1.0.9",
-        "about.ver": "1.0.8",
+        "upd.install": "Aktualisieren auf 1.0.10",
+        "about.ver": "1.0.9",
         "about.proto": "Protokolle",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1458,6 +1513,19 @@
         "split.native": "direct 192.168.1.1 · en0",
         "split.via": "Via loft",
         "split.bypass": "Autour de loft",
+        "split.via.short": "via",
+        "split.bypass.short": "autour",
+        "split.region": "Région",
+        "split.region.ru": "RU",
+        "split.region.ch": "CH",
+        "split.region.global": "Global",
+        "split.region.ru.d": "Russie",
+        "split.region.ch.d": "Chine",
+        "split.region.global.d": "Monde",
+        "split.rdef": "Par défaut",
+        "split.inherit": "Comme la région",
+        "split.search": "Trouver un service",
+        "split.empty": "Rien dans cette région pour l’instant.",
         "split.add": "Ajouter",
         "split.nets": "réseaux",
         "split.net": "réseau",
@@ -1507,8 +1575,8 @@
         "upd.quiet.d": "Désactive la vérification au lancement.",
         "upd.offer.title": "Mise à jour loft",
         "upd.offer.body": "Télécharger et remplacer cette app.",
-        "upd.install": "Mettre à jour vers 1.0.9",
-        "about.ver": "1.0.8",
+        "upd.install": "Mettre à jour vers 1.0.10",
+        "about.ver": "1.0.9",
         "about.proto": "protocoles",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1693,6 +1761,19 @@
         "split.native": "direto 192.168.1.1 · en0",
         "split.via": "Pelo loft",
         "split.bypass": "Fora do loft",
+        "split.via.short": "pelo",
+        "split.bypass.short": "fora",
+        "split.region": "Região",
+        "split.region.ru": "RU",
+        "split.region.ch": "CH",
+        "split.region.global": "Global",
+        "split.region.ru.d": "Rússia",
+        "split.region.ch.d": "China",
+        "split.region.global.d": "Mundo",
+        "split.rdef": "Padrão",
+        "split.inherit": "Como a região",
+        "split.search": "Encontrar um serviço",
+        "split.empty": "Nada nesta região ainda.",
         "split.add": "Adicionar",
         "split.nets": "redes",
         "split.net": "rede",
@@ -1742,8 +1823,8 @@
         "upd.quiet.d": "Desliga a verificação ao abrir.",
         "upd.offer.title": "Atualização do loft",
         "upd.offer.body": "Baixar e substituir este aplicativo.",
-        "upd.install": "Atualizar para 1.0.9",
-        "about.ver": "1.0.8",
+        "upd.install": "Atualizar para 1.0.10",
+        "about.ver": "1.0.9",
         "about.proto": "protocolos",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -1928,6 +2009,19 @@
         "split.native": "直连 192.168.1.1 · en0",
         "split.via": "经 loft",
         "split.bypass": "绕过 loft",
+        "split.via.short": "经",
+        "split.bypass.short": "绕",
+        "split.region": "地区",
+        "split.region.ru": "RU",
+        "split.region.ch": "CH",
+        "split.region.global": "Global",
+        "split.region.ru.d": "俄罗斯",
+        "split.region.ch.d": "中国",
+        "split.region.global.d": "全球",
+        "split.rdef": "默认",
+        "split.inherit": "随地区",
+        "split.search": "查找服务",
+        "split.empty": "这个地区还没有条目。",
         "split.add": "添加",
         "split.nets": "个网段",
         "split.net": "网段",
@@ -1977,8 +2071,8 @@
         "upd.quiet.d": "关闭启动时检查。",
         "upd.offer.title": "loft 更新",
         "upd.offer.body": "下载并替换这个应用。",
-        "upd.install": "更新到 1.0.9",
-        "about.ver": "1.0.8",
+        "upd.install": "更新到 1.0.10",
+        "about.ver": "1.0.9",
         "about.proto": "协议",
         "about.loft": "loft/1.0",
         "about.loft.v": "get · ws · h2 · quic · h3 · mask",
@@ -2057,6 +2151,12 @@
     let failoverOn = params.get("fail") !== "0";
     let heldNow = params.get("scene") === "hold";
     let splitTab = params.get("stab") === "bypass" ? "bypass" : "via";
+    let regionTab = ["ru", "ch", "global"].includes(params.get("region")) ? params.get("region") : "global";
+    let splitQ = "";
+    const regionDef = { ru: false, ch: true, global: true };
+    if (params.get("rdef") === "via") regionDef.ru = true;
+    if (params.get("cdef") === "bypass") regionDef.ch = false;
+    if (params.get("gdef") === "bypass") regionDef.global = false;
     let splitFmt = params.get("sfmt") === "keen" ? "keen" : "loft";
     let splitAuto = params.get("sauto") !== "0";
     let splitOn = params.get("split") === "1";
@@ -2094,16 +2194,23 @@
       return String(socksPort);
     };
     const ROUTES = [
-      { id: "yt", ru: "YouTube", en: "YouTube", via: true, cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
-      { id: "cf", ru: "Cloudflare", en: "Cloudflare", de: "Cloudflare", fr: "Cloudflare", pt: "Cloudflare", zh: "Cloudflare", via: true, cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
-      { id: "gpt", ru: "ChatGPT", en: "ChatGPT", de: "ChatGPT", fr: "ChatGPT", pt: "ChatGPT", zh: "ChatGPT", via: true, cidrs: ["104.18.32.0/24"], src: "me" },
-      { id: "gos", ru: "Госуслуги", en: "Gov services", de: "Behörden", fr: "Services publics", pt: "Serviços públicos", zh: "政务服务", via: false, cidrs: ["91.226.245.0/24", "5.61.16.0/21"], src: "me" },
-      { id: "lan", ru: "Локальная сеть", en: "LAN", de: "LAN", fr: "LAN", pt: "LAN", zh: "局域网", via: false, cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
+      { id: "yt", ru: "YouTube", en: "YouTube", region: "global", via: null, cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
+      { id: "cf", ru: "Cloudflare", en: "Cloudflare", de: "Cloudflare", fr: "Cloudflare", pt: "Cloudflare", zh: "Cloudflare", region: "global", via: null, cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
+      { id: "gpt", ru: "ChatGPT", en: "ChatGPT", de: "ChatGPT", fr: "ChatGPT", pt: "ChatGPT", zh: "ChatGPT", region: "global", via: null, cidrs: ["104.18.32.0/24"], src: "me" },
+      { id: "nf", ru: "Netflix", en: "Netflix", region: "global", via: null, cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
+      { id: "gos", ru: "Госуслуги", en: "Gov services", de: "Behörden", fr: "Services publics", pt: "Serviços públicos", zh: "政务服务", region: "ru", via: null, cidrs: ["91.226.245.0/24", "5.61.16.0/21"], src: "me" },
+      { id: "ya", ru: "Яндекс", en: "Yandex", de: "Yandex", fr: "Yandex", pt: "Yandex", zh: "Yandex", region: "ru", via: null, cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "repo" },
+      { id: "wx", ru: "WeChat", en: "WeChat", de: "WeChat", fr: "WeChat", pt: "WeChat", zh: "微信", region: "ch", via: null, cidrs: ["203.205.128.0/19", "182.254.0.0/16"], src: "repo" },
+      { id: "ali", ru: "Alipay", en: "Alipay", de: "Alipay", fr: "Alipay", pt: "Alipay", zh: "支付宝", region: "ch", via: null, cidrs: ["110.75.0.0/16"], src: "repo" },
+      { id: "lan", ru: "Локальная сеть", en: "LAN", de: "LAN", fr: "LAN", pt: "LAN", zh: "局域网", region: "global", via: false, cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
     ];
     const locName = (o) => o[lang] || o.en || o.ru || "";
     const rname = (r) => locName(r);
-    const routesVia = () => ROUTES.filter((r) => r.via);
-    const routesBypass = () => ROUTES.filter((r) => !r.via);
+    const rowVia = (r) => (r.via === true || r.via === false) ? r.via : !!regionDef[r.region];
+    const rowOver = (r) => r.via === true || r.via === false;
+    const routesVia = () => ROUTES.filter((r) => rowVia(r));
+    const routesBypass = () => ROUTES.filter((r) => !rowVia(r));
+    const routesIn = (region) => ROUTES.filter((r) => r.region === region);
     const routeCount = (list) => list.reduce((n, r) => n + r.cidrs.length, 0);
     const pname = (p) => locName(p);
     const active = () => PROFILES.find((p) => p.id === activeId);
@@ -2533,15 +2640,28 @@ outbounds:
         </div>`;
       },
       split: () => {
-        const list = splitTab === "bypass" ? routesBypass() : routesVia();
+        const q = splitQ.trim().toLowerCase();
+        const list = routesIn(regionTab).filter((r) => !q || rname(r).toLowerCase().includes(q));
+        const defVia = !!regionDef[regionTab];
         const rows = list.map((r) => {
           const n = r.cidrs.length;
           const net = n === 1 ? t("split.net") : t("split.nets");
-          return `<div class="rrow">
+          const via = rowVia(r);
+          const over = rowOver(r);
+          return `<div class="rrow" data-go="splitadd">
             <div><div class="n">${rname(r)}</div><div class="u">${r.cidrs.slice(0, 2).join(" · ")}${n > 2 ? " · …" : ""}</div></div>
-            <div class="meta">${n} ${net}<div class="src">${r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div></div>
+            <div class="meta">${n} ${net}<div class="src">${r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div>
+              <div class="dir">
+                <button type="button" class="${via ? "on" : ""} ${via && over ? "over" : ""}" data-rdir="via" data-rid="${r.id}">${t("split.via.short")}</button>
+                <button type="button" class="${!via ? "on" : ""} ${!via && over ? "over" : ""}" data-rdir="bypass" data-rid="${r.id}">${t("split.bypass.short")}</button>
+              </div>
+            </div>
           </div>`;
         }).join("");
+        const tab = (id) => {
+          const n = routesIn(id).length;
+          return `<button type="button" class="${regionTab === id ? "on" : ""}" data-region="${id}">${t("split.region." + id)}<span class="n">${n}</span></button>`;
+        };
         return `
         <div class="win split">
           <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
@@ -2553,10 +2673,17 @@ outbounds:
             <div class="split-sub">${splitOn ? t("split.sub") : t("split.sub.off")}</div>
             ${splitOn ? `<div class="split-native">${t("split.native")}</div>` : ""}
             <div class="split-tabs">
-              <button type="button" class="${splitTab === "via" ? "on" : ""}" data-stab="via">${t("split.via")} <span class="n">${routeCount(routesVia())}</span></button>
-              <button type="button" class="${splitTab === "bypass" ? "on" : ""}" data-stab="bypass">${t("split.bypass")} <span class="n">${routeCount(routesBypass())}</span></button>
+              ${tab("ru")}${tab("ch")}${tab("global")}
             </div>
-            <div class="split-list ${splitOn ? "" : "dim"}">${rows}</div>
+            <div class="split-def">
+              <div class="label">${t("split.rdef")} · ${t("split.region." + regionTab + ".d")}</div>
+              <div class="seg">
+                <button type="button" class="${defVia ? "on" : ""}" data-rdef="via">${t("split.via")}</button>
+                <button type="button" class="${!defVia ? "on" : ""}" data-rdef="bypass">${t("split.bypass")}</button>
+              </div>
+            </div>
+            <input class="field sm split-search" data-sq type="search" value="${splitQ.replace(/"/g, "&quot;")}" placeholder="${t("split.search")}" spellcheck="false" />
+            <div class="split-list ${splitOn ? "" : "dim"}">${rows || `<div class="split-sub">${t("split.empty")}</div>`}</div>
             <button class="ghost-sm" data-go="splitadd" style="align-self:flex-start;margin:8px 0 4px">+ ${t("split.add")}</button>
             <div class="actions">
               <button class="btn" data-go="splitin">${t("import")}</button>
@@ -2638,10 +2765,17 @@ outbounds:
             <input class="field sm" placeholder="142.250.0.0/16" spellcheck="false" />
             <div class="label">${t("split.add.name")}</div>
             <input class="field sm" placeholder="YouTube" />
+            <div class="label">${t("split.region")}</div>
+            <div class="seg">
+              <button type="button" class="${regionTab === "ru" ? "on" : ""}" data-region="ru">${t("split.region.ru")}</button>
+              <button type="button" class="${regionTab === "ch" ? "on" : ""}" data-region="ch">${t("split.region.ch")}</button>
+              <button type="button" class="${regionTab === "global" ? "on" : ""}" data-region="global">${t("split.region.global")}</button>
+            </div>
             <div class="label">${t("split.import.where")}</div>
             <div class="seg">
-              <button type="button" class="${splitTab === "via" ? "on" : ""}" data-stab="via">${t("split.via")}</button>
-              <button type="button" class="${splitTab === "bypass" ? "on" : ""}" data-stab="bypass">${t("split.bypass")}</button>
+              <button type="button" class="on" data-adddir="inherit">${t("split.inherit")}</button>
+              <button type="button" data-adddir="via">${t("split.via")}</button>
+              <button type="button" data-adddir="bypass">${t("split.bypass")}</button>
             </div>
             <button class="btn connect on" style="margin-top:16px" data-go="split">${t("split.add.go")}</button>
             <button class="btn back" data-go="split">${t("back")}</button>
@@ -2811,6 +2945,45 @@ outbounds:
             const wrap = el.closest(".seg, .split-tabs");
             if (wrap) wrap.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === el));
           }
+        };
+      });
+      sceneEl.querySelectorAll("[data-region]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          regionTab = el.dataset.region;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-rdef]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          regionDef[regionTab] = el.dataset.rdef === "via";
+          show("split", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-rdir]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const r = ROUTES.find((x) => x.id === el.dataset.rid);
+          if (!r) return;
+          const want = el.dataset.rdir === "via";
+          if (rowOver(r) && r.via === want) r.via = null;
+          else r.via = want;
+          show("split", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-sq]").forEach((el) => {
+        el.oninput = () => {
+          splitQ = el.value;
+          const pos = el.selectionStart;
+          show("split", true);
+          requestAnimationFrame(() => {
+            const n = document.querySelector("[data-sq]");
+            if (n) {
+              n.focus();
+              try { n.setSelectionRange(pos, pos); } catch (_) {}
+            }
+          });
         };
       });
       sceneEl.querySelectorAll("[data-sfmt]").forEach((el) => {
@@ -2989,6 +3162,7 @@ outbounds:
         u.searchParams.set("lang", lang);
         u.searchParams.set("multi", multi ? "1" : "0");
         u.searchParams.set("stab", splitTab);
+        u.searchParams.set("region", regionTab);
         u.searchParams.set("sfmt", splitFmt);
         u.searchParams.set("split", splitOn ? "1" : "0");
         u.searchParams.set("socks", sharedSocks ? "1" : "0");

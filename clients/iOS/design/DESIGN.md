@@ -38,7 +38,7 @@ Same rooms as the macOS windows, laid out for one column and a thumb.
 | Onboard | Two steps, same as macOS. **1 Access key** (`lt_…`) → Continue, or import a file/QR. **2 Address**: URL, how to connect GET/WS/H2/QUIC/H3, path → Open loft. Then the stock iOS VPN permission sheet, once. |
 | Settings | Three tabs **General / Route / Client**. Header Reset routes. Links **Defaults \| Journal \| About**. iOS subset: language, simplified interface, speed units, extended journal; default route, hold, split (no failover); auto-connect, reconnect, external IP. Skip Dock, login item, several outbounds, SOCKS. |
 | Journal | Front and session lines. The key is shortened. Copy / Clear / Back. |
-| About | Mark, loft, `1.0.8`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
+| About | Mark, loft, `1.0.9`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
 | Scan | Camera QR. From file / From Photos. Paste `loft://` / `sstp://` / `vless://`. |
 | Share QR | `loft://` of one front. Several fronts or several connections → `.loft`. Warns that the file contains the key. |
 | iOS Settings → VPN | Stock list. loft Connected, type loft. Toggle is the system tunnel. |

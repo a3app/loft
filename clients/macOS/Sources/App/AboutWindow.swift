@@ -7,6 +7,8 @@ final class AboutWindowController: NSWindowController {
     private let software: String
     private let updater = Updater()
     private let actionBtn = PillButton(frame: .zero)
+    private let kick = NSTextField(labelWithString: "")
+    private let blurb = NSTextField(wrappingLabelWithString: "")
     private var offer: Updater.Offer?
     private var busy = false
 
@@ -18,6 +20,8 @@ final class AboutWindowController: NSWindowController {
         super.init(window: w)
         build()
         w.center()
+        NotificationCenter.default.addObserver(self, selector: #selector(reload), name: .loftState, object: nil)
+        reload()
         checkNow()
     }
 
@@ -27,7 +31,16 @@ final class AboutWindowController: NSWindowController {
     /// Starts the GitHub check whenever this window is shown.
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
+        reload()
         checkNow()
+    }
+
+    /// Captions follow the current UI language.
+    @objc func reload() {
+        kick.stringValue = L10n.t("protos")
+        kick.alignment = .center
+        blurb.stringValue = L10n.t("blurb")
+        blurb.alignment = .center
     }
 
     /// Asks GitHub for a newer DMG. Skips while a check or install is running.
@@ -62,8 +75,15 @@ final class AboutWindowController: NSWindowController {
         let ver = Palette.label(software, font: Palette.body(12.5), color: Palette.mute, frame: NSRect(x: 20, y: 112, width: 320, height: 18))
         ver.alignment = .center
 
-        let kick = Palette.label(L10n.t("protos"), font: Palette.body(11), color: Palette.mute, frame: NSRect(x: 20, y: 148, width: 320, height: 14))
+        kick.font = Palette.body(11)
+        kick.textColor = Palette.mute
+        kick.backgroundColor = .clear
+        kick.isBezeled = false
+        kick.drawsBackground = false
+        kick.isEditable = false
+        kick.isSelectable = false
         kick.alignment = .center
+        kick.frame = NSRect(x: 20, y: 148, width: 320, height: 14)
         c.addSubview(kick)
 
         let keyFont = Palette.body(12.5)
@@ -94,10 +114,18 @@ final class AboutWindowController: NSWindowController {
         let blurbH: CGFloat = 48
         let blurbY: CGFloat = 228
 
-        let blurb = NSTextField(wrappingLabelWithString: L10n.t("blurb"))
         blurb.font = Palette.body(13.5)
         blurb.textColor = Palette.stone
+        blurb.backgroundColor = .clear
+        blurb.isBezeled = false
+        blurb.drawsBackground = false
+        blurb.isEditable = false
+        blurb.isSelectable = false
         blurb.alignment = .center
+        blurb.maximumNumberOfLines = 3
+        blurb.preferredMaxLayoutWidth = 304
+        blurb.lineBreakMode = .byWordWrapping
+        blurb.cell?.wraps = true
         blurb.frame = NSRect(x: 28, y: blurbY, width: 304, height: blurbH)
 
         // Middle of the gap between blurb (ends 276) and the colophon (madeY).

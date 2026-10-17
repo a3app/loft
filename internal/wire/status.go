@@ -17,7 +17,7 @@ type Hello struct {
 	Max        uint16
 	Caps       Cap
 	Program    string // client binary name, e.g. loft
-	Software   string // client release, e.g. 1.0.8 — not the protocol
+	Software   string // client release, e.g. 1.0.9 — not the protocol
 }
 
 // Offer is this Hello's version range and caps. Max 0 is treated as 1.0.

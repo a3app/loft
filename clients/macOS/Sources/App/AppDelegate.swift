@@ -367,6 +367,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shows About, or brings the existing one forward.
     @objc func showAbout() {
         if aboutWC == nil { aboutWC = AboutWindowController(software: engine.software) }
+        aboutWC?.reload()
         present(aboutWC)
         aboutWC?.checkNow()
     }
