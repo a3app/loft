@@ -210,6 +210,12 @@ route ADD 77.88.8.8 MASK 255.255.255.255 0.0.0.0 :: rem Yandex DNS | bypass
 
 URL сырого `.bat` (GitHub и подобное). Автообновление раз в сутки. Импорт в выбранный список (обычно «via loft»). Строки из репо помечаются `source: repo`. Обновление вручную добавленные CIDR не трогает.
 
+Опубликованный список: [`a3app/loft-routes`](https://github.com/a3app/loft-routes) обходит деревья вроде [RockBlack-VPN/ip-address](https://github.com/RockBlack-VPN/ip-address) и собирает один loft-routes файл с `:: rem <сервис> | via` на каждой строке.
+
+```
+https://raw.githubusercontent.com/a3app/loft-routes/main/via.bat
+```
+
 ### 5.3 Windows
 
 Настройки: тумблер (строка открывает списки). Окно списков: тот же тумблер, подпись прямого маршрута. Внизу: Import / Export / Repository. Плюс: добавить сеть.

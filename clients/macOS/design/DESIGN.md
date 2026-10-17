@@ -210,6 +210,12 @@ These files are local route tables. They are distinct from controller address li
 
 A URL of a raw `.bat` (GitHub and similar). Auto-update once a day. Import into the chosen list (usually “via loft”). Lines from the repo are marked `source: repo`. An update leaves manually added CIDRs in place.
 
+Published list: [`a3app/loft-routes`](https://github.com/a3app/loft-routes) walks trees such as [RockBlack-VPN/ip-address](https://github.com/RockBlack-VPN/ip-address) and emits one loft-routes file with `:: rem <service> | via` on every line.
+
+```
+https://raw.githubusercontent.com/a3app/loft-routes/main/via.bat
+```
+
 ### 5.3 Windows
 
 Settings: a toggle (the row opens the lists). Lists window: the same toggle, caption of the direct route. Bottom: Import / Export / Repository. Plus: add a network.

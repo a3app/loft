@@ -172,7 +172,7 @@ final class SplitStore {
             SplitSet(id: "gos", name: "Госуслуги", via: false, cidrs: ["91.226.245.0/24", "5.61.16.0/21"], source: .me),
             SplitSet(id: "lan", name: "Локальная сеть", via: false, cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], source: .me),
         ]
-        repoURL = "https://raw.githubusercontent.com/loft/routes/main/via.bat"
+        repoURL = "https://raw.githubusercontent.com/a3app/loft-routes/main/via.bat"
         repoVia = true
         repoAuto = true
         repoCount = 214
