@@ -2,7 +2,7 @@
 
 [English](guide.md) · **Русский**
 
-ПО 1.0.4. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Устройство: [architecture_ru.md](architecture_ru.md).
+ПО 1.0.5. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Устройство: [architecture_ru.md](architecture_ru.md).
 
 Это эталонная реализация.
 

@@ -212,7 +212,7 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
         try writeRelaunch(from: staged, onto: dest)
     }
 
-    /// Unversioned `loft-macos-arm64.dmg` or `loft-1.0.4-macos-arm64.dmg`.
+    /// Unversioned `loft-macos-arm64.dmg` or `loft-1.0.5-macos-arm64.dmg`.
     private static func asset(_ name: String, matches want: String) -> Bool {
         if name == want { return true }
         #if arch(arm64)

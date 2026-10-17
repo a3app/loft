@@ -6,7 +6,7 @@
 
 **Protocol 1.0.** A third-party implementation that follows this document can speak to a loft node. The Go tree in this repository is one implementation. Licensed [Apache-2.0](../LICENSE).
 
-Software version (`VERSION`, currently 1.0.4) is independent of protocol version. Handshake carries both. Keywords **MUST**, **SHOULD**, **MAY** follow RFC 2119. Unknown trailing fields in Hello and Status MUST be ignored.
+Software version (`VERSION`, currently 1.0.5) is independent of protocol version. Handshake carries both. Keywords **MUST**, **SHOULD**, **MAY** follow RFC 2119. Unknown trailing fields in Hello and Status MUST be ignored.
 
 ---
 
@@ -92,7 +92,7 @@ When mask is enabled, a loft ClientHello completes TLS 1.3 wearing a dest-shaped
 HKDF-SHA256(ikm=shared, salt=R, info="loft-cert-serial", L=16)
 ```
 
-with `shared` the sid-v3 ECDH. CertificateVerify is `ecdsa_secp256r1_sha256` under that leaf. A client that knows `mask_pub` MUST check the serial bind and the ECDSA verify. Application records MAY be padded so the first ciphertext lengths follow a pattern sampled from the origin. Status `mask_pub` and roster `mask_pub` carry the 32-byte X25519 public. Empty means mask is off. Probes continue to splice. An implementation that only splices remains compatible with splice-only nodes.
+with `shared` the sid-v3 ECDH. CertificateVerify is `ecdsa_secp256r1_sha256` under that leaf. A client that knows `mask_pub` MUST check the serial bind and the ECDSA verify. Application records SHOULD be padded so ciphertext lengths follow a pattern sampled from the origin, including after the first sampled records. Status `mask_pub` and roster `mask_pub` carry the 32-byte X25519 public. Empty means mask is off. Probes continue to splice. An implementation that only splices remains compatible with splice-only nodes.
 
 ### 3.3 WebSocket (`ws`)
 
@@ -456,7 +456,7 @@ A ClientHello that matches a current browser passes the same JA3/JA4 allowlists 
 
 `session_id` is 32 random-looking bytes. sid v3 is HKDF under ECDH with the node’s static X25519; a middlebox needs that private key to mark those ClientHellos. A stolen member key marks only sid v2 (the fallback used before `mask_pub` is known). A middlebox without either secret sees a string of the same length Chrome already sends.
 
-Mask presents a dest-shaped ECDSA P-256 leaf and `ecdsa_secp256r1_sha256` CertificateVerify, bound by the serial to the same ECDH. A middlebox that verifies the public CA chain will not accept the leaf; a middlebox that only looks at names, dates, and the signature scheme sees dest-typical values. Application-record lengths on the loft path MAY follow a pattern sampled from the origin. Splice-only nodes skip mask.
+Mask presents a dest-shaped ECDSA P-256 leaf and `ecdsa_secp256r1_sha256` CertificateVerify, bound by the serial to the same ECDH. A middlebox that verifies the public CA chain will not accept the leaf; a middlebox that only looks at names, dates, and the signature scheme sees dest-typical values. Application-record lengths on the loft path SHOULD follow a pattern sampled from the origin. Splice-only nodes skip mask.
 
 ### 11.2 Classification of the destination
 

@@ -8,7 +8,7 @@ Report privately: [github.com/a3app/loft/security/advisories/new](https://github
 
 ## Supported versions
 
-Protocol **loft/1.0**. Software version is [`VERSION`](VERSION); the current release is **1.0.4**.
+Protocol **loft/1.0**. Software version is [`VERSION`](VERSION); the current release is **1.0.5**.
 
 | | Security updates |
 |--|--|
@@ -59,7 +59,7 @@ Wire description: [docs/protocol.md](docs/protocol.md).
 
 ## Какие версии чиним
 
-Протокол **loft/1.0**. Версия ПО — [`VERSION`](VERSION); текущий релиз **1.0.4**.
+Протокол **loft/1.0**. Версия ПО — [`VERSION`](VERSION); текущий релиз **1.0.5**.
 
 | | Обновления безопасности |
 |--|--|

@@ -2,7 +2,7 @@
 
 [English](README.md) · **Русский**
 
-ПО 1.0.4. Протокол 1.0. Спецификация: [docs/protocol_ru.md](../../docs/protocol_ru.md). Эксплуатация: [docs/guide_ru.md](../../docs/guide_ru.md).
+ПО 1.0.5. Протокол 1.0. Спецификация: [docs/protocol_ru.md](../../docs/protocol_ru.md). Эксплуатация: [docs/guide_ru.md](../../docs/guide_ru.md).
 
 Этот каталог — Debian-раскладка ноды: POSIX-установщик, unit systemd, sysctl, конфиг команды и `.deb`.
 

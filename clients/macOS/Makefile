@@ -26,7 +26,7 @@ MACOS := $(APP)/Contents/MacOS
 RES := $(APP)/Contents/Resources
 FW := $(APP)/Contents/Frameworks
 ROOTVER := $(shell cat $(ROOT)/VERSION 2>/dev/null || echo 1.0.0)
-# Menu-bar marketing version. Patch +1 on every `make app` (1.0.2 → 1.0.3 → 1.0.4).
+# Menu-bar marketing version. Patch +1 on every `make app` (1.0.3 → 1.0.4 → 1.0.5).
 # CI: BUMP=0 stamps Info.plist from the file and leaves VERSION alone.
 MACVER_FILE := VERSION
 BUMP ?= 1

@@ -22,7 +22,7 @@
 
 ## 2. Вход в протокол (1.0)
 
-ПО `1.0.4`. Протокол `1.0` (`0x0100` в Hello). SOCKS и TUN остаются локальными. Спецификация: roster, decoy, mask, **именованные списки адресов** и пересылка оверлея обязательны для клиента на фильтрованном пути.
+ПО `1.0.5`. Протокол `1.0` (`0x0100` в Hello). SOCKS и TUN остаются локальными. Спецификация: roster, decoy, mask, **именованные списки адресов** и пересылка оверлея обязательны для клиента на фильтрованном пути.
 
 | В приложении | В канале |
 |--------------|------------|
@@ -355,7 +355,7 @@ Multi: вместо одного Connect список профилей, у ка�
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.4 |
+| about.ver | 1.0.5 |
 | about.proto | protocol · 1.0 |
 | about.fronts | fronts · get · ws · quic · h2 · h3 |
 | about.opts | options · mask |

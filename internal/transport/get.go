@@ -801,7 +801,7 @@ func (g *GET) noteCatch() {
 	}
 }
 
-// pace: idle GETs once per keepalive so :444 is not a metronome on the public path.
+// pace: idle GETs around keepalive/2 with jitter so the public path is not a metronome.
 // busy / catch / uplink → fill inflight (download). lastLive or live TCP
 // warms at 20ms so a gapped download does not sleep 1s (~10×). pace=0
 // on lastLive packed 8 pads and TCP 1-byte waited ~8 RTT.
@@ -816,7 +816,7 @@ func (g *GET) pace() time.Duration {
 	if d < time.Second {
 		d = time.Second
 	}
-	return d
+	return jitterDur(d)
 }
 
 // uplinkBudget is decoded mux plaintext that still fits HeaderBudget after AEAD and base64url.
@@ -1318,6 +1318,25 @@ func randN(n int) int {
 	var b [2]byte
 	_, _ = rand.Read(b[:])
 	return int(b[0]) % n
+}
+
+// jitterDur returns d ± 1/3, not below d/2. Idle GET/Ping only — not the live 20ms path.
+func jitterDur(d time.Duration) time.Duration {
+	if d <= 0 {
+		return d
+	}
+	span := d / 3
+	if span <= 0 {
+		return d
+	}
+	var b [4]byte
+	_, _ = rand.Read(b[:])
+	n := (int64(b[0])<<24 | int64(b[1])<<16 | int64(b[2])<<8 | int64(b[3])) & 0x7fffffff
+	out := d - span + time.Duration(n%int64(span*2+1))
+	if min := d / 2; out < min {
+		return min
+	}
+	return out
 }
 
 // GETServer is the origin for the GET front (CDN or direct).

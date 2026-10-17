@@ -87,6 +87,22 @@ func chunkFor(targetRec, leftover, overhead int) int {
 	return leftover
 }
 
+// destRec is the dest application-record size for the i-th loft record.
+// The first len(pads) follow the sampled origin; later records pick from that set.
+func destRec(pads []int, i int) int {
+	n := len(pads)
+	if n == 0 {
+		return 0
+	}
+	if i < 0 {
+		i = 0
+	}
+	if i < n {
+		return pads[i]
+	}
+	return pads[randN(n)]
+}
+
 // drainHTTP reads a bounded response so the spy sees dest homepage records.
 func drainHTTP(r io.Reader) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(r, 32<<10))

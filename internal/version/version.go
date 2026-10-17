@@ -1,5 +1,5 @@
 // Package version holds the program release (injected from VERSION, currently
-// 1.0.4 when built) distinct from protocol 1.0 (0x0100). Handshake carries both.
+// 1.0.5 when built) distinct from protocol 1.0 (0x0100). Handshake carries both.
 package version
 
 import (

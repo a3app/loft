@@ -2,7 +2,7 @@
 
 **English** · [Русский](architecture_ru.md)
 
-Software 1.0.4. Protocol 1.0 (loft/1.0). Spec: [protocol.md](protocol.md). Operation: [guide.md](guide.md).
+Software 1.0.5. Protocol 1.0 (loft/1.0). Spec: [protocol.md](protocol.md). Operation: [guide.md](guide.md).
 
 This document describes the Go tree in this repository. A third-party implementation MAY differ in layout and still speak the protocol.
 
@@ -208,7 +208,7 @@ Mux `Pull` drains Open/Ping/Pong/Dgram/Leave and small Data (≤ 4 KiB) before b
 
 One mux session per member instance. Streams are goroutines with a bounded receive buffer. Mux payload is ≤ 16384; `Stream.Write` and `EncodeBatch` split CmdData so a 32 KiB `io.Copy` does not drop the frame.
 
-The GET front has a bounded inflight window (protocol 2–8, default 4; this tree defaults to 48). The client pump is the sole uplink Puller and assigns GET `seq` in Pull order. The node applies uplink in seq order; only the in-order GET Pulls mux downlink so a dropped HTTP response cannot lose frames already taken from the mux (YouTube/Speedtest TLS). Idle GET pace is `keepalive_ms / 2` (floor 1 s). Open/tiny Data wait 15 ms and datagrams 80 ms so ICMP can ride the same body. Generic GET `header_budget` in this tree is 16 KiB of HTTP header (decoded mux ~12 KiB after base64url+AEAD, ~13 KiB after Cookie Z85); the Yandex profile pins 16 KiB encoded. Status `h2_conns` (node `get_h2`, 1–4) is extra HTTP/2 connections for a second header-budget envelope; inflight is still the total. A GET whose uplink already has ≥ 2 KiB CmdData caps the body at 96 KiB so Cookie slots recycle; download-only stays 256 KiB.
+The GET front has a bounded inflight window (protocol 2–8, default 4; this tree defaults to 48). The client pump is the sole uplink Puller and assigns GET `seq` in Pull order. The node applies uplink in seq order; only the in-order GET Pulls mux downlink so a dropped HTTP response cannot lose frames already taken from the mux (YouTube/Speedtest TLS). Idle GET pace is `keepalive_ms / 2` (floor 1 s) with ±⅓ jitter. Open/tiny Data wait 15 ms and datagrams 80 ms so ICMP can ride the same body. Generic GET `header_budget` in this tree is 16 KiB of HTTP header (decoded mux ~12 KiB after base64url+AEAD, ~13 KiB after Cookie Z85); the Yandex profile pins 16 KiB encoded. Status `h2_conns` (node `get_h2`, 1–4) is extra HTTP/2 connections for a second header-budget envelope; inflight is still the total. A GET whose uplink already has ≥ 2 KiB CmdData caps the body at 96 KiB so Cookie slots recycle; download-only stays 256 KiB.
 
 Relay trunks are one mux session per relay process, with many `hub:*` streams.
 

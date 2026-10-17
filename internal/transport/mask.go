@@ -1110,11 +1110,8 @@ func (c *maskConn) Write(p []byte) (int, error) {
 		oh = c.out.aead.Overhead()
 	}
 	for len(p) > 0 {
-		target := 0
-		if c.padI < len(c.pads) {
-			target = c.pads[c.padI]
-			c.padI++
-		}
+		target := destRec(c.pads, c.padI)
+		c.padI++
 		nchunk := chunkFor(target, len(p), oh)
 		chunk := p[:nchunk]
 		pad := padFor(target, len(chunk), oh)
