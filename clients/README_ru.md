@@ -17,14 +17,14 @@
 Общий код: `internal/`. Артефакты: `dist/clients/`.
 
 ```bash
-make client    # dist/clients/go/loft
-make front     # dist/clients/go/loft-front
-make probe     # dist/clients/go/loft-probe
-make bench     # dist/clients/go/loft-bench
-make macos     # dist/clients/macOS/loft.app
-make macos-dmg # dist/clients/macOS/loft-*-macos-<arch>.dmg
-make macos-dmgs # оба DMG, arm64 и x86_64 (CI)
-make dist-clients # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
+make client        # dist/clients/go/loft
+make front         # dist/clients/go/loft-front
+make probe         # dist/clients/go/loft-probe
+make bench         # dist/clients/go/loft-bench
+make macos         # dist/clients/macOS/loft.app
+make macos-dmg     # dist/clients/macOS/loft-*-macos-<arch>.dmg
+make macos-dmgs    # оба DMG, arm64 и x86_64 (CI)
+make dist-clients  # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
 ```
 
 Протокол: [docs/protocol_ru.md](../docs/protocol_ru.md). Запуск: [docs/guide_ru.md](../docs/guide_ru.md).
