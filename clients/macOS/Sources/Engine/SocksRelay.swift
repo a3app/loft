@@ -11,6 +11,8 @@ final class SocksRelay: NSObject {
     private var targetPort: UInt16 = 0
     private var running = false
     private var listenAddr = ""
+    private static let copies = DispatchQueue(label: "app.loft.socks-copy", qos: .userInitiated, attributes: .concurrent)
+    private static let copyGate = DispatchSemaphore(value: 32)
 
     /// True while the shared port is bound.
     var isListening: Bool {
@@ -100,8 +102,10 @@ final class SocksRelay: NSObject {
             let host = targetHost
             let port = targetPort
             lock.unlock()
-            Thread.detachNewThread {
+            Self.copies.async {
+                Self.copyGate.wait()
                 self.splice(cfd, host: host, port: port)
+                Self.copyGate.signal()
             }
         }
     }
@@ -124,7 +128,7 @@ final class SocksRelay: NSObject {
         Self.tuneTCP(cfd)
         Self.tuneTCP(rfd)
         let sem = DispatchSemaphore(value: 0)
-        Thread.detachNewThread {
+        Self.copies.async {
             Self.copy(cfd, rfd)
             Darwin.shutdown(rfd, SHUT_WR)
             sem.signal()

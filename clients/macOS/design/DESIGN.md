@@ -22,7 +22,7 @@ Shared file (all loft apps): a `.loft` file holds **one or several connections**
 
 ## 2. Protocol join (1.0)
 
-Software `1.0.9`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
+Software `1.0.10`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local. Spec: roster, decoy, mask, **named address lists**, and overlay forwarding are required of a client on a filtered path.
 
 | In the application | On the wire |
 |--------------------|-------------|
@@ -52,7 +52,7 @@ Lists: Status `lists_serial` / `lists_hash` → `GET {lists_path}` (default `/st
 
 Hold, failover, Packet Tunnel vs helper, “reset routes” are machine policy on top of that mapping. They are not caps.
 
-**Mock still behind the wire:** Manual screen is GET\|WS only; no `bootstrap` / `controller_pub`; no fetch of named lists; split catalog has region + default and no `drop`; no live-front change after failover. A complete `.loft` already carries the YAML fields.
+**Mock still behind the wire:** Manual screen is GET\|WS only; no `bootstrap` / `controller_pub`; no fetch of named lists; split catalog has zone + default and no `drop`; no live-front change after failover. A complete `.loft` already carries the YAML fields.
 
 ---
 
@@ -220,33 +220,36 @@ https://raw.githubusercontent.com/a3app/loft-routes/main/via.bat
 
 ### 5.3 Catalog
 
-The lists window is one catalog of named services, grouped by **region** (national origin of the service), not by direction.
+The lists window is one catalog of named services, grouped by **zone**, not by direction. Built-in zones are Local and Global. More zones come from the zone editor or from import (`ru-ru.bat` → RU).
 
 | Code | Meaning | Default direction |
 |------|---------|-------------------|
-| **RU** | Russia | around loft |
-| **CH** | China | through loft |
-| **Global** | the rest of the world | through loft |
+| **Local** | private networks | around loft |
+| **Global** | the rest of the internet | through loft |
 
-Each region has a default: through loft or around loft. A service without its own mark inherits the region default. A service may override (LAN around loft while Global is through loft). Changing the region default moves every inheriting row; overrides stay.
+Each zone has a default: through loft or around loft. A service without its own mark inherits the zone default. A service may override. Changing the zone default moves every inheriting row; overrides stay.
 
-A later loft-routes file MAY carry `REM region: ru` and `REM list: bypass`. Until then, `a3app/loft-routes` `ru-ru.bat` lands in RU, `global.bat` in Global. CH is an empty catalog until a source exists.
+Local ships with one service, LAN (`10.0.0.0/8` `172.16.0.0/12` `192.168.0.0/16`), inheriting the zone. Built-in zones cannot be renamed or deleted; their default direction can change. Deleting a user zone moves its services to Global.
+
+A later loft-routes file MAY carry `REM zone: ru` and `REM list: bypass`. Until then, `a3app/loft-routes` `ru-ru.bat` lands in a user zone RU, `global.bat` in Global.
 
 ### 5.4 Windows
 
 Settings: a toggle (the row opens the catalog). Catalog window, 440 × ~600:
 
 1. Title + the same split toggle. Caption of the remembered direct hop.
-2. Three region tabs: **RU** · **CH** · **Global**, each with a service count.
-3. **Default** for the open region — capsule Through loft / Around loft.
-4. Search field, filters the open region by service name.
-5. Rows: name, first CIDRs, count, source (repo / mine), compact through / around. Gold = inherits the region. Copper = this service overrides. Click the pills to set or to clear back to inherit. Click the row to edit.
-6. Plus: add a service (network, name, region, direction: as the region / through / around).
+2. Zone dropdown (Local, Global, then any added zones), each option with a service count. **Zones** opens the zone editor.
+3. **Default** for the open zone — capsule Through loft / Around loft.
+4. Search field, filters the open zone by service name.
+5. Rows: name, first CIDRs, count, source (repo / mine), compact through / around. Gold = inherits the zone. Copper = this service overrides. Click the pills to set or to clear back to inherit. Click the row to edit.
+6. Plus: add a service (network, name, zone, direction: as the zone / through / around).
 7. Footer: Import / Export / Repository.
 
-Import of a mixed loft-routes file keeps `| via` / `| bypass` as overrides. A file with `REM list:` and `REM region:` fills one region as inherit.
+Zone editor: rows are name, default direction, service count, built-in mark. Plus adds a zone (name + default). Click a row to edit. Built-in: name locked, default editable. User zone: rename, delete (services → Global).
 
-Empty region: mute line, no fake rows.
+Import of a mixed loft-routes file keeps `| via` / `| bypass` as overrides. A file with `REM list:` and `REM zone:` fills one zone as inherit.
+
+Empty zone: mute line, no fake rows.
 
 ---
 
@@ -277,7 +280,7 @@ Edit                 — name, loft:// (or SSTP/VLESS fields), SOCKS, tunnel;
 Onboarding           — key → address, or import a file
 Settings             — login, auto-connect, check for updates at launch, simple view, multi, shared SOCKS,
                        route (failover / hold / in the menu on break / split / reset)
-Split                — catalog RU / CH / Global, region default, Keenetic+loft import, repository
+Split                — catalog Local / Global + user zones, zone editor, Keenetic+loft import, repository
 About                — client version, protocol 1.0, fronts and options this
                        client implements, colophon A³. On open, checks
                        GitHub `a3app/loft` latest release; the pill installs
@@ -351,7 +354,7 @@ Multi: instead of one Connect, a list of profiles, each with lamp, overlay IP, S
 
 ## 10. Copy
 
-Canonical locale is English. The interactive mock defaults to English (`?lang=ru`, `de`, `fr`, `pt`, `zh`). Screenshots under `shots/` include Russian and English. The app ships Russian, English, German, French, Portuguese, and Simplified Chinese.
+Canonical locale is English. Copy lives in [`lang/`](../lang/) — one `{code}.lang` pack per language, same files for the app and this mock (`?lang=ru`, `de`, `fr`, `pt`, `zh`, `it`, `ja`, `ko`). Screenshots under `shots/` include Russian and English. The app ships Russian, English, German, French, Portuguese, Simplified Chinese, Italian, Japanese, and Korean.
 
 | id | English |
 |----|---------|
@@ -387,13 +390,14 @@ Canonical locale is English. The interactive mock defaults to English (`?lang=ru
 | split.d | Past loft uses the direct route from before loft. |
 | split.via | Through loft |
 | split.bypass | Around loft |
-| split.region | RU / CH / Global |
-| split.rdef | Default for the open region |
-| split.inherit | As the region |
+| split.zone | Zone |
+| split.zones | Zones (editor) |
+| split.rdef | Default for the open zone |
+| split.inherit | As the zone |
 | route.reset | Reset routes (Settings footer) |
 | route.held | route closed |
 | open.one / close.one | Open / Disconnect |
-| about.ver | 1.0.9 |
+| about.ver | 1.0.10 |
 | about.proto | protocols |
 | about.loft | loft/1.0 · get · ws · h2 · quic · h3 · mask |
 | about.sstp | SSTP · ppp · mschapv2 · pap |

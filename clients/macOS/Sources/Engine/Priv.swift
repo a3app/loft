@@ -3,6 +3,7 @@
 import Foundation
 import AppKit
 import Darwin
+import SystemConfiguration
 
 /// Swift wrapper around setuid loft-priv: install helper, hold utun, split default, restore.
 enum Priv {
@@ -13,7 +14,12 @@ enum Priv {
     private static var origGW = ""
     private static let gwLock = NSLock()
     private static var gwCached = ""
+    private static var gwIface = ""
     private static var gwCachedAt = Date.distantPast
+    private static let gwTTL: TimeInterval = 5
+    static let netQueue = DispatchQueue(label: "app.loft.net", qos: .utility)
+    static var onPathChange: (() -> Void)?
+    private static var pathBox: PathWatchBox?
 
     /// Runs `cmd` as root: already euid 0, or osascript on the main thread.
     static func runAdmin(_ cmd: String) throws {
@@ -57,9 +63,9 @@ enum Priv {
         p.standardError = errp
         p.standardOutput = outp
         p.launch()
-        p.waitUntilExit()
         let err = String(data: errp.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         let out = String(data: outp.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        p.waitUntilExit()
         for raw in (err + "\n" + out).components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             if !line.isEmpty { LoftLog.shared.add("tun", line) }
@@ -287,10 +293,7 @@ enum Priv {
             } else {
                 p.terminate()
             }
-            let deadline = Date().addingTimeInterval(2)
-            while p.isRunning && Date() < deadline {
-                Thread.sleep(forTimeInterval: 0.05)
-            }
+            waitGone(p, seconds: 2)
             if p.isRunning, isSetuidRoot(installedPriv()) {
                 try? run(installedPriv(), ["--kill", "\(pid)", "--force"])
             }
@@ -298,6 +301,17 @@ enum Priv {
         if reapAll, isSetuidRoot(installedPriv()) {
             try? run(installedPriv(), ["--reap"])
         }
+    }
+
+    /// Waits for `p` to exit without sleeping the caller in a poll loop.
+    private static func waitGone(_ p: Process, seconds: TimeInterval) {
+        if !p.isRunning { return }
+        let sem = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            p.waitUntilExit()
+            sem.signal()
+        }
+        _ = sem.wait(timeout: .now() + seconds)
     }
 
     /// Boot-time cleanup: restore routes and reap leftover holders.
@@ -374,23 +388,69 @@ enum Priv {
         isRealGW(gw) && gwOnLink(gw)
     }
 
+    /// Last physical hop without spawning. Empty until the first refresh.
+    static func cachedGateway() -> String {
+        gwLock.lock(); defer { gwLock.unlock() }
+        return gwCached
+    }
+
+    /// Interface of `cachedGateway`, or empty.
+    static func cachedIface() -> String {
+        gwLock.lock(); defer { gwLock.unlock() }
+        return gwIface
+    }
+
     /// IPv4 default that still lives on en*/bridge, skipping loft utun.
     /// Walks netstat `default`, then DHCP `ipconfig` routers, so a leftover
     /// 0/1 split or a dead hotspot 0/0 does not hide the home Wi-Fi hop.
+    /// Main-thread callers get the cache and a background refresh.
     static func physicalGateway() -> String {
         gwLock.lock()
-        if Date().timeIntervalSince(gwCachedAt) < 0.4 {
-            let v = gwCached
-            gwLock.unlock()
-            return v
+        let age = Date().timeIntervalSince(gwCachedAt)
+        let cached = gwCached
+        gwLock.unlock()
+        if age < gwTTL { return cached }
+        if pthread_main_np() != 0 {
+            if cached.isEmpty, age > 3600 {
+                netQueue.sync { _ = physicalGatewayNow() }
+                return cachedGateway()
+            }
+            netQueue.async { _ = physicalGatewayNow() }
+            return cached
         }
-        gwLock.unlock()
-        let v = physicalGatewayNow()
-        gwLock.lock()
-        gwCached = v
-        gwCachedAt = Date()
-        gwLock.unlock()
-        return v
+        return physicalGatewayNow()
+    }
+
+    /// SCDynamicStore watch for default-route hops. Callbacks run on netQueue.
+    static func startPathWatch() {
+        if pathBox != nil { return }
+        let box = PathWatchBox {
+            netQueue.async {
+                flushGatewayCache()
+                _ = physicalGatewayNow()
+                onPathChange?()
+            }
+        }
+        var ctx = SCDynamicStoreContext(
+            version: 0,
+            info: Unmanaged.passUnretained(box).toOpaque(),
+            retain: nil,
+            release: nil,
+            copyDescription: nil
+        )
+        let cb: SCDynamicStoreCallBack = { _, _, info in
+            guard let info = info else { return }
+            Unmanaged<PathWatchBox>.fromOpaque(info).takeUnretainedValue().onFire()
+        }
+        guard let store = SCDynamicStoreCreate(nil, "app.loft.path" as CFString, cb, &ctx) else { return }
+        let keys = ["State:/Network/Global/IPv4"] as CFArray
+        SCDynamicStoreSetNotificationKeys(store, keys, nil)
+        guard let src = SCDynamicStoreCreateRunLoopSource(nil, store, 0) else { return }
+        CFRunLoopAddSource(CFRunLoopGetMain(), src, CFRunLoopMode.commonModes)
+        box.store = store
+        box.source = src
+        pathBox = box
+        netQueue.async { _ = physicalGatewayNow() }
     }
 
     /// Drop the 400ms gw cache (wake / DHCP) so the next read hits netstat.
@@ -400,13 +460,31 @@ enum Priv {
         gwLock.unlock()
     }
 
-    /// Uncached physical next hop.
+    /// Uncached physical next hop. Updates the 5s cache.
     private static func physicalGatewayNow() -> String {
-        for gw in netstatDefaults() where isUsableGW(gw) { return gw }
-        for gw in dhcpRouters() where isUsableGW(gw) { return gw }
-        let g = gateway()
-        if isUsableGW(g) { return g }
-        return ""
+        var hop = ""
+        var iface = ""
+        for (gw, iff) in netstatDefaults() where isUsableGW(gw) {
+            hop = gw
+            iface = iff
+            break
+        }
+        if hop.isEmpty {
+            for gw in dhcpRouters() where isUsableGW(gw) {
+                hop = gw
+                break
+            }
+        }
+        if hop.isEmpty {
+            let g = gateway()
+            if isUsableGW(g) { hop = g }
+        }
+        gwLock.lock()
+        gwCached = hop
+        gwIface = iface
+        gwCachedAt = Date()
+        gwLock.unlock()
+        return hop
     }
 
     /// Re-pin exclude hosts when the phone hotspot / Wi-Fi gateway changed.
@@ -756,11 +834,10 @@ enum Priv {
         return ips
     }
 
-    /// SOCKS CONNECT through the session. :80 first, then :443; CONNECT success is enough.
-    /// A 6s HTTP wait on a blackholed :80 used to skip TUN default even when :443 worked.
+    /// SOCKS CONNECT through the session. :443 first, then :80; CONNECT success is enough.
     static func loftCarriesTCP(_ socks: String) -> Bool {
-        socksConnectOK(socks, dest: [1, 1, 1, 1], port: 80)
-            || socksConnectOK(socks, dest: [1, 1, 1, 1], port: 443)
+        socksConnectOK(socks, dest: [1, 1, 1, 1], port: 443)
+            || socksConnectOK(socks, dest: [1, 1, 1, 1], port: 80)
     }
 
     /// SOCKS5 CONNECT to dest:port via `socks` (`host:port`). True on a success reply.
@@ -776,7 +853,7 @@ enum Priv {
         let fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         if fd < 0 { return false }
         defer { close(fd) }
-        var tv = timeval(tv_sec: 2, tv_usec: 0)
+        var tv = timeval(tv_sec: 0, tv_usec: 400_000)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
         var nd: Int32 = 1
@@ -881,20 +958,20 @@ enum Priv {
 
     /// First on-link non-utun default from `netstat -rn`, preferring `en*`.
     private static func netstatDefault() -> String {
-        netstatDefaults().first ?? ""
+        netstatDefaults().first?.0 ?? ""
     }
 
     /// Physical `default` next hops from `netstat -rn`, en* first, skipping utun and off-link.
-    private static func netstatDefaults() -> [String] {
-        var en: [String] = []
-        var other: [String] = []
+    private static func netstatDefaults() -> [(String, String)] {
+        var en: [(String, String)] = []
+        var other: [(String, String)] = []
         for raw in shellLines("/usr/sbin/netstat", ["-rn", "-f", "inet"]) {
             let parts = raw.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
             guard parts.count >= 4, parts[0] == "default" else { continue }
             let gw = parts[1]
             let iface = parts[parts.count - 1]
             if iface.hasPrefix("utun") || !isUsableGW(gw) { continue }
-            if iface.hasPrefix("en") { en.append(gw) } else { other.append(gw) }
+            if iface.hasPrefix("en") { en.append((gw, iface)) } else { other.append((gw, iface)) }
         }
         return en + other
     }
@@ -945,4 +1022,12 @@ enum Priv {
         }
         return out
     }
+}
+
+/// Holds SCDynamicStore so the callback pointer stays valid.
+private final class PathWatchBox {
+    var store: SCDynamicStore?
+    var source: CFRunLoopSource?
+    let onFire: () -> Void
+    init(_ onFire: @escaping () -> Void) { self.onFire = onFire }
 }

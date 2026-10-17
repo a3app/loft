@@ -167,6 +167,8 @@ final class ProfileStore {
     var lang = "ru"
     var checkUpdates = true
     let routes = SplitStore()
+    private let io = DispatchQueue(label: "app.loft.prefs")
+    private var prefsWork: DispatchWorkItem?
 
     /// Plain-text echo used when the pref is empty or garbage.
     static let defaultExtIPURL = "https://api.ipify.org"
@@ -303,10 +305,9 @@ final class ProfileStore {
         savePrefs()
     }
 
-    /// Writes prefs.yaml and the active id file.
-    func savePrefs() {
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let s = """
+    /// YAML body of the current prefs.
+    private func prefsYAML() -> String {
+        """
         multi: \(multi)
         shared_socks: \(sharedSocks)
         socks_port: \(socksPort)
@@ -326,8 +327,34 @@ final class ProfileStore {
         lang: \(lang)
         check_updates: \(checkUpdates)
         """
-        try? s.write(to: dir.appendingPathComponent("prefs.yaml"), atomically: true, encoding: .utf8)
-        try? activeID.write(to: dir.appendingPathComponent("active"), atomically: true, encoding: .utf8)
+    }
+
+    /// Writes prefs.yaml and the active id file off the main thread.
+    func savePrefs() {
+        let s = prefsYAML()
+        let active = activeID
+        let dest = dir
+        prefsWork?.cancel()
+        let w = DispatchWorkItem {
+            try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+            try? s.write(to: dest.appendingPathComponent("prefs.yaml"), atomically: true, encoding: .utf8)
+            try? active.write(to: dest.appendingPathComponent("active"), atomically: true, encoding: .utf8)
+        }
+        prefsWork = w
+        io.asyncAfter(deadline: .now() + 0.2, execute: w)
+    }
+
+    /// Flushes a pending prefs write. Call from halt.
+    func flush() {
+        prefsWork?.cancel()
+        let s = prefsYAML()
+        let active = activeID
+        let dest = dir
+        io.sync {
+            try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+            try? s.write(to: dest.appendingPathComponent("prefs.yaml"), atomically: true, encoding: .utf8)
+            try? active.write(to: dest.appendingPathComponent("active"), atomically: true, encoding: .utf8)
+        }
     }
 
     /// Writes `p` as YAML, preserving original keys when `p.yaml` is set.
@@ -343,8 +370,8 @@ final class ProfileStore {
         }
         p.yaml = yaml
         let u = profilesDir.appendingPathComponent(p.id + ".yaml")
-        try? yaml.write(to: u, atomically: true, encoding: .utf8)
         if let i = profiles.firstIndex(where: { $0.id == p.id }) { profiles[i] = p } else { profiles.append(p) }
+        io.async { try? yaml.write(to: u, atomically: true, encoding: .utf8) }
     }
 
     /// Saves `p` from the editor, regenerating YAML.
@@ -375,6 +402,31 @@ final class ProfileStore {
     /// Parses `url`. One outbound → one profile; several → one profile each.
     func importFile(_ url: URL) -> LoftProfile? {
         let list = parseAll(url: url)
+        guard !list.isEmpty else { return nil }
+        var saved: [LoftProfile] = []
+        for var p in list {
+            p.yaml = ""
+            p.id = uniqueID(p.name)
+            save(p)
+            saved.append(p)
+        }
+        profiles.sort { $0.name < $1.name }
+        let primary = saved.first(where: { $0.kind == "get" }) ?? saved.first
+        ensureActive()
+        if activeID.isEmpty, let p = primary { activeID = p.id; savePrefs() }
+        return primary
+    }
+
+    /// Saves profiles parsed from already-decoded QR payloads. Call on the main queue.
+    func importPayloads(_ payloads: [String], fileName: String) -> LoftProfile? {
+        var list: [LoftProfile] = []
+        var seen = Set<String>()
+        for payload in payloads {
+            for p in parseBlob(payload, fileName: fileName) {
+                let k = p.kind + "\n" + p.url + "\n" + p.token
+                if seen.insert(k).inserted { list.append(p) }
+            }
+        }
         guard !list.isEmpty else { return nil }
         var saved: [LoftProfile] = []
         for var p in list {
@@ -637,6 +689,19 @@ final class ProfileStore {
     /// Profiles from a `.loft` / YAML / `.vpn` file, a share URI, or a QR image.
     func parseShare(url: URL) -> [LoftProfile] {
         parseAll(url: url)
+    }
+
+    /// Profiles from already-decoded QR payloads. Call on the main queue.
+    func parseSharePayloads(_ payloads: [String], fileName: String) -> [LoftProfile] {
+        var out: [LoftProfile] = []
+        var seen = Set<String>()
+        for payload in payloads {
+            for p in parseBlob(payload, fileName: fileName) {
+                let k = p.kind + "\n" + p.url + "\n" + p.token
+                if seen.insert(k).inserted { out.append(p) }
+            }
+        }
+        return out
     }
 
     /// One profile per outbound. Shared token / SOCKS / TUN / mux from the file head.

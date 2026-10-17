@@ -143,7 +143,7 @@ final class MarqueeLab: FlippedView {
         didSet { a.textColor = textColor; b.textColor = textColor }
     }
 
-    /// Two clipped labels and a 30 fps timer used when the string overflows.
+    /// Two clipped labels and a 15 fps timer used when the string overflows.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -196,12 +196,12 @@ final class MarqueeLab: FlippedView {
         arm()
     }
 
-    /// Starts a 30 fps timer while the ticker is visible and scrolling.
+    /// Starts a 15 fps timer while the ticker is visible and scrolling.
     private func arm() {
         let live = window?.isVisible == true && !isHidden && scrolling && bounds.width > 1 && !b.isHidden
         if live {
             if timer == nil {
-                let t = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+                let t = Timer.scheduledTimer(withTimeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
                     self?.tick()
                 }
                 RunLoop.main.add(t, forMode: .common)
@@ -220,7 +220,7 @@ final class MarqueeLab: FlippedView {
             timer = nil
             return
         }
-        x -= 0.7
+        x -= 1.4
         if -x >= piece { x += piece }
         place()
     }
@@ -1358,6 +1358,15 @@ final class SegControl: FlippedView {
     /// Storyboard path is unused.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Updates bit titles in place when the count matches.
+    func setTitles(_ titles: [String]) {
+        guard titles.count == buttons.count else { return }
+        for (i, t) in titles.enumerated() where buttons[i].title != t {
+            buttons[i].title = t
+            buttons[i].needsDisplay = true
+        }
+    }
+
     /// Splits the width across the bits with a 6pt gap, or stacks them when `vertical`.
     override func layout() {
         super.layout()
@@ -1671,19 +1680,33 @@ func loftStrokeInside(_ rect: NSRect, radius: CGFloat, color: NSColor, width: CG
     p.stroke()
 }
 
+/// Cached CTLine + ink bounds for static chrome titles.
+private enum InkCache {
+    static var map: [String: (CTLine, CGRect)] = [:]
+    static func line(_ text: String, attrs: [NSAttributedString.Key: Any]) -> (CTLine, CGRect) {
+        let font = attrs[.font] as? NSFont
+        let c = (attrs[.foregroundColor] as? NSColor)?.usingColorSpace(.genericRGB)
+        let key = "\(text)|\(font?.fontName ?? "")|\(font?.pointSize ?? 0)|\(c?.redComponent ?? 0)|\(c?.greenComponent ?? 0)|\(c?.blueComponent ?? 0)"
+        if let hit = map[key] { return hit }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+        let ink = CTLineGetImageBounds(line, nil)
+        if map.count > 96 { map.removeAll(keepingCapacity: true) }
+        map[key] = (line, ink)
+        return (line, ink)
+    }
+}
+
 /// Ink size of `s` in `font` (cap of «П», not the em-box).
 func loftInkSize(_ s: String, font: NSFont) -> NSSize {
-    let line = CTLineCreateWithAttributedString(NSAttributedString(string: s, attributes: [.font: font]))
-    let r = CTLineGetImageBounds(line, nil)
+    let r = InkCache.line(s, attrs: [.font: font]).1
     return NSSize(width: ceil(r.width), height: ceil(r.height))
 }
 
 /// Draws `text` in `box`: ink centered horizontally, cap-height centered vertically.
 /// Descenders (ф, y) hang below the mid-line and do not lift the title.
 func loftDrawInk(_ text: String, attrs: [NSAttributedString.Key: Any], in box: NSRect, alignment: NSTextAlignment, flipped: Bool) {
-    let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+    let (line, ink) = InkCache.line(text, attrs: attrs)
     guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-    let ink = CTLineGetImageBounds(line, nil)
     if ink.width < 0.5 || ink.height < 0.5 { return }
     let x: CGFloat
     switch alignment {

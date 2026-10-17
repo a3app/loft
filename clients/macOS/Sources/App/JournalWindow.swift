@@ -37,7 +37,6 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         build()
         w.center()
         NotificationCenter.default.addObserver(self, selector: #selector(reload), name: .loftLog, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(reload), name: .loftState, object: nil)
         reload()
     }
 
@@ -190,24 +189,38 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         copyBtn.title = L10n.t("copy")
         clearBtn.title = L10n.t("clear_log")
         back.title = L10n.t("back")
+        guard window?.isVisible == true else { return }
         let body = LoftLog.shared.dump()
         let shown = body.isEmpty ? L10n.t("journal_empty") : body
         if shown == painted { return }
         if text.selectedRange().length > 0 { return }
+        let old = painted
         painted = shown
         applyLogStyle()
         let inner = scroll.bounds.width > 1 ? scroll.bounds.width : 480
         text.textContainer?.containerSize = NSSize(width: max(40, inner - 20), height: CGFloat.greatestFiniteMagnitude)
-        text.string = shown
-        text.textColor = body.isEmpty ? Palette.mute : Palette.snow
-        text.font = Palette.mono(11)
-        let style = logStyle()
-        text.defaultParagraphStyle = style
-        let n = (text.string as NSString).length
-        if n > 0 {
-            let r = NSRange(location: 0, length: n)
-            text.textStorage?.addAttribute(.paragraphStyle, value: style, range: r)
-            text.textStorage?.addAttribute(.font, value: Palette.mono(11), range: r)
+        let empty = L10n.t("journal_empty")
+        if shown.hasPrefix(old), !old.isEmpty, old != empty, let storage = text.textStorage, !body.isEmpty {
+            let extra = String(shown.dropFirst(old.count))
+            storage.beginEditing()
+            storage.append(NSAttributedString(string: extra, attributes: [
+                .font: Palette.mono(11),
+                .foregroundColor: Palette.snow,
+                .paragraphStyle: logStyle(),
+            ]))
+            storage.endEditing()
+        } else {
+            text.string = shown
+            text.textColor = body.isEmpty ? Palette.mute : Palette.snow
+            text.font = Palette.mono(11)
+            let style = logStyle()
+            text.defaultParagraphStyle = style
+            let n = (text.string as NSString).length
+            if n > 0 {
+                let r = NSRange(location: 0, length: n)
+                text.textStorage?.addAttribute(.paragraphStyle, value: style, range: r)
+                text.textStorage?.addAttribute(.font, value: Palette.mono(11), range: r)
+            }
         }
         text.layoutManager?.ensureLayout(for: text.textContainer!)
         let used = text.layoutManager?.usedRect(for: text.textContainer!) ?? .zero
@@ -217,7 +230,6 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
             let n = (text.string as NSString).length
             text.scrollRangeToVisible(NSRange(location: max(0, n - 1), length: 0))
         }
-        window?.makeFirstResponder(text)
     }
 
     /// Window copy action: dumps the journal to the pasteboard.

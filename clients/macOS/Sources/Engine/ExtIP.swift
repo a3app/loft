@@ -5,11 +5,15 @@ import Darwin
 
 /// HTTP GET to the configured echo API. SOCKS binds the request to one loft-front.
 enum ExtIP {
-    /// Blocking lookup. Call off the main queue. Empty string on failure.
-    static func lookup(url raw: String, socks: String, useDirect: Bool) -> String {
-        guard let url = URL(string: raw), let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https", url.host != nil else { return "" }
-        if socks.isEmpty && !useDirect { return "" }
+    private static let lock = NSLock()
+    private static var sessions: [String: URLSession] = [:]
+
+    /// Reuses an ephemeral session per SOCKS bind (or "direct").
+    private static func session(socks: String, useDirect: Bool) -> URLSession {
+        let key = useDirect && socks.isEmpty ? "direct" : socks
+        lock.lock()
+        if let s = sessions[key] { lock.unlock(); return s }
+        lock.unlock()
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 8
         cfg.timeoutIntervalForResource = 10
@@ -25,11 +29,22 @@ enum ExtIP {
                 kCFNetworkProxiesHTTPSEnable: false,
             ]
         }
+        let session = URLSession(configuration: cfg)
+        lock.lock()
+        sessions[key] = session
+        lock.unlock()
+        return session
+    }
+
+    /// Blocking lookup. Call off the main queue. Empty string on failure.
+    static func lookup(url raw: String, socks: String, useDirect: Bool) -> String {
+        guard let url = URL(string: raw), let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https", url.host != nil else { return "" }
+        if socks.isEmpty && !useDirect { return "" }
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
         req.setValue("loft", forHTTPHeaderField: "User-Agent")
         req.setValue("close", forHTTPHeaderField: "Connection")
-        let session = URLSession(configuration: cfg)
-        defer { session.finishTasksAndInvalidate() }
+        let session = session(socks: socks, useDirect: useDirect)
         let sem = DispatchSemaphore(value: 0)
         var body = Data()
         var ok = false

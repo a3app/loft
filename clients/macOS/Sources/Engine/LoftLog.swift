@@ -18,6 +18,8 @@ final class LoftLog {
     private let maxFile = 1_500_000
     private let keepFiles = 3
 
+    private var notifyPending = false
+
     var diag = false {
         didSet {
             if oldValue == diag { return }
@@ -62,7 +64,20 @@ final class LoftLog {
         let persist = diag
         lock.unlock()
         if persist { io.async { self.appendFile(line) } }
-        DispatchQueue.main.async {
+        scheduleNotify()
+    }
+
+    /// Coalesces journal UI reloads so a handshake burst is one layout pass.
+    private func scheduleNotify() {
+        lock.lock()
+        if notifyPending { lock.unlock(); return }
+        notifyPending = true
+        lock.unlock()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            guard let self = self else { return }
+            self.lock.lock()
+            self.notifyPending = false
+            self.lock.unlock()
             NotificationCenter.default.post(name: .loftLog, object: self)
         }
     }
@@ -90,8 +105,9 @@ final class LoftLog {
     func snapshot(_ tag: String) {
         guard diag else { return }
         add("diag", "--- \(tag) ---")
-        for line in Priv.diagLines() {
-            add("diag", line)
+        io.async {
+            let rows = Priv.diagLines()
+            for line in rows { self.add("diag", line) }
         }
     }
 

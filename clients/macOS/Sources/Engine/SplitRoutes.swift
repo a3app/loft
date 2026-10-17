@@ -66,8 +66,12 @@ final class SplitStore {
 
     /// Writes `routes.txt`.
     func save() {
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try? emitStore().write(to: dir.appendingPathComponent("routes.txt"), atomically: true, encoding: .utf8)
+        let body = emitStore()
+        let dest = dir
+        DispatchQueue.global(qos: .utility).async {
+            try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+            try? body.write(to: dest.appendingPathComponent("routes.txt"), atomically: true, encoding: .utf8)
+        }
     }
 
     /// Adds or merges `incoming`. Repo rows replace previous repo rows when `asRepo`.

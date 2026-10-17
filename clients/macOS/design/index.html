@@ -295,6 +295,16 @@
       color: var(--snow); border: 1px solid #3a332e; border-radius: 10px;
       padding: 7px 28px 7px 12px; font: 600 12.5px var(--ui); cursor: pointer;
     }
+    .loft-select.wide {
+      display: block; width: 100%; min-width: 0; max-width: none;
+      padding: 9px 28px 9px 12px; margin: 0;
+    }
+    .split-zone { margin: 0 0 8px; }
+    .split-zone .label { margin: 4px 0 6px; }
+    .split-zone-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .split-zone-head .label { margin: 4px 0 6px; }
+    .split-zone-head .ghost-sm { margin: 0; padding: 0; color: var(--lamp); font-weight: 600; }
+    .field.sm:disabled { opacity: .55; cursor: default; }
     .field.sm { margin: 0; padding: 10px 12px; font-size: 13px; }
     .btn.back { background: transparent; color: var(--mute); font-weight: 500; margin-top: 8px; }
 
@@ -587,6 +597,9 @@
       <button type="button" data-lang="fr">FR</button>
       <button type="button" data-lang="pt">PT</button>
       <button type="button" data-lang="zh">中文</button>
+      <button type="button" data-lang="it">IT</button>
+      <button type="button" data-lang="ja">JA</button>
+      <button type="button" data-lang="ko">KO</button>
     </div>
     <h4 id="board-scenes">Scenes</h4>
     <button class="on" data-scene="hero" data-i18n="nav.hero">Overview</button>
@@ -609,6 +622,9 @@
     <button data-scene="splitin" data-i18n="nav.splitin">Import routes</button>
     <button data-scene="splitout" data-i18n="nav.splitout">Export routes</button>
     <button data-scene="splitrepo" data-i18n="nav.splitrepo">Repository</button>
+    <button data-scene="zones" data-i18n="nav.zones">Zones</button>
+    <button data-scene="zoneedit" data-i18n="nav.zoneedit">Edit zone</button>
+    <button data-scene="zoneadd" data-i18n="nav.zoneadd">Add zone</button>
     <button data-scene="about" data-i18n="nav.about">About</button>
     <button data-scene="upd" data-i18n="nav.upd">Update</button>
   </nav>
@@ -638,1509 +654,27 @@
     </div>
   </div>
 
+  <script>var L10N_PACKS = {};</script>
+  <script src="../lang/en.lang"></script>
+  <script src="../lang/ru.lang"></script>
+  <script src="../lang/de.lang"></script>
+  <script src="../lang/fr.lang"></script>
+  <script src="../lang/pt.lang"></script>
+  <script src="../lang/zh.lang"></script>
+  <script src="../lang/it.lang"></script>
+  <script src="../lang/ja.lang"></script>
+  <script src="../lang/ko.lang"></script>
   <script>
-    const I18N = {
-      ru: {
-        "board.sub": "Menu-bar agent. Макет v1: ключ, фронт, SOCKS5.",
-        "board.lang": "Язык",
-        "board.scenes": "Сцены",
-        "nav.hero": "Обзор",
-        "nav.onboard": "Ключ",
-        "nav.url": "Адрес",
-        "nav.off": "Popover · закрыт",
-        "nav.on": "Popover · открыт",
-        "nav.err": "Popover · ошибка",
-        "nav.hold": "Popover · маршрут",
-        "nav.main": "Окно статуса",
-        "nav.out": "Фронты",
-        "nav.list": "Подключения",
-        "nav.edit": "Правка",
-        "nav.editvless": "Правка · VLESS",
-        "edit.vless.link": "Ссылка",
-        "edit.vless.manual": "Вручную",
-        "edit.vless.url": "Ссылка vless://",
-        "edit.vless.uuid": "UUID",
-        "edit.vless.host": "Адрес",
-        "edit.vless.port": "Порт",
-        "edit.vless.sec": "Защита",
-        "edit.vless.tls": "TLS",
-        "edit.vless.reality": "REALITY",
-        "edit.vless.net": "Транспорт",
-        "edit.vless.tcp": "TCP",
-        "edit.vless.xhttp": "XHTTP",
-        "edit.vless.sni": "Имя хоста TLS",
-        "edit.vless.fp": "Отпечаток TLS",
-        "edit.vless.pbk": "Публичный ключ",
-        "edit.vless.sid": "Short ID",
-        "edit.vless.vision": "Vision",
-        "edit.vless.vision.d": "xtls-rprx-vision на TCP.",
-        "edit.main": "Соединение",
-        "edit.adv": "Расширенные",
-        "vpn.type": "Тип VPN",
-        "nav.switch": "Popover · смена",
-        "nav.import": "Импорт",
-        "nav.export": "Экспорт",
-        "nav.set": "Настройки",
-        "nav.split": "Маршруты",
-        "nav.splitin": "Импорт маршрутов",
-        "nav.splitout": "Экспорт маршрутов",
-        "nav.splitrepo": "Репозиторий",
-        "nav.about": "О программе",
-        "nav.upd": "Обновление",
-        "status.off": "лофт закрыт",
-        "status.closed": "закрыт",
-        "connect": "Открыть лофт",
-        "disconnect": "Отключить",
-        "front": "Фронт",
-        "session.none": "нет сессии",
-        "open": "Открыть loft",
-        "quit": "Выйти",
-        "key.title": "Ключ доступа",
-        "key.body": "Введите ключ доступа, который вам выдали.",
-        "key.hint": "Начинается с lt_. Его показывают один раз — сохраните.",
-        "key.step": "Шаг 1 из 2",
-        "continue": "Продолжить",
-        "back": "Назад",
-        "url.title": "Адрес",
-        "url.body": "Введите адрес, который выдали вместе с ключом.",
-        "url.step": "Шаг 2 из 2",
-        "url.label": "URL",
-        "url.type": "Как подключаться",
-        "url.get": "GET",
-        "url.ws": "WS",
-        "url.h2": "H2",
-        "url.quic": "QUIC",
-        "url.h3": "H3",
-        "url.path": "Путь (если давали)",
-        "url.hint": "HTTPS. GET — как файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.",
-        "url.go": "Открыть лофт",
-        "settings": "Настройки",
-        "set.gen": "Общие",
-        "set.client": "Клиент",
-        "journal": "Журнал",
-        "pref.defaults": "По умолчанию",
-        "pref.login": "Открывать при входе",
-        "pref.login.d": "Login item, без окна",
-        "pref.dock": "Отображать значок в Dock",
-        "pref.dock.d": "В строке меню остаётся.",
-        "pref.dock.always": "всегда",
-        "pref.dock.window": "когда открыто окно",
-        "pref.dock.never": "никогда",
-        "pref.auto": "Подключать автоматически",
-        "pref.auto.d": "После ключа и живого фронта",
-        "pref.reconnect": "Автоматический реконнект",
-        "pref.reconnect.d": "Оборвалось — снова открыть лофт.",
-        "pref.simple": "Упрощенный интерфейс",
-        "pref.simple.d": "Меню и окна — открыть и закрыть.",
-        "pref.rate": "Единицы скорости",
-        "pref.rate.d": "Как показывать ↑↓ в меню и окне статуса.",
-        "pref.rate.kbit": "кбит/с",
-        "pref.rate.kb": "КБ/с",
-        "pref.socks.d": "локальный вход приложений",
-        "pref.socks.share": "Общий SOCKS",
-        "pref.socks.share.d": "Один порт из настроек. Раздельная — если включена.",
-        "pref.socks.share.off": "У каждого свой порт.",
-        "pref.socks.port": "Порт SOCKS5",
-        "pref.socks.port.d": "Локальный вход. У подключения можно задать свой.",
-        "pref.tun.d": "следующий шаг, сейчас tun2socks",
-        "pref.off": "выкл",
-        "pop.overlay": "Overlay IP",
-        "pref.route": "Маршрут",
-        "edit.tun": "Интерфейс туннеля",
-        "edit.tun.d": "Свой адрес на интерфейсе. Маршрут машины — в Настройках, выкл. по умолчанию.",
-        "pop.tun": "Туннель",
-        "pop.setup": "Настройка",
-        "pref.fail": "Передать живому",
-        "pref.fail.d": "Оборвалось — маршрут на другой туннель.",
-        "pref.default_route": "Маршрут по умолчанию",
-        "pref.default_route.d": "Весь интернет через лофт. Выкл — только сеть лофта.",
-        "pref.hold": "Не открывать прямой интернет",
-        "pref.hold.d": "Последний туннель умер — сеть закрыта.",
-        "route.reset": "Сбросить маршруты",
-        "route.reset.d": "Вернуть прямой интернет.",
-
-        "route.held": "маршрут закрыт",
-        "route.tag": "маршрут",
-        "split": "Раздельная маршрутизация",
-        "split.d": "Мимо — через прямой маршрут до лофта.",
-        "split.sub": "Мимо идёт через прямой маршрут, запомненный до лофта. Даже если лофт закрыт.",
-        "split.sub.off": "Выкл — списки не ставятся в систему.",
-        "split.native": "прямой 192.168.1.1 · en0",
-        "split.via": "Через лофт",
-        "split.bypass": "Мимо лофта",
-        "split.via.short": "через",
-        "split.bypass.short": "мимо",
-        "split.region": "Регион",
-        "split.region.ru": "RU",
-        "split.region.ch": "CH",
-        "split.region.global": "Global",
-        "split.region.ru.d": "Россия",
-        "split.region.ch.d": "Китай",
-        "split.region.global.d": "Мир",
-        "split.rdef": "По умолчанию",
-        "split.inherit": "Как регион",
-        "split.search": "Найти сервис",
-        "split.empty": "В этом регионе пока пусто.",
-        "split.add": "Добавить",
-        "split.nets": "сетей",
-        "split.net": "сеть",
-        "split.src.repo": "репо",
-        "split.src.me": "свои",
-        "split.repo": "Репозиторий",
-        "split.import.title": "Импорт маршрутов",
-        "split.import.body": "Keenetic .bat или loft-routes. Комментарий :: rem — имя сервиса.",
-        "split.import.drop": "Перетащите .bat или .loft-routes",
-        "split.import.detect": "Keenetic · 214 строк · без направления",
-        "split.import.where": "Куда положить",
-        "split.import.go": "Добавить 214 маршрутов",
-        "split.export.title": "Экспорт маршрутов",
-        "split.export.body": "Keenetic поймёт оба. Loft пишет имя сервиса и направление в комментарии.",
-        "split.export.fmt": "Формат",
-        "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
-        "split.export.which": "Какой список",
-        "split.export.save": "Сохранить loft-routes.bat",
-        "split.export.save.keen": "Сохранить YouTube.bat",
-        "split.repo.body": "Raw .bat с GitHub или своего хоста. Обычно это «через лофт».",
-        "split.repo.url": "Адрес списка",
-        "split.repo.auto": "Обновлять самим",
-        "split.repo.auto.d": "Раз в сутки, свои записи не затирает.",
-        "split.repo.last": "Сегодня · 214 маршрутов",
-        "split.repo.pull": "Обновить сейчас",
-        "split.add.title": "Сеть",
-        "split.add.body": "Адрес или CIDR. Имя сервиса — чтобы в списке было понятно.",
-        "split.add.net": "Сеть или адрес",
-        "split.add.name": "Сервис",
-        "split.add.go": "Добавить",
-        "pref.select.d": "порядок outbound в YAML",
-        "pref.lang": "Язык интерфейса",
-        "pref.lang.d": "меняется сразу",
-        "pref.lang.ru": "Русский",
-        "pref.lang.en": "English",
-        "pref.lang.de": "Deutsch",
-        "pref.lang.fr": "Français",
-        "pref.lang.pt": "Português",
-        "pref.lang.zh": "中文",
-        "pref.diag": "Расширенный журнал",
-        "pref.diag.d": "Маршруты, DNS, loft-priv. Файл с ротацией.",
-        "pref.upd": "Проверять обновления при запуске",
-        "pref.upd.d": "GitHub latest, когда loft открывается.",
-        "upd.later": "Позже",
-        "upd.quiet": "Не спрашивать снова",
-        "upd.quiet.d": "Выключит проверку при запуске.",
-        "upd.offer.title": "Обновление loft",
-        "upd.offer.body": "Скачать и заменить это приложение.",
-        "upd.install": "Обновить до 1.0.10",
-        "about.ver": "1.0.9",
-        "about.proto": "протоколы",
-        "about.loft": "loft/1.0",
-        "about.loft.v": "get · ws · h2 · quic · h3 · mask",
-        "about.sstp": "SSTP",
-        "about.sstp.v": "ppp · mschapv2 · pap",
-        "about.vless": "VLESS",
-        "about.vless.v": "tcp · tls · reality · xhttp",
-        "about.trojan": "Trojan",
-        "about.trojan.v": "tcp · tls · reality · xhttp",
-        "about.blurb": "С улицы — обычный HTTPS.<br>Внутри горит своя сеть.",
-        "live": "get · live",
-        "conn": "Подключение",
-        "conns": "Подключения",
-        "conns.sub": "Каждое — свой ключ и адрес. Активное одно.",
-        "conns.sub.multi": "Каждое открывается отдельно.",
-        "conns.multi": "Несколько",
-        "conn.active": "активно",
-        "conn.up": "открыто",
-        "conn.down": "закрыто",
-        "conn.err": "ошибка",
-        "conn.fail": "не удалось",
-        "conn.retry": "Повторить",
-        "conn.retry.wait": "Повтор (%d)",
-        "conn.cancel": "Отмена",
-        "edit": "Править",
-        "edit.title": "Подключение",
-        "edit.name": "Имя",
-        "edit.save": "Сохранить",
-        "edit.delete": "Удалить",
-        "edit.socks": "SOCKS5",
-        "edit.sstp.dns": "DNS",
-        "edit.sstp.dns.ph": "пусто — с сервера, иначе шлюз",
-        "edit.sstp.dns.replace": "Только эти адреса",
-        "edit.sstp.dns.replace.d": "Не брать DNS с сервера и шлюз PPP.",
-        "edit.dns.ph.loft": "пусто — с ноды",
-        "edit.dns.ph.vless": "адреса через запятую",
-        "edit.dns.system": "DNS в систему",
-        "edit.dns.system.d": "Пока туннель поднят, прописать резолверы в службы сети Mac.",
-        "pref.multi": "Несколько исходящих",
-        "pref.multi.d": "Своё «открыть» и статус у каждого.",
-        "pref.socks.each": "у каждого своё",
-        "open.one": "Открыть",
-        "close.one": "Отключить",
-        "conn.count": "открыто",
-        "conn.add": "Вручную",
-        "import": "Импорт",
-        "export": "Экспорт",
-        "import.title": "Импорт",
-        "import.body": "Файл с ключом и адресом, который вам выдали.",
-        "import.drop": "Перетащите сюда client.yaml, .loft или .vpn",
-        "import.pick": "Выбрать файл…",
-        "export.title": "Экспорт",
-        "export.body": "Сохранить текущее подключение файлом.",
-        "export.save": "Сохранить Офис.loft",
-        "export.warn": "В файле есть ключ доступа. Не передавайте посторонним.",
-        "key.orfile": "Или импортировать файл",
-      },
-      en: {
-        "board.sub": "Menu-bar agent. Mock v1: key, front, SOCKS5.",
-        "board.lang": "Language",
-        "board.scenes": "Scenes",
-        "nav.hero": "Overview",
-        "nav.onboard": "Key",
-        "nav.url": "Address",
-        "nav.off": "Popover · closed",
-        "nav.on": "Popover · open",
-        "nav.err": "Popover · error",
-        "nav.hold": "Popover · route",
-        "nav.main": "Status",
-        "nav.out": "Fronts",
-        "nav.list": "Connections",
-        "nav.edit": "Edit",
-        "nav.editvless": "Edit · VLESS",
-        "edit.vless.link": "Link",
-        "edit.vless.manual": "Manual",
-        "edit.vless.url": "vless:// link",
-        "edit.vless.uuid": "UUID",
-        "edit.vless.host": "Address",
-        "edit.vless.port": "Port",
-        "edit.vless.sec": "Security",
-        "edit.vless.tls": "TLS",
-        "edit.vless.reality": "REALITY",
-        "edit.vless.net": "Transport",
-        "edit.vless.tcp": "TCP",
-        "edit.vless.xhttp": "XHTTP",
-        "edit.vless.sni": "TLS hostname",
-        "edit.vless.fp": "TLS fingerprint",
-        "edit.vless.pbk": "Public key",
-        "edit.vless.sid": "Short ID",
-        "edit.vless.vision": "Vision",
-        "edit.vless.vision.d": "xtls-rprx-vision on TCP.",
-        "edit.main": "Connection",
-        "edit.adv": "Advanced",
-        "vpn.type": "VPN type",
-        "nav.switch": "Popover · switch",
-        "nav.import": "Import",
-        "nav.export": "Export",
-        "nav.set": "Settings",
-        "nav.split": "Routes",
-        "nav.splitin": "Import routes",
-        "nav.splitout": "Export routes",
-        "nav.splitrepo": "Repository",
-        "nav.about": "About",
-        "nav.upd": "Update",
-        "status.off": "loft closed",
-        "status.closed": "closed",
-        "connect": "Open loft",
-        "disconnect": "Disconnect",
-        "front": "Front",
-        "session.none": "no session",
-        "open": "Open loft",
-        "quit": "Quit",
-        "key.title": "Access key",
-        "key.body": "Enter the access key you were given.",
-        "key.hint": "It starts with lt_. Shown once — keep it.",
-        "key.step": "Step 1 of 2",
-        "continue": "Continue",
-        "back": "Back",
-        "url.title": "Address",
-        "url.body": "Enter the address you were given with the key.",
-        "url.step": "Step 2 of 2",
-        "url.label": "URL",
-        "url.type": "How to connect",
-        "url.get": "GET",
-        "url.ws": "WS",
-        "url.h2": "H2",
-        "url.quic": "QUIC",
-        "url.h3": "H3",
-        "url.path": "Path (if they gave you one)",
-        "url.hint": "HTTPS. GET looks like a file, WS is a channel, H2/H3 are CONNECT, QUIC is UDP.",
-        "url.go": "Open loft",
-        "settings": "Settings",
-        "set.gen": "General",
-        "set.client": "Client",
-        "journal": "Journal",
-        "pref.defaults": "Defaults",
-        "pref.login": "Open at login",
-        "pref.login.d": "Login item, no window",
-        "pref.dock": "Show Dock icon",
-        "pref.dock.d": "The menu-bar icon stays.",
-        "pref.dock.always": "Always",
-        "pref.dock.window": "When a window is open",
-        "pref.dock.never": "Never",
-        "pref.auto": "Connect automatically",
-        "pref.auto.d": "After a key and a live front",
-        "pref.reconnect": "Automatic reconnect",
-        "pref.reconnect.d": "If it drops, open loft again.",
-        "pref.simple": "Simplified interface",
-        "pref.simple.d": "Menu and windows: open and close.",
-        "pref.rate": "Speed units",
-        "pref.rate.d": "How ↑↓ is shown in the menu and status window.",
-        "pref.rate.kbit": "kbps",
-        "pref.rate.kb": "kB/s",
-        "pref.socks.d": "local app inbound",
-        "pref.socks.share": "Shared SOCKS",
-        "pref.socks.share.d": "One port from Settings. Split rules, if split is on.",
-        "pref.socks.share.off": "A port per connection.",
-        "pref.socks.port": "SOCKS5 port",
-        "pref.socks.port.d": "Local inbound. A connection can set its own.",
-        "pref.tun.d": "next, tun2socks for now",
-        "pref.off": "off",
-        "pop.overlay": "Overlay IP",
-        "pref.route": "Route",
-        "edit.tun": "Tunnel interface",
-        "edit.tun.d": "Our address on the interface. The machine default is in Settings, off unless you turn it on.",
-        "pop.tun": "Tunnel",
-        "pop.setup": "Settings",
-        "pref.fail": "Hand off to a live one",
-        "pref.fail.d": "If it drops, the route moves to another tunnel.",
-        "pref.default_route": "Allow default route",
-        "pref.default_route.d": "Send all internet through loft. Off — loft net only.",
-        "pref.hold": "Don’t restore direct internet",
-        "pref.hold.d": "Last tunnel died — the machine stays dark.",
-        "route.reset": "Reset routes",
-        "route.reset.d": "Give this machine its direct internet back.",
-
-        "route.held": "route held",
-        "route.tag": "route",
-        "split": "Split routing",
-        "split.d": "Around loft uses the direct route from before loft.",
-        "split.sub": "Around loft uses the direct route remembered before loft. Works even when loft is closed.",
-        "split.sub.off": "Off — lists stay out of the system table.",
-        "split.native": "direct 192.168.1.1 · en0",
-        "split.via": "Through loft",
-        "split.bypass": "Around loft",
-        "split.via.short": "through",
-        "split.bypass.short": "around",
-        "split.region": "Region",
-        "split.region.ru": "RU",
-        "split.region.ch": "CH",
-        "split.region.global": "Global",
-        "split.region.ru.d": "Russia",
-        "split.region.ch.d": "China",
-        "split.region.global.d": "World",
-        "split.rdef": "Default",
-        "split.inherit": "As the region",
-        "split.search": "Find a service",
-        "split.empty": "Nothing in this region yet.",
-        "split.add": "Add",
-        "split.nets": "nets",
-        "split.net": "net",
-        "split.src.repo": "repo",
-        "split.src.me": "mine",
-        "split.repo": "Repository",
-        "split.import.title": "Import routes",
-        "split.import.body": "Keenetic .bat or loft-routes. :: rem is the service name.",
-        "split.import.drop": "Drop a .bat or .loft-routes file",
-        "split.import.detect": "Keenetic · 214 lines · no direction",
-        "split.import.where": "Put them",
-        "split.import.go": "Add 214 routes",
-        "split.export.title": "Export routes",
-        "split.export.body": "Keenetic reads both. Loft writes the service name and direction in the rem.",
-        "split.export.fmt": "Format",
-        "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
-        "split.export.which": "Which list",
-        "split.export.save": "Save loft-routes.bat",
-        "split.export.save.keen": "Save YouTube.bat",
-        "split.repo.body": "Raw .bat from GitHub or your host. Usually the through-loft list.",
-        "split.repo.url": "List URL",
-        "split.repo.auto": "Update on its own",
-        "split.repo.auto.d": "Once a day. Leaves your own rows alone.",
-        "split.repo.last": "Today · 214 routes",
-        "split.repo.pull": "Update now",
-        "split.add.title": "Network",
-        "split.add.body": "Address or CIDR. Service name is what you see in the list.",
-        "split.add.net": "Network or address",
-        "split.add.name": "Service",
-        "split.add.go": "Add",
-        "pref.select.d": "outbound order in YAML",
-        "pref.lang": "Language",
-        "pref.lang.d": "takes effect immediately",
-        "pref.lang.ru": "Русский",
-        "pref.lang.en": "English",
-        "pref.lang.de": "Deutsch",
-        "pref.lang.fr": "Français",
-        "pref.lang.pt": "Português",
-        "pref.lang.zh": "中文",
-        "pref.diag": "Extended journal",
-        "pref.diag.d": "Routes, DNS, loft-priv. Rotating file.",
-        "pref.upd": "Check for updates at launch",
-        "pref.upd.d": "GitHub latest when loft opens.",
-        "upd.later": "Later",
-        "upd.quiet": "Don’t ask again",
-        "upd.quiet.d": "Turns off check at launch.",
-        "upd.offer.title": "loft update",
-        "upd.offer.body": "Download and replace this app.",
-        "upd.install": "Update to 1.0.10",
-        "about.ver": "1.0.9",
-        "about.proto": "protocols",
-        "about.loft": "loft/1.0",
-        "about.loft.v": "get · ws · h2 · quic · h3 · mask",
-        "about.sstp": "SSTP",
-        "about.sstp.v": "ppp · mschapv2 · pap",
-        "about.vless": "VLESS",
-        "about.vless.v": "tcp · tls · reality · xhttp",
-        "about.trojan": "Trojan",
-        "about.trojan.v": "tcp · tls · reality · xhttp",
-        "about.blurb": "From the street — ordinary HTTPS.<br>Inside, a network of your own.",
-        "live": "get · live",
-        "conn": "Connection",
-        "conns": "Connections",
-        "conns.sub": "Each has its own key and address. One is active.",
-        "conns.sub.multi": "Each opens on its own.",
-        "conns.multi": "Multiple",
-        "conn.active": "active",
-        "conn.up": "open",
-        "conn.down": "closed",
-        "conn.err": "error",
-        "conn.fail": "failed",
-        "conn.retry": "Retry",
-        "conn.retry.wait": "Retry (%d)",
-        "conn.cancel": "Cancel",
-        "edit": "Edit",
-        "edit.title": "Connection",
-        "edit.name": "Name",
-        "edit.save": "Save",
-        "edit.delete": "Delete",
-        "edit.socks": "SOCKS5",
-        "edit.sstp.dns": "DNS",
-        "edit.sstp.dns.ph": "empty — from the server, else the gateway",
-        "edit.sstp.dns.replace": "These addresses only",
-        "edit.sstp.dns.replace.d": "Skip the server and the PPP gateway.",
-        "edit.dns.ph.loft": "empty — from the node",
-        "edit.dns.ph.vless": "comma-separated addresses",
-        "edit.dns.system": "DNS into the system",
-        "edit.dns.system.d": "While the tunnel is up, write resolvers into the Mac network services.",
-        "pref.multi": "Multiple outbounds",
-        "pref.multi.d": "Each has its own Open and status.",
-        "pref.socks.each": "per connection",
-        "open.one": "Open",
-        "close.one": "Disconnect",
-        "conn.count": "open",
-        "conn.add": "Manual",
-        "import": "Import",
-        "export": "Export",
-        "import.title": "Import",
-        "import.body": "The file with the key and address you were given.",
-        "import.drop": "Drop a client.yaml, .loft or .vpn here",
-        "import.pick": "Choose file…",
-        "export.title": "Export",
-        "export.body": "Save the current connection as a file.",
-        "export.save": "Save Office.loft",
-        "export.warn": "The file contains the access key. Don’t share it with anyone.",
-        "key.orfile": "Or import a file",
-      },
-      de: {
-        "board.sub": "Menu-bar-Agent. Mock v1: Schlüssel, Front, SOCKS5.",
-        "board.lang": "Sprache",
-        "board.scenes": "Szenen",
-        "nav.hero": "Übersicht",
-        "nav.onboard": "Schlüssel",
-        "nav.url": "Adresse",
-        "nav.off": "Popover · geschlossen",
-        "nav.on": "Popover · offen",
-        "nav.err": "Popover · Fehler",
-        "nav.hold": "Popover · Route",
-        "nav.main": "Status",
-        "nav.out": "Fronts",
-        "nav.list": "Verbindungen",
-        "nav.edit": "Bearbeiten",
-        "nav.editvless": "Bearbeiten · VLESS",
-        "edit.vless.link": "Link",
-        "edit.vless.manual": "Manuell",
-        "edit.vless.url": "vless://-Link",
-        "edit.vless.uuid": "UUID",
-        "edit.vless.host": "Adresse",
-        "edit.vless.port": "Port",
-        "edit.vless.sec": "Schutz",
-        "edit.vless.tls": "TLS",
-        "edit.vless.reality": "REALITY",
-        "edit.vless.net": "Transport",
-        "edit.vless.tcp": "TCP",
-        "edit.vless.xhttp": "XHTTP",
-        "edit.vless.sni": "TLS-Hostname",
-        "edit.vless.fp": "TLS-Fingerabdruck",
-        "edit.vless.pbk": "Öffentlicher Schlüssel",
-        "edit.vless.sid": "Short ID",
-        "edit.vless.vision": "Vision",
-        "edit.vless.vision.d": "xtls-rprx-vision auf TCP.",
-        "edit.main": "Verbindung",
-        "edit.adv": "Erweitert",
-        "vpn.type": "VPN-Typ",
-        "nav.switch": "Popover · Wechsel",
-        "nav.import": "Import",
-        "nav.export": "Export",
-        "nav.set": "Einstellungen",
-        "nav.split": "Routen",
-        "nav.splitin": "Routen importieren",
-        "nav.splitout": "Routen exportieren",
-        "nav.splitrepo": "Repository",
-        "nav.about": "Über loft",
-        "nav.upd": "Update",
-        "status.off": "loft geschlossen",
-        "status.closed": "geschlossen",
-        "connect": "Loft öffnen",
-        "disconnect": "Trennen",
-        "front": "Front",
-        "session.none": "keine Sitzung",
-        "open": "Loft öffnen",
-        "quit": "Beenden",
-        "key.title": "Zugangsschlüssel",
-        "key.body": "Geben Sie den Zugangsschlüssel ein, den Sie bekommen haben.",
-        "key.hint": "Beginnt mit lt_. Einmal gezeigt — behalten.",
-        "key.step": "Schritt 1 von 2",
-        "continue": "Weiter",
-        "back": "Zurück",
-        "url.title": "Adresse",
-        "url.body": "Geben Sie die Adresse ein, die Sie mit dem Schlüssel bekommen haben.",
-        "url.step": "Schritt 2 von 2",
-        "url.label": "URL",
-        "url.type": "Wie verbinden",
-        "url.get": "GET",
-        "url.ws": "WS",
-        "url.h2": "H2",
-        "url.quic": "QUIC",
-        "url.h3": "H3",
-        "url.path": "Pfad (falls angegeben)",
-        "url.hint": "HTTPS. GET wie eine Datei, WS ein Kanal, H2/H3 CONNECT, QUIC UDP.",
-        "url.go": "Loft öffnen",
-        "settings": "Einstellungen",
-        "set.gen": "Allgemein",
-        "set.client": "Client",
-        "journal": "Journal",
-        "pref.defaults": "Standard",
-        "pref.login": "Beim Anmelden öffnen",
-        "pref.login.d": "Login-Objekt, ohne Fenster",
-        "pref.dock": "Dock-Symbol anzeigen",
-        "pref.dock.d": "Das Menüleisten-Symbol bleibt.",
-        "pref.dock.always": "Immer",
-        "pref.dock.window": "Wenn ein Fenster offen ist",
-        "pref.dock.never": "Nie",
-        "pref.auto": "Automatisch verbinden",
-        "pref.auto.d": "Nach Schlüssel und lebendem Front",
-        "pref.reconnect": "Automatisch erneut verbinden",
-        "pref.reconnect.d": "Wenn sie abreißt — loft wieder öffnen.",
-        "pref.simple": "Vereinfachte Oberfläche",
-        "pref.simple.d": "Menü und Fenster: öffnen und schließen.",
-        "pref.rate": "Geschwindigkeitseinheiten",
-        "pref.rate.d": "Wie ↑↓ in Menü und Statusfenster erscheint.",
-        "pref.rate.kbit": "kbit/s",
-        "pref.rate.kb": "kB/s",
-        "pref.socks.d": "lokaler App-Eingang",
-        "pref.socks.share": "Gemeinsames SOCKS",
-        "pref.socks.share.d": "Ein Port aus den Einstellungen. Split-Regeln, wenn Split an ist.",
-        "pref.socks.share.off": "Ein Port pro Verbindung.",
-        "pref.socks.port": "SOCKS5-Port",
-        "pref.socks.port.d": "Lokaler Eingang. Eine Verbindung kann einen eigenen setzen.",
-        "pref.tun.d": "als Nächstes, vorerst tun2socks",
-        "pref.off": "aus",
-        "pop.overlay": "Overlay IP",
-        "pref.route": "Route",
-        "edit.tun": "Tunnel-Interface",
-        "edit.tun.d": "Unsere Adresse auf dem Interface. Die Maschinen-Default steht in Einstellungen, standardmäßig aus.",
-        "pop.tun": "Tunnel",
-        "pop.setup": "Einstellungen",
-        "pref.fail": "An eine lebende übergeben",
-        "pref.fail.d": "Wenn sie abreißt, wandert die Route zum anderen Tunnel.",
-        "pref.default_route": "Standardroute erlauben",
-        "pref.default_route.d": "Das ganze Internet durch loft. Aus — nur das loft-Netz.",
-        "pref.hold": "Direktes Internet nicht wiederherstellen",
-        "pref.hold.d": "Letzter Tunnel tot — die Maschine bleibt dunkel.",
-        "route.reset": "Routen zurücksetzen",
-        "route.reset.d": "Dieser Maschine das direkte Internet zurückgeben.",
-        "route.held": "Route gehalten",
-        "route.tag": "Route",
-        "split": "Getrennte Routen",
-        "split.d": "An loft vorbei nutzt die direkte Route von vor loft.",
-        "split.sub": "An loft vorbei nutzt die direkte Route, die vor loft gemerkt wurde. Auch wenn loft zu ist.",
-        "split.sub.off": "Aus — Listen kommen nicht in die Systemtabelle.",
-        "split.native": "direkt 192.168.1.1 · en0",
-        "split.via": "Durch loft",
-        "split.bypass": "An loft vorbei",
-        "split.via.short": "durch",
-        "split.bypass.short": "vorbei",
-        "split.region": "Region",
-        "split.region.ru": "RU",
-        "split.region.ch": "CH",
-        "split.region.global": "Global",
-        "split.region.ru.d": "Russland",
-        "split.region.ch.d": "China",
-        "split.region.global.d": "Welt",
-        "split.rdef": "Standard",
-        "split.inherit": "Wie die Region",
-        "split.search": "Dienst suchen",
-        "split.empty": "In dieser Region noch nichts.",
-        "split.add": "Hinzufügen",
-        "split.nets": "Netze",
-        "split.net": "Netz",
-        "split.src.repo": "Repo",
-        "split.src.me": "eigene",
-        "split.repo": "Repository",
-        "split.import.title": "Routen importieren",
-        "split.import.body": "Keenetic .bat oder loft-routes. :: rem ist der Dienstname.",
-        "split.import.drop": ".bat oder .loft-routes ablegen",
-        "split.import.detect": "Keenetic · 214 Zeilen · ohne Richtung",
-        "split.import.where": "Wohin legen",
-        "split.import.go": "214 Routen hinzufügen",
-        "split.export.title": "Routen exportieren",
-        "split.export.body": "Keenetic liest beide. Loft schreibt Dienstname und Richtung in den rem.",
-        "split.export.fmt": "Format",
-        "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
-        "split.export.which": "Welche Liste",
-        "split.export.save": "loft-routes.bat speichern",
-        "split.export.save.keen": "YouTube.bat speichern",
-        "split.repo.body": "Raw .bat von GitHub oder dem eigenen Host. Meist die Durch-loft-Liste.",
-        "split.repo.url": "Listen-URL",
-        "split.repo.auto": "Von selbst aktualisieren",
-        "split.repo.auto.d": "Einmal am Tag. Eigene Zeilen bleiben.",
-        "split.repo.last": "Heute · 214 Routen",
-        "split.repo.pull": "Jetzt aktualisieren",
-        "split.add.title": "Netz",
-        "split.add.body": "Adresse oder CIDR. Der Dienstname ist, was du in der Liste siehst.",
-        "split.add.net": "Netz oder Adresse",
-        "split.add.name": "Dienst",
-        "split.add.go": "Hinzufügen",
-        "pref.select.d": "Outbound-Reihenfolge in YAML",
-        "pref.lang": "Sprache der Oberfläche",
-        "pref.lang.d": "wirkt sofort",
-        "pref.lang.ru": "Русский",
-        "pref.lang.en": "English",
-        "pref.lang.de": "Deutsch",
-        "pref.lang.fr": "Français",
-        "pref.lang.pt": "Português",
-        "pref.lang.zh": "中文",
-        "pref.diag": "Erweitertes Journal",
-        "pref.diag.d": "Routen, DNS, loft-priv. Rotierende Datei.",
-        "pref.upd": "Beim Start nach Updates suchen",
-        "pref.upd.d": "GitHub latest, wenn loft startet.",
-        "upd.later": "Später",
-        "upd.quiet": "Nicht mehr fragen",
-        "upd.quiet.d": "Schaltet die Prüfung beim Start aus.",
-        "upd.offer.title": "loft-Update",
-        "upd.offer.body": "Diese App herunterladen und ersetzen.",
-        "upd.install": "Aktualisieren auf 1.0.10",
-        "about.ver": "1.0.9",
-        "about.proto": "Protokolle",
-        "about.loft": "loft/1.0",
-        "about.loft.v": "get · ws · h2 · quic · h3 · mask",
-        "about.sstp": "SSTP",
-        "about.sstp.v": "ppp · mschapv2 · pap",
-        "about.vless": "VLESS",
-        "about.vless.v": "tcp · tls · reality · xhttp",
-        "about.trojan": "Trojan",
-        "about.trojan.v": "tcp · tls · reality · xhttp",
-        "about.blurb": "Von der Straße — ganz normales HTTPS.<br>Innen brennt ein eigenes Netz.",
-        "live": "get · live",
-        "conn": "Verbindung",
-        "conns": "Verbindungen",
-        "conns.sub": "Jede hat eigenen Schlüssel und Adresse. Eine ist aktiv.",
-        "conns.sub.multi": "Jede öffnet für sich.",
-        "conns.multi": "Mehrere",
-        "conn.active": "aktiv",
-        "conn.up": "offen",
-        "conn.down": "geschlossen",
-        "conn.err": "Fehler",
-        "conn.fail": "fehlgeschlagen",
-        "conn.retry": "Wiederholen",
-        "conn.retry.wait": "Wiederholen (%d)",
-        "conn.cancel": "Abbrechen",
-        "edit": "Bearbeiten",
-        "edit.title": "Verbindung",
-        "edit.name": "Name",
-        "edit.save": "Speichern",
-        "edit.delete": "Löschen",
-        "edit.socks": "SOCKS5",
-        "edit.sstp.dns": "DNS",
-        "edit.sstp.dns.ph": "leer — vom Server, sonst das Gateway",
-        "edit.sstp.dns.replace": "Nur diese Adressen",
-        "edit.sstp.dns.replace.d": "Server und PPP-Gateway überspringen.",
-        "edit.dns.ph.loft": "leer — von der Node",
-        "edit.dns.ph.vless": "Adressen, kommagetrennt",
-        "edit.dns.system": "DNS ins System",
-        "edit.dns.system.d": "Solange der Tunnel oben ist, Resolver in die Mac-Netzwerkdienste schreiben.",
-        "pref.multi": "Mehrere Ausgänge",
-        "pref.multi.d": "Eigenes Öffnen und eigener Status für jedes.",
-        "pref.socks.each": "pro Verbindung",
-        "open.one": "Öffnen",
-        "close.one": "Trennen",
-        "conn.count": "offen",
-        "conn.add": "Manuell",
-        "import": "Import",
-        "export": "Export",
-        "import.title": "Import",
-        "import.body": "Die Datei mit Schlüssel und Adresse, die Sie bekommen haben.",
-        "import.drop": "client.yaml, .loft oder .vpn hier ablegen",
-        "import.pick": "Datei wählen…",
-        "export.title": "Export",
-        "export.body": "Die aktuelle Verbindung als Datei speichern.",
-        "export.save": "Office.loft speichern",
-        "export.warn": "Die Datei enthält den Zugangsschlüssel. Nicht weitergeben.",
-        "key.orfile": "Oder Datei importieren",
-      },
-      fr: {
-        "board.sub": "Agent barre de menus. Maquette v1 : clé, front, SOCKS5.",
-        "board.lang": "Langue",
-        "board.scenes": "Scènes",
-        "nav.hero": "Aperçu",
-        "nav.onboard": "Clé",
-        "nav.url": "Adresse",
-        "nav.off": "Popover · fermé",
-        "nav.on": "Popover · ouvert",
-        "nav.err": "Popover · erreur",
-        "nav.hold": "Popover · route",
-        "nav.main": "État",
-        "nav.out": "Fronts",
-        "nav.list": "Connexions",
-        "nav.edit": "Modifier",
-        "nav.editvless": "Modifier · VLESS",
-        "edit.vless.link": "Lien",
-        "edit.vless.manual": "Manuel",
-        "edit.vless.url": "Lien vless://",
-        "edit.vless.uuid": "UUID",
-        "edit.vless.host": "Adresse",
-        "edit.vless.port": "Port",
-        "edit.vless.sec": "Sécurité",
-        "edit.vless.tls": "TLS",
-        "edit.vless.reality": "REALITY",
-        "edit.vless.net": "Transport",
-        "edit.vless.tcp": "TCP",
-        "edit.vless.xhttp": "XHTTP",
-        "edit.vless.sni": "Nom d’hôte TLS",
-        "edit.vless.fp": "Empreinte TLS",
-        "edit.vless.pbk": "Clé publique",
-        "edit.vless.sid": "Short ID",
-        "edit.vless.vision": "Vision",
-        "edit.vless.vision.d": "xtls-rprx-vision sur TCP.",
-        "edit.main": "Connexion",
-        "edit.adv": "Avancé",
-        "vpn.type": "Type de VPN",
-        "nav.switch": "Popover · changement",
-        "nav.import": "Importer",
-        "nav.export": "Exporter",
-        "nav.set": "Réglages",
-        "nav.split": "Routes",
-        "nav.splitin": "Importer des routes",
-        "nav.splitout": "Exporter des routes",
-        "nav.splitrepo": "Dépôt",
-        "nav.about": "À propos",
-        "nav.upd": "Mise à jour",
-        "status.off": "loft fermé",
-        "status.closed": "fermé",
-        "connect": "Ouvrir loft",
-        "disconnect": "Déconnecter",
-        "front": "Front",
-        "session.none": "pas de session",
-        "open": "Ouvrir loft",
-        "quit": "Quitter",
-        "key.title": "Clé d’accès",
-        "key.body": "Entrez la clé d’accès qu’on vous a donnée.",
-        "key.hint": "Elle commence par lt_. Montrée une fois — gardez-la.",
-        "key.step": "Étape 1 sur 2",
-        "continue": "Continuer",
-        "back": "Retour",
-        "url.title": "Adresse",
-        "url.body": "Entrez l’adresse donnée avec la clé.",
-        "url.step": "Étape 2 sur 2",
-        "url.label": "URL",
-        "url.type": "Comment se connecter",
-        "url.get": "GET",
-        "url.ws": "WS",
-        "url.h2": "H2",
-        "url.quic": "QUIC",
-        "url.h3": "H3",
-        "url.path": "Chemin (s’ils vous l’ont donné)",
-        "url.hint": "HTTPS. GET comme un fichier, WS un canal, H2/H3 CONNECT, QUIC UDP.",
-        "url.go": "Ouvrir loft",
-        "settings": "Réglages",
-        "set.gen": "Général",
-        "set.client": "Client",
-        "journal": "Journal",
-        "pref.defaults": "Par défaut",
-        "pref.login": "Ouvrir à la connexion",
-        "pref.login.d": "Login item, sans fenêtre",
-        "pref.dock": "Afficher l’icône du Dock",
-        "pref.dock.d": "L’icône de la barre de menus reste.",
-        "pref.dock.always": "Toujours",
-        "pref.dock.window": "Quand une fenêtre est ouverte",
-        "pref.dock.never": "Jamais",
-        "pref.auto": "Connecter automatiquement",
-        "pref.auto.d": "Après une clé et un front vivant",
-        "pref.reconnect": "Reconnexion automatique",
-        "pref.reconnect.d": "Si ça coupe, rouvrir loft.",
-        "pref.simple": "Interface simplifiée",
-        "pref.simple.d": "Menu et fenêtres : ouvrir et fermer.",
-        "pref.rate": "Unités de débit",
-        "pref.rate.d": "Comment ↑↓ s’affiche dans le menu et la fenêtre d’état.",
-        "pref.rate.kbit": "kbit/s",
-        "pref.rate.kb": "ko/s",
-        "pref.socks.d": "entrée locale des apps",
-        "pref.socks.share": "SOCKS partagé",
-        "pref.socks.share.d": "Un port depuis Réglages. Règles de split, si le split est activé.",
-        "pref.socks.share.off": "Un port par connexion.",
-        "pref.socks.port": "Port SOCKS5",
-        "pref.socks.port.d": "Entrée locale. Une connexion peut en fixer un à elle.",
-        "pref.tun.d": "ensuite, tun2socks pour l’instant",
-        "pref.off": "off",
-        "pop.overlay": "Overlay IP",
-        "pref.route": "Route",
-        "edit.tun": "Interface du tunnel",
-        "edit.tun.d": "Notre adresse sur l’interface. La route de la machine est dans Réglages, off par défaut.",
-        "pop.tun": "Tunnel",
-        "pop.setup": "Réglages",
-        "pref.fail": "Passer à une active",
-        "pref.fail.d": "Si ça coupe, la route passe à un autre tunnel.",
-        "pref.default_route": "Autoriser la route par défaut",
-        "pref.default_route.d": "Tout l’internet via loft. Off — uniquement le réseau loft.",
-        "pref.hold": "Ne pas rétablir l’internet direct",
-        "pref.hold.d": "Le dernier tunnel est mort — la machine reste sombre.",
-        "route.reset": "Réinitialiser les routes",
-        "route.reset.d": "Rendre à cette machine son internet direct.",
-        "route.held": "route retenue",
-        "route.tag": "route",
-        "split": "Routage séparé",
-        "split.d": "Autour de loft utilise la route directe d’avant loft.",
-        "split.sub": "Autour de loft utilise la route directe mémorisée avant loft. Même si loft est fermé.",
-        "split.sub.off": "Off — les listes restent hors de la table système.",
-        "split.native": "direct 192.168.1.1 · en0",
-        "split.via": "Via loft",
-        "split.bypass": "Autour de loft",
-        "split.via.short": "via",
-        "split.bypass.short": "autour",
-        "split.region": "Région",
-        "split.region.ru": "RU",
-        "split.region.ch": "CH",
-        "split.region.global": "Global",
-        "split.region.ru.d": "Russie",
-        "split.region.ch.d": "Chine",
-        "split.region.global.d": "Monde",
-        "split.rdef": "Par défaut",
-        "split.inherit": "Comme la région",
-        "split.search": "Trouver un service",
-        "split.empty": "Rien dans cette région pour l’instant.",
-        "split.add": "Ajouter",
-        "split.nets": "réseaux",
-        "split.net": "réseau",
-        "split.src.repo": "dépôt",
-        "split.src.me": "à moi",
-        "split.repo": "Dépôt",
-        "split.import.title": "Importer des routes",
-        "split.import.body": "Keenetic .bat ou loft-routes. :: rem est le nom du service.",
-        "split.import.drop": "Déposez un fichier .bat ou .loft-routes",
-        "split.import.detect": "Keenetic · 214 lignes · sans direction",
-        "split.import.where": "Où les mettre",
-        "split.import.go": "Ajouter 214 routes",
-        "split.export.title": "Exporter des routes",
-        "split.export.body": "Keenetic lit les deux. Loft écrit le nom du service et la direction dans le rem.",
-        "split.export.fmt": "Format",
-        "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
-        "split.export.which": "Quelle liste",
-        "split.export.save": "Enregistrer loft-routes.bat",
-        "split.export.save.keen": "Enregistrer YouTube.bat",
-        "split.repo.body": "Raw .bat depuis GitHub ou votre hôte. En général la liste via loft.",
-        "split.repo.url": "URL de la liste",
-        "split.repo.auto": "Mettre à jour tout seul",
-        "split.repo.auto.d": "Une fois par jour. Laisse vos propres lignes.",
-        "split.repo.last": "Aujourd’hui · 214 routes",
-        "split.repo.pull": "Mettre à jour maintenant",
-        "split.add.title": "Réseau",
-        "split.add.body": "Adresse ou CIDR. Le nom du service est ce que vous voyez dans la liste.",
-        "split.add.net": "Réseau ou adresse",
-        "split.add.name": "Service",
-        "split.add.go": "Ajouter",
-        "pref.select.d": "ordre des outbounds dans le YAML",
-        "pref.lang": "Langue de l’interface",
-        "pref.lang.d": "prend effet tout de suite",
-        "pref.lang.ru": "Русский",
-        "pref.lang.en": "English",
-        "pref.lang.de": "Deutsch",
-        "pref.lang.fr": "Français",
-        "pref.lang.pt": "Português",
-        "pref.lang.zh": "中文",
-        "pref.diag": "Journal étendu",
-        "pref.diag.d": "Routes, DNS, loft-priv. Fichier rotatif.",
-        "pref.upd": "Vérifier les mises à jour au lancement",
-        "pref.upd.d": "GitHub latest à l’ouverture de loft.",
-        "upd.later": "Plus tard",
-        "upd.quiet": "Ne plus demander",
-        "upd.quiet.d": "Désactive la vérification au lancement.",
-        "upd.offer.title": "Mise à jour loft",
-        "upd.offer.body": "Télécharger et remplacer cette app.",
-        "upd.install": "Mettre à jour vers 1.0.10",
-        "about.ver": "1.0.9",
-        "about.proto": "protocoles",
-        "about.loft": "loft/1.0",
-        "about.loft.v": "get · ws · h2 · quic · h3 · mask",
-        "about.sstp": "SSTP",
-        "about.sstp.v": "ppp · mschapv2 · pap",
-        "about.vless": "VLESS",
-        "about.vless.v": "tcp · tls · reality · xhttp",
-        "about.trojan": "Trojan",
-        "about.trojan.v": "tcp · tls · reality · xhttp",
-        "about.blurb": "Depuis la rue — du HTTPS ordinaire.<br>Dedans, un réseau à soi.",
-        "live": "get · live",
-        "conn": "Connexion",
-        "conns": "Connexions",
-        "conns.sub": "Chacune a sa clé et son adresse. Une seule est active.",
-        "conns.sub.multi": "Chacune s’ouvre toute seule.",
-        "conns.multi": "Plusieurs",
-        "conn.active": "actif",
-        "conn.up": "ouvert",
-        "conn.down": "fermé",
-        "conn.err": "erreur",
-        "conn.fail": "échec",
-        "conn.retry": "Réessayer",
-        "conn.retry.wait": "Réessayer (%d)",
-        "conn.cancel": "Annuler",
-        "edit": "Modifier",
-        "edit.title": "Connexion",
-        "edit.name": "Nom",
-        "edit.save": "Enregistrer",
-        "edit.delete": "Supprimer",
-        "edit.socks": "SOCKS5",
-        "edit.sstp.dns": "DNS",
-        "edit.sstp.dns.ph": "vide — du serveur, sinon la passerelle",
-        "edit.sstp.dns.replace": "Ces adresses seulement",
-        "edit.sstp.dns.replace.d": "Ignorer le serveur et la passerelle PPP.",
-        "edit.dns.ph.loft": "vide — du nœud",
-        "edit.dns.ph.vless": "adresses séparées par des virgules",
-        "edit.dns.system": "DNS dans le système",
-        "edit.dns.system.d": "Tant que le tunnel est ouvert, écrire les résolveurs dans les services réseau du Mac.",
-        "pref.multi": "Plusieurs sorties",
-        "pref.multi.d": "Son propre Ouvrir et son état pour chacun.",
-        "pref.socks.each": "par connexion",
-        "open.one": "Ouvrir",
-        "close.one": "Déconnecter",
-        "conn.count": "ouvert",
-        "conn.add": "Manuel",
-        "import": "Importer",
-        "export": "Exporter",
-        "import.title": "Importer",
-        "import.body": "Le fichier avec la clé et l’adresse qu’on vous a donnés.",
-        "import.drop": "Déposez ici client.yaml, .loft ou .vpn",
-        "import.pick": "Choisir un fichier…",
-        "export.title": "Exporter",
-        "export.body": "Enregistrer la connexion actuelle dans un fichier.",
-        "export.save": "Enregistrer Office.loft",
-        "export.warn": "Le fichier contient la clé d’accès. Ne le donnez à personne.",
-        "key.orfile": "Ou importer un fichier",
-      },
-      pt: {
-        "board.sub": "Agente da barra de menus. Mock v1: chave, front, SOCKS5.",
-        "board.lang": "Idioma",
-        "board.scenes": "Cenas",
-        "nav.hero": "Visão geral",
-        "nav.onboard": "Chave",
-        "nav.url": "Endereço",
-        "nav.off": "Popover · fechado",
-        "nav.on": "Popover · aberto",
-        "nav.err": "Popover · erro",
-        "nav.hold": "Popover · rota",
-        "nav.main": "Status",
-        "nav.out": "Fronts",
-        "nav.list": "Conexões",
-        "nav.edit": "Editar",
-        "nav.editvless": "Editar · VLESS",
-        "edit.vless.link": "Link",
-        "edit.vless.manual": "Manual",
-        "edit.vless.url": "Link vless://",
-        "edit.vless.uuid": "UUID",
-        "edit.vless.host": "Endereço",
-        "edit.vless.port": "Porta",
-        "edit.vless.sec": "Segurança",
-        "edit.vless.tls": "TLS",
-        "edit.vless.reality": "REALITY",
-        "edit.vless.net": "Transporte",
-        "edit.vless.tcp": "TCP",
-        "edit.vless.xhttp": "XHTTP",
-        "edit.vless.sni": "Hostname TLS",
-        "edit.vless.fp": "Impressão TLS",
-        "edit.vless.pbk": "Chave pública",
-        "edit.vless.sid": "Short ID",
-        "edit.vless.vision": "Vision",
-        "edit.vless.vision.d": "xtls-rprx-vision no TCP.",
-        "edit.main": "Conexão",
-        "edit.adv": "Avançado",
-        "vpn.type": "Tipo de VPN",
-        "nav.switch": "Popover · troca",
-        "nav.import": "Importar",
-        "nav.export": "Exportar",
-        "nav.set": "Ajustes",
-        "nav.split": "Rotas",
-        "nav.splitin": "Importar rotas",
-        "nav.splitout": "Exportar rotas",
-        "nav.splitrepo": "Repositório",
-        "nav.about": "Sobre",
-        "nav.upd": "Atualização",
-        "status.off": "loft fechado",
-        "status.closed": "fechado",
-        "connect": "Abrir loft",
-        "disconnect": "Desconectar",
-        "front": "Front",
-        "session.none": "sem sessão",
-        "open": "Abrir loft",
-        "quit": "Sair",
-        "key.title": "Chave de acesso",
-        "key.body": "Digite a chave de acesso que lhe deram.",
-        "key.hint": "Começa com lt_. Mostrada uma vez — guarde.",
-        "key.step": "Passo 1 de 2",
-        "continue": "Continuar",
-        "back": "Voltar",
-        "url.title": "Endereço",
-        "url.body": "Digite o endereço dado junto com a chave.",
-        "url.step": "Passo 2 de 2",
-        "url.label": "URL",
-        "url.type": "Como conectar",
-        "url.get": "GET",
-        "url.ws": "WS",
-        "url.h2": "H2",
-        "url.quic": "QUIC",
-        "url.h3": "H3",
-        "url.path": "Caminho (se tiverem dado um)",
-        "url.hint": "HTTPS. GET como arquivo, WS canal, H2/H3 CONNECT, QUIC UDP.",
-        "url.go": "Abrir loft",
-        "settings": "Ajustes",
-        "set.gen": "Geral",
-        "set.client": "Cliente",
-        "journal": "Diário",
-        "pref.defaults": "Padrão",
-        "pref.login": "Abrir ao entrar",
-        "pref.login.d": "Login item, sem janela",
-        "pref.dock": "Mostrar ícone no Dock",
-        "pref.dock.d": "O ícone da barra de menus permanece.",
-        "pref.dock.always": "Sempre",
-        "pref.dock.window": "Quando uma janela está aberta",
-        "pref.dock.never": "Nunca",
-        "pref.auto": "Conectar automaticamente",
-        "pref.auto.d": "Depois da chave e de um front ativo",
-        "pref.reconnect": "Reconectar automaticamente",
-        "pref.reconnect.d": "Se cair, abrir o loft de novo.",
-        "pref.simple": "Interface simplificada",
-        "pref.simple.d": "Menu e janelas: abrir e fechar.",
-        "pref.rate": "Unidades de velocidade",
-        "pref.rate.d": "Como ↑↓ aparece no menu e na janela de status.",
-        "pref.rate.kbit": "kbit/s",
-        "pref.rate.kb": "kB/s",
-        "pref.socks.d": "entrada local dos apps",
-        "pref.socks.share": "SOCKS compartilhado",
-        "pref.socks.share.d": "Uma porta dos Ajustes. Regras de split, se o split estiver ligado.",
-        "pref.socks.share.off": "Uma porta por conexão.",
-        "pref.socks.port": "Porta SOCKS5",
-        "pref.socks.port.d": "Entrada local. Uma conexão pode definir a sua.",
-        "pref.tun.d": "em seguida, tun2socks por enquanto",
-        "pref.off": "desl.",
-        "pop.overlay": "Overlay IP",
-        "pref.route": "Rota",
-        "edit.tun": "Interface do túnel",
-        "edit.tun.d": "Nosso endereço na interface. A rota da máquina está em Ajustes, desligada por padrão.",
-        "pop.tun": "Túnel",
-        "pop.setup": "Ajustes",
-        "pref.fail": "Passar para uma ativa",
-        "pref.fail.d": "Se cair, a rota vai para outro túnel.",
-        "pref.default_route": "Permitir rota padrão",
-        "pref.default_route.d": "Toda a internet pelo loft. Desl. — só a rede loft.",
-        "pref.hold": "Não restaurar a internet direta",
-        "pref.hold.d": "O último túnel morreu — a máquina fica no escuro.",
-        "route.reset": "Redefinir rotas",
-        "route.reset.d": "Devolver a internet direta a esta máquina.",
-        "route.held": "rota retida",
-        "route.tag": "rota",
-        "split": "Roteamento separado",
-        "split.d": "Fora do loft usa a rota direta de antes do loft.",
-        "split.sub": "Fora do loft usa a rota direta lembrada antes do loft. Funciona mesmo com loft fechado.",
-        "split.sub.off": "Desl. — as listas ficam fora da tabela do sistema.",
-        "split.native": "direto 192.168.1.1 · en0",
-        "split.via": "Pelo loft",
-        "split.bypass": "Fora do loft",
-        "split.via.short": "pelo",
-        "split.bypass.short": "fora",
-        "split.region": "Região",
-        "split.region.ru": "RU",
-        "split.region.ch": "CH",
-        "split.region.global": "Global",
-        "split.region.ru.d": "Rússia",
-        "split.region.ch.d": "China",
-        "split.region.global.d": "Mundo",
-        "split.rdef": "Padrão",
-        "split.inherit": "Como a região",
-        "split.search": "Encontrar um serviço",
-        "split.empty": "Nada nesta região ainda.",
-        "split.add": "Adicionar",
-        "split.nets": "redes",
-        "split.net": "rede",
-        "split.src.repo": "repo",
-        "split.src.me": "minhas",
-        "split.repo": "Repositório",
-        "split.import.title": "Importar rotas",
-        "split.import.body": "Keenetic .bat ou loft-routes. :: rem é o nome do serviço.",
-        "split.import.drop": "Solte um arquivo .bat ou .loft-routes",
-        "split.import.detect": "Keenetic · 214 linhas · sem direção",
-        "split.import.where": "Onde colocar",
-        "split.import.go": "Adicionar 214 rotas",
-        "split.export.title": "Exportar rotas",
-        "split.export.body": "O Keenetic lê os dois. O Loft escreve o nome do serviço e a direção no rem.",
-        "split.export.fmt": "Formato",
-        "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
-        "split.export.which": "Qual lista",
-        "split.export.save": "Salvar loft-routes.bat",
-        "split.export.save.keen": "Salvar YouTube.bat",
-        "split.repo.body": "Raw .bat do GitHub ou do seu host. Em geral a lista pelo loft.",
-        "split.repo.url": "URL da lista",
-        "split.repo.auto": "Atualizar sozinho",
-        "split.repo.auto.d": "Uma vez ao dia. Não apaga as suas linhas.",
-        "split.repo.last": "Hoje · 214 rotas",
-        "split.repo.pull": "Atualizar agora",
-        "split.add.title": "Rede",
-        "split.add.body": "Endereço ou CIDR. O nome do serviço é o que aparece na lista.",
-        "split.add.net": "Rede ou endereço",
-        "split.add.name": "Serviço",
-        "split.add.go": "Adicionar",
-        "pref.select.d": "ordem dos outbounds no YAML",
-        "pref.lang": "Idioma da interface",
-        "pref.lang.d": "vale na hora",
-        "pref.lang.ru": "Русский",
-        "pref.lang.en": "English",
-        "pref.lang.de": "Deutsch",
-        "pref.lang.fr": "Français",
-        "pref.lang.pt": "Português",
-        "pref.lang.zh": "中文",
-        "pref.diag": "Diário estendido",
-        "pref.diag.d": "Rotas, DNS, loft-priv. Arquivo rotativo.",
-        "pref.upd": "Buscar atualizações ao abrir",
-        "pref.upd.d": "GitHub latest quando o loft abre.",
-        "upd.later": "Depois",
-        "upd.quiet": "Não perguntar de novo",
-        "upd.quiet.d": "Desliga a verificação ao abrir.",
-        "upd.offer.title": "Atualização do loft",
-        "upd.offer.body": "Baixar e substituir este aplicativo.",
-        "upd.install": "Atualizar para 1.0.10",
-        "about.ver": "1.0.9",
-        "about.proto": "protocolos",
-        "about.loft": "loft/1.0",
-        "about.loft.v": "get · ws · h2 · quic · h3 · mask",
-        "about.sstp": "SSTP",
-        "about.sstp.v": "ppp · mschapv2 · pap",
-        "about.vless": "VLESS",
-        "about.vless.v": "tcp · tls · reality · xhttp",
-        "about.trojan": "Trojan",
-        "about.trojan.v": "tcp · tls · reality · xhttp",
-        "about.blurb": "Da rua — HTTPS comum.<br>Dentro, uma rede própria.",
-        "live": "get · live",
-        "conn": "Conexão",
-        "conns": "Conexões",
-        "conns.sub": "Cada uma tem a própria chave e endereço. Uma está ativa.",
-        "conns.sub.multi": "Cada uma abre por conta própria.",
-        "conns.multi": "Vários",
-        "conn.active": "ativo",
-        "conn.up": "aberto",
-        "conn.down": "fechado",
-        "conn.err": "erro",
-        "conn.fail": "falhou",
-        "conn.retry": "Repetir",
-        "conn.retry.wait": "Repetir (%d)",
-        "conn.cancel": "Cancelar",
-        "edit": "Editar",
-        "edit.title": "Conexão",
-        "edit.name": "Nome",
-        "edit.save": "Salvar",
-        "edit.delete": "Excluir",
-        "edit.socks": "SOCKS5",
-        "edit.sstp.dns": "DNS",
-        "edit.sstp.dns.ph": "vazio — do servidor, senão o gateway",
-        "edit.sstp.dns.replace": "Só estes endereços",
-        "edit.sstp.dns.replace.d": "Pular o servidor e o gateway PPP.",
-        "edit.dns.ph.loft": "vazio — do nó",
-        "edit.dns.ph.vless": "endereços separados por vírgula",
-        "edit.dns.system": "DNS no sistema",
-        "edit.dns.system.d": "Enquanto o túnel estiver no ar, gravar os resolvedores nos serviços de rede do Mac.",
-        "pref.multi": "Várias saídas",
-        "pref.multi.d": "Cada um com seu Abrir e status.",
-        "pref.socks.each": "por conexão",
-        "open.one": "Abrir",
-        "close.one": "Desconectar",
-        "conn.count": "aberto",
-        "conn.add": "Manual",
-        "import": "Importar",
-        "export": "Exportar",
-        "import.title": "Importar",
-        "import.body": "O arquivo com a chave e o endereço que lhe deram.",
-        "import.drop": "Solte aqui client.yaml, .loft ou .vpn",
-        "import.pick": "Escolher arquivo…",
-        "export.title": "Exportar",
-        "export.body": "Salvar a conexão atual como arquivo.",
-        "export.save": "Salvar Office.loft",
-        "export.warn": "O arquivo contém a chave de acesso. Não compartilhe.",
-        "key.orfile": "Ou importar um arquivo",
-      },
-      zh: {
-        "board.sub": "菜单栏客户端。模型 v1：密钥、前置、SOCKS5。",
-        "board.lang": "语言",
-        "board.scenes": "场景",
-        "nav.hero": "总览",
-        "nav.onboard": "密钥",
-        "nav.url": "地址",
-        "nav.off": "弹出 · 已关闭",
-        "nav.on": "弹出 · 已打开",
-        "nav.err": "弹出 · 错误",
-        "nav.hold": "弹出 · 路由",
-        "nav.main": "状态",
-        "nav.out": "前置",
-        "nav.list": "连接",
-        "nav.edit": "编辑",
-        "nav.editvless": "编辑 · VLESS",
-        "edit.vless.link": "链接",
-        "edit.vless.manual": "手动",
-        "edit.vless.url": "vless:// 链接",
-        "edit.vless.uuid": "UUID",
-        "edit.vless.host": "地址",
-        "edit.vless.port": "端口",
-        "edit.vless.sec": "安全",
-        "edit.vless.tls": "TLS",
-        "edit.vless.reality": "REALITY",
-        "edit.vless.net": "传输",
-        "edit.vless.tcp": "TCP",
-        "edit.vless.xhttp": "XHTTP",
-        "edit.vless.sni": "TLS 主机名",
-        "edit.vless.fp": "TLS 指纹",
-        "edit.vless.pbk": "公钥",
-        "edit.vless.sid": "Short ID",
-        "edit.vless.vision": "Vision",
-        "edit.vless.vision.d": "TCP 上的 xtls-rprx-vision。",
-        "edit.main": "连接",
-        "edit.adv": "高级",
-        "vpn.type": "VPN 类型",
-        "nav.switch": "弹出 · 切换",
-        "nav.import": "导入",
-        "nav.export": "导出",
-        "nav.set": "设置",
-        "nav.split": "路由",
-        "nav.splitin": "导入路由",
-        "nav.splitout": "导出路由",
-        "nav.splitrepo": "仓库",
-        "nav.about": "关于",
-        "nav.upd": "更新",
-        "status.off": "loft 已关闭",
-        "status.closed": "已关闭",
-        "connect": "打开 loft",
-        "disconnect": "断开",
-        "front": "前置",
-        "session.none": "没有会话",
-        "open": "打开 loft",
-        "quit": "退出",
-        "key.title": "访问密钥",
-        "key.body": "输入发给你的访问密钥。",
-        "key.hint": "以 lt_ 开头。只显示一次 — 请保存。",
-        "key.step": "第 1 步，共 2 步",
-        "continue": "继续",
-        "back": "返回",
-        "url.title": "地址",
-        "url.body": "输入和密钥一起发给你的地址。",
-        "url.step": "第 2 步，共 2 步",
-        "url.label": "URL",
-        "url.type": "如何连接",
-        "url.get": "GET",
-        "url.ws": "WS",
-        "url.h2": "H2",
-        "url.quic": "QUIC",
-        "url.h3": "H3",
-        "url.path": "路径（如果给了）",
-        "url.hint": "HTTPS。GET 像文件，WS 是通道，H2/H3 是 CONNECT，QUIC 是 UDP。",
-        "url.go": "打开 loft",
-        "settings": "设置",
-        "set.gen": "通用",
-        "set.client": "客户端",
-        "journal": "日志",
-        "pref.defaults": "默认",
-        "pref.login": "登录时打开",
-        "pref.login.d": "登录项，不打开窗口",
-        "pref.dock": "在 Dock 显示图标",
-        "pref.dock.d": "菜单栏图标仍在。",
-        "pref.dock.always": "始终",
-        "pref.dock.window": "有窗口时",
-        "pref.dock.never": "从不",
-        "pref.auto": "自动连接",
-        "pref.auto.d": "有密钥且前置可用之后",
-        "pref.reconnect": "自动重连",
-        "pref.reconnect.d": "断了就再打开 loft。",
-        "pref.simple": "简化界面",
-        "pref.simple.d": "菜单和窗口：打开与关闭。",
-        "pref.rate": "速率单位",
-        "pref.rate.d": "菜单和状态窗口里 ↑↓ 的显示方式。",
-        "pref.rate.kbit": "千比特/秒",
-        "pref.rate.kb": "KB/秒",
-        "pref.socks.d": "应用的本机入口",
-        "pref.socks.share": "共用 SOCKS",
-        "pref.socks.share.d": "设置里的一个端口。若开了分流，用分流规则。",
-        "pref.socks.share.off": "每条连接自己的端口。",
-        "pref.socks.port": "SOCKS5 端口",
-        "pref.socks.port.d": "本机入口。连接可以设自己的。",
-        "pref.tun.d": "下一步，目前是 tun2socks",
-        "pref.off": "关",
-        "pop.overlay": "Overlay IP",
-        "pref.route": "路由",
-        "edit.tun": "隧道接口",
-        "edit.tun.d": "接口上的本机地址。机器默认路由在设置里，默认关。",
-        "pop.tun": "隧道",
-        "pop.setup": "设置",
-        "pref.fail": "交给仍在线的",
-        "pref.fail.d": "断了就把路由交给另一条隧道。",
-        "pref.default_route": "允许默认路由",
-        "pref.default_route.d": "全部流量走 loft。关 — 只有 loft 网。",
-        "pref.hold": "不要恢复直连网络",
-        "pref.hold.d": "最后一条隧道没了 — 机器保持断网。",
-        "route.reset": "重置路由",
-        "route.reset.d": "把直连网络还给这台机器。",
-        "route.held": "路由已卡住",
-        "route.tag": "路由",
-        "split": "分流",
-        "split.d": "绕过 loft 走打开前记下的直连路由。",
-        "split.sub": "绕过 loft 走打开前记下的直连路由。loft 关着也一样。",
-        "split.sub.off": "关 — 列表不写入系统表。",
-        "split.native": "直连 192.168.1.1 · en0",
-        "split.via": "经 loft",
-        "split.bypass": "绕过 loft",
-        "split.via.short": "经",
-        "split.bypass.short": "绕",
-        "split.region": "地区",
-        "split.region.ru": "RU",
-        "split.region.ch": "CH",
-        "split.region.global": "Global",
-        "split.region.ru.d": "俄罗斯",
-        "split.region.ch.d": "中国",
-        "split.region.global.d": "全球",
-        "split.rdef": "默认",
-        "split.inherit": "随地区",
-        "split.search": "查找服务",
-        "split.empty": "这个地区还没有条目。",
-        "split.add": "添加",
-        "split.nets": "个网段",
-        "split.net": "网段",
-        "split.src.repo": "仓库",
-        "split.src.me": "自己的",
-        "split.repo": "仓库",
-        "split.import.title": "导入路由",
-        "split.import.body": "Keenetic .bat 或 loft-routes。:: rem 是服务名。",
-        "split.import.drop": "拖入 .bat 或 .loft-routes",
-        "split.import.detect": "Keenetic · 214 行 · 无方向",
-        "split.import.where": "放到哪里",
-        "split.import.go": "添加 214 条路由",
-        "split.export.title": "导出路由",
-        "split.export.body": "Keenetic 两种都认。Loft 把服务名和方向写进 rem。",
-        "split.export.fmt": "格式",
-        "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
-        "split.export.which": "哪份列表",
-        "split.export.save": "保存 loft-routes.bat",
-        "split.export.save.keen": "保存 YouTube.bat",
-        "split.repo.body": "来自 GitHub 或自己主机的 raw .bat。通常是经 loft 的列表。",
-        "split.repo.url": "列表地址",
-        "split.repo.auto": "自行更新",
-        "split.repo.auto.d": "每天一次。不覆盖你自己的行。",
-        "split.repo.last": "今天 · 214 条路由",
-        "split.repo.pull": "立即更新",
-        "split.add.title": "网段",
-        "split.add.body": "地址或 CIDR。服务名是列表里看到的名字。",
-        "split.add.net": "网段或地址",
-        "split.add.name": "服务",
-        "split.add.go": "添加",
-        "pref.select.d": "YAML 里的出站顺序",
-        "pref.lang": "界面语言",
-        "pref.lang.d": "立即生效",
-        "pref.lang.ru": "Русский",
-        "pref.lang.en": "English",
-        "pref.lang.de": "Deutsch",
-        "pref.lang.fr": "Français",
-        "pref.lang.pt": "Português",
-        "pref.lang.zh": "中文",
-        "pref.diag": "扩展日志",
-        "pref.diag.d": "路由、DNS、loft-priv。轮转文件。",
-        "pref.upd": "启动时检查更新",
-        "pref.upd.d": "打开 loft 时查 GitHub latest。",
-        "upd.later": "稍后",
-        "upd.quiet": "不再询问",
-        "upd.quiet.d": "关闭启动时检查。",
-        "upd.offer.title": "loft 更新",
-        "upd.offer.body": "下载并替换这个应用。",
-        "upd.install": "更新到 1.0.10",
-        "about.ver": "1.0.9",
-        "about.proto": "协议",
-        "about.loft": "loft/1.0",
-        "about.loft.v": "get · ws · h2 · quic · h3 · mask",
-        "about.sstp": "SSTP",
-        "about.sstp.v": "ppp · mschapv2 · pap",
-        "about.vless": "VLESS",
-        "about.vless.v": "tcp · tls · reality · xhttp",
-        "about.trojan": "Trojan",
-        "about.trojan.v": "tcp · tls · reality · xhttp",
-        "about.blurb": "从街上看来是普通 HTTPS。<br>里面是自己的网络。",
-        "live": "get · live",
-        "conn": "连接",
-        "conns": "连接",
-        "conns.sub": "每条有自己的密钥和地址。同时只激活一条。",
-        "conns.sub.multi": "每条单独打开。",
-        "conns.multi": "多个",
-        "conn.active": "当前",
-        "conn.up": "已打开",
-        "conn.down": "已关闭",
-        "conn.err": "错误",
-        "conn.fail": "失败",
-        "conn.retry": "重试",
-        "conn.retry.wait": "重试 (%d)",
-        "conn.cancel": "取消",
-        "edit": "编辑",
-        "edit.title": "连接",
-        "edit.name": "名称",
-        "edit.save": "保存",
-        "edit.delete": "删除",
-        "edit.socks": "SOCKS5",
-        "edit.sstp.dns": "DNS",
-        "edit.sstp.dns.ph": "空 — 来自服务器，否则网关",
-        "edit.sstp.dns.replace": "只用这些地址",
-        "edit.sstp.dns.replace.d": "不从服务器和 PPP 网关取 DNS。",
-        "edit.dns.ph.loft": "空 — 来自节点",
-        "edit.dns.ph.vless": "逗号分隔的地址",
-        "edit.dns.system": "写入系统 DNS",
-        "edit.dns.system.d": "隧道开着时，把解析器写入 Mac 网络服务。",
-        "pref.multi": "多个出站",
-        "pref.multi.d": "每条有自己的打开和状态。",
-        "pref.socks.each": "每条连接",
-        "open.one": "打开",
-        "close.one": "断开",
-        "conn.count": "已打开",
-        "conn.add": "手动",
-        "import": "导入",
-        "export": "导出",
-        "import.title": "导入",
-        "import.body": "发给你的带密钥和地址的文件。",
-        "import.drop": "把 client.yaml、.loft 或 .vpn 拖到这里",
-        "import.pick": "选择文件…",
-        "export.title": "导出",
-        "export.body": "把当前连接存成文件。",
-        "export.save": "保存 Office.loft",
-        "export.warn": "文件里有访问密钥。不要给外人。",
-        "key.orfile": "或导入文件",
-      },
-    };
-
+    const LANGS = ["en", "ru", "de", "fr", "pt", "zh", "it", "ja", "ko"];
+    const I18N = L10N_PACKS;
     const params = new URLSearchParams(location.search);
-    const LANGS = ["en", "ru", "de", "fr", "pt", "zh"];
     let lang = LANGS.includes(params.get("lang")) ? params.get("lang") : "en";
     let current = "hero";
     const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
     const PROFILES = [
-      { id: "office", ru: "Офис", en: "Office", de: "Büro", fr: "Bureau", pt: "Escritório", zh: "办公室", host: "cdn.example.com", path: "/static/v3/build", kind: "get", file: "office.loft", socks: "1080", ip: "10.8.17.4", gw: "10.8.17.1", up: true, err: false, tun: true },
-      { id: "lab", ru: "Lab", en: "Lab", de: "Labor", fr: "Labo", pt: "Lab", zh: "实验室", host: "app.example.com", path: "/api/v1/sync", kind: "ws", file: "lab.loft", socks: "1081", ip: "10.8.18.2", gw: "10.8.18.1", up: true, err: false, tun: true },
-      { id: "home", ru: "Дом", en: "Home", de: "Zuhause", fr: "Maison", pt: "Casa", zh: "家", host: "edge.home.lan", path: "", kind: "get", file: "home.loft", socks: "1082", ip: "10.8.19.3", gw: "10.8.19.1", up: false, err: false, tun: false },
+      { id: "office", ru: "Офис", en: "Office", de: "Büro", fr: "Bureau", pt: "Escritório", zh: "办公室", it: "Ufficio", ja: "オフィス", ko: "사무실", host: "cdn.example.com", path: "/static/v3/build", kind: "get", file: "office.loft", socks: "1080", ip: "10.8.17.4", gw: "10.8.17.1", up: true, err: false, tun: true },
+      { id: "lab", ru: "Lab", en: "Lab", de: "Labor", fr: "Labo", pt: "Lab", zh: "实验室", it: "Lab", ja: "ラボ", ko: "랩", host: "app.example.com", path: "/api/v1/sync", kind: "ws", file: "lab.loft", socks: "1081", ip: "10.8.18.2", gw: "10.8.18.1", up: true, err: false, tun: true },
+      { id: "home", ru: "Дом", en: "Home", de: "Zuhause", fr: "Maison", pt: "Casa", zh: "家", it: "Casa", ja: "ホーム", ko: "집", host: "edge.home.lan", path: "", kind: "get", file: "home.loft", socks: "1082", ip: "10.8.19.3", gw: "10.8.19.1", up: false, err: false, tun: false },
     ];
     let activeId = "office";
     let multi = params.get("multi") === "1";
@@ -2151,12 +685,22 @@
     let failoverOn = params.get("fail") !== "0";
     let heldNow = params.get("scene") === "hold";
     let splitTab = params.get("stab") === "bypass" ? "bypass" : "via";
-    let regionTab = ["ru", "ch", "global"].includes(params.get("region")) ? params.get("region") : "global";
+    let regionTab = params.get("region") || "global";
     let splitQ = "";
-    const regionDef = { ru: false, ch: true, global: true };
-    if (params.get("rdef") === "via") regionDef.ru = true;
-    if (params.get("cdef") === "bypass") regionDef.ch = false;
-    if (params.get("gdef") === "bypass") regionDef.global = false;
+    const ZONE_PRESETS = ["local", "global"];
+    const ZONES = [
+      { id: "local", builtin: true, def: false },
+      { id: "global", builtin: true, def: true },
+      { id: "ru", builtin: false, def: false },
+      { id: "ch", builtin: false, def: true },
+    ];
+    const zoneById = (id) => ZONES.find((z) => z.id === id);
+    if (params.get("ldef") === "via" && zoneById("local")) zoneById("local").def = true;
+    if (params.get("gdef") === "bypass" && zoneById("global")) zoneById("global").def = false;
+    if (params.get("rdef") === "via" && zoneById("ru")) zoneById("ru").def = true;
+    if (params.get("cdef") === "bypass" && zoneById("ch")) zoneById("ch").def = false;
+    let editingZoneId = params.get("zid") || "local";
+    let addZoneVia = params.get("zdef") !== "bypass";
     let splitFmt = params.get("sfmt") === "keen" ? "keen" : "loft";
     let splitAuto = params.get("sauto") !== "0";
     let splitOn = params.get("split") === "1";
@@ -2195,18 +739,66 @@
     };
     const ROUTES = [
       { id: "yt", ru: "YouTube", en: "YouTube", region: "global", via: null, cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
-      { id: "cf", ru: "Cloudflare", en: "Cloudflare", de: "Cloudflare", fr: "Cloudflare", pt: "Cloudflare", zh: "Cloudflare", region: "global", via: null, cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
-      { id: "gpt", ru: "ChatGPT", en: "ChatGPT", de: "ChatGPT", fr: "ChatGPT", pt: "ChatGPT", zh: "ChatGPT", region: "global", via: null, cidrs: ["104.18.32.0/24"], src: "me" },
+      { id: "cf", ru: "Cloudflare", en: "Cloudflare", de: "Cloudflare", fr: "Cloudflare", pt: "Cloudflare", zh: "Cloudflare", it: "Cloudflare", ja: "Cloudflare", ko: "Cloudflare", region: "global", via: null, cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
+      { id: "gpt", ru: "ChatGPT", en: "ChatGPT", de: "ChatGPT", fr: "ChatGPT", pt: "ChatGPT", zh: "ChatGPT", it: "ChatGPT", ja: "ChatGPT", ko: "ChatGPT", region: "global", via: null, cidrs: ["104.18.32.0/24"], src: "me" },
       { id: "nf", ru: "Netflix", en: "Netflix", region: "global", via: null, cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
-      { id: "gos", ru: "Госуслуги", en: "Gov services", de: "Behörden", fr: "Services publics", pt: "Serviços públicos", zh: "政务服务", region: "ru", via: null, cidrs: ["91.226.245.0/24", "5.61.16.0/21"], src: "me" },
-      { id: "ya", ru: "Яндекс", en: "Yandex", de: "Yandex", fr: "Yandex", pt: "Yandex", zh: "Yandex", region: "ru", via: null, cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "repo" },
-      { id: "wx", ru: "WeChat", en: "WeChat", de: "WeChat", fr: "WeChat", pt: "WeChat", zh: "微信", region: "ch", via: null, cidrs: ["203.205.128.0/19", "182.254.0.0/16"], src: "repo" },
-      { id: "ali", ru: "Alipay", en: "Alipay", de: "Alipay", fr: "Alipay", pt: "Alipay", zh: "支付宝", region: "ch", via: null, cidrs: ["110.75.0.0/16"], src: "repo" },
-      { id: "lan", ru: "Локальная сеть", en: "LAN", de: "LAN", fr: "LAN", pt: "LAN", zh: "局域网", region: "global", via: false, cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
+      { id: "gos", ru: "Госуслуги", en: "Gov services", de: "Behörden", fr: "Services publics", pt: "Serviços públicos", zh: "政务服务", it: "Servizi pubblici", ja: "行政サービス", ko: "공공서비스", region: "ru", via: null, cidrs: ["91.226.245.0/24", "5.61.16.0/21"], src: "me" },
+      { id: "ya", ru: "Яндекс", en: "Yandex", de: "Yandex", fr: "Yandex", pt: "Yandex", zh: "Yandex", it: "Yandex", ja: "Yandex", ko: "Yandex", region: "ru", via: null, cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "repo" },
+      { id: "wx", ru: "WeChat", en: "WeChat", de: "WeChat", fr: "WeChat", pt: "WeChat", zh: "微信", it: "WeChat", ja: "WeChat", ko: "위챗", region: "ch", via: null, cidrs: ["203.205.128.0/19", "182.254.0.0/16"], src: "repo" },
+      { id: "ali", ru: "Alipay", en: "Alipay", de: "Alipay", fr: "Alipay", pt: "Alipay", zh: "支付宝", it: "Alipay", ja: "Alipay", ko: "알리페이", region: "ch", via: null, cidrs: ["110.75.0.0/16"], src: "repo" },
+      { id: "lan", ru: "Локальная сеть", en: "LAN", de: "LAN", fr: "LAN", pt: "LAN", zh: "局域网", it: "LAN", ja: "LAN", ko: "로컬 네트워크", region: "local", via: null, cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
     ];
     const locName = (o) => o[lang] || o.en || o.ru || "";
     const rname = (r) => locName(r);
-    const rowVia = (r) => (r.via === true || r.via === false) ? r.via : !!regionDef[r.region];
+    const zoneLabel = (id) => {
+      const z = zoneById(id);
+      const named = z ? locName(z) : "";
+      if (named) return named;
+      const k = "split.zone." + id;
+      const s = t(k);
+      return s === k ? String(id).toUpperCase() : s;
+    };
+    const zoneDesc = (id) => {
+      const k = "split.zone." + id + ".d";
+      const s = t(k);
+      return s === k ? "" : s;
+    };
+    const zoneIds = () => {
+      const ids = [];
+      const add = (id) => { if (id && !ids.includes(id)) ids.push(id); };
+      ZONE_PRESETS.forEach(add);
+      ZONES.forEach((z) => add(z.id));
+      ROUTES.forEach((r) => add(r.region));
+      return ids;
+    };
+    const zoneDef = (id) => {
+      const z = zoneById(id);
+      if (z) return !!z.def;
+      return id !== "local" && id !== "ru";
+    };
+    const zoneSlug = (name) => {
+      const ascii = String(name || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "").slice(0, 16);
+      const taken = (id) => ZONES.some((z) => z.id === id);
+      if (ascii) {
+        let id = ascii, n = 2;
+        while (taken(id)) { id = ascii + n; n += 1; }
+        return id;
+      }
+      let n = 1, id = "z1";
+      while (taken(id)) { n += 1; id = "z" + n; }
+      return id;
+    };
+    const zoneSelect = (withCount) => {
+      const ids = zoneIds();
+      if (regionTab && !ids.includes(regionTab)) ids.push(regionTab);
+      const opts = ids.map((id) => {
+        const n = routesIn(id).length;
+        const label = withCount ? zoneLabel(id) + " · " + n : zoneLabel(id);
+        return `<option value="${id}" ${regionTab === id ? "selected" : ""}>${label}</option>`;
+      }).join("");
+      return `<select class="loft-select wide" data-region>${opts}</select>`;
+    };
+    const rowVia = (r) => (r.via === true || r.via === false) ? r.via : zoneDef(r.region);
     const rowOver = (r) => r.via === true || r.via === false;
     const routesVia = () => ROUTES.filter((r) => rowVia(r));
     const routesBypass = () => ROUTES.filter((r) => !rowVia(r));
@@ -2601,7 +1193,7 @@ outbounds:
             <div class="pref"><div><div class="n">${t("pref.auto")}</div><div class="d">${t("pref.auto.d")}</div></div><div class="toggle on"><i></i></div></div>
             <div class="pref"><div><div class="n">${t("pref.simple")}</div><div class="d">${t("pref.simple.d")}</div></div><div class="toggle ${simpleOn ? "on" : ""}" data-simple><i></i></div></div>
             <div class="pref"><div><div class="n">${t("pref.rate")}</div><div class="d">${t("pref.rate.d")}</div></div><div class="rate-bits"><button type="button" class="on">${t("pref.rate.kbit")}</button><button type="button">${t("pref.rate.kb")}</button></div></div>
-            <div class="pref"><div><div class="n">${t("pref.lang")}</div><div class="d">${t("pref.lang.d")}</div></div><select class="loft-select" data-uilang>${[["ru","pref.lang.ru"],["en","pref.lang.en"],["de","pref.lang.de"],["fr","pref.lang.fr"],["pt","pref.lang.pt"],["zh","pref.lang.zh"]].map(([id, k]) => `<option value="${id}" ${lang === id ? "selected" : ""}>${t(k)}</option>`).join("")}</select></div>
+            <div class="pref"><div><div class="n">${t("pref.lang")}</div><div class="d">${t("pref.lang.d")}</div></div><select class="loft-select" data-uilang>${[["ru","pref.lang.ru"],["en","pref.lang.en"],["de","pref.lang.de"],["fr","pref.lang.fr"],["pt","pref.lang.pt"],["zh","pref.lang.zh"],["it","pref.lang.it"],["ja","pref.lang.ja"],["ko","pref.lang.ko"]].map(([id, k]) => `<option value="${id}" ${lang === id ? "selected" : ""}>${t(k)}</option>`).join("")}</select></div>
             <div class="pref"><div><div class="n">${t("pref.upd")}</div><div class="d">${t("pref.upd.d")}</div></div><div class="toggle on"><i></i></div></div>
             <div class="pref" style="border:0"><div><div class="n">${t("pref.diag")}</div><div class="d">${t("pref.diag.d")}</div></div><div class="toggle"><i></i></div></div>`;
         const route = `
@@ -2642,14 +1234,14 @@ outbounds:
       split: () => {
         const q = splitQ.trim().toLowerCase();
         const list = routesIn(regionTab).filter((r) => !q || rname(r).toLowerCase().includes(q));
-        const defVia = !!regionDef[regionTab];
+        const defVia = zoneDef(regionTab);
         const rows = list.map((r) => {
           const n = r.cidrs.length;
           const net = n === 1 ? t("split.net") : t("split.nets");
           const via = rowVia(r);
           const over = rowOver(r);
           return `<div class="rrow" data-go="splitadd">
-            <div><div class="n">${rname(r)}</div><div class="u">${r.cidrs.slice(0, 2).join(" · ")}${n > 2 ? " · …" : ""}</div></div>
+            <div><div class="n">${rname(r)}</div><div class="u">${r.cidrs.slice(0, 2).join(" ")}${n > 2 ? " …" : ""}</div></div>
             <div class="meta">${n} ${net}<div class="src">${r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div>
               <div class="dir">
                 <button type="button" class="${via ? "on" : ""} ${via && over ? "over" : ""}" data-rdir="via" data-rid="${r.id}">${t("split.via.short")}</button>
@@ -2658,10 +1250,7 @@ outbounds:
             </div>
           </div>`;
         }).join("");
-        const tab = (id) => {
-          const n = routesIn(id).length;
-          return `<button type="button" class="${regionTab === id ? "on" : ""}" data-region="${id}">${t("split.region." + id)}<span class="n">${n}</span></button>`;
-        };
+        const rdefNote = zoneDesc(regionTab);
         return `
         <div class="win split">
           <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
@@ -2672,11 +1261,15 @@ outbounds:
             </div>
             <div class="split-sub">${splitOn ? t("split.sub") : t("split.sub.off")}</div>
             ${splitOn ? `<div class="split-native">${t("split.native")}</div>` : ""}
-            <div class="split-tabs">
-              ${tab("ru")}${tab("ch")}${tab("global")}
+            <div class="split-zone">
+              <div class="split-zone-head">
+                <div class="label">${t("split.zone")}</div>
+                <button type="button" class="ghost-sm" data-go="zones">${t("split.zones")}</button>
+              </div>
+              ${zoneSelect(true)}
             </div>
             <div class="split-def">
-              <div class="label">${t("split.rdef")} · ${t("split.region." + regionTab + ".d")}</div>
+              <div class="label">${t("split.rdef")}${rdefNote ? " · " + rdefNote : ""}</div>
               <div class="seg">
                 <button type="button" class="${defVia ? "on" : ""}" data-rdef="via">${t("split.via")}</button>
                 <button type="button" class="${!defVia ? "on" : ""}" data-rdef="bypass">${t("split.bypass")}</button>
@@ -2765,12 +1358,8 @@ outbounds:
             <input class="field sm" placeholder="142.250.0.0/16" spellcheck="false" />
             <div class="label">${t("split.add.name")}</div>
             <input class="field sm" placeholder="YouTube" />
-            <div class="label">${t("split.region")}</div>
-            <div class="seg">
-              <button type="button" class="${regionTab === "ru" ? "on" : ""}" data-region="ru">${t("split.region.ru")}</button>
-              <button type="button" class="${regionTab === "ch" ? "on" : ""}" data-region="ch">${t("split.region.ch")}</button>
-              <button type="button" class="${regionTab === "global" ? "on" : ""}" data-region="global">${t("split.region.global")}</button>
-            </div>
+            <div class="label">${t("split.zone")}</div>
+            ${zoneSelect(false)}
             <div class="label">${t("split.import.where")}</div>
             <div class="seg">
               <button type="button" class="on" data-adddir="inherit">${t("split.inherit")}</button>
@@ -2779,6 +1368,71 @@ outbounds:
             </div>
             <button class="btn connect on" style="margin-top:16px" data-go="split">${t("split.add.go")}</button>
             <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`,
+      zones: () => {
+        const rows = zoneIds().map((id) => {
+          const z = zoneById(id) || { id, builtin: false, def: zoneDef(id) };
+          const n = routesIn(id).length;
+          const net = n === 1 ? t("split.net") : t("split.nets");
+          const desc = zoneDesc(id);
+          const sub = [desc, n + " " + net].filter(Boolean).join(" · ");
+          return `<div class="rrow" data-zid="${id}">
+            <div><div class="n">${zoneLabel(id)}</div><div class="u">${sub}</div></div>
+            <div class="meta">${z.def ? t("split.via") : t("split.bypass")}${z.builtin ? `<div class="src">${t("split.zones.builtin")}</div>` : ""}</div>
+          </div>`;
+        }).join("");
+        return `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.zones")}</h1>
+            <p>${t("split.zones.add.body")}</p>
+            <div class="split-list">${rows}</div>
+            <button class="ghost-sm" data-go="zoneadd" style="align-self:flex-start;margin:8px 0 4px">+ ${t("split.zones.add")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      zoneedit: () => {
+        const z = zoneById(editingZoneId) || zoneById("local") || ZONES[0];
+        const n = routesIn(z.id).length;
+        const net = n === 1 ? t("split.net") : t("split.nets");
+        return `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.zones.edit.title")}</h1>
+            <p>${z.builtin ? t("split.zones.builtin") + " · " + n + " " + net : n + " " + net}</p>
+            <div class="label">${t("split.zones.name")}</div>
+            <input class="field sm" data-zname value="${zoneLabel(z.id).replace(/"/g, "&quot;")}" ${z.builtin ? "disabled" : ""} />
+            <div class="label">${t("split.rdef")}${zoneDesc(z.id) ? " · " + zoneDesc(z.id) : ""}</div>
+            <div class="seg">
+              <button type="button" class="${z.def ? "on" : ""}" data-zdef="via">${t("split.via")}</button>
+              <button type="button" class="${!z.def ? "on" : ""}" data-zdef="bypass">${t("split.bypass")}</button>
+            </div>
+            <button class="btn connect on" style="margin-top:16px" data-zsave>${t("split.zones.save")}</button>
+            ${z.builtin ? "" : `<button class="btn back" data-zdel style="color:var(--err)">${t("split.zones.del")}</button>
+            <div class="hint">${t("split.zones.move")}</div>`}
+            <button class="btn back" data-go="zones">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      zoneadd: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.zones.add.title")}</h1>
+            <p>${t("split.zones.add.body")}</p>
+            <div class="label">${t("split.zones.name")}</div>
+            <input class="field sm" data-zname placeholder="EU" />
+            <div class="label">${t("split.rdef")}</div>
+            <div class="seg">
+              <button type="button" class="${addZoneVia ? "on" : ""}" data-zadddef="via">${t("split.via")}</button>
+              <button type="button" class="${!addZoneVia ? "on" : ""}" data-zadddef="bypass">${t("split.bypass")}</button>
+            </div>
+            <button class="btn connect on" style="margin-top:16px" data-zadd>${t("split.zones.add.go")}</button>
+            <button class="btn back" data-go="zones">${t("back")}</button>
           </div>
         </div>`,
       about: () => `
@@ -2948,17 +1602,82 @@ outbounds:
         };
       });
       sceneEl.querySelectorAll("[data-region]").forEach((el) => {
-        el.onclick = (ev) => {
+        const apply = (ev) => {
           ev.stopPropagation();
-          regionTab = el.dataset.region;
+          const next = el.tagName === "SELECT" ? el.value : el.dataset.region;
+          if (!next) return;
+          regionTab = next;
           show(current, true);
         };
+        el[el.tagName === "SELECT" ? "onchange" : "onclick"] = apply;
       });
       sceneEl.querySelectorAll("[data-rdef]").forEach((el) => {
         el.onclick = (ev) => {
           ev.stopPropagation();
-          regionDef[regionTab] = el.dataset.rdef === "via";
+          const z = zoneById(regionTab);
+          if (z) z.def = el.dataset.rdef === "via";
           show("split", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zid]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          editingZoneId = el.dataset.zid;
+          show("zoneedit", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zdef]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const z = zoneById(editingZoneId);
+          if (z) z.def = el.dataset.zdef === "via";
+          show("zoneedit", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zadddef]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          addZoneVia = el.dataset.zadddef === "via";
+          show("zoneadd", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zsave]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const z = zoneById(editingZoneId);
+          const name = (sceneEl.querySelector("[data-zname]") || {}).value;
+          if (z && !z.builtin && String(name || "").trim()) {
+            const n = String(name).trim();
+            z[lang] = n;
+            if (!z.en) z.en = n;
+          }
+          show("zones", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zdel]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const z = zoneById(editingZoneId);
+          if (!z || z.builtin) return;
+          ROUTES.forEach((r) => { if (r.region === z.id) r.region = "global"; });
+          const i = ZONES.findIndex((x) => x.id === z.id);
+          if (i >= 0) ZONES.splice(i, 1);
+          if (regionTab === z.id) regionTab = "global";
+          editingZoneId = "local";
+          show("zones", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zadd]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const name = String((sceneEl.querySelector("[data-zname]") || {}).value || "").trim() || "EU";
+          const id = zoneSlug(name);
+          const z = { id, builtin: false, def: addZoneVia, en: name };
+          z[lang] = name;
+          ZONES.push(z);
+          editingZoneId = id;
+          regionTab = id;
+          show("zones", true);
         };
       });
       sceneEl.querySelectorAll("[data-rdir]").forEach((el) => {
@@ -3031,7 +1750,7 @@ outbounds:
       sceneEl.querySelectorAll("[data-uilang]").forEach((el) => {
         el.onchange = (ev) => {
           ev.stopPropagation();
-          setLang(el.value === "en" ? "en" : "ru");
+          if (LANGS.includes(el.value)) setLang(el.value);
         };
       });
       sceneEl.querySelectorAll("[data-profile]").forEach((el) => {
@@ -3163,6 +1882,7 @@ outbounds:
         u.searchParams.set("multi", multi ? "1" : "0");
         u.searchParams.set("stab", splitTab);
         u.searchParams.set("region", regionTab);
+        u.searchParams.set("zid", editingZoneId);
         u.searchParams.set("sfmt", splitFmt);
         u.searchParams.set("split", splitOn ? "1" : "0");
         u.searchParams.set("socks", sharedSocks ? "1" : "0");

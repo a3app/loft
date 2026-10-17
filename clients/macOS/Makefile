@@ -26,13 +26,14 @@ MACOS := $(APP)/Contents/MacOS
 RES := $(APP)/Contents/Resources
 FW := $(APP)/Contents/Frameworks
 ROOTVER := $(shell cat $(ROOT)/VERSION 2>/dev/null || echo 1.0.0)
-# Menu-bar marketing version. Patch +1 on every `make app` (1.0.7 → 1.0.8 → 1.0.9).
+# Menu-bar marketing version. Patch +1 on every `make app` (1.0.8 → 1.0.9 → 1.0.10).
 # CI: BUMP=0 stamps Info.plist from the file and leaves VERSION alone.
 MACVER_FILE := VERSION
 BUMP ?= 1
 
 SWIFT_SRC := $(wildcard Sources/Engine/*.swift Sources/App/*.swift)
-C_OBJ := $(OBJ)/chacha.o $(OBJ)/utun.o $(OBJ)/stack.o
+LANG_SRC := $(wildcard lang/*.lang)
+C_OBJ := $(OBJ)/chacha.o $(OBJ)/utun.o
 CARCH := -arch $(ARCH) -mmacosx-version-min=$(MIN) -O2 -isysroot $(SDK)
 
 .PHONY: all app dmg dmgs run clean test-crypto shot front-probe
@@ -88,10 +89,6 @@ $(OBJ)/utun.o: Sources/TUN/utun.c Sources/TUN/utun.h
 	mkdir -p $(OBJ)
 	$(CLANG) -c Sources/TUN/utun.c -o $@ $(CARCH)
 
-$(OBJ)/stack.o: Sources/TUN/stack.c Sources/TUN/stack.h
-	mkdir -p $(OBJ)
-	$(CLANG) -c Sources/TUN/stack.c -o $@ $(CARCH)
-
 $(OBJ)/target-arch:
 	mkdir -p $(OBJ)
 	echo $(ARCH) > $@
@@ -109,13 +106,13 @@ $(MACOS)/loft-front: $(OBJ)/target-arch $(ROOT)/go.mod $(FRONT_GO)
 		-ldflags="-s -w -X github.com/a3app/loft/internal/version.Version=$(ROOTVER)" \
 		-o dist/clients/macOS/loft.app/Contents/MacOS/loft-front ./clients/go/cmd/loft-front
 
-$(APP)/Contents/MacOS/loft: $(OBJ)/target-arch $(SWIFT_SRC) $(C_OBJ) $(MACOS)/loft-priv $(MACOS)/loft-front
-	mkdir -p $(MACOS) $(RES) $(FW)
+$(APP)/Contents/MacOS/loft: $(OBJ)/target-arch $(SWIFT_SRC) $(LANG_SRC) $(C_OBJ) $(MACOS)/loft-priv $(MACOS)/loft-front
+	mkdir -p $(MACOS) $(RES) $(RES)/lang $(FW)
 	$(SWIFTC) -swift-version 5 -target $(TRIPLE) -sdk $(SDK) -O \
 		-import-objc-header Sources/Bridging-Header.h \
 		-I Sources \
-		-framework AppKit -framework Foundation -framework Security -framework QuartzCore -framework CoreImage \
-		-Xlinker $(OBJ)/chacha.o -Xlinker $(OBJ)/utun.o -Xlinker $(OBJ)/stack.o \
+		-framework AppKit -framework Foundation -framework Security -framework QuartzCore -framework CoreImage -framework SystemConfiguration \
+		-Xlinker $(OBJ)/chacha.o -Xlinker $(OBJ)/utun.o \
 		-Xlinker -rpath -Xlinker @executable_path/../Frameworks \
 		$(SWIFT_SRC) \
 		-o $(MACOS)/loft
@@ -123,6 +120,7 @@ $(APP)/Contents/MacOS/loft: $(OBJ)/target-arch $(SWIFT_SRC) $(C_OBJ) $(MACOS)/lo
 	printf 'APPL????' > $(APP)/Contents/PkgInfo
 	cp Resources/loft.icns $(RES)/
 	cp Resources/loftTemplate*.png $(RES)/
+	cp lang/*.lang $(RES)/lang/
 	xcrun swift-stdlib-tool --copy --scan-executable $(MACOS)/loft \
 	  --destination $(FW) --platform macosx --unsigned-destination $(FW)
 	rm -rf $(FW)/macosx

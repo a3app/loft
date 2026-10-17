@@ -53,11 +53,9 @@ final class SessionController {
 
     let store = ProfileStore()
     private var lives: [String: LiveSession] = [:]
-    private var front: GETFront?
-    private let tun = TUNEngine()
-    private let socks = SOCKS5Server()
     private let relay = SocksRelay()
     private let queue = DispatchQueue(label: "app.loft.session")
+    private var haltDone = false
     private var lastFail = ""
     /// Popover, advertised SOCKS, and default route follow this id (last successful connect).
     private var currentID = ""
@@ -78,7 +76,7 @@ final class SessionController {
     }
 
     var software: String {
-        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0.9"
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0.10"
     }
 
     /// Popover session: last successful connect, else the list pick.
@@ -121,7 +119,9 @@ final class SessionController {
         try? Priv.ensureSetuid()
         FrontHelper.reapOrphans()
         Priv.reapStale()
-        lastPathGW = Priv.physicalGateway()
+        lastPathGW = Priv.cachedGateway()
+        Priv.onPathChange = { [weak self] in self?.networkChanged() }
+        Priv.startPathWatch()
         store.routes.maybePull()
     }
 
@@ -498,11 +498,7 @@ final class SessionController {
         }
         let gen = s.helper.socksGen()
         s.helper.send("socks \(want)")
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline {
-            if s.helper.socksGen() != gen { break }
-            Thread.sleep(forTimeInterval: 0.04)
-        }
+        s.helper.waitSocks(after: gen, seconds: 2)
         let got = s.helper.socksListen()
         if s.helper.socksGen() == gen {
             LoftLog.shared.add("loft", "socks live id=\(p.id) bind-fail want=\(want) keep=\(s.probeSocks)")
@@ -619,25 +615,29 @@ final class SessionController {
         }
     }
 
-    /// Quit path: tearDown is async on the session queue; wait so loft-priv dies.
-    func halt() {
+    /// Quit path: tearDown on the session queue. `done` runs on main when helpers are gone.
+    func halt(done: (() -> Void)? = nil) {
+        if haltDone {
+            done?()
+            return
+        }
+        haltDone = true
+        store.flush()
         for s in lives.values {
             cancelReconnect(s)
             s.reconnectAttempt = 0
             s.generation += 1
         }
-        let sem = DispatchSemaphore(value: 0)
         queue.async {
             for s in self.lives.values { self.tearDown(s) }
+            self.relay.stop()
+            FrontHelper.reapOrphans()
+            Priv.stopHeld(key: nil)
             DispatchQueue.main.async {
                 for s in self.lives.values { self.set(s.id, .off, err: "", ip: "") }
+                done?()
             }
-            sem.signal()
         }
-        _ = sem.wait(timeout: .now() + 8)
-        relay.stop()
-        FrontHelper.reapOrphans()
-        Priv.stopHeld(key: nil)
     }
 
     /// Cancels every pending reconnect timer.
@@ -798,8 +798,16 @@ final class SessionController {
     }
 
     /// Poll from the spark timer: physical gw changed (home Wi-Fi after a phone hotspot).
+    /// Spawns are on the net queue; the session queue applies the result.
     func notePath() {
-        let gw = Priv.physicalGateway()
+        Priv.netQueue.async { [weak self] in
+            let gw = Priv.physicalGateway()
+            self?.queue.async { self?.applyPath(gw) }
+        }
+    }
+
+    /// Compares `gw` to the last hop and rebinds pins when the path moved.
+    private func applyPath(_ gw: String) {
         if gw.isEmpty {
             emptyGWTicks += 1
             if emptyGWTicks < 3 { return }
@@ -929,8 +937,12 @@ final class SessionController {
         }
     }
 
-    var tunName: String { displayLive?.tunName ?? tun.name }
-    var holdArmed: Bool { tun.holdArmed }
+    var tunName: String { displayLive?.tunName ?? Priv.tunName }
+    var holdArmed: Bool {
+        if anyOn { return false }
+        if lives.values.contains(where: { $0.state == .connecting || $0.state == .disconnecting }) { return false }
+        return store.hold && Priv.hasHolders()
+    }
 
     /// Machine path for this connection. SOCKS is a local inbound, not the route.
     var routeCaption: String { routeCaption(of: displayID) }
@@ -1000,11 +1012,6 @@ final class SessionController {
         case .connecting: cancelConnect()
         case .disconnecting: return
         }
-    }
-
-    /// Opens a mux stream on the leftover GETFront, if one is running.
-    func openStream(host: String, port: UInt16) -> LoftStream? {
-        return front?.open(host: host, port: port)
     }
 
     /// Overlay IP reported by loft-front of the current session.

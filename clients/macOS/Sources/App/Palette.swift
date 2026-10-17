@@ -52,15 +52,23 @@ enum Palette {
             ?? NSFont.systemFont(ofSize: size)
     }
 
+    private static var widthCache: [String: CGFloat] = [:]
+    private static var iconCache: [Int: NSImage] = [:]
+
     /// Single-line width of `s` in `font`, plus a 2pt fudge.
     static func textWidth(_ s: String, font: NSFont) -> CGFloat {
+        let key = "\(font.fontName)|\(font.pointSize)|\(s)"
+        if let w = widthCache[key] { return w }
         let cell = NSTextFieldCell(textCell: s)
         cell.font = font
         cell.usesSingleLineMode = true
         cell.lineBreakMode = .byTruncatingTail
         cell.wraps = false
         let sz = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: 10_000, height: 40))
-        return ceil(sz.width) + 2
+        let w = ceil(sz.width) + 2
+        if widthCache.count > 256 { widthCache.removeAll(keepingCapacity: true) }
+        widthCache[key] = w
+        return w
     }
 
     /// Wrapped height of `s` in `font` at `width`.
@@ -116,8 +124,10 @@ enum Palette {
         return t
     }
 
-    /// Status-item mark at 1x/2x/3x. `err` paints the lamp red.
+    /// Status-item mark at 1x/2x/3x. `err` paints the lamp red. Cached per state.
     static func menuIcon(on: Bool, err: Bool = false) -> NSImage {
+        let key = err ? 2 : (on ? 1 : 0)
+        if let img = iconCache[key] { return img }
         let st: MarkState = err ? .err : (on ? .on : .off)
         let pt = NSSize(width: 18, height: 18)
         let img = NSImage(size: pt)
@@ -148,6 +158,7 @@ enum Palette {
             img.addRepresentation(rep)
         }
         img.isTemplate = false
+        iconCache[key] = img
         return img
     }
 

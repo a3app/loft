@@ -25,6 +25,8 @@ final class FrontHelper {
     var onExit: ((Int32) -> Void)?
     private var stopping = false
     private var waitSem: DispatchSemaphore?
+    private var tunSem = DispatchSemaphore(value: 0)
+    private var socksSem = DispatchSemaphore(value: 0)
     private var outRest = ""
     private var errRest = ""
 
@@ -196,8 +198,9 @@ final class FrontHelper {
             lock.lock(); let stop = stopping; lock.unlock()
             if stop { break }
             if !p.isRunning { break }
-            if Date() > deadline { break }
-            _ = sem.wait(timeout: .now() + 0.2)
+            let left = deadline.timeIntervalSinceNow
+            if left <= 0 { break }
+            _ = sem.wait(timeout: .now() + left)
         }
         lock.lock()
         waitSem = nil
@@ -232,6 +235,8 @@ final class FrontHelper {
         let sem = waitSem
         lock.unlock()
         sem?.signal()
+        tunSem.signal()
+        socksSem.signal()
         if let p = p {
             let pid = p.processIdentifier
             LoftLog.shared.add("front", "interrupt pid=\(pid) running=\(p.isRunning ? 1 : 0)")
@@ -248,13 +253,21 @@ final class FrontHelper {
         let p = proc
         proc = nil
         lock.unlock()
+        waitSem?.signal()
+        tunSem.signal()
+        socksSem.signal()
         if let p = p, p.isRunning {
-            p.terminate()
-            let deadline = Date().addingTimeInterval(1.5)
-            while p.isRunning && Date() < deadline {
-                Thread.sleep(forTimeInterval: 0.05)
+            let gone = DispatchSemaphore(value: 0)
+            let prev = p.terminationHandler
+            p.terminationHandler = { proc in
+                prev?(proc)
+                gone.signal()
             }
-            if p.isRunning { kill(p.processIdentifier, SIGKILL) }
+            p.terminate()
+            if p.isRunning, gone.wait(timeout: .now() + 1.5) == .timedOut {
+                if p.processIdentifier > 0 { kill(p.processIdentifier, SIGKILL) }
+                _ = gone.wait(timeout: .now() + 0.4)
+            }
         }
         if !tunSock.isEmpty {
             try? FileManager.default.removeItem(atPath: tunSock)
@@ -265,8 +278,24 @@ final class FrontHelper {
     /// Blocks until loft-front reports `tun up`, or `seconds` elapse.
     func waitTun(seconds: TimeInterval) {
         let deadline = Date().addingTimeInterval(seconds)
-        while !tunLive && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.05)
+        while !tunLive {
+            lock.lock(); let stop = stopping; lock.unlock()
+            if stop { return }
+            let left = deadline.timeIntervalSinceNow
+            if left <= 0 { return }
+            _ = tunSem.wait(timeout: .now() + left)
+        }
+    }
+
+    /// Blocks until a `socks5` STATUS newer than `gen` arrives, or `seconds` elapse.
+    func waitSocks(after gen: UInt64, seconds: TimeInterval) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while socksGen() == gen {
+            lock.lock(); let stop = stopping; lock.unlock()
+            if stop { return }
+            let left = deadline.timeIntervalSinceNow
+            if left <= 0 { return }
+            _ = socksSem.wait(timeout: .now() + left)
         }
     }
 
@@ -305,6 +334,7 @@ final class FrontHelper {
     private func ingest(_ line: String, err: Bool, sem: DispatchSemaphore?) {
         if line.hasPrefix("tun up") || line.hasPrefix("tun fd ") {
             tunLive = true
+            tunSem.signal()
         }
         let low = line.lowercased()
         if low.hasPrefix("socks5 ") {
@@ -313,6 +343,7 @@ final class FrontHelper {
             socksBind = rest
             socksEpoch += 1
             lock.unlock()
+            socksSem.signal()
         }
         if !err && line.hasPrefix("STATUS ") {
             let first = overlayIP.isEmpty
@@ -351,7 +382,12 @@ final class FrontHelper {
         if st.state == "connecting" { lastStage = st.msg }
         if st.state == "error" { lastError = st.msg.isEmpty ? "front" : FrontExplain.display(st.msg) }
         if st.state == "on", !st.ip.isEmpty { lastError = "" }
+        let gotIP = !overlayIP.isEmpty
+        let gotErr = !lastError.isEmpty
+        let gotTun = tunLive
         lock.unlock()
+        if gotTun { tunSem.signal() }
+        if gotIP || gotErr { waitSem?.signal() }
     }
 
     /// Latest (up, down) byte counters from STATUS.

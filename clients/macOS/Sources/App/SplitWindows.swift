@@ -2,6 +2,41 @@
 
 import AppKit
 
+/// One split-list row. Reused across reloads.
+private final class SplitRow: FlippedView {
+    let plate = LoftPlate(frame: .zero)
+    let hit = ActionButton(frame: .zero)
+    let name = NSTextField(labelWithString: "")
+    let cidrs = NSTextField(labelWithString: "")
+    let meta = NSTextField(labelWithString: "")
+    let src = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        plate.radius = 8
+        hit.drawsWash = false
+        name.font = Palette.font(13.5)
+        name.textColor = Palette.snow
+        cidrs.font = Palette.mono(11.5)
+        cidrs.textColor = Palette.mute
+        meta.font = Palette.body(11)
+        meta.textColor = Palette.mute
+        meta.alignment = .right
+        src.font = Palette.font(10)
+        src.textColor = Palette.copper
+        src.alignment = .right
+        for v in [plate, hit, name, cidrs, meta, src] as [NSView] { addSubview(v) }
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        plate.frame = bounds
+        hit.frame = bounds
+    }
+}
+
 /// Lists window: via / past loft, import, export, repository.
 final class SplitWindowController: NSWindowController {
     private let engine: SessionController
@@ -18,6 +53,7 @@ final class SplitWindowController: NSWindowController {
     private let exp = PillButton(frame: .zero)
     private let repo = PillButton(frame: .zero)
     private let footLine = FlippedView(frame: .zero)
+    private var rows: [String: SplitRow] = [:]
 
     /// Builds the split lists window around `engine`.
     init(engine: SessionController) {
@@ -27,7 +63,6 @@ final class SplitWindowController: NSWindowController {
         w.level = .normal
         build()
         w.center()
-        NotificationCenter.default.addObserver(self, selector: #selector(reload), name: .loftState, object: nil)
         reload()
     }
 
@@ -89,17 +124,8 @@ final class SplitWindowController: NSWindowController {
         addBtn.title = "+  " + L10n.t("split_add")
         let viaN = routes.cidrCount(true)
         let byN = routes.cidrCount(false)
-        tabSeg.removeFromSuperview()
-        tabSeg = SegControl(
-            frame: .zero,
-            titles: ["\(L10n.t("split_via"))  \(viaN)", "\(L10n.t("split_bypass"))  \(byN)"]
-        )
+        tabSeg.setTitles(["\(L10n.t("split_via"))  \(viaN)", "\(L10n.t("split_bypass"))  \(byN)"])
         tabSeg.value = tab
-        tabSeg.onChange = { [weak self] v in
-            self?.tab = v
-            self?.reload()
-        }
-        c.addSubview(tabSeg)
 
         let headY: CGFloat = 14
         let headH: CGFloat = 28
@@ -115,16 +141,26 @@ final class SplitWindowController: NSWindowController {
         tabSeg.frame = NSRect(x: 20, y: y, width: w - 40, height: 32)
         y += 40
         let listTop = y
-        list.subviews.forEach { $0.removeFromSuperview() }
-        let rows = tab == 0 ? routes.viaSets() : routes.bypassSets()
+        let sets = tab == 0 ? routes.viaSets() : routes.bypassSets()
         var ly: CGFloat = 0
-        if rows.isEmpty {
+        var seen = Set<String>()
+        if sets.isEmpty {
+            for (_, row) in rows { row.removeFromSuperview() }
+            rows.removeAll()
+            list.subviews.forEach { $0.removeFromSuperview() }
             let empty = Palette.wrap(L10n.t("split_empty"), font: Palette.body(13), color: Palette.mute, frame: NSRect(x: 8, y: 12, width: w - 56, height: 48), lines: 3)
+            empty.identifier = NSUserInterfaceItemIdentifier("split-empty")
             list.addSubview(empty)
             ly = 72
         } else {
-            for s in rows {
+            list.subviews.filter { $0.identifier?.rawValue == "split-empty" }.forEach { $0.removeFromSuperview() }
+            for s in sets {
+                seen.insert(s.id)
                 ly += addRow(s, y: ly, width: w - 40)
+            }
+            for (id, row) in rows where !seen.contains(id) {
+                row.removeFromSuperview()
+                rows.removeValue(forKey: id)
             }
         }
         list.alphaValue = on ? 1 : 0.4
@@ -158,36 +194,34 @@ final class SplitWindowController: NSWindowController {
     /// One service row. Returns the used height.
     private func addRow(_ s: SplitSet, y: CGFloat, width: CGFloat) -> CGFloat {
         let h: CGFloat = 48
-        let row = LoftPlate(frame: NSRect(x: 0, y: y, width: width, height: h - 4))
-        row.radius = 8
-        let n = Palette.label(s.name, font: Palette.font(13.5), color: Palette.snow, frame: NSRect(x: 10, y: 6, width: width - 100, height: 18))
+        let row = rows[s.id] ?? SplitRow(frame: .zero)
+        if rows[s.id] == nil {
+            rows[s.id] = row
+            list.addSubview(row)
+            row.hit.target = self
+            row.hit.action = #selector(editTap(_:))
+        }
+        row.frame = NSRect(x: 0, y: y, width: width, height: h - 4)
+        row.hit.frame = row.bounds
+        row.hit.identifier = NSUserInterfaceItemIdentifier(s.id)
+        row.name.stringValue = s.name
+        row.name.frame = NSRect(x: 10, y: 6, width: width - 100, height: 18)
         let shown = s.cidrs.prefix(2).joined(separator: " · ") + (s.cidrs.count > 2 ? " · …" : "")
-        let u = Palette.label(shown, font: Palette.mono(11.5), color: Palette.mute, frame: NSRect(x: 10, y: 24, width: width - 100, height: 14))
+        row.cidrs.stringValue = shown
+        row.cidrs.frame = NSRect(x: 10, y: 24, width: width - 100, height: 14)
         let net = s.cidrs.count == 1 ? L10n.t("split_net") : L10n.t("split_nets")
-        let meta = Palette.label("\(s.cidrs.count) \(net)", font: Palette.body(11), color: Palette.mute, frame: NSRect(x: width - 90, y: 6, width: 80, height: 14))
-        meta.alignment = .right
-        let src = Palette.label(s.source == .repo ? L10n.t("split_src_repo") : L10n.t("split_src_me"), font: Palette.font(10), color: Palette.copper, frame: NSRect(x: width - 90, y: 22, width: 80, height: 14))
-        src.alignment = .right
-        let hit = ActionButton(frame: row.bounds)
-        hit.drawsWash = false
-        hit.identifier = NSUserInterfaceItemIdentifier(s.id)
-        hit.target = self
-        hit.action = #selector(editTap(_:))
-        row.addSubview(hit)
-        row.addSubview(n)
-        row.addSubview(u)
-        row.addSubview(meta)
-        row.addSubview(src)
-        list.addSubview(row)
+        row.meta.stringValue = "\(s.cidrs.count) \(net)"
+        row.meta.frame = NSRect(x: width - 90, y: 6, width: 80, height: 14)
+        row.src.stringValue = s.source == .repo ? L10n.t("split_src_repo") : L10n.t("split_src_me")
+        row.src.frame = NSRect(x: width - 90, y: 22, width: 80, height: 14)
         return h
     }
 
     private func nativeLine() -> String {
-        let gw = Priv.physicalGateway()
-        let hop = Priv.activePath("default")
-        let g = gw.isEmpty ? hop.gw : gw
+        let gw = Priv.cachedGateway()
+        let g = gw
         if g.isEmpty { return "" }
-        var iff = hop.iface
+        var iff = Priv.cachedIface()
         if iff.hasPrefix("utun") || iff.hasPrefix("lo") { iff = "" }
         if iff.isEmpty {
             return String(format: L10n.t("split_native_gw"), g)

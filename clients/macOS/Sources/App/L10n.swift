@@ -1,11 +1,11 @@
-// UI strings for the loft menubar app: ru, en, de, fr, pt, zh.
+// UI strings: one pack per language in lang/<code>.lang (same files the design mock loads).
 
 import Foundation
 
 /// Lookup for every UI caption. Default locale is Russian, matching prefs.
 enum L10n {
     enum Lang: String, CaseIterable {
-        case ru, en, de, fr, pt, zh
+        case ru, en, de, fr, pt, zh, it, ja, ko
 
         /// Name of this language in that language, so the picker stays findable.
         var nativeName: String {
@@ -16,6 +16,9 @@ enum L10n {
             case .fr: return "Français"
             case .pt: return "Português"
             case .zh: return "中文"
+            case .it: return "Italiano"
+            case .ja: return "日本語"
+            case .ko: return "한국어"
             }
         }
 
@@ -28,6 +31,9 @@ enum L10n {
             case .fr: return "fr_FR"
             case .pt: return "pt_BR"
             case .zh: return "zh_CN"
+            case .it: return "it_IT"
+            case .ja: return "ja_JP"
+            case .ko: return "ko_KR"
             }
         }
     }
@@ -40,346 +46,45 @@ enum L10n {
         lang = Lang(rawValue: code) ?? .ru
     }
 
-    /// Looks up `k` in the active language; unknown keys come back unchanged.
+    /// Looks up `k` in the active pack; English, then Russian, then the key itself.
     static func t(_ k: String) -> String {
-        guard let p = table[k] else { return k }
-        switch lang {
-        case .ru: return p.0
-        case .en: return p.1
-        case .de: return p.2
-        case .fr: return p.3
-        case .pt: return p.4
-        case .zh: return p.5
-        }
+        if let s = packs[lang.rawValue]?[k] { return s }
+        if lang != .en, let s = packs["en"]?[k] { return s }
+        if lang != .ru, let s = packs["ru"]?[k] { return s }
+        return k
     }
 
-    private static let table: [String: (String, String, String, String, String, String)] = [
-            "connect": ("Открыть лофт", "Open loft", "Loft öffnen", "Ouvrir loft", "Abrir loft", "打开 loft"),
-            "pop_connect": ("Подключить", "Connect", "Verbinden", "Connecter", "Conectar", "连接"),
-            "pop_off": ("Нет активных соединений", "No active connections", "Keine aktiven Verbindungen", "Aucune connexion active", "Nenhuma conexão ativa", "没有活动连接"),
-            "disconnect": ("Отключить", "Disconnect", "Trennen", "Déconnecter", "Desconectar", "断开"),
-            "disconnecting": ("Отключение…", "Disconnecting…", "Trennen…", "Déconnexion…", "Desconectando…", "正在断开…"),
-            "connecting": ("Подключение…", "Connecting…", "Verbinden…", "Connexion…", "Conectando…", "正在连接…"),
-            "retry": ("Повторить", "Retry", "Wiederholen", "Réessayer", "Repetir", "重试"),
-            "retry_wait": ("Повтор (%d)", "Retry (%d)", "Wiederholen (%d)", "Réessayer (%d)", "Repetir (%d)", "重试 (%d)"),
-            "cancel": ("Отмена", "Cancel", "Abbrechen", "Annuler", "Cancelar", "取消"),
-            "open": ("Открыть loft", "Open loft", "Loft öffnen", "Ouvrir loft", "Abrir loft", "打开 loft"),
-            "quit": ("Выйти", "Quit", "Beenden", "Quitter", "Sair", "退出"),
-            "menu_about": ("О программе loft", "About loft", "Über loft", "À propos de loft", "Sobre o loft", "关于 loft"),
-            "menu_hide": ("Скрыть loft", "Hide loft", "loft ausblenden", "Masquer loft", "Ocultar loft", "隐藏 loft"),
-            "menu_hide_others": ("Скрыть остальные", "Hide Others", "Andere ausblenden", "Masquer les autres", "Ocultar outros", "隐藏其他"),
-            "menu_show_all": ("Показать все", "Show All", "Alle einblenden", "Tout afficher", "Mostrar tudo", "全部显示"),
-            "menu_quit": ("Завершить loft", "Quit loft", "loft beenden", "Quitter loft", "Sair do loft", "退出 loft"),
-            "menu_edit": ("Правка", "Edit", "Bearbeiten", "Édition", "Editar", "编辑"),
-            "menu_cut": ("Вырезать", "Cut", "Ausschneiden", "Couper", "Recortar", "剪切"),
-            "menu_paste": ("Вставить", "Paste", "Einsetzen", "Coller", "Colar", "粘贴"),
-            "menu_select_all": ("Выбрать всё", "Select All", "Alles auswählen", "Tout sélectionner", "Selecionar tudo", "全选"),
-            "conn": ("Подключение", "Connection", "Verbindung", "Connexion", "Conexão", "连接"),
-            "conns": ("Подключения", "Connections", "Verbindungen", "Connexions", "Conexões", "连接"),
-            "conns_sub": ("Каждое — свой ключ и адрес. Активное одно.", "Each has its own key and address. One is active.", "Jede hat eigenen Schlüssel und Adresse. Eine ist aktiv.", "Chacune a sa clé et son adresse. Une seule est active.", "Cada uma tem a própria chave e endereço. Uma está ativa.", "每条有自己的密钥和地址。同时只激活一条。"),
-            "conns_sub_multi": ("Каждое открывается отдельно.", "Each one opens on its own.", "Jede öffnet für sich.", "Chacune s’ouvre toute seule.", "Cada uma abre por conta própria.", "每条单独打开。"),
-            "settings": ("Настройки", "Settings", "Einstellungen", "Réglages", "Ajustes", "设置"),
-            "set_gen": ("Общие", "General", "Allgemein", "Général", "Geral", "通用"),
-            "set_client": ("Клиент", "Client", "Client", "Client", "Cliente", "客户端"),
-            "about": ("О программе", "About", "Über loft", "À propos", "Sobre", "关于"),
-            "journal": ("Журнал", "Journal", "Journal", "Journal", "Diário", "日志"),
-            "defaults": ("По умолчанию", "Defaults", "Standard", "Par défaut", "Padrão", "默认"),
-            "journal_d": ("Строки фронта и сессии. Ключ сокращается.", "Front and session lines. The key is shortened.", "Zeilen von Front und Sitzung. Der Schlüssel wird gekürzt.", "Lignes du front et de la session. La clé est raccourcie.", "Linhas do front e da sessão. A chave é encurtada.", "前置与会话行。密钥会缩短。"),
-            "journal_diag": ("Файл с ротацией 1.5 МБ × 3", "Rotating file, 1.5 MB × 3", "Rotierende Datei, 1,5 MB × 3", "Fichier rotatif, 1,5 Mo × 3", "Arquivo rotativo, 1,5 MB × 3", "轮转文件，1.5 MB × 3"),
-            "journal_empty": ("Пока пусто. Открой лофт — сюда придут строки фронта.", "Empty for now. Open loft — front lines will land here.", "Noch leer. Loft öffnen — Front-Zeilen landen hier.", "Vide pour l’instant. Ouvrez loft — les lignes du front arriveront ici.", "Vazio por enquanto. Abra o loft — as linhas do front aparecem aqui.", "还是空的。打开 loft，前置行会到这里。"),
-            "copy": ("Скопировать", "Copy", "Kopieren", "Copier", "Copiar", "复制"),
-            "clear_log": ("Очистить", "Clear", "Leeren", "Effacer", "Limpar", "清除"),
-            "import": ("Импорт", "Import", "Import", "Importer", "Importar", "导入"),
-            "ok": ("OK", "OK", "OK", "OK", "OK", "OK"),
-            "qr": ("QR", "QR", "QR", "QR", "QR", "QR"),
-            "qr_load": ("Из QR-картинки", "From QR image", "Aus QR-Bild", "Depuis une image QR", "De imagem QR", "从二维码图片"),
-            "qr_none": ("QR-код не найден", "No QR code found", "Kein QR-Code gefunden", "Aucun code QR trouvé", "Nenhum QR encontrado", "未找到二维码"),
-            "qr_fail": ("В картинке нет известного подключения", "No known connection in this image", "In diesem Bild keine bekannte Verbindung", "Aucune connexion connue dans cette image", "Nenhuma conexão conhecida nesta imagem", "图片里没有已知连接"),
-            "imp_fail": ("Это не loft, VLESS, .loft или .vpn", "This is not loft, VLESS, .loft, or .vpn", "Das ist kein loft, VLESS, .loft oder .vpn", "Ce n’est pas loft, VLESS, .loft ou .vpn", "Isto não é loft, VLESS, .loft ou .vpn", "这不是 loft、VLESS、.loft 或 .vpn"),
-            "export": ("Экспорт", "Export", "Export", "Exporter", "Exportar", "导出"),
-            "off": ("лофт закрыт", "loft closed", "loft geschlossen", "loft fermé", "loft fechado", "loft 已关闭"),
-            "closed": ("закрыт", "closed", "geschlossen", "fermé", "fechado", "已关闭"),
-            "pill_on": ("Подключено", "Connected", "Verbunden", "Connecté", "Conectado", "已连接"),
-            "pill_off": ("Не подключено", "Not connected", "Nicht verbunden", "Non connecté", "Não conectado", "未连接"),
-            "err": ("ошибка", "error", "Fehler", "erreur", "erro", "错误"),
-            "fail": ("не удалось", "failed", "fehlgeschlagen", "échec", "falhou", "失败"),
-            "none": ("нет сессии", "no session", "keine Sitzung", "pas de session", "sem sessão", "没有会话"),
-            "save": ("Сохранить", "Save", "Speichern", "Enregistrer", "Salvar", "保存"),
-            "back": ("Назад", "Back", "Zurück", "Retour", "Voltar", "返回"),
-            "continue": ("Продолжить", "Continue", "Weiter", "Continuer", "Continuar", "继续"),
-            "manual": ("Вручную", "Manual", "Manuell", "Manuel", "Manual", "手动"),
-            "delete": ("Удалить", "Delete", "Löschen", "Supprimer", "Excluir", "删除"),
-            "edit": ("Править", "Edit", "Bearbeiten", "Modifier", "Editar", "编辑"),
-            "simple": ("Упрощенный интерфейс", "Simplified interface", "Vereinfachte Oberfläche", "Interface simplifiée", "Interface simplificada", "简化界面"),
-            "simple_d": ("Меню и окна — открыть и закрыть.", "Menu and windows: open and close.", "Menü und Fenster: öffnen und schließen.", "Menu et fenêtres : ouvrir et fermer.", "Menu e janelas: abrir e fechar.", "菜单和窗口：打开与关闭。"),
-            "rate_unit": ("Единицы скорости", "Speed units", "Geschwindigkeitseinheiten", "Unités de débit", "Unidades de velocidade", "速率单位"),
-            "rate_unit_d": ("Как показывать ↑↓ в меню и окне статуса.", "How ↑↓ is shown in the menu and status window.", "Wie ↑↓ in Menü und Statusfenster erscheint.", "Comment ↑↓ s’affiche dans le menu et la fenêtre d’état.", "Como ↑↓ aparece no menu e na janela de status.", "菜单和状态窗口里 ↑↓ 的显示方式。"),
-            "u_day": ("д", "d", "T", "j", "d", "天"),
-            "u_bit": ("бит/с", "bit/s", "Bit/s", "bit/s", "bit/s", "比特/秒"),
-            "u_kbit": ("кбит/с", "kbps", "kbit/s", "kbit/s", "kbit/s", "千比特/秒"),
-            "u_mbit": ("Мбит/с", "Mbit/s", "Mbit/s", "Mbit/s", "Mbit/s", "兆比特/秒"),
-            "u_b": ("Б/с", "B/s", "B/s", "o/s", "B/s", "字节/秒"),
-            "u_kb": ("КБ/с", "kB/s", "kB/s", "ko/s", "kB/s", "KB/秒"),
-            "u_mb": ("МБ/с", "MB/s", "MB/s", "Mo/s", "MB/s", "MB/秒"),
-            "multi": ("Несколько исходящих", "Several outbounds", "Mehrere Ausgänge", "Plusieurs sorties", "Várias saídas", "多个出站"),
-            "multi_d": ("Своё «открыть» и статус у каждого.", "Its own Open and status on each.", "Eigenes Öffnen und eigener Status für jedes.", "Son propre Ouvrir et son état pour chacun.", "Cada um com seu Abrir e status.", "每条有自己的打开和状态。"),
-            "several": ("Несколько", "Several", "Mehrere", "Plusieurs", "Vários", "多个"),
-            "open_n": ("открыто · %d", "open · %d", "offen · %d", "ouvert · %d", "aberto · %d", "已打开 · %d"),
-            "open_n_err": ("открыто · %d · ошибка", "open · %d · error", "offen · %d · Fehler", "ouvert · %d · erreur", "aberto · %d · erro", "已打开 · %d · 错误"),
-            "conn_up": ("открыто", "open", "offen", "ouvert", "aberto", "已打开"),
-            "conn_down": ("закрыто", "closed", "geschlossen", "fermé", "fechado", "已关闭"),
-            "hold": ("Не открывать прямой интернет", "Don’t restore direct internet", "Direktes Internet nicht wiederherstellen", "Ne pas rétablir l’internet direct", "Não restaurar a internet direta", "不要恢复直连网络"),
-            "hold_d": ("Последний туннель умер — сеть закрыта.", "Last tunnel died — the machine stays dark.", "Letzter Tunnel tot — die Maschine bleibt dunkel.", "Le dernier tunnel est mort — la machine reste sombre.", "O último túnel morreu — a máquina fica no escuro.", "最后一条隧道没了 — 机器保持断网。"),
-            "failover": ("Передать живому", "Hand off to a live one", "An eine lebende übergeben", "Passer à une active", "Passar para uma ativa", "交给仍在线的"),
-            "failover_d": ("Оборвалось — маршрут на другой туннель.", "If it drops, the route moves to another tunnel.", "Wenn sie abreißt, wandert die Route zum anderen Tunnel.", "Si ça coupe, la route passe à un autre tunnel.", "Se cair, a rota vai para outro túnel.", "断了就把路由交给另一条隧道。"),
-            "upd_launch": ("Проверять обновления при запуске", "Check for updates at launch", "Beim Start nach Updates suchen", "Vérifier les mises à jour au lancement", "Buscar atualizações ao abrir", "启动时检查更新"),
-            "upd_launch_d": ("GitHub latest, когда loft открывается.", "GitHub latest when loft opens.", "GitHub latest, wenn loft startet.", "GitHub latest à l’ouverture de loft.", "GitHub latest quando o loft abre.", "打开 loft 时查 GitHub latest。"),
-            "upd_later": ("Позже", "Later", "Später", "Plus tard", "Depois", "稍后"),
-            "upd_quiet": ("Не спрашивать снова", "Don’t ask again", "Nicht mehr fragen", "Ne plus demander", "Não perguntar de novo", "不再询问"),
-            "upd_quiet_d": ("Выключит проверку при запуске.", "Turns off check at launch.", "Schaltet die Prüfung beim Start aus.", "Désactive la vérification au lancement.", "Desliga a verificação ao abrir.", "关闭启动时检查。"),
-            "upd_offer_title": ("Обновление loft", "loft update", "loft-Update", "Mise à jour loft", "Atualização do loft", "loft 更新"),
-            "upd_offer_body": ("Скачать и заменить это приложение.", "Download and replace this app.", "Diese App herunterladen und ersetzen.", "Télécharger et remplacer cette app.", "Baixar e substituir este aplicativo.", "下载并替换这个应用。"),
-            "login": ("Открывать при входе", "Open at login", "Beim Anmelden öffnen", "Ouvrir à la connexion", "Abrir ao entrar", "登录时打开"),
-            "login_d": ("Login item, без окна", "Login item, no window", "Login-Objekt, ohne Fenster", "Login item, sans fenêtre", "Login item, sem janela", "登录项，不打开窗口"),
-            "dock": ("Отображать значок в Dock", "Show Dock icon", "Dock-Symbol anzeigen", "Afficher l’icône du Dock", "Mostrar ícone no Dock", "在 Dock 显示图标"),
-            "dock_d": ("В строке меню остаётся.", "The menu-bar icon stays.", "Das Menüleisten-Symbol bleibt.", "L’icône de la barre de menus reste.", "O ícone da barra de menus permanece.", "菜单栏图标仍在。"),
-            "dock_always": ("всегда", "Always", "Immer", "Toujours", "Sempre", "始终"),
-            "dock_window": ("когда открыто окно", "When a window is open", "Wenn ein Fenster offen ist", "Quand une fenêtre est ouverte", "Quando uma janela está aberta", "有窗口时"),
-            "dock_never": ("никогда", "Never", "Nie", "Jamais", "Nunca", "从不"),
-            "auto": ("Подключать автоматически", "Connect automatically", "Automatisch verbinden", "Connecter automatiquement", "Conectar automaticamente", "自动连接"),
-            "auto_d": ("После ключа и живого фронта", "After a key and a live front", "Nach Schlüssel und lebendem Front", "Après une clé et un front vivant", "Depois da chave e de um front ativo", "有密钥且前置可用之后"),
-            "reconnect": ("Автоматический реконнект", "Automatic reconnect", "Automatisch erneut verbinden", "Reconnexion automatique", "Reconectar automaticamente", "自动重连"),
-            "reconnect_d": ("Оборвалось — снова открыть лофт.", "If it drops, open loft again.", "Wenn sie abreißt — loft wieder öffnen.", "Si ça coupe, rouvrir loft.", "Se cair, abrir o loft de novo.", "断了就再打开 loft。"),
-            "socks_share": ("Общий SOCKS", "Shared SOCKS", "Gemeinsames SOCKS", "SOCKS partagé", "SOCKS compartilhado", "共用 SOCKS"),
-            "socks_share_d": ("Один порт из настроек. Раздельная — если включена.", "One port from Settings. Split rules, if split is on.", "Ein Port aus den Einstellungen. Split-Regeln, wenn Split an ist.", "Un port depuis Réglages. Règles de split, si le split est activé.", "Uma porta dos Ajustes. Regras de split, se o split estiver ligado.", "设置里的一个端口。若开了分流，用分流规则。"),
-            "socks_port": ("Порт SOCKS5", "SOCKS5 port", "SOCKS5-Port", "Port SOCKS5", "Porta SOCKS5", "SOCKS5 端口"),
-            "socks_port_d": ("Локальный вход. У подключения можно задать свой.", "Local inbound. A connection can set its own.", "Lokaler Eingang. Eine Verbindung kann einen eigenen setzen.", "Entrée locale. Une connexion peut en fixer un à elle.", "Entrada local. Uma conexão pode definir a sua.", "本机入口。连接可以设自己的。"),
-            "split": ("Раздельная маршрутизация", "Split routing", "Getrennte Routen", "Routage séparé", "Roteamento separado", "分流"),
-            "split_d": ("Мимо — через прямой маршрут до лофта.", "Around loft uses the direct route from before loft.", "An loft vorbei nutzt die direkte Route von vor loft.", "Autour de loft utilise la route directe d’avant loft.", "Fora do loft usa a rota direta de antes do loft.", "绕过 loft 走打开前记下的直连路由。"),
-            "split_sub": ("Мимо идёт через прямой маршрут, запомненный до лофта. Даже если лофт закрыт.", "Around loft uses the direct route remembered before loft. Works even when loft is closed.", "An loft vorbei nutzt die direkte Route, die vor loft gemerkt wurde. Auch wenn loft zu ist.", "Autour de loft utilise la route directe mémorisée avant loft. Même si loft est fermé.", "Fora do loft usa a rota direta lembrada antes do loft. Funciona mesmo com loft fechado.", "绕过 loft 走打开前记下的直连路由。loft 关着也一样。"),
-            "split_sub_off": ("Выкл — списки не ставятся в систему.", "Off — lists stay out of the system table.", "Aus — Listen kommen nicht in die Systemtabelle.", "Off — les listes restent hors de la table système.", "Desl. — as listas ficam fora da tabela do sistema.", "关 — 列表不写入系统表。"),
-            "split_native": ("прямой %@ · %@", "direct %@ · %@", "direkt %@ · %@", "direct %@ · %@", "direto %@ · %@", "直连 %@ · %@"),
-            "split_native_gw": ("прямой %@", "direct %@", "direkt %@", "direct %@", "direto %@", "直连 %@"),
-            "split_via": ("Через лофт", "Through loft", "Durch loft", "Via loft", "Pelo loft", "经 loft"),
-            "split_bypass": ("Мимо лофта", "Around loft", "An loft vorbei", "Autour de loft", "Fora do loft", "绕过 loft"),
-            "split_add": ("Добавить", "Add", "Hinzufügen", "Ajouter", "Adicionar", "添加"),
-            "split_nets": ("сетей", "nets", "Netze", "réseaux", "redes", "个网段"),
-            "split_net": ("сеть", "net", "Netz", "réseau", "rede", "网段"),
-            "split_src_repo": ("репо", "repo", "Repo", "dépôt", "repo", "仓库"),
-            "split_src_me": ("свои", "mine", "eigene", "à moi", "minhas", "自己的"),
-            "split_empty": ("Пока пусто. Импорт, репозиторий или плюс — сеть.", "Empty for now. Import, repository, or plus — a network.", "Noch leer. Import, Repository oder Plus — ein Netz.", "Vide pour l’instant. Import, dépôt ou plus — un réseau.", "Vazio por enquanto. Importar, repositório ou mais — uma rede.", "还是空的。导入、仓库或加号 — 一个网段。"),
-            "split_repo": ("Репозиторий", "Repository", "Repository", "Dépôt", "Repositório", "仓库"),
-            "split_import_title": ("Импорт маршрутов", "Import routes", "Routen importieren", "Importer des routes", "Importar rotas", "导入路由"),
-            "split_import_body": ("Keenetic .bat или loft-routes. Комментарий :: rem — имя сервиса.", "Keenetic .bat or loft-routes. :: rem is the service name.", "Keenetic .bat oder loft-routes. :: rem ist der Dienstname.", "Keenetic .bat ou loft-routes. :: rem est le nom du service.", "Keenetic .bat ou loft-routes. :: rem é o nome do serviço.", "Keenetic .bat 或 loft-routes。:: rem 是服务名。"),
-            "split_import_drop": ("Перетащите .bat или .loft-routes", "Drop a .bat or .loft-routes file", ".bat oder .loft-routes ablegen", "Déposez un fichier .bat ou .loft-routes", "Solte um arquivo .bat ou .loft-routes", "拖入 .bat 或 .loft-routes"),
-            "split_import_pick": ("Выбрать файл…", "Choose file…", "Datei wählen…", "Choisir un fichier…", "Escolher arquivo…", "选择文件…"),
-            "split_import_where": ("Куда положить", "Put them", "Wohin legen", "Où les mettre", "Onde colocar", "放到哪里"),
-            "split_import_go": ("Добавить %d маршрутов", "Add %d routes", "%d Routen hinzufügen", "Ajouter %d routes", "Adicionar %d rotas", "添加 %d 条路由"),
-            "split_import_none": ("В файле нет маршрутов.", "The file has no routes.", "In der Datei keine Routen.", "Le fichier n’a pas de routes.", "O arquivo não tem rotas.", "文件里没有路由。"),
-            "split_import_need": ("Сначала файл с маршрутами.", "Drop a route file first.", "Zuerst eine Route-Datei ablegen.", "Déposez d’abord un fichier de routes.", "Solte primeiro um arquivo de rotas.", "先放入路由文件。"),
-            "split_detect_keen": ("Keenetic", "Keenetic", "Keenetic", "Keenetic", "Keenetic", "Keenetic"),
-            "split_detect_loft": ("Loft", "Loft", "Loft", "Loft", "Loft", "Loft"),
-            "split_detect_n": ("%d строк", "%d lines", "%d Zeilen", "%d lignes", "%d linhas", "%d 行"),
-            "split_detect_nodir": ("без направления", "no direction", "ohne Richtung", "sans direction", "sem direção", "无方向"),
-            "split_export_title": ("Экспорт маршрутов", "Export routes", "Routen exportieren", "Exporter des routes", "Exportar rotas", "导出路由"),
-            "split_export_body": ("Keenetic поймёт оба. Loft пишет имя сервиса и направление в комментарии.", "Keenetic reads both. Loft writes the service name and direction in the rem.", "Keenetic liest beide. Loft schreibt Dienstname und Richtung in den rem.", "Keenetic lit les deux. Loft écrit le nom du service et la direction dans le rem.", "O Keenetic lê os dois. O Loft escreve o nome do serviço e a direção no rem.", "Keenetic 两种都认。Loft 把服务名和方向写进 rem。"),
-            "split_export_fmt": ("Формат", "Format", "Format", "Format", "Formato", "格式"),
-            "split_export_keen": ("Keenetic .bat", "Keenetic .bat", "Keenetic .bat", "Keenetic .bat", "Keenetic .bat", "Keenetic .bat"),
-            "split_export_loft": ("Loft", "Loft", "Loft", "Loft", "Loft", "Loft"),
-            "split_export_which": ("Какой список", "Which list", "Welche Liste", "Quelle liste", "Qual lista", "哪份列表"),
-            "split_export_save": ("Сохранить loft-routes.bat", "Save loft-routes.bat", "loft-routes.bat speichern", "Enregistrer loft-routes.bat", "Salvar loft-routes.bat", "保存 loft-routes.bat"),
-            "split_export_save_keen": ("Сохранить YouTube.bat", "Save YouTube.bat", "YouTube.bat speichern", "Enregistrer YouTube.bat", "Salvar YouTube.bat", "保存 YouTube.bat"),
-            "split_export_empty": ("Нечего сохранять в этом списке.", "Nothing to save in this list.", "In dieser Liste nichts zu speichern.", "Rien à enregistrer dans cette liste.", "Nada para salvar nesta lista.", "这份列表里没什么可保存。"),
-            "split_repo_body": ("Raw .bat с GitHub или своего хоста. Обычно это «через лофт».", "Raw .bat from GitHub or your host. Usually the through-loft list.", "Raw .bat von GitHub oder dem eigenen Host. Meist die Durch-loft-Liste.", "Raw .bat depuis GitHub ou votre hôte. En général la liste via loft.", "Raw .bat do GitHub ou do seu host. Em geral a lista pelo loft.", "来自 GitHub 或自己主机的 raw .bat。通常是经 loft 的列表。"),
-            "split_repo_url": ("Адрес списка", "List URL", "Listen-URL", "URL de la liste", "URL da lista", "列表地址"),
-            "split_repo_auto": ("Обновлять самим", "Update on its own", "Von selbst aktualisieren", "Mettre à jour tout seul", "Atualizar sozinho", "自行更新"),
-            "split_repo_auto_d": ("Раз в сутки, свои записи не затирает.", "Once a day. Leaves your own rows alone.", "Einmal am Tag. Eigene Zeilen bleiben.", "Une fois par jour. Laisse vos propres lignes.", "Uma vez ao dia. Não apaga as suas linhas.", "每天一次。不覆盖你自己的行。"),
-            "split_repo_pull": ("Обновить сейчас", "Update now", "Jetzt aktualisieren", "Mettre à jour maintenant", "Atualizar agora", "立即更新"),
-            "split_repo_none": ("Нет адреса списка.", "No list URL.", "Keine Listen-URL.", "Pas d’URL de liste.", "Sem URL da lista.", "没有列表地址。"),
-            "split_repo_fail": ("Не удалось скачать список.", "Could not download the list.", "Liste konnte nicht geladen werden.", "Impossible de télécharger la liste.", "Não foi possível baixar a lista.", "无法下载列表。"),
-            "split_add_title": ("Сеть", "Network", "Netz", "Réseau", "Rede", "网段"),
-            "split_add_body": ("Адрес или CIDR. Имя сервиса — чтобы в списке было понятно.", "Address or CIDR. Service name is what you see in the list.", "Adresse oder CIDR. Der Dienstname ist, was du in der Liste siehst.", "Adresse ou CIDR. Le nom du service est ce que vous voyez dans la liste.", "Endereço ou CIDR. O nome do serviço é o que aparece na lista.", "地址或 CIDR。服务名是列表里看到的名字。"),
-            "split_add_net": ("Сеть или адрес", "Network or address", "Netz oder Adresse", "Réseau ou adresse", "Rede ou endereço", "网段或地址"),
-            "split_add_name": ("Сервис", "Service", "Dienst", "Service", "Serviço", "服务"),
-            "split_add_go": ("Добавить", "Add", "Hinzufügen", "Ajouter", "Adicionar", "添加"),
-            "split_add_save": ("Сохранить", "Save", "Speichern", "Enregistrer", "Salvar", "保存"),
-            "split_add_bad": ("Нужен адрес или CIDR.", "Need an address or CIDR.", "Adresse oder CIDR nötig.", "Il faut une adresse ou un CIDR.", "É preciso um endereço ou CIDR.", "需要地址或 CIDR。"),
-            "name": ("Имя", "Name", "Name", "Nom", "Nome", "名称"),
-            "key": ("Ключ доступа", "Access key", "Zugangsschlüssel", "Clé d’accès", "Chave de acesso", "访问密钥"),
-            "url": ("URL", "URL", "URL", "URL", "URL", "URL"),
-            "path": ("Путь (если давали)", "Path (if they gave you one)", "Pfad (falls angegeben)", "Chemin (s’ils vous l’ont donné)", "Caminho (se tiverem dado um)", "路径（如果给了）"),
-            "tun": ("Интерфейс туннеля", "Tunnel interface", "Tunnel-Interface", "Interface du tunnel", "Interface do túnel", "隧道接口"),
-            "tun_d": ("Маршрут машины — в Настройках.", "The machine route is in Settings.", "Die Maschinenroute steht in Einstellungen.", "La route de la machine est dans Réglages.", "A rota da máquina está em Ajustes.", "机器路由在设置里。"),
-            "sstp_tun": ("Интерфейс туннеля", "Tunnel interface", "Tunnel-Interface", "Interface du tunnel", "Interface do túnel", "隧道接口"),
-            "sstp_tun_d": ("Маршрут машины — в Настройках.", "The machine route is in Settings.", "Die Maschinenroute steht in Einstellungen.", "La route de la machine est dans Réglages.", "A rota da máquina está em Ajustes.", "机器路由在设置里。"),
-            "default_route": ("Маршрут по умолчанию", "Allow default route", "Standardroute erlauben", "Autoriser la route par défaut", "Permitir rota padrão", "允许默认路由"),
-            "default_route_d": ("Весь интернет через лофт. Выкл — только сеть лофта.", "Send all internet through loft. Off — loft net only.", "Das ganze Internet durch loft. Aus — nur das loft-Netz.", "Tout l’internet via loft. Off — uniquement le réseau loft.", "Toda a internet pelo loft. Desl. — só a rede loft.", "全部流量走 loft。关 — 只有 loft 网。"),
-            "diag": ("Расширенный журнал", "Extended journal", "Erweitertes Journal", "Journal étendu", "Diário estendido", "扩展日志"),
-            "diag_d": ("Маршруты, DNS, loft-priv. Файл с ротацией.", "Routes, DNS, loft-priv. Rotating file.", "Routen, DNS, loft-priv. Rotierende Datei.", "Routes, DNS, loft-priv. Fichier rotatif.", "Rotas, DNS, loft-priv. Arquivo rotativo.", "路由、DNS、loft-priv。轮转文件。"),
-            "net_tag": ("Туннель", "Tunnel", "Tunnel", "Tunnel", "Túnel", "隧道"),
-            "pop_setup": ("Настройка", "Settings", "Einstellungen", "Réglages", "Ajustes", "设置"),
-            "full": ("весь трафик", "full tunnel", "voller Tunnel", "tunnel complet", "túnel completo", "全隧道"),
-            "reset": ("Сбросить маршруты", "Reset routes", "Routen zurücksetzen", "Réinitialiser les routes", "Redefinir rotas", "重置路由"),
-            "held": ("маршрут закрыт", "route held", "Route gehalten", "route retenue", "rota retida", "路由已卡住"),
-            "overlay": ("Overlay IP", "Overlay IP", "Overlay IP", "Overlay IP", "Overlay IP", "Overlay IP"),
-            "ext_ip": ("Показывать внешний IP", "Show external IP", "Externe IP zeigen", "Afficher l’IP externe", "Mostrar IP externo", "显示外部 IP"),
-            "ext_ip_d": ("После подключения спросить адрес у сервиса через это соединение.", "After connect, ask a service for the address through this session.", "Nach dem Verbinden einen Dienst durch diese Sitzung nach der Adresse fragen.", "Après connexion, demander l’adresse à un service via cette session.", "Depois de conectar, pedir o endereço a um serviço por esta sessão.", "连上后通过本会话向服务询问地址。"),
-            "ext_ip_url": ("API внешнего IP", "External IP API", "API der externen IP", "API d’IP externe", "API de IP externo", "外部 IP API"),
-            "ext_ip_url_d": ("HTTP-ответ: сам адрес или JSON с полем ip.", "HTTP body: the address, or JSON with an ip field.", "HTTP-Körper: die Adresse, oder JSON mit Feld ip.", "Corps HTTP : l’adresse, ou JSON avec un champ ip.", "Corpo HTTP: o endereço, ou JSON com campo ip.", "HTTP 正文：地址本身，或带 ip 字段的 JSON。"),
-            "ext_ip_lab": ("Внешний IP", "External IP", "Externe IP", "IP externe", "IP externo", "外部 IP"),
-            "route": ("Маршрут", "Route", "Route", "Route", "Rota", "路由"),
-            "route_tag": ("маршрут", "route", "Route", "route", "rota", "路由"),
-            "need_key": ("нужен ключ и URL", "need a key and a URL", "Schlüssel und URL nötig", "il faut une clé et une URL", "precisa de chave e URL", "需要密钥和 URL"),
-            "need_inbound": ("нужен туннель или SOCKS5", "need a tunnel or SOCKS5", "Tunnel oder SOCKS5 nötig", "il faut un tunnel ou SOCKS5", "precisa de túnel ou SOCKS5", "需要隧道或 SOCKS5"),
-            "socks": ("SOCKS5", "SOCKS5", "SOCKS5", "SOCKS5", "SOCKS5", "SOCKS5"),
-            "socks_d": ("Если пусто — порт из Настроек.", "If empty — port from Settings.", "Leer — Port aus Einstellungen.", "Si vide — port depuis Réglages.", "Se vazio — porta dos Ajustes.", "空则用设置里的端口。"),
-            "mux": ("Мультиплекс", "Mux", "Multiplex", "Multiplex", "Multiplex", "多路复用"),
-            "mux_d": ("Несколько TCP в одной GET-сессии.\nВыкл — CONNECT без mux (нужна нода).", "Several TCP in one GET session.\nOff — CONNECT, no inner mux (needs the node).", "Mehrere TCP in einer GET-Sitzung.\nAus — CONNECT ohne inneres Mux (braucht die Node).", "Plusieurs TCP dans une session GET.\nOff — CONNECT, sans mux interne (il faut le nœud).", "Vários TCP numa sessão GET.\nDesl. — CONNECT, sem mux interno (precisa do nó).", "一条 GET 会话里多路 TCP。\n关 — CONNECT，无内部 mux（需要节点）。"),
-            "err_need_mux": ("нода без CONNECT, нужен mux", "node has no CONNECT, mux required", "Node ohne CONNECT, Mux nötig", "nœud sans CONNECT, mux requis", "nó sem CONNECT, mux obrigatório", "节点没有 CONNECT，需要 mux"),
-            "warn_export": ("В файле есть ключ доступа. Не передавайте посторонним.", "The file contains the key. Do not give it away.", "Die Datei enthält den Schlüssel. Nicht weitergeben.", "Le fichier contient la clé. Ne le donnez pas.", "O arquivo contém a chave. Não entregue a estranhos.", "文件里有访问密钥。不要给外人。"),
-            "lang": ("Язык интерфейса", "Interface language", "Sprache der Oberfläche", "Langue de l’interface", "Idioma da interface", "界面语言"),
-            "lang_ru": ("Русский", "Русский", "Русский", "Русский", "Русский", "Русский"),
-            "lang_en": ("English", "English", "English", "English", "English", "English"),
-            "lang_de": ("Deutsch", "Deutsch", "Deutsch", "Deutsch", "Deutsch", "Deutsch"),
-            "lang_fr": ("Français", "Français", "Français", "Français", "Français", "Français"),
-            "lang_pt": ("Português", "Português", "Português", "Português", "Português", "Português"),
-            "lang_zh": ("中文", "中文", "中文", "中文", "中文", "中文"),
-            "lang_d": ("меняется сразу", "changes at once", "wirkt sofort", "prend effet tout de suite", "vale na hora", "立即生效"),
-            "proto": ("протокол", "protocol", "Protokoll", "protocole", "protocolo", "协议"),
-            "protos": ("протоколы", "protocols", "Protokolle", "protocoles", "protocolos", "协议"),
-            "fronts": ("фронты", "fronts", "Fronts", "fronts", "fronts", "前置"),
-            "options": ("опции", "options", "Optionen", "options", "opções", "选项"),
-            "active": ("активно", "active", "aktiv", "actif", "ativo", "当前"),
-            "open_one": ("Открыть", "Open", "Öffnen", "Ouvrir", "Abrir", "打开"),
-            "close_one": ("Отключить", "Disconnect", "Trennen", "Déconnecter", "Desconectar", "断开"),
-            "front": ("Фронт", "Front", "Front", "Front", "Front", "前置"),
-            "key_title": ("Ключ доступа", "Access key", "Zugangsschlüssel", "Clé d’accès", "Chave de acesso", "访问密钥"),
-            "key_body": ("Введите ключ доступа, который вам выдали.", "Enter the access key you were given.", "Geben Sie den Zugangsschlüssel ein, den Sie bekommen haben.", "Entrez la clé d’accès qu’on vous a donnée.", "Digite a chave de acesso que lhe deram.", "输入发给你的访问密钥。"),
-            "key_hint": ("Начинается с lt_. Его показывают один раз — сохраните.", "It starts with lt_. Shown once — keep it.", "Beginnt mit lt_. Einmal gezeigt — behalten.", "Elle commence par lt_. Montrée une fois — gardez-la.", "Começa com lt_. Mostrada uma vez — guarde.", "以 lt_ 开头。只显示一次 — 请保存。"),
-            "key_step": ("Шаг 1 из 2", "Step 1 of 2", "Schritt 1 von 2", "Étape 1 sur 2", "Passo 1 de 2", "第 1 步，共 2 步"),
-            "key_orfile": ("Или импортировать файл или QR", "Or import a file or QR", "Oder Datei oder QR importieren", "Ou importer un fichier ou un QR", "Ou importar um arquivo ou QR", "或导入文件或二维码"),
-            "url_title": ("Адрес", "Address", "Adresse", "Adresse", "Endereço", "地址"),
-            "url_body": ("Введите адрес, который выдали вместе с ключом.", "Enter the address you were given with the key.", "Geben Sie die Adresse ein, die Sie mit dem Schlüssel bekommen haben.", "Entrez l’adresse donnée avec la clé.", "Digite o endereço dado junto com a chave.", "输入和密钥一起发给你的地址。"),
-            "url_step": ("Шаг 2 из 2", "Step 2 of 2", "Schritt 2 von 2", "Étape 2 sur 2", "Passo 2 de 2", "第 2 步，共 2 步"),
-            "url_type": ("Как подключаться", "How to connect", "Wie verbinden", "Comment se connecter", "Como conectar", "如何连接"),
-            "url_get": ("GET", "GET", "GET", "GET", "GET", "GET"),
-            "url_ws": ("WebSocket", "WebSocket", "WebSocket", "WebSocket", "WebSocket", "WebSocket"),
-            "url_hint": ("HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.", "HTTPS. GET file, WS channel, H2/H3 CONNECT, QUIC UDP.", "HTTPS. GET Datei, WS Kanal, H2/H3 CONNECT, QUIC UDP.", "HTTPS. GET fichier, WS canal, H2/H3 CONNECT, QUIC UDP.", "HTTPS. GET arquivo, WS canal, H2/H3 CONNECT, QUIC UDP.", "HTTPS。GET 文件，WS 通道，H2/H3 CONNECT，QUIC UDP。"),
-            "vpn_type": ("Тип VPN", "VPN type", "VPN-Typ", "Type de VPN", "Tipo de VPN", "VPN 类型"),
-            "vpn_loft": ("loft", "loft", "loft", "loft", "loft", "loft"),
-            "vpn_sstp": ("SSTP", "SSTP", "SSTP", "SSTP", "SSTP", "SSTP"),
-            "vpn_vless": ("VLESS", "VLESS", "VLESS", "VLESS", "VLESS", "VLESS"),
-            "vpn_trojan": ("Trojan", "Trojan", "Trojan", "Trojan", "Trojan", "Trojan"),
-            "vless_uuid": ("UUID", "UUID", "UUID", "UUID", "UUID", "UUID"),
-            "vless_url": ("Ссылка vless://", "vless:// link", "vless://-Link", "Lien vless://", "Link vless://", "vless:// 链接"),
-            "vless_link": ("Ссылка", "Link", "Link", "Lien", "Link", "链接"),
-            "vless_manual": ("Вручную", "Manual", "Manuell", "Manuel", "Manual", "手动"),
-            "vless_host": ("Адрес", "Address", "Adresse", "Adresse", "Endereço", "地址"),
-            "vless_port": ("Порт", "Port", "Port", "Port", "Porta", "端口"),
-            "vless_sec": ("Защита", "Security", "Schutz", "Sécurité", "Segurança", "安全"),
-            "vless_tls": ("TLS", "TLS", "TLS", "TLS", "TLS", "TLS"),
-            "vless_reality": ("REALITY", "REALITY", "REALITY", "REALITY", "REALITY", "REALITY"),
-            "vless_net": ("Транспорт", "Transport", "Transport", "Transport", "Transporte", "传输"),
-            "vless_tcp": ("TCP", "TCP", "TCP", "TCP", "TCP", "TCP"),
-            "vless_xhttp": ("XHTTP", "XHTTP", "XHTTP", "XHTTP", "XHTTP", "XHTTP"),
-            "vless_fp": ("Отпечаток TLS", "TLS fingerprint", "TLS-Fingerabdruck", "Empreinte TLS", "Impressão TLS", "TLS 指纹"),
-            "vless_pbk": ("Публичный ключ", "Public key", "Öffentlicher Schlüssel", "Clé publique", "Chave pública", "公钥"),
-            "vless_sid": ("Short ID", "Short ID", "Short ID", "Short ID", "Short ID", "Short ID"),
-            "vless_vision": ("Vision", "Vision", "Vision", "Vision", "Vision", "Vision"),
-            "vless_vision_d": ("xtls-rprx-vision на TCP.", "xtls-rprx-vision on TCP.", "xtls-rprx-vision auf TCP.", "xtls-rprx-vision sur TCP.", "xtls-rprx-vision no TCP.", "TCP 上的 xtls-rprx-vision。"),
-            "vless_path": ("Путь", "Path", "Pfad", "Chemin", "Caminho", "路径"),
-            "vless_xhost": ("Заголовок Host", "Host header", "Host-Header", "En-tête Host", "Cabeçalho Host", "Host 头"),
-            "trojan_pass": ("Пароль", "Password", "Passwort", "Mot de passe", "Senha", "密码"),
-            "trojan_url": ("Сервер", "Server", "Server", "Serveur", "Servidor", "服务器"),
-            "need_vless": ("нужны UUID и адрес VLESS", "VLESS needs a UUID and a server", "VLESS braucht UUID und Server", "VLESS a besoin d’un UUID et d’un serveur", "VLESS precisa de UUID e servidor", "VLESS 需要 UUID 和服务器"),
-            "need_trojan": ("нужны пароль и адрес Trojan", "Trojan needs a password and a server", "Trojan braucht Passwort und Server", "Trojan a besoin d’un mot de passe et d’un serveur", "Trojan precisa de senha e servidor", "Trojan 需要密码和服务器"),
-            "err_vless": ("VLESS не открылся", "VLESS did not come up", "VLESS ist nicht hochgekommen", "VLESS ne s’est pas ouvert", "VLESS não subiu", "VLESS 没有起来"),
-            "err_vless_uuid": ("неверный UUID VLESS", "wrong VLESS UUID", "falsche VLESS-UUID", "UUID VLESS incorrect", "UUID VLESS errado", "VLESS UUID 不对"),
-            "err_reality": ("не сошёлся Reality", "Reality handshake failed", "Reality-Handshake fehlgeschlagen", "échec du handshake Reality", "handshake Reality falhou", "Reality 握手失败"),
-            "err_vless_reality": ("не сошёлся Reality", "Reality handshake failed", "Reality-Handshake fehlgeschlagen", "échec du handshake Reality", "handshake Reality falhou", "Reality 握手失败"),
-            "err_vless_transport": ("этот транспорт VLESS пока не поддерживается", "this VLESS transport is not supported yet", "dieser VLESS-Transport wird noch nicht unterstützt", "ce transport VLESS n’est pas encore pris en charge", "este transporte VLESS ainda não é suportado", "此 VLESS 传输暂不支持"),
-            "err_trojan": ("Trojan не открылся", "Trojan did not come up", "Trojan ist nicht hochgekommen", "Trojan ne s’est pas ouvert", "Trojan não subiu", "Trojan 没有起来"),
-            "err_trojan_password": ("неверный пароль Trojan", "wrong Trojan password", "falsches Trojan-Passwort", "mot de passe Trojan incorrect", "senha Trojan errada", "Trojan 密码不对"),
-            "err_trojan_transport": ("этот транспорт Trojan пока не поддерживается", "this Trojan transport is not supported yet", "dieser Trojan-Transport wird noch nicht unterstützt", "ce transport Trojan n’est pas encore pris en charge", "este transporte Trojan ainda não é suportado", "此 Trojan 传输暂不支持"),
-            "sstp_user": ("Пользователь", "Username", "Benutzer", "Nom d’utilisateur", "Usuário", "用户名"),
-            "sstp_pass": ("Пароль", "Password", "Passwort", "Mot de passe", "Senha", "密码"),
-            "show_secret": ("Показать", "Show", "Zeigen", "Afficher", "Mostrar", "显示"),
-            "hide_secret": ("Скрыть", "Hide", "Verbergen", "Masquer", "Ocultar", "隐藏"),
-            "sstp_url": ("Сервер", "Server", "Server", "Serveur", "Servidor", "服务器"),
-            "sstp_sni": ("Имя хоста TLS", "TLS hostname", "TLS-Hostname", "Nom d’hôte TLS", "Hostname TLS", "TLS 主机名"),
-            "sstp_tls": ("Проверка сертификата", "TLS server verification", "Zertifikatsprüfung", "Vérification du certificat", "Verificação do certificado", "证书校验"),
-            "sstp_tls_d": ("Проверять сертификат HTTPS-сервера.", "Verify the HTTPS server certificate.", "Das HTTPS-Serverzertifikat prüfen.", "Vérifier le certificat du serveur HTTPS.", "Verificar o certificado do servidor HTTPS.", "校验 HTTPS 服务器证书。"),
-            "sstp_pap": ("PAP / CHAP", "PAP / CHAP", "PAP / CHAP", "PAP / CHAP", "PAP / CHAP", "PAP / CHAP"),
-            "sstp_pap_d": ("Менее безопасно. По умолчанию только MSCHAPv2.", "Less secure. Default is MSCHAPv2 only.", "Weniger sicher. Standard ist nur MSCHAPv2.", "Moins sûr. Par défaut MSCHAPv2 seulement.", "Menos seguro. O padrão é só MSCHAPv2.", "不太安全。默认只用 MSCHAPv2。"),
-            "sstp_dns": ("Свои DNS", "Custom DNS", "Eigene DNS", "DNS perso", "DNS próprios", "自定义 DNS"),
-            "sstp_dns_ph": ("Если пусто — берутся с сервера, иначе шлюз.", "If empty, they come from the server, else the gateway.", "Leer — vom Server, sonst das Gateway.", "Si vide, ils viennent du serveur, sinon la passerelle.", "Se vazio, vêm do servidor, senão o gateway.", "空则来自服务器，否则网关。"),
-            "sstp_dns_replace": ("Только эти адреса", "These addresses only", "Nur diese Adressen", "Ces adresses seulement", "Só estes endereços", "只用这些地址"),
-            "sstp_dns_replace_d": ("Не брать DNS с сервера и шлюз PPP.", "Skip the server and the PPP gateway.", "Server und PPP-Gateway überspringen.", "Ignorer le serveur et la passerelle PPP.", "Pular o servidor e o gateway PPP.", "不从服务器和 PPP 网关取 DNS。"),
-            "dns_ph_loft": ("Если пусто — берутся с ноды.", "If empty, they come from the node.", "Leer — von der Node.", "Si vide, ils viennent du nœud.", "Se vazio, vêm do nó.", "空则来自节点。"),
-            "dns_ph_vless": ("Если пусто — без своих адресов.", "If empty, no custom resolvers.", "Leer — keine eigenen Resolver.", "Si vide, pas de résolveurs perso.", "Se vazio, sem resolvedores próprios.", "空则没有自定义解析。"),
-            "dns_system": ("Системный DNS", "System DNS", "System-DNS", "DNS système", "DNS do sistema", "系统 DNS"),
-            "dns_system_d": ("Пока туннель открыт — DNS всей машины.", "While the tunnel is up, these are the Mac’s DNS.", "Solange der Tunnel oben ist — DNS der ganzen Maschine.", "Tant que le tunnel est ouvert, c’est le DNS de la machine.", "Enquanto o túnel estiver no ar, este é o DNS da máquina.", "隧道开着时，作为整机 DNS。"),
-            "need_sstp": ("нужны пользователь и пароль SSTP", "SSTP needs a user and password", "SSTP braucht Benutzer und Passwort", "SSTP a besoin d’un utilisateur et d’un mot de passe", "SSTP precisa de usuário e senha", "SSTP 需要用户和密码"),
-            "err_sstp_chap": ("SSTP отказал в пароле (MSCHAPv2)", "SSTP rejected the password (MSCHAPv2)", "SSTP hat das Passwort abgelehnt (MSCHAPv2)", "SSTP a rejeté le mot de passe (MSCHAPv2)", "SSTP rejeitou a senha (MSCHAPv2)", "SSTP 拒绝了密码（MSCHAPv2）"),
-            "err_sstp_http": ("на 443 нет SSTP — обычный HTTPS", "port 443 is HTTPS, not SSTP", "auf 443 ist HTTPS, nicht SSTP", "le port 443 est du HTTPS, pas du SSTP", "a 443 é HTTPS, não SSTP", "443 上是 HTTPS，不是 SSTP"),
-            "err_sstp": ("SSTP не открылся", "SSTP did not come up", "SSTP ist nicht hochgekommen", "SSTP ne s’est pas ouvert", "SSTP não subiu", "SSTP 没有起来"),
-            "url_go": ("Открыть лофт", "Open loft", "Loft öffnen", "Ouvrir loft", "Abrir loft", "打开 loft"),
-            "edit_title": ("Подключение", "Connection", "Verbindung", "Connexion", "Conexão", "连接"),
-            "edit_main": ("Соединение", "Connection", "Verbindung", "Connexion", "Conexão", "连接"),
-            "edit_adv": ("Расширенные", "Advanced", "Erweitert", "Avancé", "Avançado", "高级"),
-            "loft_uri": ("Адрес loft://", "loft:// address", "loft://-Adresse", "Adresse loft://", "Endereço loft://", "loft:// 地址"),
-            "group_route": ("маршрут", "route", "Route", "route", "rota", "路由"),
-            "blurb": ("С улицы — обычный HTTPS.\nВнутри горит своя сеть.", "From the street — ordinary HTTPS.\nInside, a network of its own.", "Von der Straße — ganz normales HTTPS.\nInnen brennt ein eigenes Netz.", "Depuis la rue — du HTTPS ordinaire.\nDedans, un réseau à soi.", "Da rua — HTTPS comum.\nDentro, uma rede própria.", "从街上看来是普通 HTTPS。\n里面是自己的网络。"),
-            "ws_later": ("WebSocket — в этой сборке GET", "WebSocket — this build is GET", "WebSocket — dieser Build ist GET", "WebSocket — cette build est GET", "WebSocket — esta build é GET", "WebSocket — 此构建是 GET"),
-            "not_front": ("это не фронт loft", "this is not a loft front", "das ist kein loft-Front", "ce n’est pas un front loft", "isto não é um front loft", "这不是 loft 前置"),
-            "drop": ("Перетащите сюда client.yaml, .loft, .vpn или QR-картинку", "Drop client.yaml, .loft, .vpn or a QR image here", "client.yaml, .loft, .vpn oder QR-Bild hier ablegen", "Déposez ici client.yaml, .loft, .vpn ou une image QR", "Solte aqui client.yaml, .loft, .vpn ou uma imagem QR", "把 client.yaml、.loft、.vpn 或二维码图片拖到这里"),
-            "up": ("открыто", "open", "offen", "ouvert", "aberto", "已打开"),
-            "down": ("закрыто", "closed", "geschlossen", "fermé", "fechado", "已关闭"),
-            "err_h2_mask": ("этот адрес отдаёт HTTP/2 (маска GET), а не WebSocket", "this address speaks HTTP/2 (GET mask), not WebSocket", "diese Adresse spricht HTTP/2 (GET-Maske), nicht WebSocket", "cette adresse parle HTTP/2 (masque GET), pas WebSocket", "este endereço fala HTTP/2 (máscara GET), não WebSocket", "此地址是 HTTP/2（GET 伪装），不是 WebSocket"),
-            "err_auth_limit": ("лимит соединений по этому ключу", "connection limit on this key", "Verbindungslimit für diesen Schlüssel", "limite de connexions sur cette clé", "limite de conexões nesta chave", "此密钥的连接数已满"),
-            "err_auth_online": ("ключ уже в сети (несколько сессий выключены)", "this key is already online (multi is off)", "dieser Schlüssel ist schon online (Mehrfachsitzungen aus)", "cette clé est déjà en ligne (le multi est off)", "esta chave já está online (multi desligado)", "此密钥已在线（未开多会话）"),
-            "err_auth_key": ("неверные учётные данные", "wrong credentials", "falsche Zugangsdaten", "identifiants incorrects", "credenciais erradas", "凭证不对"),
-            "err_auth_denied": ("ключ без доступа", "key is not authorized", "Schlüssel ohne Zugang", "clé non autorisée", "chave sem acesso", "密钥无权访问"),
-            "err_auth_expired": ("срок ключа истёк", "this key has expired", "dieser Schlüssel ist abgelaufen", "cette clé a expiré", "esta chave expirou", "密钥已过期"),
-            "err_get_413": ("GET-заголовок слишком большой", "GET header too large", "GET-Header zu groß", "en-tête GET trop grand", "cabeçalho GET grande demais", "GET 头太大"),
-            "err_get_405": ("этот фронт не принимает GET", "this front does not accept GET", "dieses Front nimmt kein GET", "ce front n’accepte pas GET", "este front não aceita GET", "此前置不接受 GET"),
-            "err_net_off": ("сеть на ноде выключена", "the node network is off", "Netz auf der Node ist aus", "le réseau du nœud est éteint", "a rede do nó está desligada", "节点上网络已关闭"),
-            "err_ip_pool": ("у ноды кончились адреса", "the node address pool is empty", "der Node sind die Adressen ausgegangen", "le pool d’adresses du nœud est vide", "o pool de endereços do nó acabou", "节点地址池空了"),
-            "err_policy": ("нода отбросила соединение по правилам", "the node dropped this by policy", "die Node hat die Verbindung nach Regeln verworfen", "le nœud a rejeté ceci par politique", "o nó descartou isto por política", "节点按规则丢弃了连接"),
-            "err_no_tcp": ("интернет идёт мимо лофта: нода не отвечает по TCP", "internet bypasses loft: the node is not answering TCP", "Internet geht an loft vorbei: die Node antwortet nicht per TCP", "l’internet contourne loft : le nœud ne répond pas en TCP", "a internet ignora o loft: o nó não responde em TCP", "流量绕过 loft：节点不响应 TCP"),
-            "err_get_hs": ("рукопожатие GET не удалось", "GET handshake failed", "GET-Handshake fehlgeschlagen", "échec du handshake GET", "handshake GET falhou", "GET 握手失败"),
-            "err_get_empty": ("фронт не выдал сессию", "front gave no session", "Front gab keine Sitzung", "le front n’a pas donné de session", "o front não deu sessão", "前置没有给出会话"),
-            "err_get_status": ("фронт отклонил рукопожатие", "front rejected the handshake", "Front hat den Handshake abgelehnt", "le front a rejeté le handshake", "o front rejeitou o handshake", "前置拒绝了握手"),
-            "err_ws": ("WebSocket не открылся", "WebSocket did not open", "WebSocket hat nicht geöffnet", "WebSocket ne s’est pas ouvert", "WebSocket não abriu", "WebSocket 没有打开"),
-            "err_front_closed": ("фронт закрыл соединение", "the front closed the connection", "das Front hat die Verbindung geschlossen", "le front a fermé la connexion", "o front fechou a conexão", "前置关闭了连接"),
-            "err_timeout": ("сервер не отвечает", "the server is not answering", "der Server antwortet nicht", "le serveur ne répond pas", "o servidor não responde", "服务器没有应答"),
-            "err_stale": ("сессия оборвалась", "the session dropped", "die Sitzung ist abgerissen", "la session a sauté", "a sessão caiu", "会话中断了"),
-            "err_no_reply": ("сервер не отвечает", "the server is not answering", "der Server antwortet nicht", "le serveur ne répond pas", "o servidor não responde", "服务器没有应答"),
-            "err_no_net": ("сеть не сконфигурирована", "network is not configured", "Netz ist nicht konfiguriert", "le réseau n’est pas configuré", "a rede não está configurada", "网络未配置"),
-            "err_refused": ("фронт не принимает соединение", "the front refused the connection", "das Front hat die Verbindung abgelehnt", "le front a refusé la connexion", "o front recusou a conexão", "前置拒绝了连接"),
-            "err_reset": ("фронт сбросил соединение", "the front reset the connection", "das Front hat die Verbindung zurückgesetzt", "le front a réinitialisé la connexion", "o front resetou a conexão", "前置重置了连接"),
-            "err_socks": ("SOCKS5", "SOCKS5", "SOCKS5", "SOCKS5", "SOCKS5", "SOCKS5"),
-            "err_no_front": ("нет loft-front", "loft-front is missing", "loft-front fehlt", "loft-front est absent", "loft-front está ausente", "缺少 loft-front"),
-            "err_front": ("фронт не запустился", "the front did not start", "das Front ist nicht gestartet", "le front n’a pas démarré", "o front não iniciou", "前置没有启动"),
-            "err_front_exit": ("фронт завершился", "front exited", "Front beendet", "front terminé", "front saiu", "前置已退出"),
-            "err_eof": ("фронт оборвал соединение", "the front dropped the connection", "das Front hat die Verbindung abgerissen", "le front a coupé la connexion", "o front derrubou a conexão", "前置切断了连接"),
-            "err_unreach": ("сеть недоступна", "network is unreachable", "Netz nicht erreichbar", "réseau injoignable", "rede inacessível", "网络不可达"),
-            "err_dns": ("не резолвится адрес фронта", "front address did not resolve", "Front-Adresse nicht aufgelöst", "l’adresse du front n’a pas été résolue", "o endereço do front não resolveu", "前置地址解析失败"),
-            "st_front": ("фронт", "front", "Front", "front", "front", "前置"),
-            "st_handshake": ("рукопожатие", "handshake", "Handshake", "handshake", "handshake", "握手"),
-            "upd_check": ("Проверить обновления", "Check for updates", "Nach Updates suchen", "Rechercher des mises à jour", "Buscar atualizações", "检查更新"),
-            "upd_checking": ("Проверяю обновления…", "Checking for updates…", "Suche nach Updates…", "Recherche de mises à jour…", "Buscando atualizações…", "正在检查更新…"),
-            "upd_current": ("Установлена последняя версия.", "This is the latest version.", "Das ist die neueste Version.", "C’est la dernière version.", "Esta é a versão mais recente.", "已是最新版本。"),
-            "upd_available": ("Доступна %@", "%@ is available", "%@ ist verfügbar", "%@ est disponible", "%@ está disponível", "%@ 可用"),
-            "upd_install": ("Обновить до %@", "Update to %@", "Aktualisieren auf %@", "Mettre à jour vers %@", "Atualizar para %@", "更新到 %@"),
-            "upd_downloading": ("Скачиваю… %d%%", "Downloading… %d%%", "Laden… %d%%", "Téléchargement… %d%%", "Baixando… %d%%", "正在下载… %d%%"),
-            "upd_installing": ("Устанавливаю…", "Installing…", "Installieren…", "Installation…", "Instalando…", "正在安装…"),
-            "upd_relaunch": ("Сейчас перезапущу.", "Relaunching now.", "Starte jetzt neu.", "Redémarrage maintenant.", "Reiniciando agora.", "即将重新启动。"),
-            "upd_err": ("Не удалось проверить.", "Could not check.", "Prüfung fehlgeschlagen.", "Impossible de vérifier.", "Não foi possível verificar.", "无法检查。"),
-            "upd_err_net": ("Нет сети.", "No network.", "Kein Netz.", "Pas de réseau.", "Sem rede.", "没有网络。"),
-            "upd_err_asset": ("Нет сборки для этой машины.", "No build for this machine.", "Kein Build für diese Maschine.", "Pas de build pour cette machine.", "Não há build para esta máquina.", "没有适合这台机器的构建。"),
-            "upd_err_sum": ("Контрольная сумма не совпала.", "Checksum did not match.", "Prüfsumme stimmt nicht.", "La somme de contrôle ne correspond pas.", "A soma de verificação não bateu.", "校验和不匹配。"),
-            "upd_err_mount": ("Не удалось открыть образ.", "Could not open the image.", "Abbild konnte nicht geöffnet werden.", "Impossible d’ouvrir l’image.", "Não foi possível abrir a imagem.", "无法打开镜像。"),
-            "upd_err_copy": ("Не удалось заменить приложение.", "Could not replace the app.", "App konnte nicht ersetzt werden.", "Impossible de remplacer l’app.", "Não foi possível substituir o aplicativo.", "无法替换应用。"),
-        ]
+    private static let packs: [String: [String: String]] = loadPacks()
+
+    /// Reads `lang/<code>.lang` from the app bundle (copied from clients/macOS/lang).
+    private static func loadPacks() -> [String: [String: String]] {
+        var out: [String: [String: String]] = [:]
+        let bundle = Bundle.main
+        for code in Lang.allCases.map({ $0.rawValue }) {
+            let url = bundle.url(forResource: code, withExtension: "lang", subdirectory: "lang")
+                ?? bundle.url(forResource: code, withExtension: "lang")
+            guard let url = url, let data = try? Data(contentsOf: url) else { continue }
+            guard let pack = parsePack(data) else { continue }
+            out[code] = pack
+        }
+        return out
+    }
+
+    /// Accepts a JSON object, or `L10N_PACKS["xx"] = { ... };`.
+    private static func parsePack(_ data: Data) -> [String: String]? {
+        var slice = data
+        if let s = String(data: data, encoding: .utf8),
+           let a = s.firstIndex(of: "{"),
+           let b = s.lastIndex(of: "}"),
+           a <= b {
+            slice = Data(s[a...b].utf8)
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: slice) as? [String: Any] else { return nil }
+        var pack: [String: String] = [:]
+        pack.reserveCapacity(obj.count)
+        for (k, v) in obj {
+            if let str = v as? String { pack[k] = str }
+        }
+        return pack
+    }
 }

@@ -20,7 +20,6 @@ final class AboutWindowController: NSWindowController {
         super.init(window: w)
         build()
         w.center()
-        NotificationCenter.default.addObserver(self, selector: #selector(reload), name: .loftState, object: nil)
         reload()
         checkNow()
     }

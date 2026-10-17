@@ -66,14 +66,18 @@ enum QRScan {
         return list
     }
 
-    /// High-accuracy QR features in `ci`.
+    /// QR features in `ci`. Low accuracy first; high only if that misses.
     private static func scan(_ ci: CIImage) -> [String] {
-        let det = CIDetector(
-            ofType: CIDetectorTypeQRCode,
-            context: nil,
-            options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]
-        )
-        let feats = det?.features(in: ci) as? [CIQRCodeFeature] ?? []
-        return feats.compactMap { $0.messageString }
+        for acc in [CIDetectorAccuracyLow, CIDetectorAccuracyHigh] {
+            let det = CIDetector(
+                ofType: CIDetectorTypeQRCode,
+                context: nil,
+                options: [CIDetectorAccuracy: acc]
+            )
+            let feats = det?.features(in: ci) as? [CIQRCodeFeature] ?? []
+            let hits = feats.compactMap { $0.messageString }
+            if !hits.isEmpty { return hits }
+        }
+        return []
     }
 }

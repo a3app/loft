@@ -6,7 +6,7 @@ loft is an overlay that runs inside TLS. Streams are multiplexed over GET, WebSo
 
 Protocol **loft/1.0**. Share URI **`loft://`**. YAML `kind: loft`.
 
-This repository is the open specification and a reference node plus clients (macOS app, Linux and macOS CLI). Software `1.0.9`. A third party can implement loft from [docs/protocol.md](docs/protocol.md).
+This repository is the open specification and a reference node plus clients (macOS app, Linux and macOS CLI). Software `1.0.10`. A third party can implement loft from [docs/protocol.md](docs/protocol.md).
 
 ## Operators
 

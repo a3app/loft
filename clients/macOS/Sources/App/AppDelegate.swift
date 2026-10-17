@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalMon: Any?
     private var sparkTimer: Timer?
     private var menuLang: L10n.Lang?
+    private var refreshWork: DispatchWorkItem?
+    private var lastIconOn: Bool?
+    private var lastIconErr: Bool?
 
     /// Boots the engine, status item, popover, and optional auto-connect.
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -80,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NotificationCenter.default.addObserver(forName: .loftState, object: nil, queue: .main) { [weak self] _ in
-            self?.refresh()
+            self?.scheduleRefresh()
         }
 
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -97,23 +100,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sparkTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             self.engine.notePath()
-            self.engine.tickRates()
             let st = self.engine.state
-            if self.engine.reconnectLeft != nil || self.engine.store.profiles.contains(where: { self.engine.reconnectLeft(of: $0.id) != nil }) {
-                NotificationCenter.default.post(name: .loftState, object: self.engine)
+            let live = st == .on || st == .connecting || st == .disconnecting || self.engine.anyOn
+            let reconnect = self.engine.reconnectLeft != nil
+                || self.engine.store.profiles.contains(where: { self.engine.reconnectLeft(of: $0.id) != nil })
+            if live && self.uiShowsRates() { self.engine.tickRates() }
+            if reconnect {
+                self.scheduleRefresh()
                 return
             }
-            if st == .on || st == .connecting || st == .disconnecting || self.engine.anyOn {
-                if self.popPanel.isVisible {
-                    let sz = self.popView.render(engine: self.engine)
-                    var f = self.popPanel.frame
-                    let dy = sz.height - f.size.height
-                    f.origin.y -= dy
-                    f.size = sz
-                    self.popPanel.setFrame(f, display: true)
-                }
-                self.listWC?.rebuild()
-            }
+            if live { self.tickLiveUI() }
         }
         if let t = sparkTimer { RunLoop.main.add(t, forMode: .common) }
 
@@ -127,8 +123,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Tears the session down so loft-priv and loft-front die before quit.
-    func applicationWillTerminate(_ notification: Notification) {
-        engine.halt()
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        engine.halt { NSApp.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
 
     /// Stays running with the status item when the last window closes.
@@ -238,7 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let screen = bw.screen ?? NSScreen.main {
             origin.x = min(max(screen.visibleFrame.minX + 8, origin.x), screen.visibleFrame.maxX - sz.width - 8)
         }
-        popPanel.setFrame(NSRect(origin: origin, size: sz), display: true)
+        popPanel.setFrame(NSRect(origin: origin, size: sz), display: false)
         popPanel.orderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installMonitors()
@@ -288,6 +285,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hidePopover()
     }
 
+    /// Coalesces `.loftState` so handshake stages share one frame.
+    private func scheduleRefresh() {
+        refreshWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.refresh() }
+        refreshWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03, execute: w)
+    }
+
+    /// True when a visible surface is showing byte rates or uptime.
+    private func uiShowsRates() -> Bool {
+        popPanel.isVisible || listWC?.window?.isVisible == true
+    }
+
+    /// Uptime / rates / reconnect titles without regenerating the menu icon.
+    private func tickLiveUI() {
+        if popPanel.isVisible {
+            fitPopover(popView.render(engine: engine))
+        }
+        if listWC?.window?.isVisible == true {
+            listWC?.rebuild()
+        }
+    }
+
+    /// Resizes the popover only when the fitted size actually changed.
+    private func fitPopover(_ sz: NSSize) {
+        var f = popPanel.frame
+        if abs(sz.height - f.size.height) < 0.5 && abs(sz.width - f.size.width) < 0.5 { return }
+        f.origin.y -= sz.height - f.size.height
+        f.size = sz
+        popPanel.setFrame(f, display: false)
+    }
+
     /// Updates language, status-item icon, popover size, and the connections list.
     private func refresh() {
         L10n.apply(engine.store.lang)
@@ -296,17 +325,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let err = engine.store.multi
             ? (engine.anyError || engine.holdArmed)
             : (engine.state == .error || engine.holdArmed)
-        item.button?.image = Palette.menuIcon(on: on, err: err)
-        item.button?.image?.isTemplate = false
-        if popPanel.isVisible {
-            let sz = popView.render(engine: engine)
-            var f = popPanel.frame
-            let dy = sz.height - f.size.height
-            f.origin.y -= dy
-            f.size = sz
-            popPanel.setFrame(f, display: true)
+        if lastIconOn != on || lastIconErr != err {
+            item.button?.image = Palette.menuIcon(on: on, err: err)
+            item.button?.image?.isTemplate = false
+            lastIconOn = on
+            lastIconErr = err
         }
-        listWC?.rebuild()
+        if popPanel.isVisible {
+            fitPopover(popView.render(engine: engine))
+        }
+        if listWC?.window?.isVisible == true {
+            listWC?.rebuild()
+        }
+        if splitWC?.window?.isVisible == true {
+            splitWC?.reload()
+        }
     }
 
     /// Connects, or opens onboard if there is no profile yet.
@@ -327,8 +360,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shows the connections list window.
     @objc func showList() {
         if listWC == nil { listWC = ConnectionsWindowController(engine: engine) }
-        listWC?.rebuild()
         present(listWC)
+        listWC?.rebuild()
     }
 
     /// Reloads Settings if that window is open (quiet checkbox wrote prefs).
@@ -375,8 +408,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shows the journal window.
     @objc func showJournal() {
         if journalWC == nil { journalWC = JournalWindowController() }
-        journalWC?.reload()
         present(journalWC)
+        journalWC?.reload()
     }
 
     /// Opens the profile editor for `p`.
@@ -388,8 +421,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Opens the split-routing lists. The Settings row is the door; the toggle stays on the row.
     func showSplit() {
         if splitWC == nil { splitWC = SplitWindowController(engine: engine) }
-        splitWC?.reload()
         present(splitWC)
+        splitWC?.reload()
     }
 
     /// Keenetic / loft-routes import sheet.

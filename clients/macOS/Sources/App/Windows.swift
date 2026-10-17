@@ -270,6 +270,45 @@ final class StatusWindowController: NSWindowController {
     }
 }
 
+/// One connections-list row. Reused across rebuilds.
+private final class ConnRow: FlippedView {
+    let plate = LoftPlate(frame: .zero)
+    let hit = ActionButton(frame: .zero)
+    let act = PillButton(frame: .zero)
+    let name = NSTextField(labelWithString: "")
+    let host = NSTextField(labelWithString: "")
+    let tagLab = NSTextField(labelWithString: "")
+    let side = NSTextField(labelWithString: "")
+    let edit = GhostButton(frame: .zero)
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        plate.radius = 10
+        hit.drawsWash = false
+        act.compact = true
+        name.font = Palette.font(13.5)
+        name.textColor = Palette.snow
+        host.font = Palette.mono(11.5)
+        host.textColor = Palette.mute
+        tagLab.font = Palette.font(10)
+        tagLab.textColor = Palette.lamp
+        side.font = Palette.body(10.5)
+        side.alignment = .right
+        edit.font = Palette.body(11.5)
+        edit.tone = Palette.mute
+        edit.alignment = .right
+        for v in [plate, hit, act, name, host, tagLab, side, edit] as [NSView] { addSubview(v) }
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        plate.frame = bounds
+        hit.frame = bounds
+    }
+}
+
 /// Connections list: profiles, multi toggle, import/export, drop target.
 final class ConnectionsWindowController: NSWindowController {
     private let engine: SessionController
@@ -286,6 +325,7 @@ final class ConnectionsWindowController: NSWindowController {
     private let footLine = FlippedView(frame: .zero)
     private let dropPlate = LoftPlate(frame: .zero)
     private let drop = NSTextField(wrappingLabelWithString: "")
+    private var rows: [String: ConnRow] = [:]
 
     /// Builds the connections window around `engine` and rebuilds on `.loftState`.
     init(engine: SessionController) {
@@ -295,7 +335,6 @@ final class ConnectionsWindowController: NSWindowController {
         w.level = .normal
         build()
         w.center()
-        NotificationCenter.default.addObserver(self, selector: #selector(rebuild), name: .loftState, object: nil)
         rebuild()
     }
 
@@ -379,7 +418,6 @@ final class ConnectionsWindowController: NSWindowController {
         sub.lineBreakMode = .byTruncatingTail
         sub.usesSingleLineMode = true
         sub.frame = NSRect(x: 20, y: 40, width: w - 40, height: 18)
-        list.subviews.forEach { $0.removeFromSuperview() }
         var y: CGFloat = 0
         let simple = engine.store.simple
         let multi = engine.store.multi
@@ -393,46 +431,55 @@ final class ConnectionsWindowController: NSWindowController {
         dropPlate.isHidden = !empty
         listScroll.isHidden = empty
         let kept = listScroll.contentView.bounds.origin
+        var seen = Set<String>()
         for p in engine.profilesByFreshness() {
+            seen.insert(p.id)
             let rowH: CGFloat = simple ? 44 : 52
             let rowW = w - 40
-            let row = LoftPlate(frame: NSRect(x: 10, y: y, width: rowW, height: rowH))
-            row.radius = 10
+            let row = rows[p.id] ?? ConnRow(frame: .zero)
+            if rows[p.id] == nil {
+                rows[p.id] = row
+                list.addSubview(row)
+                row.hit.target = self
+                row.hit.action = #selector(pick(_:))
+                row.act.target = self
+                row.act.action = #selector(toggleOne(_:))
+                row.edit.target = self
+                row.edit.action = #selector(editOne(_:))
+            }
+            row.frame = NSRect(x: 10, y: y, width: rowW, height: rowH)
+            row.hit.frame = row.bounds
+            row.hit.identifier = NSUserInterfaceItemIdentifier(p.id)
+            row.act.identifier = NSUserInterfaceItemIdentifier(p.id)
+            row.edit.identifier = NSUserInterfaceItemIdentifier(p.id)
             let active = p.id == engine.store.activeID || p.id == engine.displayID
             let st = engine.state(of: p.id)
             let live = st == .on
-            if active || live {
-                row.fill = Palette.field
-                row.stroke = Palette.slate
-            }
-            let act = PillButton(frame: .zero)
-            act.compact = true
-            act.identifier = NSUserInterfaceItemIdentifier(p.id)
-            act.target = self
-            act.action = #selector(toggleOne(_:))
+            row.plate.fill = (active || live) ? Palette.field : nil
+            row.plate.stroke = (active || live) ? Palette.slate : nil
             if st == .error {
-                act.title = engine.actionTitle(of: p.id)
-                act.lampOn = false
-                act.isEnabled = true
+                row.act.title = engine.actionTitle(of: p.id)
+                row.act.lampOn = false
+                row.act.isEnabled = true
             } else if st == .disconnecting {
-                act.title = L10n.t("disconnecting")
-                act.lampOn = false
-                act.isEnabled = false
+                row.act.title = L10n.t("disconnecting")
+                row.act.lampOn = false
+                row.act.isEnabled = false
             } else if st == .connecting {
-                act.title = engine.actionTitle(of: p.id)
-                act.lampOn = false
-                act.isEnabled = true
+                row.act.title = engine.actionTitle(of: p.id)
+                row.act.lampOn = false
+                row.act.isEnabled = true
             } else if live {
-                act.title = L10n.t("disconnect")
-                act.lampOn = true
-                act.isEnabled = true
+                row.act.title = L10n.t("disconnect")
+                row.act.lampOn = true
+                row.act.isEnabled = true
             } else {
-                act.title = L10n.t("pop_connect")
-                act.lampOn = false
-                act.isEnabled = !busy
+                row.act.title = L10n.t("pop_connect")
+                row.act.lampOn = false
+                row.act.isEnabled = !busy
             }
             let actX: CGFloat = 8
-            act.frame = NSRect(x: actX, y: round((rowH - actH) / 2), width: actW, height: actH)
+            row.act.frame = NSRect(x: actX, y: round((rowH - actH) / 2), width: actW, height: actH)
             let textX = actX + actW + 8
             let sideStr: String
             if simple {
@@ -465,45 +512,37 @@ final class ConnectionsWindowController: NSWindowController {
             let tagW: CGFloat = showTag ? Palette.textWidth(tagStr, font: tagFont) : 0
             let nameMax = max(48, sideX - textX - 8 - (showTag ? tagW + 6 : 0))
             let nameW = min(Palette.textWidth(p.name, font: nameFont), nameMax)
-            let n = Palette.label(p.name, font: nameFont, color: Palette.snow, frame: NSRect(x: textX, y: simple ? 12 : 8, width: nameW, height: 18))
-            let hit = ActionButton(frame: row.bounds)
-            hit.drawsWash = false
-            hit.identifier = NSUserInterfaceItemIdentifier(p.id)
-            hit.target = self
-            hit.action = #selector(pick(_:))
-            row.addSubview(hit)
-            row.addSubview(act)
-            row.addSubview(n)
+            row.name.stringValue = p.name
+            row.name.frame = NSRect(x: textX, y: simple ? 12 : 8, width: nameW, height: 18)
+            row.tagLab.isHidden = !showTag
             if showTag {
-                let tag = Palette.label(tagStr, font: tagFont, color: Palette.lamp, frame: NSRect(x: textX + nameW + 6, y: 10, width: tagW, height: 14))
-                row.addSubview(tag)
+                row.tagLab.stringValue = tagStr
+                row.tagLab.frame = NSRect(x: textX + nameW + 6, y: 10, width: tagW, height: 14)
             }
+            row.host.isHidden = simple
             if !simple {
                 var sub = Palette.hostOf(p.url)
                 if p.socksOn {
                     let port = Palette.socksPort(engine.store.socksBind(for: p))
                     if !port.isEmpty { sub += " · " + port }
                 }
-                let u = Palette.label(sub, font: Palette.mono(11.5), color: Palette.mute, frame: NSRect(x: textX, y: 28, width: max(40, sideX - textX - 8), height: 14))
-                row.addSubview(u)
+                row.host.stringValue = sub
+                row.host.frame = NSRect(x: textX, y: 28, width: max(40, sideX - textX - 8), height: 14)
             }
+            row.side.isHidden = sideStr.isEmpty
             if !sideStr.isEmpty {
-                let side = Palette.label(sideStr, font: Palette.body(10.5), color: (active || live) ? Palette.lamp : Palette.stone, frame: NSRect(x: sideX, y: simple ? 6 : 8, width: sideW, height: 14))
-                side.alignment = .right
-                row.addSubview(side)
+                row.side.stringValue = sideStr
+                row.side.textColor = (active || live) ? Palette.lamp : Palette.stone
+                row.side.frame = NSRect(x: sideX, y: simple ? 6 : 8, width: sideW, height: 14)
             }
             let edY: CGFloat = (simple && sideStr.isEmpty) ? round((rowH - 16) / 2) : (simple ? 22 : 26)
-            let ed = GhostButton(frame: NSRect(x: sideX, y: edY, width: sideW, height: 16))
-            ed.title = L10n.t("edit")
-            ed.font = Palette.body(11.5)
-            ed.tone = Palette.mute
-            ed.alignment = .right
-            ed.identifier = NSUserInterfaceItemIdentifier(p.id)
-            ed.target = self
-            ed.action = #selector(editOne(_:))
-            row.addSubview(ed)
-            list.addSubview(row)
+            row.edit.title = editStr
+            row.edit.frame = NSRect(x: sideX, y: edY, width: sideW, height: 16)
             y += row.frame.height + 4
+        }
+        for (id, row) in rows where !seen.contains(id) {
+            row.removeFromSuperview()
+            rows.removeValue(forKey: id)
         }
         let header: CGFloat = 66
         let footer: CGFloat = 12 + 1 + 14 + 36 + 20
@@ -559,12 +598,11 @@ final class ConnectionsWindowController: NSWindowController {
 
     /// Highlights the row whose hit target is `id`.
     private func paintSelection(_ id: String) {
-        for row in list.subviews.compactMap({ $0 as? LoftPlate }) {
-            let hit = row.subviews.compactMap({ $0 as? ActionButton }).first
-            let on = hit?.identifier?.rawValue == id
+        for row in list.subviews.compactMap({ $0 as? ConnRow }) {
+            let on = row.hit.identifier?.rawValue == id
             let live = on && engine.state(of: id) == .on
-            row.fill = (on || live) ? Palette.field : nil
-            row.stroke = (on || live) ? Palette.slate : nil
+            row.plate.fill = (on || live) ? Palette.field : nil
+            row.plate.stroke = (on || live) ? Palette.slate : nil
         }
     }
 
@@ -587,16 +625,37 @@ final class ConnectionsWindowController: NSWindowController {
 
     /// Saves every share file / QR image; notices when none parsed.
     private func importURLs(_ urls: [URL]) {
+        let images = urls.filter { QRScan.isImage($0) }
+        let files = urls.filter { !QRScan.isImage($0) }
         var n = 0
-        for u in urls {
+        for u in files {
             if engine.store.importFile(u) != nil { n += 1 }
         }
-        if n == 0 {
-            let img = urls.contains { QRScan.isImage($0) }
-            loftNotice(img && urls.count == 1 && QRScan.payloads(from: urls[0]).isEmpty ? "qr_none" : (img ? "qr_fail" : "imp_fail"))
+        if images.isEmpty {
+            if n == 0 { loftNotice("imp_fail") }
+            NotificationCenter.default.post(name: .loftState, object: engine)
+            rebuild()
+            return
         }
-        NotificationCenter.default.post(name: .loftState, object: engine)
-        rebuild()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let decoded = images.map { ($0, QRScan.payloads(from: $0)) }
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                var extra = n
+                var qrEmpty = decoded.count == 1
+                for (u, payloads) in decoded {
+                    if !payloads.isEmpty { qrEmpty = false }
+                    if self.engine.store.importPayloads(payloads, fileName: u.deletingPathExtension().lastPathComponent) != nil {
+                        extra += 1
+                    }
+                }
+                if extra == 0 {
+                    loftNotice(qrEmpty ? "qr_none" : "qr_fail")
+                }
+                NotificationCenter.default.post(name: .loftState, object: self.engine)
+                self.rebuild()
+            }
+        }
     }
 
     /// Save-panel export of the active profile (warns that the key is in the file).
@@ -1633,12 +1692,17 @@ final class EditWindowController: NSWindowController {
         p.allowedFileTypes = QRScan.imageExt.sorted()
         p.begin { [weak self] r in
             guard r == NSApplication.ModalResponse.OK, let u = p.url, let self = self else { return }
-            let hits = self.engine.store.parseShare(url: u)
-            guard let q = hits.first else {
-                loftNotice(QRScan.payloads(from: u).isEmpty ? "qr_none" : "qr_fail")
-                return
+            DispatchQueue.global(qos: .userInitiated).async {
+                let payloads = QRScan.payloads(from: u)
+                DispatchQueue.main.async {
+                    let hits = self.engine.store.parseSharePayloads(payloads, fileName: u.deletingPathExtension().lastPathComponent)
+                    guard let q = hits.first else {
+                        loftNotice(payloads.isEmpty ? "qr_none" : "qr_fail")
+                        return
+                    }
+                    self.applyShare(q)
+                }
             }
-            self.applyShare(q)
         }
     }
 
@@ -1829,13 +1893,28 @@ final class OnboardWindowController: NSWindowController {
         let p = shareOpenPanel()
         p.begin { [weak self] r in
             guard r == NSApplication.ModalResponse.OK, let u = p.url, let self = self else { return }
+            if QRScan.isImage(u) {
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let payloads = QRScan.payloads(from: u)
+                    DispatchQueue.main.async {
+                        if let prof = self.engine.store.importPayloads(payloads, fileName: u.deletingPathExtension().lastPathComponent) {
+                            self.engine.store.select(prof.id)
+                            NotificationCenter.default.post(name: .loftState, object: self.engine)
+                            self.window?.close()
+                            return
+                        }
+                        loftNotice(payloads.isEmpty ? "qr_none" : "qr_fail")
+                    }
+                }
+                return
+            }
             if let prof = self.engine.store.importFile(u) {
                 self.engine.store.select(prof.id)
                 NotificationCenter.default.post(name: .loftState, object: self.engine)
                 self.window?.close()
                 return
             }
-            loftNotice(QRScan.isImage(u) && QRScan.payloads(from: u).isEmpty ? "qr_none" : (QRScan.isImage(u) ? "qr_fail" : "imp_fail"))
+            loftNotice("imp_fail")
         }
     }
 }
