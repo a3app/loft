@@ -362,14 +362,14 @@ func (s *Session) Ping(ctx context.Context) (time.Duration, error) {
 		s.mu.Unlock()
 	}()
 	t0 := time.Now()
-	if err := s.send(wire.Frame{Cmd: wire.CmdPing, Payload: id[:]}); err != nil {
-		return 0, err
+	if err := s.sendCtx(ctx, wire.Frame{Cmd: wire.CmdPing, Payload: id[:]}); err != nil {
+		return time.Since(t0), err
 	}
 	select {
 	case <-ctx.Done():
-		return 0, ctx.Err()
+		return time.Since(t0), ctx.Err()
 	case <-s.die:
-		return 0, ErrClosed
+		return time.Since(t0), ErrClosed
 	case <-ch:
 		return time.Since(t0), nil
 	}
@@ -405,6 +405,12 @@ func noteTraffic(f wire.Frame, ctr *atomic.Uint64) {
 
 // send queues f on out or fails if the session is dead.
 func (s *Session) send(f wire.Frame) error {
+	return s.sendCtx(context.Background(), f)
+}
+
+// sendCtx is send with a deadline. Ping uses this so a full pri queue
+// cannot pin WatchStall until die.
+func (s *Session) sendCtx(ctx context.Context, f wire.Frame) error {
 	if s.closed.Load() {
 		return ErrClosed
 	}
@@ -414,19 +420,40 @@ func (s *Session) send(f wire.Frame) error {
 		}
 	}
 	ch := s.out
+	dataQueued := false
 	if s.priFrame(f) {
 		ch = s.pri
 	} else if f.Cmd == wire.CmdData {
 		if st := s.stream(f.StreamID); st != nil {
 			st.queued.Add(1)
+			dataQueued = true
 		}
+	}
+	undo := func() {
+		if !dataQueued {
+			return
+		}
+		if st := s.stream(f.StreamID); st != nil && st.queued.Load() > 0 {
+			st.queued.Add(-1)
+		}
+	}
+	var done <-chan struct{}
+	if ctx != nil {
+		done = ctx.Done()
 	}
 	select {
 	case ch <- f:
 		noteTraffic(f, &s.bytesUp)
 		return nil
 	case <-s.die:
+		undo()
 		return ErrClosed
+	case <-done:
+		undo()
+		if ctx != nil && ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return context.Canceled
 	}
 }
 
