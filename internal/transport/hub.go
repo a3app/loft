@@ -51,7 +51,7 @@ func proxyStream(st *mux.Stream) {
 		st.Reset(wire.StreamRefused)
 		return
 	}
-	if NetSwitch != nil && NetSwitch.Handle(st) {
+	if o := NetSwitch(); o != nil && o.Handle(st) {
 		return
 	}
 	if host == wire.CtlHost {

@@ -14,8 +14,19 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
-// NetSwitch is the overlay fabric (nil = internet-only proxy).
-var NetSwitch *Overlay
+// netSwitch is the overlay fabric (nil = internet-only proxy).
+// atomic so test cleanup and leftover serveMux.Detach do not race.
+var netSwitch atomic.Pointer[Overlay]
+
+// NetSwitch returns the overlay fabric. Nil means internet-only proxy.
+func NetSwitch() *Overlay {
+	return netSwitch.Load()
+}
+
+// SetNetSwitch installs the overlay fabric. Tests restore the previous value.
+func SetNetSwitch(o *Overlay) {
+	netSwitch.Store(o)
+}
 
 // Overlay is the node's member fabric: overlay CIDR, leases, and live sessions.
 type Overlay struct {

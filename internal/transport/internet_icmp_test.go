@@ -38,13 +38,13 @@ func TestDeliverInternetICMP(t *testing.T) {
 	n := &netconf.Network{ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Peers: netconf.PeersHub, Enabled: true}
 	o := NewOverlay(n)
 	oldKeys := AuthKeys
-	oldSwitch := NetSwitch
+	oldSwitch := NetSwitch()
 	oldPing := internetICMPPing
 	AuthKeys = nil
-	NetSwitch = o
+	SetNetSwitch(o)
 	defer func() {
 		AuthKeys = oldKeys
-		NetSwitch = oldSwitch
+		SetNetSwitch(oldSwitch)
 		internetICMPPing = oldPing
 	}()
 	cli := mux.NewClient()
@@ -112,13 +112,13 @@ func TestDeliverInternetICMPRestoresIdent(t *testing.T) {
 	n := &netconf.Network{ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Peers: netconf.PeersHub, Enabled: true}
 	o := NewOverlay(n)
 	oldKeys := AuthKeys
-	oldSwitch := NetSwitch
+	oldSwitch := NetSwitch()
 	oldPing := internetICMPPing
 	AuthKeys = nil
-	NetSwitch = o
+	SetNetSwitch(o)
 	defer func() {
 		AuthKeys = oldKeys
-		NetSwitch = oldSwitch
+		SetNetSwitch(oldSwitch)
 		internetICMPPing = oldPing
 	}()
 	cli := mux.NewClient()
@@ -157,16 +157,16 @@ func TestDeliverInternetICMPRestoresIdent(t *testing.T) {
 func TestDeliverInternetICMPDropsUnbound(t *testing.T) {
 	n := &netconf.Network{ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Peers: netconf.PeersHub, Enabled: true}
 	o := NewOverlay(n)
-	oldSwitch := NetSwitch
+	oldSwitch := NetSwitch()
 	oldPing := internetICMPPing
-	NetSwitch = o
+	SetNetSwitch(o)
 	called := false
 	internetICMPPing = func(net.IP, []byte) ([]byte, net.IP, error) {
 		called = true
 		return nil, nil, nil
 	}
 	defer func() {
-		NetSwitch = oldSwitch
+		SetNetSwitch(oldSwitch)
 		internetICMPPing = oldPing
 	}()
 	cli := mux.NewClient()

@@ -36,8 +36,8 @@ func defaultGapHold() time.Duration {
 	if visGapMS > 0 {
 		return time.Duration(visGapMS) * time.Millisecond
 	}
-	if NetSwitch != nil && NetSwitch.N() != nil {
-		return NetSwitch.N().Session.Gap()
+	if o := NetSwitch(); o != nil && o.N() != nil {
+		return o.N().Session.Gap()
 	}
 	return netconf.DefaultSession().Gap()
 }

@@ -27,8 +27,8 @@ func hookServerDgrams(ms *mux.Session) {
 		if err != nil || port != overlayICMPPort {
 			return false
 		}
-		if NetSwitch != nil && (NetSwitch.Contains(host) || NetSwitch.Routed(host) != "") {
-			NetSwitch.DeliverICMP(ms, data)
+		if o := NetSwitch(); o != nil && (o.Contains(host) || o.Routed(host) != "") {
+			o.DeliverICMP(ms, data)
 			return true
 		}
 		DeliverInternetICMP(ms, data)
@@ -75,15 +75,15 @@ func serveDgrams(ms *mux.Session) {
 		}
 		host, port, err := net.SplitHostPort(addr)
 		if err == nil && port == overlayICMPPort {
-			if NetSwitch != nil && (NetSwitch.Contains(host) || NetSwitch.Routed(host) != "") {
-				NetSwitch.DeliverICMP(ms, data)
+			if o := NetSwitch(); o != nil && (o.Contains(host) || o.Routed(host) != "") {
+				o.DeliverICMP(ms, data)
 			} else {
 				DeliverInternetICMP(ms, data)
 			}
 			continue
 		}
-		if err == nil && port == dnsPort && NetSwitch != nil && NetSwitch.IsDNS(host) {
-			NetSwitch.DeliverDNS(ms, addr, data)
+		if o := NetSwitch(); err == nil && port == dnsPort && o != nil && o.IsDNS(host) {
+			o.DeliverDNS(ms, addr, data)
 			continue
 		}
 		if r := Egress.Load(); r != nil {

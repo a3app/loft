@@ -63,7 +63,7 @@ func TestAdoptReusesHello(t *testing.T) {
 	ms.Close()
 }
 
-// TestGETSpawnReusesMux: X-Auth with the same instance_id keeps the mux.
+// TestGETSpawnReusesMux: a handshake with the same instance_id keeps the mux.
 func TestGETSpawnReusesMux(t *testing.T) {
 	gs := NewGETServer("tok", "/static/v3/build")
 	h := wire.Hello{Version: 1, InstanceID: "phone", Min: wire.ProtoMin, Max: wire.Proto, Caps: wire.CapHold}

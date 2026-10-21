@@ -79,7 +79,7 @@ func ServeSplice(w http.ResponseWriter, r *http.Request, token []byte, seen *ecr
 		http.Error(w, "target", http.StatusBadRequest)
 		return
 	}
-	if NetSwitch != nil && (NetSwitch.Contains(host) || NetSwitch.Routed(host) != "") {
+	if o := NetSwitch(); o != nil && (o.Contains(host) || o.Routed(host) != "") {
 		http.Error(w, "overlay mux", http.StatusBadGateway)
 		return
 	}

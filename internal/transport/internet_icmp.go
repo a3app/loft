@@ -39,8 +39,8 @@ func DeliverInternetICMP(from *mux.Session, pkt []byte) {
 		return
 	}
 	replyTo := net.IP(pkt[12:16]).To4()
-	if NetSwitch != nil {
-		ip := NetSwitch.SessionIP(from)
+	if o := NetSwitch(); o != nil {
+		ip := o.SessionIP(from)
 		if ip == "" {
 			return
 		}

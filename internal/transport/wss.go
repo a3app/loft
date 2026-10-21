@@ -377,9 +377,10 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // serveMux Accepts mux streams and proxies each one until the session ends.
 func serveMux(ms *mux.Session) {
+	ov := NetSwitch()
 	defer func() {
-		if NetSwitch != nil {
-			NetSwitch.Detach(ms)
+		if ov != nil {
+			ov.Detach(ms)
 		}
 	}()
 	for {

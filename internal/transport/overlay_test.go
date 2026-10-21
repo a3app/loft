@@ -86,9 +86,9 @@ func TestStampOverlayAuthBindsKeyNotClaim(t *testing.T) {
 			{ID: "bob", Authorized: true, Multi: true, MultiLimit: 8, IP: "10.8.0.11"},
 		},
 	}
-	oldNet, oldKeys := NetSwitch, AuthKeys
-	defer func() { NetSwitch, AuthKeys = oldNet, oldKeys }()
-	NetSwitch = NewOverlay(n)
+	oldNet, oldKeys := NetSwitch(), AuthKeys
+	defer func() { SetNetSwitch(oldNet); AuthKeys = oldKeys }()
+	SetNetSwitch(NewOverlay(n))
 	r := identity.NewRing()
 	r.Put("alice", "lt_alice")
 	r.Put("bob", "lt_bob")

@@ -74,7 +74,8 @@ func verifyAny(fallback []byte, h clientHello) bool {
 
 // stampOverlayAuth binds the session to the overlay after Hello decode.
 func stampOverlayAuth(st *wire.Status, rest []byte, sess *mux.Session, remote net.Addr, token []byte) {
-	if NetSwitch == nil || st == nil {
+	ov := NetSwitch()
+	if ov == nil || st == nil {
 		return
 	}
 	h, _ := wire.DecodeHello(rest)
@@ -86,7 +87,7 @@ func stampOverlayAuth(st *wire.Status, rest []byte, sess *mux.Session, remote ne
 		}
 		h.MemberID = id
 	}
-	NetSwitch.Bind(st, h, sess, remote)
+	ov.Bind(st, h, sess, remote)
 }
 
 // finishStatus stamps overlay identity onto st.

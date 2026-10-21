@@ -229,8 +229,8 @@ func reload(dir string, cfg *config.ServerConfig) error {
 	}
 	transport.AuthKeys.Replace(ring)
 	closed := 0
-	if transport.NetSwitch != nil {
-		closed = transport.NetSwitch.Reload(n)
+	if o := transport.NetSwitch(); o != nil {
+		closed = o.Reload(n)
 	}
 	if err := loadEgress(dir, cfg); err != nil {
 		log.Printf("reload: %v (previous exit rules kept)", err)

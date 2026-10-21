@@ -67,8 +67,8 @@ func writeNodeStatus(dir string) {
 			Members []transport.Peer      `json:"members"`
 			Relays  []transport.LiveRelay `json:"relays"`
 		}{At: time.Now().UTC(), Members: []transport.Peer{}, Relays: []transport.LiveRelay{}}
-		if transport.NetSwitch != nil {
-			st.Members = transport.NetSwitch.Peers()
+		if o := transport.NetSwitch(); o != nil {
+			st.Members = o.Peers()
 		}
 		if transport.FleetCtl != nil {
 			st.Relays = transport.FleetCtl.Live()

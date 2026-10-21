@@ -28,7 +28,7 @@ import (
 func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 	info := nodeInfo(cfg)
 	if n != nil {
-		transport.NetSwitch = transport.NewOverlay(n)
+		transport.SetNetSwitch(transport.NewOverlay(n))
 		if !n.P2PEnabled() {
 			info.Caps &^= wire.CapP2P
 		}

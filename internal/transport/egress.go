@@ -16,10 +16,11 @@ var Egress atomic.Pointer[egress.Router]
 
 // whoOf is the member behind a session, for the exit rules.
 func whoOf(sess *mux.Session) egress.Who {
-	if NetSwitch == nil || sess == nil {
+	o := NetSwitch()
+	if o == nil || sess == nil {
 		return egress.Who{}
 	}
-	return NetSwitch.Who(sess)
+	return o.Who(sess)
 }
 
 // dialOut opens a member's TCP connection to the internet.

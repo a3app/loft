@@ -134,12 +134,12 @@ func TestDeliverICMPMeshNeighbor(t *testing.T) {
 func TestHookServerDgramsGatewaySync(t *testing.T) {
 	n := &netconf.Network{ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Peers: netconf.PeersHub, Enabled: true}
 	o := NewOverlay(n)
-	oldKeys, oldSwitch := AuthKeys, NetSwitch
+	oldKeys, oldSwitch := AuthKeys, NetSwitch()
 	AuthKeys = nil
-	NetSwitch = o
+	SetNetSwitch(o)
 	defer func() {
 		AuthKeys = oldKeys
-		NetSwitch = oldSwitch
+		SetNetSwitch(oldSwitch)
 	}()
 
 	srv := mux.NewServer()
