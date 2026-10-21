@@ -1860,5 +1860,6 @@ window.LOFT_EN = {
   "— это не диапазон": "— is not a range",
   "— это этот сервер.": "— this is this server.",
   "→ веб-сервер": "→ web server",
-  "↓ 18.4 ГБ · ↑ 2.1 ГБ": "↓ 18.4 GB · ↑ 2.1 GB"
+  "↓ 18.4 ГБ · ↑ 2.1 ГБ": "↓ 18.4 GB · ↑ 2.1 GB",
+  "Записи почты (MX, SPF, DKIM, DMARC) создаёт раздел «Почта».": "Mail records (MX, SPF, DKIM, DMARC) are made in Mail."
 };

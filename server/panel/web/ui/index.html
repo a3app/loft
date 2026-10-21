@@ -562,69 +562,78 @@ function openExit(i){const r=i>=0?EXR[i]:['member','','wg0'];
 function openExitDefault(){dialog('Остальной трафик членов','Куда выходит то, что не подошло ни под одно правило.',`<div class="fld"><label for="rd1">Куда выходит</label><select id="rd1">${exitTo('')}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 
 /* ── Домены: зоны, записи, сертификаты, DNS-провайдеры ── */
+// Record: [name, type, value, priority, made by the panel, check in a manual zone: ok | missing | differs]
 const ZONES=[
  {z:'example.net',dns:'cloudflare',reg:'14.03.2028',recs:[['vpn','A','203.0.113.10','',1],['vpn','AAAA','2001:db8::10','',1],['panel','A','203.0.113.10','',1],['mail','A','203.0.113.10','',1],['nl','A','198.51.100.77','',1],['@','MX','mail.example.net','10',1],
   ['@','TXT','v=spf1 mx -all','',1],['loft._domainkey','TXT','v=DKIM1; k=rsa; p=MIIBIjANBgkqh…IDAQAB','',1],['_dmarc','TXT','v=DMARC1; p=quarantine; rua=mailto:postmaster@example.net','',1],['@','CAA','0 issue "letsencrypt.org"','',1],['www','CNAME','example.github.io','',0]]},
- {z:'example.org',dns:'manual',reg:'02.11.2026',recs:[['@','A','203.0.113.11','',0],['www','CNAME','example.org','',0],['@','MX','mail.example.net','10',0]]}
+ {z:'example.org',dns:'manual',reg:'02.11.2026',recs:[['@','A','203.0.113.11','',0,'ok'],['www','CNAME','example.org','',0,'missing'],['@','MX','mail.example.net','10',0,'differs']]}
 ];
-const DNSP={cloudflare:['Cloudflare','API-токен с правом Zone.DNS — Edit'],digitalocean:['DigitalOcean','API-токен с правом записи'],namecheap:['Namecheap','API-ключ и белый IP сервера'],manual:['Вручную','записи вносите у регистратора сами']};
-const PROVS=[['cloudflare','Cloudflare','токен …a91c','example.net','проверен сегодня']];
-const CERTS=[['vpn.example.net','Let’s Encrypt','DNS-01','10.01.2027','нода loft'],['panel.example.net, mail.example.net','Let’s Encrypt','DNS-01','10.01.2027','панель, почта'],['nl.example.net','Let’s Encrypt','HTTP-01','22.10.2026','нода loft']];
+const DNSP={cloudflare:['Cloudflare','API-токен с правом Zone.DNS — Edit'],digitalocean:['DigitalOcean','API-токен с правом записи'],namecheap:['Namecheap','API-ключ; IP этого сервера должен быть в белом списке API'],manual:['Вручную','записи вносите у регистратора сами']};
+// Configured accesses: [kind, hint, zones]
+const PROVS=[['cloudflare','токен …a91c','example.net']];
+// Certificate: [names, issuer, check, until, where, fixed (the node's and the panel's own)]
+const CERTS=[['vpn.example.net','Let’s Encrypt','DNS-01','10.01.2027','нода loft',1],['panel.example.net','Let’s Encrypt','HTTP-01','10.01.2027','панель',1],['mail.example.net','Let’s Encrypt','DNS-01','10.01.2027','почта (SMTP, IMAP)',0],['nl.example.net','Let’s Encrypt','HTTP-01','22.10.2026','нода loft',0]];
+const USES=['нода loft','панель','почта (SMTP, IMAP)'];
+const TTLS=['авто','5 минут','1 час','1 день'];
+const CHECK={ok:['есть','ok'],missing:['нет','warn'],differs:['другое значение','warn']};
 S.zone='example.net';
 V.domains=()=>{
- const Z=ZONES.find(x=>x.z===S.zone)||ZONES[0];
+ const Z=ZONES.find(x=>x.z===S.zone)||ZONES[0],man=Z.dns==='manual';
  return pageHead('Домены','Зоны, DNS-записи и сертификаты. Записи, созданные панелью, она сама обновляет при смене IP.')+
  blk('Зоны','',`<div class="acts"><button class="btn pri" type="button" onclick="openZone('new')">${ic('i-plus')}Добавить домен</button><button class="btn" type="button" onclick="openProviders()">DNS-провайдеры</button></div>`+
   table(['Зона','DNS','Записей','Регистрация до'],ZONES.map(x=>`<tr class="click" onclick="S.zone='${x.z}';render()" ${x.z===Z.z?'style="font-weight:600"':''}><td class="mono"><b>${x.z}</b></td><td>${DNSP[x.dns][0]}${x.dns==='manual'?'':' <span class="mute">· API</span>'}</td><td class="num">${x.recs.length}</td><td class="num">${x.reg==='02.11.2026'?pill('через 13 дн.','warn'):x.reg}</td></tr>`).join('')))+
- blk('Записи '+Z.z,Z.dns==='manual'?'Зона ведётся вручную: панель покажет, какие записи внести у регистратора, и проверит их.':'<span class="dot on"></span>создано панелью — обновится при смене IP',
-  `<div class="acts"><button class="btn" type="button" onclick="openRec(-1)">${ic('i-plus')}Добавить запись</button>${Z.dns==='manual'?'<button class="btn" type="button">Проверить записи</button>':''}<button class="btn" type="button" onclick="openZone('${Z.z}')">Настройки зоны</button></div>`+
-  table(['Имя','Тип','Значение','TTL'],Z.recs.map((r,i)=>`<tr class="click" onclick="openRec(${i})"><td class="mono">${r[4]?'<span class="dot on"></span>':'<span class="dot" style="visibility:hidden"></span>'}${r[0]}</td><td class="mono">${r[1]}</td><td class="mono" style="white-space:normal;overflow-wrap:anywhere;min-width:220px">${r[3]?r[3]+' ':''}${esc(r[2])}</td><td class="mute">${r[4]?'авто':'3600'}</td></tr>`).join('')))+
+ blk('Записи '+Z.z,man?'Зона ведётся вручную: панель покажет, какие записи внести у регистратора, и проверит их.':'<span class="dot on"></span>создано панелью — обновится при смене IP',
+  `<div class="acts"><button class="btn" type="button" onclick="openRec(-1)">${ic('i-plus')}Добавить запись</button>${man?'<button class="btn" type="button" onclick="toast(\'Проверяю записи в DNS…\')">Проверить записи</button>':''}<button class="btn" type="button" onclick="openZone('${Z.z}')">Настройки зоны</button></div>`+
+  table(['Имя','Тип','Значение','TTL'].concat(man?['Проверка']:[]),Z.recs.map((r,i)=>`<tr class="click" onclick="openRec(${i})"><td class="mono">${r[4]?'<span class="dot on"></span>':'<span class="dot" style="visibility:hidden"></span>'}${r[0]}</td><td class="mono">${r[1]}</td><td class="mono" style="white-space:normal;overflow-wrap:anywhere;min-width:220px">${r[3]?r[3]+' ':''}${esc(r[2])}</td><td class="mute">${r[4]?'авто':'1 час'}</td>${man?`<td>${r[5]?pill(...CHECK[r[5]]):'<span class="mute">—</span>'}</td>`:''}</tr>`).join('')))+
  blk('Сертификаты','Выпуск и продление через Let’s Encrypt. Продление — за 30 дней до конца срока, само.',`<div class="acts"><button class="btn" type="button" onclick="openCert(-1)">${ic('i-plus')}Выпустить сертификат</button><button class="btn" type="button" onclick="openCert(-2)">Загрузить PEM</button></div>`+
   table(['Имена','Издатель','Проверка','Действует до','Где используется'],CERTS.map((r,i)=>`<tr class="click" onclick="openCert(${i})"><td class="mono" style="white-space:normal">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]==='22.10.2026'?pill('через 2 дн.','warn'):r[3]}</td><td>${r[4]}</td></tr>`).join('')));
 };
-const provSel=(id,cur)=>`<select id="${id}">${Object.entries(DNSP).map(([k,[n]])=>`<option value="${k}" ${k===cur?'selected':''}>${n}</option>`).join('')}</select>`;
+// Where DNS is managed: the accesses added in DNS providers, or by hand.
+const provSel=(id,cur)=>`<select id="${id}">${PROVS.map(p=>`<option value="${p[0]}" ${p[0]===cur?'selected':''}>${DNSP[p[0]][0]} · ${p[1]}</option>`).join('')}<option value="manual" ${cur==='manual'?'selected':''}>Вручную</option></select>`;
 function openZone(z){
  const nw=z==='new',Z=ZONES.find(x=>x.z===z)||{z:'',dns:'cloudflare'};
- dialog(nw?'Новый домен':'Зона '+z,nw?'Панель проверит, где обслуживается зона, и предложит записи для сервера.':'',`
-  <div class="fld"><label for="zz1">Зона</label><input id="zz1" class="mono" value="${Z.z}" placeholder="example.com" ${nw?'':'readonly'}></div>
-  <div><div class="fld"><label for="zz2">Где управляется DNS</label>${provSel('zz2',Z.dns)}</div><div class="hint">Через API панель сама создаёт и обновляет записи. «Вручную» — покажет, что внести у регистратора.</div></div>
-  ${nw?`<div class="dlg-sec">Сразу создать</div><label class="chk"><input type="checkbox" checked>A и AAAA для vpn → адреса сервера</label><label class="chk"><input type="checkbox" checked>CAA для Let’s Encrypt</label><label class="chk"><input type="checkbox">Записи почты (MX, SPF, DKIM, DMARC)</label>`:`<dl class="kv"><div><dt>Регистрация до</dt><dd>${Z.reg}</dd></div><div><dt>Записей</dt><dd>${Z.recs.length}</dd></div></dl>`}`,
-  `<button class="btn pri" type="button" onclick="closeDlg()">${nw?'Добавить':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить зону" style="margin-left:auto">${ic('i-trash')}</button>`}`);
+ dialog(nw?'Новый домен':'Зона '+z,nw?'Панель проверит, что провайдер обслуживает зону, и создаст записи для сервера.':'',`
+  <div class="fld"><label for="zz1">Зона</label><input id="zz1" class="mono" value="${Z.z}" placeholder="example.com" ${nw?'list="zzl"':'readonly'}>${nw?'<datalist id="zzl"><option value="example.net"><option value="example.com"></datalist>':''}</div>
+  <div><div class="fld"><label for="zz2">Где управляется DNS</label>${provSel('zz2',Z.dns)}</div><div class="hint">Через API панель сама создаёт и обновляет записи. «Вручную» — покажет, что внести у регистратора. Доступы — в «DNS-провайдерах».</div></div>
+  ${nw?`<div class="dlg-sec">Сразу создать</div><label class="chk"><input type="checkbox" checked>A и AAAA для имён сервера в этой зоне → адреса сервера</label><label class="chk"><input type="checkbox" checked>CAA для Let’s Encrypt</label><p class="hint">Записи почты (MX, SPF, DKIM, DMARC) создаёт раздел «Почта».</p>`:`<dl class="kv"><div><dt>Регистрация до</dt><dd>${Z.reg}</dd></div></dl>`}`,
+  `<button class="btn pri" type="button" onclick="closeDlg()">${nw?'Добавить':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить зону" style="margin-left:auto" onclick="zoneDel('${z}')">${ic('i-trash')}</button>`}`);
 }
+function zoneDel(z){dialog(`Удалить зону «${z}» из панели?`,'Записи у провайдера останутся; панель просто перестанет вести эту зону.','',`<button class="btn danger" type="button" onclick="closeDlg()">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
+const REC_PH={A:'203.0.113.10',AAAA:'2001:db8::10',MX:'mail.example.net',CAA:'0 issue &quot;letsencrypt.org&quot;',SRV:'5 443 vpn.example.net'};
 function openRec(i){
- const Z=ZONES.find(x=>x.z===S.zone)||ZONES[0],r=Z.recs[i]||['','A','','',0],nw=i<0;
- dialog(nw?'Новая запись':'Запись '+r[0]+' '+r[1],Z.z+(r[4]?' · создана панелью: при смене IP обновится сама':''),`
-  <div class="fld"><label for="rr1">Тип</label><select id="rr1" onchange="$('#rrP').hidden=!['MX','SRV'].includes(this.value)">${['A','AAAA','CNAME','MX','TXT','CAA','SRV','NS'].map(t=>`<option ${t===r[1]?'selected':''}>${t}</option>`).join('')}</select></div>
-  <div><div class="fld"><label for="rr2">Имя</label><input id="rr2" class="mono" value="${r[0]}" placeholder="@"></div><div class="hint">@ — сама зона ${Z.z}.</div></div>
+ const Z=ZONES.find(x=>x.z===S.zone)||ZONES[0],r=Z.recs[i]||['','A','','',0],nw=i<0,addr=['A','AAAA'].includes(r[1]);
+ dialog(nw?'Новая запись':'Запись '+r[0]+' '+r[1],Z.z+(r[4]?' · создана панелью':''),`
+  <div class="fld"><label for="rr1">Тип</label><select id="rr1" ${nw?'':'disabled'} onchange="$('#rrP').hidden=!['MX','SRV'].includes(this.value);$('#rrA').hidden=!['A','AAAA'].includes(this.value)">${['A','AAAA','CNAME','MX','TXT','CAA','SRV','NS'].map(t=>`<option ${t===r[1]?'selected':''}>${t}</option>`).join('')}</select></div>
+  <div><div class="fld"><label for="rr2">Имя</label><input id="rr2" class="mono" value="${r[0]}" placeholder="@" ${nw?'':'readonly'}></div><div class="hint">@ — сама зона ${Z.z}.</div></div>
   <div id="rrP" ${['MX','SRV'].includes(r[1])?'':'hidden'}><div class="fld"><label for="rr3">Приоритет</label><input id="rr3" class="num" value="${r[3]||10}"></div></div>
-  <div class="fld"><label for="rr4">Значение</label><input id="rr4" class="mono" value="${esc(r[2])}"></div>
-  <div class="fld"><label for="rr5">TTL</label><select id="rr5"><option>авто</option><option>5 минут</option><option ${r[4]?'':'selected'}>1 час</option><option>1 день</option></select></div>
-  ${r[4]?'<label class="chk"><input type="checkbox" checked>Обновлять при смене IP сервера</label>':''}`,
+  <div class="fld"><label for="rr4">Значение</label><input id="rr4" class="mono" value="${esc(r[2])}" placeholder="${REC_PH[r[1]]||''}"></div>
+  <div class="fld"><label for="rr5">TTL</label><select id="rr5">${TTLS.map(t=>`<option ${t===(r[4]?'авто':'1 час')?'selected':''}>${t}</option>`).join('')}</select></div>
+  <label class="chk" id="rrA" ${addr?'':'hidden'}><input type="checkbox" ${r[4]?'checked':''}>Обновлять при смене IP сервера</label>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">${nw?'Добавить':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить запись" style="margin-left:auto">${ic('i-trash')}</button>`}`);
 }
+const useOpts=(cur)=>USES.filter(u=>u!=='почта (SMTP, IMAP)'||pkgOn('Почтовый сервер')||u===cur).map(u=>`<option ${u===cur?'selected':''}>${u}</option>`).join('');
 function openCert(i){
  if(i===-2)return dialog('Загрузить сертификат','Свой сертификат от другого центра. Продлевать его вы будете сами.',`
   <div class="fld"><label for="pm1">Сертификат и цепочка (PEM)</label><textarea id="pm1" class="mono ta" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
   <div class="fld"><label for="pm2">Закрытый ключ (PEM)</label><textarea id="pm2" class="mono ta" rows="4" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>
-  <div class="acts" style="margin:0"><button class="btn sm" type="button">${ic('i-up',16)}Выбрать файлы</button></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Загрузить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  <div class="acts" style="margin:0"><button class="btn sm" type="button">${ic('i-up',16)}Выбрать файлы</button></div>
+  <div class="fld"><label for="pm3">Где использовать</label><select id="pm3">${useOpts('')}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Загрузить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
  const c=CERTS[i],nw=i<0;
  dialog(nw?'Новый сертификат':'Сертификат '+c[0].split(',')[0],nw?'Let’s Encrypt. Проверка DNS-01 нужна для имён, которые не смотрят на этот сервер, и для *.':'',`
-  <div><div class="fld"><label for="ce1">Имена</label><input id="ce1" class="mono" value="${nw?'':c[0]}" placeholder="vpn.example.net, mail.example.net"></div><div class="hint">Через запятую. *.example.net — только с проверкой DNS-01.</div></div>
-  <div class="fld"><label for="ce2">Проверка</label><select id="ce2"><option ${!nw&&c[2]==='DNS-01'?'selected':''}>DNS-01 — через DNS-провайдера зоны</option><option ${!nw&&c[2]==='HTTP-01'?'selected':''}>HTTP-01 — через веб-сервер на :80</option></select></div>
-  <div class="fld"><label for="ce3">Где использовать</label><select id="ce3"><option>нода loft</option><option>панель и веб-почта</option><option>почта (SMTP, IMAP)</option><option>везде, где подходит имя</option></select></div>
-  ${nw?'':`<dl class="kv"><div><dt>Издатель</dt><dd>${c[1]} (R11)</dd></div><div><dt>Действует до</dt><dd>${c[3]}</dd></div><div><dt>Ключ</dt><dd>ECDSA P-256</dd></div></dl>
-  <div class="acts" style="margin:0"><button class="btn sm" type="button">Продлить сейчас</button></div>`}`,
-  `<button class="btn pri" type="button" onclick="closeDlg()">${nw?'Выпустить':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить сертификат" style="margin-left:auto">${ic('i-trash')}</button>`}`);
+  <div><div class="fld"><label for="ce1">Имена</label><input id="ce1" class="mono" value="${nw?'':c[0]}" placeholder="vpn.example.net, mail.example.net"></div><div class="hint">Через запятую. *.example.net — только с проверкой DNS-01.${nw?'':' Сертификат ноды должен включать её имя, панели — имя панели.'}</div></div>
+  <div class="fld"><label for="ce2">Проверка</label><select id="ce2"><option ${!nw&&c[2]==='DNS-01'?'selected':''}>DNS-01 — через DNS-провайдера зоны</option><option ${nw||c[2]!=='DNS-01'?'selected':''}>HTTP-01 — через веб-сервер на :80</option></select></div>
+  <div class="fld"><label for="ce3">Где использовать</label><select id="ce3" ${nw?'':'disabled'}>${useOpts(nw?'':c[4])}</select></div>
+  ${nw?'':`<dl class="kv"><div><dt>Издатель</dt><dd>${c[1]}</dd></div><div><dt>Действует до</dt><dd>${c[3]}</dd></div><div><dt>Ключ</dt><dd>ECDSA P-256</dd></div></dl>`}`,
+  `<button class="btn pri" type="button" onclick="closeDlg()">${nw?'Выпустить':'Выпустить заново'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw||c[5]?'':`<button class="icb del" type="button" aria-label="Удалить сертификат" style="margin-left:auto">${ic('i-trash')}</button>`}`);
 }
 function openProviders(){
  dialog('DNS-провайдеры','Доступы, через которые панель ведёт записи зон и проходит проверку DNS-01. Хранятся только на этом сервере.',
-  table(['Провайдер','Доступ','Зоны','Проверка'],PROVS.map(p=>`<tr><td><b>${p[1]}</b></td><td class="mono">${p[2]}</td><td class="mono">${p[3]}</td><td>${pill(p[4],'ok')}</td></tr>`).join(''))+`
+  table(['Провайдер','Доступ','Зоны',{t:'',r:1}],PROVS.map(p=>`<tr><td><b>${DNSP[p[0]][0]}</b></td><td class="mono">${p[1]}</td><td class="mono">${p[2]}</td><td class="r"><div class="cell-acts"><button class="icb del" type="button" aria-label="Удалить доступ">${ic('i-trash')}</button></div></td></tr>`).join(''))+`
   <div class="dlg-sec">Добавить</div>
   <div class="fld"><label for="dp1">Провайдер</label><select id="dp1" onchange="$('#dpNc').hidden=this.value!=='namecheap';$('#dpH').textContent=DNSP[this.value][1]">${Object.entries(DNSP).filter(([k])=>k!=='manual').map(([k,[n]])=>`<option value="${k}">${n}</option>`).join('')}</select></div>
   <div><div class="fld"><label for="dp2">API-токен</label><input id="dp2" class="mono" type="password" autocomplete="off"></div><div class="hint" id="dpH">${DNSP.cloudflare[1]}</div></div>
-  <div id="dpNc" hidden><div class="fld"><label for="dp3">Пользователь API</label><input id="dp3" autocomplete="off"></div></div>
-  <button class="btn sm" type="button" style="align-self:flex-start">Проверить доступ</button>`,
-  `<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
+  <div id="dpNc" hidden><div class="fld"><label for="dp3">Пользователь API</label><input id="dp3" autocomplete="off"></div><div class="hint">Белый IP для API Namecheap: <span class="mono">203.0.113.10</span></div></div>`,
+  `<button class="btn pri" type="button" onclick="closeDlg()">Проверить и добавить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
 }
 
 /* ── Почта: появляется в меню, когда установлен пакет «Почтовый сервер» ── */
