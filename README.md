@@ -61,11 +61,12 @@ Web administration of one loft server: the node, its networks and members, IP ad
 flowchart LR
     subgraph Client["loft client"]
         App["SSH · browser · curl"] --> In["SOCKS5 / TUN"]
-        In --> Mux["mux<br/>Open / Data / Close / Dgram"]
+        In --> Mux["mux Open / Data / Close / Dgram"]
         Mux --> Seal["ChaCha20-Poly1305"]
         Seal --> Front["get · ws · h2 · quic · h3"]
     end
-    Front -- "TLS 1.3 HTTPS" --> Edge["CDN / reverse proxy"] --> Node["loft-node"]
+    Front -->|"TLS 1.3 HTTPS"| Edge["CDN / reverse proxy"]
+    Edge --> Node["loft-node"]
     Node --> Dest["lab · fleet · site"]
 ```
 

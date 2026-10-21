@@ -61,11 +61,12 @@ macOS 客户端住在菜单栏。从那里打开覆盖网，挂着几条有名�
 flowchart LR
     subgraph Client["loft 客户端"]
         App["SSH · 浏览器 · curl"] --> In["SOCKS5 / TUN"]
-        In --> Mux["mux<br/>Open / Data / Close / Dgram"]
+        In --> Mux["mux Open / Data / Close / Dgram"]
         Mux --> Seal["ChaCha20-Poly1305"]
         Seal --> Front["get · ws · h2 · quic · h3"]
     end
-    Front -- "TLS 1.3 HTTPS" --> Edge["CDN / 反向代理"] --> Node["loft-node"]
+    Front -->|"TLS 1.3 HTTPS"| Edge["CDN / 反向代理"]
+    Edge --> Node["loft-node"]
     Node --> Dest["实验室 · 机群 · 站点"]
 ```
 
