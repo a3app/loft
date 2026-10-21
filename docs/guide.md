@@ -212,7 +212,7 @@ Binary `loft`. Example `clients/go/configs/client.yaml`.
 ALL_PROXY=socks5://127.0.0.1:1080 curl https://example.com
 ```
 
-Local listeners: SOCKS5 (`127.0.0.1:1080` in `client.yaml` and the GUI). CLI `loft` / `loft-front` without an explicit port bind `127.0.0.1:18080` so they can sit beside the open client. TUN if `tun: auto`. `-if en0` (or a local/gateway IPv4) pins front sockets to that path; same flag on `loft-front`, `loft-probe`, `loft-bench`.
+Local listeners: SOCKS5 (`127.0.0.1:1080` in `client.yaml` and the GUI). CLI `loft` / `loft-front` without an explicit port bind `127.0.0.1:18080` so they can sit beside the open client. TUN if `tun: auto`. `-if en0` (or a local/gateway IPv4) pins front sockets to that path; same flag on `loft-front`, `loft-probe`, `loft-bench`. `loft-front` / `loft-bench` `-h2-max-age` is YAML `h2_max_age_ms` (0 = keep until error).
 
 Wi-Fi / LTE / VPN path change: SOCKS and TUN stay up, overlay IP stays, the helper process stays. The front TCP is redialed with a fresh `0x02` and the same `instance_id`. With cap `hold`, mux streams stay for `gap_hold_ms` (default 8 s) and inner TCP stays up. Leave still tears the session.
 
@@ -258,9 +258,9 @@ make probe
 | `listen.bind` | Same as `-if`; CLI `-if` wins |
 | `listen.uplink` | RouterOS WAN name for container egress (`ether1`, `lte1`) |
 
-Outbound fields: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| empty), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `insecure_skip_verify`.
+Outbound fields: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| empty), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `h2_max_age_ms`, `insecure_skip_verify`.
 
-Omitted `header_budget` is 16 KiB of HTTP header (Yandex CDN profile pins 12 KiB). Omitted `inflight` is 8 in this tree (protocol range 2–8, spec default 4). Later GET uplink is header `X-Request-Id`; the first GET is Cookie `session=` plus `X-Auth: 1`. Overlay ICMP is CmdDgram to `dst:1`; the node answers the gateway and emits internet echo.
+Omitted `header_budget` is 16 KiB of HTTP header (Yandex CDN profile pins 12 KiB). Omitted `inflight` is 8 in this tree (protocol range 2–8, spec default 4). Omitted `h2_max_age_ms` is 0: keep the GET HTTP/2 connection until error. A positive value (floor 15 s, cap 1 h) replaces that TCP; mux and GET session id stay. GET uplink is Cookie `session=`; the first GET is tag `0x02` with the session id already in the path. Overlay ICMP is CmdDgram to `dst:1`; the node answers the gateway and emits internet echo.
 
 The client does not choose decoy SNI. The node advertises it. A CDN front keeps the CDN hostname.
 

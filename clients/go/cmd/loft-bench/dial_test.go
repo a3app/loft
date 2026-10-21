@@ -16,4 +16,13 @@ func TestOutboundForYandex(t *testing.T) {
 	if g.CDN != "" || g.HeaderBudget != 16<<10 || !g.Insecure {
 		t.Fatalf("%+v", g)
 	}
+	if g.H2MaxAgeMS != 0 {
+		t.Fatalf("h2 default %d", g.H2MaxAgeMS)
+	}
+	outboundH2MaxAgeMS = 60000
+	t.Cleanup(func() { outboundH2MaxAgeMS = 0 })
+	aged := outboundFor("https://loft.example:444", "get", "/static/js", "", true)
+	if aged.H2MaxAgeMS != 60000 {
+		t.Fatalf("h2_max_age_ms %d", aged.H2MaxAgeMS)
+	}
 }

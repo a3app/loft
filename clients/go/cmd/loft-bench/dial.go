@@ -14,6 +14,9 @@ import (
 	"github.com/a3app/loft/internal/transport"
 )
 
+// outboundH2MaxAgeMS is -h2-max-age in milliseconds (0 = keep HTTP/2 until error).
+var outboundH2MaxAgeMS int
+
 // dialFront tries the requested kind first (GUI: empty kind from URL), then the other.
 func dialFront(ctx context.Context, token, raw, kind, path, cdnName string, muxOn bool) (transport.Dialer, string, error) {
 	kind = strings.ToLower(strings.TrimSpace(kind))
@@ -58,6 +61,7 @@ func outboundFor(raw, kind, path, cdnName string, muxOn bool) config.Outbound {
 		Insecure:     true,
 		HeaderBudget: 16 << 10,
 		Inflight:     48,
+		H2MaxAgeMS:   outboundH2MaxAgeMS,
 	}
 	if !muxOn {
 		f := false

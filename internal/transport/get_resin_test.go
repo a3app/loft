@@ -93,7 +93,7 @@ func TestGETOpenSurvivesFirstMux404(t *testing.T) {
 	var muxN atomic.Int32
 	var firstMux, retryMux atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Auth") == "1" {
+		if cookieHandshake(r) {
 			gs.ServeHTTP(w, r)
 			return
 		}
@@ -137,7 +137,7 @@ func TestGETBurst404DoesNotDie(t *testing.T) {
 	seen := map[string]struct{}{}
 	var mu sync.Mutex
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Auth") == "1" {
+		if cookieHandshake(r) {
 			gs.ServeHTTP(w, r)
 			return
 		}

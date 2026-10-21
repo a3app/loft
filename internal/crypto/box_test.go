@@ -34,6 +34,23 @@ func TestSealOpen(t *testing.T) {
 	}
 }
 
+func TestLooksLikeAuth(t *testing.T) {
+	token := []byte("token-secret")
+	blob, _, _, err := MakeAuth(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !LooksLikeAuth(blob) {
+		t.Fatal("0x02")
+	}
+	if LooksLikeAuth(nil) || LooksLikeAuth([]byte{0x01, 1, 2, 3}) {
+		t.Fatal("false positive")
+	}
+	if LooksLikeAuth([]byte{tagAuth}) {
+		t.Fatal("short 0x02")
+	}
+}
+
 // TestAuthClocklessAndReplay accepts a 0x02 proof and treats the same
 // nonce+eph_c as an idempotent retry (GET Cookie), not a new session.
 func TestAuthClocklessAndReplay(t *testing.T) {

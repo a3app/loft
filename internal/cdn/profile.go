@@ -37,7 +37,7 @@ func GenericGET() Profile {
 		Inflight:     48,
 		Path:         "/static/js",
 		Ext:          ".js",
-		UplinkHeader: "X-Request-Id",
+		UplinkHeader: "Cookie",
 		ContentType:  "application/javascript",
 		FetchDest:    "script",
 	}

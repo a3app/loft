@@ -18,7 +18,7 @@ func Yandex() Profile {
 	// queued Cookie GETs (TTFB 900ms) and sat upload at ~3 Mbit. 16 matches
 	// the pool: pad TTFB ~220ms, more payload per RTT.
 	p.Inflight = 16
-	// Edge often drops X-Request-Id; Cookie already made the handshake.
+	// Cookie is the GET uplink (custom headers are stripped more often).
 	p.UplinkHeader = "Cookie"
 	// Origin fetch dies at 5s (504). Waiting 15s HOL-blocks mux on a dead GET.
 	p.TripTimeout = 6 * time.Second

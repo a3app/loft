@@ -32,7 +32,7 @@
 
 ## 1. Origin — loft 节点，控制台之前
 
-CDN 对节点开**自己的** TLS。客户端 ClientHello 里的 HMAC 到不了节点。会话活在 HTTP 里：第一个 GET 是 `Cookie: session=` 和 `X-Auth: 1`，后面也是 `Cookie: session=`（边缘经常切掉 `X-Request-Id`）。节点的应答必须把 `X-Session` 头送到客户端。
+CDN 对节点开**自己的** TLS。客户端 ClientHello 里的 HMAC 到不了节点。会话活在 HTTP 里：第一个 GET 是带 `0x02` 的 Cookie `session=`，会话 id 已经在路径里，后面也是 Cookie `session=`（AEAD）。节点仍回 `X-Session`；新客户端不靠它。
 
 所以 CDN 的 origin 是**自己**回答 `get_path` 上 `GET` 的监听口，而不是把别人的 ClientHello 拼进诱饵。
 
@@ -172,7 +172,7 @@ yc cdn origin-group create --name loft-origin \
 
 ### 第 3 步. HTTP 头和方法
 
-`Cookie`、`X-Auth`、`X-Request-Id` 客户端自己带。不要用静态头再复制一份。节点应答里的 `X-Session` 能到客户端，只要 **不隐藏** 还开着。
+`Cookie` 客户端自己带。不要用静态头再复制一份。节点应答里的 `X-Session` 能到客户端，只要 **不隐藏** 还开着；新客户端不靠它。
 
 ![头：什么都不要加，隐藏源站头 —「不隐藏」，CORS —「不添加」](img/yandex-cdn/05-headers.png)
 
@@ -322,7 +322,7 @@ CLI `loft` / `loft-front` 不写端口时听 `127.0.0.1:18080`，免得占掉开
 | 405 | WS 或 POST；Yandex 只要 GET |
 | 502 | 去 origin 的 Host/SNI 和节点证书对不上（`other.example.net` 盖不住 `loft.example.com`）；诱饵拼接了边缘 |
 | 504 / origin 超时 5 秒 | 去 origin 的 SNI/Host 不是 advertise 名（节点在拼接）；防火墙；origin 没有 IPv4 |
-| 握手有了，mux 空 | CDN 藏了 `X-Session`，或没放过 `Cookie` / `X-Request-Id` |
+| 握手有了，mux 空 | CDN 没放过 Cookie |
 | 会话串台 | 资源上缓存还开着；「忽略 Cookie」开着 |
 | 客户端 TLS 对不上 | CNAME 还没散开；边缘上是默认的 `*.yccdn.cloud.yandex.net`，不是 `cdn.example.com` 的 LE |
 | `loft-bench` 404 / mux 空 | 忘了 `-path /static/v3/build` |
@@ -336,7 +336,7 @@ CLI `loft` / `loft-front` 不写端口时听 `127.0.0.1:18080`，免得占掉开
 | 文件 | 角色 |
 |------|------|
 | `internal/cdn/yandex.go` | 配置：GET，12 KiB，inflight 16 |
-| `internal/transport/get.go` | `setCDNHeaders`，Cookie / `X-Request-Id` / `X-Session` |
+| `internal/transport/get.go` | `setCDNHeaders`，Cookie / `X-Session` |
 | `clients/go/configs/client.yaml` | 出站例子 `cdn-get`，path `/static/v3/build` |
 | `clients/go/cmd/loft-bench` | `-cdn yandex`；path 要显式写 |
 | `docs/img/yandex-cdn/` | 这份说明书对应的控制台截图 |

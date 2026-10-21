@@ -32,7 +32,7 @@
 
 ## 1. Origin — нода loft, до консоли
 
-CDN открывает **свой** TLS к ноде. HMAC из ClientHello клиента до ноды не доходит. Сессия живёт в HTTP: первый GET — `Cookie: session=` и `X-Auth: 1`, дальше тоже `Cookie: session=` (ребро часто режет `X-Request-Id`). Ответ ноды обязан донести до клиента заголовок `X-Session`.
+CDN открывает **свой** TLS к ноде. HMAC из ClientHello клиента до ноды не доходит. Сессия живёт в HTTP: первый GET — Cookie `session=` с тегом `0x02` и идентификатором сессии уже в пути, дальше тоже Cookie `session=` (AEAD). `X-Session` нода всё ещё ставит; новый клиент без него обходится.
 
 Поэтому origin для CDN — слушатель, который **сам** отвечает на `GET` по `get_path`, а не сплайсирует чужой ClientHello в decoy.
 
@@ -172,7 +172,7 @@ yc cdn origin-group create --name loft-origin \
 
 ### Шаг 3. HTTP-заголовки и методы
 
-`Cookie`, `X-Auth`, `X-Request-Id` идут от клиента сами. Статическими их не дублировать. `X-Session` из ответа ноды до клиента доходит, пока стоит **Не скрывать**.
+`Cookie` идёт от клиента сам. Статическим его не дублировать. `X-Session` из ответа ноды до клиента доходит, пока стоит **Не скрывать**; новый клиент без него обходится.
 
 ![Заголовки: ничего не добавлять, скрытие заголовков источника — «Не скрывать», CORS — «Не добавлять»](img/yandex-cdn/05-headers.png)
 
@@ -322,7 +322,7 @@ CLI `loft` / `loft-front` без явного порта слушают `127.0.0
 | 405 | WS или POST; для Yandex нужен только GET |
 | 502 | Host/SNI к origin не совпадают с сертификатом ноды (`other.example.net` не покрывает `loft.example.com`); decoy сплайсирует ребро |
 | 504 / origin timeout 5 с | SNI/Host к origin не advertise-имя (нода сплайсирует); файрвол; у origin нет IPv4 |
-| Рукопожатие есть, mux пустой | CDN спрятал `X-Session`, либо не пропустил `Cookie` / `X-Request-Id` |
+| Рукопожатие есть, mux пустой | CDN не пропустил Cookie |
 | Сессии путаются | кэш на ресурсе ещё включён; «игнорировать Cookie» включено |
 | TLS клиента не сходится | CNAME ещё не разошёлся; на крае дефолтный `*.yccdn.cloud.yandex.net`, а не LE на `cdn.example.com` |
 | `loft-bench` 404 / пустой mux | забыли `-path /static/v3/build` |
@@ -336,7 +336,7 @@ CLI `loft` / `loft-front` без явного порта слушают `127.0.0
 | Файл | Роль |
 |------|------|
 | `internal/cdn/yandex.go` | профиль: GET, 12 КиБ, inflight 16 |
-| `internal/transport/get.go` | `setCDNHeaders`, Cookie / `X-Request-Id` / `X-Session` |
+| `internal/transport/get.go` | `setCDNHeaders`, Cookie / `X-Session` |
 | `clients/go/configs/client.yaml` | пример outbound `cdn-get`, path `/static/v3/build` |
 | `clients/go/cmd/loft-bench` | `-cdn yandex`; path задавать явно |
 | `docs/img/yandex-cdn/` | скриншоты консоли к этой инструкции |

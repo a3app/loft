@@ -137,6 +137,22 @@ func TestTraceCommand(t *testing.T) {
 	}
 }
 
+func TestLoadClientH2MaxAge(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "client.yaml")
+	body := "token: t\noutbounds:\n  - name: x\n    type: get\n    url: https://example.com\n    h2_max_age_ms: 60000\n"
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadClient(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Outbounds[0].H2MaxAgeMS != 60000 {
+		t.Fatalf("h2_max_age_ms %d", c.Outbounds[0].H2MaxAgeMS)
+	}
+}
+
 func TestLoadClientTofu(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "client.yaml")

@@ -28,7 +28,7 @@ type NodeInfo struct {
 
 // Status builds the first AEAD Status from session defaults and this node's offer.
 // sid is the GET HTTP sid (or "ws" / "quic"). Overlay instance_id is Hello /
-// overlay Bind, not this sid — mixing them made GET X-Auth adopt miss the
+// overlay Bind, not this sid — mixing them made GET handshake adopt miss the
 // parked mux after RememberVis.
 func (n NodeInfo) Status(sid string) wire.Status {
 	st := netconf.DefaultSession().Status(wire.OK, "", "", "", 1280, 0)

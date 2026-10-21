@@ -33,7 +33,11 @@ func main() {
 	httpN := flag.Int("http", 1<<20, "HTTPS body for internet/direct samples")
 	timeout := flag.Duration("timeout", 45*time.Second, "per-case deadline")
 	ifName := flag.String("if", "", "outbound interface or local IP")
+	h2MaxAge := flag.Duration("h2-max-age", 0, "GET HTTP/2 recycle; 0 keep until error")
 	flag.Parse()
+	if *h2MaxAge > 0 {
+		outboundH2MaxAgeMS = int(h2MaxAge.Milliseconds())
+	}
 
 	if *serve != "" {
 		if err := serveOrigin(*serve); err != nil {

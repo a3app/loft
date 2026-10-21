@@ -43,6 +43,23 @@ const (
 	tagTicket byte = 0x03 // 1.0.16 ticket; HKDF(lt_, ticket nonce)
 )
 
+// LooksLikeAuth is the GET handshake Cookie: tag 0x02 or leftover 0x03.
+// AEAD uplink is nonce[12]||ct and is not this shape. A 1/256 first-byte
+// collision still fails FinishAuth; the GET front then treats it as mux.
+func LooksLikeAuth(blob []byte) bool {
+	if len(blob) < 1 {
+		return false
+	}
+	switch blob[0] {
+	case tagAuth:
+		return len(blob) >= proofLenV1
+	case tagTicket:
+		return len(blob) >= 1+8+16+1+AuthSize
+	default:
+		return false
+	}
+}
+
 // ErrAuth is a failed proof or AEAD open.
 var ErrAuth = fmt.Errorf("crypto: auth failed")
 

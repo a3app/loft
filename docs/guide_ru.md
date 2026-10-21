@@ -212,7 +212,7 @@ Relay открывает транк с возможностью `relay` в Hello
 ALL_PROXY=socks5://127.0.0.1:1080 curl https://example.com
 ```
 
-Локальные слушатели: SOCKS5 (`127.0.0.1:1080` в `client.yaml` и в GUI). CLI `loft` / `loft-front` без явного порта слушают `127.0.0.1:18080`, чтобы сидеть рядом с открытым клиентом. TUN — если `tun: auto`. `-if en0` (или локальный/шлюзовой IPv4) сажает сокеты фронта на этот путь; тот же флаг у `loft-front`, `loft-probe`, `loft-bench`.
+Локальные слушатели: SOCKS5 (`127.0.0.1:1080` в `client.yaml` и в GUI). CLI `loft` / `loft-front` без явного порта слушают `127.0.0.1:18080`, чтобы сидеть рядом с открытым клиентом. TUN — если `tun: auto`. `-if en0` (или локальный/шлюзовой IPv4) сажает сокеты фронта на этот путь; тот же флаг у `loft-front`, `loft-probe`, `loft-bench`. У `loft-front` / `loft-bench` `-h2-max-age` — то же, что YAML `h2_max_age_ms` (0 — держать, пока ребро само не оборвёт).
 
 Смена пути Wi-Fi / LTE / VPN: SOCKS и TUN остаются, IP оверлея остаётся, процесс-помощник остаётся. TCP фронта перенабирается свежим `0x02` и тем же `instance_id`. При возможности `hold` mux-потоки живут `gap_hold_ms` (по умолчанию 8 с), внутренний TCP не рвётся. Leave сессию всё равно закрывает.
 
@@ -258,9 +258,9 @@ make probe
 | `listen.bind` | То же, что `-if`; флаг CLI главнее |
 | `listen.uplink` | Имя WAN RouterOS для выхода контейнера (`ether1`, `lte1`) |
 
-Поля исходящего: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| пусто), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `insecure_skip_verify`.
+Поля исходящего: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| пусто), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `h2_max_age_ms`, `insecure_skip_verify`.
 
-Пропущенный `header_budget` — 16 КиБ HTTP-заголовка (профиль Yandex CDN фиксирует 12 КиБ). Пропущенный `inflight` в этом дереве — 8 (диапазон протокола 2–8, в спецификации по умолчанию 4). Дальнейший исходящий GET — заголовок `X-Request-Id`; первый GET — Cookie `session=` плюс `X-Auth: 1`. ICMP оверлея — CmdDgram на `dst:1`; нода отвечает шлюзу и отправляет настоящий ICMP echo в интернет.
+Пропущенный `header_budget` — 16 КиБ HTTP-заголовка (профиль Yandex CDN фиксирует 12 КиБ). Пропущенный `inflight` в этом дереве — 8 (диапазон протокола 2–8, в спецификации по умолчанию 4). Пропущенный `h2_max_age_ms` — 0: HTTP/2 GET живёт, пока ребро само не оборвёт. Положительное значение (пол 15 с, потолок 1 ч) меняет этот TCP; mux и идентификатор GET-сессии остаются. Исходящий GET — Cookie `session=`; первый GET — тег `0x02`, идентификатор сессии уже в пути. ICMP оверлея — CmdDgram на `dst:1`; нода отвечает шлюзу и отправляет настоящий ICMP echo в интернет.
 
 Клиент decoy SNI не выбирает. Его объявляет нода. CDN-фронт сохраняет hostname CDN.
 

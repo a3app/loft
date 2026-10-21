@@ -212,7 +212,7 @@ export LOFT_TOKEN='long-secret'
 ALL_PROXY=socks5://127.0.0.1:1080 curl https://example.com
 ```
 
-本机监听：SOCKS5（`client.yaml` 和 GUI 里 `127.0.0.1:1080`）。CLI `loft` / `loft-front` 没写端口就绑 `127.0.0.1:18080`，好跟开着的客户端并排。`tun: auto` 才有 TUN。`-if en0`（或本机/网关 IPv4）把前置套接字钉在那条路上；`loft-front`、`loft-probe`、`loft-bench` 同一个标志。
+本机监听：SOCKS5（`client.yaml` 和 GUI 里 `127.0.0.1:1080`）。CLI `loft` / `loft-front` 没写端口就绑 `127.0.0.1:18080`，好跟开着的客户端并排。`tun: auto` 才有 TUN。`-if en0`（或本机/网关 IPv4）把前置套接字钉在那条路上；`loft-front`、`loft-probe`、`loft-bench` 同一个标志。`loft-front` / `loft-bench` 的 `-h2-max-age` 就是 YAML `h2_max_age_ms`（0 = 留到出错）。
 
 Wi-Fi / LTE / VPN 路径一变：SOCKS 和 TUN 还在，覆盖网 IP 还在，助手进程还在。前置 TCP 用新的 `0x02` 和同一个 `instance_id` 重拨。有 cap `hold` 时，mux 流在 `gap_hold_ms`（默认 8 秒）里还在，里面的 TCP 不断。Leave 还是会拆会话。
 
@@ -258,9 +258,9 @@ make probe
 | `listen.bind` | 和 `-if` 一样；命令行 `-if` 优先 |
 | `listen.uplink` | 容器出口用的 RouterOS WAN 名（`ether1`、`lte1`） |
 
-出站字段：`name`、`type`（`get` \| `ws` \| `h2` \| `quic` \| `h3`）、`url`、`path`、`cdn`（`yandex` \| `cloudflare` \| 空）、`fingerprint`（`chrome` \| `firefox` \| `go`）、`header_budget`、`inflight`、`insecure_skip_verify`。
+出站字段：`name`、`type`（`get` \| `ws` \| `h2` \| `quic` \| `h3`）、`url`、`path`、`cdn`（`yandex` \| `cloudflare` \| 空）、`fingerprint`（`chrome` \| `firefox` \| `go`）、`header_budget`、`inflight`、`h2_max_age_ms`、`insecure_skip_verify`。
 
-没写 `header_budget` 就是 16 KiB HTTP 头（Yandex CDN 配置钉死 12 KiB）。没写 `inflight` 在这棵树是 8（协议范围 2–8，规范默认 4）。后面的 GET 上行是头 `X-Request-Id`；第一次 GET 是 Cookie `session=` 加 `X-Auth: 1`。覆盖网 ICMP 是打到 `dst:1` 的 CmdDgram；节点答网关，并发互联网 echo。
+没写 `header_budget` 就是 16 KiB HTTP 头（Yandex CDN 配置钉死 12 KiB）。没写 `inflight` 在这棵树是 8（协议范围 2–8，规范默认 4）。没写 `h2_max_age_ms` 就是 0：GET 的 HTTP/2 一直留到出错。大于 0（下限 15 秒，上限 1 小时）会换这条 TCP；mux 和 GET 会话 id 不变。GET 上行是 Cookie `session=`；第一次 GET 是标签 `0x02`，会话 id 已经在路径里。覆盖网 ICMP 是打到 `dst:1` 的 CmdDgram；节点答网关，并发互联网 echo。
 
 客户端不选诱饵 SNI。节点宣告。CDN 前置保持 CDN 主机名。
 

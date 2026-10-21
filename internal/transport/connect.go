@@ -58,11 +58,7 @@ func ServeSplice(w http.ResponseWriter, r *http.Request, token []byte, seen *ecr
 	if seen == nil {
 		seen = ecrypto.NewNonces()
 	}
-	raw := r.Header.Get("X-Request-Id")
-	if c := r.Header.Get("Cookie"); strings.HasPrefix(c, "session=") {
-		raw = strings.TrimPrefix(c, "session=")
-	}
-	blob, _ := wire.DecodeUplink(raw)
+	blob, _ := wire.DecodeUplink(uplinkHeader(r))
 	if _, err := frontAuth(token, blob, seen); err != nil {
 		http.NotFound(w, r)
 		return
@@ -173,9 +169,11 @@ func closeWrite(c net.Conn) {
 	_ = c.Close()
 }
 
-// openConnect issues HTTP CONNECT :authority target on the GET HTTP/2 client.
+// openConnect issues HTTP CONNECT :authority target on a live GET HTTP/2
+// client from the pool (same pick as mux GETs, including h2_max_age recycle).
 func (g *GET) openConnect(target string) (net.Conn, error) {
-	if g.client == nil {
+	cl := g.pickClient()
+	if cl == nil {
 		return nil, fmt.Errorf("connect: no client")
 	}
 	pr, pw := io.Pipe()
@@ -192,8 +190,7 @@ func (g *GET) openConnect(target string) (net.Conn, error) {
 		return nil, err
 	}
 	req.Header.Set("Cookie", "session="+wire.EncodeUplink(blob, 0))
-	req.Header.Set("X-Auth", "1")
-	resp, err := g.client.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		_ = pw.Close()
 		return nil, err

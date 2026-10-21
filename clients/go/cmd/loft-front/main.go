@@ -28,6 +28,9 @@ import (
 // frontDecoy and frontPBK are -decoy / -pbk for direct loft fronts.
 var frontDecoy, frontPBK string
 
+// frontH2MaxAgeMS is -h2-max-age in milliseconds (0 = keep HTTP/2 until error).
+var frontH2MaxAgeMS int
+
 // main connects a loft front and serves SOCKS5 and optional TUN for the GUI.
 func main() {
 	token := flag.String("token", "", "member key")
@@ -54,7 +57,11 @@ func main() {
 	ifName := flag.String("if", "", "outbound interface or local IP")
 	driveOn := flag.Bool("drive", false, "drive-debug log (handoff, stall, handshake)")
 	traceFile := flag.String("trace", "", "drive log file; implies -drive")
+	h2MaxAge := flag.Duration("h2-max-age", 0, "GET HTTP/2 recycle; 0 keep until error")
 	flag.Parse()
+	if *h2MaxAge > 0 {
+		frontH2MaxAgeMS = int(h2MaxAge.Milliseconds())
+	}
 	if err := protect.Bind(*ifName); err != nil {
 		fmt.Fprintf(os.Stderr, "loft-front: -if: %v\n", err)
 		os.Exit(2)
@@ -335,6 +342,7 @@ func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 		Insecure:     true,
 		HeaderBudget: 16 << 10,
 		Inflight:     48,
+		H2MaxAgeMS:   frontH2MaxAgeMS,
 	}
 	if p, err := cdn.Lookup(o.CDN); err == nil && o.CDN != "" {
 		o.HeaderBudget = p.HeaderBudget

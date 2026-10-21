@@ -94,6 +94,7 @@ type Outbound struct {
 	Decoy        string `yaml:"decoy"`       // optional last-known node identity (host or host:port); empty = discover
 	HeaderBudget int    `yaml:"header_budget"`
 	Inflight     int    `yaml:"inflight"`
+	H2MaxAgeMS   int    `yaml:"h2_max_age_ms"` // GET: recycle HTTP/2 TCP; 0 = keep until error
 	Insecure     bool   `yaml:"insecure_skip_verify"`
 	Mux          *bool  `yaml:"mux,omitempty"`      // nil/true: inner mux; false: HTTP/2 CONNECT splice
 	MaskPub      string `yaml:"mask_pub,omitempty"` // 32-byte node X25519, hex or base64url

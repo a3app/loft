@@ -25,6 +25,18 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+func cookieHandshake(r *http.Request) bool {
+	if r.Header.Get("X-Auth") == "1" {
+		return true
+	}
+	c := r.Header.Get("Cookie")
+	if !strings.HasPrefix(c, "session=") {
+		return false
+	}
+	blob, _ := wire.DecodeUplink(strings.TrimPrefix(c, "session="))
+	return ecrypto.LooksLikeAuth(blob)
+}
+
 // TestGETEcho opens a mux TCP echo through the GET front.
 func TestGETEcho(t *testing.T) {
 	echo, err := net.Listen("tcp", "127.0.0.1:0")
@@ -178,6 +190,64 @@ func TestGETLegacyV1Handshake(t *testing.T) {
 	st2, err := wire.DecodeStatus(plain2)
 	if err != nil || !st2.Code.OK() {
 		t.Fatalf("ticket status decode %v %v", st2, err)
+	}
+}
+
+// TestGETHandshakeClientSID: 0x02 Cookie, sid in the path, no X-Auth.
+// Handshake still works when the edge hides X-Session.
+func TestGETHandshakeClientSID(t *testing.T) {
+	const token = "test-token-please-change"
+	gs := NewGETServer(token, "/static/v3/build")
+	var sawAuth, sawRID atomic.Bool
+	var pathSID atomic.Value
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Auth") != "" {
+			sawAuth.Store(true)
+		}
+		if r.Header.Get("X-Request-Id") != "" {
+			sawRID.Store(true)
+		}
+		if cookieHandshake(r) {
+			sid, _ := parseGETPath("/static/v3/build", r.URL.Path)
+			pathSID.Store(sid)
+		}
+		rec := httptest.NewRecorder()
+		gs.ServeHTTP(rec, r)
+		for k, vv := range rec.Header() {
+			if k == "X-Session" {
+				continue
+			}
+			w.Header()[k] = vv
+		}
+		w.WriteHeader(rec.Code)
+		_, _ = w.Write(rec.Body.Bytes())
+	}))
+	defer ts.Close()
+	g, err := NewGET(token, config.Outbound{
+		Type: "get", URL: ts.URL, Path: "/static/v3/build",
+		Fingerprint: "go", HeaderBudget: 4096, Inflight: 1, Insecure: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := g.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	if sawAuth.Load() {
+		t.Fatal("client still sends X-Auth")
+	}
+	if sawRID.Load() {
+		t.Fatal("client still sends X-Request-Id")
+	}
+	sid, _ := pathSID.Load().(string)
+	if !validGETSID(sid) {
+		t.Fatalf("path sid %q", sid)
+	}
+	if g.sid != sid {
+		t.Fatalf("client sid %q path %q", g.sid, sid)
 	}
 }
 
@@ -615,8 +685,8 @@ func TestGETIdleDoesNotPoll(t *testing.T) {
 	}
 }
 
-// TestGETMuxUsesRequestID puts later uplink in X-Request-Id, not Cookie.
-func TestGETMuxUsesRequestID(t *testing.T) {
+// TestGETMuxUsesCookie puts later uplink in Cookie, not X-Request-Id.
+func TestGETMuxUsesCookie(t *testing.T) {
 	var lastCookie, lastRID atomic.Value
 	lastCookie.Store("")
 	lastRID.Store("")
@@ -669,11 +739,11 @@ func TestGETMuxUsesRequestID(t *testing.T) {
 	}
 	cookie, _ := lastCookie.Load().(string)
 	rid, _ := lastRID.Load().(string)
-	if strings.HasPrefix(cookie, "session=") && len(cookie) > 32 {
-		t.Fatalf("mux GET still uses giant Cookie (%d)", len(cookie))
+	if !strings.HasPrefix(cookie, "session=") {
+		t.Fatalf("mux GET cookie %q", cookie)
 	}
-	if rid == "" {
-		t.Fatal("mux GET missing X-Request-Id")
+	if rid != "" {
+		t.Fatalf("mux GET still uses X-Request-Id")
 	}
 }
 
@@ -917,12 +987,12 @@ func TestPullHoldIdleDoesNotPark(t *testing.T) {
 func TestGETGatewayPingFast(t *testing.T) {
 	n := &netconf.Network{ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Peers: netconf.PeersHub, Enabled: true}
 	o := NewOverlay(n)
-	oldKeys, oldSwitch := AuthKeys, NetSwitch
+	oldKeys, oldSwitch := AuthKeys, NetSwitch()
 	AuthKeys = nil
-	NetSwitch = o
+	SetNetSwitch(o)
 	defer func() {
 		AuthKeys = oldKeys
-		NetSwitch = oldSwitch
+		SetNetSwitch(oldSwitch)
 	}()
 
 	const token = "test-token-please-change"
@@ -1019,12 +1089,12 @@ func withOverlay(t *testing.T) {
 	t.Helper()
 	n := &netconf.Network{ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Peers: netconf.PeersHub, Enabled: true}
 	o := NewOverlay(n)
-	oldKeys, oldSwitch := AuthKeys, NetSwitch
+	oldKeys, oldSwitch := AuthKeys, NetSwitch()
 	AuthKeys = nil
-	NetSwitch = o
+	SetNetSwitch(o)
 	t.Cleanup(func() {
 		AuthKeys = oldKeys
-		NetSwitch = oldSwitch
+		SetNetSwitch(oldSwitch)
 	})
 }
 
@@ -1662,7 +1732,7 @@ func TestGETRadioGapKeepsSession(t *testing.T) {
 	const token = "test-token-please-change"
 	gs := NewGETServer(token, "/static/v3/build")
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "/new/") {
+		if cookieHandshake(r) {
 			gs.ServeHTTP(w, r)
 			return
 		}
@@ -1764,6 +1834,76 @@ func TestPickClientRoundRobin(t *testing.T) {
 	}
 }
 
+func TestParseH2MaxAge(t *testing.T) {
+	if parseH2MaxAge(0) != 0 || parseH2MaxAge(-1) != 0 {
+		t.Fatal("off")
+	}
+	if parseH2MaxAge(1000) != h2MaxAgeMin {
+		t.Fatal("floor")
+	}
+	if parseH2MaxAge(60000) != time.Minute {
+		t.Fatal("60s")
+	}
+	if parseH2MaxAge(int((2*time.Hour)/time.Millisecond)) != h2MaxAgeMax {
+		t.Fatal("cap")
+	}
+}
+
+func TestPickClientRotatesAged(t *testing.T) {
+	a := &http.Client{}
+	g := &GET{
+		cfg:      config.Outbound{Type: "get", URL: "http://127.0.0.1/"},
+		clients:  []*http.Client{a},
+		born:     []time.Time{time.Now().Add(-time.Hour)},
+		h2MaxAge: 15 * time.Second,
+	}
+	g.liveH2.Store(1)
+	got := g.pickClient()
+	if got == nil || got == a {
+		t.Fatal("did not rotate")
+	}
+	if len(g.drain) != 1 || g.drain[0].c != a {
+		t.Fatalf("drain %+v", g.drain)
+	}
+	if g.pickClient() == a {
+		t.Fatal("still picking aged")
+	}
+}
+
+func TestPickClientNoRotateWhenOff(t *testing.T) {
+	a := &http.Client{}
+	g := &GET{
+		clients: []*http.Client{a},
+		born:    []time.Time{time.Now().Add(-time.Hour)},
+	}
+	g.liveH2.Store(1)
+	if g.pickClient() != a {
+		t.Fatal("rotated with max-age 0")
+	}
+}
+
+func TestSetCDNHeadersVaryIncludesLegacyUplink(t *testing.T) {
+	rec := httptest.NewRecorder()
+	setCDNHeaders(rec)
+	got := rec.Header().Get("Vary")
+	if got != "Cookie, X-Request-Id" {
+		t.Fatalf("Vary=%q", got)
+	}
+}
+
+func TestUplinkHeaderFindsSessionAmongCookies(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/static/v3/build/ab/1.js", nil)
+	r.Header["Cookie"] = []string{"edge=1", "other=x; session=PAYLOAD; trail=1"}
+	if got := uplinkHeader(r); got != "PAYLOAD" {
+		t.Fatalf("got %q", got)
+	}
+	r2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	r2.Header.Set("X-Request-Id", "OLD")
+	if got := uplinkHeader(r2); got != "OLD" {
+		t.Fatalf("rid %q", got)
+	}
+}
+
 func TestYandexUplinkFitsOneChunk(t *testing.T) {
 	g := &GET{}
 	g.budget.Store(16 << 10)
@@ -1849,7 +1989,7 @@ func TestGETEchoSurvivesDroppedBody(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec := httptest.NewRecorder()
 		gs.ServeHTTP(rec, r)
-		if r.Header.Get("X-Auth") != "1" && n.Add(1)%4 == 0 {
+		if !cookieHandshake(r) && n.Add(1)%4 == 0 {
 			if hj, ok := w.(http.Hijacker); ok {
 				c, _, err := hj.Hijack()
 				if err == nil {

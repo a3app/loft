@@ -34,6 +34,9 @@ type GET struct {
 	token        []byte
 	client       *http.Client
 	clients      []*http.Client
+	born         []time.Time
+	drain        []getH2Drain
+	h2MaxAge     time.Duration // 0 = keep HTTP/2 until error
 	poolMu       sync.Mutex
 	rr           atomic.Uint32
 	base         string
@@ -173,17 +176,19 @@ func NewGET(token string, o config.Outbound) (*GET, error) {
 	}
 	base := strings.TrimRight(o.URL, "/")
 	g := &GET{
-		prof:    prof,
-		cfg:     o,
-		token:   []byte(token),
-		client:  cl,
-		clients: []*http.Client{cl},
-		base:    base,
-		path:    strings.TrimRight(o.Path, "/"),
-		host:    u.Host,
-		sess:    clientHoldMux(),
-		done:    make(chan struct{}),
-		held:    map[uint64][]wire.Frame{},
+		prof:     prof,
+		cfg:      o,
+		token:    []byte(token),
+		client:   cl,
+		clients:  []*http.Client{cl},
+		born:     []time.Time{time.Now()},
+		h2MaxAge: parseH2MaxAge(o.H2MaxAgeMS),
+		base:     base,
+		path:     strings.TrimRight(o.Path, "/"),
+		host:     u.Host,
+		sess:     clientHoldMux(),
+		done:     make(chan struct{}),
+		held:     map[uint64][]wire.Frame{},
 	}
 	if sid, key, seq := clientHoldGET(); sid != "" {
 		g.sid = sid
@@ -200,7 +205,7 @@ func NewGET(token string, o config.Outbound) (*GET, error) {
 	return g, nil
 }
 
-// Start sends the first GET (X-Auth cookie) and starts the inflight pump.
+// Start sends the first GET (0x02 Cookie, client-chosen sid) and starts the inflight pump.
 func (g *GET) Start(ctx context.Context) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -234,12 +239,12 @@ func (g *GET) Start(ctx context.Context) error {
 		return err
 	}
 	auth := append(proof, hello.Encode()...)
-	g.sid = "new"
+	g.sid = ecrypto.RandomID()
 	body, _, err := g.roundTrip(ctx, auth, nil)
 	if err != nil {
 		return fmt.Errorf("get handshake: %w", err)
 	}
-	if g.sid == "new" {
+	if g.sid == "" || g.sid == "new" {
 		return fmt.Errorf("get handshake: empty session")
 	}
 	key, plain, err := ecrypto.OpenHello(sk, nonce, body, []byte(g.sid))
@@ -672,12 +677,20 @@ func (g *GET) dropIdleFront() {
 	}
 	g.poolMu.Lock()
 	cs := append([]*http.Client(nil), g.clients...)
+	ds := make([]*http.Client, len(g.drain))
+	for i, d := range g.drain {
+		ds[i] = d.c
+	}
 	g.poolMu.Unlock()
 	if len(cs) == 0 && g.client != nil {
 		g.client.CloseIdleConnections()
-		return
 	}
 	for _, c := range cs {
+		if c != nil {
+			c.CloseIdleConnections()
+		}
+	}
+	for _, c := range ds {
 		if c != nil {
 			c.CloseIdleConnections()
 		}
@@ -686,7 +699,8 @@ func (g *GET) dropIdleFront() {
 
 // pickClient round-robins live HTTP/2 connections. Node Status h2_conns
 // grows the pool; inflight is the total across them. poolMu is not GET.mu:
-// Start holds GET.mu across the handshake GET.
+// Start holds GET.mu across the handshake GET. h2_max_age_ms (0 = off)
+// replaces one aged slot per pick; mux, GET sid, and CONNECT splice stay.
 func (g *GET) pickClient() *http.Client {
 	n := int(g.liveH2.Load())
 	if n < 1 {
@@ -696,6 +710,7 @@ func (g *GET) pickClient() *http.Client {
 	if n > len(g.clients) {
 		g.growClientsLocked(n)
 	}
+	g.rotateLocked()
 	list := g.clients
 	g.poolMu.Unlock()
 	if len(list) == 0 {
@@ -712,13 +727,100 @@ func (g *GET) growClientsLocked(n int) {
 	if n > 4 {
 		n = 4
 	}
+	now := time.Now()
 	for len(g.clients) < n {
 		cl, err := httpClient(g.cfg, string(g.token))
 		if err != nil {
 			return
 		}
 		g.clients = append(g.clients, cl)
+		g.born = append(g.born, now)
 	}
+}
+
+type getH2Drain struct {
+	c *http.Client
+	t time.Time
+}
+
+const (
+	h2MaxAgeMin = 15 * time.Second
+	h2MaxAgeMax = time.Hour
+	h2DrainTTL  = 30 * time.Second
+	h2DrainCap  = 8
+)
+
+func parseH2MaxAge(ms int) time.Duration {
+	if ms <= 0 {
+		return 0
+	}
+	d := time.Duration(ms) * time.Millisecond
+	if d < h2MaxAgeMin {
+		return h2MaxAgeMin
+	}
+	if d > h2MaxAgeMax {
+		return h2MaxAgeMax
+	}
+	return d
+}
+
+// rotateLocked replaces at most one HTTP/2 client older than h2MaxAge.
+// The old Transport stays in drain so in-flight GETs finish; CloseIdle
+// later. 0 max-age is a no-op.
+func (g *GET) rotateLocked() {
+	g.sweepDrainLocked(time.Now())
+	if g.h2MaxAge <= 0 {
+		return
+	}
+	now := time.Now()
+	for i := range g.clients {
+		if i >= len(g.born) {
+			g.born = append(g.born, now)
+			continue
+		}
+		if now.Sub(g.born[i]) < g.h2MaxAge {
+			continue
+		}
+		cl, err := httpClient(g.cfg, string(g.token))
+		if err != nil {
+			return
+		}
+		g.parkDrainLocked(g.clients[i], now)
+		g.clients[i] = cl
+		g.born[i] = now
+		return
+	}
+}
+
+func (g *GET) parkDrainLocked(c *http.Client, now time.Time) {
+	if c == nil {
+		return
+	}
+	g.drain = append(g.drain, getH2Drain{c: c, t: now})
+	for len(g.drain) > h2DrainCap {
+		old := g.drain[0]
+		g.drain = g.drain[1:]
+		if old.c != nil {
+			old.c.CloseIdleConnections()
+		}
+	}
+}
+
+func (g *GET) sweepDrainLocked(now time.Time) {
+	if len(g.drain) == 0 {
+		return
+	}
+	keep := g.drain[:0]
+	for _, d := range g.drain {
+		if now.Sub(d.t) < h2DrainTTL {
+			keep = append(keep, d)
+			continue
+		}
+		if d.c != nil {
+			d.c.CloseIdleConnections()
+		}
+	}
+	g.drain = keep
 }
 
 // markLive records useful mux so pace stays warm for a short window.
@@ -802,8 +904,8 @@ func (g *GET) uplinkBudget() int {
 	if h <= 0 {
 		h = 16 << 10
 	}
-	// X-Request-Id is base64.RawURLEncoding(nonce||ct). Keep the b64
-	// value inside HeaderBudget so the GET is not 413 / truncated
+	// Cookie is base64.RawURLEncoding(nonce||ct) or Z85. Keep the
+	// encoded value inside HeaderBudget so the GET is not 413 / truncated
 	// (truncated uplink used to consume seq and drop POST Data).
 	n := h*3/4 - 12 - 16 - 96
 	if n < 1024 {
@@ -1066,7 +1168,7 @@ func (g *GET) roundTrip(ctx context.Context, auth, uplink []byte) ([]byte, http.
 	return b, h, err
 }
 
-// roundTripAt issues one GET. Auth uses Cookie+X-Auth; later uplink is X-Request-Id.
+// roundTripAt issues one GET. Auth and later uplink both use Cookie session=.
 func (g *GET) roundTripAt(ctx context.Context, auth, uplink []byte, seq uint64) ([]byte, http.Header, uint64, error) {
 	var blob []byte
 	var err error
@@ -1122,14 +1224,7 @@ func (g *GET) roundTripAt(ctx context.Context, auth, uplink []byte, seq uint64) 
 		enc = byte(g.uplinkEnc.Load())
 	}
 	hdr := wire.EncodeUplink(blob, enc)
-	if len(auth) > 0 {
-		req.Header.Set("Cookie", "session="+hdr)
-		req.Header.Set("X-Auth", "1")
-	} else if strings.EqualFold(g.prof.UplinkHeader, "Cookie") {
-		req.Header.Set("Cookie", "session="+hdr)
-	} else {
-		req.Header.Set("X-Request-Id", hdr)
-	}
+	req.Header.Set("Cookie", "session="+hdr)
 
 	t0 := time.Now()
 	cli := g.pickClient()
@@ -1402,30 +1497,76 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	setCDNHeaders(w)
 	sid, seqStr := parseGETPath(s.Path, r.URL.Path)
 	seq, _ := strconv.ParseUint(seqStr, 10, 64)
-	rawHdr := r.Header.Get("X-Request-Id")
-	if c := r.Header.Get("Cookie"); strings.HasPrefix(c, "session=") {
-		rawHdr = strings.TrimPrefix(c, "session=")
-	}
-	blob, _ := wire.DecodeUplink(rawHdr)
+	blob, _ := wire.DecodeUplink(uplinkHeader(r))
 
 	var ss *serverSess
-	if r.Header.Get("X-Auth") == "1" || sid == "new" {
+	tryHS := r.Header.Get("X-Auth") == "1" || sid == "new" || ecrypto.LooksLikeAuth(blob)
+	if tryHS {
 		a, err := frontAuth(s.Token, blob, s.Seen)
 		if err != nil {
-			http.NotFound(w, r)
-			traceMISS(sid, seq, "auth", r)
-			return
-		}
-		if a.Replay {
-			s.mu.Lock()
-			ss = s.hs[string(a.Nonce)]
-			s.mu.Unlock()
-			if ss == nil || len(ss.hello) == 0 {
+			ss = s.get(sid)
+			if ss == nil {
 				http.NotFound(w, r)
 				traceMISS(sid, seq, "auth", r)
 				return
 			}
+		} else {
+			if a.Replay {
+				s.mu.Lock()
+				ss = s.hs[string(a.Nonce)]
+				s.mu.Unlock()
+				if ss == nil || len(ss.hello) == 0 {
+					http.NotFound(w, r)
+					traceMISS(sid, seq, "auth", r)
+					return
+				}
+				w.Header().Set("X-Session", ss.id)
+				w.Header().Set("Content-Type", s.contentType())
+				w.Header().Set("Content-Length", strconv.Itoa(len(ss.hello)))
+				if r.Method != http.MethodHead {
+					_, _ = io.Copy(w, bytes.NewReader(ss.hello))
+				}
+				traceHS(ss, r, seq)
+				return
+			}
+			ss = s.spawnWant(a.Key, a.Rest, a.Token, sid)
+			if seq > 0 {
+				ss.nextSeq = seq + 1
+			} else {
+				ss.nextSeq = 2
+			}
+			ss.downSeq = ss.nextSeq
+			if ss.nextSeq > 0 {
+				ss.replied = ss.nextSeq - 1
+			}
 			w.Header().Set("X-Session", ss.id)
+			sid = ss.id
+			st := s.Info.Status(ss.id)
+			if len(s.Info.Token) == 0 {
+				// Overlay instance_id is Hello, not the GET HTTP sid (X-Session).
+				st = withDecoy(netconf.DefaultSession().Status(wire.OK, "", "", "", 1280, 0), s.Decoy)
+			}
+			finishStatus(&st, a.Token, ss.id, a.Rest, ss.mux, remoteAddr(r.RemoteAddr))
+			stampLegacyTicket(&st, a, ss.id)
+			if st.InstanceID == "" {
+				if h, err := wire.DecodeHello(a.Rest); err == nil {
+					st.InstanceID = h.InstanceID
+				}
+			}
+			if s.tune != nil {
+				st.HeaderBudget, st.Inflight = s.tune.advertised()
+			}
+			st.UplinkEnc = wire.UplinkCookie85
+			st.H2Conns = s.H2Conns
+			sealed, err := ecrypto.Seal(ss.key, st.Encode(), []byte(ss.id))
+			if err != nil {
+				http.Error(w, "unavailable", http.StatusBadGateway)
+				return
+			}
+			ss.hello = ecrypto.WrapHello(a.EphN, sealed)
+			s.mu.Lock()
+			s.hs[string(a.Nonce)] = ss
+			s.mu.Unlock()
 			w.Header().Set("Content-Type", s.contentType())
 			w.Header().Set("Content-Length", strconv.Itoa(len(ss.hello)))
 			if r.Method != http.MethodHead {
@@ -1434,141 +1575,96 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			traceHS(ss, r, seq)
 			return
 		}
-		ss = s.spawn(a.Key, a.Rest, a.Token)
-		if seq > 0 {
-			ss.nextSeq = seq + 1
-		} else {
-			ss.nextSeq = 2
-		}
-		ss.downSeq = ss.nextSeq
-		if ss.nextSeq > 0 {
-			ss.replied = ss.nextSeq - 1
-		}
-		w.Header().Set("X-Session", ss.id)
-		sid = ss.id
-		st := s.Info.Status(ss.id)
-		if len(s.Info.Token) == 0 {
-			// Overlay instance_id is Hello, not the GET HTTP sid (X-Session).
-			st = withDecoy(netconf.DefaultSession().Status(wire.OK, "", "", "", 1280, 0), s.Decoy)
-		}
-		finishStatus(&st, a.Token, ss.id, a.Rest, ss.mux, remoteAddr(r.RemoteAddr))
-		stampLegacyTicket(&st, a, ss.id)
-		if st.InstanceID == "" {
-			if h, err := wire.DecodeHello(a.Rest); err == nil {
-				st.InstanceID = h.InstanceID
-			}
-		}
-		if s.tune != nil {
-			st.HeaderBudget, st.Inflight = s.tune.advertised()
-		}
-		st.UplinkEnc = wire.UplinkCookie85
-		st.H2Conns = s.H2Conns
-		sealed, err := ecrypto.Seal(ss.key, st.Encode(), []byte(ss.id))
-		if err != nil {
-			http.Error(w, "unavailable", http.StatusBadGateway)
-			return
-		}
-		ss.hello = ecrypto.WrapHello(a.EphN, sealed)
-		s.mu.Lock()
-		s.hs[string(a.Nonce)] = ss
-		s.mu.Unlock()
-		w.Header().Set("Content-Type", s.contentType())
-		w.Header().Set("Content-Length", strconv.Itoa(len(ss.hello)))
-		if r.Method != http.MethodHead {
-			_, _ = io.Copy(w, bytes.NewReader(ss.hello))
-		}
-		traceHS(ss, r, seq)
-		return
-	} else {
+	}
+	if ss == nil {
 		ss = s.get(sid)
 		if ss == nil {
 			http.NotFound(w, r)
 			traceMISS(sid, seq, "nosid", r)
 			return
 		}
-		var frames []wire.Frame
-		if len(blob) > 0 {
-			plain, err := ecrypto.Open(ss.key, blob, []byte(ss.id))
-			if err != nil {
-				// Do not ingest as empty: that advances nextSeq and the
-				// client retry of the same seq is dropped (TLS bad MAC).
-				http.Error(w, "unavailable", http.StatusBadGateway)
-				traceGET(ss, r, seq, nil, "badmac", false, 0)
-				return
-			}
-			frames, err = wire.DecodeBatch(plain)
-			if err != nil {
-				http.Error(w, "unavailable", http.StatusBadGateway)
-				traceGET(ss, r, seq, nil, "badwire", false, 0)
-				return
-			}
-		}
-		// HTTP/2 waiters sit until they are Puller. Jumping downSeq on
-		// a 200ms timeout skipped Pulls and live GET download lagged WS.
-		// HTTP/1.1: a Data GET must not sit behind another conn.
-		// Upload Data on HTTP/2 used to wait the same 5s Puller queue:
-		// Yandex Cookie TTFB went 238ms (pad) → 973ms (14 KiB up) and
-		// CDN upload sat at ~3 Mbit. Return empty at once if not Puller;
-		// jump stays false so downSeq is not skipped.
-		turn := getH2PullerWait
-		jump := false
-		if r.ProtoMajor < 2 {
-			jump = true
-			if usefulMux(frames) {
-				turn = 0
-			} else {
-				turn = getTurnWait
-			}
-		} else if usefulMux(frames) {
-			turn = 0
-		}
-		frames, ev := wire.SplitTune(frames)
-		if ev != 0 {
-			s.tune.observe(ev)
-		}
-		if seq > 0 {
-			if cached := ss.replayReply(seq); cached != nil {
-				s.writeSealed(w, r, cached)
-				traceGET(ss, r, seq, frames, "replay", false, 0)
-				return
-			}
-		}
-		if ev == 0 {
-			s.tune.recover()
-		}
-		tPull := time.Now()
-		down, pulled := ss.ingestAndPull(seq, frames, turn, jump)
-		wait := time.Since(tPull)
-		down = ss.withReport(down)
-		if tf, ok := s.tune.takeReply(); ok {
-			down = append([]wire.Frame{tf}, down...)
-		}
-		if ss.mux.Closed() {
-			s.drop(ss.id)
-		}
-		if pulled {
-			sealed, err := s.sealDown(ss, down)
-			if err != nil {
-				ss.endPull(seq)
-				http.Error(w, "unavailable", http.StatusBadGateway)
-				traceGET(ss, r, seq, frames, "seal", true, wait)
-				return
-			}
-			sealed = ss.rememberReply(seq, sealed)
-			ss.endPull(seq)
-			s.writeSealed(w, r, sealed)
-			traceGET(ss, r, seq, frames, "ingest", true, wait)
+	}
+	var frames []wire.Frame
+	if len(blob) > 0 {
+		plain, err := ecrypto.Open(ss.key, blob, []byte(ss.id))
+		if err != nil {
+			// Do not ingest as empty: that advances nextSeq and the
+			// client retry of the same seq is dropped (TLS bad MAC).
+			http.Error(w, "unavailable", http.StatusBadGateway)
+			traceGET(ss, r, seq, nil, "badmac", false, 0)
 			return
 		}
+		frames, err = wire.DecodeBatch(plain)
+		if err != nil {
+			http.Error(w, "unavailable", http.StatusBadGateway)
+			traceGET(ss, r, seq, nil, "badwire", false, 0)
+			return
+		}
+	}
+	// HTTP/2 waiters sit until they are Puller. Jumping downSeq on
+	// a 200ms timeout skipped Pulls and live GET download lagged WS.
+	// HTTP/1.1: a Data GET must not sit behind another conn.
+	// Upload Data on HTTP/2 used to wait the same 5s Puller queue:
+	// Yandex Cookie TTFB went 238ms (pad) → 973ms (14 KiB up) and
+	// CDN upload sat at ~3 Mbit. Return empty at once if not Puller;
+	// jump stays false so downSeq is not skipped.
+	turn := getH2PullerWait
+	jump := false
+	if r.ProtoMajor < 2 {
+		jump = true
+		if usefulMux(frames) {
+			turn = 0
+		} else {
+			turn = getTurnWait
+		}
+	} else if usefulMux(frames) {
+		turn = 0
+	}
+	frames, ev := wire.SplitTune(frames)
+	if ev != 0 {
+		s.tune.observe(ev)
+	}
+	if seq > 0 {
 		if cached := ss.replayReply(seq); cached != nil {
 			s.writeSealed(w, r, cached)
-			traceGET(ss, r, seq, frames, "replay", false, wait)
+			traceGET(ss, r, seq, frames, "replay", false, 0)
 			return
 		}
-		s.writeGET(w, r, ss, seq, down)
-		traceGET(ss, r, seq, frames, viaAfterPull(ss, seq, false, false), false, wait)
+	}
+	if ev == 0 {
+		s.tune.recover()
+	}
+	tPull := time.Now()
+	down, pulled := ss.ingestAndPull(seq, frames, turn, jump)
+	wait := time.Since(tPull)
+	down = ss.withReport(down)
+	if tf, ok := s.tune.takeReply(); ok {
+		down = append([]wire.Frame{tf}, down...)
+	}
+	if ss.mux.Closed() {
+		s.drop(ss.id)
+	}
+	if pulled {
+		sealed, err := s.sealDown(ss, down)
+		if err != nil {
+			ss.endPull(seq)
+			http.Error(w, "unavailable", http.StatusBadGateway)
+			traceGET(ss, r, seq, frames, "seal", true, wait)
+			return
+		}
+		sealed = ss.rememberReply(seq, sealed)
+		ss.endPull(seq)
+		s.writeSealed(w, r, sealed)
+		traceGET(ss, r, seq, frames, "ingest", true, wait)
 		return
 	}
+	if cached := ss.replayReply(seq); cached != nil {
+		s.writeSealed(w, r, cached)
+		traceGET(ss, r, seq, frames, "replay", false, wait)
+		return
+	}
+	s.writeGET(w, r, ss, seq, down)
+	traceGET(ss, r, seq, frames, viaAfterPull(ss, seq, false, false), false, wait)
 }
 
 // writeGET seals downlink (with pad to ~400 bytes) and writes the GET body.
@@ -1610,10 +1706,16 @@ func (s *GETServer) writeSealed(w http.ResponseWriter, r *http.Request, sealed [
 	_, _ = io.Copy(w, bytes.NewReader(sealed))
 }
 
-// spawn allocates a GET HTTP sid. Mux is adopted on X-Auth (member +
+// spawn allocates a GET HTTP sid. Mux is adopted on handshake (member +
 // instance_id + CapHold) the same way WS does, so a hold-gap handshake
 // does not RST inner TCP. A second serveMux is not started on reuse.
 func (s *GETServer) spawn(key, rest, token []byte) *serverSess {
+	return s.spawnWant(key, rest, token, "")
+}
+
+// spawnWant is spawn with a client-chosen sid (24 hex). Path "new" and
+// collisions fall back to RandomID; X-Session still echoes the live id.
+func (s *GETServer) spawnWant(key, rest, token []byte, wantID string) *serverSess {
 	ms, reused := adoptServerMux(rest, token)
 	if !reused {
 		if inst := helloInstance(rest); inst != "" {
@@ -1625,8 +1727,12 @@ func (s *GETServer) spawn(key, rest, token []byte) *serverSess {
 			}
 		}
 	}
+	id := wantID
+	if !validGETSID(id) {
+		id = ecrypto.RandomID()
+	}
 	ss := &serverSess{
-		id:       ecrypto.RandomID(),
+		id:       id,
 		key:      key,
 		mux:      ms,
 		held:     map[uint64][]wire.Frame{},
@@ -1635,6 +1741,9 @@ func (s *GETServer) spawn(key, rest, token []byte) *serverSess {
 	}
 	ss.cond = sync.NewCond(&ss.mu)
 	s.mu.Lock()
+	if s.sessions[ss.id] != nil {
+		ss.id = ecrypto.RandomID()
+	}
 	s.sessions[ss.id] = ss
 	s.mu.Unlock()
 	if !reused {
@@ -2025,7 +2134,7 @@ func (ss *serverSess) pushUplinkLocked(seq uint64, frames []wire.Frame) {
 }
 
 // drop forgets the GET HTTP sid. CapHold parks the mux (WS dropServerMux)
-// so a later X-Auth with the same instance_id can adopt it. Leave already
+// so a later handshake with the same instance_id can adopt it. Leave already
 // closed the mux; park then no-ops.
 func (s *GETServer) drop(id string) {
 	s.mu.Lock()
@@ -2060,6 +2169,8 @@ func parseGETPath(prefix, p string) (sid string, seq string) {
 }
 
 // setCDNHeaders disables caching so a CDN does not store AEAD bodies.
+// Vary lists Cookie and the older X-Request-Id uplink so a caching edge
+// does not mix Cookie clients with X-Request-Id-only clients.
 func setCDNHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0")
 	w.Header().Set("Pragma", "no-cache")
@@ -2067,4 +2178,44 @@ func setCDNHeaders(w http.ResponseWriter) {
 	w.Header().Set("CDN-Cache-Control", "no-store")
 	w.Header().Set("X-Accel-Expires", "0")
 	w.Header().Set("Vary", "Cookie, X-Request-Id")
+}
+
+// uplinkHeader is Cookie session= (live GET uplink). An edge may prepend
+// its own Cookie; scan every Cookie header. X-Request-Id is the older
+// generic header; a node still accepts it.
+func uplinkHeader(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	for _, raw := range r.Header.Values("Cookie") {
+		if v := sessionCookieValue(raw); v != "" {
+			return v
+		}
+	}
+	return r.Header.Get("X-Request-Id")
+}
+
+func sessionCookieValue(raw string) string {
+	const key = "session="
+	for _, part := range strings.Split(raw, ";") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, key) {
+			return strings.TrimPrefix(part, key)
+		}
+	}
+	return ""
+}
+
+// validGETSID is a client-chosen GET HTTP sid (RandomID: 24 lowercase hex).
+func validGETSID(sid string) bool {
+	if len(sid) != 24 {
+		return false
+	}
+	for i := 0; i < len(sid); i++ {
+		c := sid[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }

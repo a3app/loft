@@ -102,9 +102,9 @@ TLS，然后 HTTP upgrade。路径是节点本地的（默认 `/api/v1/sync`）�
 
 给只转发 GET 的边缘。HTTP/2。路径长得像资源：`{base}/{session}/{seq}.js`。
 
-第一个 GET：头 `X-Auth: 1`，Cookie `session=<base64url(auth blob)>`。响应 200，`X-Session`，`Cache-Control: private, no-store`，体是 AEAD(Status)，AAD = 会话 id。
+第一个 GET：Cookie `session=<base64url(auth blob)>`。blob 是标签 `0x02`（或遗留的 `0x03` ticket）。路径里已经带着客户端选的会话 id（24 hex）。响应 200，`Cache-Control: private, no-store`，体是 AEAD(Status)，AAD = 这个会话 id。节点 SHOULD 用同一个 id 回 `X-Session`（老客户端走路径 `new`，靠这个头）。
 
-后续 GET：`X-Request-Id: base64url(AEAD(mux batch))`，AAD = 会话 id，体是 AEAD(mux 批次)。节点 SHOULD 在体前面加 CmdReport（`applied` = 最后一段连续收下的 GET seq）。客户端收到了 MUST 停止重试上行 seq ≤ `applied`。节点 MAY 也在 Cookie `session=` 里收这条上行（老客户端）；那时没有 `X-Auth: 1`。认证失败 MUST 回 404 带 HTML。上行 MUST 塞进一个头（Status `header_budget` 是编码后 Cookie 字节；省略时默认 16 KiB HTTP 头）。Status `uplink_enc` 1 是 `~` 加上 `u16be length || AEAD blob` 的 Z85（RFC 32）；0 和省略是 base64url。握手 Cookie 仍是 base64url。节点 MUST 两种都收。Status `h2_conns`（1–4）是到这条前置的 HTTP/2 连接数；0 保持一条。Inflight 是这些连接上未完成 GET 的总数。HTTP 413：预算减半，下限 1024，再拆开。HTTP 405：这条前置不是 GET。Inflight 2–8（协议默认 4；Status `inflight` 是上限）。客户端看到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST 在同一会话上退避，MAY 在下一条已经带着 mux 的 GET 上发 CmdTune event 1。节点 MAY 降低这条前置的 `header_budget` / `inflight`，并在这个 GET 体里回 CmdTune event 0。空闲时上行空着：至少等 `keepalive_ms / 2`（且不少于 1 秒）。已经带着 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点 SHOULD 为下行把 GET 最多攥 250 ms，MUST NOT 攥超过 1 秒。上行里已经有 CmdData 时，节点 MAY 一下行 Data 入队就回。这条上行有 ≥ 2 KiB CmdData 时，节点 SHOULD 把这个 GET 体封顶 96 KiB，好让下一条 Cookie 快点转出去；纯下载的 GET 仍是 256 KiB（多条流时 192 KiB）。
+后续 GET：Cookie `session=`，里面是 AEAD(mux 批次) 的 base64url 或 Z85，AAD = 会话 id，体是 AEAD(mux 批次)。节点 SHOULD 在体前面加 CmdReport（`applied` = 最后一段连续收下的 GET seq）。客户端收到了 MUST 停止重试上行 seq ≤ `applied`。握手是验得过的 `0x02`/`0x03` Cookie；后面的 GET 是 AEAD。节点 MUST 仍接受老客户端的 `X-Auth: 1`、路径 `new`、以及 `X-Request-Id` 上行。认证失败 MUST 回 404 带 HTML。上行 MUST 塞进一个头（Status `header_budget` 是编码后 Cookie 字节；省略时默认 16 KiB HTTP 头）。Status `uplink_enc` 1 是 `~` 加上 `u16be length || AEAD blob` 的 Z85（RFC 32）；0 和省略是 base64url。握手 Cookie 仍是 base64url。节点 MUST 两种都收。Status `h2_conns`（1–4）是到这条前置的 HTTP/2 连接数；0 保持一条。Inflight 是这些连接上未完成 GET 的总数。客户端 MAY 按本地 max-age 换一条 HTTP/2（省略或 0 就留到出错）；mux 和 GET 会话 id 不变。HTTP 413：预算减半，下限 1024，再拆开。HTTP 405：这条前置不是 GET。Inflight 2–8（协议默认 4；Status `inflight` 是上限）。客户端看到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST 在同一会话上退避，MAY 在下一条已经带着 mux 的 GET 上发 CmdTune event 1。节点 MAY 降低这条前置的 `header_budget` / `inflight`，并在这个 GET 体里回 CmdTune event 0。空闲时上行空着：至少等 `keepalive_ms / 2`（且不少于 1 秒）。已经带着 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点 SHOULD 为下行把 GET 最多攥 250 ms，MUST NOT 攥超过 1 秒。上行里已经有 CmdData 时，节点 MAY 一下行 Data 入队就回。这条上行有 ≥ 2 KiB CmdData 时，节点 SHOULD 把这个 GET 体封顶 96 KiB，好让下一条 Cookie 快点转出去；纯下载的 GET 仍是 256 KiB（多条流时 192 KiB）。
 
 HTTP/2 断了但没 Leave，会话不结束。客户端进程退出前 MUST 再发一个 GET，上行批次里带着 CmdLeave。节点于是关掉 mux 会话，忘掉 GET 会话 id，Detach，Release。`lease_hold` 仍为 `ok_resumed` 留着覆盖网 IP。
 
@@ -128,7 +128,7 @@ Status MAY 置 `canary_flags`：bit 0 胖 ClientHello，bit 1 ClientHello 拆成
 
 ### 3.9 CONNECT 拼接 (`connect`)
 
-GET mux 在请求/响应上轮询一套流协议。节点 MAY 在 Status 里置能力 `connect`，仅当 `fronts` 列出 `connect`（默认关）。常规 GET/WS 握手（租约、覆盖网 IP）之后，客户端 MAY 用 HTTP/2 `CONNECT` `:authority` `host:port` 打开 TCP，而不是 mux `CmdOpen`。该 CONNECT MUST 带与 GET 握手相同的 0x02 Cookie（`Cookie: session=` base64url，`X-Auth: 1`）。证明失败为 HTTP 404。节点拨那个目标并把字节拼上。它 MUST 拒绝 loopback、link-local（含 `169.254.169.254`）、multicast、unspecified 和 `localhost`。覆盖网成员 IP、UDP、ICMP 仍走 mux。没有 `connect` 的节点，每条 TCP 都走 mux。未开此前置的 HTTP CONNECT MUST 404。
+GET mux 在请求/响应上轮询一套流协议。节点 MAY 在 Status 里置能力 `connect`，仅当 `fronts` 列出 `connect`（默认关）。常规 GET/WS 握手（租约、覆盖网 IP）之后，客户端 MAY 用 HTTP/2 `CONNECT` `:authority` `host:port` 打开 TCP，而不是 mux `CmdOpen`。CONNECT 走和 mux GET 同一份活着的 GET HTTP/2 客户端池（可选 `h2_max_age_ms`）。该 CONNECT MUST 带与 GET 握手相同的 0x02 Cookie（`Cookie: session=` base64url）。证明失败为 HTTP 404。节点拨那个目标并把字节拼上。它 MUST 拒绝 loopback、link-local（含 `169.254.169.254`）、multicast、unspecified 和 `localhost`。覆盖网成员 IP、UDP、ICMP 仍走 mux。没有 `connect` 的节点，每条 TCP 都走 mux。未开此前置的 HTTP CONNECT MUST 404。
 
 ---
 
