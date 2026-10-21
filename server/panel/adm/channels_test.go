@@ -352,3 +352,31 @@ func TestChannelSystemNames(t *testing.T) {
 		t.Fatalf("%+v %v", v.Channels, err)
 	}
 }
+
+func TestPrioMultiLimitsAuto(t *testing.T) {
+	o, _ := chanOps(t)
+	ctx := context.Background()
+	if _, err := o.ChannelSave(ctx, wgChan("wg-nl")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.ChannelPrio(ctx, admproto.Prio{Title: "Main", Use: []string{"wg-nl"}, Auto: true, Multi: true,
+		Limits: map[string]admproto.PrioLimit{"wg-nl": {In: 50, Out: 10}, "gone": {In: 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.ChannelPrio(ctx, admproto.Prio{Title: "Bad", Limits: map[string]admproto.PrioLimit{"wg-nl": {In: -1}}}); err == nil {
+		t.Fatal("negative limit saved")
+	}
+	px := admproto.Channel{Type: admproto.ChanPX, On: true, Exit: true, PX: &admproto.PXConf{Kind: "socks5", Addr: "192.0.2.40:1080"}}
+	v, err := o.ChannelSave(ctx, px)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := v.Prios[0]
+	if strings.Join(p.Use, " ") != "wg-nl px0" || len(p.Limits) != 1 || p.Limits["wg-nl"] != (admproto.PrioLimit{In: 50, Out: 10}) {
+		t.Fatalf("list %+v", p)
+	}
+	eg, _ := os.ReadFile(o.egressFile())
+	if !strings.Contains(string(eg), "prio prio1 wg-nl px0 then direct multi limit wg-nl 50/10\n") {
+		t.Fatalf("egress.conf:\n%s", eg)
+	}
+}

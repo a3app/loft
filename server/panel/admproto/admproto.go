@@ -420,10 +420,20 @@ type ChanCheck struct {
 
 // Prio is a priority list: channels in order, then Last.
 type Prio struct {
-	ID    string   `json:"id"`    // set by the helper (prio1, prio2…); rules name it
-	Title string   `json:"title"` // what the panel shows
-	Use   []string `json:"use"`   // channel names in order
-	Last  string   `json:"last"`  // direct | block
+	ID    string   `json:"id"`              // set by the helper (prio1, prio2…); rules name it
+	Title string   `json:"title"`           // what the panel shows
+	Use   []string `json:"use"`             // channel names in order
+	Last  string   `json:"last"`            // direct | block
+	Multi bool     `json:"multi,omitempty"` // spread connections over the working channels
+	Auto  bool     `json:"auto,omitempty"`  // new exit channels join the list at its end
+	// Limits cap a channel's speed for everyone who leaves by the list.
+	Limits map[string]PrioLimit `json:"limits,omitempty"`
+}
+
+// PrioLimit is a speed cap in Mbit/s; 0 = none. In is towards members.
+type PrioLimit struct {
+	In  int `json:"in,omitempty"`
+	Out int `json:"out,omitempty"`
 }
 
 // WGConf is the interface and its peers.

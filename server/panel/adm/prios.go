@@ -155,6 +155,21 @@ func checkPrio(p *admproto.Prio, s chanStore) error {
 		p.Use = []string{}
 	}
 	seen := map[string]bool{}
+	defer func() {
+		for ch, l := range p.Limits {
+			if !seen[ch] || (l.In == 0 && l.Out == 0) {
+				delete(p.Limits, ch) // a channel taken out of the list drops its limit
+			}
+		}
+		if len(p.Limits) == 0 {
+			p.Limits = nil
+		}
+	}()
+	for ch, l := range p.Limits {
+		if l.In < 0 || l.Out < 0 || l.In > 100000 || l.Out > 100000 {
+			return fmt.Errorf("speed limit of %s: 0 to 100000 Mbit/s", ch)
+		}
+	}
 	for _, u := range p.Use {
 		i := find(s, u)
 		if i < 0 {
@@ -169,6 +184,18 @@ func checkPrio(p *admproto.Prio, s chanStore) error {
 		seen[u] = true
 	}
 	return nil
+}
+
+// autoJoin puts a new exit channel at the end of every list that takes new ones.
+func autoJoin(s *chanStore, c admproto.Channel) {
+	if !c.Exit {
+		return
+	}
+	for i := range s.Prios {
+		if s.Prios[i].Auto && !slices.Contains(s.Prios[i].Use, c.Name) {
+			s.Prios[i].Use = append(slices.Clone(s.Prios[i].Use), c.Name)
+		}
+	}
 }
 
 // ChannelPrio adds a list (empty ID) or changes one.

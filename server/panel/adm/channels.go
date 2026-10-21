@@ -446,6 +446,8 @@ func (o *Ops) ChannelSave(ctx context.Context, c admproto.Channel) (admproto.Cha
 		next.Channels[i] = c
 	} else {
 		next.Channels = append(next.Channels, c)
+		next.Prios = slices.Clone(s.Prios)
+		autoJoin(&next, c)
 	}
 	err = o.applyChans(ctx, s, next)
 	o.chanMu.Unlock()
@@ -609,7 +611,14 @@ func EgressConf(s chanStore) (string, error) {
 		c.Channels = append(c.Channels, e)
 	}
 	for _, p := range s.Prios {
-		c.Prios = append(c.Prios, egress.Prio{Name: p.ID, Use: p.Use, Last: p.Last})
+		e := egress.Prio{Name: p.ID, Use: p.Use, Last: p.Last, Multi: p.Multi}
+		for ch, l := range p.Limits {
+			if e.Limits == nil {
+				e.Limits = map[string]egress.Limit{}
+			}
+			e.Limits[ch] = egress.Limit{In: l.In, Out: l.Out}
+		}
+		c.Prios = append(c.Prios, e)
 	}
 	for _, r := range s.Rules.Rules {
 		c.Rules = append(c.Rules, egress.Rule{Match: r.Match, Value: r.Value, Via: r.Via})
