@@ -1,4 +1,4 @@
-# loft 1.0.23
+# loft 1.0.24
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -27,8 +27,18 @@ Not in Dist: iOS / Android / Aurora / Keenetic / MikroTik clients (catalog and m
 - **macOS app** — menu bar. Named connections, import `loft://` or `.loft`, local SOCKS5 and TUN, split routes, reconnect, failover.
 - **loft / loft-front** — CLI session. Same fronts as the app.
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
-- **loft-panel** — web admin on the node: wizard, members, packages, release updates.
+- **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.24
+
+Protocol stays **loft/1.0**.
+
+Panel:
+
+- Keep member keys is opt-in. The panel can store a copy of the issued secret so the operator can show the link, QR, or `.loft` again without reissuing. Default off. Turning it off wipes the panel copy; `members.keys` on the node stays.
+- Wizard step Domain and DNS: Cloudflare, DigitalOcean, Namecheap, or manual. Creates the provider, zone, A/AAAA, and CAA before names are saved.
+- Domains page is live: zones, records, HTTP-01 and DNS-01.
 
 ## 1.0.23
 
@@ -64,7 +74,7 @@ macOS:
 
 В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Aurora, Keenetic, MikroTik в этот Dist не входят.
 
-1.0.23: публичный путь по умолчанию только GET; пустой GET-path `/static/v3/build`; GET перепривязывается при смене egress; mux не стопорит ingest; utun читается при заторе; dual-stack 1.0.16 снят; H2/H3 CONNECT только на tunnel path. macOS: `-path` только у GET, reap через libproc, `--probe` по всем профилям, 404 GitHub Release — текущая версия. Протокол loft/1.0.
+1.0.24: хранение ключей членов — по желанию, ссылку можно показать снова; мастер «Домен и DNS» создаёт провайдера, зону, A/AAAA и CAA; страница доменов живая (Cloudflare, DigitalOcean, Namecheap, вручную; HTTP-01 и DNS-01). Протокол loft/1.0.
 
 ---
 
@@ -74,4 +84,4 @@ loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流
 
 本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Aurora / Keenetic / MikroTik 不在这次包里。
 
-1.0.23：默认公开路径只有 GET；空 GET path 为 `/static/v3/build`；出口变化时 GET 重绑；mux 不再堵住 ingest；utun 在拥塞时继续读；去掉 1.0.16 dual-stack；H2/H3 CONNECT 必须 Match 隧道路径。macOS：`-path` 只给 GET，libproc 收尸，`--probe` 扫全部配置，GitHub Release 404 视为已是最新。协议仍是 loft/1.0。
+1.0.24：可选保存成员密钥，链接可再次查看；向导「域名和 DNS」会创建提供商、区域、A/AAAA 和 CAA；域名页可用（Cloudflare、DigitalOcean、Namecheap、手动；HTTP-01 和 DNS-01）。协议仍是 loft/1.0。
