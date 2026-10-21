@@ -125,6 +125,55 @@ func TestDomainsZonesRecords(t *testing.T) {
 	}
 }
 
+func TestWizardDNSCreatesZoneBeforeNames(t *testing.T) {
+	e := newEnv(t)
+	e.srv.SetDomainsFile(t.TempDir())
+	fd := &fakeDNS{recs: map[string][]Record{"example.net": {}}}
+	e.srv.dom.provider = func(dnsProv) DNSProvider { return fd }
+	c, csrf := e.owner()
+	if r := e.do("POST", "/api/domains/provider", map[string]any{"kind": "cloudflare", "token": "tok-1234567890", "check_only": true}, c, csrf); r.code != 200 {
+		t.Fatalf("check_only %d %v", r.code, r.body)
+	}
+	if r := e.do("GET", "/api/domains", nil, c, ""); len(r.body["providers"].([]any)) != 0 {
+		t.Fatalf("check_only stored a provider: %v", r.body)
+	}
+	p := e.do("POST", "/api/domains/provider", map[string]string{"kind": "cloudflare", "token": "tok-1234567890"}, c, csrf)
+	if p.code != 200 {
+		t.Fatalf("provider %d %v", p.code, p.body)
+	}
+	pid := p.body["id"].(string)
+	again := e.do("POST", "/api/domains/provider", map[string]string{"kind": "cloudflare", "token": "tok-1234567890"}, c, csrf)
+	if again.code != 200 || again.body["id"] != pid {
+		t.Fatalf("same token must reuse the provider: %d %v", again.code, again.body)
+	}
+	// Names are not in settings yet (wizard step 2 creates records first).
+	if r := e.do("POST", "/api/domains/zone", map[string]any{
+		"name": "example.net", "provider": pid, "create": []string{"addr", "caa"},
+		"hosts": []string{"vpn.example.net", "panel.example.net"},
+	}, c, csrf); r.code != 200 {
+		t.Fatalf("zone %d %v", r.code, r.body)
+	}
+	rr := e.do("GET", "/api/domains/records?zone=example.net", nil, c, "")
+	recs := rr.body["records"].([]any)
+	var caa, vpn bool
+	for _, x := range recs {
+		m := x.(map[string]any)
+		if m["type"] == "CAA" {
+			caa = true
+		}
+		if m["type"] == "A" && m["name"] == "vpn" {
+			vpn = true
+		}
+	}
+	if !caa {
+		t.Fatalf("CAA missing: %v", recs)
+	}
+	if n := len(fd.recs["example.net"]); n < 1 {
+		t.Fatalf("provider got no records: %d", n)
+	}
+	_ = vpn // A records only exist when ServerIPs() sees a public address
+}
+
 func TestCloudflareAndDigitalOcean(t *testing.T) {
 	var cfSeen []string
 	cf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

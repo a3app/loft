@@ -14,14 +14,15 @@ First working slice. Real today:
 - **Segments**: the node's `network.conf` in the switch view and the config editor, apply by live reload (the node re-reads the files; only affected members reconnect) and automatic rollback;
 - new members get a real `lt_` key in `members.keys`; removed members lose theirs on apply; the panel can keep a copy of the key so the operator can show the link, QR and `.loft` again (Settings, off by default);
 - node state on the overview;
-- the setup wizard: owner, node and panel names, Let’s Encrypt certificates, first member, first packages;
+- the setup wizard: owner, domain and DNS (Cloudflare, DigitalOcean, Namecheap or by hand; the panel creates A/AAAA and CAA), Let’s Encrypt certificates, first member, first packages;
+- **Domains**: zones, DNS records (through a provider’s API or by hand, with a check of manual records), Let’s Encrypt certificates (HTTP-01 and DNS-01) and PEM upload; auto A/AAAA follow the server’s addresses;
 - **Packages**: install, upgrade, switch off and remove packages from a closed catalog (Telegram MTProto proxy, WireGuard, OpenVPN, ZeroTier, fail2ban; the node, nginx and SSTP as the base), with the job log on the page;
 - **loft node**: node.conf from the screen (listen, fronts, web servers behind the node, masking, paths, relays, CDN ranges, shared token, session log), address lists, node token change, the service log; who is online, from the node’s status file;
 - **Users**: roles with a section × none/view/change matrix (checked on every request), invitations, API tokens (`Authorization: Bearer lpt_…`), sessions, a log of changes;
 - **Network and IP**: server addresses and routes (a change is undone after 2 minutes unless confirmed); upstream channels — WireGuard, SSTP, OpenVPN, ZeroTier, HTTP/HTTPS/SOCKS5 proxies, Xray — and exit rules by member, tag or address list, with fall-backs; incoming through a channel;
+- **Mail**: mail domains, mailboxes, DNS records and the certificate of mail.<domain> (when the mail package is installed);
+- **System**: fail2ban, encrypted backups and Linux accounts;
 - **Update from releases**: node and panel from GitHub Releases, checked against SHA256SUMS, rolled back if the services do not come up.
-
-Every other screen shows an empty state.
 
 ## Layout
 

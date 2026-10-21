@@ -269,8 +269,12 @@ func newID(prefix string) string {
 // providerSave adds a DNS provider after checking its access.
 func (s *Server) providerSave(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		ID, Kind, Token, User string
-		Delete                bool
+		ID        string `json:"id"`
+		Kind      string `json:"kind"`
+		Token     string `json:"token"`
+		User      string `json:"user"`
+		Delete    bool   `json:"delete"`
+		CheckOnly bool   `json:"check_only"`
 	}
 	if !readJSON(w, r, 8<<10, &in) {
 		return
@@ -309,21 +313,33 @@ func (s *Server) providerSave(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "access check failed: "+err.Error())
 		return
 	}
+	if in.CheckOnly {
+		ok(w, struct{}{})
+		return
+	}
+	for _, x := range s.dom.f.Providers {
+		if x.Kind == p.Kind && x.Token == p.Token && x.User == p.User {
+			ok(w, provView{ID: x.ID, Kind: x.Kind, Hint: tokenHint(x.Token), User: x.User})
+			return
+		}
+	}
 	s.dom.f.Providers = append(s.dom.f.Providers, p)
 	if err := s.dom.save(); err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	ok(w, provView{ID: p.ID, Kind: p.Kind, Hint: tokenHint(p.Token)})
+	ok(w, provView{ID: p.ID, Kind: p.Kind, Hint: tokenHint(p.Token), User: p.User})
 }
 
 // zoneSave adds, moves or deletes a zone. A new zone may get the server's
 // A/AAAA records for its names and a CAA record for Let's Encrypt.
 func (s *Server) zoneSave(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Name, Provider string
-		Delete         bool
-		Create         []string // "addr" (A/AAAA for the server's names in the zone), "caa"
+		Name     string   `json:"name"`
+		Provider string   `json:"provider"`
+		Delete   bool     `json:"delete"`
+		Create   []string `json:"create"`          // "addr" (A/AAAA for the server's names in the zone), "caa"
+		Hosts    []string `json:"hosts,omitempty"` // names to point at this server; empty = node and panel
 	}
 	if !readJSON(w, r, 8<<10, &in) {
 		return
@@ -365,9 +381,14 @@ func (s *Server) zoneSave(w http.ResponseWriter, r *http.Request) {
 	}
 	z.Provider = in.Provider
 	st, _ := s.Settings.Get()
+	hosts := in.Hosts
+	if len(hosts) == 0 {
+		hosts = uniq([]string{st.Domain, st.PanelDomain})
+	}
 	var want []Record
 	if slices.Contains(in.Create, "addr") {
-		for _, host := range uniq([]string{st.Domain, st.PanelDomain}) {
+		for _, host := range uniq(hosts) {
+			host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
 			if host == in.Name || strings.HasSuffix(host, "."+in.Name) {
 				want = append(want, addrRecords(relName(host, in.Name))...)
 			}

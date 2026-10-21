@@ -1,8 +1,8 @@
 /* loft-panel live layer.
    Markup and drawing come from design/index.html (the mock). Served by
    loft-panel, this file replaces every sample with the server's data or an
-   empty state: sign-in, the setup wizard (owner, domain, certificate, first
-   member, packages), the overview, members and Segments. Opened from disk
+   empty state: sign-in, the setup wizard (owner, domain and DNS, certificate, first
+   member, packages), the overview, members, Segments and Domains. Opened from disk
    (no /api), the page stays a plain mock. */
 (() => {
   const L = { csrf: '', me: null, sha: '', node: null, info: null, wz: null };
@@ -108,6 +108,10 @@
     [/^(\S+) points at (.+), this server is (.+)$/, m => `${m[1]} указывает на ${m[2]}, а этот сервер — ${m[3]}. Исправьте A-запись`],
     [/^http:\/\/(\S+)\/ does not reach the panel \((.*)\): port 80/, m => `Запрос http://${m[1]}/ не дошёл до панели (${m[2]}): порт 80 должен быть открыт и вести на этот сервер`],
     [/^Let's Encrypt could not check http:\/\/(\S+)\/: (.*)$/, m => `Let’s Encrypt не смог проверить http://${m[1]}/: ${m[2]}`],
+    [/^member keys are not kept$/, () => 'Ключи членов в панели не хранятся'],
+    [/^key is not stored$/, () => 'Ключ этого члена в панели не сохранён'],
+    [/^no stored key for this member$/, () => 'Ключ этого члена в панели не сохранён'],
+    [/^member id required$/, () => 'Укажите идентификатор члена'],
     [/^member (\S+) already exists$/, m => `Член сети ${m[1]} уже есть — выберите другой идентификатор`],
     [/^member id "(.*)": /, m => `Идентификатор «${m[1]}»: только латиница, цифры, точка, дефис, подчёркивание; до 64 знаков`],
     [/^network\.conf changed since it was opened/, () => 'network.conf изменили, пока вы его правили: обновите страницу и примените снова'],
@@ -268,6 +272,18 @@
       const st = L.node && L.node.active, info = L.info || {}, w = L.wz || {};
       const all = NETS.flatMap(n => n.members);
       const cert = w.cert_until ? pill('до ' + new Date(w.cert_until).toLocaleDateString(LOC()), 'ok') : pill('самоподписанный', 'warn');
+      const dm = L.dm || { zones: [], certs: [], providers: [] };
+      const dnsNames = [];
+      for (const p of dm.providers || []) {
+        const n = (DNSK[p.kind] || [])[0] || p.kind;
+        if (n && !dnsNames.includes(n)) dnsNames.push(n);
+      }
+      if ((dm.zones || []).some(z => z.provider === 'manual') && !dnsNames.includes('Вручную')) dnsNames.push('Вручную');
+      const certRows = (dm.certs || []).slice(0, 4).map(c => `<div><dt class="mono">${esc((c.names || []).join(', ') || '—')}</dt><dd>${untilCell(c.until)}</dd></div>`).join('');
+      const emptyDom = !(dm.zones || []).length && !(dm.certs || []).length;
+      const domBody = emptyDom
+        ? `<p class="hint" style="margin:0 0 16px">Зон нет. Добавьте домен, чтобы панель вела его записи.</p>${L.can('domains') ? `<button class="btn" type="button" onclick="go('domains')">${ic('i-plus')}Добавить домен</button>` : ''}`
+        : `<dl class="kv">${certRows}${dnsNames.length ? `<div><dt>DNS</dt><dd>${esc(dnsNames.join(', '))}</dd></div>` : (dm.zones || []).length ? `<div><dt>Зоны</dt><dd class="num">${dm.zones.length}</dd></div>` : ''}</dl>`;
       return pageHead('Обзор', 'Состояние ноды и сети loft на этом сервере.') + `<div class="cards">
         <section class="card"><div class="card-h"><h2>Нода loft</h2>${!st ? pill('нет данных') : st === 'active' ? pill('работает', 'ok') : pill(st, 'warn')}</div>
           <dl class="kv"><div><dt>Имя</dt><dd class="mono">${esc(info.host || '—')}</dd></div><div><dt>Версия</dt><dd>${esc(L.node && L.node.version || '—')}</dd></div>
@@ -277,6 +293,7 @@
           <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${all.filter(m => m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${all.filter(m => !m.authorized).length}</div><div class="mute">выключено</div></div></div>
           <p class="hint" style="margin:0 0 16px">Сейчас в сети: ${all.filter(m => (EXTRA[m.id] || [])[3]).length}.</p>
           <button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button></section>
+        ${L.can('domains', 1) ? `<section class="card"><div class="card-h"><h2>Домены</h2><a href="#domains" style="margin-left:auto">Все</a></div>${domBody}</section>` : ''}
       </div>`;
     };
     const segments = V.segments;
@@ -348,7 +365,7 @@
         } catch (e) { toast('network.conf на сервере не разобран панелью: ' + (e.msg || e)); }
       }
     } else toast('Сеть ноды не прочитана: ' + net.reason.message);
-    await loadPresence();
+    await Promise.all([loadPresence(), L.can('domains', 1) ? loadDomains() : Promise.resolve()]);
     render();
   }
 
@@ -368,7 +385,7 @@
   };
   window.revertAll = () => loadData().then(() => toast('Черновик сброшен к тому, что работает'));
 
-  /* a new member from the Members screen: real key, shown once */
+  /* a new member from the Members screen: real key; kept in the panel when the setting is on */
   const saveMember0 = window.saveMember;
   window.saveMember = async (id) => {
     if (id) return saveMember0(id);
@@ -380,12 +397,13 @@
     if (!m) return;
     m.key_sha256 = k.key_sha256;
     render();
-    showKey(nid, k, 'После «Применить» нода начнёт пускать этот ключ.');
+    showKey(nid, k, L.keepKeys ? 'Ключ хранится в панели — его можно показать снова. После «Применить» нода начнёт пускать этот ключ.' : 'После «Применить» нода начнёт пускать этот ключ.');
   };
   // The key with its link, QR code (drawn by the panel) and .loft file.
   function showKey(id, k, note) {
     L.kf = { id, file: k.file };
-    dialog('Ключ члена ' + esc(id), 'Показан один раз. ' + note, `
+    const head = L.keepKeys ? note : ('Показан один раз. ' + note);
+    dialog('Ключ члена ' + esc(id), head, `
       ${k.link ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))">${k.qr ? `<div class="qr" style="align-self:start">${k.qr}</div>` : ''}
         <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri" id="klink">${esc(k.link)}</div>
         <p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>` : ''}
@@ -393,15 +411,29 @@
       <div class="acts" style="margin:0">${k.link ? `<button class="btn sm pri" type="button" onclick="LIVE.copy('#klink')">Копировать ссылку</button>` : ''}${k.file ? `<button class="btn sm" type="button" onclick="LIVE.download(LIVE.kf.id + '.loft', LIVE.kf.file)">${ic('i-down', 16)}Скачать .loft</button>` : ''}<button class="btn sm" type="button" onclick="LIVE.copy('#kkey')">Копировать ключ</button></div>`,
       `<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`);
   }
-  // A member's key is kept only as a fingerprint: Reissue makes a new one.
+  window.showStoredKey = id => L.viewKey(id);
+  L.viewKey = async id => {
+    let k;
+    try { k = await api('GET', '/api/members/key?id=' + encodeURIComponent(id)); } catch (e) { toast(e.message); return; }
+    showKey(id, k, 'Ключ хранится в панели — его можно показать снова.');
+  };
   window.reissueKey = id => L.reissue(id);
-  L.reissue = async id => {
+  L.reissue = id => {
+    if (L.keepKeys) {
+      dialog('Перевыпустить ключ?', 'Новый ключ заменит сохранённый. Старый перестанет действовать после «Применить».', '',
+        `<button class="btn danger" type="button" onclick="LIVE.reissueGo('${esc(id)}')">Перевыпустить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+      return;
+    }
+    L.reissueGo(id);
+  };
+  L.reissueGo = async id => {
+    closeDlg();
     let k;
     try { k = await api('POST', '/api/members/key', { id }); } catch (e) { toast(e.message); return; }
     const [, m] = findMember(id);
     if (m) m.key_sha256 = k.key_sha256;
     render();
-    showKey(id, k, 'После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.');
+    showKey(id, k, L.keepKeys ? 'Новый ключ сохранён в панели. После «Применить» нода начнёт пускать его, старый перестанет действовать.' : 'После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.');
   };
   // The page is served by the panel itself, so a blob link downloads normally.
   L.download = (name, text) => {
@@ -683,7 +715,8 @@
       blk('Мастер установки', 'Пройти шаги первой настройки заново: домен, сертификат, первый член сети, пакеты. Уже сделанное не стирается.', `<button class="btn" type="button" onclick="S.wz.step=2;go('setup')">Открыть мастер</button>`) +
       blk('Панель', '', grid(`<div><div class="fld"><label for="st1">Адрес панели</label><input id="st1" class="mono" value="${esc(st.panel || location.hostname)}" readonly></div><div class="hint">Имена и сертификаты меняются в мастере установки — шаги «Домен и DNS» и «Сертификат».</div></div>
         <div><div class="fld"><label for="st2">Язык по умолчанию</label><select id="st2" onchange="LIVE.stPanel()">${opts(LANGS, st.lang)}</select></div><div class="hint">Для страницы входа и тех, кто не выбрал язык сам.</div></div>
-        <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3" ${tz ? '' : 'disabled'} onchange="LIVE.stTz(this)">${zones}</select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`)) +
+        <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3" ${tz ? '' : 'disabled'} onchange="LIVE.stTz(this)">${zones}</select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`) +
+        `<div><label class="chk"><input id="stKeep" type="checkbox" ${st.keep_member_keys ? 'checked' : ''} onchange="LIVE.stPanel()"><span>Хранить ключи членов</span></label><div class="hint">Ссылка, QR-код и файл .loft открываются снова без перевыпуска. Копия лежит в каталоге данных панели, права 0600. Выключение стирает копию в панели; файл на ноде остаётся.</div></div>`) +
       blk('Вход', 'Блокировка адресов после неудачных входов — в <a href="#system">Системе</a>.', grid(`<div class="fld"><label for="st4">Выходить при бездействии</label><select id="st4" onchange="LIVE.stPanel()">${opts(IDLE, st.session_idle)}</select></div>
         <div class="fld"><label for="st5">Срок сессии</label><select id="st5" onchange="LIVE.stPanel()">${opts(SMAX, st.session_max)}</select></div>`)) +
       blk('Уведомления', 'Письма о событиях уходят через SMTP-сервер, указанный здесь.', `<div class="card">${grid(`<div class="fld"><label for="st6">Кому</label><input id="st6" type="email" value="${esc(n.to)}" placeholder="admin@example.net"></div>
@@ -696,9 +729,20 @@
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:16px">${EV.map(([k, t]) => `<label class="chk"><input type="checkbox" data-ev="${k}" ${n.events.includes(k) ? 'checked' : ''}>${t}</label>`).join('')}</div>
         <div class="acts" style="margin:16px 0 0"><button class="btn pri sm" type="button" onclick="LIVE.stNotify(this)">Сохранить</button><button class="btn sm" type="button" ${n.host && n.to ? '' : 'disabled'} onclick="LIVE.stTest(this)">Отправить пробное</button></div></div>`);
   }
-  L.stPanel = async () => {
+  L.stPanel = () => {
+    const keep = $('#stKeep') ? $('#stKeep').checked : !!L.keepKeys;
+    if (L.keepKeys && !keep) {
+      dialog('Выключить хранение ключей?', 'Копия в панели будет стёрта. Файл на ноде останется. Ссылку, QR-код и .loft снова можно будет только перевыпустить.', '',
+        `<button class="btn danger" type="button" onclick="LIVE.stPanelGo(false)">Выключить</button><button class="btn" type="button" onclick="closeDlg();render()">Отмена</button>`);
+      return;
+    }
+    L.stPanelGo(keep);
+  };
+  L.stPanelGo = async keep => {
+    closeDlg();
     try {
-      L.st = await api('POST', '/api/settings/panel', { session_idle: $('#st4').value, session_max: $('#st5').value, lang: $('#st2').value });
+      L.st = await api('POST', '/api/settings/panel', { session_idle: $('#st4').value, session_max: $('#st5').value, lang: $('#st2').value, keep_member_keys: keep });
+      L.keepKeys = !!L.st.keep_member_keys;
       if (window.I18N) I18N.def(L.st.lang);
       toast('Сохранено');
     } catch (e) { toast(e.message); }
@@ -1937,6 +1981,17 @@
   L.provDel = async id => { try { await api('POST', '/api/domains/provider', { id, delete: true }); toast('Доступ удалён'); } catch (e) { toast(e.message); } await loadDomains(); L.openProviders(); };
 
   /* ── setup wizard ── */
+  const parentZone = n => { n = String(n || '').trim().toLowerCase().replace(/\.$/, ''); const i = n.indexOf('.'); return (i < 0 || n.indexOf('.', i + 1) < 0) ? n : n.slice(i + 1); };
+  const dnsRows = (zone, hosts, ips) => {
+    const rows = [];
+    for (const h of (hosts || []).filter(Boolean).map(x => x.trim().toLowerCase().replace(/\.$/, ''))) {
+      if (!(h === zone || h.endsWith('.' + zone))) continue;
+      const rel = h === zone ? '@' : h.slice(0, -(zone.length + 1));
+      for (const ip of ips || []) rows.push([ip.includes(':') ? 'AAAA' : 'A', rel, ip]);
+    }
+    rows.push(['CAA', '@', '0 issue "letsencrypt.org"']);
+    return rows;
+  };
   const W = { name: '', check: null, busy: '', member: null, error: '', pk: {} };
   // wizard package ids (the mock's) → catalog keys
   const WK = { mtp: 'mtproto', wg: 'wireguard', ovpn: 'openvpn', zt: 'zerotier', xrayc: 'xray', f2b: 'fail2ban', mail: 'mail', antispam: 'antispam', webmail: 'webmail' };
@@ -1957,26 +2012,46 @@
         <div class="fld"><label for="w1d">Язык панели</label><select id="w1d">${opts(LANGS, (window.I18N && I18N.lang) || 'ru')}</select></div>`;
       next = 'Создать владельца';
     } else if (s === 2) {
+      if (!L.dm) loadDomains().then(() => { if (step() === 2) redraw(); });
       const curNode = info.host || '', curPanel = info.panel && info.panel !== info.host ? info.panel : '';
       if (W.sep === undefined) W.sep = !!curPanel;
+      if (W.prov === undefined) W.prov = ((L.dm || {}).providers || [])[0] ? L.dm.providers[0].kind : 'cloudflare';
       const name = W.name || w.domain || curNode, panel = W.panel !== undefined ? W.panel : (w.panel_domain || curPanel);
+      const zone = W.zone || parentZone(name);
+      const apiDNS = W.prov && W.prov !== 'manual';
+      const have = ((L.dm || {}).providers || []).find(p => p.kind === W.prov);
+      const ips = w.server_ips || [];
       const line = c => !c ? '' : c.error ? `<p class="note-s" style="color:var(--bad)"><span class="mono">${esc(c.name)}</span>: ${c.error === 'does not resolve' ? 'пока не находится в DNS — добавьте A-запись и подождите несколько минут' : 'это не имя вида vpn.example.net'}</p>`
         : c.match ? `<p class="note-s">${pill('ok', 'ok')} <span class="mono">${esc(c.name)}</span> → <span class="mono">${esc(c.ips.join(', '))}</span> — это этот сервер.</p>`
         : `<p class="note-s" style="color:var(--bad)"><span class="mono">${esc(c.name)}</span> указывает на <span class="mono">${esc(c.ips.join(', '))}</span>, а этот сервер — <span class="mono">${esc(c.server_ips.join(', '))}</span>. Исправьте A-запись у регистратора.</p>`;
       const changed = name !== curNode || (W.sep ? panel : '') !== curPanel;
-      body = `<h1>Имя сервера</h1><p class="fs-d">На эти имена выпускаются сертификаты. Каждому нужна A-запись на адрес сервера <span class="mono">${esc((w.server_ips || []).join(', ') || '—')}</span>.</p>
-        <div><div class="fld"><label for="w2a">Имя для подключения клиентов</label><input id="w2a" class="mono" value="${esc(name)}" placeholder="api.example.net" oninput="LIVE.W.name=this.value;LIVE.W.check=null"></div><div class="hint">Попадает в ссылки loft:// и профили членов сети.</div></div>${line(W.check)}
+      const hosts = [name].concat(W.sep && panel ? [panel] : []);
+      const recs = dnsRows(zone, hosts, ips);
+      body = `<h1>Домен сервера</h1><p class="fs-d">Клиенты подключаются по этому имени, на него же выпускается сертификат. Через DNS-провайдера панель сама создаст записи на адрес <span class="mono">${esc(ips.join(', ') || '—')}</span>.</p>
+        <div><div class="fld"><label for="w2a">Имя для подключения клиентов</label><input id="w2a" class="mono" value="${esc(name)}" placeholder="api.example.net" oninput="LIVE.W.name=this.value;LIVE.W.check=null;LIVE.W.zone=LIVE.W.zone||''"></div><div class="hint">Попадает в ссылки loft:// и профили членов сети.</div></div>${line(W.check)}
         <label class="chk"><input id="w2sep" type="checkbox" ${W.sep ? 'checked' : ''} onchange="LIVE.W.sep=this.checked;LIVE.W.pcheck=null;LIVE.redrawKeep()"><span>Отдельное имя для панели<span class="hint" style="display:block;margin:0">Тот, кто проверяет адрес ноды, увидит обычную страницу веб-сервера и сертификат только с именем ноды — панель там не найти. Оба имени указывают на один IP, и по истории DNS это видно.</span></span></label>
         ${W.sep ? `<div class="fld"><label for="w2p">Имя панели</label><input id="w2p" class="mono" value="${esc(panel)}" placeholder="panel.example.net" oninput="LIVE.W.panel=this.value;LIVE.W.pcheck=null"></div>${line(W.pcheck)}` : ''}
-        <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.checkName()">Проверить DNS</button></div>
-        ${dnsBad() ? `<label class="chk"><input id="w2force" type="checkbox" ${W.force ? 'checked' : ''} onchange="LIVE.W.force=this.checked"><span>Всё равно продолжить<span class="hint" style="display:block;margin:0">Например, DNS ещё обновляется или сервер за NAT. Сертификат Let’s Encrypt не выпустится, пока имя не начнёт указывать сюда.</span></span></label>` : ''}
+        <div><div class="fld"><label for="w2z">Зона</label><input id="w2z" class="mono" value="${esc(zone)}" placeholder="example.net" list="w2zl" oninput="LIVE.W.zone=this.value"></div><div class="hint">В этой зоне панель ведёт записи. Подсказки — из зон провайдера.</div></div><datalist id="w2zl">${(W.pz || []).map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+        <div class="dlg-sec">Где управляется DNS зоны</div>
+        <div class="opts">${['cloudflare', 'digitalocean', 'namecheap', 'manual'].map(k => `<button type="button" class="opt ${W.prov === k ? 'on' : ''}" aria-pressed="${W.prov === k}" onclick="LIVE.pickProv('${k}')"><b>${DNSK[k][0]}</b><span>${DNSK[k][1]}</span></button>`).join('')}</div>
+        ${apiDNS ? (have ? `<p class="note-s">${pill('ok', 'ok')} <b>${DNSK[W.prov][0]}</b> · <span class="mono">${esc(have.hint)}</span>. Доступ уже добавлен.</p>` :
+          `<div><div class="fld"><label for="w2b">API-токен ${DNSK[W.prov][0]}</label><input id="w2b" class="mono" type="password" autocomplete="off" value="${esc(W.token || '')}" oninput="LIVE.W.token=this.value"></div><div class="hint">${DNSK[W.prov][1]}</div></div>
+           ${W.prov === 'namecheap' ? `<div><div class="fld"><label for="w2nc">Пользователь API</label><input id="w2nc" autocomplete="off" value="${esc(W.ncuser || '')}" oninput="LIVE.W.ncuser=this.value"></div><div class="hint">Белый IP для API Namecheap: <span class="mono">${esc((ips.filter(x => !x.includes(':'))[0]) || '—')}</span></div></div>` : ''}
+           <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.checkProv()">Проверить</button></div>`) :
+          `<p class="note-s">Внесите записи ниже у регистратора. Сертификат выпустится по HTTP-01, когда имя начнёт указывать на сервер.</p>
+           <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.checkName()">Проверить DNS</button></div>
+           ${dnsBad() ? `<label class="chk"><input id="w2force" type="checkbox" ${W.force ? 'checked' : ''} onchange="LIVE.W.force=this.checked"><span>Всё равно продолжить<span class="hint" style="display:block;margin:0">Например, DNS ещё обновляется или сервер за NAT. Сертификат Let’s Encrypt не выпустится, пока имя не начнёт указывать сюда.</span></span></label>` : ''}`}
+        <div class="dlg-sec">${apiDNS ? 'Панель создаст записи' : 'Нужны записи'}</div>
+        ${table(['Тип', 'Имя', 'Значение'], recs.map(r => `<tr><td class="mono">${esc(r[0])}</td><td class="mono">${esc(r[1])}</td><td class="mono">${esc(r[2])}</td></tr>`).join('') || `<tr><td colspan="3" class="mute">Нет адресов сервера — A и AAAA не создать. CAA для Let’s Encrypt всё равно будет.</td></tr>`)}
         <p class="hint" style="margin:0">Сейчас нода — <span class="mono">${esc(curNode || '—')}</span>, панель — <span class="mono">${esc(curPanel || curNode || '—')}</span>.${changed ? ' При смене имён нода перезапустится — подключения прервутся на пару секунд.' : ''}</p>`;
-      next = changed ? 'Сменить имена и дальше' : 'Дальше';
+      next = apiDNS ? 'Создать записи и дальше' : (changed ? 'Сменить имена и дальше' : 'Дальше');
+      skip = 'Пропустить — работать по IP';
     } else if (s === 3) {
       const until = w.cert_until ? new Date(w.cert_until) : null;
       const pd = w.panel_domain, puntil = w.panel_cert_until ? new Date(w.panel_cert_until) : null;
       const row = (who, name, u) => `<p class="note-s">${u ? pill('до ' + u.toLocaleDateString(LOC()), 'ok') : pill('самоподписанный', 'warn')} ${who} <span class="mono">${esc(name)}</span></p>`;
-      body = `<h1>Сертификат</h1><p class="fs-d">Let’s Encrypt${pd ? ' — отдельный для ноды и для панели, чтобы имя панели не попало в сертификат ноды' : ''}. Проверка идёт через порт 80 этого сервера — он должен быть открыт. Продлевается сам за 30 дней до конца срока.</p>
+      const dns01 = ((L.dm || {}).zones || []).some(z => z.provider && z.provider !== 'manual');
+      body = `<h1>Сертификат</h1><p class="fs-d">Let’s Encrypt${pd ? ' — отдельный для ноды и для панели, чтобы имя панели не попало в сертификат ноды' : ''}. ${dns01 ? 'Проверка DNS-01 через DNS-провайдера зоны. Порт 80 не нужен.' : 'Проверка идёт через порт 80 этого сервера — он должен быть открыт.'} Продлевается сам за 30 дней до конца срока.</p>
         ${row('нода', w.domain || info.host || '—', until)}${pd ? row('панель', pd, puntil) : ''}
         ${until && (!pd || puntil) ? '' : '<p class="hint" style="margin:0">С самоподписанным сертификатом браузеры и приложения предупреждают.</p>'}
         <div class="fld"><label for="w3a">Почта для писем Let’s Encrypt (необязательно)</label><input id="w3a" type="email" value="${esc(w.email || '')}" placeholder="admin@example.net"></div>`;
@@ -2046,6 +2121,42 @@
     W.pcheck = W.sep ? await api('POST', '/api/domain/check', { name: W.panel }) : null;
   };
   L.checkName = () => { readNames(); return work('Проверяю DNS…', checkBoth); };
+  L.pickProv = k => { W.prov = k; W.pz = []; redraw(); if (k !== 'manual') L.loadProvZones(); };
+  L.loadProvZones = async () => {
+    const have = ((L.dm || {}).providers || []).find(p => p.kind === W.prov);
+    if (!have) return;
+    try { W.pz = (await api('GET', '/api/domains/provider-zones?id=' + encodeURIComponent(have.id))).zones || []; } catch (e) { W.pz = []; }
+    if (step() === 2) redraw();
+  };
+  L.checkProv = () => work('Проверяю доступ…', async () => {
+    await api('POST', '/api/domains/provider', { kind: W.prov, token: ($('#w2b') && $('#w2b').value) || W.token || '', user: ($('#w2nc') && $('#w2nc').value) || W.ncuser || '', check_only: true });
+    toast('Доступ проверен');
+  });
+  const saveWizardDNS = async (name, panel) => {
+    const zone = (($('#w2z') && $('#w2z').value) || W.zone || parentZone(name)).trim().toLowerCase().replace(/\.$/, '');
+    W.zone = zone;
+    const zones = [];
+    if (zone) zones.push(zone);
+    if (panel) {
+      const pz = parentZone(panel);
+      if (pz && !zones.includes(pz)) zones.push(pz);
+    }
+    if (!zones.length) return;
+    let pid = 'manual';
+    if (W.prov && W.prov !== 'manual') {
+      const have = ((L.dm || {}).providers || []).find(p => p.kind === W.prov);
+      if (have) pid = have.id;
+      else {
+        const r = await api('POST', '/api/domains/provider', { kind: W.prov, token: ($('#w2b') && $('#w2b').value) || W.token || '', user: ($('#w2nc') && $('#w2nc').value) || W.ncuser || '' });
+        pid = r.id;
+      }
+    }
+    const hosts = [name].concat(panel ? [panel] : []);
+    for (const z of zones) {
+      await api('POST', '/api/domains/zone', { name: z, provider: pid, create: ['addr', 'caa'], hosts });
+    }
+    await loadDomains();
+  };
 
   window.wzNext = async () => {
     const s = step();
@@ -2066,13 +2177,21 @@
     }
     if (s === 2) {
       readNames();
+      W.token = ($('#w2b') && $('#w2b').value) || W.token || '';
+      W.ncuser = ($('#w2nc') && $('#w2nc').value) || W.ncuser || '';
+      W.zone = ($('#w2z') && $('#w2z').value) || W.zone || '';
       const name = W.name, panel = W.sep ? W.panel : '';
       if (W.sep && (!panel || panel === name)) { W.error = 'Имя панели должно отличаться от имени для клиентов'; redraw(); return; }
       const info = L.info || {}, curPanel = info.panel && info.panel !== info.host ? info.panel : '';
-      if (name === info.host && panel === curPanel) return advance();
-      return work('Проверяю DNS…', async () => {
-        await checkBoth();
-        if (dnsBad() && !W.force) throw new Error('Имена пока не указывают на этот сервер. Исправьте A-записи или отметьте «Всё равно продолжить».');
+      const apiDNS = W.prov && W.prov !== 'manual';
+      if (apiDNS && !((L.dm || {}).providers || []).some(p => p.kind === W.prov) && (!W.token || (W.prov === 'namecheap' && !W.ncuser))) { W.error = 'Нужен токен (для Namecheap — и пользователь API)'; redraw(); return; }
+      return work(apiDNS ? 'Создаю записи DNS…' : 'Проверяю DNS…', async () => {
+        if (!apiDNS) {
+          await checkBoth();
+          if (dnsBad() && !W.force) throw new Error('Имена пока не указывают на этот сервер. Исправьте A-записи или отметьте «Всё равно продолжить».');
+        }
+        await saveWizardDNS(name, panel);
+        if (name === info.host && panel === curPanel) return advance();
         W.busy = 'Меняю имена: нода перезапускается…'; redraw();
         await job('/api/domain', { name, panel }, lost => { W.busy = lost ? 'Нода перезапускается, жду ответа…' : 'Меняю имена…'; redraw(); });
         W.check = W.pcheck = null;
@@ -2141,6 +2260,7 @@
     }
     wrapViews();
     S.ver = st.version || '';
+    L.keepKeys = !!st.keep_member_keys;
     if (window.I18N) I18N.def(st.lang); // the panel's language until this browser picks one
     showHost();
     if (st.setup) { S.wz.step = 1; settle('setup'); render(); return; }

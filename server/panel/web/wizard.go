@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -201,34 +200,26 @@ func (s *Server) serverName(ctx context.Context, by string) (string, error) {
 	return info.Host, nil
 }
 
-// issueAndInstall runs the preflight, ACME, and cert.install for target node
-// or panel; it records the expiry for renewal.
+// issueAndInstall runs ACME and cert.install for target node or panel.
+// DNS-01 is used when the name is in a zone with a DNS provider; else HTTP-01.
 func (s *Server) issueAndInstall(ctx context.Context, by, name, email, target string) (time.Time, error) {
-	if s.ACME == nil {
-		return time.Time{}, errors.New("certificates are not configured")
+	method := "http-01"
+	if _, err := s.dns01For([]string{name}); err == nil {
+		method = "dns-01"
 	}
-	if err := s.ACME.Preflight(ctx, name); err != nil {
-		return time.Time{}, err
-	}
-	is, err := s.ACME.Issue(ctx, name, email)
+	until, err := s.issueCert(ctx, by, []string{name}, method, target, email, "")
 	if err != nil {
 		return time.Time{}, err
 	}
-	if err := s.Adm(by).Call(ctx, admproto.OpCertInstall, admproto.CertInstall{Fullchain: is.Fullchain, Key: is.Key, Target: target}, nil); err != nil {
-		return time.Time{}, fmt.Errorf("install: %w", admErr(err))
-	}
 	s.Settings.Update(func(st *store.Settings) {
-		if target == "panel" {
-			st.PanelCertUntil = is.NotAfter
-		} else {
-			st.CertUntil, st.Domain = is.NotAfter, name
-		}
 		if email != "" {
 			st.ACMEEmail = email
 		}
+		if target == "node" && st.Domain == "" {
+			st.Domain = name
+		}
 	})
-	s.logf("certificate for %s until %s", name, is.NotAfter.Format(time.DateOnly))
-	return is.NotAfter, nil
+	return until, nil
 }
 
 // Renew keeps the certificate fresh: every 12 h, 30 days before expiry.
