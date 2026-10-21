@@ -86,17 +86,20 @@ A member key is `lt_` plus 48 hex characters (24 bytes). `network.conf` stores S
 **Exit channels.** By default members leave through the server's own route. `egress.conf` next to `network.conf` (written by loft-panel) sends them elsewhere:
 
 ```
-channel wg-nl dev wg-nl fail px          # a kernel interface (WireGuard, OpenVPN, ZeroTier)
-channel px socks5 192.0.2.40:1080 user u pass "p w" udp proxy fail direct
-channel web http 192.0.2.41:3128 tls fail block   # HTTP or HTTPS proxy (CONNECT)
+channel wg-nl dev wg-nl check ping probe 1.1.1.1 every 10 fails 3   # a kernel interface (WireGuard, OpenVPN, ZeroTier)
+channel wg-fi dev wg-fi
+channel px socks5 192.0.2.40:1080 user u pass "p w" udp proxy check tcp probe example.com:443
+channel web http 192.0.2.41:3128 tls      # HTTP or HTTPS proxy (CONNECT)
 channel office sstp vpn.example.org:443 user office pass x auth mschapv2
-rule member bob via px
-rule tag office via wg-nl
-rule list blocked via web                # a list from node.conf lists
-default direct
+prio main wg-nl wg-fi px then direct      # a priority list: the first working channel, then direct or block
+prio office office then block
+rule member bob via office
+rule tag staff via main
+rule list blocked via main                # a list from node.conf lists
+default via main
 ```
 
-Rules match in order, then `default`. A channel that is `off`, has no interface, or failed a connect in the last 20 s hands over to its `fail` (a channel, `direct`, `block`). A proxy may go `via` another channel. `dev` binds the socket to the interface (SO_BINDTODEVICE); the system needs a routing rule for it (`ip rule add oif DEV lookup TABLE` with a default route in TABLE), which loft-panel sets up. TCP streams and member datagrams follow the rules; ICMP and DNS queries to the node leave directly. The node re-reads the file on SIGHUP and writes `egress-status.json` (state, bytes, connections) every 5 s.
+Rules match in order, then `default`; each names a priority list (or `direct`, `block`). A list takes its first channel that may carry traffic, then the next, then its `then` step. A channel is skipped while it is `off`, has no interface, failed a connect in the last 20 s, or fails its link check: `check ping` (kernel interfaces) or `check tcp` sends a probe every `every` seconds (10) and calls the link lost after `fails` failures in a row (3); one success brings it back. A rule may still name a channel; then that channel's `fail` chain (a channel, `direct`, `block`) is the order, as in older files. A proxy may go `via` another channel. `dev` binds the socket to the interface (SO_BINDTODEVICE); the system needs a routing rule for it (`ip rule add oif DEV lookup TABLE` with a default route in TABLE), which loft-panel sets up. TCP streams and member datagrams follow the rules; ICMP and DNS queries to the node leave directly. The node re-reads the file on SIGHUP and writes `egress-status.json` (state, bytes, connections) every 5 s.
 
 `LOFT_TOKEN` is the node secret (mask, controller seed). Clients use per-member keys in `members.keys`. `auth shared enable` (`auth_shared: true` in YAML) accepts `LOFT_TOKEN` as the client secret when the ring is empty — the old one-token overlay. A non-empty ring never mixes the node token, even with that flag on. New installs leave `auth shared disable` and issue an `operator` key.
 

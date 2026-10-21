@@ -86,17 +86,20 @@ ip access-list overlay
 **Каналы выхода.** По умолчанию члены выходят по маршруту самого сервера. `egress.conf` рядом с `network.conf` (его пишет loft-panel) отправляет их иначе:
 
 ```
-channel wg-nl dev wg-nl fail px          # интерфейс ядра (WireGuard, OpenVPN, ZeroTier)
-channel px socks5 192.0.2.40:1080 user u pass "p w" udp proxy fail direct
-channel web http 192.0.2.41:3128 tls fail block   # HTTP- или HTTPS-прокси (CONNECT)
+channel wg-nl dev wg-nl check ping probe 1.1.1.1 every 10 fails 3   # интерфейс ядра (WireGuard, OpenVPN, ZeroTier)
+channel wg-fi dev wg-fi
+channel px socks5 192.0.2.40:1080 user u pass "p w" udp proxy check tcp probe example.com:443
+channel web http 192.0.2.41:3128 tls      # HTTP- или HTTPS-прокси (CONNECT)
 channel office sstp vpn.example.org:443 user office pass x auth mschapv2
-rule member bob via px
-rule tag office via wg-nl
-rule list blocked via web                # список из lists в node.conf
-default direct
+prio main wg-nl wg-fi px then direct      # список приоритетов: первый работающий канал, затем direct или block
+prio office office then block
+rule member bob via office
+rule tag staff via main
+rule list blocked via main                # список из lists в node.conf
+default via main
 ```
 
-Правила проверяются по порядку, затем `default`. Канал, который `off`, без интерфейса или не смог подключиться за последние 20 с, передаёт трафик своему `fail` (канал, `direct`, `block`). Прокси может идти `via` другой канал. `dev` привязывает сокет к интерфейсу (SO_BINDTODEVICE); системе нужно правило маршрутизации (`ip rule add oif DEV lookup TABLE` и маршрут по умолчанию в TABLE) — его ставит loft-panel. По правилам идут TCP-потоки и датаграммы членов; ICMP и DNS-запросы к ноде выходят напрямую. Нода перечитывает файл по SIGHUP и каждые 5 с пишет `egress-status.json` (состояние, байты, соединения).
+Правила проверяются по порядку, затем `default`; каждое называет список приоритетов (или `direct`, `block`). Список берёт первый канал, который может нести трафик, затем следующий, затем шаг `then`. Канал пропускается, пока он `off`, без интерфейса, не смог подключиться за последние 20 с или не проходит проверку связи: `check ping` (интерфейсы ядра) или `check tcp` шлёт пробу каждые `every` секунд (10) и считает связь потерянной после `fails` неудач подряд (3); одна удача возвращает канал. Правило может по-прежнему назвать канал — тогда порядок задаёт его цепочка `fail` (канал, `direct`, `block`), как в старых файлах. Прокси может идти `via` другой канал. `dev` привязывает сокет к интерфейсу (SO_BINDTODEVICE); системе нужно правило маршрутизации (`ip rule add oif DEV lookup TABLE` и маршрут по умолчанию в TABLE) — его ставит loft-panel. По правилам идут TCP-потоки и датаграммы членов; ICMP и DNS-запросы к ноде выходят напрямую. Нода перечитывает файл по SIGHUP и каждые 5 с пишет `egress-status.json` (состояние, байты, соединения).
 
 `LOFT_TOKEN` — секрет ноды (mask, seed контроллера). Клиенты входят ключами из `members.keys`. `auth shared enable` (`auth_shared: true` в YAML) принимает `LOFT_TOKEN` как секрет клиента, пока кольцо пустое — старый оверлей на одном токене. Непустое кольцо токен ноды не подмешивает, даже с флагом. Новая установка пишет `auth shared disable` и выдаёт ключ `operator`.
 
