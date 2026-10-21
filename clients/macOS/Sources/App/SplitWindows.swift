@@ -280,8 +280,7 @@ final class SplitWindowController: NSWindowController {
         let shown = s.cidrs.prefix(2).joined(separator: " · ") + (s.cidrs.count > 2 ? " · …" : "")
         row.cidrs.stringValue = shown
         row.cidrs.frame = NSRect(x: 10, y: 28, width: width - 100, height: 16)
-        let net = s.cidrs.count == 1 ? L10n.t("split_net") : L10n.t("split_nets")
-        row.meta.stringValue = "\(s.cidrs.count) \(net)"
+        row.meta.stringValue = L10n.nets(s.cidrs.count)
         row.meta.frame = NSRect(x: width - 90, y: 6, width: 80, height: 18)
         row.src.stringValue = srcLabel(s.source)
         row.src.frame = NSRect(x: width - 90, y: 26, width: 80, height: 16)
@@ -528,6 +527,7 @@ final class SplitExportWindowController: NSWindowController {
             sel.onChange = { [weak self] v in
                 guard let self = self, self.zoneIds.indices.contains(v) else { return }
                 self.whereZone = self.zoneIds[v]
+                self.paint()
             }
             c.addSubview(sel)
             y += 48
@@ -545,7 +545,7 @@ final class SplitExportWindowController: NSWindowController {
         y += sampleH + 32
         let go = PillButton(frame: NSRect(x: 28, y: y, width: 384, height: 42))
         go.lampOn = true
-        go.title = loftFmt ? L10n.t("split_export_save") : L10n.t("split_export_save_keen")
+        go.title = loftFmt ? L10n.t("split_export_save") : String(format: L10n.t("split_export_save_keen"), keenFileName())
         go.target = self
         go.action = #selector(saveTap)
         c.addSubview(go)
@@ -560,6 +560,12 @@ final class SplitExportWindowController: NSWindowController {
         c.addSubview(back)
         y += 22 + 14
         loftResize(window!, bodyHeight: y)
+    }
+
+    /// A Keenetic export is named after the zone's first service.
+    private func keenFileName() -> String {
+        let sets = engine.store.routes.sets(in: whereZone)
+        return sets.first.map { $0.name.isEmpty ? "routes" : $0.name } ?? "routes"
     }
 
     @objc private func saveTap() {
@@ -579,7 +585,7 @@ final class SplitExportWindowController: NSWindowController {
         if loftFmt {
             p.nameFieldStringValue = "loft-routes.bat"
         } else {
-            p.nameFieldStringValue = (sets.first?.name.isEmpty == false ? sets[0].name : "routes") + ".bat"
+            p.nameFieldStringValue = keenFileName() + ".bat"
         }
         p.begin { [weak self] r in
             guard r == .OK, let u = p.url, let self = self else { return }
@@ -1083,8 +1089,7 @@ final class SplitZonesWindowController: NSWindowController {
         plate.radius = 8
         c.addSubview(plate)
         let n = routes.sets(in: id).count
-        let net = n == 1 ? L10n.t("split_net") : L10n.t("split_nets")
-        var sub = "\(n) \(net)"
+        var sub = L10n.nets(n)
         if let file = zoneRepoFile(z?.repo ?? "") { sub += " · " + file }
         let name = Palette.label(routes.zoneLabel(id), font: Palette.font(13.5), color: Palette.snow, frame: NSRect(x: 38, y: y + 6, width: 240, height: 18))
         let u = Palette.label(sub, font: Palette.mono(11.5), color: Palette.mute, frame: NSRect(x: 38, y: y + 24, width: 240, height: 14))
@@ -1159,8 +1164,7 @@ final class SplitZoneEditWindowController: NSWindowController {
         c.addSubview(title)
         y += 34
         let n = routes.sets(in: z.id).count
-        let net = n == 1 ? L10n.t("split_net") : L10n.t("split_nets")
-        var cap = "\(n) \(net)"
+        var cap = L10n.nets(n)
         if z.builtin { cap = L10n.t("split_zones_builtin") + " · " + cap }
         let body = Palette.wrap(cap, font: Palette.body(13.5), color: Palette.mute, frame: NSRect(x: 28, y: y, width: 384, height: 20), lines: 1)
         body.alignment = .center

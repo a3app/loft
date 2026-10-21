@@ -906,6 +906,13 @@
     ];
     const locName = (o) => o[lang] || o.en || o.ru || "";
     const rname = (r) => locName(r);
+    // Russian has a few-form: 1 сеть, 2–4 сети, 5+ сетей.
+    const netWord = (n) => {
+      if (lang === "ru") { const d = n % 10, h = n % 100; if (d === 1 && h !== 11) return t("split.net"); if (d >= 2 && d <= 4 && (h < 12 || h > 14)) return t("split.nets.few"); return t("split.nets"); }
+      return n === 1 ? t("split.net") : t("split.nets");
+    };
+    // A Keenetic export is named after the zone's first service.
+    const keenName = () => { const r = routesIn(regionTab)[0]; return r ? rname(r) : "routes"; };
     const zoneLabel = (id) => {
       const z = zoneById(id);
       const named = z ? locName(z) : "";
@@ -1448,7 +1455,7 @@ outbounds:
         const policy = zoneLabel(regionTab) + " · " + (defVia ? t("split.via") : t("split.bypass"));
         const rows = list.map((r) => {
           const n = r.cidrs.length;
-          const net = n === 1 ? t("split.net") : t("split.nets");
+          const net = netWord(n);
           return `<div class="rrow" data-go="splitadd">
             <div><div class="n">${rname(r)}</div><div class="u">${r.cidrs.slice(0, 2).join(" ")}${n > 2 ? " …" : ""}</div></div>
             <div class="meta">${n} ${net}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div></div>
@@ -1513,7 +1520,7 @@ outbounds:
             <div class="fmt">${splitFmt === "loft"
               ? "REM loft-routes 1.0\nREM zone: global\nroute ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube\nREM zone: local\nroute ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"
               : "route ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"}</div>
-            <button class="btn connect on" data-go="split">${splitFmt === "loft" ? t("split.export.save") : t("split.export.save.keen")}</button>
+            <button class="btn connect on" data-go="split">${splitFmt === "loft" ? t("split.export.save") : t("split.export.save.keen").replace("%@", keenName())}</button>
             <button class="btn back" data-go="split">${t("back")}</button>
           </div>
         </div>`,
@@ -1577,7 +1584,7 @@ outbounds:
         const rows = zoneIds().map((id) => {
           const z = zoneById(id) || { id, builtin: false, def: zoneDef(id) };
           const n = routesIn(id).length;
-          const net = n === 1 ? t("split.net") : t("split.nets");
+          const net = netWord(n);
           const file = zoneRepoFile(z);
           const sub = file ? n + " " + net + " · " + file : n + " " + net;
           return `<div class="rrow" data-zid="${id}">
@@ -1600,7 +1607,7 @@ outbounds:
       zoneedit: () => {
         const z = zoneById(editingZoneId) || zoneById("local") || ZONES[0];
         const n = routesIn(z.id).length;
-        const net = n === 1 ? t("split.net") : t("split.nets");
+        const net = netWord(n);
         return `
         <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
           <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>

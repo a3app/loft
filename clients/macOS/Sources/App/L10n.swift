@@ -60,6 +60,18 @@ enum L10n {
         return k
     }
 
+    /// "N nets" with the pack's plural: Russian has a few-form (`split_nets_few`), the rest one/other.
+    static func nets(_ n: Int) -> String {
+        let one = t("split_net"), many = t("split_nets")
+        if lang == .ru {
+            let d = n % 10, h = n % 100
+            if d == 1 && h != 11 { return "\(n) \(one)" }
+            if (2...4).contains(d) && !(12...14).contains(h) { return "\(n) \(t("split_nets_few"))" }
+            return "\(n) \(many)"
+        }
+        return "\(n) \(n == 1 ? one : many)"
+    }
+
     private static func lookup(_ k: String) -> String? {
         if let s = packs[lang.rawValue]?[k] { return s }
         if lang != .en, let s = packs["en"]?[k] { return s }
