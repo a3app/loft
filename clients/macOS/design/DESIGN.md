@@ -361,7 +361,9 @@ Implementation: `NSStatusItem` with a custom view or a composite image (template
 
 ### 7.1 Popover
 
-Always one session. Title is **Connected** plus uptime, or **No active connections**. Subtitle is a lamp-dot and the profile name. The action is Connect / Disconnect / Cancel / Retry. Rows: Connection, optional External IP, Overlay (TUN badge when the tunnel is up), Route, SOCKS5. Footer: Open Loft | Settings | Quit. Reset routes appears when hold is armed.
+One main session. Title is **Connected** plus uptime, or **No active connections**. Subtitle is a lamp-dot and the profile name. The action is Connect / Disconnect / Cancel / Retry. Rows: Connection, optional External IP, Overlay (TUN badge when the tunnel is up), Route, SOCKS5. Footer: Open Loft | Settings | Quit. Reset routes appears when hold is armed.
+
+**Several on: accordion.** Below the main session, the other sessions that are up, connecting or failed are collapsed rows: lamp-dot, name, uptime (or the error), a small Disconnect (Retry when failed). A click on a row makes it the main session, the same as picking it in the Connection menu (shared SOCKS and default route follow it); the previous one collapses. Sessions that are off are only in Connections. Simple view has no accordion.
 
 Connection opens an `NSMenu` of profiles (check on the current one, status open/closed/failed). It is not a second popover list.
 
@@ -385,12 +387,13 @@ This screen does not mention peer, SHA-256, or revocation.
 
 Dark ink `#1A1714`, snow text, lamp only on connected. System Settings is not copied.
 
-Always one session, including when Several is on:
+One main session, the same accordion as the popover when Several is on:
 
 - Header: mark + `loft` + pill `Connected: name 0:12` / `Not connected` (the pill opens Connections)
 - Large Connect / Disconnect (lamp fill when on)
 - Three cards: OVERLAY · FRONT · SOCKS5
-- Sparkline up/down, no gallery of countries and no outbound list
+- Sparkline up/down, no gallery of countries
+- Several on: the other live sessions as collapsed rows (see 7.1)
 - Footer: Journal / Reset routes / Lists / Settings
 
 **Simple view.** Toggle in Settings. Popover, status, list, edit: name and Connect/Disconnect (plus changing connection from the menu). No overlay IP, front, SOCKS, spark, TUN badge, GET/WS, or path. List without the “Several” toggle. Settings, split, import/export stay as they are.

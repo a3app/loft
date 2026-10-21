@@ -691,6 +691,17 @@
     }
     .mini.on { background: var(--lamp); color: var(--ink); }
     .plist.sess .item { padding: 8px 6px; }
+    .others { margin: 4px 0 2px; border-top: 1px solid var(--line); padding-top: 6px; }
+    .other {
+      display: flex; align-items: center; gap: 8px; padding: 5px 2px;
+      font-size: 12.5px; cursor: pointer; border-radius: 8px;
+    }
+    .other .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .other .tm { color: var(--mute); font-size: 11.5px; }
+    .other .tm.err { color: var(--err); }
+    .other .mini { padding: 4px 9px; font-size: 11px; }
+    .win.main .others { margin: 0 0 12px; border-top: 0; padding-top: 0; display: grid; gap: 6px; }
+    .win.main .other { background: #211c19; border-radius: 10px; padding: 8px 10px; }
     .pop-head .s.err { color: var(--err); }
     .ghost-sm { background: none; border: 0; color: var(--mute); font: 500 11.5px var(--ui); cursor: pointer; padding: 4px 6px; }
     .toggle { cursor: pointer; flex-shrink: 0; }
@@ -1043,6 +1054,20 @@
       <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
     </svg>`;
 
+    // Multi: the other up / failed sessions, collapsed. Click makes one the main session.
+    const UPTIME = { office: "0:12", lab: "0:07", home: "0:03" };
+    const others = () => {
+      if (!multi || simpleOn) return "";
+      const rows = PROFILES.filter((p) => p.id !== activeId && (p.up || p.err)).map((p) => `
+        <div class="other" data-prefer="${p.id}">
+          <span class="lamp-dot ${p.err ? "err" : "on"}"></span>
+          <span class="n">${pname(p)}</span>
+          <span class="tm ${p.err ? "err" : ""}">${p.err ? t("err") : UPTIME[p.id]}</span>
+          <button class="mini" data-toggle="${p.id}">${p.err ? t("retry") : t("disconnect")}</button>
+        </div>`).join("");
+      return rows ? `<div class="others">${rows}</div>` : "";
+    };
+
     const popover = (on, err, held) => {
       const p = active();
       const locked = !!(held || heldNow);
@@ -1078,6 +1103,7 @@
         ${primary}
         ${resetBtn}
         ${rows}
+        ${others()}
         <div class="pop-foot">
           <a class="left" href="#" data-go="list">${t("open")}</a>
           <a class="mid" href="#" data-go="set">${t("settings")}</a>
@@ -1726,6 +1752,7 @@ outbounds:
             </div>
             ${action}
             ${cards}
+            ${others()}
             <div class="actions">
               <button class="btn" data-go="journal">${t("journal")}</button>
               <button class="btn" data-reset>${t("reset")}</button>
@@ -2120,6 +2147,13 @@ outbounds:
           }
           activeId = el.dataset.profile;
           show(current === "switch" ? "on" : current);
+        };
+      });
+      sceneEl.querySelectorAll("[data-prefer]").forEach((el) => {
+        el.onclick = (ev) => {
+          if (ev.target.closest("[data-toggle]")) return;
+          activeId = el.dataset.prefer;
+          show(current, true);
         };
       });
       sceneEl.querySelectorAll("[data-toggle]").forEach((b) => {
