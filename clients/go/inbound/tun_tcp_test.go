@@ -45,6 +45,21 @@ func (p *pipeTun) Close() error {
 // Name is a stub interface name.
 func (p *pipeTun) Name() string { return "utun-test" }
 
+// TestIPv4DatagramDropsTruncated refuses an IPv4 header whose Total Length
+// exceeds the TUN read, so a short buffer cannot inject a torn packet.
+func TestIPv4DatagramDropsTruncated(t *testing.T) {
+	p := make([]byte, 40)
+	p[0] = 0x45
+	binary.BigEndian.PutUint16(p[2:4], 100)
+	if ipv4Datagram(p) != nil {
+		t.Fatal("truncated")
+	}
+	binary.BigEndian.PutUint16(p[2:4], 40)
+	if got := ipv4Datagram(p); len(got) != 40 {
+		t.Fatalf("len %d", len(got))
+	}
+}
+
 // TestGVisorSYNAck expects SYN-ACK for a SYN sourced from overlay IPv4.
 func TestGVisorSYNAck(t *testing.T) {
 	ifc := &pipeTun{r: make(chan []byte, 4)}

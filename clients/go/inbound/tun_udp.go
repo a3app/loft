@@ -107,8 +107,12 @@ func (t *tunStack) rememberUDP(dest string, f udpFlow) {
 		n += len(l)
 	}
 	if n >= maxUDP {
-		t.udpNat = map[string][]udpFlow{dest: {f}}
-		return
+		for d := range t.udpNat {
+			if d != dest {
+				delete(t.udpNat, d)
+				break
+			}
+		}
 	}
 	t.udpNat[dest] = out
 }
@@ -153,9 +157,7 @@ func (t *tunStack) onOverlayUDP(addr string, data []byte) bool {
 	}
 	for _, f := range flows {
 		pkt := encodeUDP(srcIP, uint16(port), net.IP(f.src[:]), f.sport, data)
-		if _, err := t.ifc.Write(pkt); err != nil {
-			fmt.Fprintf(os.Stderr, "tun udp rx: %v\n", err)
-		}
+		t.emit(pkt)
 	}
 	return true
 }

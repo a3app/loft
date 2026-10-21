@@ -223,9 +223,7 @@ func (t *tunStack) handleICMP(raw []byte) bool {
 	dst := net.IP(raw[16:20])
 	if reply, ok := icmpEchoReply(raw, t.our); ok {
 		logICMP(reply)
-		if _, err := t.ifc.Write(reply); err != nil {
-			fmt.Fprintf(os.Stderr, "tun icmp write: %v\n", err)
-		}
+		t.emit(reply)
 		return true
 	}
 	if t.our != nil && t.inOverlay(dst) && !dst.Equal(t.our) {
@@ -299,9 +297,7 @@ func (t *tunStack) onOverlayICMP(_ string, data []byte) bool {
 	if t.ifc == nil {
 		return true
 	}
-	if _, err := t.ifc.Write(pkt); err != nil {
-		fmt.Fprintf(os.Stderr, "tun icmp rx: %v\n", err)
-	}
+	t.emit(pkt)
 	return true
 }
 

@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -143,7 +142,9 @@ func (u *utunRWC) Read(p []byte) (int, error) {
 			continue
 		}
 		if err == unix.EAGAIN || err == unix.EWOULDBLOCK {
-			runtime.Gosched()
+			if err := u.poll(unix.POLLIN, -1); err != nil {
+				return 0, err
+			}
 			continue
 		}
 		if err != nil {
@@ -174,9 +175,17 @@ func (u *utunRWC) Write(p []byte) (int, error) {
 		buf[3] = syscall.AF_INET6
 	}
 	copy(buf[utunHdr:], p)
+	tries := 0
 	for off := 0; off < len(buf); {
 		n, err := unix.Write(u.fd, buf[off:])
 		if err == unix.EINTR {
+			continue
+		}
+		if err == unix.ENOBUFS || err == unix.EAGAIN || err == unix.EWOULDBLOCK {
+			if tries++; tries > 8 {
+				return 0, err
+			}
+			_ = u.poll(unix.POLLOUT, 2)
 			continue
 		}
 		if err != nil {
@@ -188,4 +197,16 @@ func (u *utunRWC) Write(p []byte) (int, error) {
 		off += n
 	}
 	return len(p), nil
+}
+
+// poll waits for events on the utun fd. timeoutMs -1 waits forever.
+func (u *utunRWC) poll(events int16, timeoutMs int) error {
+	pfd := []unix.PollFd{{Fd: int32(u.fd), Events: events}}
+	for {
+		_, err := unix.Poll(pfd, timeoutMs)
+		if err == unix.EINTR {
+			continue
+		}
+		return err
+	}
 }

@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +22,42 @@ type memWriter struct{ b []byte }
 func (m *memWriter) Write(p []byte) (int, error) {
 	m.b = append(m.b, p...)
 	return len(p), nil
+}
+
+// closeFlag is an io.WriteCloser that records Close.
+type closeFlag struct {
+	memWriter
+	closed atomic.Bool
+}
+
+func (c *closeFlag) Close() error { c.closed.Store(true); return nil }
+
+// TestAddUDPEvictsAtCap closes one writer once the map hits maxUDP.
+func TestAddUDPEvictsAtCap(t *testing.T) {
+	st := &tunStack{}
+	var flags []*closeFlag
+	for i := 0; i < maxUDP; i++ {
+		c := &closeFlag{}
+		flags = append(flags, c)
+		st.addUDP("x:"+strconv.Itoa(i), c)
+	}
+	st.addUDP("new:1", &memWriter{})
+	closed := 0
+	for _, c := range flags {
+		if c.closed.Load() {
+			closed++
+		}
+	}
+	if closed != 1 {
+		t.Fatalf("closed %d", closed)
+	}
+	n := 0
+	for _, list := range st.udp {
+		n += len(list)
+	}
+	if n != maxUDP {
+		t.Fatalf("n=%d", n)
+	}
 }
 
 // TestUDPReplyInjected writes a mux DNS datagram into a registered UDP writer.

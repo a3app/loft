@@ -4,6 +4,7 @@ package inbound
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -30,6 +31,9 @@ const (
 	nicID   = 1
 	maxUDP  = 128
 	udpIdle = 60 * time.Second
+	// tunPktBuf is one IPv4 datagram at the NIC MTU (1280) plus headroom.
+	tunPktBuf = 2048
+	emitCap   = 64
 )
 
 // tunIO is a TUN device: IP packets in and out, plus an interface name.
@@ -52,6 +56,7 @@ type tunStack struct {
 	udpMu     sync.Mutex
 	udp       map[string][]io.Writer // dest host:port → gVisor UDP conns
 	udpNat    map[string][]udpFlow   // dest host:port → original src (Darwin dummy)
+	emitCh    chan []byte            // TUN writes off the read/ingest path
 }
 
 // newStack builds an IPv4 gVisor NIC, TCP/UDP forwarders, and the TUN pump loops.
@@ -151,6 +156,8 @@ func newStack(ifc tunIO, d transport.Dialer, our net.IP, ipnet *net.IPNet) (*tun
 	ts.Attach(d)
 	ctx, cancel := context.WithCancel(context.Background())
 	ts.outCancel = cancel
+	ts.emitCh = make(chan []byte, emitCap)
+	go ts.emitLoop(ctx)
 	go ts.tunToStack()
 	go ts.stackToTun(ctx)
 	return ts, nil
@@ -159,7 +166,7 @@ func newStack(ifc tunIO, d transport.Dialer, our net.IP, ipnet *net.IPNet) (*tun
 // tunToStack reads TUN packets: ICMP/UDP first, else inject IPv4 into gVisor.
 func (t *tunStack) tunToStack() {
 	fmt.Fprintf(os.Stderr, "tun read-loop %s\n", t.ifc.Name())
-	buf := make([]byte, 2048)
+	buf := make([]byte, tunPktBuf)
 	var seen uint32
 	for {
 		n, err := t.ifc.Read(buf)
@@ -171,6 +178,9 @@ func (t *tunStack) tunToStack() {
 			continue
 		}
 		raw := stripUTUN(buf[:n])
+		if raw = ipv4Datagram(raw); raw == nil {
+			continue
+		}
 		switch classifyTUN(raw) {
 		case tunIPv4:
 		default:
@@ -208,9 +218,56 @@ func (t *tunStack) stackToTun(ctx context.Context) {
 		_, _ = v.Read(b)
 		v.Release()
 		if len(b) > 0 {
-			_, _ = t.ifc.Write(b)
+			t.writeTUN(b)
 		}
 		pkt.DecRef()
+	}
+}
+
+// ipv4Datagram returns a complete IPv4 header+payload, or nil if truncated.
+func ipv4Datagram(raw []byte) []byte {
+	if len(raw) < 20 || raw[0]>>4 != 4 {
+		return raw
+	}
+	tot := int(binary.BigEndian.Uint16(raw[2:4]))
+	if tot < 20 || tot > len(raw) {
+		return nil
+	}
+	return raw[:tot]
+}
+
+// emit queues a packet for the TUN writer. Full queue drops (UDP/ICMP).
+// Tests that never started emitLoop write through ifc directly.
+func (t *tunStack) emit(pkt []byte) {
+	if len(pkt) == 0 {
+		return
+	}
+	if t.emitCh == nil {
+		t.writeTUN(pkt)
+		return
+	}
+	p := append([]byte(nil), pkt...)
+	select {
+	case t.emitCh <- p:
+	default:
+	}
+}
+
+func (t *tunStack) writeTUN(pkt []byte) {
+	if t.ifc == nil || len(pkt) == 0 {
+		return
+	}
+	_, _ = t.ifc.Write(pkt)
+}
+
+func (t *tunStack) emitLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case p := <-t.emitCh:
+			t.writeTUN(p)
+		}
 	}
 }
 
@@ -230,9 +287,10 @@ func (t *tunStack) Close() error {
 }
 
 // addUDP registers a gVisor UDP conn for dest host:port replies.
+// At cap, the oldest dest is evicted and closed so relay goroutines exit.
 func (t *tunStack) addUDP(dest string, w io.Writer) {
+	var evict io.Closer
 	t.udpMu.Lock()
-	defer t.udpMu.Unlock()
 	if t.udp == nil {
 		t.udp = make(map[string][]io.Writer)
 	}
@@ -241,9 +299,26 @@ func (t *tunStack) addUDP(dest string, w io.Writer) {
 		n += len(list)
 	}
 	if n >= maxUDP {
-		t.udp = make(map[string][]io.Writer)
+		for d, list := range t.udp {
+			if len(list) == 0 {
+				continue
+			}
+			if c, ok := list[0].(io.Closer); ok {
+				evict = c
+			}
+			if len(list) == 1 {
+				delete(t.udp, d)
+			} else {
+				t.udp[d] = list[1:]
+			}
+			break
+		}
 	}
 	t.udp[dest] = append(t.udp[dest], w)
+	t.udpMu.Unlock()
+	if evict != nil {
+		_ = evict.Close()
+	}
 }
 
 // delUDP unregisters a gVisor UDP conn.
@@ -273,6 +348,9 @@ func (t *tunStack) injectUDP(addr string, data []byte) bool {
 		return false
 	}
 	for _, w := range list {
+		if d, ok := w.(interface{ SetWriteDeadline(time.Time) error }); ok {
+			_ = d.SetWriteDeadline(time.Now().Add(time.Millisecond))
+		}
 		_, _ = w.Write(data)
 	}
 	return true
@@ -340,19 +418,20 @@ func (t *tunStack) relayUDP(conn *gonet.UDPConn, dest string) {
 	}
 }
 
-// pipe copies both ways until the first side finishes.
+// pipe copies both ways and half-closes, matching SOCKS relay.
 func pipe(a, b io.ReadWriteCloser) {
 	done := make(chan struct{}, 2)
-	go func() {
+	cp := func(dst, src io.ReadWriteCloser) {
 		buf := make([]byte, 128<<10)
-		_, _ = io.CopyBuffer(a, b, buf)
+		_, _ = io.CopyBuffer(dst, src, buf)
+		if cw, ok := dst.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		}
 		done <- struct{}{}
-	}()
-	go func() {
-		buf := make([]byte, 128<<10)
-		_, _ = io.CopyBuffer(b, a, buf)
-		done <- struct{}{}
-	}()
+	}
+	go cp(a, b)
+	go cp(b, a)
+	<-done
 	<-done
 }
 

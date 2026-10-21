@@ -81,7 +81,7 @@ func (l tcpTuneListener) Accept() (net.Conn, error) {
 	return c, nil
 }
 
-// TuneListener wraps ln so Accept sets TCP_NODELAY and 2 MiB buffers.
+// TuneListener wraps ln so Accept sets TCP_NODELAY and tcpBuf (256 KiB) buffers.
 func TuneListener(ln net.Listener) net.Listener {
 	if ln == nil {
 		return nil
