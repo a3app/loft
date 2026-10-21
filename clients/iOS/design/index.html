@@ -160,7 +160,6 @@
     .plate {
       flex: 1; background: #211c19; border-radius: 10px; padding: 8px 8px 10px; min-width: 0;
     }
-    .cards .plate:first-child { flex: .7; }
     .plate .k {
       font-size: 9px; letter-spacing: .08em; color: var(--mute); text-transform: uppercase; font-weight: 600;
     }
@@ -169,11 +168,13 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .spark {
-      display: flex; justify-content: space-between; align-items: baseline;
+      display: flex; justify-content: flex-start; gap: 10px; align-items: flex-start;
       margin-top: 12px; color: var(--mute); font-size: 11.5px;
     }
     .spark .l { letter-spacing: .12em; color: var(--lamp); display: flex; flex-direction: column; gap: 2px; }
     .spark .l .up { color: var(--stone); }
+    .spark .r { display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+    .spark .r .dn { color: var(--lamp); }
     .home.simple .cards, .home.simple .spark { display: none; }
     .iprows { margin-top: 12px; border-top: 1px solid var(--line); }
     .iprows .r {
@@ -550,6 +551,9 @@
     <button type="button" data-go="home" data-mode="off" data-i="nOff">Дом · выкл</button>
     <button type="button" data-go="home" data-mode="connecting" data-i="nOpen">Дом · подключение</button>
     <button type="button" data-go="home" data-mode="simple" data-i="nSimple">Дом · упрощённый</button>
+    <button type="button" data-go="home" data-mode="on" data-vpn="sstp" data-i="nHomeSstp">Дом · SSTP</button>
+    <button type="button" data-go="home" data-mode="on" data-vpn="vless" data-i="nHomeVless">Дом · VLESS</button>
+    <button type="button" data-go="home" data-mode="on" data-vpn="trojan" data-i="nHomeTrojan">Дом · Trojan</button>
     <button type="button" data-go="list" data-i="nList">Подключения</button>
     <button type="button" data-go="list" data-list="swipe" data-i="nSwipe">Список · свайп</button>
     <button type="button" data-go="list" data-list="ctx" data-i="nCtx">Список · меню</button>
@@ -605,17 +609,18 @@
             <button type="button" class="danger" id="homeAct" data-i="disconnect">Отключить</button>
           </div>
           <div class="cards" id="homeCards" data-sheet="det">
-            <div class="plate"><div class="k" data-i="methodK">СПОСОБ</div><div class="v" id="frontV">GET</div></div>
-            <div class="plate"><div class="k" data-i="rxK">ПРИЁМ</div><div class="v" id="overV">12.4 Мбит/с</div></div>
-            <div class="plate"><div class="k" data-i="txK">ОТДАЧА</div><div class="v" id="tunV">1.1 Мбит/с</div></div>
+            <div class="plate"><div class="k" id="cardK1">ПРОТОКОЛ</div><div class="v" id="cardV1">loft/1.0</div></div>
+            <div class="plate"><div class="k" id="cardK2">ФРОНТ</div><div class="v" id="cardV2">GET</div></div>
+            <div class="plate"><div class="k" id="cardK3">ОПЦИИ</div><div class="v" id="cardV3">mux · mask</div></div>
           </div>
           <div class="spark" id="homeSpark">
-            <span class="l"><span id="sparkL">↓ ▃▅▂▇▄▆▃▅▂▇</span><span class="up" id="sparkU">↑ ▁▂▁▃▂▁▂▃▁▂</span></span>
-            <span class="r" id="sparkR">↓ 12.4 Мбит/с</span>
+            <span class="l"><span id="sparkL">▃▅▂▇▄▆▃▅▂▇</span><span class="up" id="sparkU">▁▂▁▃▂▁▂▃▁▂</span></span>
+            <span class="r" id="sparkR"><span class="dn">↓ 12.4 Мбит/с</span><span>↑ 1.1 Мбит/с</span></span>
           </div>
           <div class="iprows" id="homeIPs">
             <div class="r"><span class="k" data-i="extIpK">Внешний IP</span><span class="v">203.0.113.17</span></div>
             <div class="r"><span class="k" data-i="overIpK">Overlay IP</span><span class="v">10.8.0.14</span></div>
+            <div class="r"><span class="k" data-i="routeK">Маршрут</span><span class="v">10.8.0.1</span></div>
           </div>
         </div>
       </div>
@@ -1391,14 +1396,16 @@ hold  armed</pre>
         newTitle: "Новое подключение",
         detServer: "Сервер",
         detMtu: "MTU",
-        detFront: "Способ",
-        detOver: "Адрес в сети loft", extIpK: "Внешний IP", overIpK: "Overlay IP",
+        detFront: "Фронт",
+        detOver: "Адрес в сети loft", extIpK: "Внешний IP", overIpK: "Overlay IP", routeK: "Маршрут",
         detT: "Сведения",
-        sparkCap: "скорость за последнюю минуту",
         kindAutoV: "Авто",
-        txK: "ОТДАЧА",
-        rxK: "ПРИЁМ",
-        methodK: "СПОСОБ",
+        protoK: "ПРОТОКОЛ",
+        frontK: "ФРОНТ",
+        transK: "ТРАНСПОРТ",
+        authK: "ВХОД",
+        secK: "ЗАЩИТА",
+        optK: "ОПЦИИ",
         pillBusy: "Подключение: Home…",
         "split.add": "Добавить",
         "split.add.body": "Адрес или префикс CIDR. Имя сервиса видно в списке.",
@@ -1478,6 +1485,9 @@ hold  armed</pre>
         nOff: "Дом · выкл",
         nOpen: "Дом · подключение",
         nSimple: "Дом · упрощённый",
+        nHomeSstp: "Дом · SSTP",
+        nHomeVless: "Дом · VLESS",
+        nHomeTrojan: "Дом · Trojan",
         nOnb0: "Начало · первый запуск",
         nAdd: "Список · добавить",
         nEditTrojan: "Правка · Trojan",
@@ -1681,14 +1691,16 @@ hold  armed</pre>
         newTitle: "New Connection",
         detServer: "Server",
         detMtu: "MTU",
-        detFront: "Method",
-        detOver: "loft address", extIpK: "External IP", overIpK: "Overlay IP",
+        detFront: "Front",
+        detOver: "loft address", extIpK: "External IP", overIpK: "Overlay IP", routeK: "Route",
         detT: "Details",
-        sparkCap: "speed, last minute",
         kindAutoV: "Auto",
-        txK: "UP",
-        rxK: "DOWN",
-        methodK: "METHOD",
+        protoK: "PROTOCOL",
+        frontK: "FRONT",
+        transK: "TRANSPORT",
+        authK: "AUTH",
+        secK: "SECURITY",
+        optK: "OPTIONS",
         pillBusy: "Connecting: Home…",
         "split.add": "Add",
         "split.add.body": "Address or CIDR prefix. The service name is what you see in the list.",
@@ -1768,6 +1780,9 @@ hold  armed</pre>
         nOff: "Home · down",
         nOpen: "Home · connecting",
         nSimple: "Home · simplified",
+        nHomeSstp: "Home · SSTP",
+        nHomeVless: "Home · VLESS",
+        nHomeTrojan: "Home · Trojan",
         nOnb0: "Onboarding · start",
         nAdd: "List · add",
         nEditTrojan: "Edit · Trojan",
@@ -1971,14 +1986,16 @@ hold  armed</pre>
         newTitle: "新连接",
         detServer: "服务器",
         detMtu: "MTU",
-        detFront: "方式",
-        detOver: "loft 地址", extIpK: "外部 IP", overIpK: "Overlay IP",
+        detFront: "前置",
+        detOver: "loft 地址", extIpK: "外部 IP", overIpK: "Overlay IP", routeK: "路由",
         detT: "详细信息",
-        sparkCap: "近一分钟速率",
         kindAutoV: "自动",
-        txK: "上传",
-        rxK: "下载",
-        methodK: "方式",
+        protoK: "协议",
+        frontK: "前置",
+        transK: "传输",
+        authK: "认证",
+        secK: "安全",
+        optK: "选项",
         pillBusy: "正在连接: Home…",
         "split.add": "添加",
         "split.add.body": "地址或 CIDR 前缀。服务名是列表里显示的名字。",
@@ -2058,6 +2075,9 @@ hold  armed</pre>
         nOff: "主页 · 未连接",
         nOpen: "主页 · 正在连接",
         nSimple: "主页 · 简化",
+        nHomeSstp: "主页 · SSTP",
+        nHomeVless: "主页 · VLESS",
+        nHomeTrojan: "主页 · Trojan",
         nOnb0: "引导 · 开始",
         nAdd: "列表 · 添加",
         nEditTrojan: "编辑 · Trojan",
@@ -2281,6 +2301,13 @@ hold  armed</pre>
       });
     }
 
+    const HOME_CARDS = {
+      loft: [["protoK", "loft/1.0"], ["frontK", "GET"], ["optK", "mux · mask"]],
+      sstp: [["protoK", "SSTP"], ["transK", "PPP"], ["authK", "CHAP"]],
+      vless: [["protoK", "VLESS"], ["transK", "TCP"], ["secK", "REALITY"]],
+      trojan: [["protoK", "Trojan"], ["transK", "TCP"], ["secK", "TLS"]],
+    };
+    let homeVpn = "loft";
     function paintHome() {
       const root = document.getElementById("home");
       const act = document.getElementById("homeAct");
@@ -2288,9 +2315,17 @@ hold  armed</pre>
       const pillT = document.getElementById("homePillT");
       const body = document.getElementById("homeBody");
       const win = document.getElementById("homeWin");
-      const over = document.getElementById("overV");
-      const front = document.getElementById("frontV");
-      const tun = document.getElementById("tunV");
+      // Cards follow the protocol: what it is, how it rides, and its options.
+      const set = HOME_CARDS[homeVpn] || HOME_CARDS.loft;
+      const live = homeMode === "on" || homeMode === "simple";
+      set.forEach(([k, v], i) => {
+        document.getElementById("cardK" + (i + 1)).textContent = I[lang][k];
+        let val = v;
+        if (homeVpn === "loft" && !live && k === "frontK") val = I[lang].kindAutoV;
+        if (homeVpn === "loft" && !live && k === "optK") val = "—";
+        document.getElementById("cardV" + (i + 1)).textContent = val;
+      });
+      const mbit = lang === "ru" ? "Мбит/с" : "Mbit/s";
       const sparkL = document.getElementById("sparkL");
       const sparkR = document.getElementById("sparkR");
       root.classList.toggle("simple", homeMode === "simple");
@@ -2305,9 +2340,6 @@ hold  armed</pre>
         act.textContent = I[lang].cancel;
         body.setAttribute("fill", "#8A7E72");
         win.setAttribute("fill", "#3A332E");
-        front.textContent = I[lang].kindAutoV;
-        over.textContent = dash;
-        tun.textContent = dash;
         sparkL.textContent = I[lang].handshake;
         document.getElementById("sparkU").textContent = "";
         sparkR.textContent = "";
@@ -2316,20 +2348,14 @@ hold  armed</pre>
         act.textContent = I[lang].disconnect;
         body.setAttribute("fill", "#F3EDE4");
         win.setAttribute("fill", "#E8B84A");
-        front.textContent = "GET";
-        over.textContent = lang === "ru" ? "12.4 Мбит/с" : "12.4 Mbit/s";
-        tun.textContent = lang === "ru" ? "1.1 Мбит/с" : "1.1 Mbit/s";
-        sparkL.textContent = "↓ ▃▅▂▇▄▆▃▅▂▇";
-        document.getElementById("sparkU").textContent = "↑ ▁▂▁▃▂▁▂▃▁▂";
-        sparkR.textContent = I[lang].sparkCap;
+        sparkL.textContent = "▃▅▂▇▄▆▃▅▂▇";
+        document.getElementById("sparkU").textContent = "▁▂▁▃▂▁▂▃▁▂";
+        sparkR.innerHTML = `<span class="dn">↓ 12.4 ${mbit}</span><span>↑ 1.1 ${mbit}</span>`;
       } else {
         act.className = "go";
         act.textContent = I[lang].connect;
         body.setAttribute("fill", "#8A7E72");
         win.setAttribute("fill", "#3A332E");
-        front.textContent = I[lang].kindAutoV;
-        over.textContent = dash;
-        tun.textContent = dash;
         sparkL.textContent = "";
         document.getElementById("sparkU").textContent = "";
         sparkR.textContent = "";
@@ -2415,6 +2441,7 @@ hold  armed</pre>
     function slugOf(id, x) {
       const p = [id];
       if (id === "home" && x.mode && x.mode !== "on") p.push(x.mode);
+      if (id === "home" && x.vpn && x.vpn !== "loft") p.push(x.vpn);
       if (x.list) p.push(x.list);
       if (id === "edit") {
         if (x.vpn && x.vpn !== "loft") p.push(x.vpn);
@@ -2469,6 +2496,7 @@ hold  armed</pre>
       document.getElementById(id).classList.remove("hidden");
       if (id === "home") {
         homeMode = extra.mode || "on";
+        homeVpn = extra.vpn || "loft";
         paintHome();
       }
       if (id === "edit") {
