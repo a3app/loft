@@ -85,6 +85,11 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
                     return
                 }
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                // No GitHub Release (tag-only repo) is "nothing newer", not offline.
+                if code == 404 {
+                    DispatchQueue.main.async { done(.success(nil)) }
+                    return
+                }
                 guard let data = data, (200..<300).contains(code) else {
                     DispatchQueue.main.async { done(.failure(Fail.badHTTP(code))) }
                     return

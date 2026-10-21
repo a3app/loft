@@ -138,7 +138,8 @@ final class UpdateOfferWindowController: NSWindowController {
         case .checksum: return L10n.t("upd_err_sum")
         case .mount: return L10n.t("upd_err_mount")
         case .copy: return L10n.t("upd_err_copy")
-        case .network, .badHTTP: return L10n.t("upd_err_net")
+        case .network: return L10n.t("upd_err_net")
+        case .badHTTP: return L10n.t("upd_err")
         }
     }
 }
