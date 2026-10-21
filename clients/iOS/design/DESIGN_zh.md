@@ -22,7 +22,7 @@ v1：磁盘上的命名连接，导入/导出 `.loft`，连接 / 断开，不要
 
 iOS 设置里显示的就是应用拉起的那条 VPN。应用不替代设置。
 
-Apple TV（tvOS 17+）是 iPhone GUI 之后同一条 Packet Tunnel。[计划](../PLAN_zh.md) 第 6 阶段。这个模型是手机。
+Apple TV（tvOS 17+）是 iPhone GUI 之后同一条 Packet Tunnel。[计划](../PLAN.md) 第 6 阶段。这个模型是手机。
 
 ---
 

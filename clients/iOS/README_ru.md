@@ -4,7 +4,7 @@
 
 Клиент iOS: один **Packet Tunnel**, который система видит как Personal VPN. Контейнер держит профили и лампу; Network Extension ведёт сессию Go (loft, SSTP или VLESS).
 
-Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/ios.md](../../docs/ios.md). URI импорта: [docs/share_ru.md](../../docs/share_ru.md). План: [PLAN_ru.md](PLAN_ru.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
+Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/ios.md](../../docs/ios.md). URI импорта: [docs/share_ru.md](../../docs/share_ru.md). План: [PLAN.md](PLAN.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
 
 Тонкий хост и Packet Tunnel в этом дереве. Сначала bind движка: `make -C ../mobile ios`.
 

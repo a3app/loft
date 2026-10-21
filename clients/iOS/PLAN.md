@@ -1,7 +1,5 @@
 # Plan · loft on iOS
 
-**English** · [Русский](PLAN_ru.md) · [中文](PLAN_zh.md)
-
 Software 1.0.0. Protocol 1.0. This plan does not raise either version.
 
 ## Goal

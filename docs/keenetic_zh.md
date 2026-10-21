@@ -2,7 +2,7 @@
 
 [English](keenetic.md) · [Русский](keenetic_ru.md) · **中文**
 
-loft 在 Keenetic 路由器上怎么跑。目录：[clients/Keenetic/](../clients/Keenetic/)。计划：[clients/Keenetic/PLAN_zh.md](../clients/Keenetic/PLAN_zh.md)。模型：[clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。
+loft 在 Keenetic 路由器上怎么跑。目录：[clients/Keenetic/](../clients/Keenetic/)。计划：[clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md)。模型：[clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。
 
 包还没打。这份文件是对接规格。
 

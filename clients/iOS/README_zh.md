@@ -4,7 +4,7 @@
 
 iOS 客户端：一条 **Packet Tunnel**，系统当成 Personal VPN。容器应用管配置和灯；Network Extension 跑 Go 会话（loft、SSTP 或 VLESS）。
 
-协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/ios_zh.md](../../docs/ios_zh.md)。导入 URI：[docs/share_zh.md](../../docs/share_zh.md)。计划：[PLAN_zh.md](PLAN_zh.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
+协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/ios_zh.md](../../docs/ios_zh.md)。导入 URI：[docs/share_zh.md](../../docs/share_zh.md)。计划：[PLAN.md](PLAN.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
 
 薄宿主和 Packet Tunnel 在这个目录。先 bind Go 引擎：`make -C ../mobile ios`。
 

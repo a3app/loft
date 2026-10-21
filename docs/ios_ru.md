@@ -2,7 +2,7 @@
 
 [English](ios.md) · **Русский** · [中文](ios_zh.md)
 
-Как loft работает на iPhone, позже Apple TV (tvOS 17+). Каталог: [clients/iOS/](../clients/iOS/). План: [clients/iOS/PLAN_ru.md](../clients/iOS/PLAN_ru.md) (Apple TV — фаза 6). Макет: [clients/iOS/design/index.html](../clients/iOS/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md). URI импорта: [share_ru.md](share_ru.md).
+Как loft работает на iPhone, позже Apple TV (tvOS 17+). Каталог: [clients/iOS/](../clients/iOS/). План: [clients/iOS/PLAN.md](../clients/iOS/PLAN.md) (Apple TV — фаза 6). Макет: [clients/iOS/design/index.html](../clients/iOS/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md). URI импорта: [share_ru.md](share_ru.md).
 
 Приложения ещё нет. Этот файл — спецификация интеграции.
 

@@ -4,7 +4,7 @@
 
 Entware 客户端：一个 **OpkgTun** 接口，KeeneticOS 拿它进连接优先级和策略路由。设置在 LAN 口上；登录是 Keenetic 网页管理会话。
 
-协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/keenetic_zh.md](../../docs/keenetic_zh.md)。计划：[PLAN_zh.md](PLAN_zh.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
+协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/keenetic_zh.md](../../docs/keenetic_zh.md)。计划：[PLAN.md](PLAN.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
 
 这里只做目录。还没有二进制。
 

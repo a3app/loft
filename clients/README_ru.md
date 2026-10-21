@@ -9,10 +9,10 @@
 | [`go/cmd/loft-probe`](go/cmd/loft-probe/) | ICMP/TCP/UDP/DNS/HTTP через сессию |
 | [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Автозамер GET/WS против пути connect на macOS |
 | [`macOS/`](macOS/) | Строка меню. UX: [`macOS/design/DESIGN_ru.md`](macOS/design/DESIGN_ru.md) |
-| [`Keenetic/`](Keenetic/) | Entware / OpkgTun. План: [`Keenetic/PLAN_ru.md`](Keenetic/PLAN_ru.md). Макет: [`Keenetic/design/index.html`](Keenetic/design/index.html) |
+| [`Keenetic/`](Keenetic/) | Entware / OpkgTun. План: [`Keenetic/PLAN.md`](Keenetic/PLAN.md). Макет: [`Keenetic/design/index.html`](Keenetic/design/index.html) |
 | [`MikroTik/`](MikroTik/) | Контейнер RouterOS 7. Макет: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
-| [`iOS/`](iOS/) | Packet Tunnel. Тонкий хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN_ru.md`](iOS/PLAN_ru.md) фаза 6 |
-| [`Android/`](Android/) | VpnService. Тонкий хост Java. Макет: [`Android/design/index.html`](Android/design/index.html). Android TV / Google TV: [`Android/PLAN_ru.md`](Android/PLAN_ru.md) фаза 4 |
+| [`iOS/`](iOS/) | Packet Tunnel. Тонкий хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md) фаза 6 |
+| [`Android/`](Android/) | VpnService. Тонкий хост Java. Макет: [`Android/design/index.html`](Android/design/index.html). Android TV / Google TV: [`Android/PLAN.md`](Android/PLAN.md) фаза 4 |
 | [`Aurora/`](Aurora/) | Оверлей ConnMan. Тонкий хост QML + loft-front. Макет: [`Aurora/design/index.html`](Aurora/design/index.html) |
 | [`mobile/`](mobile/) | Общий движок Go (`gomobile bind`). Без GUI. |
 

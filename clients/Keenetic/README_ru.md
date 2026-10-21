@@ -4,7 +4,7 @@
 
 Клиент Entware: один интерфейс **OpkgTun**, который KeeneticOS ставит в приоритеты подключений и политики. Настройки — на LAN-порту; вход — сессия веб-админки Keenetic.
 
-Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/keenetic_ru.md](../../docs/keenetic_ru.md). План: [PLAN_ru.md](PLAN_ru.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
+Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/keenetic_ru.md](../../docs/keenetic_ru.md). План: [PLAN.md](PLAN.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
 
 Это каталог. Сборки ещё нет.
 

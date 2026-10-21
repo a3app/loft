@@ -9,10 +9,10 @@
 | [`go/cmd/loft-probe`](go/cmd/loft-probe/) | 经会话打 ICMP/TCP/UDP/DNS/HTTP |
 | [`go/cmd/loft-bench`](go/cmd/loft-bench/) | 自动压 GET/WS 吞吐，对照 macOS 打开那条路径 |
 | [`macOS/`](macOS/) | 菜单栏应用。UX：[`macOS/design/DESIGN_zh.md`](macOS/design/DESIGN_zh.md) |
-| [`Keenetic/`](Keenetic/) | Entware / OpkgTun。计划：[`Keenetic/PLAN_zh.md`](Keenetic/PLAN_zh.md)。模型：[`Keenetic/design/index.html`](Keenetic/design/index.html) |
+| [`Keenetic/`](Keenetic/) | Entware / OpkgTun。计划：[`Keenetic/PLAN.md`](Keenetic/PLAN.md)。模型：[`Keenetic/design/index.html`](Keenetic/design/index.html) |
 | [`MikroTik/`](MikroTik/) | RouterOS 7 容器。模型：[`MikroTik/design/index.html`](MikroTik/design/index.html) |
-| [`iOS/`](iOS/) | Packet Tunnel。薄宿主 + appex。模型：[`iOS/design/index.html`](iOS/design/index.html)。Apple TV：[`iOS/PLAN_zh.md`](iOS/PLAN_zh.md) 第 6 阶段 |
-| [`Android/`](Android/) | VpnService。薄 Java 宿主。模型：[`Android/design/index.html`](Android/design/index.html)。Android TV / Google TV：[`Android/PLAN_zh.md`](Android/PLAN_zh.md) 第 4 阶段 |
+| [`iOS/`](iOS/) | Packet Tunnel。薄宿主 + appex。模型：[`iOS/design/index.html`](iOS/design/index.html)。Apple TV：[`iOS/PLAN.md`](iOS/PLAN.md) 第 6 阶段 |
+| [`Android/`](Android/) | VpnService。薄 Java 宿主。模型：[`Android/design/index.html`](Android/design/index.html)。Android TV / Google TV：[`Android/PLAN.md`](Android/PLAN.md) 第 4 阶段 |
 | [`Aurora/`](Aurora/) | ConnMan 覆盖网。薄 QML 宿主 + loft-front。模型：[`Aurora/design/index.html`](Aurora/design/index.html) |
 | [`mobile/`](mobile/) | 共用 Go 引擎（`gomobile bind`）。没有 GUI。 |
 

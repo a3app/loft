@@ -2,7 +2,7 @@
 
 [English](keenetic.md) · **Русский** · [中文](keenetic_zh.md)
 
-Как loft работает на роутере Keenetic. Каталог: [clients/Keenetic/](../clients/Keenetic/). План: [clients/Keenetic/PLAN_ru.md](../clients/Keenetic/PLAN_ru.md). Макет: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
+Как loft работает на роутере Keenetic. Каталог: [clients/Keenetic/](../clients/Keenetic/). План: [clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md). Макет: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
 
 Пакета ещё нет. Этот файл — спецификация интеграции.
 

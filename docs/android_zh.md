@@ -2,7 +2,7 @@
 
 [English](android.md) · [Русский](android_ru.md) · **中文**
 
-loft 在手机上怎么跑，然后是 Android TV / Google TV。目录：[clients/Android/](../clients/Android/)。计划：[clients/Android/PLAN_zh.md](../clients/Android/PLAN_zh.md)。引擎：[clients/mobile/](../clients/mobile/)。协议：[protocol_zh.md](protocol_zh.md)。导入 URI：[share_zh.md](share_zh.md)。UX：[clients/Android/design/DESIGN_zh.md](../clients/Android/design/DESIGN_zh.md)。模型：[clients/Android/design/index.html](../clients/Android/design/index.html)。
+loft 在手机上怎么跑，然后是 Android TV / Google TV。目录：[clients/Android/](../clients/Android/)。计划：[clients/Android/PLAN.md](../clients/Android/PLAN.md)。引擎：[clients/mobile/](../clients/mobile/)。协议：[protocol_zh.md](protocol_zh.md)。导入 URI：[share_zh.md](share_zh.md)。UX：[clients/Android/design/DESIGN_zh.md](../clients/Android/design/DESIGN_zh.md)。模型：[clients/Android/design/index.html](../clients/Android/design/index.html)。
 
 适配器是 Java。会话是 Go。
 
@@ -40,4 +40,4 @@ Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProte
 | 引擎 AAR | API **24** |
 | 手机应用 | API **26**，target **36** |
 | 语言 | Java 17 |
-| Android TV / Google TV | 同一个 AAR；Leanback flavor 以后再说（[计划](../clients/Android/PLAN_zh.md) 第 4 阶段） |
+| Android TV / Google TV | 同一个 AAR；Leanback flavor 以后再说（[计划](../clients/Android/PLAN.md) 第 4 阶段） |
