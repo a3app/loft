@@ -537,7 +537,7 @@ listen $LISTEN
 cert $LOFT_TLS/fullchain.pem
 key $LOFT_TLS/privkey.pem
 fronts get
-get_path /static/js
+get_path /static/v3/build
 ws_path /api/v1/sync
 h2_path /api/v1/tunnel
 h3_path /api/v1/tunnel

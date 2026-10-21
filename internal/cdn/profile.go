@@ -34,7 +34,7 @@ func GenericGET() Profile {
 		// Node ingestAndPull serializes mux Pull by GET seq. Inflight
 		// pipelines RTT; 48 queued a 2s TTFB path until tripTimeout.
 		Inflight:     8,
-		Path:         "/static/js",
+		Path:         "/static/v3/build",
 		Ext:          ".js",
 		UplinkHeader: "Cookie",
 		ContentType:  "application/javascript",

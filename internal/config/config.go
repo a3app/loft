@@ -38,6 +38,8 @@ type ClientConfig struct {
 const (
 	DefaultSOCKS5 = "127.0.0.1:1080"
 	DebugSOCKS5   = "127.0.0.1:18080"
+	// DefaultGETPath is empty node get_path and empty client GET outbound.
+	DefaultGETPath = "/static/v3/build"
 )
 
 // ListenConfig is local SOCKS5 and optional TUN.
@@ -266,7 +268,7 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 		c.Listen = ":443"
 	}
 	if c.GetPath == "" {
-		c.GetPath = "/static/v3/build"
+		c.GetPath = DefaultGETPath
 	}
 	if c.WSPath == "" {
 		c.WSPath = "/api/v1/sync"

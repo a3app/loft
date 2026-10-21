@@ -6,7 +6,7 @@ token: "change-me-long-random"
 # Optional real website root. Empty = built-in cover page.
 cover_dir: ""
 
-get_path: /static/js
+get_path: /static/v3/build
 ws_path: /api/v1/sync
 h2_path: /api/v1/tunnel
 h3_path: /api/v1/tunnel
