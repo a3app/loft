@@ -165,6 +165,10 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 
+func cookieSecure(r *http.Request) bool {
+	return r != nil && r.TLS != nil
+}
+
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -175,7 +179,14 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: s.token(), Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieName,
+		Value:    s.token(),
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   cookieSecure(r),
+		SameSite: http.SameSiteLaxMode,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

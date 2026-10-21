@@ -1,6 +1,7 @@
 package lanui
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -133,11 +134,27 @@ func TestHTTPPass(t *testing.T) {
 	if len(ck) == 0 {
 		t.Fatal("cookie")
 	}
+	if ck[0].Secure || !ck[0].HttpOnly || ck[0].SameSite != http.SameSiteLaxMode || ck[0].Path != "/" {
+		t.Fatalf("http cookie flags %+v", ck[0])
+	}
 	r = httptest.NewRequest(http.MethodGet, "/api/status", nil)
 	r.AddCookie(ck[0])
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
+	}
+}
+
+func TestLoginCookieSecureOnTLS(t *testing.T) {
+	s := &Server{Pass: "secret"}
+	r := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("password=secret"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.TLS = &tls.ConnectionState{}
+	w := httptest.NewRecorder()
+	s.mux().ServeHTTP(w, r)
+	ck := w.Result().Cookies()
+	if w.Code != 204 || len(ck) == 0 || !ck[0].Secure || !ck[0].HttpOnly {
+		t.Fatalf("tls cookie %d %+v", w.Code, ck)
 	}
 }
