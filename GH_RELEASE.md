@@ -1,4 +1,4 @@
-# loft 1.0.22
+# loft 1.0.23
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -30,29 +30,31 @@ Not in Dist: iOS / Android / Aurora / Keenetic / MikroTik clients (catalog and m
 - **loft-panel** — web admin on the node: wizard, members, packages, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
 
-## 1.0.22
+## 1.0.23
 
-Node and protocol (additive Status tails; old clients ignore extra bytes). Protocol stays **loft/1.0**.
+Protocol stays **loft/1.0**. Auth is DH 0x02 only.
 
-- Origin CONNECT is no longer an open TCP proxy. Cap `connect` is off unless `fronts` lists `connect`. Every CONNECT carries 0x02 Cookie `session=` + `X-Auth: 1`. Loopback, link-local, multicast, unspecified, localhost, and `metadata.google.internal` return 403.
-- Hold resume parks the mux by the authenticated member plus `instance_id`. A second member with the same instance cannot adopt it.
-- `rate_bps` is a per-session token bucket on bulk Data/Dgram (optional Status tail). 0 is off. Pri frames skip the bucket.
-- Node reloads `network.conf` and `members.keys` on SIGHUP.
+- Omitted `fronts` is GET only. Empty GET path is `/static/v3/build` (`DefaultGETPath`). An explicit `/static/js` is left as written.
+- GET rebinds after an egress change without Park.
+- Mux ingest never blocks on one hog stream: datagrams drop, parked Data then RST.
+- TUN keeps reading utun when mux or TUN write is congested.
+- HMAC-only 0x02 and 0x03 tickets from 1.0.16 are gone. A 1.0.16 client cannot join.
+- HTTP/2 and HTTP/3 CONNECT require Match on the tunnel path.
 
 macOS:
 
-- Split routing: ignore entries on imported lists; Tools menu checkbox; Open Loft icon.
-- loft-priv asks for the admin password once (setuid), not on every split apply.
-- README support wallets (BTC, ETH/USDT ERC-20, TRX/USDT TRC20, LTC, ZEC).
+- `-path` is GET only. A leftover GET cover is not sent as h2 CONNECT.
+- Boot reaps bundled `loft-front` via libproc (no `ps` pipe stall).
+- `--probe` walks every saved profile and fails closed on an empty overlay.
+- GitHub `/releases/latest` 404 is “current”, not “no network”.
 
-Panel (first Dist packages):
+## 1.0.22
 
-- Live Packages screen, picker, job log, release updates; wizard step 5 installs.
-- Sessions survive panel restarts; setup wizard (domain, Let's Encrypt, first member).
-- Users: roles with a section × view/change matrix, invitations, API tokens.
-- Network and IP: server addresses and routes, upstream channels, exit rules.
-- Mail packages (Postfix/Dovecot, Rspamd, Roundcube); node screen (node.conf, relays, CDN, who is online).
-- MTProto proxy package (`mtg`) from a pinned GitHub tarball, with share links.
+- Origin CONNECT is no longer an open TCP proxy. Cap `connect` is off unless `fronts` lists `connect`.
+- Hold resume parks the mux by the authenticated member plus `instance_id`.
+- `rate_bps` is a per-session token bucket on bulk Data/Dgram. Node reloads `network.conf` and `members.keys` on SIGHUP.
+- macOS split ignore entries; loft-priv asks for the admin password once.
+- Panel first Dist packages: wizard, members, mail, MTProto (`mtg`).
 
 ---
 
@@ -62,7 +64,7 @@ Panel (first Dist packages):
 
 В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Aurora, Keenetic, MikroTik в этот Dist не входят.
 
-1.0.22: CONNECT на origin больше не открытый прокси (нужен 0x02, cap `connect` выключен по умолчанию); hold/park по члену и `instance_id`; `rate_bps` на сессию; SIGHUP перечитывает сеть и ключи. macOS: игнор в split, пароль loft-priv один раз, чекбокс в Инструментах. Панель впервые в Dist: пакеты, мастер, пользователи, сеть и каналы, почта, MTProto (`mtg`). Протокол loft/1.0.
+1.0.23: публичный путь по умолчанию только GET; пустой GET-path `/static/v3/build`; GET перепривязывается при смене egress; mux не стопорит ingest; utun читается при заторе; dual-stack 1.0.16 снят; H2/H3 CONNECT только на tunnel path. macOS: `-path` только у GET, reap через libproc, `--probe` по всем профилям, 404 GitHub Release — текущая версия. Протокол loft/1.0.
 
 ---
 
@@ -72,4 +74,4 @@ loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流
 
 本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Aurora / Keenetic / MikroTik 不在这次包里。
 
-1.0.22：源站 CONNECT 不再是未认证的 TCP 代理（需要 0x02，cap `connect` 默认关闭）；hold/park 按成员和 `instance_id`；会话 `rate_bps`；SIGHUP 重载网络和密钥。macOS：分流忽略项、loft-priv 一次管理员密码、工具菜单勾选。面板首次进入 Dist：软件包、向导、用户、网络和通道、邮件、MTProto（`mtg`）。协议仍是 loft/1.0。
+1.0.23：默认公开路径只有 GET；空 GET path 为 `/static/v3/build`；出口变化时 GET 重绑；mux 不再堵住 ingest；utun 在拥塞时继续读；去掉 1.0.16 dual-stack；H2/H3 CONNECT 必须 Match 隧道路径。macOS：`-path` 只给 GET，libproc 收尸，`--probe` 扫全部配置，GitHub Release 404 视为已是最新。协议仍是 loft/1.0。

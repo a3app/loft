@@ -6,7 +6,7 @@
 
 **协议 1.0。** 第三方按本文实现，就能和 loft 节点对话。本仓库的 Go 树是其中一种实现。许可 [Apache-2.0](../LICENSE)。
 
-软件版本（`VERSION`，现在 1.0.22）和协议版本无关。握手两边都带。关键词 **MUST**、**SHOULD**、**MAY** 按 RFC 2119。Hello 和 Status 尾巴上不认识的字段 MUST 忽略。
+软件版本（`VERSION`，现在 1.0.23）和协议版本无关。握手两边都带。关键词 **MUST**、**SHOULD**、**MAY** 按 RFC 2119。Hello 和 Status 尾巴上不认识的字段 MUST 忽略。
 
 ---
 

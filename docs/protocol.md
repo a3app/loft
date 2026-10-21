@@ -6,7 +6,7 @@
 
 **Protocol 1.0.** A third-party implementation that follows this document may speak to a loft node. The Go tree in this repository is one such implementation. Licensed [Apache-2.0](../LICENSE).
 
-Software version (`VERSION`, currently 1.0.22) is independent of protocol version. Both are carried in the handshake. Keywords **MUST**, **SHOULD**, **MAY** follow RFC 2119. Unknown trailing fields in Hello and Status MUST be ignored.
+Software version (`VERSION`, currently 1.0.23) is independent of protocol version. Both are carried in the handshake. Keywords **MUST**, **SHOULD**, **MAY** follow RFC 2119. Unknown trailing fields in Hello and Status MUST be ignored.
 
 ---
 
