@@ -172,6 +172,11 @@ table.t{width:100%;border-spacing:0;font-size:14px}
 .rule .n{width:24px;height:24px;border-radius:12px;background:var(--th);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:0 0 24px}
 .rule .tail{margin-left:auto;font-size:12px;color:var(--mute)}
 .rules{border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.prio-list{border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.prio-row{display:flex;align-items:center;gap:12px;padding:6px 12px;border-top:1px solid var(--line);background:var(--field)}
+.prio-row:first-child{border-top:0}
+.prio-row .chk{flex:1;min-width:0}
+.prio-row .sub{display:block;font-size:12px;color:var(--mute)}
 
 /* поля с подписью на рамке */
 .fld{position:relative;margin-top:8px}
@@ -524,16 +529,16 @@ function openRoute(){dialog('Добавить маршрут','Маршрут п
   <div class="fld"><label for="nr3">Интерфейс</label><select id="nr3"><option>eth0</option><option>wg0</option></select></div>`,
  `<button class="btn pri" type="button" onclick="closeDlg();S.npend=1;toast('Применено — подтвердите в течение 2 минут');render()">Добавить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 const CH={
- 'wg0':{title:'Нидерланды',t:'wg',addr:'10.8.0.30/24',lport:'43529',peer:'nl1',srv:'nl1.vpn-provider.example:51820',hs:'12 с назад',tx:'1.2 ГБ',rx:'9.1 ГБ',on:1,st:'up',fail:'wg1',accept:1,ext:'198.51.100.77'},
- 'wg1':{title:'Финляндия, резерв',t:'wg',addr:'10.9.0.12/24',lport:'',peer:'fi2',srv:'fi2.vpn-provider.example:51820',hs:'—',tx:'0 Б',rx:'0 Б',on:0,st:'off',fail:'block'},
- 'sstp0':{title:'Офис по SSTP',t:'vpn',kind:'SSTP',srv:'vpn.example.org',ip:'172.16.40.12',tx:'356 МБ',rx:'443 МБ',on:1,st:'up',fail:'direct'},
- 'ovpn0':{title:'Германия, OpenVPN',t:'vpn',kind:'OpenVPN',srv:'de.vpn-provider.example:1194',ip:'—',tx:'0 Б',rx:'0 Б',on:1,st:'connecting',fail:'direct'},
- 'zt0':{title:'Офисная сеть',t:'zt',srv:'8056c2e21c000001',net:'office-net',node:'a1b2c3d4e5',addr:'10.147.17.20',tx:'0.3 ГБ',rx:'0.8 ГБ',on:1,st:'up',fail:'direct'},
- 'px0':{title:'Прокси офиса',t:'px',kind:'SOCKS5',srv:'192.0.2.40:1080',auth:'логин',tx:'0.4 ГБ',rx:'2.6 ГБ',on:1,st:'up',fail:'block'},
- 'xr0':{title:'Xray, Германия',t:'xr',srv:'de.example.org:443',via:'px0',tx:'0.2 ГБ',rx:'1.1 ГБ',on:1,st:'up',fail:'block'}
+ 'wg0':{title:'Нидерланды',t:'wg',addr:'10.8.0.30/24',lport:'43529',peer:'nl1',srv:'nl1.vpn-provider.example:51820',hs:'12 с назад',tx:'1.2 ГБ',rx:'9.1 ГБ',on:1,st:'up',accept:1,chk:['ping','1.1.1.1'],ext:'198.51.100.77'},
+ 'wg1':{title:'Финляндия, резерв',t:'wg',addr:'10.9.0.12/24',lport:'',peer:'fi2',srv:'fi2.vpn-provider.example:51820',hs:'—',tx:'0 Б',rx:'0 Б',on:0,st:'off'},
+ 'sstp0':{title:'Офис по SSTP',t:'vpn',kind:'SSTP',srv:'vpn.example.org',ip:'172.16.40.12',tx:'356 МБ',rx:'443 МБ',on:1,st:'up'},
+ 'ovpn0':{title:'Германия, OpenVPN',t:'vpn',kind:'OpenVPN',srv:'de.vpn-provider.example:1194',ip:'—',tx:'0 Б',rx:'0 Б',on:1,st:'connecting'},
+ 'zt0':{title:'Офисная сеть',t:'zt',srv:'8056c2e21c000001',net:'office-net',node:'a1b2c3d4e5',addr:'10.147.17.20',tx:'0.3 ГБ',rx:'0.8 ГБ',on:1,st:'up'},
+ 'px0':{title:'Прокси офиса',t:'px',kind:'SOCKS5',srv:'192.0.2.40:1080',auth:'логин',tx:'0.4 ГБ',rx:'2.6 ГБ',on:1,st:'nolink',chk:['tcp','example.com:443']},
+ 'xr0':{title:'Xray, Германия',t:'xr',srv:'de.example.org:443',via:'px0',tx:'0.2 ГБ',rx:'1.1 ГБ',on:1,st:'up'}
 };
 const CHT={wg:'WireGuard',vpn:'VPN',px:'Прокси',xr:'Xray',zt:'ZeroTier'};
-const CHST={up:['работает',1],connecting:['подключается…',0],down:['не работает',0],off:['выключен',0],denied:['ждёт авторизации',0]};
+const CHST={up:['работает',1],nolink:['нет связи',0],connecting:['подключается…',0],down:['не работает',0],off:['выключен',0],denied:['ждёт авторизации',0]};
 const chName=(k,c)=>`<td>${who(sw(c.on,'Включён'),esc(c.title),`<span class="sub ${CHST[c.st][1]?'okt':''}"><span class="mono">${k}</span> · ${CHST[c.st][0]}</span>`)}</td>`;
 const chT=k=>CH[k]?CH[k].title:k;
 const delCell=`<td class="r"><div class="cell-acts"><button class="icb del" type="button" aria-label="Удалить канал" onclick="event.stopPropagation();dialog('Удалить подключение?','Канал отключится и его настройки удалятся с сервера.','','<button class=&quot;btn danger&quot; type=&quot;button&quot; onclick=&quot;closeDlg()&quot;>Удалить</button><button class=&quot;btn&quot; type=&quot;button&quot; onclick=&quot;closeDlg()&quot;>Отмена</button>')">${ic('i-trash')}</button></div></td>`;
@@ -549,8 +554,35 @@ function chanTable(type){
   }[type];
   return table(C[0].concat([{t:'',r:1}]),rows.map(([k,c])=>tr(k,C[1](k,c))).join(''));
 }
-const EXR=[['member','bob','xr0'],['tag','office','zt0'],['list','blocked-ru','wg0'],['member','guest-01','wg0']];
-function exitChain(n){const o=[],seen={};let x=(CH[n]||{}).fail||'direct';while(!seen[x]){seen[x]=1;o.push(x==='direct'?'напрямую':x==='block'?'блокировать':chT(x));if(!CH[x])break;x=CH[x].fail||'direct'}return o.join(' → ')}
+/* Priorities: an ordered list of channels; traffic takes the first live one, then the last step. */
+const PRIO=[
+ {t:'Основной',use:['wg0','wg1'],last:'direct'},
+ {t:'Офис',use:['zt0','sstp0'],last:'direct'},
+ {t:'Германия',use:['xr0','px0'],last:'block'}
+];
+const EXR=[['member','bob',2],['tag','office',1],['list','blocked-ru',0],['member','guest-01',0]];
+const EXDEF='direct';
+const lastT=x=>x==='block'?'блокировать':'напрямую';
+const liveOf=p=>p.use.find(k=>CH[k].on&&CH[k].st==='up');
+function prioChain(p){return p.use.map(k=>`<span class="${CH[k].on&&CH[k].st==='up'?'':'mute'}">${chT(k)}</span>`).join(' → ')+` → <span class="mute">${lastT(p.last)}</span>`}
+const usedBy=i=>EXR.filter(r=>r[2]===i).length+(EXDEF===i?1:0);
+function prioBlock(){
+  return blk('Приоритеты подключений','Список каналов по порядку: трафик идёт через первый работающий, при сбое — через следующий. Канал пропускается, пока он выключен, не подключён или не проходит проверку связи. Приоритет выбирают в правилах выхода.',
+   `<div class="acts"><button class="btn" type="button" onclick="openPrio(-1)">${ic('i-plus')}Добавить приоритет</button></div>`+
+   table(['Приоритет','Порядок каналов','Сейчас','Правил',{t:'',r:1}],PRIO.map((p,i)=>{const l=liveOf(p);
+    return `<tr class="click" onclick="openPrio(${i})"><td><b>${esc(p.t)}</b></td><td>${prioChain(p)}</td><td>${l?`<span class="okt">${chT(l)}</span>`:`<span class="mute">${lastT(p.last)}</span>`}</td><td class="num">${usedBy(i)||'—'}</td><td class="r"><div class="cell-acts"><button class="icb del" type="button" aria-label="Удалить приоритет" ${usedBy(i)?'disabled title="Выбран в правилах выхода"':''} onclick="event.stopPropagation()">${ic('i-trash')}</button></div></td></tr>`}).join('')));
+}
+function openPrio(i){
+  const p=i>=0?PRIO[i]:{t:'',use:[],last:'direct'};
+  const all=Object.keys(CH),order=p.use.concat(all.filter(k=>!p.use.includes(k)));
+  const row=(k,j)=>{const c=CH[k],on=p.use.includes(k);
+   return `<div class="prio-row"><label class="chk"><input type="checkbox" ${on?'checked':''}><span>${esc(c.title)} <span class="sub"><span class="mono">${k}</span> · ${CHST[c.st][0]}</span></span></label><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${j?'':'disabled'}>↑</button><button class="icb" type="button" aria-label="Ниже" ${j<order.length-1?'':'disabled'}>↓</button></span></div>`};
+  dialog(i>=0?'Приоритет «'+esc(p.t)+'»':'Новый приоритет','Отметьте каналы и расставьте их по порядку. Трафик идёт через первый работающий.',
+   `<div class="fld"><label for="pr1">Название</label><input id="pr1" value="${esc(p.t)}" placeholder="Например, Основной" maxlength="40"></div>
+    <div><div class="dlg-sec">Каналы по порядку</div><div class="prio-list">${order.map(row).join('')}</div></div>
+    <div class="fld"><label for="pr2">Если ни один не работает</label><select id="pr2"><option ${p.last==='direct'?'selected':''}>Выходить напрямую</option><option ${p.last==='block'?'selected':''}>Блокировать</option></select></div>`,
+   `<button class="btn pri" type="button" onclick="closeDlg()">${i>=0?'Сохранить':'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+}
 function netUp(){
   const add=(t,l,x='')=>`<div class="acts"><button class="btn" type="button" onclick="openChan('new:${t}')">${ic('i-plus')}${l}</button>${x}</div>`;
   const what={member:v=>`Член <b>${v}</b>`,tag:v=>`Члены с тегом <b>${v}</b>`,list:v=>`Адреса из списка <b class="mono">${v}</b>`};
@@ -560,22 +592,23 @@ function netUp(){
   blk('Сети ZeroTier','Подключение к сети ZeroTier по 16-значному ID сети. Новому участнику может понадобиться авторизация у администратора сети.',add('zt','Добавить подключение')+chanTable('zt'))+
   blk('Прокси-подключения','Выход через прокси-сервер по HTTP, HTTPS или SOCKS5. Можно пользоваться само по себе или как первым звеном цепочки для Xray.',add('px','Добавить подключение')+chanTable('px'))+
   blk('Xray','Канал по ссылке vless://, trojan:// или ss://. «Через» — канал, через который Xray подключается к своему серверу.',add('xr','Добавить подключение')+chanTable('xr'))+
-  blk('Правила выхода','Проверяются сверху вниз, срабатывает первое подходящее. Сам сервер — панель, обновления, почта — всегда выходит напрямую.',
+  prioBlock()+
+  blk('Правила выхода','Проверяются сверху вниз, срабатывает первое подходящее, и трафик уходит по выбранному приоритету. Сам сервер — панель, обновления, почта — всегда выходит напрямую.',
    `<div class="acts"><button class="btn" type="button" onclick="openExit(-1)">${ic('i-plus')}Добавить правило</button></div><div class="rules">
-   ${EXR.map(([m,v,c],i)=>`<div class="rule click" onclick="openExit(${i})"><span class="n">${i+1}</span><span>${what[m](v)} → <b>${chT(c)}</b>${CH[c].via?` <span class="mute">через ${chT(CH[c].via)}</span>`:''}</span><span class="tail">при сбое: ${exitChain(c)}</span><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${i?'':'disabled'} onclick="event.stopPropagation()">↑</button><button class="icb" type="button" aria-label="Ниже" ${i<EXR.length-1?'':'disabled'} onclick="event.stopPropagation()">↓</button><button class="icb del" type="button" aria-label="Удалить правило" onclick="event.stopPropagation()">${ic('i-trash')}</button></span></div>`).join('')}
+   ${EXR.map(([m,v,c],i)=>`<div class="rule click" onclick="openExit(${i})"><span class="n">${i+1}</span><span>${what[m](v)} → <b>${esc(PRIO[c].t)}</b></span><span class="tail">${prioChain(PRIO[c])}</span><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${i?'':'disabled'} onclick="event.stopPropagation()">↑</button><button class="icb" type="button" aria-label="Ниже" ${i<EXR.length-1?'':'disabled'} onclick="event.stopPropagation()">↓</button><button class="icb del" type="button" aria-label="Удалить правило" onclick="event.stopPropagation()">${ic('i-trash')}</button></span></div>`).join('')}
    <div class="rule click" style="background:var(--bg)" onclick="openExitDefault()"><span class="n">∗</span><span>Остальной трафик членов → <b>напрямую</b> <span class="mono mute">eth0</span></span></div></div>
    <p class="hint">ICMP (ping) и DNS-запросы к ноде идут напрямую.</p>`)+
   blk('Приём через канал','Внешний IP канала становится адресом сервера; ответы уходят тем же каналом. Только для каналов со своим внешним IP.',
    `<div class="card"><dl class="kv"><div><dt>Канал</dt><dd>Нидерланды</dd></div><div><dt>Внешний адрес</dt><dd class="mono">198.51.100.77</dd></div><div><dt>Адрес в канале</dt><dd class="mono">10.8.0.30</dd></div><div><dt>Слушают</dt><dd>нода loft :443</dd></div></dl></div>`);
 }
-const exitTo=cur=>`<option>Напрямую</option>${Object.keys(CH).map(k=>`<option ${k===cur?'selected':''}>${chT(k)} · ${CHT[CH[k].t]}</option>`).join('')}<option>Блокировать</option>`;
-function openExit(i){const r=i>=0?EXR[i]:['member','','wg0'];
+const exitTo=cur=>`<option ${cur==='direct'?'selected':''}>Напрямую</option>${PRIO.map((p,i)=>`<option ${i===cur?'selected':''}>${esc(p.t)}</option>`).join('')}<option ${cur==='block'?'selected':''}>Блокировать</option>`;
+function openExit(i){const r=i>=0?EXR[i]:['member','',0];
  dialog(i>=0?'Правило '+(i+1):'Новое правило','Чей трафик и куда он выходит.',
   `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1">${[['member','Член сети'],['tag','Члены с тегом'],['list','Адреса из списка']].map(([k,l])=>`<option ${r[0]===k?'selected':''}>${l}</option>`).join('')}</select></div>
    <div class="fld"><label for="ru2">Кто или что</label><select id="ru2"><option>${r[1]||'alice-phone'}</option></select></div>
-   <div class="fld"><label for="ru3">Куда выходит</label><select id="ru3">${exitTo(r[2])}</select></div>`,
+   <div class="fld"><label for="ru3">Приоритет</label><select id="ru3">${exitTo(r[2])}</select></div>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">${i>=0?'Сохранить':'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
-function openExitDefault(){dialog('Остальной трафик членов','Куда выходит то, что не подошло ни под одно правило.',`<div class="fld"><label for="rd1">Куда выходит</label><select id="rd1">${exitTo('')}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
+function openExitDefault(){dialog('Остальной трафик членов','Куда выходит то, что не подошло ни под одно правило.',`<div class="fld"><label for="rd1">Приоритет</label><select id="rd1">${exitTo(EXDEF)}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 
 /* ── Домены: зоны, записи, сертификаты, DNS-провайдеры ── */
 // Record: [name, type, value, priority, made by the panel, check in a manual zone: ok | missing | differs]
@@ -1576,19 +1609,27 @@ const chanFoot=nw=>`<button class="btn pri" type="button" onclick="closeDlg()">$
 const plusF=(id,l,v,ph='')=>`<div class="fld"><label for="${id}">${l}</label><input id="${id}" class="mono" value="${v}" placeholder="${ph}"><button class="icb in-ic" type="button" aria-label="Добавить ещё">${ic('i-plus',18)}</button></div>`;
 /* «Подключаться через»: интерфейсы и каналы сервера; прокси — только для тех, кто умеет TCP через прокси */
 const viaSel=(id,self,types,cur,hint)=>`<div><div class="fld"><label for="${id}">Подключаться через</label><select id="${id}"><option>Любое интернет-подключение</option>${Object.entries(CH).filter(([k,c])=>k!==self&&types.includes(c.t)).map(([k,c])=>`<option ${k===cur?'selected':''}>${c.title} · ${c.t==='vpn'?c.kind:CHT[c.t]}</option>`).join('')}</select></div>${hint?`<div class="hint">${hint}</div>`:''}</div>`;
-const chFailSel=(id,self,cur)=>`<div class="fld"><label for="${id}">При сбое</label><select id="${id}"><option>Выходить напрямую</option>${Object.keys(CH).filter(k=>k!==self).map(k=>`<option ${cur===k?'selected':''}>Перейти на ${CH[k].title}</option>`).join('')}<option ${cur==='block'?'selected':''}>Блокировать</option></select></div>`;
+/* Link check: the node probes through the channel; failing probes take it out of priorities. */
+const chCheck=(id,c)=>{const k=(c.chk||['off'])[0];
+ return `<div class="dlg-sec">Проверка связи</div>
+  <div><div class="fld"><label for="${id}">Как проверять</label><select id="${id}" onchange="$('#${id}f').hidden=this.value==='off'"><option value="off" ${k==='off'?'selected':''}>Не проверять</option><option value="ping" ${k==='ping'?'selected':''}>Ping (ICMP)</option><option value="tcp" ${k==='tcp'?'selected':''}>Подключение TCP</option></select></div><div class="hint">Нода проверяет связь через канал. Пока проверка не проходит, приоритеты его пропускают.</div></div>
+  <div id="${id}f" ${k==='off'?'hidden':''} style="display:flex;flex-direction:column;gap:18px">
+   <div><div class="fld"><label for="${id}a">Адрес проверки</label><input id="${id}a" class="mono" value="${(c.chk||[])[1]||''}" placeholder="1.1.1.1 или example.com:443"></div><div class="hint">Для TCP — адрес и порт.</div></div>
+   <div class="fld"><label for="${id}b">Интервал, с</label><input id="${id}b" class="num" value="10"></div>
+   <div class="fld"><label for="${id}c">Неудач подряд до «нет связи»</label><input id="${id}c" class="num" value="3"></div>
+  </div>`};
 const advBlk=x=>`<details class="adv"><summary>Дополнительные настройки</summary><div style="display:flex;flex-direction:column;gap:18px;margin-top:16px">${x}</div></details>`;
 const pwOpt=(id,label,has)=>`<div><div class="fld"><label for="${id}">${label}</label><input id="${id}" type="password" autocomplete="new-password" placeholder="${has?'сохранён':''}" data-pw-optional></div>${has?'<div class="hint">Пусто — оставить сохранённый.</div>':''}</div>`;
 function vpnFields(kind,c,nw,id){
  if(kind==='OpenVPN')return `<div><div class="fld"><label for="o1">Конфигурация OpenVPN</label><textarea id="o1" class="mono ta" rows="6" placeholder="Вставьте содержимое файла .ovpn">${nw?'':'client\ndev tun\nproto tcp-client\nremote '+c.srv.replace(':',' ')+'\n…'}</textarea></div><div class="acts" style="margin:10px 0 0"><button class="btn sm" type="button">${ic('i-up',16)}Загрузить .ovpn</button></div></div>
   <div class="fld"><label for="o2">Имя пользователя</label><input id="o2" placeholder="если требует сервер" autocomplete="off"></div>${pwOpt('o3','Пароль',!nw)}
   <label class="chk"><input type="checkbox">Принимать входящие на внешний IP канала</label>
-  ${advBlk(`<label class="chk"><input type="checkbox"><span>Получать маршруты от удалённой стороны<span class="hint" style="display:block;margin:0">Маршрут по умолчанию от сервера не берётся никогда.</span></span></label>${chFailSel('v9',id,c.fail)}`)}`;
+  ${advBlk(`<label class="chk"><input type="checkbox"><span>Получать маршруты от удалённой стороны<span class="hint" style="display:block;margin:0">Маршрут по умолчанию от сервера не берётся никогда.</span></span></label>${chCheck('v9',c)}`)}`;
  return `<div class="fld"><label for="s1">Адрес сервера</label><input id="s1" class="mono" value="${nw?'':c.srv}" placeholder="vpn.example.org[:443]"></div>
   <div class="fld"><label for="s2">Имя пользователя</label><input id="s2" value="${nw?'':'office'}" autocomplete="off"></div>${pwOpt('s3','Пароль',!nw)}
   <div><div class="fld"><label for="s4">Тип аутентификации</label><select id="s4"><option>Авто</option><option>MS-CHAP v2</option><option>PAP</option></select></div><div class="hint">Клиент SSTP в loft умеет MS-CHAP v2 и PAP.</div></div>
   <label class="chk"><input type="checkbox">Не проверять сертификат сервера</label>
-  ${advBlk(chFailSel('v9',id,c.fail))}`;
+  ${advBlk(chCheck('v9',c))}`;
 }
 function openChan(id){
   const nw=id.startsWith('new:'),t=nw?id.slice(4):CH[id].t,c=nw?{}:CH[id],name=nw?'':c.title;
@@ -1607,16 +1648,16 @@ function openChan(id){
    <div id="pAuth" ${c.auth==='логин'?'':'hidden'} style="display:flex;flex-direction:column;gap:18px"><div class="fld"><label for="p4">Имя пользователя</label><input id="p4" value="${nw?'':'loft'}" autocomplete="off"></div>${pwOpt('p5','Пароль',!nw)}</div>
    ${advBlk(`${viaSel('p6',id,['wg','vpn','zt','px'],'','')}
     <div><div class="fld"><label for="p7">UDP</label><select id="p7"><option>Напрямую</option><option>Через прокси (только SOCKS5, если сервер умеет)</option><option>Блокировать</option></select></div><div class="hint">Так пойдут DNS и QUIC членов, у которых выход через этот прокси.</div></div>
-    ${chFailSel('p8',id,c.fail)}`)}`,foot);
+    ${chCheck('p8',c)}`)}`,foot);
   if(t==='xr') return dialog(title,'Ссылка от провайдера или своего сервера Xray.',`${head}
    <div><div class="fld"><label for="x1">Ссылка</label><input id="x1" class="mono" value="${nw?'':'vless://…@de.example.org:443?security=reality&amp;flow=xtls-rprx-vision&amp;pbk=…'}"></div><div class="hint">vless://, trojan:// или ss://.</div></div>
    ${nw?'':`<dl class="kv"><div><dt>Протокол</dt><dd>VLESS</dd></div><div><dt>Сервер</dt><dd class="mono">de.example.org:443</dd></div><div><dt>Защита</dt><dd>REALITY · Vision</dd></div><div><dt>Транспорт</dt><dd>tcp</dd></div></dl>`}
    ${viaSel('x2',id,['wg','zt','px'],c.via,'Цепочка: Xray подключается к своему серверу через другой канал.')}
-   ${chFailSel('x3',id,c.fail)}`,foot);
+   ${chCheck('x3',c)}`,foot);
   if(t==='zt') return dialog(title,'Введите 16-значный ID сети ZeroTier. Новому участнику может понадобиться авторизация у администратора сети — в ZeroTier Central или в своём контроллере.',`${head}
    <div><div class="fld"><label for="z1">ID сети</label><input id="z1" class="mono" value="${c.srv||''}" maxlength="16" placeholder="16 шестнадцатеричных знаков"></div>${nw?'':`<div class="hint">Сеть: <b>${c.net}</b> · локальный ID <span class="mono">${c.node}</span></div>`}</div>
    <label class="chk"><input type="checkbox">Принимать входящие на внешний IP канала</label>
-   ${advBlk(`<label class="chk"><input type="checkbox" checked><span>Получать адреса и маршруты от сети<span class="hint" style="display:block;margin:0">Маршрут по умолчанию из сети не берётся никогда.</span></span></label>${chFailSel('z4',id,c.fail)}`)}`,foot);
+   ${advBlk(`<label class="chk"><input type="checkbox" checked><span>Получать адреса и маршруты от сети<span class="hint" style="display:block;margin:0">Маршрут по умолчанию из сети не берётся никогда.</span></span></label>${chCheck('z4',c)}`)}`,foot);
   /* WireGuard: интерфейс + один или несколько пиров */
   const peer=(i,p)=>`<div class="peer"><div class="peer-h"><b>Пир ${i}</b><button class="btn sm ghost" type="button">${ic('i-trash',16)}Удалить пир</button></div>
    <div class="fld"><label for="w${i}a">Имя пира</label><input id="w${i}a" value="${p.n||''}"></div>
@@ -1632,7 +1673,7 @@ function openChan(id){
    <div><div class="fld"><label for="c2p">Публичный ключ</label><input id="c2p" class="mono" readonly value="${nw?'':'PGWcMKekG7P1…'}"></div><div class="hint">Передайте его администратору сервера.</div></div>
    <div class="fld"><label for="c3">Адрес в туннеле</label><input id="c3" class="mono" value="${c.addr||''}" placeholder="10.8.0.2/24"></div>
    <div class="fld"><label for="c3p">Порт прослушивания</label><input id="c3p" class="num" value="${c.lport||''}" placeholder="случайный"></div>
-   ${advBlk(`<div class="fld"><label for="cmtu">Размер MTU</label><input id="cmtu" class="num" value="" placeholder="1420"></div>${chFailSel('c9',id,c.fail)}`)}
+   ${advBlk(`<div class="fld"><label for="cmtu">Размер MTU</label><input id="cmtu" class="num" value="" placeholder="1420"></div>${chCheck('c9',c)}`)}
    <div class="dlg-sec">Настройка пира</div>
    ${peer(1,nw?{}:{n:c.peer,k:'qE/WlyGXV0ODz1sAgs+6l+A/HMfnq=',e:c.srv})}
    <button class="btn sm" type="button" style="align-self:flex-start">${ic('i-plus',16)}Добавить пир</button>`,foot);

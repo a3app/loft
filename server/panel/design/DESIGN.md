@@ -69,15 +69,17 @@ QUIC and HTTP/3 are shown greyed with the reason while decoy is on.
 
 | Section | Table | Dialog |
 |---------|-------|--------|
-| WireGuard (package) | connection, address, peer, sent, received, peer address and port, latest handshake | private key + key pair generation, public key, address in the tunnel, listen port; peers: name, public and preshared key, address and port, allowed subnets, keepalive; folded: MTU, on failure. A `.conf` upload fills the dialog |
+| WireGuard (package) | connection, address, peer, sent, received, peer address and port, latest handshake | private key + key pair generation, public key, address in the tunnel, listen port; peers: name, public and preshared key, address and port, allowed subnets, keepalive; folded: MTU, link check. A `.conf` upload fills the dialog |
 | VPN connections | connection, VPN type, server, sent, received, address | SSTP: server, user, password, authentication (Auto, MS-CHAP v2, PAP), skip the certificate check. OpenVPN (package): `.ovpn` text or upload, user and password; folded: take routes (never the default route) |
 | ZeroTier (package) | connection, network, network ID, local ID, IP, sent, received | network ID (16 hex), authorisation hint; folded: take addresses and routes from the network |
 | Proxies | connection, type, address, login, sent, received, via | HTTP / HTTPS / SOCKS5, address:port, no login or user and password; folded: connect through, UDP (direct, through SOCKS5, block) |
 | Xray (package) | connection, server, via, sent, received | a `vless://` `trojan://` `ss://` link, parsed; connect through WireGuard, OpenVPN, ZeroTier or a proxy |
 
-Every dialog has **Use for internet exit** (the channel can be picked in rules) and **On failure** (direct, another channel, block). WireGuard, OpenVPN and ZeroTier can **take incoming connections on the channel's external IP**. Passwords and keys are not shown after saving.
+Every dialog has **Use for internet exit** (the channel can be picked in rules) and **Link check** (off, ping or TCP connect; address, interval, failures in a row before “no link”). WireGuard, OpenVPN and ZeroTier can **take incoming connections on the channel's external IP**. Passwords and keys are not shown after saving.
 
-**Exit rules**: a member, a tag or an address list from `node.conf` → a channel; checked top down, arrows reorder; the "rest of members' traffic" row is where everything else goes. The end of a row shows the "on failure" chain. The server itself always leaves directly; so do ICMP and DNS queries to the node.
+**Connection priorities** (above the exit rules): a named, ordered list of channels with a last step of “direct” or “block”. Traffic takes the first channel that works; a channel is skipped while it is off, not connected, or failing its link check (state “no link”). Table: priority, channel order (dead ones grey), the channel in use now, how many rules pick it; only an unused one can be deleted. Dialog: name, every channel with a tick and order arrows, “If none of them works”. Old “on failure” chains turn into priorities on upgrade.
+
+**Exit rules**: a member, a tag or an address list from `node.conf` → a priority (or direct, block); checked top down, arrows reorder; the "rest of members' traffic" row is where everything else goes. The end of a row shows the priority's channel order. The server itself always leaves directly; so do ICMP and DNS queries to the node.
 
 **Incoming through a channel**: channel, external address, address in the channel, who listens.
 
