@@ -42,6 +42,7 @@ flowchart LR
 | [guide.md](guide.md) | Build, config, decoy, roster, Debian. |
 | [share.md](share.md) | Import URI: `loft://`, `.loft` (one or several connections), QR. |
 | [keenetic.md](keenetic.md) | KeeneticOS Entware client. |
+| [mikrotik.md](mikrotik.md) | RouterOS 7 container client. |
 | [ios.md](ios.md) | iOS Packet Tunnel. |
 | [android.md](android.md) | Android VpnService. |
 | [aurora.md](aurora.md) | Aurora OS ConnMan. |

@@ -81,6 +81,7 @@ flowchart LR
 | [docs/guide.md](docs/guide.md) | Build, configuration, operation, Debian. |
 | [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN operator guide (RU). |
 | [docs/keenetic.md](docs/keenetic.md) | KeeneticOS Entware client (OpkgTun). Catalog: [clients/Keenetic/](clients/Keenetic/). |
+| [docs/mikrotik.md](docs/mikrotik.md) | RouterOS 7 container client. Catalog: [clients/MikroTik/](clients/MikroTik/). |
 | [docs/ios.md](docs/ios.md) | iOS Packet Tunnel client. Catalog: [clients/iOS/](clients/iOS/). |
 | [docs/android.md](docs/android.md) | Android VpnService client. Catalog: [clients/Android/](clients/Android/). |
 | [docs/aurora.md](docs/aurora.md) | Aurora OS ConnMan client. Catalog: [clients/Aurora/](clients/Aurora/). |
@@ -97,6 +98,7 @@ server/panel      loft-panel web admin
 clients/go        loft, loft-front, loft-probe
 clients/macOS     menu-bar app (launches loft-front)
 clients/Keenetic  Entware / OpkgTun (plan and mock)
+clients/MikroTik  RouterOS 7 container (image + .rsc)
 clients/iOS       Packet Tunnel (thin host + appex)
 clients/Android   VpnService (thin Java host)
 clients/Aurora    ConnMan overlay (thin QML host)

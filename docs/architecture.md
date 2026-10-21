@@ -45,6 +45,7 @@ clients/
   macOS/design        UX spec and mock
   macOS/tests         RFC 8439 AEAD vector (make -C clients/macOS test-crypto)
   Keenetic/           Entware OpkgTun catalog (plan and mock; no binary yet)
+  MikroTik/           RouterOS 7 container (image + .rsc; SOCKS first; not Dist)
   iOS/                Packet Tunnel (thin host + appex; gomobile xcframework; Apple TV in PLAN phase 6)
   Android/            VpnService (thin Java host; gomobile AAR; UX mock; Android TV / Google TV in PLAN phase 4)
   Aurora/             ConnMan overlay (QML host + loft-connman plugin + loft-front)

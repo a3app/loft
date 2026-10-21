@@ -197,3 +197,59 @@ func TestDecoyProxyCommand(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestLoadClientListenHTTPUplink(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "client.yaml")
+	body := []byte(`listen:
+  socks5: 0.0.0.0:1080
+  tun: auto
+  http: 0.0.0.0:8090
+  bind: eth0
+  uplink: ether1
+token: "lt_test"
+outbounds:
+  - name: node
+    type: get
+    url: https://vpn.example.net
+`)
+	if err := os.WriteFile(p, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadClient(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Listen.HTTP != "0.0.0.0:8090" || c.Listen.Bind != "eth0" || c.Listen.Uplink != "ether1" {
+		t.Fatalf("%+v", c.Listen)
+	}
+	c.Listen.Uplink = "lte1"
+	if err := WriteClient(p, c); err != nil {
+		t.Fatal(err)
+	}
+	c2, err := LoadClient(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2.Listen.Uplink != "lte1" {
+		t.Fatalf("uplink %q", c2.Listen.Uplink)
+	}
+}
+
+func TestValidIFName(t *testing.T) {
+	if err := ValidIFName(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidIFName("ether1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidIFName("pppoe-out1"); err != nil {
+		t.Fatal(err)
+	}
+	if ValidIFName("ether1; /system/reset") == nil {
+		t.Fatal("want reject")
+	}
+	if ValidIFName("ether 1") == nil {
+		t.Fatal("want reject")
+	}
+}

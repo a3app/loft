@@ -13,6 +13,8 @@ clients/Android/app/build/
 clients/Android/build/
 clients/Aurora/bin/
 clients/Aurora/build/
+clients/MikroTik/pack/loft
+clients/MikroTik/pack/*.tar
 docs/brand/__pycache__/
 docs/brand/concepts/
 .DS_Store

@@ -253,6 +253,10 @@ make probe
 | `listen.tun` | Пусто = выкл; `auto` создаёт utun |
 | `listen.tun_addr` | Префикс TUN; адрес — IP оверлея из Status |
 | `listen.kill_switch` | Держать системный маршрут по умолчанию, когда TUN умирает |
+| `listen.http` | LAN-страница оператора (MikroTik `:8090`) |
+| `listen.http_pass` | Пароль этой страницы, по желанию |
+| `listen.bind` | То же, что `-if`; флаг CLI главнее |
+| `listen.uplink` | Имя WAN RouterOS для выхода контейнера (`ether1`, `lte1`) |
 
 Поля исходящего: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| пусто), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `insecure_skip_verify`.
 

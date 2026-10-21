@@ -1,0 +1,84 @@
+# loft on RouterOS
+
+**English** · [Русский](mikrotik_ru.md) · [中文](mikrotik_zh.md)
+
+How loft runs on a MikroTik board. Catalog: [clients/MikroTik/](../clients/MikroTik/). Plan: [clients/MikroTik/PLAN.md](../clients/MikroTik/PLAN.md). Mock: [clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html). Protocol: [protocol.md](protocol.md).
+
+The image is built with `make -C clients/MikroTik image`. Dist does not ship it yet. MikroTik extra packages are vendor-only; loft ships as a container image.
+
+---
+
+## 1. Two planes
+
+RouterOS owns **where** packets go (mangle, routing tables, address-lists). loft owns **how** the session looks on the wire (loft fronts).
+
+```
+LAN host
+  → SOCKS 172.31.20.2:1080            (always, after socks5)
+  → [tun up] mangle list loft-lan
+      → table loft → 172.31.20.2
+          → loft TUN
+              → loft  get|ws|h2|quic|h3  on eth0
+                  → TLS 1.3 → CDN or node
+```
+
+SSTP, WireGuard, IPsec, L2TP stay the stock RouterOS clients. loft is not a row in Winbox VPN.
+
+## 2. Container, not NPK
+
+RouterOS 7.12+ extra package `container` (arm, arm64, x86 / CHR). `device-mode container=yes` once, then Reset (CHR: power cycle). Disk for `root-dir` and `tmpdir` — usually `disk1`, never NAND.
+
+```
+/interface/veth        veth-loft  172.31.20.2/24  gw 172.31.20.1
+/interface/bridge      br-loft
+/ip/address            172.31.20.1/24 on br-loft
+/ip/firewall/nat       masquerade src 172.31.20.0/24
+/container             name=loft  mount /data  file=loft.tar
+```
+
+Entrypoint: `loft -c /data/client.yaml -if eth0`. YAML is the operator file; the LAN page at `http://172.31.20.2:8090/` writes it. Image is scratch + CA store + static linux `loft`.
+
+## 3. SOCKS first
+
+`listen.socks5: 0.0.0.0:1080` is the path that always works. A laptop on the LAN (or the router itself) uses `172.31.20.2:1080`. RouterOS has no native SOCKS client; browsers, curl, and SSH `-o ProxyCommand` do.
+
+Do not run `policy.rsc` on SOCKS alone.
+
+## 4. Gateway after tun up
+
+`/dev/net/tun` inside a RouterOS container is not guaranteed. If the log shows `tun up`:
+
+- table `loft`, default via `172.31.20.2`
+- address-list `loft-lan` (edit the prefix)
+- mangle prerouting: src list, dst `!172.31.20.0/24`, mark-routing `loft`
+
+RouterOS itself does not get a new default route. Without TUN, 0/0 via the container IP loops (container default is the ROS veth gateway).
+
+## 5. LAN page and uplink
+
+`listen.http: 0.0.0.0:8090` serves a small operator page (status, key, URL, front, uplink). Optional `listen.http_pass`. Winbox cookie is not shared.
+
+**Uplink** is a RouterOS WAN name (`ether1`, `lte1`, `pppoe-out1`). The container always binds fronts on `eth0`. Save writes `/data/uplink.rsc`. Import it:
+
+```
+/import disk1/loft/data/uplink.rsc
+```
+
+That pins `172.31.20.0/24` to table `loft-wan` → the named interface. Empty uplink removes the rule (main table).
+
+## 6. Hairpin
+
+A policy that sends LAN `0/0` into the container also wants to swallow GET/WS to the node. loft binds fronts on `eth0` (`-if eth0`). The mangle skips `172.31.20.0/24`. `kill_switch: false` in the YAML; loft still adds split defaults *inside* the netns, which is what makes the container a gateway.
+
+## 7. Boards
+
+| | |
+|--|--|
+| Runs | arm, arm64, x86, x86_64 — RB5009, hAP ax²/ax³, CCR2004+, CHR |
+| Does not run | mipsbe / mmips / smips — hEX, hAP lite, most cheap boards |
+
+`architecture-name` from `/system/resource` must match the tarball (`arm` / `arm64` / `amd64` for x86 and x86_64).
+
+## 8. What this file is not
+
+Not a vendor `.npk`. Not a new VPN type in Winbox. Not loft-node on the same board. Not a patch of WebFig.

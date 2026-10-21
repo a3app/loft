@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/a3app/loft/clients/go/inbound"
+	"github.com/a3app/loft/clients/go/lanui"
 	"github.com/a3app/loft/internal/config"
 	"github.com/a3app/loft/internal/protect"
 	"github.com/a3app/loft/internal/transport"
@@ -37,6 +39,17 @@ func main() {
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}
+	if *showVer {
+		version.Print("loft")
+		return
+	}
+	cfg, err := config.LoadClient(*cfgPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *ifName == "" {
+		*ifName = cfg.Listen.Bind
+	}
 	if err := protect.Bind(*ifName); err != nil {
 		log.Fatalf("-if: %v", err)
 	}
@@ -45,14 +58,6 @@ func main() {
 	}
 	if *traceFile != "" {
 		*driveOn = true
-	}
-	if *showVer {
-		version.Print("loft")
-		return
-	}
-	cfg, err := config.LoadClient(*cfgPath)
-	if err != nil {
-		log.Fatal(err)
 	}
 	base := strings.TrimSuffix(*cfgPath, filepath.Ext(*cfgPath))
 	transport.SetInstanceFile(base + ".instance")
@@ -115,18 +120,9 @@ func main() {
 	if drv != nil {
 		pathCh = transport.MergePath(ctx, pathCh, transport.WatchStall(ctx, h, drv))
 	}
-	go func() {
-		n := 0
-		_ = transport.SuperviseOn(ctx, cfg, pathCh, func(d transport.Dialer, o config.Outbound) {
-			h.Set(d)
-			n++
-			log.Printf("%s outbound %s (%s) up overlay=%s", version.Line("loft"), o.Name, o.Type, transport.OverlayIP())
-			if drv != nil {
-				drv.Event("LIVE", fmt.Sprintf("n=%d", n), "type="+o.Type, "name="+o.Name, "overlay="+transport.OverlayIP())
-			}
-			bringTUN()
-		})
-	}()
+
+	sess := &session{parent: ctx, pathCh: pathCh, h: h, bringTUN: bringTUN, drv: drv}
+	sess.start(cfg)
 
 	ln, err := inbound.ListenSOCKS5(cfg.Listen.SOCKS5, h)
 	if err != nil {
@@ -135,7 +131,131 @@ func main() {
 	defer ln.Close()
 	log.Printf("socks5 %s", cfg.Listen.SOCKS5)
 
+	if cfg.Listen.HTTP != "" {
+		ring := lanui.NewRing(80)
+		log.SetOutput(io.MultiWriter(os.Stderr, ring))
+		ui := &lanui.Server{
+			Addr: cfg.Listen.HTTP,
+			Pass: cfg.Listen.HTTPPass,
+			Log:  ring,
+			Live: func() lanui.Status { return liveStatus(*cfgPath, sess, &tunMu, &tunDev) },
+			Apply: func(p lanui.Patch) error {
+				return applyPatch(*cfgPath, p, sess)
+			},
+		}
+		go func() {
+			log.Printf("http %s", cfg.Listen.HTTP)
+			if err := ui.Listen(); err != nil {
+				log.Printf("http: %v", err)
+			}
+		}()
+	}
+
 	<-ctx.Done()
+}
+
+type session struct {
+	mu       sync.Mutex
+	cancel   context.CancelFunc
+	parent   context.Context
+	pathCh   <-chan struct{}
+	h        *transport.Holder
+	bringTUN func()
+	drv      *transport.Drive
+	front    string
+	name     string
+}
+
+func (s *session) start(cfg *config.ClientConfig) {
+	s.mu.Lock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	ctx, cancel := context.WithCancel(s.parent)
+	s.cancel = cancel
+	s.mu.Unlock()
+	go func() {
+		_ = transport.SuperviseOn(ctx, cfg, s.pathCh, func(d transport.Dialer, o config.Outbound) {
+			s.h.Set(d)
+			s.mu.Lock()
+			s.front, s.name = o.Type, o.Name
+			s.mu.Unlock()
+			log.Printf("%s outbound %s (%s) up overlay=%s", version.Line("loft"), o.Name, o.Type, transport.OverlayIP())
+			if s.drv != nil {
+				s.drv.Event("LIVE", "type="+o.Type, "name="+o.Name, "overlay="+transport.OverlayIP())
+			}
+			s.bringTUN()
+		})
+	}()
+}
+
+func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.Device) lanui.Status {
+	st := lanui.Status{
+		Version: version.Line("loft"),
+		Bind:    protect.Bound(),
+		Overlay: transport.OverlayIP(),
+	}
+	if cfg, err := config.LoadClient(path); err == nil {
+		st.SOCKS = cfg.Listen.SOCKS5
+		st.HTTP = cfg.Listen.HTTP
+		st.Uplink = cfg.Listen.Uplink
+		st.TokenSet = cfg.Token != ""
+		if len(cfg.Outbounds) > 0 {
+			st.URL = cfg.Outbounds[0].URL
+			st.Path = cfg.Outbounds[0].Path
+			st.Front = cfg.Outbounds[0].Type
+			st.Outbound = cfg.Outbounds[0].Name
+		}
+	}
+	sess.mu.Lock()
+	if sess.front != "" {
+		st.Front = sess.front
+	}
+	if sess.name != "" {
+		st.Outbound = sess.name
+	}
+	sess.mu.Unlock()
+	tunMu.Lock()
+	st.TUN = *tunDev != nil
+	tunMu.Unlock()
+	return st
+}
+
+func applyPatch(path string, p lanui.Patch, sess *session) error {
+	cfg, err := config.LoadClient(path)
+	if err != nil {
+		return err
+	}
+	if t := strings.TrimSpace(p.Token); t != "" {
+		cfg.Token = t
+	}
+	if len(cfg.Outbounds) == 0 {
+		return fmt.Errorf("no outbound")
+	}
+	o := &cfg.Outbounds[0]
+	if p.URL != "" {
+		o.URL = p.URL
+	}
+	if p.Type != "" {
+		o.Type = p.Type
+	}
+	if p.Path != "" {
+		o.Path = p.Path
+	}
+	if err := config.ValidIFName(p.Uplink); err != nil {
+		return err
+	}
+	cfg.Listen.Uplink = p.Uplink
+	if err := config.WriteClient(path, cfg); err != nil {
+		return err
+	}
+	rsc := filepath.Join(filepath.Dir(path), "uplink.rsc")
+	if err := lanui.WriteUplinkRSC(rsc, p.Uplink, "172.31.20.0/24"); err != nil {
+		return err
+	}
+	sess.start(cfg)
+	log.Printf("saved uplink=%s", p.Uplink)
+	return nil
 }
 
 // outboundHosts resolves front hostnames to IPs excluded from TUN split routes.

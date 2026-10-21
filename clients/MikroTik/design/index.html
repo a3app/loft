@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — RouterOS</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --lamp: #E8B84A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+      --wb-bg: #ececec;
+      --wb-ink: #1c1c1c;
+      --wb-mute: #5c5c5c;
+      --wb-line: #c8c8c8;
+      --wb-bar: #3a3a3a;
+      --wb-sel: #3d7ea6;
+      --mt-red: #c41e3a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      min-height: 100%;
+    }
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+    }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 14px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav button {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 6px 10px; border-radius: 8px; cursor: pointer;
+    }
+    nav button:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang { display: flex; gap: 4px; margin: 4px 8px 10px; }
+    .lang button { flex: 1; text-align: center; padding: 6px 0; font-weight: 600; font-size: 12px; }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage-wrap {
+      padding: 28px; display: flex; align-items: center; justify-content: center;
+      min-height: 0;
+    }
+
+    .panel {
+      width: 440px; background: #181512; border: 1px solid #2e2824;
+      border-radius: 16px; overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    }
+    .panel header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--line);
+    }
+    .panel header .t { font-weight: 600; letter-spacing: -0.03em; }
+    .panel header .sub { color: var(--mute); font-size: 12px; margin-left: auto; font-family: var(--mono); }
+    .body { padding: 16px 18px 18px; }
+    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; }
+    .row .k { color: var(--mute); font-size: 12px; }
+    .row .v { font-size: 13px; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    .mark { width: 28px; height: 28px; flex: none; }
+    .mark .body { fill: #B7A99A; }
+    .mark .lamp { fill: #3A332E; }
+    .mark.on .lamp { fill: var(--lamp); }
+    .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 8px 0 0; }
+    .tag {
+      display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: #2a2420; color: var(--stone);
+    }
+    .tag.ok { background: rgba(125,186,106,.15); color: var(--ok); }
+    .tag.wait { background: rgba(232,184,74,.12); color: var(--lamp); }
+    .tag.err { background: rgba(226,75,75,.15); color: var(--err); }
+    .foot { padding: 10px 18px 14px; color: var(--mute); font-size: 11px; font-family: var(--mono); }
+    .warn {
+      margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+      background: rgba(232,184,74,.1); color: var(--lamp); font-size: 12px; line-height: 1.4;
+    }
+    label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
+    label.field input, label.field select {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 8px; padding: 8px 10px; font: 400 13px var(--ui);
+    }
+    .btns { display: flex; gap: 8px; margin-top: 14px; }
+    .btns button {
+      flex: 1; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      font: 600 13px var(--ui);
+    }
+    .go { background: var(--lamp); color: var(--ink); }
+    .ghost { background: #2a2420; color: var(--snow); }
+
+    .wb {
+      width: 680px; height: 440px; background: var(--wb-bg); color: var(--wb-ink);
+      border-radius: 10px; overflow: hidden; display: grid;
+      grid-template-rows: 28px 1fr;
+      box-shadow: 0 24px 60px rgba(0,0,0,.4);
+      font-size: 13px;
+    }
+    .wb-bar {
+      background: var(--wb-bar); color: #fff;
+      display: flex; align-items: center; gap: 8px; padding: 0 10px;
+      font-size: 12px; font-weight: 600;
+    }
+    .wb-bar .dot { width: 8px; height: 8px; background: var(--mt-red); border-radius: 1px; }
+    .wb-bar .mute { color: #bbb; font-weight: 400; margin-left: auto; }
+    .wb-body { display: grid; grid-template-columns: 168px 1fr; min-height: 0; }
+    .wb aside {
+      background: #f7f7f7; border-right: 1px solid var(--wb-line); padding: 10px 8px;
+    }
+    .wb aside a {
+      display: block; padding: 6px 8px; border-radius: 4px; color: var(--wb-ink);
+      text-decoration: none; margin-bottom: 1px; font-size: 12px;
+    }
+    .wb aside a.on { background: var(--wb-sel); color: #fff; }
+    .wb main { padding: 14px 16px; overflow: auto; }
+    .wb h2 { margin: 0 0 4px; font-size: 16px; font-weight: 650; }
+    .wb .cap { color: var(--wb-mute); margin: 0 0 12px; font-size: 12px; }
+    .tbl {
+      width: 100%; border-collapse: collapse; background: #fff;
+      border: 1px solid var(--wb-line); border-radius: 4px; overflow: hidden;
+      font-size: 12px;
+    }
+    .tbl th, .tbl td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--wb-line); }
+    .tbl th { background: #f3f3f3; font-weight: 600; color: var(--wb-mute); }
+    .tbl tr:last-child td { border-bottom: 0; }
+    .tbl tr.on td { background: #e8f2f8; }
+    .term {
+      background: #1a1714; color: var(--paper); font-family: var(--mono);
+      font-size: 12px; line-height: 1.55; padding: 12px 14px;
+      border-radius: 6px; height: 340px; overflow: auto; white-space: pre-wrap;
+    }
+    .term .ok { color: var(--ok); }
+    .term .warn { color: var(--lamp); }
+    .term .mute { color: var(--mute); }
+    .term .prompt { color: #7aa8c8; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+        <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+        <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+      </svg>
+      loft
+    </div>
+    <p data-i="navCap">Проходка на RouterOS. Маршруты — у них, сессия — в контейнере.</p>
+    <div class="lang">
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
+      <button type="button" id="lang-zh" onclick="setLang('zh')">中文</button>
+    </div>
+    <h4 data-i="hRos">RouterOS</h4>
+    <button type="button" class="on" data-go="check" data-i="nCheck">Проверка</button>
+    <button type="button" data-go="files" data-i="nFiles">Файлы</button>
+    <button type="button" data-go="container" data-i="nCtr">Контейнер</button>
+    <h4 data-i="hAfter">После старта</h4>
+    <button type="button" data-go="socks" data-i="nSocks">SOCKS</button>
+    <button type="button" data-go="policy" data-i="nGw">Шлюз</button>
+    <button type="button" data-go="log" data-i="nLog">Журнал</button>
+    <h4 data-i="hLan">Панель :8090</h4>
+    <button type="button" data-go="lan" data-i="nLan">Статус</button>
+    <button type="button" data-go="edit" data-i="nEdit">Подключение</button>
+  </nav>
+
+  <div class="stage-wrap">
+    <div class="wb screen" id="check">
+      <div class="wb-bar"><span class="dot"></span> New Terminal <span class="mute">RB5009 · arm64</span></div>
+      <div class="wb-body">
+        <aside>
+          <a href="#" class="on" data-i="tTerm">New Terminal</a>
+          <a href="#" data-i="tFiles">Files</a>
+          <a href="#" data-i="tCtr">Container</a>
+          <a href="#" data-i="tFw">IP · Firewall</a>
+        </aside>
+        <main>
+          <div class="term" id="term-check"></div>
+        </main>
+      </div>
+    </div>
+
+    <div class="wb screen hidden" id="files">
+      <div class="wb-bar"><span class="dot"></span> Files <span class="mute">disk1</span></div>
+      <div class="wb-body">
+        <aside>
+          <a href="#" data-i="tTerm">New Terminal</a>
+          <a href="#" class="on" data-i="tFiles">Files</a>
+          <a href="#" data-i="tCtr">Container</a>
+          <a href="#" data-i="tFw">IP · Firewall</a>
+        </aside>
+        <main>
+          <h2 data-i="fTitle">disk1 / loft</h2>
+          <p class="cap" data-i="fCap">Тарбол образа и YAML с ключом. token и url правит оператор.</p>
+          <table class="tbl">
+            <thead><tr><th data-i="thName">Имя</th><th data-i="thSize">Размер</th><th data-i="thKind">Тип</th></tr></thead>
+            <tbody>
+              <tr class="on"><td class="mono">loft.tar</td><td>18.2 MiB</td><td>docker save</td></tr>
+              <tr><td class="mono">data/client.yaml</td><td>412 B</td><td>YAML</td></tr>
+              <tr><td class="mono">tmp/</td><td></td><td>tmpdir</td></tr>
+              <tr><td class="mono">root/</td><td></td><td>root-dir</td></tr>
+            </tbody>
+          </table>
+          <p class="cap" style="margin-top:12px" data-i="fHint">make -C clients/MikroTik image GOARCH=arm64</p>
+        </main>
+      </div>
+    </div>
+
+    <div class="wb screen hidden" id="container">
+      <div class="wb-bar"><span class="dot"></span> Container <span class="mute">loft</span></div>
+      <div class="wb-body">
+        <aside>
+          <a href="#" data-i="tTerm">New Terminal</a>
+          <a href="#" data-i="tFiles">Files</a>
+          <a href="#" class="on" data-i="tCtr">Container</a>
+          <a href="#" data-i="tFw">IP · Firewall</a>
+        </aside>
+        <main>
+          <h2>loft</h2>
+          <p class="cap" data-i="cCap">install.rsc поднимает veth, мост и контейнер. Старт — когда status=stopped.</p>
+          <table class="tbl">
+            <thead><tr><th data-i="thName">Имя</th><th data-i="thSt">Статус</th><th>iface</th><th data-i="thBoot">Авто</th></tr></thead>
+            <tbody>
+              <tr class="on"><td>loft</td><td>running</td><td class="mono">veth-loft</td><td>yes</td></tr>
+            </tbody>
+          </table>
+          <table class="tbl" style="margin-top:10px">
+            <tbody>
+              <tr><td class="mono">172.31.20.2/24</td><td data-i="cVeth">адрес контейнера</td></tr>
+              <tr><td class="mono">172.31.20.1</td><td data-i="cRos">адрес RouterOS на br-loft</td></tr>
+              <tr><td class="mono">/data/client.yaml</td><td data-i="cMnt">mount loft-data</td></tr>
+              <tr><td class="mono">-if eth0</td><td data-i="cIf">фронты не заворачиваются</td></tr>
+            </tbody>
+          </table>
+        </main>
+      </div>
+    </div>
+
+    <div class="panel screen hidden" id="socks">
+      <header>
+        <svg viewBox="0 0 96 96" class="mark on" aria-hidden="true">
+          <path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/>
+          <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+        </svg>
+        <div class="t">loft</div>
+        <div class="sub">SOCKS5</div>
+      </header>
+      <div class="body">
+        <div class="row"><span class="k" data-i="sState">Состояние</span><span class="tag ok" data-i="sUp">в сети</span></div>
+        <div class="row"><span class="k">SOCKS5</span><span class="mono">172.31.20.2:1080</span></div>
+        <div class="row"><span class="k" data-i="sIp">Оверлей</span><span class="mono">10.8.0.14 · gw 10.8.0.1</span></div>
+        <div class="row"><span class="k" data-i="sFront">Фронт</span><span>get · vpn.example.net</span></div>
+        <p class="hint" data-i="sHint">Браузер и SSH ходят сюда сразу. Шлюз для всей LAN — только после tun up.</p>
+        <p class="hint mono">curl --socks5 172.31.20.2:1080 https://example.net</p>
+      </div>
+      <div class="foot">172.31.20.2:1080</div>
+    </div>
+
+    <div class="wb screen hidden" id="policy">
+      <div class="wb-bar"><span class="dot"></span> IP · Firewall <span class="mute">mangle</span></div>
+      <div class="wb-body">
+        <aside>
+          <a href="#" data-i="tTerm">New Terminal</a>
+          <a href="#" data-i="tFiles">Files</a>
+          <a href="#" data-i="tCtr">Container</a>
+          <a href="#" class="on" data-i="tFw">IP · Firewall</a>
+        </aside>
+        <main>
+          <h2 data-i="pTitle">Шлюз для LAN</h2>
+          <p class="cap" data-i="pCap">policy.rsc только после строки tun up. Без TUN пакеты зациклятся на veth.</p>
+          <table class="tbl">
+            <thead><tr><th>chain</th><th>src</th><th>action</th></tr></thead>
+            <tbody>
+              <tr class="on"><td>prerouting</td><td class="mono">loft-lan</td><td>mark-routing loft</td></tr>
+            </tbody>
+          </table>
+          <table class="tbl" style="margin-top:10px">
+            <tbody>
+              <tr><td>list loft-lan</td><td class="mono">192.168.88.0/24</td></tr>
+              <tr><td>table loft</td><td class="mono">0/0 via 172.31.20.2</td></tr>
+              <tr><td>dst skip</td><td class="mono">!172.31.20.0/24</td></tr>
+            </tbody>
+          </table>
+          <p class="cap" style="margin-top:12px" data-i="pWarn">У самого RouterOS нового default route нет. Фронты остаются на eth0.</p>
+        </main>
+      </div>
+    </div>
+
+    <div class="wb screen hidden" id="log">
+      <div class="wb-bar"><span class="dot"></span> Log <span class="mute">container</span></div>
+      <div class="wb-body">
+        <aside>
+          <a href="#" class="on" data-i="tTerm">New Terminal</a>
+          <a href="#" data-i="tFiles">Files</a>
+          <a href="#" data-i="tCtr">Container</a>
+          <a href="#" data-i="tFw">IP · Firewall</a>
+        </aside>
+        <main>
+          <div class="term" id="term-log"></div>
+        </main>
+      </div>
+    </div>
+
+    <div class="panel screen hidden" id="lan">
+      <header>
+        <svg viewBox="0 0 96 96" class="mark on" aria-hidden="true">
+          <path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/>
+          <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+        </svg>
+        <div class="t">loft</div>
+        <div class="sub">:8090</div>
+      </header>
+      <div class="body">
+        <div class="row"><span class="k" data-i="sState">Состояние</span><span class="tag ok" data-i="sUp">в сети</span></div>
+        <div class="row"><span class="k">SOCKS5</span><span class="mono">172.31.20.2:1080</span></div>
+        <div class="row"><span class="k" data-i="sIp">Оверлей</span><span class="mono">10.8.0.14 · gw 10.8.0.1</span></div>
+        <div class="row"><span class="k" data-i="sBind">Бинд</span><span class="mono">eth0 172.31.20.2</span></div>
+        <div class="row"><span class="k" data-i="sWan">Выход</span><span class="mono">ether1</span></div>
+        <div class="row"><span class="k" data-i="sFront">Фронт</span><span>get · vpn.example.net</span></div>
+        <p class="hint" data-i="lanH">Живая страница контейнера. Ключ и WAN правятся здесь, не в Winbox VPN.</p>
+      </div>
+      <div class="foot">http://172.31.20.2:8090/</div>
+    </div>
+
+    <div class="panel screen hidden" id="edit">
+      <header>
+        <svg viewBox="0 0 96 96" class="mark on" aria-hidden="true">
+          <path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/>
+          <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+        </svg>
+        <div class="t" data-i="eTitle">Подключение</div>
+        <div class="sub">:8090</div>
+      </header>
+      <div class="body">
+        <label class="field"><span data-i="eKey">Ключ участника</span>
+          <input class="mono" type="password" value="lt_••••••••••••" />
+        </label>
+        <label class="field">URL
+          <input class="mono" value="https://vpn.example.net" />
+        </label>
+        <label class="field"><span data-i="eType">Тип</span>
+          <select>
+            <option>get</option>
+            <option>ws</option>
+            <option>h2</option>
+            <option>quic</option>
+            <option>h3</option>
+          </select>
+        </label>
+        <label class="field"><span data-i="ePath">Путь</span>
+          <input class="mono" value="/static/v3/build" />
+        </label>
+        <label class="field"><span data-i="eWan">Исходящий интерфейс RouterOS</span>
+          <input class="mono" value="ether1" />
+        </label>
+        <p class="hint" data-i="eWanH">Имя WAN как в Winbox → Interfaces. Пусто — таблица по умолчанию. Контейнер всегда на eth0.</p>
+        <div class="btns">
+          <button type="button" class="ghost" data-i="eRsc">Скрипт выхода</button>
+          <button type="button" class="go" data-i="eSave">Сохранить</button>
+        </div>
+      </div>
+      <div class="foot">/data/client.yaml · /data/uplink.rsc</div>
+    </div>
+  </div>
+
+  <script>
+    const TERM = {
+      ru: `<span class="prompt">[admin@RB5009] ></span>  (check.rsc)
+loft check  host=RB5009
+  version=7.16.2 (stable)
+  architecture-name=arm64
+  cpu=ARM64
+  total-memory=1073741824
+<span class="ok">  containers: this CPU can run them</span>
+<span class="ok">  package container: enabled</span>
+<span class="ok">  device-mode container: yes</span>
+  disks:
+  0  disk1  usb  32GiB  ext4
+<span class="mute">next: copy pack/loft-linux-arm64.tar and pack/client.yaml onto the disk, then install.rsc</span>`,
+      en: `<span class="prompt">[admin@RB5009] ></span>  (check.rsc)
+loft check  host=RB5009
+  version=7.16.2 (stable)
+  architecture-name=arm64
+  cpu=ARM64
+  total-memory=1073741824
+<span class="ok">  containers: this CPU can run them</span>
+<span class="ok">  package container: enabled</span>
+<span class="ok">  device-mode container: yes</span>
+  disks:
+  0  disk1  usb  32GiB  ext4
+<span class="mute">next: copy pack/loft-linux-arm64.tar and pack/client.yaml onto the disk, then install.rsc</span>`,
+      zh: `<span class="prompt">[admin@RB5009] ></span>  (check.rsc)
+loft check  host=RB5009
+  version=7.16.2 (stable)
+  architecture-name=arm64
+  cpu=ARM64
+  total-memory=1073741824
+<span class="ok">  containers: this CPU can run them</span>
+<span class="ok">  package container: enabled</span>
+<span class="ok">  device-mode container: yes</span>
+  disks:
+  0  disk1  usb  32GiB  ext4
+<span class="mute">next: copy pack/loft-linux-arm64.tar and pack/client.yaml onto the disk, then install.rsc</span>`
+    };
+    const LOG = `<span class="mute">container,info loft:</span> socks5 0.0.0.0:1080
+<span class="mute">container,info loft:</span> outbound node up overlay=10.8.0.14
+<span class="ok">container,info loft:</span> tun up
+<span class="mute">container,info loft:</span> front get bound on eth0`;
+
+    const I = {
+      ru: {
+        navCap: "Проходка на RouterOS. Маршруты — у них, сессия — в контейнере.",
+        hRos: "RouterOS", nCheck: "Проверка", nFiles: "Файлы", nCtr: "Контейнер",
+        hAfter: "После старта", nSocks: "SOCKS", nGw: "Шлюз", nLog: "Журнал",
+        hLan: "Панель :8090", nLan: "Статус", nEdit: "Подключение",
+        sBind: "Бинд", sWan: "Выход", lanH: "Живая страница контейнера. Ключ и WAN правятся здесь, не в Winbox VPN.",
+        eTitle: "Подключение", eKey: "Ключ участника", eType: "Тип", ePath: "Путь",
+        eWan: "Исходящий интерфейс RouterOS",
+        eWanH: "Имя WAN как в Winbox → Interfaces. Пусто — таблица по умолчанию. Контейнер всегда на eth0.",
+        eRsc: "Скрипт выхода", eSave: "Сохранить",
+        tTerm: "New Terminal", tFiles: "Files", tCtr: "Container", tFw: "IP · Firewall",
+        fTitle: "disk1 / loft", fCap: "Тарбол образа и YAML с ключом. token и url правит оператор.",
+        thName: "Имя", thSize: "Размер", thKind: "Тип",
+        fHint: "make -C clients/MikroTik image GOARCH=arm64",
+        cCap: "install.rsc поднимает veth, мост и контейнер. Старт — когда status=stopped.",
+        thSt: "Статус", thBoot: "Авто",
+        cVeth: "адрес контейнера", cRos: "адрес RouterOS на br-loft",
+        cMnt: "mount loft-data", cIf: "фронты не заворачиваются",
+        sState: "Состояние", sUp: "в сети", sIp: "Оверлей", sFront: "Фронт",
+        sHint: "Браузер и SSH ходят сюда сразу. Шлюз для всей LAN — только после tun up.",
+        pTitle: "Шлюз для LAN",
+        pCap: "policy.rsc только после строки tun up. Без TUN пакеты зациклятся на veth.",
+        pWarn: "У самого RouterOS нового default route нет. Фронты остаются на eth0."
+      },
+      en: {
+        navCap: "RouterOS walkthrough. Routes stay in RouterOS; the session is the container.",
+        hRos: "RouterOS", nCheck: "Check", nFiles: "Files", nCtr: "Container",
+        hAfter: "After start", nSocks: "SOCKS", nGw: "Gateway", nLog: "Log",
+        hLan: "Panel :8090", nLan: "Status", nEdit: "Connection",
+        sBind: "Bind", sWan: "Uplink", lanH: "Live page in the container. Key and WAN are set here, not in Winbox VPN.",
+        eTitle: "Connection", eKey: "Member key", eType: "Type", ePath: "Path",
+        eWan: "RouterOS uplink interface",
+        eWanH: "WAN name as in Winbox → Interfaces. Empty = default table. The container stays on eth0.",
+        eRsc: "Uplink script", eSave: "Save",
+        tTerm: "New Terminal", tFiles: "Files", tCtr: "Container", tFw: "IP · Firewall",
+        fTitle: "disk1 / loft", fCap: "Image tarball and YAML with the member key. The operator sets token and url.",
+        thName: "Name", thSize: "Size", thKind: "Type",
+        fHint: "make -C clients/MikroTik image GOARCH=arm64",
+        cCap: "install.rsc brings up veth, bridge, and the container. Start when status=stopped.",
+        thSt: "Status", thBoot: "Boot",
+        cVeth: "container address", cRos: "RouterOS address on br-loft",
+        cMnt: "mount loft-data", cIf: "fronts do not hairpin",
+        sState: "State", sUp: "up", sIp: "Overlay", sFront: "Front",
+        sHint: "Browsers and SSH use this now. LAN gateway only after tun up.",
+        pTitle: "LAN gateway",
+        pCap: "Run policy.rsc only after the log line tun up. Without TUN, packets loop on the veth.",
+        pWarn: "RouterOS itself gets no new default route. Fronts stay on eth0."
+      },
+      zh: {
+        navCap: "RouterOS 走查。路由留在 RouterOS，会话在容器里。",
+        hRos: "RouterOS", nCheck: "检查", nFiles: "文件", nCtr: "容器",
+        hAfter: "启动之后", nSocks: "SOCKS", nGw: "网关", nLog: "日志",
+        hLan: "面板 :8090", nLan: "状态", nEdit: "连接",
+        sBind: "绑定", sWan: "出口", lanH: "容器里的活页。密钥和 WAN 在这里改，不在 Winbox VPN。",
+        eTitle: "连接", eKey: "成员密钥", eType: "类型", ePath: "路径",
+        eWan: "RouterOS 出口接口",
+        eWanH: "Winbox → Interfaces 里的 WAN 名。空 = 默认表。容器仍在 eth0。",
+        eRsc: "出口脚本", eSave: "保存",
+        tTerm: "New Terminal", tFiles: "Files", tCtr: "Container", tFw: "IP · Firewall",
+        fTitle: "disk1 / loft", fCap: "镜像包和带密钥的 YAML。token 和 url 由运营方填写。",
+        thName: "名称", thSize: "大小", thKind: "类型",
+        fHint: "make -C clients/MikroTik image GOARCH=arm64",
+        cCap: "install.rsc 拉起 veth、网桥和容器。status=stopped 后再启动。",
+        thSt: "状态", thBoot: "开机",
+        cVeth: "容器地址", cRos: "br-loft 上的 RouterOS 地址",
+        cMnt: "挂载 loft-data", cIf: "前置不会绕回",
+        sState: "状态", sUp: "在线", sIp: "覆盖网", sFront: "前置",
+        sHint: "浏览器和 SSH 现在就走这里。整段 LAN 当网关要等 tun up。",
+        pTitle: "LAN 网关",
+        pCap: "日志出现 tun up 再跑 policy.rsc。没有 TUN 时包会在 veth 上打环。",
+        pWarn: "RouterOS 自身不装新的 default route。前置仍走 eth0。"
+      }
+    };
+
+    function setLang(lang) {
+      document.documentElement.lang = lang;
+      ["en", "ru", "zh"].forEach((l) => {
+        document.getElementById("lang-" + l).classList.toggle("on", l === lang);
+      });
+      const t = I[lang];
+      document.querySelectorAll("[data-i]").forEach((el) => {
+        const k = el.getAttribute("data-i");
+        if (t[k]) el.textContent = t[k];
+      });
+      document.getElementById("term-check").innerHTML = TERM[lang];
+      document.getElementById("term-log").innerHTML = LOG;
+    }
+
+    function show(id) {
+      document.querySelectorAll(".screen").forEach((el) => el.classList.add("hidden"));
+      document.getElementById(id).classList.remove("hidden");
+      document.querySelectorAll("nav button[data-go]").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-go") === id);
+      });
+    }
+
+    document.querySelectorAll("nav button[data-go]").forEach((b) => {
+      b.addEventListener("click", () => show(b.getAttribute("data-go")));
+    });
+    const q = new URLSearchParams(location.search);
+    setLang(q.get("lang") || "ru");
+    if (q.get("go") && document.getElementById(q.get("go"))) show(q.get("go"));
+  </script>
+</body>
+</html>

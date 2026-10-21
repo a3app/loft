@@ -10,6 +10,7 @@
 | [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Автозамер GET/WS против пути connect на macOS |
 | [`macOS/`](macOS/) | Строка меню. UX: [`macOS/design/DESIGN_ru.md`](macOS/design/DESIGN_ru.md) |
 | [`Keenetic/`](Keenetic/) | Entware / OpkgTun. План: [`Keenetic/PLAN_ru.md`](Keenetic/PLAN_ru.md). Макет: [`Keenetic/design/index.html`](Keenetic/design/index.html) |
+| [`MikroTik/`](MikroTik/) | Контейнер RouterOS 7. План: [`MikroTik/PLAN_ru.md`](MikroTik/PLAN_ru.md). Макет: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Тонкий хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN_ru.md`](iOS/PLAN_ru.md) фаза 6 |
 | [`Android/`](Android/) | VpnService. Тонкий хост Java. Макет: [`Android/design/index.html`](Android/design/index.html). Android TV / Google TV: [`Android/PLAN_ru.md`](Android/PLAN_ru.md) фаза 4 |
 | [`Aurora/`](Aurora/) | Оверлей ConnMan. Тонкий хост QML + loft-front. Макет: [`Aurora/design/index.html`](Aurora/design/index.html) |

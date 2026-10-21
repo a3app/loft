@@ -41,6 +41,7 @@ flowchart LR
 | [guide_zh.md](guide_zh.md) | 编译、配置、诱饵、名册、Debian。 |
 | [yandex-cdn_zh.md](yandex-cdn_zh.md) | Yandex Cloud CDN：控制台怎么点。 |
 | [keenetic_zh.md](keenetic_zh.md) | KeeneticOS：OpkgTun、优先级、面板登录。 |
+| [mikrotik_zh.md](mikrotik_zh.md) | RouterOS 7：容器、SOCKS、策略路由。 |
 | [ios_zh.md](ios_zh.md) | iOS：Packet Tunnel，Personal VPN。Apple TV 以后再说。 |
 | [android_zh.md](android_zh.md) | Android：VpnService。Android TV / Google TV 以后再说。 |
 | [aurora_zh.md](aurora_zh.md) | Aurora OS：ConnMan 覆盖网，loft-front。 |
@@ -51,7 +52,7 @@ flowchart LR
 | [../README_zh.md](../README_zh.md) | 总览 |
 | [../server/README_zh.md](../server/README_zh.md) | loft-node |
 | [../server/debian/README_zh.md](../server/debian/README_zh.md) | 安装脚本和 `.deb` |
-| [../clients/README_zh.md](../clients/README_zh.md) | CLI、macOS、Keenetic、iOS、Android、Aurora |
+| [../clients/README_zh.md](../clients/README_zh.md) | CLI、macOS、Keenetic、MikroTik、iOS、Android、Aurora |
 | [brand/README_zh.md](brand/README_zh.md) | 标志 |
 
 [下载](https://github.com/a3app/loft/releases/latest) · [源码](https://github.com/a3app/loft)

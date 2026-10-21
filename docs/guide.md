@@ -253,6 +253,10 @@ make probe
 | `listen.tun` | Empty = off; `auto` creates utun |
 | `listen.tun_addr` | Prefix for the TUN; the address is the overlay IP from Status |
 | `listen.kill_switch` | Hold native default when TUN dies |
+| `listen.http` | LAN operator page (MikroTik `:8090`) |
+| `listen.http_pass` | Optional password for that page |
+| `listen.bind` | Same as `-if`; CLI `-if` wins |
+| `listen.uplink` | RouterOS WAN name for container egress (`ether1`, `lte1`) |
 
 Outbound fields: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| empty), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `insecure_skip_verify`.
 

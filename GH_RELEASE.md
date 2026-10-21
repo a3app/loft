@@ -20,7 +20,7 @@ Checksums: `loft-clients-SHA256SUMS.txt`, `loft-node-SHA256SUMS.txt`, `loft-pane
 
 CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`.
 
-Not in Dist: iOS / Android / Aurora / Keenetic clients (catalog and mocks).
+Not in Dist: iOS / Android / Aurora / Keenetic / MikroTik clients (catalog and mocks).
 
 ## What it does
 
@@ -60,7 +60,7 @@ Panel (first Dist packages):
 
 Оверлей внутри TLS 1.3. Приложения ходят в локальные SOCKS5 или TUN. Потоки в одном mux, ChaCha20-Poly1305, снаружи обычный HTTPS: GET, WebSocket, HTTP/2, QUIC или HTTP/3. Перед нодой может стоять CDN. Протокол **loft/1.0**. Ссылка `loft://`.
 
-В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Aurora, Keenetic в этот Dist не входят.
+В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Aurora, Keenetic, MikroTik в этот Dist не входят.
 
 1.0.22: CONNECT на origin больше не открытый прокси (нужен 0x02, cap `connect` выключен по умолчанию); hold/park по члену и `instance_id`; `rate_bps` на сессию; SIGHUP перечитывает сеть и ключи. macOS: игнор в split, пароль loft-priv один раз, чекбокс в Инструментах. Панель впервые в Dist: пакеты, мастер, пользователи, сеть и каналы, почта, MTProto (`mtg`). Протокол loft/1.0.
 
@@ -70,6 +70,6 @@ Panel (first Dist packages):
 
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
-本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Aurora / Keenetic 不在这次包里。
+本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Aurora / Keenetic / MikroTik 不在这次包里。
 
 1.0.22：源站 CONNECT 不再是未认证的 TCP 代理（需要 0x02，cap `connect` 默认关闭）；hold/park 按成员和 `instance_id`；会话 `rate_bps`；SIGHUP 重载网络和密钥。macOS：分流忽略项、loft-priv 一次管理员密码、工具菜单勾选。面板首次进入 Dist：软件包、向导、用户、网络和通道、邮件、MTProto（`mtg`）。协议仍是 loft/1.0。

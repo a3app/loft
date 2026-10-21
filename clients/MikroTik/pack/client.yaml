@@ -1,0 +1,26 @@
+# loft on RouterOS. Mount this file at /data/client.yaml.
+# SOCKS is the path that always works. TUN becomes a LAN gateway
+# when the container has /dev/net/tun (entrypoint still binds fronts on eth0).
+# LAN page: http://172.31.20.2:8090  — uplink is the RouterOS WAN name.
+
+listen:
+  socks5: 0.0.0.0:1080
+  tun: auto
+  kill_switch: false
+  http: 0.0.0.0:8090
+  # http_pass: "change-me"
+  # uplink: ether1
+
+token: "change-me-long-random"
+
+select: auto
+
+# fronts: [get, ws, h2, quic, h3]
+
+outbounds:
+  - name: node
+    type: get
+    url: https://vpn.example.net
+    path: /static/v3/build
+    fingerprint: chrome
+    insecure_skip_verify: false

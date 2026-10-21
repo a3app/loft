@@ -81,6 +81,7 @@ flowchart LR
 | [docs/guide_ru.md](docs/guide_ru.md) | Собрать, настроить, запустить, Debian. |
 | [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN: как подключить. |
 | [docs/keenetic_ru.md](docs/keenetic_ru.md) | Клиент KeeneticOS (Entware, OpkgTun). Каталог: [clients/Keenetic/](clients/Keenetic/). |
+| [docs/mikrotik_ru.md](docs/mikrotik_ru.md) | Клиент RouterOS 7 (контейнер). Каталог: [clients/MikroTik/](clients/MikroTik/). |
 | [docs/ios_ru.md](docs/ios_ru.md) | Клиент iOS (Packet Tunnel). Каталог: [clients/iOS/](clients/iOS/). |
 | [docs/android_ru.md](docs/android_ru.md) | Клиент Android (VpnService). Каталог: [clients/Android/](clients/Android/). |
 | [docs/aurora_ru.md](docs/aurora_ru.md) | Клиент ОС Аврора (ConnMan). Каталог: [clients/Aurora/](clients/Aurora/). |
@@ -97,6 +98,7 @@ server/panel      веб-панель loft-panel
 clients/go        loft, loft-front, loft-probe
 clients/macOS     приложение в строке меню (запускает loft-front)
 clients/Keenetic  Entware / OpkgTun (план и макет)
+clients/MikroTik  контейнер RouterOS 7 (образ + .rsc)
 clients/iOS       Packet Tunnel (хост + appex)
 clients/Android   VpnService (хост на Java)
 clients/Aurora    оверлей ConnMan (тонкий хост QML)

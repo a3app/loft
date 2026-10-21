@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--ui); background: #0e0c0b; color: var(--snow);
+      display: flex; justify-content: center; padding: 28px 16px;
+    }
+    .wrap { width: 440px; }
+    .lang { display: flex; gap: 4px; margin: 0 0 12px; }
+    .lang button {
+      flex: 1; border: 0; border-radius: 8px; padding: 6px 0; cursor: pointer;
+      background: #1e1a17; color: var(--stone); font: 600 12px var(--ui);
+    }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+    .card {
+      background: #181512; border: 1px solid #2e2824; border-radius: 16px;
+      overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.45); margin-bottom: 12px;
+    }
+    header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--line);
+    }
+    header .t { font-weight: 600; letter-spacing: -0.03em; }
+    header .sub { margin-left: auto; color: var(--mute); font: 12px var(--mono); }
+    .mark { width: 28px; height: 28px; flex: none; }
+    .mark .body { fill: #B7A99A; }
+    .mark .lamp { fill: #3A332E; }
+    .mark.on .lamp { fill: var(--lamp); }
+    .body { padding: 16px 18px 18px; }
+    .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 13px; }
+    .row .k { color: var(--mute); font-size: 12px; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
+    label.field input, label.field select, textarea {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 8px; padding: 8px 10px; font: 400 13px var(--ui);
+    }
+    textarea { font-family: var(--mono); font-size: 11px; min-height: 120px; resize: vertical; }
+    .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 0 0 12px; }
+    .btns { display: flex; gap: 8px; }
+    .btns button {
+      flex: 1; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      font: 600 13px var(--ui);
+    }
+    .go { background: var(--lamp); color: var(--ink); }
+    .ghost { background: #2a2420; color: var(--snow); }
+    .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #2a2420; color: var(--stone); }
+    .tag.ok { background: rgba(125,186,106,.15); color: var(--ok); }
+    .tag.wait { background: rgba(232,184,74,.12); color: var(--lamp); }
+    .msg { font-size: 12px; margin-top: 10px; min-height: 1em; }
+    .msg.err { color: var(--err); }
+    .msg.ok { color: var(--ok); }
+    .log {
+      background: #1a1714; color: var(--paper); font: 11px/1.5 var(--mono);
+      padding: 10px 12px; border-radius: 8px; max-height: 160px; overflow: auto; white-space: pre-wrap;
+    }
+    .foot { padding: 10px 18px 14px; color: var(--mute); font-size: 11px; font-family: var(--mono); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="lang">
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
+      <button type="button" id="lang-zh" onclick="setLang('zh')">中文</button>
+    </div>
+
+    <div class="card hidden" id="gate">
+      <header>
+        <svg viewBox="0 0 96 96" class="mark" aria-hidden="true">
+          <path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/>
+          <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+        </svg>
+        <div class="t">loft</div>
+        <div class="sub">:8090</div>
+      </header>
+      <div class="body">
+        <p class="hint" data-i="gateH">Страница на LAN. Пароль — listen.http_pass в YAML.</p>
+        <label class="field"><span data-i="ePass">Пароль</span><input id="password" type="password" /></label>
+        <div class="btns"><button type="button" class="go" onclick="login()" data-i="eIn">Войти</button></div>
+        <div class="msg" id="gateMsg"></div>
+      </div>
+    </div>
+
+    <div id="app">
+      <div class="card">
+        <header>
+          <svg viewBox="0 0 96 96" class="mark" id="mark" aria-hidden="true">
+            <path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/>
+            <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+          </svg>
+          <div class="t">loft</div>
+          <div class="sub" id="ver"></div>
+        </header>
+        <div class="body">
+          <div class="row"><span class="k" data-i="sState">Состояние</span><span class="tag" id="stTag">—</span></div>
+          <div class="row"><span class="k">SOCKS5</span><span class="mono" id="stSocks">—</span></div>
+          <div class="row"><span class="k" data-i="sIp">Оверлей</span><span class="mono" id="stOverlay">—</span></div>
+          <div class="row"><span class="k" data-i="sBind">Бинд</span><span class="mono" id="stBind">—</span></div>
+          <div class="row"><span class="k" data-i="sUp">Выход</span><span class="mono" id="stUplink">—</span></div>
+          <div class="row"><span class="k" data-i="sFront">Фронт</span><span id="stFront">—</span></div>
+        </div>
+        <div class="foot" id="foot">http://172.31.20.2:8090/</div>
+      </div>
+
+      <div class="card">
+        <header>
+          <svg viewBox="0 0 96 96" class="mark" aria-hidden="true">
+            <path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/>
+            <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+          </svg>
+          <div class="t" data-i="eTitle">Подключение</div>
+          <div class="sub">:8090</div>
+        </header>
+        <div class="body">
+          <label class="field"><span data-i="eKey">Ключ участника</span>
+            <input id="token" class="mono" type="password" placeholder="lt_…" />
+          </label>
+          <label class="field">URL
+            <input id="url" class="mono" />
+          </label>
+          <label class="field"><span data-i="eType">Тип</span>
+            <select id="type">
+              <option>get</option><option>ws</option><option>h2</option><option>quic</option><option>h3</option>
+            </select>
+          </label>
+          <label class="field"><span data-i="ePath">Путь</span>
+            <input id="path" class="mono" />
+          </label>
+          <label class="field"><span data-i="eWan">Исходящий интерфейс RouterOS</span>
+            <input id="uplink" class="mono" placeholder="ether1 · lte1 · pppoe-out1" />
+          </label>
+          <p class="hint" data-i="eWanH">Имя WAN как в Winbox → Interfaces. Пусто — таблица по умолчанию. Контейнер всегда на eth0; сюда пишется выход наружу.</p>
+          <div class="btns">
+            <button type="button" class="ghost" onclick="copyRsc()" data-i="eRsc">Скрипт выхода</button>
+            <button type="button" class="go" onclick="save()" data-i="eSave">Сохранить</button>
+          </div>
+          <div class="msg" id="saveMsg"></div>
+        </div>
+        <div class="foot">/data/client.yaml · /data/uplink.rsc</div>
+      </div>
+
+      <div class="card hidden" id="rscCard">
+        <header>
+          <div class="t" data-i="rTitle">uplink.rsc</div>
+          <div class="sub">New Terminal</div>
+        </header>
+        <div class="body">
+          <p class="hint" data-i="rHint">После сохранения вставьте в New Terminal или /import disk1/loft/data/uplink.rsc</p>
+          <textarea id="rsc" readonly></textarea>
+        </div>
+        <div class="foot">/import disk1/loft/data/uplink.rsc</div>
+      </div>
+
+      <div class="card">
+        <header><div class="t" data-i="lTitle">Журнал</div></header>
+        <div class="body"><div class="log" id="log"></div></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const I = {
+      ru: {
+        gateH: "Страница на LAN. Пароль — listen.http_pass в YAML.",
+        ePass: "Пароль", eIn: "Войти",
+        sState: "Состояние", sIp: "Оверлей", sBind: "Бинд", sUp: "Выход", sFront: "Фронт",
+        eTitle: "Подключение", eKey: "Ключ участника", eType: "Тип", ePath: "Путь",
+        eWan: "Исходящий интерфейс RouterOS",
+        eWanH: "Имя WAN как в Winbox → Interfaces. Пусто — таблица по умолчанию. Контейнер всегда на eth0; сюда пишется выход наружу.",
+        eRsc: "Скрипт выхода", eSave: "Сохранить",
+        rTitle: "uplink.rsc", rHint: "После сохранения вставьте в New Terminal или /import disk1/loft/data/uplink.rsc",
+        lTitle: "Журнал",
+        up: "в сети", down: "нет оверлея", saved: "Сохранено. Если меняли выход — импортируйте uplink.rsc.",
+        bad: "Не удалось сохранить", need: "Нужен пароль"
+      },
+      en: {
+        gateH: "LAN page. Password is listen.http_pass in the YAML.",
+        ePass: "Password", eIn: "Sign in",
+        sState: "State", sIp: "Overlay", sBind: "Bind", sUp: "Uplink", sFront: "Front",
+        eTitle: "Connection", eKey: "Member key", eType: "Type", ePath: "Path",
+        eWan: "RouterOS uplink interface",
+        eWanH: "WAN name as in Winbox → Interfaces. Empty = default table. The container stays on eth0; this is the path out.",
+        eRsc: "Uplink script", eSave: "Save",
+        rTitle: "uplink.rsc", rHint: "After save, paste in New Terminal or /import disk1/loft/data/uplink.rsc",
+        lTitle: "Log",
+        up: "up", down: "no overlay", saved: "Saved. If you changed the uplink, import uplink.rsc.",
+        bad: "Save failed", need: "Password required"
+      },
+      zh: {
+        gateH: "LAN 页。密码是 YAML 里的 listen.http_pass。",
+        ePass: "密码", eIn: "登录",
+        sState: "状态", sIp: "覆盖网", sBind: "绑定", sUp: "出口", sFront: "前置",
+        eTitle: "连接", eKey: "成员密钥", eType: "类型", ePath: "路径",
+        eWan: "RouterOS 出口接口",
+        eWanH: "Winbox → Interfaces 里的 WAN 名。空 = 默认表。容器仍在 eth0；这里是往外走的路。",
+        eRsc: "出口脚本", eSave: "保存",
+        rTitle: "uplink.rsc", rHint: "保存后粘贴到 New Terminal，或 /import disk1/loft/data/uplink.rsc",
+        lTitle: "日志",
+        up: "在线", down: "没有覆盖网", saved: "已保存。若改了出口，再导入 uplink.rsc。",
+        bad: "保存失败", need: "需要密码"
+      }
+    };
+    let lang = "ru";
+    function t(k) { return (I[lang] && I[lang][k]) || k; }
+    function setLang(l) {
+      lang = l;
+      document.documentElement.lang = l;
+      ["en","ru","zh"].forEach((x) => document.getElementById("lang-"+x).classList.toggle("on", x===l));
+      document.querySelectorAll("[data-i]").forEach((el) => {
+        const k = el.getAttribute("data-i");
+        if (I[lang][k]) el.textContent = I[lang][k];
+      });
+      refresh();
+    }
+    function listenURL(st) {
+      const h = (st && st.http) || "0.0.0.0:8090";
+      const port = h.split(":").pop() || "8090";
+      if (/^(0\.0\.0\.0|\[::\]|::)/.test(h) || h.charAt(0) === ":") {
+        return "http://172.31.20.2:" + port + "/";
+      }
+      return "http://" + h.replace(/^https?:\/\//, "") + "/";
+    }
+    async function refresh() {
+      const r = await fetch("/api/status");
+      const st = await r.json();
+      if (r.status === 401 || st.need_pass) {
+        document.getElementById("gate").classList.remove("hidden");
+        document.getElementById("app").classList.add("hidden");
+        return;
+      }
+      document.getElementById("gate").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      const up = !!st.overlay;
+      document.querySelectorAll("#app .mark").forEach((el) => el.classList.toggle("on", up));
+      const tag = document.getElementById("stTag");
+      tag.textContent = up ? t("up") : t("down");
+      tag.className = "tag " + (up ? "ok" : "wait");
+      document.getElementById("ver").textContent = st.version || "";
+      document.getElementById("stSocks").textContent = st.socks || "—";
+      document.getElementById("stOverlay").textContent = st.overlay || "—";
+      document.getElementById("stBind").textContent = st.bind || "—";
+      document.getElementById("stUplink").textContent = st.uplink || "—";
+      document.getElementById("stFront").textContent = [st.front, st.outbound].filter(Boolean).join(" · ") || "—";
+      document.getElementById("foot").textContent = listenURL(st);
+      if (st.url) document.getElementById("url").value = st.url;
+      if (st.path) document.getElementById("path").value = st.path;
+      if (st.front) document.getElementById("type").value = st.front;
+      if (st.uplink) document.getElementById("uplink").value = st.uplink;
+      const lr = await fetch("/api/log");
+      if (lr.ok) {
+        const lines = await lr.json();
+        document.getElementById("log").textContent = (lines || []).join("\n");
+      }
+    }
+    async function login() {
+      const fd = new FormData();
+      fd.set("password", document.getElementById("password").value);
+      const r = await fetch("/login", { method: "POST", body: fd });
+      document.getElementById("gateMsg").textContent = r.ok ? "" : t("need");
+      document.getElementById("gateMsg").className = "msg " + (r.ok ? "" : "err");
+      if (r.ok) refresh();
+    }
+    async function save() {
+      const body = {
+        token: document.getElementById("token").value,
+        url: document.getElementById("url").value,
+        type: document.getElementById("type").value,
+        path: document.getElementById("path").value,
+        uplink: document.getElementById("uplink").value.trim()
+      };
+      const r = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const msg = document.getElementById("saveMsg");
+      if (!r.ok) {
+        msg.textContent = t("bad") + " — " + (await r.text());
+        msg.className = "msg err";
+        return;
+      }
+      msg.textContent = t("saved");
+      msg.className = "msg ok";
+      document.getElementById("token").value = "";
+      await showRsc();
+      refresh();
+    }
+    async function showRsc() {
+      const r = await fetch("/api/uplink.rsc");
+      if (!r.ok) return;
+      document.getElementById("rsc").value = await r.text();
+      document.getElementById("rscCard").classList.remove("hidden");
+    }
+    async function copyRsc() {
+      await showRsc();
+      const box = document.getElementById("rsc");
+      box.select();
+      document.execCommand("copy");
+    }
+    setLang("ru");
+    setInterval(refresh, 4000);
+  </script>
+</body>
+</html>

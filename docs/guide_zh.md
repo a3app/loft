@@ -253,6 +253,10 @@ make probe
 | `listen.tun` | 空 = 关；`auto` 建 utun |
 | `listen.tun_addr` | TUN 前缀；地址是 Status 给的覆盖网 IP |
 | `listen.kill_switch` | TUN 死了还按住系统默认路由 |
+| `listen.http` | LAN 运营页（MikroTik `:8090`） |
+| `listen.http_pass` | 该页的可选密码 |
+| `listen.bind` | 和 `-if` 一样；命令行 `-if` 优先 |
+| `listen.uplink` | 容器出口用的 RouterOS WAN 名（`ether1`、`lte1`） |
 
 出站字段：`name`、`type`（`get` \| `ws` \| `h2` \| `quic` \| `h3`）、`url`、`path`、`cdn`（`yandex` \| `cloudflare` \| 空）、`fingerprint`（`chrome` \| `firefox` \| `go`）、`header_budget`、`inflight`、`insecure_skip_verify`。
 

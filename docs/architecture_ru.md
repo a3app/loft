@@ -45,6 +45,7 @@ clients/
   macOS/design        спецификация UX и макет
   macOS/tests         вектор RFC 8439 AEAD (make -C clients/macOS test-crypto)
   Keenetic/           каталог Entware OpkgTun (план и макет; сборки ещё нет)
+  MikroTik/           контейнер RouterOS 7 (образ + .rsc; сначала SOCKS; не в Dist)
   iOS/                Packet Tunnel (тонкий хост + appex; gomobile xcframework; Apple TV в плане, фаза 6)
   Android/            VpnService (тонкий хост Java; gomobile AAR; UX-макет; Android TV / Google TV в плане, фаза 4)
   Aurora/             оверлей ConnMan (хост QML + плагин loft-connman + loft-front)

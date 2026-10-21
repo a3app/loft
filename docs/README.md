@@ -11,6 +11,7 @@ loft/1.0. Software version is `../VERSION`. Apache License 2.0.
 | [guide.md](guide.md) | Build, config, decoy, roster, Debian. |
 | [yandex-cdn_ru.md](yandex-cdn_ru.md) | Yandex Cloud CDN: где что завести (RU). |
 | [keenetic.md](keenetic.md) | KeeneticOS: OpkgTun, priorities, panel auth. |
+| [mikrotik.md](mikrotik.md) | RouterOS 7: container, SOCKS, policy routing. |
 | [ios.md](ios.md) | iOS: Packet Tunnel, Personal VPN. Apple TV later. |
 | [android.md](android.md) | Android: VpnService. Android TV / Google TV later. |
 | [aurora.md](aurora.md) | Aurora OS: ConnMan overlay, loft-front. |
@@ -21,5 +22,5 @@ loft/1.0. Software version is `../VERSION`. Apache License 2.0.
 | [../README.md](../README.md) | Overview |
 | [../server/README.md](../server/README.md) | loft-node |
 | [../server/debian/README.md](../server/debian/README.md) | Installer and `.deb` |
-| [../clients/README.md](../clients/README.md) | CLI, macOS, Keenetic, iOS, Android, Aurora |
+| [../clients/README.md](../clients/README.md) | CLI, macOS, Keenetic, MikroTik, iOS, Android, Aurora |
 | [brand/README.md](brand/README.md) | Mark |

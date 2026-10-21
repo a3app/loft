@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 
@@ -44,6 +45,41 @@ type ListenConfig struct {
 	TUN        string `yaml:"tun"` // empty = off; "auto" creates utun
 	TunAddr    string `yaml:"tun_addr"`
 	KillSwitch bool   `yaml:"kill_switch"`
+	HTTP       string `yaml:"http,omitempty"`      // LAN operator page, e.g. 0.0.0.0:8090
+	HTTPPass   string `yaml:"http_pass,omitempty"` // empty = open on the bind
+	Bind       string `yaml:"bind,omitempty"`      // same as -if; CLI -if wins
+	Uplink     string `yaml:"uplink,omitempty"`    // RouterOS WAN name for container egress
+}
+
+var ifNameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._-]{0,62}$`)
+
+// ValidIFName is empty or a RouterOS / OS interface name (ether1, lte1, en0).
+func ValidIFName(s string) error {
+	if s == "" {
+		return nil
+	}
+	if !ifNameRe.MatchString(s) {
+		return fmt.Errorf("interface %q: use a name like ether1 or lte1", s)
+	}
+	return nil
+}
+
+// WriteClient stores cfg as YAML, mode 0600.
+func WriteClient(path string, cfg *ClientConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("nil config")
+	}
+	if err := ValidIFName(cfg.Listen.Bind); err != nil {
+		return err
+	}
+	if err := ValidIFName(cfg.Listen.Uplink); err != nil {
+		return err
+	}
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o600)
 }
 
 // Outbound is one TLS edge the client will try.
@@ -178,6 +214,12 @@ func LoadClient(path string) (*ClientConfig, error) {
 	}
 	if len(c.Outbounds) == 0 {
 		return nil, fmt.Errorf("at least one outbound is required")
+	}
+	if err := ValidIFName(c.Listen.Bind); err != nil {
+		return nil, err
+	}
+	if err := ValidIFName(c.Listen.Uplink); err != nil {
+		return nil, err
 	}
 	for i := range c.Outbounds {
 		o := &c.Outbounds[i]
