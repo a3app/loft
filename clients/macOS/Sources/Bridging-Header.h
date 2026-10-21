@@ -2,6 +2,7 @@
 
 #include "Crypto/chacha20poly1305.h"
 #include <CommonCrypto/CommonDigest.h>
+#include <libproc.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netinet/in.h>

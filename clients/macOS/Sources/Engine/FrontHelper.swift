@@ -33,28 +33,32 @@ final class FrontHelper {
     private var errRest = ""
 
     /// SIGTERM leftover loft-front from this bundle. Leaves debug binaries (other paths) alone.
+    /// Uses libproc so boot cannot stall on a full `ps` pipe (long argv of a live loft-front).
     static func reapOrphans() {
         guard let bin = binaryPath() else { return }
-        let p = Process()
-        p.arguments = ["-ax", "-o", "pid=,command="]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = Pipe()
-        do { try p.start(at: "/bin/ps") } catch { return }
-        p.waitUntilExit()
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        guard let text = String(data: data, encoding: .utf8) else { return }
         let selfPid = getpid()
-        var n = 0
-        for raw in text.split(separator: "\n") {
-            let s = raw.trimmingCharacters(in: .whitespaces)
-            guard let sp = s.firstIndex(of: " "), let pid = Int32(s[..<sp]), pid > 1, pid != selfPid else { continue }
-            let cmd = s[s.index(after: sp)...].trimmingCharacters(in: .whitespaces)
-            guard cmd == bin || cmd.hasPrefix(bin + " ") else { continue }
-            kill(pid, SIGTERM)
-            n += 1
+        var pids = [pid_t](repeating: 0, count: 4096)
+        let nbytes = pids.withUnsafeMutableBufferPointer { buf -> Int32 in
+            guard let base = buf.baseAddress else { return 0 }
+            return proc_listpids(UInt32(PROC_ALL_PIDS), 0, base, Int32(buf.count * MemoryLayout<pid_t>.stride))
         }
-        if n > 0 { Thread.sleep(forTimeInterval: 0.15) }
+        guard nbytes > 0 else { return }
+        let n = min(Int(nbytes) / MemoryLayout<pid_t>.stride, pids.count)
+        var pathBuf = [CChar](repeating: 0, count: 4 * 1024)
+        var killed = 0
+        for i in 0..<n {
+            let pid = pids[i]
+            if pid <= 1 || pid == selfPid { continue }
+            let plen = pathBuf.withUnsafeMutableBufferPointer { buf -> Int32 in
+                proc_pidpath(pid, buf.baseAddress, UInt32(buf.count))
+            }
+            if plen <= 0 { continue }
+            if String(cString: pathBuf) == bin {
+                kill(pid, SIGTERM)
+                killed += 1
+            }
+        }
+        if killed > 0 { Thread.sleep(forTimeInterval: 0.15) }
     }
 
     /// CLI `-path` for loft-front. GET keeps the profile path; other fronts omit a
