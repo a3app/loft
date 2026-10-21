@@ -29,7 +29,7 @@ func SpliceUDP(listen, dest string) error {
 		return nil
 	}
 	_, addr := splitDecoy(dest)
-	pc, err := net.ListenPacket("udp", listen)
+	pc, err := listenUDPSticky(listen)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func ListenUDPDecoy(listen, certFile, keyFile string, info NodeInfo, fronts []st
 	if err != nil {
 		return err
 	}
-	pc, err := net.ListenPacket("udp", listen)
+	pc, err := listenUDPSticky(listen)
 	if err != nil {
 		return err
 	}
@@ -407,21 +407,21 @@ func (c *demuxConn) SetWriteDeadline(time.Time) error { return nil }
 // SetReadBuffer, SetWriteBuffer and SyscallConn let quic-go size the shared
 // socket's buffers as it would its own.
 func (c *demuxConn) SetReadBuffer(n int) error {
-	if u, ok := c.pc.(*net.UDPConn); ok {
+	if u := udpConnOf(c.pc); u != nil {
 		return u.SetReadBuffer(n)
 	}
 	return errors.New("not a UDP socket")
 }
 
 func (c *demuxConn) SetWriteBuffer(n int) error {
-	if u, ok := c.pc.(*net.UDPConn); ok {
+	if u := udpConnOf(c.pc); u != nil {
 		return u.SetWriteBuffer(n)
 	}
 	return errors.New("not a UDP socket")
 }
 
 func (c *demuxConn) SyscallConn() (syscall.RawConn, error) {
-	if u, ok := c.pc.(*net.UDPConn); ok {
+	if u := udpConnOf(c.pc); u != nil {
 		return u.SyscallConn()
 	}
 	return nil, errors.New("not a UDP socket")

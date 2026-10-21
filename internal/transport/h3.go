@@ -184,8 +184,13 @@ func mustAddr(o config.Outbound) string {
 
 // ListenUDP serves quic mux and/or h3 CONNECT on one UDP socket. ALPN h3 wins CONNECT.
 func ListenUDP(addr, certFile, keyFile string, info NodeInfo, fronts []string) error {
+	pc, err := listenUDPSticky(addr)
+	if err != nil {
+		return err
+	}
+	tr := &quic.Transport{Conn: pc}
 	return serveUDP(certFile, keyFile, info, fronts, func(tc *tls.Config) (*quic.Listener, error) {
-		return quic.ListenAddr(addr, tc, quicCfg())
+		return tr.Listen(tc, quicCfg())
 	})
 }
 

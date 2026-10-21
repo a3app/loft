@@ -44,6 +44,17 @@ func dialQUIC(ctx context.Context, addr string, token []byte, tc *tls.Config, qc
 	if err != nil {
 		return nil, err
 	}
+	// Wildcard UDP can leave the GET/TCP egress (VPN). Bind the same IPv4.
+	if ua, ok := pc.LocalAddr().(*net.UDPAddr); ok && (ua.IP == nil || ua.IP.IsUnspecified()) {
+		if ip := net.ParseIP(physicalAddr()); ip != nil && ip.To4() != nil {
+			_ = pc.Close()
+			pc, err = net.ListenUDP("udp4", &net.UDPAddr{IP: ip.To4()})
+			if err != nil {
+				return nil, err
+			}
+			protect.Apply(pc)
+		}
+	}
 	tc = tc.Clone()
 	tc.Rand = &markRand{first: random}
 	tr := &quic.Transport{Conn: pc, ConnectionIDGenerator: &markCIDs{first: scid}}
@@ -72,7 +83,8 @@ func quicCfg() *quic.Config {
 	}
 }
 
-// QUIC is the loss-tolerant front. Retransmit and path change are QUIC's.
+// QUIC is the loss-tolerant front. Retransmit is QUIC's. Path change still
+// Parks: one UDP 4-tuple, no CID migration onto a new socket.
 type QUIC struct {
 	cfg    config.Outbound
 	token  []byte
