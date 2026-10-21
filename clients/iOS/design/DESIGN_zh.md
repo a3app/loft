@@ -36,7 +36,7 @@ Apple TV（tvOS 17+）是 iPhone GUI 之后同一条 Packet Tunnel。[计划](..
 | 连接 | 标题、`+`，副标题「每条有自己的密钥和地址。同时只激活一条。」行：紧凑连接/断开、名称、**主机**副标题，旁边类型（`loft · get` / `sstp` / `vless`），开着的那条另有 **当前**。点一下打开这条连接；只有「连接」按钮切换隧道。**向右滑** 编辑，**向左滑** 删除（有确认页）。**长按** 菜单：编辑 / 导出 `.loft`（仅选中） / 删除。**`+`** 打开一页：扫描二维码 · 粘贴链接 · 从文件 · 手动。屏上没有手势提示。下面是标签栏。没有「多个」开关。 |
 | 编辑 | 模态：顶上 **取消** 回到打开它的地方。新连接标题是「新连接」，有胶囊 **VPN 类型** loft / SSTP / VLESS / Trojan，顶栏 **扫描**。已有的连接只显示自己的类型（不能换：字段不同），顶栏 **分享**（二维码），最下面红色 **删除**，带确认页。loft 和 VLESS：胶囊 **链接 / 手动**（图标：链环和铅笔）。链接显示服务器，只藏密钥（`loft://lt_••••@cdn…`）；显示 打开全部。loft 手动是访问密钥、主机、端口、方式（**自动**·GET·WS·H2·QUIC·H3）、路径。两边写同一份配置。VLESS 手动是 UUID、主机、端口、TLS·REALITY、TCP·XHTTP、TLS 主机名、指纹，以及该模式要的字段。证书校验。没有 SOCKS 字段，也没有接口开关：隧道总是 Packet Tunnel。SSTP：用户、密码、服务器、证书校验、PAP/CHAP。Trojan：密码、`trojan://` 服务器、证书校验。折叠的 **更多选项**：mux（loft，「所有连接共用一条到节点的会话」）、DNS、DNS 写入系统；SSTP 和 Trojan 的 TLS 主机名在这里，SSTP 还有「只用这些地址」。保存。 |
 | 引导 | 开始：**扫描二维码** 和 **粘贴链接**（已复制的链接直接添加）；「手动输入密钥和地址」进入 macOS 那两步。**1 访问密钥**（`lt_…`）→ 继续。**2 地址**：URL；**更多选项** 里收着怎么连（先是 **自动**，再 GET/WS/H2/QUIC/H3）和路径（占位提示，不是预填值）→ 连接。然后 iOS 问一次是否允许 VPN；屏上提示点「允许」。 |
-| 设置 | 一个列表，分组 **通用 / 路由 / 连接**。顶栏重置路由。链接 **默认 \| 日志 \| 关于**；「默认」先确认。通用：简化界面、速率单位（比特或字节；数字会自己换到 Mbit/s）、语言、扩展日志。路由：默认路由、**没有 VPN 就不上网**、分流和 **列表** 按钮（没有故障切换）。连接：**启动时连接**、**断线自动重连**、**自动开启**（Connect On Demand：陌生 Wi‑Fi 和蜂窝网络）和 **受信任的 Wi‑Fi** 字段、外部 IP。没有 Dock、登录项、多条出站、SOCKS。 |
+| 设置 | 一个列表，分组 **通用 / 路由 / 连接**。顶栏重置路由。链接 **默认 \| 日志 \| 关于**；「默认」先确认。通用：简化界面、速率单位（比特或字节；数字会自己换到 Mbit/s）、语言、详细日志。路由：默认路由、**无 VPN 时禁止联网**、分流和 **列表** 按钮（没有故障切换）。连接：**启动时连接**、**断线重连**、**按需连接**（蜂窝和未受信任的 Wi‑Fi）和 **受信任的 Wi‑Fi** 字段、公网 IP。没有 Dock、登录项、多条出站、SOCKS。 |
 | 日志 | 从设置进入：顶上 **‹ 设置**，标签栏留着。前置和会话行。密钥会缩短。复制 / 分享 / 清除（带确认页）。 |
 | 关于 | 从设置进入：顶上 **‹ 设置**。标志、loft、`1.0.22`，协议 loft/1.0 · SSTP · VLESS · Trojan，简介，「Made with love by A³」。 |
 | 扫描 | 模态：顶上 **取消**。相机二维码。从文件 / 从照片。「或粘贴链接」输入框（`loft://…、sstp://…、vless://…`），按钮 **粘贴** 和 **添加**。 |
@@ -49,17 +49,17 @@ Apple TV（tvOS 17+）是 iPhone GUI 之后同一条 Packet Tunnel。[计划](..
 
 ### 分流
 
-沿用 macOS 的模型（macOS DESIGN §5）：**区域** 走 Loft 或绕过 Loft，**服务**（名称 + CIDR）只是属于某个区域，**忽略** 是不写入路由、拉取列表后仍保留的 CIDR。内置区域 Local（绕过，局域网）和 Global（走 Loft，`global.bat`），自己的区域在编辑器里加。iOS 上「走 Loft」是 Packet Tunnel 的 `includedRoutes`，「绕过」是它的 `excludedRoutes`；隧道关着时本来就全部直连。没有 macOS 那种记住的直连下一跳。
+沿用 macOS 的模型（macOS DESIGN §5）：**区域** 经 loft 或绕过 loft，**服务**（名称 + CIDR）只是属于某个区域，**排除** 是不写入路由、拉取列表后仍保留的 CIDR。内置区域 Local（绕过，局域网）和 Global（经 loft，`global.bat`），自己的区域在编辑器里加。iOS 上「经 loft」是 Packet Tunnel 的 `includedRoutes`，「绕过」是它的 `excludedRoutes`；隧道关着时本来就全部直连。没有 macOS 那种记住的直连下一跳。
 
 入口：设置 → 路由 → 开关和金色的 **列表**。这些屏在设置标签里打开，顶上是 **‹ 设置** / **‹ 返回**。
 
 | 屏 | 内容 |
 |----|------|
-| 列表 | 标题和同一个开关，一行说明（走 Loft 进隧道，绕过直连）。**区域** + **区域** → 编辑器。区域胶囊带服务数。安静的一行 `Global · 走 Loft`。搜索。行：名称、前几个 CIDR、网段数、来源（仓库 / 自己的 / 忽略）；点一下编辑。**+ 添加**。底部 **导入 · 导出 · 仓库**。 |
-| 网络 | 条目 路由 / 忽略，网段或地址（编辑时每行一个 CIDR），服务，区域。添加 / 保存。 |
+| 列表 | 标题和同一个开关，一行说明（经 loft 进隧道，绕过直连）。**区域** + **区域** → 编辑器。区域胶囊带服务数。安静的一行 `Global · 经 loft`。搜索。行：名称、前几个 CIDR、网段数、来源（列表 / 自定义 / 排除）；点一下编辑。**+ 添加**。底部 **导入 · 导出 · 规则集**。 |
+| 网络 | 条目 路由 / 排除，网段或地址（编辑时每行一个 CIDR），服务，区域。添加 / 保存。 |
 | 区域 | 行：名称、网段数 · 列表文件、方向、「内置」。**+ 添加区域**。 |
-| 区域编辑 | 名称（内置的锁住）、方向 走 / 绕过 Loft、列表地址 + **列表**、自动更新、保存；自己的区域有 删除区域（服务 → Global）。新区域同样的字段。 |
-| 仓库 | 当前区域的列表地址 + **列表**、自动更新、上次拉取、立即更新。 |
+| 区域编辑 | 名称（内置的锁住）、方向 经 loft / 绕过 loft、列表地址 + **列表**、自动更新、保存；自己的区域有 删除区域（服务 → Global）。新区域同样的字段。 |
+| 规则集 | 当前区域的列表地址 + **列表**、自动更新、上次拉取、立即更新。 |
 | 目录 | loft-routes 列表：全球、俄罗斯、中国、伊朗、哈萨克斯坦、白俄罗斯；当前的高亮。点一下填入地址并返回。 |
 | 导入 | 从文件（iOS 文件），识别出的格式和行数，区域，添加。 |
 | 导出 | 所有区域写进一个 loft-routes 文件（区域在 `REM zone:`，服务名在注释里），示例，保存（分享页）。iOS 上没有 Keenetic .bat 格式。 |
@@ -109,7 +109,7 @@ VPN 类型是 **胶囊**（选中的类型用灯色填），连接/高级和设�
 
 ## 5. 文案
 
-共用的文案——按钮、设置、路由——来自 `clients/macOS/lang/*.lang`，macOS 和 iOS 上说法一样。iOS 只在 macOS 没有对应的地方用自己的文案：主页卡片和详情页、「自动开启」和「受信任的 Wi‑Fi」、引导的开始屏、「+」那一页。模型默认俄语（`?lang=en` 或 RU/EN 控件）。主页、引导和列表紧凑按钮用同一个词：**连接**（Connect）；进行中是 **正在连接…**。密钥是 **Access key**，不是 Member key。
+共用的文案——按钮、设置、路由——来自 `clients/macOS/lang/*.lang`，macOS 和 iOS 上说法一样。iOS 只在 macOS 没有对应的地方用自己的文案：主页卡片和详细信息、**按需连接** 和 **受信任的 Wi‑Fi**、引导开始屏、「+」那一页。模型默认俄语（`?lang=en` 或 RU/EN 控件）。主页、引导和列表紧凑按钮用同一个词：**连接**；进行中是 **正在连接…**。密钥是 **访问密钥**，不是成员密钥。中文走 VPN/分流习惯说法（按需连接、分流、断线重连、无 VPN 时禁止联网）。
 
 | id | EN | RU |
 |----|----|----|
@@ -119,29 +119,31 @@ VPN 类型是 **胶囊**（选中的类型用灯色填），连接/高级和设�
 | connecting | Connecting… | Подключение… |
 | pill_on | Connected | Подключено |
 | pill_off | Not connected · Home › | Не подключено · Home › |
-| journal | Journal | Журнал |
+| journal | Log | Журнал |
 | reset | Reset routes | Сбросить маршруты |
 | settings | Settings | Настройки |
 | conns | Connections | Подключения |
-| conns_sub | Each has its own key and address. One is active. | Каждое — свой ключ и адрес. Активное одно. |
+| conns_sub | Each has its own key and address. Only one is active at a time. | У каждого свой ключ и адрес. Одновременно активно одно. |
 | active | active | активно |
 | edit | Edit | Править |
 | delete | Delete | Удалить |
 | import / export | Import / Export | Импорт / Экспорт |
-| warn_export | The file contains the key. Do not give it away. | В файле есть ключ доступа. Не передавайте посторонним. |
+| warn_export | The file contains the access key. Do not share it. | В файле есть ключ доступа. Никому не передавайте. |
 | vpn_type | VPN type | Тип VPN |
 | loft_uri | loft:// address | Адрес loft:// |
-| edit_main / edit_adv | Main / Advanced | Основные / Расширенные |
+| edit_main / edit_adv | Main / Advanced | Основные / Дополнительно |
 | key_title | Access key | Ключ доступа |
 | url_title | Address | Адрес |
 | url_go | Connect | Подключить |
-| simple | Simplified interface | Упрощенный интерфейс |
-| hold | No internet without the VPN | Без VPN — без интернета |
-| auto | Connect at launch | Подключать при запуске |
-| reconnect | Reconnect if it drops | Переподключаться при обрыве |
-| split | Split routing | Раздельная маршрутизация |
-| default_route | Allow default route | Маршрут по умолчанию |
-| blurb | From the street — ordinary HTTPS. Inside, a network of its own. | С улицы — обычный HTTPS. Внутри горит своя сеть. |
+| simple | Simplified interface | Упрощённый интерфейс |
+| hold | No Internet without VPN | Без VPN — без интернета |
+| auto | Connect at Launch | Подключаться при запуске |
+| reconnect | Reconnect on Disconnect | Переподключаться при обрыве |
+| demand | Connect On Demand | Подключаться по требованию |
+| trusted | Trusted Wi‑Fi | Доверенные сети Wi‑Fi |
+| split | Split Routing | Раздельная маршрутизация |
+| default_route | Default Route | Маршрут по умолчанию |
+| blurb | On the outside, ordinary HTTPS. Inside, a network of its own. | Снаружи — обычный HTTPS. Внутри — своя сеть. |
 
 状态卡片：**方式**（前置：GET、WS……没连上时是「自动」），**下载** 和 **上传** 用选定的单位。loft 网络地址和 MTU 在点开的详情页里。
 

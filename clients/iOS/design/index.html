@@ -531,7 +531,7 @@
       </svg>
       loft
     </div>
-    <p data-i="navCap">Макет iOS по живому GUI macOS. Туннель — Packet Tunnel.</p>
+    <p data-i="navCap">Макет iOS по живому GUI macOS. Туннель — системный Packet Tunnel.</p>
     <div class="lang">
       <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
       <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
@@ -540,26 +540,26 @@
     <h4 data-i="hApp">Приложение</h4>
     <button type="button" class="on" data-go="home" data-mode="on" data-i="nHome">Дом · в сети</button>
     <button type="button" data-go="home" data-mode="off" data-i="nOff">Дом · выкл</button>
-    <button type="button" data-go="home" data-mode="connecting" data-i="nOpen">Дом · подключить</button>
-    <button type="button" data-go="home" data-mode="simple" data-i="nSimple">Дом · упрощенный</button>
+    <button type="button" data-go="home" data-mode="connecting" data-i="nOpen">Дом · подключение</button>
+    <button type="button" data-go="home" data-mode="simple" data-i="nSimple">Дом · упрощённый</button>
     <button type="button" data-go="list" data-i="nList">Подключения</button>
     <button type="button" data-go="list" data-list="swipe" data-i="nSwipe">Список · свайп</button>
     <button type="button" data-go="list" data-list="ctx" data-i="nCtx">Список · меню</button>
     <button type="button" data-go="list" data-list="export" data-i="nExp">Список · экспорт</button>
     <button type="button" data-go="list" data-list="add" data-i="nAdd">Список · добавить</button>
     <button type="button" data-go="edit" data-vpn="loft" data-edittab="main" data-i="nEdit">Правка</button>
-    <button type="button" data-go="edit" data-vpn="loft" data-edittab="adv" data-i="nEditAdv">Правка · расширенные</button>
+    <button type="button" data-go="edit" data-vpn="loft" data-edittab="adv" data-i="nEditAdv">Правка · дополнительно</button>
     <button type="button" data-go="edit" data-vpn="sstp" data-edittab="main" data-i="nEditSstp">Правка · SSTP</button>
     <button type="button" data-go="edit" data-vpn="vless" data-edittab="main" data-i="nEditVless">Правка · VLESS</button>
     <button type="button" data-go="edit" data-vpn="trojan" data-edittab="main" data-i="nEditTrojan">Правка · Trojan</button>
-    <button type="button" data-go="scan" data-i="nScan">Сканер QR</button>
-    <button type="button" data-go="share" data-i="nShare">QR для шаринга</button>
-    <button type="button" data-go="onboard" data-step="0" data-i="nOnb0">Онбординг · начало</button>
-    <button type="button" data-go="onboard" data-step="1" data-i="nOnb">Онбординг · ключ</button>
-    <button type="button" data-go="onboard" data-step="2" data-i="nOnb2">Онбординг · адрес</button>
+    <button type="button" data-go="scan" data-i="nScan">Сканер QR-кода</button>
+    <button type="button" data-go="share" data-i="nShare">Поделиться QR</button>
+    <button type="button" data-go="onboard" data-step="0" data-i="nOnb0">Начало · первый запуск</button>
+    <button type="button" data-go="onboard" data-step="1" data-i="nOnb">Начало · ключ</button>
+    <button type="button" data-go="onboard" data-step="2" data-i="nOnb2">Начало · адрес</button>
     <button type="button" data-go="settings" data-settab="0" data-i="nSet">Настройки · общие</button>
     <button type="button" data-go="settings" data-settab="1" data-i="nSetR">Настройки · маршрут</button>
-    <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · клиент</button>
+    <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · подключение</button>
     <h4 data-i="hRoutes">Раздельная маршрутизация</h4>
     <button type="button" data-go="split" data-i="nSplit">Маршруты · списки</button>
     <button type="button" data-go="splitsvc" data-i="nSvc">Маршруты · сеть</button>
@@ -613,7 +613,7 @@
           <div class="title" data-i="conns">Подключения</div>
           <button type="button" class="plus" data-sheet="add" title="+">+</button>
         </div>
-        <p class="subline" data-i="connsSub">Каждое — свой ключ и адрес. Активное одно.</p>
+        <p class="subline" data-i="connsSub">У каждого свой ключ и адрес. Одновременно активно одно.</p>
         <div class="scroll">
           <div class="swipe" data-id="home" data-kind="loft">
             <div class="behind">
@@ -715,7 +715,7 @@
                   <input class="mono" value="443" />
                 </label>
               </div>
-              <label class="field cap"><span data-i="urlType">Как подключаться</span></label>
+              <label class="field cap"><span data-i="urlType">Способ</span></label>
               <div class="seg" id="loftNet">
                 <button type="button" class="on" data-i="kindAuto">Авто</button>
                 <button type="button">GET</button>
@@ -731,7 +731,7 @@
           </div>
 
           <div id="edit-main-sstp" class="hidden">
-            <label class="field"><span data-i="sstpUser">Пользователь</span>
+            <label class="field"><span data-i="sstpUser">Имя пользователя</span>
               <input value="alice" />
             </label>
             <label class="field"><span data-i="sstpPass">Пароль</span>
@@ -753,7 +753,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="sstpPap">PAP / CHAP</div>
-                <div class="s" data-i="sstpPapD">Менее безопасно. По умолчанию только MSCHAPv2.</div>
+                <div class="s" data-i="sstpPapD">Слабее. По умолчанию только MSCHAPv2.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -806,7 +806,7 @@
                   <input class="mono" value="443" />
                 </label>
               </div>
-              <label class="field cap"><span data-i="vlessSec">Защита</span></label>
+              <label class="field cap"><span data-i="vlessSec">Безопасность</span></label>
               <div class="seg" id="vlessSec">
                 <button type="button" data-sec="tls">TLS</button>
                 <button type="button" class="on" data-sec="reality">REALITY</button>
@@ -823,7 +823,7 @@
                 <input class="mono" value="chrome" />
               </label>
               <div id="vless-reality">
-                <label class="field"><span data-i="vlessPbk">Публичный ключ</span>
+                <label class="field"><span data-i="vlessPbk">Открытый ключ</span>
                   <div class="secret">
                     <input class="mono" type="password" value="••••••••" />
                     <button type="button" class="eye" data-i="showSecret">Показать</button>
@@ -863,7 +863,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="mux">Мультиплекс</div>
-                <div class="s" data-i="muxD">Несколько TCP в одной GET-сессии.</div>
+                <div class="s" data-i="muxD">Все соединения идут в одной сессии с нодой.</div>
               </div>
               <div class="toggle on"><i></i></div>
             </div>
@@ -873,7 +873,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="dnsSys">DNS в систему</div>
-                <div class="s" data-i="dnsSysD">Пока туннель поднят, прописать резолверы в Packet Tunnel.</div>
+                <div class="s" data-i="dnsSysD">Пока туннель подключён, DNS-серверы задаются через системный VPN.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -889,14 +889,14 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="dnsRep">Только эти адреса</div>
-                <div class="s" data-i="dnsRepD">Не брать DNS с сервера и шлюз PPP.</div>
+                <div class="s" data-i="dnsRepD">Не брать DNS с сервера и шлюза PPP.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
             <div class="set-row">
               <div>
                 <div class="k" data-i="dnsSys">DNS в систему</div>
-                <div class="s" data-i="dnsSysD">Пока туннель поднят, прописать резолверы в Packet Tunnel.</div>
+                <div class="s" data-i="dnsSysD">Пока туннель подключён, DNS-серверы задаются через системный VPN.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -912,7 +912,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="dnsSys">DNS в систему</div>
-                <div class="s" data-i="dnsSysD">Пока туннель поднят, прописать резолверы в Packet Tunnel.</div>
+                <div class="s" data-i="dnsSysD">Пока туннель подключён, DNS-серверы задаются через системный VPN.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -925,7 +925,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="dnsSys">DNS в систему</div>
-                <div class="s" data-i="dnsSysD">Пока туннель поднят, прописать резолверы в Packet Tunnel.</div>
+                <div class="s" data-i="dnsSysD">Пока туннель подключён, DNS-серверы задаются через системный VPN.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -950,8 +950,8 @@
           <div id="set-0">
             <div class="set-row">
               <div>
-                <div class="k" data-i="simple">Упрощенный интерфейс</div>
-                <div class="s" data-i="simpleD">Дом — открыть и закрыть.</div>
+                <div class="k" data-i="simple">Упрощённый интерфейс</div>
+                <div class="s" data-i="simpleD">На доме только Подключить и Отключить.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -968,7 +968,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="lang">Язык интерфейса</div>
-                <div class="s" data-i="langD">меняется сразу</div>
+                <div class="s" data-i="langD">Применяется сразу.</div>
               </div>
               <select id="langSel" onchange="setLang(this.value)">
                 <option value="en" data-i="langEn">English</option>
@@ -979,7 +979,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="diag">Расширенный журнал</div>
-                <div class="s" data-i="diagD">Маршруты, DNS, Packet Tunnel. Файл с ротацией.</div>
+                <div class="s" data-i="diagD">Маршруты, DNS, системный VPN. Журнал с ротацией.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -989,21 +989,21 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="defRoute">Маршрут по умолчанию</div>
-                <div class="s" data-i="defRouteD">Весь интернет через лофт. Выкл — только сеть лофта.</div>
+                <div class="s" data-i="defRouteD">Весь интернет через loft. Выкл — только сеть loft.</div>
               </div>
               <div class="toggle on"><i></i></div>
             </div>
             <div class="set-row">
               <div>
                 <div class="k" data-i="hold">Без VPN — без интернета</div>
-                <div class="s" data-i="holdD">Туннель упал — прямой интернет закрыт, пока Loft не вернётся.</div>
+                <div class="s" data-i="holdD">Пока туннель не подключён, прямой доступ в интернет закрыт.</div>
               </div>
               <div class="toggle on"><i></i></div>
             </div>
             <div class="set-row">
               <div>
                 <div class="k" data-i="split">Раздельная маршрутизация</div>
-                <div class="s" data-i="splitD">Зона едет через Loft или мимо. Сервис только состоит в зоне.</div>
+                <div class="s" data-i="splitD">Трафик зоны идёт через loft или в обход. Сервис только принадлежит зоне.</div>
                 <button type="button" class="ghost-sm" data-go="split" data-i="split_lists">Списки</button>
               </div>
               <div class="toggle on" id="setSplit"><i></i></div>
@@ -1013,32 +1013,32 @@
           <div id="set-2">
             <div class="set-row">
               <div>
-                <div class="k" data-i="auto">Подключать при запуске</div>
-                <div class="s" data-i="autoD">При открытии приложения подключается выбранное.</div>
+                <div class="k" data-i="auto">Подключаться при запуске</div>
+                <div class="s" data-i="autoD">При открытии приложения подключается выбранное подключение.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
             <div class="set-row">
               <div>
                 <div class="k" data-i="reconnect">Переподключаться при обрыве</div>
-                <div class="s" data-i="reconnectD">Оборвалось — подключиться снова.</div>
+                <div class="s" data-i="reconnectD">Если сессия оборвалась — подключиться снова.</div>
               </div>
               <div class="toggle on"><i></i></div>
             </div>
             <div class="set-row">
               <div>
-                <div class="k" data-i="demand">Включаться само</div>
-                <div class="s" data-i="demandD">iOS включит VPN в чужих Wi‑Fi и на сотовой, а в доверенных сетях — нет.</div>
+                <div class="k" data-i="demand">Подключаться по требованию</div>
+                <div class="s" data-i="demandD">Система подключает VPN в сотовой сети и в недоверенных Wi‑Fi. В доверенных сетях — нет.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
-            <label class="field" style="margin-top:10px"><span data-i="trusted">Доверенные Wi‑Fi</span>
+            <label class="field" style="margin-top:10px"><span data-i="trusted">Доверенные сети Wi‑Fi</span>
               <input placeholder="Home-WiFi, Office" />
             </label>
             <div class="set-row">
               <div>
                 <div class="k" data-i="extIp">Показывать внешний IP</div>
-                <div class="s" data-i="extIpD">После подключения спросить адрес у сервиса через это соединение.</div>
+                <div class="s" data-i="extIpD">После подключения запросить адрес у сервиса через это соединение.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -1064,10 +1064,10 @@
           </div>
           <div id="onb0">
             <div class="btns">
-              <button type="button" class="go" data-go="scan" data-i="addScan">Сканировать QR</button>
+              <button type="button" class="go" data-go="scan" data-i="addScan">Сканировать QR-код</button>
               <button type="button" class="ghost" data-go="home" data-mode="connecting" data-i="addPaste">Вставить ссылку</button>
             </div>
-            <p class="hint" data-i="startHint">Если ссылка уже скопирована, нажмите «Вставить ссылку».</p>
+            <p class="hint" data-i="startHint">Если ссылка уже в буфере, нажмите «Вставить ссылку».</p>
             <button type="button" class="ghost-sm" style="margin:14px auto 0" data-go="onboard" data-step="1" data-i="startManual">Ввести ключ и адрес вручную</button>
           </div>
           <div id="onb1" class="hidden">
@@ -1086,7 +1086,7 @@
             </label>
             <button type="button" class="ghost-sm" id="onbAdvBtn" data-i="onbAdv">Дополнительно</button>
             <div id="onbAdv" class="hidden">
-              <label class="field"><span data-i="urlType">Как подключаться</span></label>
+              <label class="field"><span data-i="urlType">Способ</span></label>
               <div class="seg" id="onbKind">
                 <button type="button" class="on" data-i="kindAuto">Авто</button>
                 <button type="button">GET</button>
@@ -1104,14 +1104,14 @@
               <button type="button" class="go" data-i="urlGo">Подключить</button>
               <button type="button" class="ghost" data-go="onboard" data-step="1" data-i="back">Назад</button>
             </div>
-            <p class="hint" data-i="onbVpn">Дальше — стоковый лист VPN iOS. Один раз.</p>
+            <p class="hint" data-i="onbVpn">iOS спросит разрешение на VPN — нажмите «Разрешить». Это один раз.</p>
           </div>
         </div>
       </div>
 
       <div class="screen hidden" id="scan">
         <div class="navbar"><button type="button" data-back data-i="cancel">Отмена</button></div>
-        <div class="title" data-i="scanT" style="font-size:20px;font-weight:600;letter-spacing:-0.03em;margin:0 0 8px">Сканер QR</div>
+        <div class="title" data-i="scanT" style="font-size:20px;font-weight:600;letter-spacing:-0.03em;margin:0 0 8px">Сканер QR-кода</div>
         <div class="scroll">
           <div class="finder">
             <div class="noise"></div>
@@ -1133,7 +1133,7 @@
               <button type="button" class="ghost" data-i="fromPhotos">Из Фото</button>
             </div>
           </div>
-          <label class="field"><span data-i="pasteL">Или вставить URI</span>
+          <label class="field"><span data-i="pasteL">Или вставить ссылку</span>
             <textarea class="paste" data-ph="pastePh" placeholder="loft://…, sstp://…, vless://…"></textarea>
           </label>
           <div class="row-2">
@@ -1160,7 +1160,7 @@
             </div>
           </div>
           <p class="hint mono" style="word-break:break-all">loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home</p>
-          <p class="hint" data-i="warnExport">В файле есть ключ доступа. Не передавайте посторонним.</p>
+          <p class="hint" data-i="shareHint">Адрес — loft://, один канал. Ключ в URI — секрет. Несколько каналов или подключений — файл .loft.</p>
           <div class="row-2" style="margin-top:12px">
             <button type="button" class="go" data-i="shareBtn">Поделиться</button>
             <button type="button" class="ghost" data-i="copyLink">Скопировать ссылку</button>
@@ -1172,7 +1172,7 @@
         <div class="navbar"><button type="button" data-back data-i="backSet">‹ Настройки</button></div>
         <div class="hero" style="padding-top:0">
           <h1 data-i="journal">Журнал</h1>
-          <p class="hint" data-i="journalD">Строки фронта и сессии. Ключ сокращается.</p>
+          <p class="hint" data-i="journalD">Строки канала и сессии. Ключ в журнале сокращается.</p>
         </div>
         <pre class="log">get   cdn.example.com  hello ok
 status  ip=10.8.0.14  mtu=1280  front=get
@@ -1201,8 +1201,8 @@ hold  armed</pre>
             <div class="proto"><span class="k">Trojan</span><span class="v">tcp · tls · reality · xhttp</span></div>
             <div class="proto"><span class="k">VLESS</span><span class="v">tcp · tls</span></div>
           </div>
-          <p class="blurb" data-i="blurb">С улицы — обычный HTTPS.
-Внутри горит своя сеть.</p>
+          <p class="blurb" data-i="blurb">Снаружи — обычный HTTPS.
+Внутри — своя сеть.</p>
           <p class="made">Made with love <span class="heart">♥</span> by A³</p>
         </div>
       </div>
@@ -1267,7 +1267,7 @@ hold  armed</pre>
       <div class="scrim hidden" id="detScrim">
         <div style="width:100%">
           <div class="sheet">
-            <h3 data-i="detT">Подробности</h3>
+            <h3 data-i="detT">Сведения</h3>
             <button type="button" class="row"><span data-i="detOver">Адрес в сети loft</span><span class="s mono">10.8.0.14</span></button>
             <button type="button" class="row"><span data-i="detFront">Способ</span><span class="s mono">get</span></button>
             <button type="button" class="row"><span data-i="detMtu">MTU</span><span class="s mono">1280</span></button>
@@ -1290,7 +1290,7 @@ hold  armed</pre>
         <div style="width:100%">
           <div class="sheet">
             <h3 data-i="addSheet">Новое подключение</h3>
-            <button type="button" class="row" data-go="scan"><span data-i="addScan">Сканировать QR</span></button>
+            <button type="button" class="row" data-go="scan"><span data-i="addScan">Сканировать QR-код</span></button>
             <button type="button" class="row" data-go="edit" data-new="1"><span data-i="addPaste">Вставить ссылку</span></button>
             <button type="button" class="row" data-go="scan"><span data-i="fromFile">Из файла</span></button>
             <button type="button" class="row" data-go="edit" data-new="1" data-entry="manual"><span data-i="addManual">Вручную</span></button>
@@ -1302,9 +1302,9 @@ hold  armed</pre>
         <div style="width:100%">
           <div class="sheet">
             <h3 data-i="expSheet">Экспорт Home</h3>
-            <p class="sub" data-i="warnExport">В файле есть ключ доступа. Не передавайте посторонним.</p>
+            <p class="sub" data-i="warnExport">В файле есть ключ доступа. Никому не передавайте.</p>
             <button type="button" class="row"><span data-i="expLoft">Home.loft</span><span class="s" data-i="expLoftS">это подключение</span></button>
-            <button type="button" class="row" data-go="share"><span data-i="expQr">QR loft://</span><span class="s" data-i="expQrS">один фронт</span></button>
+            <button type="button" class="row" data-go="share"><span data-i="expQr">QR loft://</span><span class="s" data-i="expQrS">один канал</span></button>
             <button type="button" class="row"><span data-i="expAll">Family.loft</span><span class="s" data-i="expAllS">все три · loft + sstp + vless</span></button>
           </div>
           <button type="button" class="cancel" data-close="exportScrim" data-i="cancel">Отмена</button>
@@ -1314,7 +1314,7 @@ hold  armed</pre>
         <div style="width:100%">
           <div class="sheet">
             <h3 id="delTitle">Удалить Office?</h3>
-            <p class="sub" data-i="delSub">Подключение пропадёт с устройства. Сессия, если она эта, закроется.</p>
+            <p class="sub" data-i="delSub">Подключение будет удалено с устройства. Если это текущая сессия, она закроется.</p>
             <button type="button" class="row danger" data-close="delScrim" data-i="delete">Удалить</button>
           </div>
           <button type="button" class="cancel" data-close="delScrim" data-i="cancel">Отмена</button>
@@ -1328,30 +1328,30 @@ hold  armed</pre>
       <div class="home-ind"></div>
       <main>
         <h2>VPN</h2>
-        <p class="cap" data-i="iosCap">Системный список. Тумблер — Packet Tunnel loft, не второй выключатель в приложении.</p>
+        <p class="cap" data-i="iosCap">Системный список VPN. Тумблер — туннель loft, не второй выключатель в приложении.</p>
         <div class="ios-group">
           <div class="ios-row">
             <div>
               <div class="l">loft</div>
-              <div class="ios-status" data-i="iosOn">Connected</div>
+              <div class="ios-status" data-i="iosOn">Подключено</div>
             </div>
             <div class="ios-sw"><i></i></div>
           </div>
           <div class="ios-row">
-            <span class="l" data-i="iosType">Type</span>
+            <span class="l" data-i="iosType">Тип</span>
             <span class="r">loft</span>
           </div>
           <div class="ios-row">
-            <span class="l" data-i="iosServer">Server</span>
+            <span class="l" data-i="iosServer">Сервер</span>
             <span class="r">cdn.example.com</span>
           </div>
         </div>
-        <p class="cap" style="margin-top:16px" data-i="iosIke">IKEv2 Office — штатный клиент iOS, не пакет loft.</p>
+        <p class="cap" style="margin-top:16px" data-i="iosIke">IKEv2 Office — встроенный клиент iOS, не приложение loft.</p>
         <div class="ios-group">
           <div class="ios-row">
             <div>
               <div class="l">IKEv2 Office</div>
-              <div class="r" data-i="iosNot">Not Connected</div>
+              <div class="r" data-i="iosNot">Не подключено</div>
             </div>
             <div class="ios-sw" style="background:#e5e5ea"><i style="right:auto;left:2px"></i></div>
           </div>
@@ -1366,14 +1366,14 @@ hold  armed</pre>
         copyLink: "Скопировать ссылку",
         pastePh: "loft://…, sstp://…, vless://…",
         pasteBtn: "Вставить",
-        cfClrS: "Строки пропадут с этого устройства.",
+        cfClrS: "Записи журнала будут удалены с этого устройства.",
         cfClrT: "Очистить журнал?",
-        cfDefGo: "Вернуть",
-        cfDefS: "Все переключатели вернутся к заводским.",
-        cfDefT: "Вернуть настройки по умолчанию?",
-        trusted: "Доверенные Wi‑Fi",
-        demandD: "iOS включит VPN в чужих Wi‑Fi и на сотовой, а в доверенных сетях — нет.",
-        demand: "Включаться само",
+        cfDefGo: "Сбросить",
+        cfDefS: "Все параметры вернутся к значениям по умолчанию.",
+        cfDefT: "Сбросить настройки?",
+        trusted: "Доверенные сети Wi‑Fi",
+        demandD: "Система подключает VPN в сотовой сети и в недоверенных Wi‑Fi. В доверенных сетях — нет.",
+        demand: "Подключаться по требованию",
         scanBtn: "Сканировать",
         shareBtn: "Поделиться",
         newTitle: "Новое подключение",
@@ -1381,33 +1381,33 @@ hold  armed</pre>
         detMtu: "MTU",
         detFront: "Способ",
         detOver: "Адрес в сети loft",
-        detT: "Подробности",
-        sparkCap: "скорость за минуту",
+        detT: "Сведения",
+        sparkCap: "скорость за последнюю минуту",
         kindAutoV: "Авто",
         txK: "ОТДАЧА",
         rxK: "ПРИЁМ",
         methodK: "СПОСОБ",
         pillBusy: "Подключение: Home…",
         "split.add": "Добавить",
-        "split.add.body": "Адрес или CIDR. Имя сервиса — чтобы в списке было понятно.",
-        "split.add.body.ignore": "CIDR, который не ставить в эту зону. Переживает обновление репозитория.",
-        "split.add.ignore": "Игнор",
+        "split.add.body": "Адрес или префикс CIDR. Имя сервиса видно в списке.",
+        "split.add.body.ignore": "Префикс, который не входит в эту зону. Сохраняется при обновлении списка.",
+        "split.add.ignore": "Исключение",
         "split.add.kind": "Запись",
         "split.add.route": "Маршрут",
         "split.add.go": "Добавить",
         "split.add.name": "Сервис",
         "split.add.net": "Сеть или адрес",
         "split.add.title": "Сеть",
-        "split_add_save": "Сохранить",
-        "split.bypass": "Мимо Loft",
-        "split.via": "Через Loft",
-        "split.d": "Зона едет через Loft или мимо. Сервис только состоит в зоне.",
+        split_add_save: "Сохранить",
+        "split.bypass": "В обход loft",
+        "split.via": "Через loft",
+        "split.d": "Трафик зоны идёт через loft или в обход. Сервис только принадлежит зоне.",
         "split.empty": "В этой зоне пока пусто.",
-        "split.ignore": "Игнор",
+        "split.ignore": "Исключение",
         "split.export.body": "Все зоны в одном файле loft-routes: зона — в REM zone:, имя сервиса — в комментарии.",
         "split.export.fmt": "Формат",
         "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
+        "split.export.loft": "loft",
         "split.export.save": "Сохранить loft-routes.bat",
         "split.export.save.keen": "Сохранить %@.bat",
         "split.export.title": "Экспорт маршрутов",
@@ -1420,26 +1420,26 @@ hold  armed</pre>
         "split.rdef": "Направление",
         "split.repo": "Репозиторий",
         "split.repo.auto": "Обновлять автоматически",
-        "split.repo.auto.d": "Раз в сутки, свои записи не затирает.",
-        "split.repo.body": "Raw .bat с GitHub или своего хоста. Заполняет эту зону. Свои строки не трогает.",
+        "split.repo.auto.d": "Раз в сутки. Свои записи не затирает.",
+        "split.repo.body": "Файл .bat с GitHub или своего хоста. Заполняет эту зону. Свои строки не трогает.",
         "split.repo.last": "Сегодня · 214 маршрутов",
-        "split.repo.none": "Пока нет списка",
+        "split.repo.none": "Списка пока нет",
         "split.repo.pull": "Обновить сейчас",
         "split.repo.url": "Адрес списка",
         "split.repo.pick": "Списки",
         "split.lists": "Списки",
-        "split.lists.body": "Из репозитория loft. Свой URL по-прежнему можно вставить.",
+        "split.lists.body": "Из каталога loft-routes. Свой URL по-прежнему можно вставить.",
         "split.search": "Найти сервис",
         "split.src.me": "свои",
-        "split.src.ignore": "игнор",
-        "split.src.repo": "репо",
-        "split.sub.off": "Выкл — списки не ставятся в систему.",
+        "split.src.ignore": "исключ.",
+        "split.src.repo": "список",
+        "split.sub.off": "Выкл — списки не пишутся в системную таблицу маршрутов.",
         "split.zone": "Зона",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
         "split.zones": "Зоны",
         "split.zones.add": "Добавить зону",
-        "split.zones.add.body": "Имя, направление, необязательный адрес списка. Сервисы едут как зона.",
+        "split.zones.add.body": "Имя, направление, необязательный адрес списка. Сервисы следуют за зоной.",
         "split.zones.add.go": "Добавить",
         "split.zones.add.title": "Новая зона",
         "split.zones.builtin": "Встроенная",
@@ -1448,138 +1448,229 @@ hold  armed</pre>
         "split.zones.move": "Сервисы перейдут в Global.",
         "split.zones.name": "Имя",
         "split.zones.save": "Сохранить",
-        "split_lists": "Списки",
-        "split.sub": "Через Loft — в туннель. Мимо Loft — напрямую, в обход туннеля.",
-        "backGen": "‹ Назад",
-        "nSplit": "Маршруты · списки",
-        "nSvc": "Маршруты · сеть",
-        "nZones": "Маршруты · зоны",
-        "nZone": "Маршруты · зона",
-        "nRepo": "Маршруты · репозиторий",
-        "nLists": "Маршруты · каталог",
-        "nSin": "Маршруты · импорт",
-        "nSout": "Маршруты · экспорт",
-        "hRoutes": "Раздельная маршрутизация",
-        navCap: "Макет iOS по живому GUI macOS. Туннель — Packet Tunnel.",
+        split_lists: "Списки",
+        "split.sub": "Через loft — в туннель. В обход loft — напрямую, мимо туннеля.",
+        backGen: "‹ Назад",
+        nSplit: "Маршруты · списки",
+        nSvc: "Маршруты · сеть",
+        nZones: "Маршруты · зоны",
+        nZone: "Маршруты · зона",
+        nRepo: "Маршруты · репозиторий",
+        nLists: "Маршруты · каталог",
+        nSin: "Маршруты · импорт",
+        nSout: "Маршруты · экспорт",
+        hRoutes: "Раздельная маршрутизация",
+        navCap: "Макет iOS по живому GUI macOS. Туннель — системный Packet Tunnel.",
         hApp: "Приложение",
-        nHome: "Дом · в сети", nOff: "Дом · выкл", nOpen: "Дом · подключить", nSimple: "Дом · упрощенный",
-        nOnb0: "Онбординг · начало",
+        nHome: "Дом · в сети",
+        nOff: "Дом · выкл",
+        nOpen: "Дом · подключение",
+        nSimple: "Дом · упрощённый",
+        nOnb0: "Начало · первый запуск",
         nAdd: "Список · добавить",
         nEditTrojan: "Правка · Trojan",
         vpnTrojan: "Trojan",
         trojanPass: "Пароль",
         trojanUrl: "Сервер",
         addSheet: "Новое подключение",
-        addScan: "Сканировать QR",
+        addScan: "Сканировать QR-код",
         addPaste: "Вставить ссылку",
         addManual: "Вручную",
         startTitle: "Добавьте подключение",
         startBody: "Отсканируйте QR или вставьте ссылку, которую вам выдали.",
-        startHint: "Если ссылка уже скопирована, нажмите «Вставить ссылку».",
+        startHint: "Если ссылка уже в буфере, нажмите «Вставить ссылку».",
         startManual: "Ввести ключ и адрес вручную",
         onbAdv: "Дополнительно",
         kindAuto: "Авто",
-        nList: "Подключения", nSwipe: "Список · свайп", nCtx: "Список · меню", nExp: "Список · экспорт",
-        nEdit: "Правка", nEditAdv: "Правка · расширенные", nEditSstp: "Правка · SSTP", nEditVless: "Правка · VLESS",
-        nScan: "Сканер QR", nShare: "QR для шаринга",
-        nOnb: "Онбординг · ключ", nOnb2: "Онбординг · адрес",
-        nSet: "Настройки · общие", nSetR: "Настройки · маршрут", nSetC: "Настройки · клиент",
-        nJournal: "Журнал", nAbout: "О программе", nIos: "Настройки → VPN",
-        connect: "Подключить", popConnect: "Подключить", disconnect: "Отключить",
-        connecting: "Подключение…", disconnecting: "Отключение…", cancel: "Отмена",
-        pillOn: "Подключено: Home 0:12", pillOff: "Не подключено · Home ›",
-        frontK: "ФРОНТ", tunK: "ТУННЕЛЬ",
-        journal: "Журнал", reset: "Сбросить маршруты", settings: "Настройки",
-        tabHome: "Дом", close: "Закрыть", backSet: "‹ Настройки",
-        conns: "Подключения", connsSub: "Каждое — свой ключ и адрес. Активное одно.",
-        active: "активно", edit: "Править", delete: "Удалить", export: "Экспорт", import: "Импорт",
-        listHint: "Свайп влево — удалить, вправо — править. Долгое нажатие — меню. Выбранное экспортируется как .loft. Тап по Office отключит Home: туннель на iOS один.",
+        nList: "Подключения",
+        nSwipe: "Список · свайп",
+        nCtx: "Список · меню",
+        nExp: "Список · экспорт",
+        nEdit: "Правка",
+        nEditAdv: "Правка · дополнительно",
+        nEditSstp: "Правка · SSTP",
+        nEditVless: "Правка · VLESS",
+        nScan: "Сканер QR-кода",
+        nShare: "Поделиться QR",
+        nOnb: "Начало · ключ",
+        nOnb2: "Начало · адрес",
+        nSet: "Настройки · общие",
+        nSetR: "Настройки · маршрут",
+        nSetC: "Настройки · подключение",
+        nJournal: "Журнал",
+        nAbout: "О программе",
+        nIos: "Настройки → VPN",
+        connect: "Подключить",
+        popConnect: "Подключить",
+        disconnect: "Отключить",
+        connecting: "Подключение…",
+        disconnecting: "Отключение…",
+        cancel: "Отмена",
+        pillOn: "Подключено: Home 0:12",
+        pillOff: "Не подключено · Home ›",
+        frontK: "ФРОНТ",
+        tunK: "ТУННЕЛЬ",
+        journal: "Журнал",
+        reset: "Сбросить маршруты",
+        settings: "Настройки",
+        tabHome: "Дом",
+        close: "Закрыть",
+        backSet: "‹ Настройки",
+        conns: "Подключения",
+        connsSub: "У каждого свой ключ и адрес. Одновременно активно одно.",
+        active: "активно",
+        edit: "Править",
+        delete: "Удалить",
+        export: "Экспорт",
+        import: "Импорт",
+        listHint: "Свайп влево — удалить, вправо — править. Долгое нажатие — меню. Выбранное экспортируется как .loft. Тап по Office отключит Home: на iOS туннель один.",
         expSheet: "Экспорт Home",
-        warnExport: "В файле есть ключ доступа. Не передавайте посторонним.",
-        expLoft: "Home.loft", expLoftS: "это подключение",
-        expQr: "QR loft://", expQrS: "один фронт",
-        expAll: "Family.loft", expAllS: "все три · loft + sstp + vless",
-        delSub: "Подключение пропадёт с устройства. Сессия, если она эта, закроется.",
-        editTitle: "Подключение", name: "Имя", vpnType: "Тип VPN",
-        vpnLoft: "loft", vpnSstp: "SSTP", vpnVless: "VLESS",
-        editMain: "Основные", editAdv: "Расширенные", loftUri: "Адрес loft://",
-        entryLink: "Ссылка", entryMan: "Вручную",
-        eKey: "Ключ доступа", ePath: "Путь",
-        vlessHost: "Адрес", vlessPort: "Порт",
-        vlessSec: "Защита", vlessNet: "Транспорт", vlessFp: "Отпечаток TLS",
-        vlessPbk: "Публичный ключ", vlessSid: "Short ID", vlessXhost: "Заголовок Host",
-        vlessVision: "Vision", vlessVisionD: "xtls-rprx-vision на TCP.",
-        showSecret: "Показать", hideSecret: "Скрыть",
-        tun: "Интерфейс туннеля", tunD: "Packet Tunnel. Маршрут машины — в Настройках.",
+        warnExport: "В файле есть ключ доступа. Никому не передавайте.",
+        expLoft: "Home.loft",
+        expLoftS: "это подключение",
+        expQr: "QR loft://",
+        expQrS: "один канал",
+        expAll: "Family.loft",
+        expAllS: "все три · loft + sstp + vless",
+        delSub: "Подключение будет удалено с устройства. Если это текущая сессия, она закроется.",
+        editTitle: "Подключение",
+        name: "Имя",
+        vpnType: "Тип VPN",
+        vpnLoft: "loft",
+        vpnSstp: "SSTP",
+        vpnVless: "VLESS",
+        editMain: "Основные",
+        editAdv: "Дополнительно",
+        loftUri: "Адрес loft://",
+        entryLink: "Ссылка",
+        entryMan: "Вручную",
+        eKey: "Ключ доступа",
+        ePath: "Путь",
+        vlessHost: "Адрес",
+        vlessPort: "Порт",
+        vlessSec: "Безопасность",
+        vlessNet: "Транспорт",
+        vlessFp: "Отпечаток TLS",
+        vlessPbk: "Открытый ключ",
+        vlessSid: "Short ID",
+        vlessXhost: "Заголовок Host",
+        vlessVision: "Vision",
+        vlessVisionD: "xtls-rprx-vision на TCP.",
+        showSecret: "Показать",
+        hideSecret: "Скрыть",
+        tun: "Интерфейс туннеля",
+        tunD: "Системный VPN (Packet Tunnel). Маршрут устройства — в Настройках.",
         sstpTunD: "Адрес с сервера на интерфейсе.",
-        sstpUser: "Пользователь", sstpPass: "Пароль", sstpUrl: "Сервер", sstpSni: "Имя хоста TLS",
-        sstpTls: "Проверка сертификата", sstpTlsD: "Проверять сертификат HTTPS-сервера.",
-        sstpPap: "PAP / CHAP", sstpPapD: "Менее безопасно. По умолчанию только MSCHAPv2.",
-        vlessUuid: "UUID", vlessUrl: "Ссылка vless://",
-        mux: "Мультиплекс", muxD: "Все соединения — по одной сессии с нодой.",
-        dns: "DNS", dnsPhLoft: "пусто — с ноды", dnsPhSstp: "пусто — с сервера, иначе шлюз", dnsPhVless: "адреса через запятую",
-        dnsSys: "DNS в систему", dnsSysD: "Пока туннель поднят, прописать резолверы в Packet Tunnel.",
-        dnsRep: "Только эти адреса", dnsRepD: "Не брать DNS с сервера и шлюз PPP.",
-        save: "Сохранить", back: "Назад", qr: "QR",
-        setGen: "Общие", setRoute: "Маршрут", setClient: "Подключение",
-        simple: "Упрощенный интерфейс", simpleD: "Дом — открыть и закрыть.",
-        rateUnit: "Единицы скорости", rateUnitD: "Как показывать ↑↓ на доме.",
-        uKbit: "кбит/с", uKb: "КБ/с",
-        lang: "Язык интерфейса", langD: "меняется сразу", langZh: "中文", langRu: "Русский", langEn: "English",
-        rateDown: "↓ 12.4 Мбит/с", delQ: "Удалить %s?",
-        diag: "Расширенный журнал", diagD: "Маршруты, DNS, Packet Tunnel. Файл с ротацией.",
-        defRoute: "Маршрут по умолчанию", defRouteD: "Весь интернет через лофт. Выкл — только сеть лофта.",
-        hold: "Без VPN — без интернета", holdD: "Туннель упал — прямой интернет закрыт, пока Loft не вернётся.",
-        split: "Раздельная маршрутизация", splitD: "Зона едет через Loft или мимо. Сервис только состоит в зоне.",
-        auto: "Подключать при запуске", autoD: "При открытии приложения подключается выбранное.",
-        reconnect: "Переподключаться при обрыве", reconnectD: "Оборвалось — подключиться снова.",
-        extIp: "Показывать внешний IP", extIpD: "После подключения спросить адрес у сервиса через это соединение.",
-        defaults: "По умолчанию", about: "О программе",
-        keyStep: "Шаг 1 из 2", keyTitle: "Ключ доступа",
+        sstpUser: "Имя пользователя",
+        sstpPass: "Пароль",
+        sstpUrl: "Сервер",
+        sstpSni: "Имя хоста TLS",
+        sstpTls: "Проверка сертификата",
+        sstpTlsD: "Проверять сертификат HTTPS-сервера.",
+        sstpPap: "PAP / CHAP",
+        sstpPapD: "Слабее. По умолчанию только MSCHAPv2.",
+        vlessUuid: "UUID",
+        vlessUrl: "Ссылка vless://",
+        mux: "Мультиплекс",
+        muxD: "Все соединения идут в одной сессии с нодой.",
+        dns: "DNS",
+        dnsPhLoft: "пусто — с ноды",
+        dnsPhSstp: "пусто — с сервера, иначе шлюз",
+        dnsPhVless: "адреса через запятую",
+        dnsSys: "DNS в систему",
+        dnsSysD: "Пока туннель подключён, DNS-серверы задаются через системный VPN.",
+        dnsRep: "Только эти адреса",
+        dnsRepD: "Не брать DNS с сервера и шлюза PPP.",
+        save: "Сохранить",
+        back: "Назад",
+        qr: "QR",
+        setGen: "Общие",
+        setRoute: "Маршрут",
+        setClient: "Подключение",
+        simple: "Упрощённый интерфейс",
+        simpleD: "На доме только Подключить и Отключить.",
+        rateUnit: "Единицы скорости",
+        rateUnitD: "Как показывать ↑↓ на доме.",
+        uKbit: "кбит/с",
+        uKb: "КБ/с",
+        lang: "Язык интерфейса",
+        langD: "Применяется сразу.",
+        langZh: "中文",
+        langRu: "Русский",
+        langEn: "English",
+        rateDown: "↓ 12,4 Мбит/с",
+        delQ: "Удалить %s?",
+        diag: "Расширенный журнал",
+        diagD: "Маршруты, DNS, системный VPN. Журнал с ротацией.",
+        defRoute: "Маршрут по умолчанию",
+        defRouteD: "Весь интернет через loft. Выкл — только сеть loft.",
+        hold: "Без VPN — без интернета",
+        holdD: "Пока туннель не подключён, прямой доступ в интернет закрыт.",
+        split: "Раздельная маршрутизация",
+        splitD: "Трафик зоны идёт через loft или в обход. Сервис только принадлежит зоне.",
+        auto: "Подключаться при запуске",
+        autoD: "При открытии приложения подключается выбранное подключение.",
+        reconnect: "Переподключаться при обрыве",
+        reconnectD: "Если сессия оборвалась — подключиться снова.",
+        extIp: "Показывать внешний IP",
+        extIpD: "После подключения запросить адрес у сервиса через это соединение.",
+        defaults: "По умолчанию",
+        about: "О программе",
+        keyStep: "Шаг 1 из 2",
+        keyTitle: "Ключ доступа",
         keyBody: "Введите ключ доступа, который вам выдали.",
         keyHint: "Начинается с lt_. Его показывают один раз — сохраните.",
-        continue: "Продолжить", keyOrfile: "Или импортировать файл или QR",
-        urlStep: "Шаг 2 из 2", urlTitle: "Адрес",
+        continue: "Продолжить",
+        keyOrfile: "Или импортировать файл или QR",
+        urlStep: "Шаг 2 из 2",
+        urlTitle: "Адрес",
         urlBody: "Введите адрес, который выдали вместе с ключом.",
-        url: "URL", urlType: "Как подключаться", path: "Путь (если давали)",
+        url: "URL",
+        urlType: "Способ",
+        path: "Путь (если давали)",
         urlHint: "HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.",
         urlGo: "Подключить",
         onbVpn: "iOS спросит разрешение на VPN — нажмите «Разрешить». Это один раз.",
-        scanT: "Сканер QR",
+        scanT: "Сканер QR-кода",
         scanHint: "Камера. loft://, sstp://, vless:// или .loft.",
-        fromFile: "Из файла", fromPhotos: "Из Фото",
-        pasteL: "Или вставить ссылку", scanAdd: "Добавить",
+        fromFile: "Из файла",
+        fromPhotos: "Из Фото",
+        pasteL: "Или вставить ссылку",
+        scanAdd: "Добавить",
         shareT: "QR",
-        shareHint: "Адрес — loft://, один фронт. Ключ в URI — секрет. Несколько фронтов или несколько подключений — файл .loft.",
-        journalD: "Строки фронта и сессии. Ключ сокращается.",
-        copy: "Скопировать", clearLog: "Очистить",
+        shareHint: "Адрес — loft://, один канал. Ключ в URI — секрет. Несколько каналов или подключений — файл .loft.",
+        journalD: "Строки канала и сессии. Ключ в журнале сокращается.",
+        copy: "Скопировать",
+        clearLog: "Очистить",
         protos: "протоколы",
-        blurb: "С улицы — обычный HTTPS.\nВнутри горит своя сеть.",
+        blurb: "Снаружи — обычный HTTPS.\nВнутри — своя сеть.",
         handshake: "рукопожатие",
-        iosCap: "Системный список. Тумблер — Packet Tunnel loft, не второй выключатель в приложении.",
-        iosOn: "Подключено", iosType: "Тип", iosServer: "Сервер",
-        iosIke: "IKEv2 Office — штатный клиент iOS, не пакет loft.",
+        iosCap: "Системный список VPN. Тумблер — туннель loft, не второй выключатель в приложении.",
+        iosOn: "Подключено",
+        iosType: "Тип",
+        iosServer: "Сервер",
+        iosIke: "IKEv2 Office — встроенный клиент iOS, не приложение loft.",
         iosNot: "Не подключено"
       },
       en: {
-        copyLink: "Copy link",
+        copyLink: "Copy Link",
         pastePh: "loft://…, sstp://…, vless://…",
         pasteBtn: "Paste",
-        cfClrS: "The lines leave this device.",
-        cfClrT: "Clear the journal?",
-        cfDefGo: "Restore",
-        cfDefS: "Every switch goes back to its factory value.",
-        cfDefT: "Restore the default settings?",
+        cfClrS: "Log entries will be removed from this device.",
+        cfClrT: "Clear the log?",
+        cfDefGo: "Reset",
+        cfDefS: "All settings return to their defaults.",
+        cfDefT: "Reset settings?",
         trusted: "Trusted Wi‑Fi",
-        demandD: "iOS turns the VPN on in other Wi‑Fi and on cellular, not in trusted networks.",
-        demand: "Turn on by itself",
+        demandD: "The system connects the VPN on cellular and untrusted Wi‑Fi. Trusted networks stay off.",
+        demand: "Connect On Demand",
         scanBtn: "Scan",
         shareBtn: "Share",
-        newTitle: "New connection",
+        newTitle: "New Connection",
         detServer: "Server",
         detMtu: "MTU",
         detFront: "Method",
-        detOver: "loft network address",
+        detOver: "loft address",
         detT: "Details",
         sparkCap: "speed, last minute",
         kindAutoV: "Auto",
@@ -1588,224 +1679,315 @@ hold  armed</pre>
         methodK: "METHOD",
         pillBusy: "Connecting: Home…",
         "split.add": "Add",
-        "split.add.body": "Address or CIDR. Service name is what you see in the list.",
-        "split.add.body.ignore": "CIDR to keep out of this zone. Survives a repository update.",
-        "split.add.ignore": "Ignore",
+        "split.add.body": "Address or CIDR prefix. The service name is what you see in the list.",
+        "split.add.body.ignore": "Prefix kept out of this zone. Survives a list update.",
+        "split.add.ignore": "Exclusion",
         "split.add.kind": "Entry",
         "split.add.route": "Route",
         "split.add.go": "Add",
         "split.add.name": "Service",
         "split.add.net": "Network or address",
         "split.add.title": "Network",
-        "split_add_save": "Save",
-        "split.bypass": "Around Loft",
-        "split.via": "Through Loft",
-        "split.d": "A zone goes through Loft or around Loft. A service only belongs to a zone.",
-        "split.empty": "Nothing in this zone yet.",
-        "split.ignore": "Ignore",
+        split_add_save: "Save",
+        "split.bypass": "Bypass loft",
+        "split.via": "Through loft",
+        "split.d": "A zone’s traffic goes through loft or around it. A service only belongs to a zone.",
+        "split.empty": "This zone is empty.",
+        "split.ignore": "Exclusion",
         "split.export.body": "All zones in one loft-routes file: the zone in REM zone:, the service name in a comment.",
         "split.export.fmt": "Format",
         "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
+        "split.export.loft": "loft",
         "split.export.save": "Save loft-routes.bat",
         "split.export.save.keen": "Save %@.bat",
-        "split.export.title": "Export routes",
+        "split.export.title": "Export Routes",
         "split.import.body": "Keenetic .bat or loft-routes. :: rem is the service name.",
         "split.import.detect": "Keenetic · 214 lines · pick a zone",
         "split.import.go": "Add 214 routes",
-        "split.import.title": "Import routes",
+        "split.import.title": "Import Routes",
         "split.net": "net",
         "split.nets": "nets",
         "split.rdef": "Direction",
         "split.repo": "Repository",
-        "split.repo.auto": "Update automatically",
+        "split.repo.auto": "Update Automatically",
         "split.repo.auto.d": "Once a day. Leaves your own rows alone.",
-        "split.repo.body": "Raw .bat from GitHub or your host. Fills this zone. Your own rows stay.",
+        "split.repo.body": "A .bat file from GitHub or your host. Fills this zone. Your own rows stay.",
         "split.repo.last": "Today · 214 routes",
         "split.repo.none": "No list yet",
-        "split.repo.pull": "Update now",
+        "split.repo.pull": "Update Now",
         "split.repo.url": "List URL",
         "split.repo.pick": "Lists",
         "split.lists": "Lists",
         "split.lists.body": "From the loft repository. You can still paste any URL.",
         "split.search": "Find a service",
-        "split.src.me": "mine",
-        "split.src.ignore": "ignore",
-        "split.src.repo": "repo",
-        "split.sub.off": "Off — lists stay out of the system table.",
+        "split.src.me": "own",
+        "split.src.ignore": "excl.",
+        "split.src.repo": "list",
+        "split.sub.off": "Off — lists are not installed in the system routing table.",
         "split.zone": "Zone",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
         "split.zones": "Zones",
-        "split.zones.add": "Add zone",
+        "split.zones.add": "Add Zone",
         "split.zones.add.body": "Name, direction, optional list URL. Services follow the zone.",
         "split.zones.add.go": "Add",
-        "split.zones.add.title": "New zone",
+        "split.zones.add.title": "New Zone",
         "split.zones.builtin": "Built-in",
-        "split.zones.del": "Delete zone",
+        "split.zones.del": "Delete Zone",
         "split.zones.edit.title": "Zone",
         "split.zones.move": "Services move to Global.",
         "split.zones.name": "Name",
         "split.zones.save": "Save",
-        "split_lists": "Lists",
-        "split.sub": "Through Loft goes into the tunnel. Around Loft goes direct, outside it.",
-        "backGen": "‹ Back",
-        "nSplit": "Routes · lists",
-        "nSvc": "Routes · network",
-        "nZones": "Routes · zones",
-        "nZone": "Routes · zone",
-        "nRepo": "Routes · repository",
-        "nLists": "Routes · catalog",
-        "nSin": "Routes · import",
-        "nSout": "Routes · export",
-        "hRoutes": "Split routing",
-        navCap: "iOS mock of the live macOS GUI. Tunnel is Packet Tunnel.",
+        split_lists: "Lists",
+        "split.sub": "Through loft enters the tunnel. Bypass loft stays direct, outside it.",
+        backGen: "‹ Back",
+        nSplit: "Routes · lists",
+        nSvc: "Routes · network",
+        nZones: "Routes · zones",
+        nZone: "Routes · zone",
+        nRepo: "Routes · repository",
+        nLists: "Routes · catalog",
+        nSin: "Routes · import",
+        nSout: "Routes · export",
+        hRoutes: "Split Routing",
+        navCap: "iOS mock of the live macOS GUI. The tunnel is the system Packet Tunnel.",
         hApp: "App",
-        nHome: "Home · up", nOff: "Home · down", nOpen: "Home · connecting", nSimple: "Home · simplified",
-        nOnb0: "Onboard · start",
+        nHome: "Home · up",
+        nOff: "Home · down",
+        nOpen: "Home · connecting",
+        nSimple: "Home · simplified",
+        nOnb0: "Onboarding · start",
         nAdd: "List · add",
         nEditTrojan: "Edit · Trojan",
         vpnTrojan: "Trojan",
         trojanPass: "Password",
         trojanUrl: "Server",
-        addSheet: "New connection",
-        addScan: "Scan QR",
-        addPaste: "Paste link",
-        addManual: "Manually",
-        startTitle: "Add a connection",
-        startBody: "Scan the QR or paste the link you were given.",
-        startHint: "If the link is already copied, tap Paste link.",
-        startManual: "Enter the key and address by hand",
-        onbAdv: "More options",
+        addSheet: "New Connection",
+        addScan: "Scan QR Code",
+        addPaste: "Paste Link",
+        addManual: "Manual",
+        startTitle: "Add a Connection",
+        startBody: "Scan the QR code or paste the link you were given.",
+        startHint: "If the link is already on the clipboard, tap Paste Link.",
+        startManual: "Enter the key and address manually",
+        onbAdv: "Advanced",
         kindAuto: "Auto",
-        nList: "Connections", nSwipe: "List · swipe", nCtx: "List · menu", nExp: "List · export",
-        nEdit: "Edit", nEditAdv: "Edit · advanced", nEditSstp: "Edit · SSTP", nEditVless: "Edit · VLESS",
-        nScan: "Scan QR", nShare: "Share QR",
-        nOnb: "Onboard · key", nOnb2: "Onboard · address",
-        nSet: "Settings · general", nSetR: "Settings · route", nSetC: "Settings · client",
-        nJournal: "Journal", nAbout: "About", nIos: "Settings → VPN",
-        connect: "Connect", popConnect: "Connect", disconnect: "Disconnect",
-        connecting: "Connecting…", disconnecting: "Disconnecting…", cancel: "Cancel",
-        pillOn: "Connected: Home 0:12", pillOff: "Not connected · Home ›",
-        frontK: "FRONT", tunK: "TUNNEL",
-        journal: "Journal", reset: "Reset routes", settings: "Settings",
-        tabHome: "Home", close: "Close", backSet: "‹ Settings",
-        conns: "Connections", connsSub: "Each has its own key and address. One is active.",
-        active: "active", edit: "Edit", delete: "Delete", export: "Export", import: "Import",
-        listHint: "Swipe left to delete, right to edit. Long-press for the menu. The selected row exports as .loft. Tapping Office disconnects Home: one tunnel on iOS.",
+        nList: "Connections",
+        nSwipe: "List · swipe",
+        nCtx: "List · menu",
+        nExp: "List · export",
+        nEdit: "Edit",
+        nEditAdv: "Edit · advanced",
+        nEditSstp: "Edit · SSTP",
+        nEditVless: "Edit · VLESS",
+        nScan: "Scan QR Code",
+        nShare: "Share QR",
+        nOnb: "Onboarding · key",
+        nOnb2: "Onboarding · address",
+        nSet: "Settings · general",
+        nSetR: "Settings · route",
+        nSetC: "Settings · connection",
+        nJournal: "Log",
+        nAbout: "About",
+        nIos: "Settings → VPN",
+        connect: "Connect",
+        popConnect: "Connect",
+        disconnect: "Disconnect",
+        connecting: "Connecting…",
+        disconnecting: "Disconnecting…",
+        cancel: "Cancel",
+        pillOn: "Connected: Home 0:12",
+        pillOff: "Not Connected · Home ›",
+        frontK: "FRONT",
+        tunK: "TUNNEL",
+        journal: "Log",
+        reset: "Reset Routes",
+        settings: "Settings",
+        tabHome: "Home",
+        close: "Close",
+        backSet: "‹ Settings",
+        conns: "Connections",
+        connsSub: "Each has its own key and address. Only one is active at a time.",
+        active: "active",
+        edit: "Edit",
+        delete: "Delete",
+        export: "Export",
+        import: "Import",
+        listHint: "Swipe left to delete, right to edit. Touch and hold for the menu. The selected row exports as .loft. Tapping Office disconnects Home: one tunnel on iOS.",
         expSheet: "Export Home",
-        warnExport: "The file contains the key. Do not give it away.",
-        expLoft: "Home.loft", expLoftS: "this connection",
-        expQr: "QR loft://", expQrS: "one front",
-        expAll: "Family.loft", expAllS: "all three · loft + sstp + vless",
-        delSub: "The connection leaves this device. If it is the live session, that session closes.",
-        editTitle: "Connection", name: "Name", vpnType: "VPN type",
-        vpnLoft: "loft", vpnSstp: "SSTP", vpnVless: "VLESS",
-        editMain: "Main", editAdv: "Advanced", loftUri: "loft:// address",
-        entryLink: "Link", entryMan: "Manual",
-        eKey: "Access key", ePath: "Path",
-        vlessHost: "Address", vlessPort: "Port",
-        vlessSec: "Security", vlessNet: "Transport", vlessFp: "TLS fingerprint",
-        vlessPbk: "Public key", vlessSid: "Short ID", vlessXhost: "Host header",
-        vlessVision: "Vision", vlessVisionD: "xtls-rprx-vision on TCP.",
-        showSecret: "Show", hideSecret: "Hide",
-        tun: "Tunnel interface", tunD: "Packet Tunnel. The machine route is in Settings.",
+        warnExport: "The file contains the access key. Do not share it.",
+        expLoft: "Home.loft",
+        expLoftS: "this connection",
+        expQr: "QR loft://",
+        expQrS: "one front",
+        expAll: "Family.loft",
+        expAllS: "all three · loft + sstp + vless",
+        delSub: "The connection will be removed from this device. If it is the live session, that session closes.",
+        editTitle: "Connection",
+        name: "Name",
+        vpnType: "VPN Type",
+        vpnLoft: "loft",
+        vpnSstp: "SSTP",
+        vpnVless: "VLESS",
+        editMain: "Main",
+        editAdv: "Advanced",
+        loftUri: "loft:// Address",
+        entryLink: "Link",
+        entryMan: "Manual",
+        eKey: "Access Key",
+        ePath: "Path",
+        vlessHost: "Address",
+        vlessPort: "Port",
+        vlessSec: "Security",
+        vlessNet: "Transport",
+        vlessFp: "TLS Fingerprint",
+        vlessPbk: "Public Key",
+        vlessSid: "Short ID",
+        vlessXhost: "Host Header",
+        vlessVision: "Vision",
+        vlessVisionD: "xtls-rprx-vision on TCP.",
+        showSecret: "Show",
+        hideSecret: "Hide",
+        tun: "Tunnel Interface",
+        tunD: "System VPN (Packet Tunnel). The device route is in Settings.",
         sstpTunD: "The address from the server on the interface.",
-        sstpUser: "Username", sstpPass: "Password", sstpUrl: "Server", sstpSni: "TLS hostname",
-        sstpTls: "TLS server verification", sstpTlsD: "Verify the HTTPS server certificate.",
-        sstpPap: "PAP / CHAP", sstpPapD: "Less secure. Default is MSCHAPv2 only.",
-        vlessUuid: "UUID", vlessUrl: "vless:// link",
-        mux: "Mux", muxD: "All connections share one session with the node.",
-        dns: "DNS", dnsPhLoft: "empty — from the node", dnsPhSstp: "empty — from the server, else the gateway", dnsPhVless: "comma-separated addresses",
-        dnsSys: "DNS into the system", dnsSysD: "While the tunnel is up, write resolvers into the Packet Tunnel.",
-        dnsRep: "These addresses only", dnsRepD: "Skip the server and the PPP gateway.",
-        save: "Save", back: "Back", qr: "QR",
-        setGen: "General", setRoute: "Route", setClient: "Connection",
-        simple: "Simplified interface", simpleD: "Home: open and close.",
-        rateUnit: "Speed units", rateUnitD: "How ↑↓ is shown on Home.",
-        uKbit: "kbps", uKb: "kB/s",
-        lang: "Interface language", langD: "changes at once", langZh: "Chinese", langRu: "Russian", langEn: "English",
-        rateDown: "↓ 12.4 Mbit/s", delQ: "Delete %s?",
-        diag: "Extended journal", diagD: "Routes, DNS, Packet Tunnel. Rotating file.",
-        defRoute: "Allow default route", defRouteD: "Send all internet through loft. Off — loft net only.",
-        hold: "No internet without the VPN", holdD: "If the tunnel goes down, direct internet stays closed until Loft is back.",
-        split: "Split routing", splitD: "A zone goes through Loft or around Loft. A service only belongs to a zone.",
-        auto: "Connect at launch", autoD: "Opening the app connects the selected connection.",
-        reconnect: "Reconnect if it drops", reconnectD: "If it drops, connect again.",
-        extIp: "Show external IP", extIpD: "After connect, ask a service for the address through this session.",
-        defaults: "Defaults", about: "About",
-        keyStep: "Step 1 of 2", keyTitle: "Access key",
+        sstpUser: "Username",
+        sstpPass: "Password",
+        sstpUrl: "Server",
+        sstpSni: "TLS Hostname",
+        sstpTls: "Certificate Verification",
+        sstpTlsD: "Verify the HTTPS server certificate.",
+        sstpPap: "PAP / CHAP",
+        sstpPapD: "Weaker. Default is MSCHAPv2 only.",
+        vlessUuid: "UUID",
+        vlessUrl: "vless:// Link",
+        mux: "Mux",
+        muxD: "All connections share one session with the node.",
+        dns: "DNS",
+        dnsPhLoft: "empty — from the node",
+        dnsPhSstp: "empty — from the server, else the gateway",
+        dnsPhVless: "comma-separated addresses",
+        dnsSys: "System-Wide DNS",
+        dnsSysD: "While the tunnel is up, write resolvers into the Packet Tunnel.",
+        dnsRep: "These Addresses Only",
+        dnsRepD: "Do not take DNS from the server or the PPP gateway.",
+        save: "Save",
+        back: "Back",
+        qr: "QR",
+        setGen: "General",
+        setRoute: "Route",
+        setClient: "Connection",
+        simple: "Simplified Interface",
+        simpleD: "Home is Connect and Disconnect only.",
+        rateUnit: "Speed Units",
+        rateUnitD: "How ↑↓ is shown on Home.",
+        uKbit: "kbit/s",
+        uKb: "kB/s",
+        lang: "Language",
+        langD: "Applies immediately.",
+        langZh: "中文",
+        langRu: "Русский",
+        langEn: "English",
+        rateDown: "↓ 12.4 Mbit/s",
+        delQ: "Delete %s?",
+        diag: "Extended Log",
+        diagD: "Routes, DNS, Packet Tunnel. Rotating log file.",
+        defRoute: "Default Route",
+        defRouteD: "All internet through loft. Off — loft network only.",
+        hold: "No Internet without VPN",
+        holdD: "Until the tunnel is up, direct internet stays blocked.",
+        split: "Split Routing",
+        splitD: "A zone’s traffic goes through loft or around it. A service only belongs to a zone.",
+        auto: "Connect at Launch",
+        autoD: "Opening the app brings up the selected connection.",
+        reconnect: "Reconnect on Disconnect",
+        reconnectD: "If the session disconnects, connect again.",
+        extIp: "Show Public IP",
+        extIpD: "After connect, ask a service for the address through this session.",
+        defaults: "Defaults",
+        about: "About",
+        keyStep: "Step 1 of 2",
+        keyTitle: "Access Key",
         keyBody: "Enter the access key you were given.",
         keyHint: "It starts with lt_. Shown once — keep it.",
-        continue: "Continue", keyOrfile: "Or import a file or QR",
-        urlStep: "Step 2 of 2", urlTitle: "Address",
+        continue: "Continue",
+        keyOrfile: "Or import a file or QR",
+        urlStep: "Step 2 of 2",
+        urlTitle: "Address",
         urlBody: "Enter the address you were given with the key.",
-        url: "URL", urlType: "How to connect", path: "Path (if they gave you one)",
-        urlHint: "HTTPS. GET file, WS channel, H2/H3 CONNECT, QUIC UDP.",
+        url: "URL",
+        urlType: "Method",
+        path: "Path (if you were given one)",
+        urlHint: "HTTPS. GET is a file, WS a channel, H2/H3 CONNECT, QUIC UDP.",
         urlGo: "Connect",
         onbVpn: "iOS will ask to allow the VPN — tap Allow. Only once.",
-        scanT: "Scan QR",
+        scanT: "Scan QR Code",
         scanHint: "Camera. loft://, sstp://, vless://, or a .loft.",
-        fromFile: "From file", fromPhotos: "From Photos",
-        pasteL: "Or paste a link", scanAdd: "Add",
+        fromFile: "From Files",
+        fromPhotos: "From Photos",
+        pasteL: "Or paste a link",
+        scanAdd: "Add",
         shareT: "QR",
-        shareHint: "The address is loft://, one front. The key in the URI is a secret. Several fronts or several connections: a .loft file.",
-        journalD: "Front and session lines. The key is shortened.",
-        copy: "Copy", clearLog: "Clear",
+        shareHint: "The address is loft://, one front. The key in the URI is a secret. Several fronts or connections: a .loft file.",
+        journalD: "Front and session lines. The key is shortened in the log.",
+        copy: "Copy",
+        clearLog: "Clear",
         protos: "protocols",
-        blurb: "From the street — ordinary HTTPS.\nInside, a network of its own.",
+        blurb: "On the outside, ordinary HTTPS.\nInside, a network of its own.",
         handshake: "handshake",
-        iosCap: "System list. The switch is loft’s Packet Tunnel, not a second toggle in the app.",
-        iosOn: "Connected", iosType: "Type", iosServer: "Server",
-        iosIke: "IKEv2 Office is the stock iOS client, not the loft package.",
+        iosCap: "System VPN list. The switch is loft’s tunnel, not a second toggle in the app.",
+        iosOn: "Connected",
+        iosType: "Type",
+        iosServer: "Server",
+        iosIke: "IKEv2 Office is the built-in iOS client, not the loft app.",
         iosNot: "Not Connected"
       },
       zh: {
-        copyLink: "复制链接",
+        copyLink: "拷贝链接",
         pastePh: "loft://…、sstp://…、vless://…",
         pasteBtn: "粘贴",
-        cfClrS: "这些行会从本机删除。",
+        cfClrS: "日志记录将从本机删除。",
         cfClrT: "清除日志？",
-        cfDefGo: "恢复",
-        cfDefS: "所有开关回到出厂值。",
-        cfDefT: "恢复默认设置？",
+        cfDefGo: "还原",
+        cfDefS: "所有设置恢复为默认值。",
+        cfDefT: "还原默认设置？",
         trusted: "受信任的 Wi‑Fi",
-        demandD: "在陌生 Wi‑Fi 和蜂窝网络下 iOS 自动开 VPN，受信任的网络不开。",
-        demand: "自动开启",
+        demandD: "在蜂窝网络和未受信任的 Wi‑Fi 下系统会连接 VPN。受信任的网络不连接。",
+        demand: "按需连接",
         scanBtn: "扫描",
         shareBtn: "分享",
         newTitle: "新连接",
         detServer: "服务器",
         detMtu: "MTU",
         detFront: "方式",
-        detOver: "loft 网络地址",
-        detT: "详情",
-        sparkCap: "近一分钟速度",
+        detOver: "loft 地址",
+        detT: "详细信息",
+        sparkCap: "近一分钟速率",
         kindAutoV: "自动",
         txK: "上传",
         rxK: "下载",
         methodK: "方式",
         pillBusy: "正在连接: Home…",
         "split.add": "添加",
-        "split.add.body": "地址或 CIDR。服务名是列表里看到的名字。",
-        "split.add.body.ignore": "本区域不安装的 CIDR。仓库更新后仍保留。",
-        "split.add.ignore": "忽略",
+        "split.add.body": "地址或 CIDR 前缀。服务名是列表里显示的名字。",
+        "split.add.body.ignore": "不写入本区域的前缀。规则集更新后仍保留。",
+        "split.add.ignore": "排除",
         "split.add.kind": "条目",
         "split.add.route": "路由",
         "split.add.go": "添加",
         "split.add.name": "服务",
         "split.add.net": "网段或地址",
         "split.add.title": "网段",
-        "split_add_save": "保存",
-        "split.bypass": "绕过 Loft",
-        "split.via": "经 Loft",
-        "split.d": "区域走 Loft 或绕过 Loft。服务只属于一个区域。",
-        "split.empty": "这个区域还没有条目。",
-        "split.ignore": "忽略",
-        "split.export.body": "所有区域写进一个 loft-routes 文件：区域在 REM zone:，服务名在注释里。",
+        split_add_save: "保存",
+        "split.bypass": "绕过 loft",
+        "split.via": "经 loft",
+        "split.d": "区域流量走 loft 或绕过。服务只属于一个区域。",
+        "split.empty": "此区域还没有条目。",
+        "split.ignore": "排除",
+        "split.export.body": "所有区域写入一个 loft-routes 文件：区域在 REM zone:，服务名在注释里。",
         "split.export.fmt": "格式",
         "split.export.keen": "Keenetic .bat",
-        "split.export.loft": "Loft",
+        "split.export.loft": "loft",
         "split.export.save": "保存 loft-routes.bat",
         "split.export.save.keen": "保存 %@.bat",
         "split.export.title": "导出路由",
@@ -1816,10 +1998,10 @@ hold  armed</pre>
         "split.net": "网段",
         "split.nets": "个网段",
         "split.rdef": "方向",
-        "split.repo": "仓库",
+        "split.repo": "规则集",
         "split.repo.auto": "自动更新",
-        "split.repo.auto.d": "每天一次。不覆盖你自己的行。",
-        "split.repo.body": "来自 GitHub 或自己主机的 raw .bat。填入此区域。你自己的行保留。",
+        "split.repo.auto.d": "每天一次。不覆盖你自己的条目。",
+        "split.repo.body": "来自 GitHub 或自有主机的 .bat。填入此区域。你自己的行保留。",
         "split.repo.last": "今天 · 214 条路由",
         "split.repo.none": "还没有列表",
         "split.repo.pull": "立即更新",
@@ -1828,10 +2010,10 @@ hold  armed</pre>
         "split.lists": "列表",
         "split.lists.body": "来自 loft 仓库。自定义地址仍可粘贴。",
         "split.search": "查找服务",
-        "split.src.me": "自己的",
-        "split.src.ignore": "忽略",
-        "split.src.repo": "仓库",
-        "split.sub.off": "关 — 列表不写入系统表。",
+        "split.src.me": "自定义",
+        "split.src.ignore": "排除",
+        "split.src.repo": "列表",
+        "split.sub.off": "关 — 列表不写入系统路由表。",
         "split.zone": "区域",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
@@ -1846,21 +2028,24 @@ hold  armed</pre>
         "split.zones.move": "服务将移到 Global。",
         "split.zones.name": "名称",
         "split.zones.save": "保存",
-        "split_lists": "列表",
-        "split.sub": "走 Loft 的进隧道。绕过 Loft 的直连，不进隧道。",
-        "backGen": "‹ 返回",
-        "nSplit": "路由 · 列表",
-        "nSvc": "路由 · 网络",
-        "nZones": "路由 · 区域",
-        "nZone": "路由 · 区域编辑",
-        "nRepo": "路由 · 仓库",
-        "nLists": "路由 · 目录",
-        "nSin": "路由 · 导入",
-        "nSout": "路由 · 导出",
-        "hRoutes": "分流",
-        navCap: "按正在出货的 macOS GUI 做的 iOS 模型。隧道是 Packet Tunnel。",
+        split_lists: "列表",
+        "split.sub": "经 loft 的流量进入隧道。绕过 loft 的直连，不进隧道。",
+        backGen: "‹ 返回",
+        nSplit: "路由 · 列表",
+        nSvc: "路由 · 网络",
+        nZones: "路由 · 区域",
+        nZone: "路由 · 区域编辑",
+        nRepo: "路由 · 规则集",
+        nLists: "路由 · 目录",
+        nSin: "路由 · 导入",
+        nSout: "路由 · 导出",
+        hRoutes: "分流",
+        navCap: "按现有 macOS 客户端做的 iOS 模型。隧道是系统 Packet Tunnel。",
         hApp: "应用",
-        nHome: "主页 · 在线", nOff: "主页 · 关闭", nOpen: "主页 · 正在连接", nSimple: "主页 · 简化",
+        nHome: "主页 · 已连接",
+        nOff: "主页 · 未连接",
+        nOpen: "主页 · 正在连接",
+        nSimple: "主页 · 简化",
         nOnb0: "引导 · 开始",
         nAdd: "列表 · 添加",
         nEditTrojan: "编辑 · Trojan",
@@ -1873,90 +2058,178 @@ hold  armed</pre>
         addManual: "手动",
         startTitle: "添加连接",
         startBody: "扫描二维码，或粘贴发给你的链接。",
-        startHint: "链接已经复制的话，点「粘贴链接」。",
+        startHint: "链接已在剪贴板时，点「粘贴链接」。",
         startManual: "手动输入密钥和地址",
-        onbAdv: "更多选项",
+        onbAdv: "高级",
         kindAuto: "自动",
-        nList: "连接", nSwipe: "列表 · 滑动", nCtx: "列表 · 菜单", nExp: "列表 · 导出",
-        nEdit: "编辑", nEditAdv: "编辑 · 高级", nEditSstp: "编辑 · SSTP", nEditVless: "编辑 · VLESS",
-        nScan: "扫描二维码", nShare: "分享二维码",
-        nOnb: "引导 · 密钥", nOnb2: "引导 · 地址",
-        nSet: "设置 · 通用", nSetR: "设置 · 路由", nSetC: "设置 · 客户端",
-        nJournal: "日志", nAbout: "关于", nIos: "设置 → VPN",
-        connect: "连接", popConnect: "连接", disconnect: "断开",
-        connecting: "正在连接…", disconnecting: "正在断开…", cancel: "取消",
-        pillOn: "已连接: Home 0:12", pillOff: "未连接 · Home ›",
-        frontK: "前置", tunK: "隧道",
-        journal: "日志", reset: "重置路由", settings: "设置",
-        tabHome: "主页", close: "关闭", backSet: "‹ 设置",
-        conns: "连接", connsSub: "每条有自己的密钥和地址。同时只激活一条。",
-        active: "当前", edit: "编辑", delete: "删除", export: "导出", import: "导入",
+        nList: "连接",
+        nSwipe: "列表 · 滑动",
+        nCtx: "列表 · 菜单",
+        nExp: "列表 · 导出",
+        nEdit: "编辑",
+        nEditAdv: "编辑 · 高级",
+        nEditSstp: "编辑 · SSTP",
+        nEditVless: "编辑 · VLESS",
+        nScan: "扫描二维码",
+        nShare: "分享二维码",
+        nOnb: "引导 · 密钥",
+        nOnb2: "引导 · 地址",
+        nSet: "设置 · 通用",
+        nSetR: "设置 · 路由",
+        nSetC: "设置 · 连接",
+        nJournal: "日志",
+        nAbout: "关于",
+        nIos: "设置 → VPN",
+        connect: "连接",
+        popConnect: "连接",
+        disconnect: "断开",
+        connecting: "正在连接…",
+        disconnecting: "正在断开…",
+        cancel: "取消",
+        pillOn: "已连接: Home 0:12",
+        pillOff: "未连接 · Home ›",
+        frontK: "前置",
+        tunK: "隧道",
+        journal: "日志",
+        reset: "重置路由",
+        settings: "设置",
+        tabHome: "主页",
+        close: "关闭",
+        backSet: "‹ 设置",
+        conns: "连接",
+        connsSub: "每条有自己的密钥和地址。同时只激活一条。",
+        active: "当前",
+        edit: "编辑",
+        delete: "删除",
+        export: "导出",
+        import: "导入",
         listHint: "左滑删除，右滑编辑。长按出菜单。选中行导出为 .loft。点 Office 会先断开 Home：iOS 上只有一条隧道。",
         expSheet: "导出 Home",
-        warnExport: "文件里有访问密钥。不要给外人。",
-        expLoft: "Home.loft", expLoftS: "这条连接",
-        expQr: "QR loft://", expQrS: "一条前置",
-        expAll: "Family.loft", expAllS: "全部三条 · loft + sstp + vless",
-        delSub: "这条连接会从本机消失。如果它是当前会话，会话会关掉。",
-        editTitle: "连接", name: "名称", vpnType: "VPN 类型",
-        vpnLoft: "loft", vpnSstp: "SSTP", vpnVless: "VLESS",
-        editMain: "连接", editAdv: "高级", loftUri: "loft:// 地址",
-        entryLink: "链接", entryMan: "手动",
-        eKey: "访问密钥", ePath: "路径",
-        vlessHost: "地址", vlessPort: "端口",
-        vlessSec: "安全", vlessNet: "传输", vlessFp: "TLS 指纹",
-        vlessPbk: "公钥", vlessSid: "Short ID", vlessXhost: "Host 头",
-        vlessVision: "Vision", vlessVisionD: "TCP 上的 xtls-rprx-vision。",
-        showSecret: "显示", hideSecret: "隐藏",
-        tun: "隧道接口", tunD: "Packet Tunnel。整机路由在设置里。",
+        warnExport: "文件里有访问密钥。不要分享给他人。",
+        expLoft: "Home.loft",
+        expLoftS: "这条连接",
+        expQr: "QR loft://",
+        expQrS: "一条前置",
+        expAll: "Family.loft",
+        expAllS: "全部三条 · loft + sstp + vless",
+        delSub: "这条连接将从本机删除。如果它是当前会话，会话会关闭。",
+        editTitle: "连接",
+        name: "名称",
+        vpnType: "VPN 类型",
+        vpnLoft: "loft",
+        vpnSstp: "SSTP",
+        vpnVless: "VLESS",
+        editMain: "主要",
+        editAdv: "高级",
+        loftUri: "loft:// 地址",
+        entryLink: "链接",
+        entryMan: "手动",
+        eKey: "访问密钥",
+        ePath: "路径",
+        vlessHost: "地址",
+        vlessPort: "端口",
+        vlessSec: "安全",
+        vlessNet: "传输",
+        vlessFp: "TLS 指纹",
+        vlessPbk: "公钥",
+        vlessSid: "Short ID",
+        vlessXhost: "Host 头",
+        vlessVision: "Vision",
+        vlessVisionD: "TCP 上的 xtls-rprx-vision。",
+        showSecret: "显示",
+        hideSecret: "隐藏",
+        tun: "隧道接口",
+        tunD: "系统 VPN（Packet Tunnel）。整机路由在设置里。",
         sstpTunD: "服务器下发的地址写在接口上。",
-        sstpUser: "用户", sstpPass: "密码", sstpUrl: "服务器", sstpSni: "TLS 主机名",
-        sstpTls: "校验证书", sstpTlsD: "校验 HTTPS 服务器证书。",
-        sstpPap: "PAP / CHAP", sstpPapD: "安全性较低。默认只用 MSCHAPv2。",
-        vlessUuid: "UUID", vlessUrl: "vless:// 链接",
-        mux: "多路复用", muxD: "所有连接共用一条到节点的会话。",
-        dns: "DNS", dnsPhLoft: "空则来自节点", dnsPhSstp: "空则来自服务器，否则网关", dnsPhVless: "逗号分隔的地址",
-        dnsSys: "写入系统 DNS", dnsSysD: "隧道开着时，把解析器写入 Packet Tunnel。",
-        dnsRep: "只用这些地址", dnsRepD: "不从服务器和 PPP 网关取 DNS。",
-        save: "保存", back: "返回", qr: "QR",
-        setGen: "通用", setRoute: "路由", setClient: "连接",
-        simple: "简化界面", simpleD: "主页只留打开和断开。",
-        rateUnit: "速率单位", rateUnitD: "主页 ↑↓ 怎么显示。",
-        uKbit: "千比特/秒", uKb: "KB/秒",
-        lang: "界面语言", langD: "立即生效", langZh: "中文", langRu: "Русский", langEn: "English",
-        rateDown: "↓ 12.4 Mbit/s", delQ: "删除 %s？",
-        diag: "扩展日志", diagD: "路由、DNS、Packet Tunnel。轮转文件。",
-        defRoute: "允许默认路由", defRouteD: "全部流量走 loft。关 — 只有 loft 网。",
-        hold: "没有 VPN 就不上网", holdD: "隧道断了，直连保持关闭，直到 Loft 恢复。",
-        split: "分流", splitD: "区域走 Loft 或绕过 Loft。服务只属于一个区域。",
-        auto: "启动时连接", autoD: "打开应用就连当前选中的那条。",
-        reconnect: "断线自动重连", reconnectD: "断了就再连接。",
-        extIp: "显示外部 IP", extIpD: "连上后通过本会话向服务询问地址。",
-        defaults: "默认", about: "关于",
-        keyStep: "第 1 步，共 2 步", keyTitle: "访问密钥",
+        sstpUser: "用户名",
+        sstpPass: "密码",
+        sstpUrl: "服务器",
+        sstpSni: "TLS 主机名",
+        sstpTls: "证书校验",
+        sstpTlsD: "校验 HTTPS 服务器证书。",
+        sstpPap: "PAP / CHAP",
+        sstpPapD: "安全性较低。默认只用 MSCHAPv2。",
+        vlessUuid: "UUID",
+        vlessUrl: "vless:// 链接",
+        mux: "多路复用",
+        muxD: "所有连接共用一条到节点的会话。",
+        dns: "DNS",
+        dnsPhLoft: "空则来自节点",
+        dnsPhSstp: "空则来自服务器，否则网关",
+        dnsPhVless: "逗号分隔的地址",
+        dnsSys: "写入系统 DNS",
+        dnsSysD: "隧道开启时，把解析器写入 Packet Tunnel。",
+        dnsRep: "仅这些地址",
+        dnsRepD: "不从服务器和 PPP 网关取 DNS。",
+        save: "保存",
+        back: "返回",
+        qr: "QR",
+        setGen: "通用",
+        setRoute: "路由",
+        setClient: "连接",
+        simple: "简化界面",
+        simpleD: "主页只留连接和断开。",
+        rateUnit: "速率单位",
+        rateUnitD: "主页 ↑↓ 的显示方式。",
+        uKbit: "kbit/s",
+        uKb: "kB/s",
+        lang: "界面语言",
+        langD: "立即生效",
+        langZh: "中文",
+        langRu: "Русский",
+        langEn: "English",
+        rateDown: "↓ 12.4 Mbit/s",
+        delQ: "删除 %s？",
+        diag: "详细日志",
+        diagD: "路由、DNS、Packet Tunnel。轮转文件。",
+        defRoute: "默认路由",
+        defRouteD: "全部流量走 loft。关 — 只有 loft 网。",
+        hold: "无 VPN 时禁止联网",
+        holdD: "隧道未接通时，直连互联网保持关闭。",
+        split: "分流",
+        splitD: "区域流量走 loft 或绕过。服务只属于一个区域。",
+        auto: "启动时连接",
+        autoD: "打开应用后连接当前选中的那条。",
+        reconnect: "断线重连",
+        reconnectD: "会话中断后重新连接。",
+        extIp: "显示公网 IP",
+        extIpD: "连上后通过本会话向服务查询地址。",
+        defaults: "默认",
+        about: "关于",
+        keyStep: "第 1 步，共 2 步",
+        keyTitle: "访问密钥",
         keyBody: "输入发给你的访问密钥。",
         keyHint: "以 lt_ 开头。只显示一次 — 请保存。",
-        continue: "继续", keyOrfile: "或导入文件或二维码",
-        urlStep: "第 2 步，共 2 步", urlTitle: "地址",
+        continue: "继续",
+        keyOrfile: "或导入文件或二维码",
+        urlStep: "第 2 步，共 2 步",
+        urlTitle: "地址",
         urlBody: "输入和密钥一起发给你的地址。",
-        url: "URL", urlType: "怎么连", path: "路径（如果给了）",
+        url: "URL",
+        urlType: "方式",
+        path: "路径（如果给了）",
         urlHint: "HTTPS。GET 是文件，WS 是通道，H2/H3 是 CONNECT，QUIC 是 UDP。",
         urlGo: "连接",
-        onbVpn: "iOS 会请求允许 VPN——点「允许」。只问一次。",
+        onbVpn: "iOS 会请求允许 VPN — 点「允许」。只问一次。",
         scanT: "扫描二维码",
         scanHint: "相机。loft://、sstp://、vless:// 或 .loft。",
-        fromFile: "从文件", fromPhotos: "从照片",
-        pasteL: "或粘贴链接", scanAdd: "添加",
+        fromFile: "从文件",
+        fromPhotos: "从照片",
+        pasteL: "或粘贴链接",
+        scanAdd: "添加",
         shareT: "QR",
         shareHint: "地址是 loft://，一条前置。URI 里的密钥是秘密。多条前置或多条连接用 .loft 文件。",
-        journalD: "前置与会话行。密钥会缩短。",
-        copy: "复制", clearLog: "清除",
+        journalD: "前置与会话行。密钥在日志里会缩短。",
+        copy: "拷贝",
+        clearLog: "清除",
         protos: "协议",
-        blurb: "从街上看来是普通 HTTPS。\n里面是自己的网络。",
+        blurb: "外面是普通 HTTPS。\n里面是自己的网络。",
         handshake: "握手",
-        iosCap: "系统列表。开关是 loft 的 Packet Tunnel，不是应用里第二个开关。",
-        iosOn: "已连接", iosType: "类型", iosServer: "服务器",
-        iosIke: "IKEv2 Office 是系统自带客户端，不是 loft 套件。",
+        iosCap: "系统 VPN 列表。开关是 loft 隧道，不是应用里第二个开关。",
+        iosOn: "已连接",
+        iosType: "类型",
+        iosServer: "服务器",
+        iosIke: "IKEv2 Office 是系统自带客户端，不是 loft。",
         iosNot: "未连接"
       }
     };
@@ -2428,7 +2701,7 @@ hold  armed</pre>
       { id: "nf", en: "Netflix", zone: "global", cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
       { id: "yandex", en: "Yandex", ru: "Яндекс", zone: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "me" },
       { id: "lan", en: "LAN", ru: "Локальная сеть", zh: "局域网", zone: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
-      { id: "ign", en: "Ignore", ru: "Игнор", zh: "忽略", zone: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
+      { id: "ign", en: "Exclusion", ru: "Исключение", zh: "排除", zone: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
     ];
     let splitOn = true, zoneTab = "global", splitQ = "", svcId = null, svcKind = "route";
     let zoneId = "local", zoneAddVia = true, zoneAddRepo = "";

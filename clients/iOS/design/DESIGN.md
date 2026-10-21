@@ -35,9 +35,9 @@ Same rooms as the macOS windows, laid out for one column and a thumb.
 | Home | Status window. Mark, `loft`, status pill (tap → list), large Connect / Disconnect. Off: pill “Not connected · Home ›”, so it is clear what will open. Connecting: pill “Connecting: Home…”, a **Cancel** button, spark “handshake”. Cards **METHOD / DOWN / UP** and spark “speed, last minute” — two lines, ↓ in lamp and ↑ in stone when simplified interface is off; tapping the cards opens a **Details** sheet (loft network address, method, MTU, server). Tab bar below. |
 | Connections | Title, `+`, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, **host** subtitle, side kind (`loft · get` / `sstp` / `vless`) and **active** on the live one. Tap opens the connection; only Connect switches the tunnel. **Leading swipe** Edit, **trailing swipe** Delete (with a sheet). **Long-press** context: Edit / Export `.loft` (selected only) / Delete. **`+`** opens a sheet: Scan QR · Paste link · From file · Manually. No gesture hint on the screen. Tab bar below. No “Several” toggle. |
 | Edit | Modal: **Cancel** on top returns to where it was opened. A new connection has the title “New connection”, the **VPN type** capsule loft / SSTP / VLESS / Trojan and **Scan** in the header. An existing one shows its type as one capsule (it cannot change: the fields differ), **Share** (QR) in the header and a red **Delete** at the end with a confirm sheet. loft and VLESS: capsule **Link / Manual** (icons: a chain link and a pencil). The link shows the server and hides only the key (`loft://lt_••••@cdn…`); Show reveals all of it. loft Manual is access key, host, port, method (**Auto**·GET·WS·H2·QUIC·H3), path. Both write the same profile. VLESS Manual is UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint, and the fields that mode needs. Certificate check. No SOCKS field and no interface toggle: the tunnel is always Packet Tunnel. SSTP: user, password, server, cert check, PAP/CHAP. Trojan: password, `trojan://` server, cert check. A folding **More options**: mux (loft, “all connections share one session with the node”), DNS, DNS into the system; SSTP and Trojan keep the TLS hostname here, SSTP also “these addresses only”. Save. |
-| Onboard | Start: **Scan QR** and **Paste link** (a copied link is added at once); “Enter the key and address by hand” leads to the two macOS steps. **1 Access key** (`lt_…`) → Continue. **2 Address**: URL; **More options** hides how to connect (**Auto** first, then GET/WS/H2/QUIC/H3) and the path (a placeholder, not a value) → Connect. Then iOS asks to allow the VPN once; the screen says to tap Allow. |
-| Settings | One list with groups **General / Route / Connection**. Header Reset routes. Links **Defaults \| Journal \| About**; Defaults asks first. General: simplified interface, speed units (bits or bytes; the number moves to Mbit/s by itself), language, extended journal. Route: default route, **No internet without the VPN**, split with a **Lists** button (no failover). Connection: **Connect at launch**, **Reconnect if it drops**, **Turn on by itself** (Connect On Demand: other Wi‑Fi and cellular) with a **Trusted Wi‑Fi** field, external IP. Skip Dock, login item, several outbounds, SOCKS. |
-| Journal | Pushed from Settings: **‹ Settings** on top, tab bar stays. Front and session lines. The key is shortened. Copy / Share / Clear (with a confirm sheet). |
+| Onboard | Start: **Scan QR Code** and **Paste link** (a copied link is added at once); “Enter the key and address by hand” leads to the two macOS steps. **1 Access key** (`lt_…`) → Continue. **2 Address**: URL; **More options** hides how to connect (**Auto** first, then GET/WS/H2/QUIC/H3) and the path (a placeholder, not a value) → Connect. Then iOS asks to allow the VPN once; the screen says to tap Allow. |
+| Settings | One list with groups **General / Route / Connection**. Header Reset routes. Links **Defaults \| Log \| About**; Defaults asks first. General: simplified interface, speed units (bits or bytes; the number moves to Mbit/s by itself), language, extended log. Route: default route, **No Internet without VPN**, split routing with a **Lists** button (no failover). Connection: **Connect at Launch**, **Reconnect on Disconnect**, **Connect On Demand** (cellular and untrusted Wi‑Fi) with a **Trusted Wi‑Fi** field, public IP. Skip Dock, login item, several outbounds, SOCKS. |
+| Log | Pushed from Settings: **‹ Settings** on top, tab bar stays. Front and session lines. The key is shortened. Copy / Share / Clear (with a confirm sheet). |
 | About | Pushed from Settings: **‹ Settings** on top. Mark, loft, `1.0.22`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
 | Scan | Modal: **Cancel** on top. Camera QR. From file / From Photos. Field “Or paste a link” (`loft://…, sstp://…, vless://…`), buttons **Paste** and **Add**. |
 | Share QR | Modal: **Close** on top. The QR and the `loft://` line, a warning that the link holds the key, **Share** and **Copy link**. Several fronts or connections are a `.loft` file from export. |
@@ -49,16 +49,16 @@ macOS-only chrome that this mock does not draw: menu-bar popover, SOCKS5 card an
 
 ### Split routing
 
-The macOS model (macOS DESIGN §5): a **zone** goes through Loft or around it, a **service** (name + CIDRs) only belongs to a zone, an **ignore** CIDR is never routed and survives list pulls. Built-in zones Local (around, LAN) and Global (through, `global.bat`); own zones come from the editor. On iOS “through Loft” is the Packet Tunnel’s `includedRoutes` and “around” its `excludedRoutes`; with the tunnel off everything is direct anyway. There is no remembered direct hop as on macOS.
+The macOS model (macOS DESIGN §5): a **zone** goes through loft or around it, a **service** (name + CIDRs) only belongs to a zone, an **exclusion** CIDR is never routed and survives list pulls. Built-in zones Local (bypass, LAN) and Global (through, `global.bat`); own zones come from the editor. On iOS “through loft” is the Packet Tunnel’s `includedRoutes` and “bypass” its `excludedRoutes`; with the tunnel off everything is direct anyway. There is no remembered direct hop as on macOS.
 
 Entry: Settings → Route → the toggle and the gold **Lists**. The screens open inside the Settings tab, with **‹ Settings** / **‹ Back** on top.
 
 | Screen | What |
 |--------|------|
-| Lists | Title and the same toggle, a line (through goes into the tunnel, around goes direct). **Zone** + **Zones** → editor. Zone capsules with the service count. Quiet line `Global · Through Loft`. Search. Rows: name, first CIDRs, network count, source (repo / own / ignore); tap edits. **+ Add**. Bottom **Import · Export · Repository**. |
-| Network | Entry Route / Ignore, network or address (one CIDR per line when editing), service, zone. Add / Save. |
+| Lists | Title and the same toggle, a line (through goes into the tunnel, bypass stays direct). **Zone** + **Zones** → editor. Zone capsules with the service count. Quiet line `Global · Through loft`. Search. Rows: name, first CIDRs, network count, source (list / own / excl.); tap edits. **+ Add**. Bottom **Import · Export · Repository**. |
+| Network | Entry Route / Exclusion, network or address (one CIDR per line when editing), service, zone. Add / Save. |
 | Zones | Rows: name, network count · list file, direction, “Built-in”. **+ Add zone**. |
-| Zone | Name (locked on a built-in), direction Through / Around Loft, list address + **Lists**, auto-update, Save; an own zone has Delete zone (services → Global). A new zone has the same fields. |
+| Zone | Name (locked on a built-in), direction Through loft / Bypass loft, list address + **Lists**, auto-update, Save; an own zone has Delete zone (services → Global). A new zone has the same fields. |
 | Repository | List address of the open zone + **Lists**, auto-update, last pull, Update now. |
 | Catalog | loft-routes lists: World, Russia, China, Iran, Kazakhstan, Belarus; the current one is lit. A tap sets the address and goes back. |
 | Import | From file (iOS Files), detected format and line count, zone, Add. |
@@ -109,7 +109,7 @@ VPN type is a **capsule** (lamp fill on the selected kind), Main/Advanced and Se
 
 ## 5. Copy
 
-Shared strings — buttons, settings, routes — come from `clients/macOS/lang/*.lang` and read the same on macOS and iOS. iOS has its own lines only where macOS has no counterpart: the Home cards and Details sheet, “Turn on by itself” and “Trusted Wi‑Fi”, the onboarding start screen, the “+” sheet. The mock defaults to Russian (`?lang=en` or the RU/EN control). Home, onboarding and the list compact button use one word: **Connect**; while it runs, **Connecting…**. The key is **Access key**, not Member key.
+Shared strings — buttons, settings, routes — come from `clients/macOS/lang/*.lang` and read the same on macOS and iOS. iOS has its own lines only where macOS has no counterpart: the Home cards and Details sheet, **Connect On Demand** and **Trusted Wi‑Fi**, the onboarding start screen, the “+” sheet. The mock defaults to Russian (`?lang=en` or the RU/EN control). Home, onboarding and the list compact button use one word: **Connect**; while it runs, **Connecting…**. The key is **Access Key**, not Member key. Copy uses each language’s VPN/routing register (Apple Settings, operator Russian, 分流/按需连接 in Chinese).
 
 | id | EN | RU |
 |----|----|----|
@@ -119,29 +119,31 @@ Shared strings — buttons, settings, routes — come from `clients/macOS/lang/*
 | connecting | Connecting… | Подключение… |
 | pill_on | Connected | Подключено |
 | pill_off | Not connected · Home › | Не подключено · Home › |
-| journal | Journal | Журнал |
+| journal | Log | Журнал |
 | reset | Reset routes | Сбросить маршруты |
 | settings | Settings | Настройки |
 | conns | Connections | Подключения |
-| conns_sub | Each has its own key and address. One is active. | Каждое — свой ключ и адрес. Активное одно. |
+| conns_sub | Each has its own key and address. Only one is active at a time. | У каждого свой ключ и адрес. Одновременно активно одно. |
 | active | active | активно |
 | edit | Edit | Править |
 | delete | Delete | Удалить |
 | import / export | Import / Export | Импорт / Экспорт |
-| warn_export | The file contains the key. Do not give it away. | В файле есть ключ доступа. Не передавайте посторонним. |
+| warn_export | The file contains the access key. Do not share it. | В файле есть ключ доступа. Никому не передавайте. |
 | vpn_type | VPN type | Тип VPN |
 | loft_uri | loft:// address | Адрес loft:// |
-| edit_main / edit_adv | Main / Advanced | Основные / Расширенные |
+| edit_main / edit_adv | Main / Advanced | Основные / Дополнительно |
 | key_title | Access key | Ключ доступа |
 | url_title | Address | Адрес |
 | url_go | Connect | Подключить |
-| simple | Simplified interface | Упрощенный интерфейс |
-| hold | No internet without the VPN | Без VPN — без интернета |
-| auto | Connect at launch | Подключать при запуске |
-| reconnect | Reconnect if it drops | Переподключаться при обрыве |
-| split | Split routing | Раздельная маршрутизация |
-| default_route | Allow default route | Маршрут по умолчанию |
-| blurb | From the street — ordinary HTTPS. Inside, a network of its own. | С улицы — обычный HTTPS. Внутри горит своя сеть. |
+| simple | Simplified interface | Упрощённый интерфейс |
+| hold | No Internet without VPN | Без VPN — без интернета |
+| auto | Connect at Launch | Подключаться при запуске |
+| reconnect | Reconnect on Disconnect | Переподключаться при обрыве |
+| demand | Connect On Demand | Подключаться по требованию |
+| trusted | Trusted Wi‑Fi | Доверенные сети Wi‑Fi |
+| split | Split Routing | Раздельная маршрутизация |
+| default_route | Default Route | Маршрут по умолчанию |
+| blurb | On the outside, ordinary HTTPS. Inside, a network of its own. | Снаружи — обычный HTTPS. Внутри — своя сеть. |
 
 Status cards: **METHOD** (the front: GET, WS, … or “Auto” while off), **DOWN** and **UP** in the chosen units. The loft network address and MTU are in the Details sheet on tap.
 
