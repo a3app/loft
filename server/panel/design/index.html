@@ -67,7 +67,24 @@ select.hdr-pill{color-scheme:dark;padding-right:8px}
 .app.rail .fold{justify-content:center;padding:0}
 .app.rail .grp-h{cursor:pointer}
 
-.main{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden}
+.main{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column}
+.main>.page{flex:1 0 auto;width:100%;box-sizing:border-box}
+/* Footer: version (opens About) and the author line, at the end of the page. */
+.foot{margin-top:auto;max-width:1600px;width:100%;box-sizing:border-box;padding:14px 32px 18px;border-top:1px solid var(--line);
+  display:flex;justify-content:flex-end;color:var(--mute);font-size:12px;line-height:1.45}
+.foot-copy{text-align:right}
+.foot-about{background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer}
+.foot-about:hover{color:var(--link);text-decoration:underline}
+.madeby{margin-top:3px;opacity:.9}
+.madeby svg{color:color-mix(in srgb,var(--lamp) 70%,var(--text));vertical-align:-1px;margin:0 1px}
+.madeby sup,.about sup{font-size:.72em;margin-left:-.14em;vertical-align:.42em}
+.about{max-width:860px}
+.about p{margin:0 0 10px;line-height:1.5;max-width:640px}
+.about h3{margin:18px 0 6px;font-size:15px}
+.about-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.about-oss{display:flex;flex-direction:column;gap:2px;padding:8px 11px;border:1px solid var(--line);border-radius:6px;background:var(--field)}
+.about-oss b{font-size:13px}
+.about-oss span{font-size:12px;color:var(--mute);line-height:1.35}
 .page{max-width:1600px;padding:0 32px 56px}
 .page-h{display:flex;align-items:center;gap:8px;padding-top:32px;margin-bottom:8px}
 .page-h h1{margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-.02em;text-wrap:balance}
@@ -412,7 +429,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
         </div>
       </div>
     </nav>
-    <main class="main" id="main"><div class="page" id="page"></div></main>
+    <main class="main" id="main"><div class="page" id="page"></div><footer class="foot" id="foot"></footer></main>
   </div>
 </div>
 <div id="full" class="full" hidden></div>
@@ -1637,14 +1654,30 @@ V.invite=()=>`<div class="fs"><div class="fs-card" style="max-width:420px">${ful
   <div><div class="fld"><label for="iv1">Пароль</label><input id="iv1" type="password" autocomplete="new-password" data-pw-min="9"></div><div class="hint" data-pw-hint>Не короче 9 знаков.</div></div>
   <div><div class="fld"><label for="iv2">Пароль ещё раз</label><input id="iv2" type="password" autocomplete="new-password" data-pw-same="iv1"></div><div class="hint" data-pw-hint></div></div>
   <button class="btn pri" type="submit" style="width:100%">Задать пароль и войти</button></form></div></div>`;
+// Footer: the version opens About; the author line is a name and is not translated.
+const HEART='<svg viewBox="0 0 7 6" width="12" height="10" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true"><rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/><rect x="0" y="1" width="7" height="2"/><rect x="1" y="3" width="5" height="1"/><rect x="2" y="4" width="3" height="1"/><rect x="3" y="5" width="1" height="1"/></svg>';
+function renderFoot(){
+  $('#foot').innerHTML=`<div class="foot-copy"><button class="foot-about" type="button" title="О loft panel" onclick="go('about')">Работает на loft-panel ${S.ver||'dev'}</button><div class="madeby" translate="no">Made with love ${HEART} by A<sup>3</sup></div></div>`;
+}
+const OSS=[['Go','язык и среда выполнения'],['nginx','веб-сервер за нодой'],['Xray-core','серверы и клиенты VLESS, Trojan, Shadowsocks'],['WireGuard · AmneziaWG','каналы WireGuard'],['OpenVPN','каналы по файлу .ovpn'],['ZeroTier','подключение к сетям ZeroTier'],['quic-go','QUIC и HTTP/3'],['uTLS','отпечаток TLS как у браузера'],['gVisor','сетевой стек в пространстве пользователя'],['Postfix · Dovecot · OpenDKIM','почта: отправка, приём, подпись'],['Rspamd','фильтр спама'],['Roundcube','веб-почта в браузере'],['nftables · fail2ban','защита от сканеров и перебора паролей'],['Let’s Encrypt','бесплатные сертификаты TLS']];
+V.about=()=>pageHead('О loft panel','')+`<div class="card"><div class="about">
+  <p>loft panel ведёт сервер loft: ставит и запускает ноду и нужные пакеты, держит сеть loft и её участников, внешние каналы и правила выхода, домены, сертификаты и почту, пользователей панели и резервные копии.</p>
+  <h3>Разработчик</h3>
+  <p translate="no">A<sup>3</sup> solutions.</p>
+  <h3>Компоненты</h3>
+  <p class="mute" style="margin-bottom:12px">Спасибо открытым проектам, на которых построен продукт:</p>
+  <div class="about-grid">${OSS.map(([n,r])=>`<div class="about-oss"><b>${n}</b><span>${r}</span></div>`).join('')}</div>
+  <p class="mute" style="margin:16px 0 0">Версия ${S.ver||'dev'}</p>
+</div></div>`;
 function render(){
   const f=!!FULL[S.route];$('#app').hidden=f;$('#full').hidden=!f;
   if(f){renderFull();document.title=(S.route==='login'?'Вход':'Мастер установки')+' · loft-panel';return}
   renderMenu();
   $('#page').innerHTML=(V[S.route]||V.main)();
+  renderFoot();
   const pd=$('#pd'),mb=$('.more');if(pd&&mb)mb.classList.toggle('need',pd.scrollHeight>pd.clientHeight+1);
   const title=MENU.flatMap(g=>g.items).find(i=>i[0]===S.route);
-  document.title=(title?title[1]+' · ':'')+'loft-panel';
+  document.title=(title?title[1]+' · ':S.route==='about'?'О loft panel · ':'')+'loft-panel';
   pwEnhance($('#page'));
 }
 function go(r){location.hash=r}

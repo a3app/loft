@@ -2140,6 +2140,7 @@
       wrapViews(); settle('login'); render(); toast(e.message); return;
     }
     wrapViews();
+    S.ver = st.version || '';
     if (window.I18N) I18N.def(st.lang); // the panel's language until this browser picks one
     showHost();
     if (st.setup) { S.wz.step = 1; settle('setup'); render(); return; }

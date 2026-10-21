@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/a3app/loft/internal/netconf"
+	"github.com/a3app/loft/internal/version"
 	"github.com/a3app/loft/server/panel/admproto"
 	"github.com/a3app/loft/server/panel/auth"
 	"github.com/a3app/loft/server/panel/store"
@@ -455,10 +456,11 @@ func (s *Server) me(u store.User, csrf string) *meJSON {
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	out := struct {
-		Setup  bool    `json:"setup"`
-		Me     *meJSON `json:"me,omitempty"`
-		Wizard bool    `json:"wizard"` // the owner has not finished the wizard
-		Lang   string  `json:"lang"`   // the panel's default language
+		Setup   bool    `json:"setup"`
+		Me      *meJSON `json:"me,omitempty"`
+		Wizard  bool    `json:"wizard"`            // the owner has not finished the wizard
+		Lang    string  `json:"lang"`              // the panel's default language
+		Version string  `json:"version,omitempty"` // signed in only: the footer shows it
 	}{Setup: s.Store.Empty(), Lang: "ru"}
 	if s.Settings != nil {
 		if st, err := s.Settings.Get(); err == nil {
@@ -470,6 +472,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		if ss := s.Sessions.Get(c.Value); ss != nil {
 			if u, err := s.Store.Get(ss.User); err == nil && !u.Disabled {
 				out.Me = s.me(u, ss.CSRF)
+				out.Version = version.Version
 			}
 		}
 	}
