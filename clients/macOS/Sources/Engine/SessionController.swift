@@ -130,8 +130,9 @@ final class SessionController {
     }
 
     /// Installs or clears extra zone CIDRs in the system table.
-    /// Around-loft always, while split is on. Through-loft only when TUN is live
-    /// and 0/1 is not already the default (otherwise the bag is redundant).
+    /// Around-loft always, while split is on. Through-loft whenever TUN is live:
+    /// 0/1 is not enough — a more-specific around-loft prefix (LAN 10/8, a
+    /// regional list) would steal Global destinations that must stay on utun.
     func syncSplitRoutes() {
         splitGen += 1
         let gen = splitGen
@@ -154,20 +155,35 @@ final class SessionController {
                 .max { $0.freshSeq < $1.freshSeq }
         }()
         let tunLive = owner != nil
-        let defaultArmed = owner?.defaultArmed ?? false
         let ifname = owner?.tunName ?? ""
         let gw = Priv.savedGW()
-        let direct = store.routes.bagCIDRs(via: false)
         let via: [String]
-        if tunLive && !defaultArmed && !ifname.isEmpty {
+        if tunLive && !ifname.isEmpty {
             var extra = store.routes.bagCIDRs(via: true)
+            // Overlay /24 is already on utun at tun up. Putting it in the
+            // via bag lets --clear-split delete the member subnet.
+            let overlayIP = owner?.helper.overlayIP ?? ""
+            func skipOverlay(_ c: String) -> Bool {
+                if overlayIP.isEmpty { return false }
+                let host = c.split(separator: "/").first.map(String.init) ?? c
+                let bits = c.split(separator: "/").dropFirst().first
+                if let bits, bits != "24" { return false }
+                return Priv.sameSlash24(host, overlayIP)
+            }
+            extra.removeAll(where: skipOverlay)
             if let routes = owner?.helper.overlayRoutes {
-                for c in routes where !extra.contains(c) { extra.append(c) }
+                for c in routes where !extra.contains(c) && !skipOverlay(c) {
+                    extra.append(c)
+                }
             }
             via = extra
         } else {
             via = []
         }
+        // Equal prefix: through-loft wins. loft-priv also drops these from
+        // the direct bag; filtering here keeps the want files honest.
+        let viaSet = Set(via)
+        let direct = store.routes.bagCIDRs(via: false).filter { !viaSet.contains($0) }
         Priv.applySplit(via: via, direct: direct, ifname: ifname, gw: gw)
     }
 

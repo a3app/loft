@@ -206,9 +206,12 @@ final class SplitStore {
     /// Called after a list or zone mutation so the kernel table can follow.
     var onChange: (() -> Void)?
 
-    /// Unique IPv4 CIDRs in the through-loft or around-loft bag. Ignore rows stay out.
+    /// Unique IPv4 CIDRs in the through-loft or around-loft bag.
+    /// Ignore rows of this bag stay out (a CIDR fully inside an ignore).
+    /// Ignore rows of the other bag are punched in as more-specific holes.
     func bagCIDRs(via: Bool) -> [String] {
         let src = via ? viaSets() : bypassSets()
+        let other = via ? bypassSets() : viaSets()
         var ignores: [String: [String]] = [:]
         for s in src where s.source == .ignore {
             ignores[s.zone, default: []].append(contentsOf: s.cidrs.compactMap(SplitBat.normalizeCIDR))
@@ -220,6 +223,12 @@ final class SplitStore {
             for raw in s.cidrs {
                 guard let c = SplitBat.normalizeCIDR(raw) else { continue }
                 if SplitBat.hitsIgnore(c, ig) { continue }
+                if seen.insert(c).inserted { out.append(c) }
+            }
+        }
+        for s in other where s.source == .ignore {
+            for raw in s.cidrs {
+                guard let c = SplitBat.normalizeCIDR(raw) else { continue }
                 if seen.insert(c).inserted { out.append(c) }
             }
         }
@@ -802,10 +811,11 @@ enum SplitBat {
         return out
     }
 
-    /// True if `cidr` equals, covers, or is covered by an ignore prefix.
+    /// True if `cidr` equals an ignore or sits inside one.
+    /// A wider via/direct prefix is kept: the ignore is a hole, not a delete.
     static func hitsIgnore(_ cidr: String, _ ignores: [String]) -> Bool {
         for ig in ignores {
-            if cidr == ig || covers(ig, cidr) || covers(cidr, ig) { return true }
+            if cidr == ig || covers(ig, cidr) { return true }
         }
         return false
     }

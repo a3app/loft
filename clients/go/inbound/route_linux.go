@@ -27,7 +27,8 @@ func addSplitDefault(tun string, exclude []string) (func(), error) {
 			cmds = append(cmds, []string{"ip", "route", "del", host})
 		}
 	}
-	// IPv4 split default only. ::/0 waits for overlay IPv6.
+	// IPv4 split default. 2000::/3 unreachable so Happy Eyeballs uses IPv4
+	// through tun; overlay IPv6 later may replace this with ::/0.
 	if err := run("ip", "route", "add", "0.0.0.0/1", "dev", tun); err != nil {
 		return nil, err
 	}
@@ -36,6 +37,9 @@ func addSplitDefault(tun string, exclude []string) (func(), error) {
 		return nil, err
 	}
 	cmds = append(cmds, []string{"ip", "route", "del", "128.0.0.0/1"})
+	if run("ip", "-6", "route", "replace", "unreachable", "2000::/3") == nil {
+		cmds = append(cmds, []string{"ip", "-6", "route", "del", "unreachable", "2000::/3"})
+	}
 	return func() {
 		for i := len(cmds) - 1; i >= 0; i-- {
 			_ = run(cmds[i][0], cmds[i][1:]...)

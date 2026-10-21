@@ -154,7 +154,7 @@ A client-wide mapping, not a per-profile list. Otherwise three TUN sessions argu
 
 **Product.** A **zone** is a policy: through Loft or around Loft, plus an optional list URL. A **service** (name + CIDRs) only belongs to a zone. Direction is not a field on the row. Built-in zones are Local (around Loft, empty repo, seed LAN) and Global (through Loft, `global.bat`). Extra zones come from the zone editor. Files `global.bat`, `ru.bat`, `cn.bat` from [a3app/loft-routes](https://github.com/a3app/loft-routes) are catalogs, not zones: the user attaches a file to a zone’s repository.
 
-**Kernel.** The system table has two CIDR bags, derived from `zone.def`: through Loft (`viaSets`) into utun, around Loft (`bypassSets`) onto the remembered native hop. loft-priv diffs them (`--apply-split` / `--clear-split`). Through-loft CIDRs are skipped while 0/1 already owns the default.
+**Kernel.** The system table has two CIDR bags, derived from `zone.def`: through Loft (`viaSets`) into utun, around Loft (`bypassSets`) onto the remembered native hop. loft-priv diffs them (`--apply-split` / `--clear-split`). Through-loft CIDRs stay installed even when 0/1 owns the default: a more-specific around-loft prefix (LAN `10/8`, a regional list) would otherwise steal Global destinations. Equal prefixes: through Loft wins. Ignore rows punch a hole in the other bag; they do not delete a covering prefix. While TUN is up, loft-priv rejects `2000::/3` so Happy Eyeballs uses IPv4 through Loft.
 
 **Protocol lists** (named sets from the controller, `use:` → via / direct / drop) stay a later revision. They do not appear as tabs. A later revision MAY import a controller list into a zone without wiping `source: me`.
 

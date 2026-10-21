@@ -205,6 +205,34 @@ static int route_blackhole(void) {
     return runv(1, "/sbin/route", argv);
 }
 
+#define IPV6_DROP_STAMP "/tmp/loft-ipv6-drop"
+
+/* ipv6_drop_global: reject 2000::/3 so Happy Eyeballs gets ENETUNREACH
+   and uses IPv4 through loft. Overlay is IPv4-only until Status.IP6;
+   a native inet6 default would send Global destinations around loft.
+   Link-local and ULA stay. reject, not blackhole: silent drop delays HE. */
+static void ipv6_drop_global(void) {
+    char *argv[] = {
+        "route", "-n", "add", "-inet6", "2000::/3", "::1", "-reject", NULL
+    };
+    if (runv(1, "/sbin/route", argv) == 0) {
+        FILE *fp = fopen(IPV6_DROP_STAMP, "w");
+        if (fp) {
+            fputs("2000::/3\n", fp);
+            fclose(fp);
+        }
+        fprintf(stderr, "loft-priv: inet6 2000::/3 reject\n");
+    }
+}
+
+static void ipv6_undrop_global(void) {
+    char *argv[] = {
+        "route", "-n", "delete", "-inet6", "2000::/3", "::1", NULL
+    };
+    runv(1, "/sbin/route", argv);
+    unlink(IPV6_DROP_STAMP);
+}
+
 /* route_unhold: delete only the 127.0.0.1 blackhole, not a real 0/0. */
 static int route_unhold(void) {
     /* Only the blackhole we installed. A bare delete of 0/0 can drop the real default. */
@@ -597,6 +625,7 @@ static void on_hold_sig(int sig) {
 /* hold_cleanup: drop overlay routes, restore 0/0 if we installed it, close utun. */
 static void hold_cleanup(void) {
     char net[32];
+    ipv6_undrop_global();
     drop_split_default();
     if (g_ip[0]) {
         cidr24(g_ip, net, sizeof net);
@@ -1012,7 +1041,7 @@ static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *if
     int addrs = RTA_DST;
     int flags = RTF_UP | RTF_STATIC;
     unsigned idx = 0;
-    int fd, n, tries = 0;
+    int fd, n, tries = 0, replaced = 0;
     memset(buf, 0, sizeof buf);
     m = (struct rt_msghdr *)buf;
     p = buf + sizeof(*m);
@@ -1075,6 +1104,16 @@ static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *if
     for (;;) {
         n = (int)write(fd, buf, m->rtm_msglen);
         if (n == (int)m->rtm_msglen) return 0;
+        /* Via ADD onto a leftover native hop: delete the dest, then retry.
+           Treating EEXIST as success left through-loft prefixes around loft. */
+        if (cmd == RTM_ADD && errno == EEXIST && iff && iff[0] && replaced == 0) {
+            char net[64];
+            cidr_fmt(c, net, sizeof net);
+            (void)route_del_net(net);
+            replaced = 1;
+            m->rtm_seq = ++g_rtseq;
+            continue;
+        }
         if (errno == EEXIST || errno == ESRCH || errno == EADDRNOTAVAIL) return 0;
         if (errno == ENOBUFS && tries++ < 8) {
             usleep(2000);
@@ -1084,10 +1123,13 @@ static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *if
     }
 }
 
-/* split_diff: delete have-not-want, add want-not-have. */
+/* split_diff: delete have-not-want and/or add want-not-have.
+   Callers run deletes on both bags first, then adds, so a prefix
+   moving via↔direct is gone from the old hop before the new ADD. */
 static void split_diff(const struct cidr4 *have, int nh,
     const struct cidr4 *want, int nw,
-    const char *gw, const char *iff, int *added, int *deleted) {
+    const char *gw, const char *iff, int *added, int *deleted,
+    int do_del, int do_add) {
     int i = 0, j = 0;
     while (i < nh || j < nw) {
         int cmp;
@@ -1095,10 +1137,10 @@ static void split_diff(const struct cidr4 *have, int nh,
         else if (j == nw) cmp = -1;
         else cmp = cidr_cmp(&have[i], &want[j]);
         if (cmp < 0) {
-            if (rt_mod(RTM_DELETE, &have[i], gw, iff) == 0) (*deleted)++;
+            if (do_del && rt_mod(RTM_DELETE, &have[i], gw, iff) == 0) (*deleted)++;
             i++;
         } else if (cmp > 0) {
-            if (rt_mod(RTM_ADD, &want[j], gw, iff) == 0) (*added)++;
+            if (do_add && rt_mod(RTM_ADD, &want[j], gw, iff) == 0) (*added)++;
             j++;
         } else {
             i++;
@@ -1140,7 +1182,27 @@ static void split_write_meta(const char *iff, const char *gw) {
     fclose(fp);
 }
 
-/* split_apply: install want-via via utun and want-direct via native gw. */
+/* cidr_eq: same IPv4 prefix. */
+static int cidr_eq(const struct cidr4 *a, const struct cidr4 *b) {
+    return a->net == b->net && a->bits == b->bits;
+}
+
+/* drop_via_from_direct: equal prefix, through-loft wins. */
+static int drop_via_from_direct(struct cidr4 *dir, int nd, const struct cidr4 *via, int nv) {
+    int w = 0, i, j;
+    for (i = 0; i < nd; i++) {
+        int hit = 0;
+        for (j = 0; j < nv; j++) {
+            if (cidr_eq(&dir[i], &via[j])) { hit = 1; break; }
+        }
+        if (!hit) dir[w++] = dir[i];
+    }
+    return w;
+}
+
+/* split_apply: install want-via via utun and want-direct via native gw.
+   Direct is applied first so a prefix moving to via is deleted off the
+   native hop before RTM_ADD to utun (EEXIST would otherwise keep it around loft). */
 static void split_apply(const char *iff, const char *gw) {
     static struct cidr4 have_via[SPLIT_MAX], want_via[SPLIT_MAX];
     static struct cidr4 have_dir[SPLIT_MAX], want_dir[SPLIT_MAX];
@@ -1153,6 +1215,7 @@ static void split_apply(const char *iff, const char *gw) {
     nv_w = load_cidrs(SPLIT_WANT_VIA, want_via, SPLIT_MAX);
     nd_h = load_cidrs(SPLIT_HAVE_DIRECT, have_dir, SPLIT_MAX);
     nd_w = load_cidrs(SPLIT_WANT_DIRECT, want_dir, SPLIT_MAX);
+    nd_w = drop_via_from_direct(want_dir, nd_w, want_via, nv_w);
     via_ok = iff && iff[0] && if_nametoindex(iff) != 0;
     dir_ok = gw && gw[0] && gw_on_link(gw);
     if (!dir_ok && gw && gw[0]) {
@@ -1175,8 +1238,10 @@ static void split_apply(const char *iff, const char *gw) {
         split_wipe(have_dir, nd_h, old_gw[0] ? old_gw : gw, NULL, &del_d);
         nd_h = 0;
     }
-    if (via_ok) split_diff(have_via, nv_h, want_via, nv_w, NULL, iff, &add_v, &del_v);
-    if (dir_ok) split_diff(have_dir, nd_h, want_dir, nd_w, gw, NULL, &add_d, &del_d);
+    if (dir_ok) split_diff(have_dir, nd_h, want_dir, nd_w, gw, NULL, &add_d, &del_d, 1, 0);
+    if (via_ok) split_diff(have_via, nv_h, want_via, nv_w, NULL, iff, &add_v, &del_v, 1, 0);
+    if (dir_ok) split_diff(have_dir, nd_h, want_dir, nd_w, gw, NULL, &add_d, &del_d, 0, 1);
+    if (via_ok) split_diff(have_via, nv_h, want_via, nv_w, NULL, iff, &add_v, &del_v, 0, 1);
     save_cidrs(SPLIT_HAVE_VIA, want_via, nv_w);
     save_cidrs(SPLIT_HAVE_DIRECT, want_dir, nd_w);
     split_write_meta(via_ok ? iff : "", dir_ok ? gw : "");
@@ -1351,10 +1416,15 @@ int main(int argc, char **argv) {
         wipe_excl();
         split_clear(hold || overlay_only);
         dns_restore();
-        if (hold) route_blackhole();
-        else if (touch_default) {
-            route_restore_default(gw);
-            unstamp_default();
+        if (hold) {
+            route_blackhole();
+            ipv6_drop_global();
+        } else {
+            ipv6_undrop_global();
+            if (touch_default) {
+                route_restore_default(gw);
+                unstamp_default();
+            }
         }
         fprintf(stderr, "loft-priv: %s gw=%s overlay=%d\n",
                 hold ? "hold" : (touch_default ? "restore" : "overlay"),
@@ -1375,6 +1445,7 @@ int main(int argc, char **argv) {
         route_unhold();
         route_restore_default(gw);
         drop_split_default();
+        ipv6_undrop_global();
         fprintf(stderr, "loft-priv: unhold gw=%s\n", gw ? gw : "");
         return 0;
     }
@@ -1427,6 +1498,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     (void)ifconfig_no_inet6(name);
+    ipv6_drop_global();
     {
         char net[32];
         cidr24(ip, net, sizeof net);

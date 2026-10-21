@@ -153,7 +153,7 @@ Hold 和「Loft 关着时绕过 Loft」在 Network Extension 上只在 provider 
 
 **产品。** **区域** 是策略：经 Loft 或绕过 Loft，外加可选的列表 URL。**服务**（名字 + CIDR）只属于一个区域。方向不是行上的字段。内置区域是 Local（绕过 Loft，空仓库，出厂 LAN）和 Global（经 Loft，`global.bat`）。额外区域从区域编辑器来。`global.bat`、`ru.bat`、`cn.bat` 来自 [a3app/loft-routes](https://github.com/a3app/loft-routes) 是目录，不是区域：用户把文件挂到区域的仓库上。
 
-**内核。** 系统表里两个 CIDR 袋，从 `zone.def` 来：经 Loft（`viaSets`）进 utun，绕过 Loft（`bypassSets`）走记住的直连下一跳。loft-priv 做 diff（`--apply-split` / `--clear-split`）。默认路由已经在 0/1 时，经 Loft 的 CIDR 不再重复装。
+**内核。** 系统表里两个 CIDR 袋，从 `zone.def` 来：经 Loft（`viaSets`）进 utun，绕过 Loft（`bypassSets`）走记住的直连下一跳。loft-priv 做 diff（`--apply-split` / `--clear-split`）。经 Loft 的 CIDR 即使 0/1 已经占着默认也照样装：更窄的绕过（局域网 `10/8`、地区列表）否则会把 Global 抢走。相同前缀：经 Loft。忽略行在另一袋上打洞，不删掉覆盖它的前缀。TUN 活着时 loft-priv 对 `2000::/3` 做 reject，Happy Eyeballs 走经 Loft 的 IPv4。
 
 **协议列表**（控制器的具名集合，`use:` → via / direct / drop）留到以后。不会变成页签。以后的修订 **可以** 把控制器列表导入区域，不覆盖 `source: me`。
 

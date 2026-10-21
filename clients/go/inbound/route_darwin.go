@@ -33,7 +33,9 @@ func addSplitDefault(tun string, exclude []string) (func(), error) {
 			undo = append(undo, []string{"delete", "-host", host})
 		}
 	}
-	// IPv4 split default only. ::/0 waits for overlay IPv6.
+	// IPv4 split default. 2000::/3 reject so Happy Eyeballs uses IPv4
+	// through tun; a native inet6 default would go around loft. Overlay IPv6
+	// later may replace this with ::/0 on tun.
 	if err := run("route", "-n", "add", "-net", "0.0.0.0/1", "-interface", tun); err != nil {
 		return nil, err
 	}
@@ -42,9 +44,13 @@ func addSplitDefault(tun string, exclude []string) (func(), error) {
 		return nil, err
 	}
 	undo = append(undo, []string{"delete", "-net", "128.0.0.0/1"})
+	if run("route", "-n", "add", "-inet6", "2000::/3", "::1", "-reject") == nil {
+		undo = append(undo, []string{"delete", "-inet6", "2000::/3"})
+	}
 	return func() {
 		for i := len(undo) - 1; i >= 0; i-- {
-			_ = exec.Command("route", "-n", undo[i][0], undo[i][1], undo[i][2]).Run()
+			args := append([]string{"-n"}, undo[i]...)
+			_ = exec.Command("route", args...).Run()
 		}
 	}, nil
 }

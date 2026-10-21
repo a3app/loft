@@ -12,7 +12,9 @@ const (
 
 // overlayIPv6Configured is true when the node assigned an overlay IPv6
 // address. Until then Loft is an IPv4-only tunnel: no ::/0, no inet6 on
-// utun, inbound IPv6 dropped so Happy Eyeballs uses IPv4.
+// utun. Inbound IPv6 on tun is dropped. Happy Eyeballs only uses IPv4 if
+// the host has no native inet6 default — macOS loft-priv rejects
+// 2000::/3 while the holder is up; addSplitDefault does the same.
 func overlayIPv6Configured() bool {
 	return transport.OverlayIPv6() != ""
 }
