@@ -92,8 +92,8 @@ channel px socks5 192.0.2.40:1080 user u pass "p w" udp proxy check tcp probe ex
 channel web http 192.0.2.41:3128 tls      # HTTP 或 HTTPS 代理（CONNECT）
 channel office sstp vpn.example.org:443 user office pass x auth mschapv2
 prio main wg-nl wg-fi px then direct      # 优先级列表：第一个可用通道，然后 direct 或 block
-prio office office then block
-rule member bob via office
+prio work office then block
+rule member bob via work
 rule tag staff via main
 rule list blocked via main                # node.conf 中 lists 的列表
 default via main

@@ -92,8 +92,8 @@ channel px socks5 192.0.2.40:1080 user u pass "p w" udp proxy check tcp probe ex
 channel web http 192.0.2.41:3128 tls      # HTTP or HTTPS proxy (CONNECT)
 channel office sstp vpn.example.org:443 user office pass x auth mschapv2
 prio main wg-nl wg-fi px then direct      # a priority list: the first working channel, then direct or block
-prio office office then block
-rule member bob via office
+prio work office then block
+rule member bob via work
 rule tag staff via main
 rule list blocked via main                # a list from node.conf lists
 default via main
