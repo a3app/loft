@@ -1957,5 +1957,14 @@ window.LOFT_EN = {
   "Пустого списка": "An empty list",
   "Копии «$": "A copy of “$",
   "Проверяются сверху вниз, срабатывает первое подходящее, и трафик уходит по выбранному списку приоритетов. Сам сервер — панель, обновления, почта — всегда выходит напрямую.": "Checked top to bottom; the first match wins and its traffic follows the chosen priority list. The server itself — panel, updates, mail — always goes out directly.",
-  "Список приоритетов": "Priority list"
+  "Список приоритетов": "Priority list",
+  "Канал можно поставить в списки приоритетов.": "The channel can go into priority lists.",
+  "Списков приоритетов пока нет — их создают на вкладке «Приоритеты подключений».": "There are no priority lists yet — create them on the “Connection priorities” tab.",
+  "Списков пока нет. Добавьте список и выберите его в правилах выхода на вкладке «Внешние каналы».": "No lists yet. Add a list and pick it in the exit rules on the “External channels” tab.",
+  "Нет подключений с «Использовать для выхода в интернет».": "No connection has “Use for internet exit”.",
+  "Список сохранён — нода перечитала его": "List saved — the node reloaded it",
+  "Список переименован": "List renamed",
+  "Список добавлен": "List added",
+  "Удалить список «$": "Delete list “$",
+  "Подключения останутся, удалится только порядок.": "The connections stay; only the order is deleted."
 };
