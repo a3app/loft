@@ -186,6 +186,27 @@
       white-space: normal; line-height: 1.2; min-height: 36px;
     }
 
+    .tabbar {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+      display: flex; padding: 6px 8px 20px;
+      background: #181512; border-top: 1px solid var(--line);
+    }
+    .tabbar button {
+      flex: 1; border: 0; background: none; cursor: pointer; color: var(--mute);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      font: 600 9.5px var(--ui); padding: 2px 0;
+    }
+    .tabbar svg { width: 22px; height: 22px; }
+    .tabbar button.on { color: var(--lamp); }
+    .phone.tabbed .screen { padding-bottom: 76px; }
+    .navbar {
+      display: flex; align-items: center; min-height: 28px; margin: 0 0 6px;
+    }
+    .navbar button {
+      background: none; border: 0; color: var(--lamp); font: 500 13px var(--ui);
+      cursor: pointer; padding: 4px 0;
+    }
+
     .head {
       display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
     }
@@ -526,16 +547,12 @@
             <span class="r" id="sparkR">↓ 12.4 Мбит/с</span>
           </div>
         </div>
-        <div class="foot">
-          <button type="button" data-go="journal" data-i="journal">Журнал</button>
-          <button type="button" data-i="reset">Сбросить маршруты</button>
-          <button type="button" data-go="settings" data-i="settings">Настройки</button>
-        </div>
       </div>
 
       <div class="screen hidden" id="list">
         <div class="head">
           <div class="title" data-i="conns">Подключения</div>
+          <button type="button" class="qr" data-go="scan" data-i="import">Импорт</button>
           <button type="button" class="plus" data-go="edit" title="+">+</button>
         </div>
         <p class="subline" data-i="connsSub">Каждое — свой ключ и адрес. Активное одно.</p>
@@ -596,14 +613,10 @@
           </div>
           <p class="hint" data-i="listHint">Свайп влево — удалить, вправо — править. Долгое нажатие — меню. Выбранное экспортируется как .loft. Тап по Office отключит Home: туннель на iOS один.</p>
         </div>
-        <div class="foot">
-          <button type="button" data-go="scan" data-i="import">Импорт</button>
-          <button type="button" data-sheet="export" data-i="export">Экспорт</button>
-          <button type="button" data-go="settings" data-i="settings">Настройки</button>
-        </div>
       </div>
 
       <div class="screen hidden" id="edit">
+        <div class="navbar"><button type="button" data-back data-i="cancel">Отмена</button></div>
         <div class="head">
           <div class="title" data-i="editTitle">Подключение</div>
           <button type="button" class="qr" data-go="scan" data-i="qr">QR</button>
@@ -857,7 +870,6 @@
             <button type="button" class="go" data-i="save">Сохранить</button>
           </div>
           <div class="end-row">
-            <button type="button" data-go="list" data-i="back">Назад</button>
             <button type="button" class="danger" data-del="Home" data-i="delete">Удалить</button>
           </div>
         </div>
@@ -1012,6 +1024,7 @@
       </div>
 
       <div class="screen hidden" id="scan">
+        <div class="navbar"><button type="button" data-back data-i="cancel">Отмена</button></div>
         <div class="title" data-i="scanT" style="font-size:20px;font-weight:600;letter-spacing:-0.03em;margin:0 0 8px">Сканер QR</div>
         <div class="scroll">
           <div class="finder">
@@ -1044,6 +1057,7 @@
       </div>
 
       <div class="screen hidden" id="share">
+        <div class="navbar"><button type="button" data-back data-i="close">Закрыть</button></div>
         <div class="title" data-i="shareT" style="font-size:20px;font-weight:600;letter-spacing:-0.03em;margin:0 0 8px">QR</div>
         <div class="scroll">
           <div class="finder" style="height:240px">
@@ -1065,7 +1079,8 @@
       </div>
 
       <div class="screen hidden" id="journal">
-        <div class="hero" style="padding-top:4px">
+        <div class="navbar"><button type="button" data-back data-i="backSet">‹ Настройки</button></div>
+        <div class="hero" style="padding-top:0">
           <h1 data-i="journal">Журнал</h1>
           <p class="hint" data-i="journalD">Строки фронта и сессии. Ключ сокращается.</p>
         </div>
@@ -1073,14 +1088,14 @@
 status  ip=10.8.0.14  mtu=1280  front=get
 tun   packet-tunnel  up
 hold  armed</pre>
-        <div class="foot">
-          <button type="button" data-i="copy">Скопировать</button>
-          <button type="button" data-i="clearLog">Очистить</button>
-          <button type="button" data-go="home" data-i="back">Назад</button>
+        <div class="row-2" style="margin-top:10px">
+          <button type="button" class="ghost" data-i="copy">Скопировать</button>
+          <button type="button" class="ghost" data-i="clearLog">Очистить</button>
         </div>
       </div>
 
       <div class="screen hidden" id="about">
+        <div class="navbar"><button type="button" data-back data-i="backSet">‹ Настройки</button></div>
         <div class="scroll about">
           <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true" style="width:72px;height:72px;margin:8px auto 10px;display:block">
             <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
@@ -1098,6 +1113,12 @@ hold  armed</pre>
 Внутри горит своя сеть.</p>
           <p class="made">Made with love <span class="heart">♥</span> by A³</p>
         </div>
+      </div>
+
+      <div class="tabbar" id="tabbar">
+        <button type="button" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span data-i="tabHome">Дом</span></button>
+        <button type="button" data-tab="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg><span data-i="conns">Подключения</span></button>
+        <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span data-i="settings">Настройки</span></button>
       </div>
 
       <div class="scrim hidden" id="ctxScrim">
@@ -1190,6 +1211,7 @@ hold  armed</pre>
         pillOn: "Подключено: Home 0:12", pillOff: "Не подключено",
         frontK: "ФРОНТ", tunK: "ТУННЕЛЬ",
         journal: "Журнал", reset: "Сбросить маршруты", settings: "Настройки",
+        tabHome: "Дом", close: "Закрыть", backSet: "‹ Настройки",
         conns: "Подключения", connsSub: "Каждое — свой ключ и адрес. Активное одно.",
         active: "активно", edit: "Править", delete: "Удалить", export: "Экспорт", import: "Импорт",
         listHint: "Свайп влево — удалить, вправо — править. Долгое нажатие — меню. Выбранное экспортируется как .loft. Тап по Office отключит Home: туннель на iOS один.",
@@ -1275,6 +1297,7 @@ hold  armed</pre>
         pillOn: "Connected: Home 0:12", pillOff: "Not connected",
         frontK: "FRONT", tunK: "TUNNEL",
         journal: "Journal", reset: "Reset routes", settings: "Settings",
+        tabHome: "Home", close: "Close", backSet: "‹ Settings",
         conns: "Connections", connsSub: "Each has its own key and address. One is active.",
         active: "active", edit: "Edit", delete: "Delete", export: "Export", import: "Import",
         listHint: "Swipe left to delete, right to edit. Long-press for the menu. The selected row exports as .loft. Tapping Office disconnects Home: one tunnel on iOS.",
@@ -1360,6 +1383,7 @@ hold  armed</pre>
         pillOn: "已连接: Home 0:12", pillOff: "未连接",
         frontK: "前置", tunK: "隧道",
         journal: "日志", reset: "重置路由", settings: "设置",
+        tabHome: "主页", close: "关闭", backSet: "‹ 设置",
         conns: "连接", connsSub: "每条有自己的密钥和地址。同时只激活一条。",
         active: "当前", edit: "编辑", delete: "删除", export: "导出", import: "导入",
         listHint: "左滑删除，右滑编辑。长按出菜单。选中行导出为 .loft。点 Office 会先断开 Home：iOS 上只有一条隧道。",
@@ -1569,9 +1593,21 @@ hold  armed</pre>
       SHEETS.forEach((id) => document.getElementById(id).classList.add("hidden"));
       document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
     }
+    // Tabs are the three rooms; Journal and About are pushed from Settings.
+    // Edit, Scanner and QR are modal: Cancel / Close returns where they came from.
+    const TAB_OF = { home: "home", list: "list", settings: "settings", journal: "settings", about: "settings" };
+    const PARENT = { edit: "list", scan: "list", share: "list", journal: "settings", about: "settings" };
+    let cur = "home";
+    const from = {};
     function show(id, extra) {
       extra = extra || {};
       hideSheets();
+      if (id !== cur && !extra.back) from[id] = cur;
+      cur = id;
+      const tab = TAB_OF[id];
+      document.getElementById("phone").classList.toggle("tabbed", !!tab);
+      document.getElementById("tabbar").classList.toggle("hidden", !tab);
+      document.querySelectorAll("#tabbar button").forEach((b) => b.classList.toggle("on", b.getAttribute("data-tab") === tab));
       document.querySelectorAll("nav button[data-go]").forEach((b) => {
         const same = b.getAttribute("data-go") === id &&
           (b.getAttribute("data-list") || "") === (extra.list || "") &&
@@ -1639,6 +1675,17 @@ hold  armed</pre>
       b.addEventListener("click", (e) => {
         e.stopPropagation();
         show(b.getAttribute("data-go"), attrsOf(b));
+      });
+    });
+    document.querySelectorAll("#tabbar button").forEach((b) => {
+      b.addEventListener("click", () => show(b.getAttribute("data-tab"), { mode: b.getAttribute("data-tab") === "home" ? homeMode : "" }));
+    });
+    document.querySelectorAll("[data-back]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        let to = from[cur] || PARENT[cur] || "home";
+        if (to === cur || to === "iosvpn") to = PARENT[cur] || "home";
+        show(to, { back: true, mode: to === "home" ? homeMode : "" });
       });
     });
     document.querySelectorAll("[data-sheet]").forEach((b) => {

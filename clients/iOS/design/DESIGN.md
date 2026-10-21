@@ -32,18 +32,18 @@ Same rooms as the macOS windows, laid out for one column and a thumb.
 
 | Screen | What |
 |--------|------|
-| Home | Status window. Mark, `loft`, status pill (tap → list), large Open loft / Disconnect. Cards **OVERLAY / FRONT / TUNNEL** and spark when simplified interface is off. Footer **Journal \| Reset routes \| Settings**. Connecting uses this screen: pill “Not connected”, action “Connecting…”, spark “handshake”. |
-| Connections | Title, `+`, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, **host** subtitle, side **active** or kind (`get` / `sstp` / `vless`), ghost Edit. **Leading swipe** Edit, **trailing swipe** Delete. **Long-press** context: Edit / Export `.loft` (selected only) / Delete. Footer **Import \| Export \| Settings**. No “Several” toggle. |
-| Edit | Title Connection, **QR** in the header. Name. Capsule **VPN type** loft / SSTP / VLESS / Trojan. Tabs **Main / Advanced**. loft and VLESS: capsule **Link / Manual**. loft Link is a secret `loft://` with Show/Hide; Manual is access key, host, port, GET·WS·H2·QUIC·H3, path. Both write the same profile. VLESS Link is a `vless://` string; Manual is UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint, and the fields that mode needs. Certificate check. Both write `vless://`. No SOCKS field. Tunnel interface = Packet Tunnel (forced on: there is no other inbound). SSTP: user, password, server, TLS hostname, cert check, PAP/CHAP. Trojan: password, `trojan://` server, TLS hostname, cert check. Advanced: mux (loft), DNS, DNS into the system; SSTP also “these addresses only”. Save, Back, Delete. |
+| Home | Status window. Mark, `loft`, status pill (tap → list), large Open loft / Disconnect. Cards **OVERLAY / FRONT / TUNNEL** and spark when simplified interface is off. Tab bar below. Connecting uses this screen: pill “Not connected”, action “Connecting…”, spark “handshake”. |
+| Connections | Title, `+`, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, **host** subtitle, side **active** or kind (`get` / `sstp` / `vless`), ghost Edit. **Leading swipe** Edit, **trailing swipe** Delete. **Long-press** context: Edit / Export `.loft` (selected only) / Delete. **Import** in the header next to `+`; export is on the selected row and in its long-press menu. Tab bar below. No “Several” toggle. |
+| Edit | Modal: **Cancel** on top returns to where it was opened. Title Connection, **QR** in the header. Name. Capsule **VPN type** loft / SSTP / VLESS / Trojan. Tabs **Main / Advanced**. loft and VLESS: capsule **Link / Manual**. loft Link is a secret `loft://` with Show/Hide; Manual is access key, host, port, GET·WS·H2·QUIC·H3, path. Both write the same profile. VLESS Link is a `vless://` string; Manual is UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint, and the fields that mode needs. Certificate check. Both write `vless://`. No SOCKS field. Tunnel interface = Packet Tunnel (forced on: there is no other inbound). SSTP: user, password, server, TLS hostname, cert check, PAP/CHAP. Trojan: password, `trojan://` server, TLS hostname, cert check. Advanced: mux (loft), DNS, DNS into the system; SSTP also “these addresses only”. Save, then Delete at the end. |
 | Onboard | Two steps, same as macOS. **1 Access key** (`lt_…`) → Continue, or import a file/QR. **2 Address**: URL, how to connect GET/WS/H2/QUIC/H3, path → Open loft. Then the stock iOS VPN permission sheet, once. |
 | Settings | Three tabs **General / Route / Client**. Header Reset routes. Links **Defaults \| Journal \| About**. iOS subset: language, simplified interface, speed units, extended journal; default route, hold, split (no failover); auto-connect, reconnect, external IP. Skip Dock, login item, several outbounds, SOCKS. |
-| Journal | Front and session lines. The key is shortened. Copy / Clear / Back. |
-| About | Mark, loft, `1.0.22`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
-| Scan | Camera QR. From file / From Photos. Paste `loft://` / `sstp://` / `vless://`. |
-| Share QR | `loft://` of one front. Several fronts or several connections → `.loft`. Warns that the file contains the key. |
+| Journal | Pushed from Settings: **‹ Settings** on top, tab bar stays. Front and session lines. The key is shortened. Copy / Clear. |
+| About | Pushed from Settings: **‹ Settings** on top. Mark, loft, `1.0.22`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
+| Scan | Modal: **Cancel** on top. Camera QR. From file / From Photos. Paste `loft://` / `sstp://` / `vless://`. |
+| Share QR | Modal: **Close** on top. `loft://` of one front. Several fronts or several connections → `.loft`. Warns that the file contains the key. |
 | iOS Settings → VPN | Stock list. loft Connected, type loft. Toggle is the system tunnel. |
 
-**Simplified interface** (Settings → General): Home is mark, pill, Open loft / Disconnect, footer. Cards and spark hide. List still has Connect/Disconnect and name. Settings stay complete.
+**Simplified interface** (Settings → General): Home is mark, pill, Open loft / Disconnect, tab bar. Cards and spark hide. List still has Connect/Disconnect and name. Settings stay complete.
 
 macOS-only chrome that this mock does not draw: menu-bar popover, SOCKS5 card and port, Dock icon, login item, several simultaneous outbounds, drag-and-drop plate.
 
@@ -82,7 +82,7 @@ Same loft tokens as macOS: Ink `#1A1714`, Lamp `#E8B84A`, Paper `#E8DFD2`, Aveni
 
 Type: headings Demi, body Regular, keys SF Mono. Connected = lamp window on. Down = lamp off, stone L.
 
-Safe area: status bar + home indicator. One column. Thumb reach: Open loft / Disconnect is the large control on Home. Footer three pills sit on the home indicator.
+Safe area: status bar + home indicator. One column. Thumb reach: Open loft / Disconnect is the large control on Home. The tab bar **Home · Connections · Settings** sits on the home indicator, on Home, Connections, Settings and the screens pushed from it (Journal, About). Edit, Scanner and Share QR are modal without it; Onboarding is full screen.
 
 Scan: dark finder, lamp-colored corner brackets, two actions under the finder (From file / From Photos).
 
