@@ -62,7 +62,7 @@ Entry: Settings → Route → the toggle and the gold **Lists**. The screens ope
 | Repository | List address of the open zone + **Lists**, auto-update, last pull, Update now. |
 | Catalog | loft-routes lists: World, Russia, China, Iran, Kazakhstan, Belarus; the current one is lit. A tap sets the address and goes back. |
 | Import | From file (iOS Files), detected format and line count, zone, Add. |
-| Export | All zones in one loft-routes file (the zone in `REM zone:`, the service name in a comment), a sample, Save (share sheet). No Keenetic .bat format on iOS. |
+| Export | All zones in one loft-routes file (the zone in `REM zone:`, the service name in a comment), a sample, Save (share sheet). |
 
 ---
 
