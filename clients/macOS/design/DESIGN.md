@@ -363,7 +363,7 @@ Implementation: `NSStatusItem` with a custom view or a composite image (template
 
 One main session. Title is **Connected** plus uptime, or **No active connections**. Subtitle is a lamp-dot and the profile name. The action is Connect / Disconnect / Cancel / Retry. Rows: Connection, optional External IP, Overlay (TUN badge when the tunnel is up), Route, SOCKS5. Footer: Open Loft | Settings | Quit. Reset routes appears when hold is armed.
 
-**Several on: accordion.** Below the main session, the other sessions that are up, connecting or failed are collapsed rows: lamp-dot, name, uptime (or the error), a small Disconnect (Retry when failed). A click on a row makes it the main session, the same as picking it in the Connection menu (shared SOCKS and default route follow it); the previous one collapses. Sessions that are off are only in Connections. Simple view has no accordion.
+**Several on: accordion.** Below the main session, the other sessions that are up, connecting or failed are collapsed rows: lamp-dot, name, uptime (or the error), a small Disconnect (Cancel while connecting, Retry when failed). A click on a row makes it the main session, the same as picking it in the Connection menu (shared SOCKS and default route follow it); the previous one collapses. Sessions that are off are only in Connections. Simple view has no accordion.
 
 Connection opens an `NSMenu` of profiles (check on the current one, status open/closed/failed). It is not a second popover list.
 

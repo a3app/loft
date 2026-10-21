@@ -133,6 +133,49 @@ if CommandLine.arguments.contains("--shot") {
         if let v = editV.window?.contentView { dump(v, "edit-vless") }
     }
 
+    // Several on: one popover and one status window walk through accordion states, so a row
+    // left over from an earlier state would show up overlapping the next shot.
+    let ids = engine.store.profiles.map { $0.id }
+    if ids.count >= 3 {
+        let (a, b, c) = (ids[0], ids[1], ids[2])
+        let now = Date()
+        let day = now.addingTimeInterval(-90_061)
+        engine.store.multi = true
+        let accPop = PopoverView(frame: .zero)
+        let accWin = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 300), styleMask: [.borderless], backing: .buffered, defer: false)
+        accWin.contentView = accPop
+        accWin.orderBack(nil)
+        let accStatus = StatusWindowController(engine: engine)
+        accStatus.showWindow(nil)
+        typealias Step = (String, () -> Void)
+        let steps: [Step] = [
+            ("1-main-on-one", { engine.shotMain(""); engine.shotSet(a, .on, since: now.addingTimeInterval(-720), fresh: 3); engine.shotSet(b, .on, since: now.addingTimeInterval(-24), fresh: 2); engine.shotMain(a) }),
+            ("2-three-err", { engine.shotSet(c, .error, err: "сервер не отвечает", fresh: 1) }),
+            ("3-main-err", { engine.shotSet(a, .error, err: "сервер не отвечает") }),
+            ("4-prefer-b", { engine.shotMain(b) }),
+            ("5-connecting", { engine.shotSet(a, .connecting); engine.shotSet(c, .connecting) }),
+            ("6-others-gone", { engine.shotSet(a, .off); engine.shotSet(c, .off) }),
+            ("7-back-days", { engine.shotSet(a, .on, since: day, fresh: 5) }),
+            ("8-multi-off", { engine.store.multi = false }),
+            ("9-multi-on", { engine.store.multi = true }),
+            ("10-simple", { engine.store.simple = true }),
+            ("11-full", { engine.store.simple = false }),
+            ("12-all-off", { engine.shotMain("") }),
+        ]
+        for (name, step) in steps {
+            step()
+            let sz = accPop.render(engine: engine)
+            accWin.setContentSize(sz)
+            accPop.frame = NSRect(origin: .zero, size: sz)
+            dump(accPop, "acc-pop-\(name)")
+            accStatus.reload()
+            if let v = accStatus.window?.contentView { dump(v, "acc-status-\(name)") }
+        }
+        engine.store.multi = false
+        engine.store.simple = false
+        engine.shotMain("")
+    }
+
     LoftLog.shared.add("loft", "open node-ws ws wss://node.example.com/api/v1/sync path=/static/js")
     LoftLog.shared.add("front", "spawn ws wss://node.example.com/api/v1/sync path=/static/js socks=127.0.0.1:1080 tun=1")
     LoftLog.shared.add("front", L10n.t("err_h2_mask"))

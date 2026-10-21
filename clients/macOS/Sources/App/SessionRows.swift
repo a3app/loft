@@ -2,7 +2,7 @@
 
 import AppKit
 
-/// One collapsed live session: lamp-dot, name, uptime or error, Disconnect / Retry.
+/// One collapsed live session: lamp-dot, name, uptime or status, and the profile's action (Disconnect / Cancel / Retry).
 /// A click on the row makes it the main session.
 final class SessionRow: FlippedView {
     static let height: CGFloat = 30
@@ -61,7 +61,7 @@ final class SessionRow: FlippedView {
         }
         time.textColor = err ? Palette.err : Palette.mute
         dot.layer?.backgroundColor = (err ? Palette.err : (st == .on ? Palette.lamp : Palette.mute)).cgColor
-        act.title = err ? L10n.t("retry") : L10n.t("disconnect")
+        act.title = engine.actionTitle(of: p.id)
         act.lampOn = false
 
         let h = Self.height
@@ -74,10 +74,15 @@ final class SessionRow: FlippedView {
         act.frame = NSRect(x: width - inset - actW, y: round((h - actH) / 2), width: actW, height: actH)
         let dotS: CGFloat = 7
         dot.frame = NSRect(x: inset, y: round((h - dotS) / 2), width: dotS, height: dotS)
-        let timeW = min(110, Palette.textWidth(time.stringValue, font: time.font ?? Palette.body(11.5)) + 4)
+        // The name keeps at least ~55% of the room; uptime or status gets what is left.
+        let nameX = inset + dotS + 8
+        let room = act.frame.minX - 8 - nameX
+        let nameNeed = Palette.textWidth(label, font: name.font ?? Palette.body(12.5)) + 4
+        let timeNeed = Palette.textWidth(time.stringValue, font: time.font ?? Palette.body(11.5)) + 4
+        let nameMin = min(nameNeed, round(room * 0.55))
+        let timeW = max(0, min(timeNeed, room - 8 - nameMin))
         let timeX = act.frame.minX - 8 - timeW
         time.frame = NSRect(x: timeX, y: round((h - 18) / 2), width: timeW, height: 18)
-        let nameX = inset + dotS + 8
         name.frame = NSRect(x: nameX, y: round((h - 18) / 2), width: max(20, timeX - 8 - nameX), height: 18)
     }
 

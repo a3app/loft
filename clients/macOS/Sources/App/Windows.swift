@@ -126,7 +126,8 @@ final class StatusWindowController: NSWindowController {
     /// Relays session state into captions, cards, and spark.
     @objc func reload() {
         let e = engine
-        let p = e.store.active()
+        // Same profile as the popover: the main session, not only the list pick.
+        let p = e.displayProfile()
         let on = e.state == .on
         let fail = e.state == .error
         let held = e.holdArmed

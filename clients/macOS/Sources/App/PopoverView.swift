@@ -339,12 +339,12 @@ final class PopoverView: FlippedView {
             sparkL.isHidden = false
             sparkL.show(spark.text, scroll: spark.scroll, keepMoving: connecting || disconnecting)
             y += 24
+            // Always place, so rows of sessions that left the set are removed.
             let rest = engine.otherLive()
             othersLine.isHidden = rest.isEmpty
-            if !rest.isEmpty {
-                othersLine.frame = NSRect(x: pad, y: y - 2, width: w - pad * 2, height: 1)
-                y = others.place(rest, engine: engine, x: pad, y: y + 4, width: w - pad * 2, inset: 2, gap: 0) + 6
-            }
+            othersLine.frame = NSRect(x: pad, y: y - 2, width: w - pad * 2, height: 1)
+            let restEnd = others.place(rest, engine: engine, x: pad, y: y + 4, width: w - pad * 2, inset: 2, gap: 0)
+            if !rest.isEmpty { y = restEnd + 6 }
         } else {
             othersLine.isHidden = true
             _ = others.place([], engine: engine, x: 0, y: 0, width: 0, inset: 0, gap: 0)

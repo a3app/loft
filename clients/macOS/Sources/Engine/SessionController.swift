@@ -203,6 +203,21 @@ final class SessionController {
     /// Connect time of one live profile.
     func connectedAt(of id: String) -> Date? { lives[id]?.connectedAt }
 
+    /// `--shot` only: sets one session's state without spawning anything.
+    func shotSet(_ id: String, _ st: State, since: Date? = nil, err: String = "", fresh: UInt64 = 0) {
+        let s = ensure(id)
+        s.state = st
+        s.connectedAt = since
+        s.errorText = err
+        s.freshSeq = fresh
+    }
+
+    /// `--shot` only: makes `id` the main session; empty clears all fake sessions.
+    func shotMain(_ id: String) {
+        if id.isEmpty { lives.removeAll() }
+        currentID = id
+    }
+
     /// Several on: the other up, connecting, or failed sessions, freshest first.
     func otherLive() -> [LoftProfile] {
         guard store.multi else { return [] }
