@@ -156,15 +156,16 @@
     .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 10px 0 0; }
     .mono { font-family: var(--mono); font-size: 12px; }
 
-    .cards { display: flex; gap: 6px; margin-top: 16px; }
+    .cards { display: flex; gap: 6px; margin-top: 16px; cursor: pointer; }
     .plate {
       flex: 1; background: #211c19; border-radius: 10px; padding: 8px 8px 10px; min-width: 0;
     }
+    .cards .plate:first-child { flex: .7; }
     .plate .k {
       font-size: 9px; letter-spacing: .08em; color: var(--mute); text-transform: uppercase; font-weight: 600;
     }
     .plate .v {
-      font-family: var(--mono); font-size: 11px; margin-top: 6px;
+      font-family: var(--ui); font-size: 12.5px; font-weight: 600; margin-top: 6px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .spark {
@@ -307,6 +308,11 @@
       padding: 12px 0; border-bottom: 1px solid var(--line);
     }
     .set-row .k { font-size: 14px; }
+    .grp {
+      margin: 14px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--mute);
+    }
+    .grp:first-child { margin-top: 0; }
     .set-row .s { color: var(--mute); font-size: 11px; margin-top: 2px; line-height: 1.35; }
     .set-row select {
       background: #211c19; border: 1px solid #2e2824; color: var(--snow);
@@ -587,10 +593,10 @@
           <div class="btns">
             <button type="button" class="danger" id="homeAct" data-i="disconnect">Отключить</button>
           </div>
-          <div class="cards" id="homeCards">
-            <div class="plate"><div class="k">OVERLAY</div><div class="v" id="overV">10.8.0.14</div></div>
-            <div class="plate"><div class="k" data-i="frontK">ФРОНТ</div><div class="v" id="frontV">get</div></div>
-            <div class="plate"><div class="k" data-i="tunK">ТУННЕЛЬ</div><div class="v" id="tunV">1280</div></div>
+          <div class="cards" id="homeCards" data-sheet="det">
+            <div class="plate"><div class="k" data-i="methodK">СПОСОБ</div><div class="v" id="frontV">GET</div></div>
+            <div class="plate"><div class="k" data-i="rxK">ПРИЁМ</div><div class="v" id="overV">12.4 Мбит/с</div></div>
+            <div class="plate"><div class="k" data-i="txK">ОТДАЧА</div><div class="v" id="tunV">1.1 Мбит/с</div></div>
           </div>
           <div class="spark" id="homeSpark">
             <span class="l" id="sparkL">▃▅▂▇▄▆▃▅▂▇</span>
@@ -662,7 +668,7 @@
         <div class="navbar"><button type="button" data-back data-i="cancel">Отмена</button></div>
         <div class="head">
           <div class="title" data-i="editTitle">Подключение</div>
-          <button type="button" class="qr" data-go="scan" data-i="qr">QR</button>
+          <button type="button" class="qr" id="editHdr" data-go="share" data-i="shareBtn">Поделиться</button>
         </div>
         <div class="scroll">
           <label class="field"><span data-i="name">Имя</span>
@@ -677,10 +683,6 @@
               <button type="button" data-vpn="trojan" data-i="vpnTrojan">Trojan</button>
             </div>
           </div>
-          <div class="seg" id="editTabs">
-            <button type="button" class="on" data-edittab="main" data-i="editMain">Основные</button>
-            <button type="button" data-edittab="adv" data-i="editAdv">Расширенные</button>
-          </div>
 
           <div id="edit-main-loft">
             <div class="seg" id="loftEntry">
@@ -690,7 +692,7 @@
             <div id="loft-link">
               <label class="field"><span data-i="loftUri">Адрес loft://</span>
                 <div class="secret">
-                  <input class="mono" type="password" value="loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" />
+                  <input class="mono" value="loft://lt_••••••@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" data-mask="loft://lt_••••••@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" data-full="loft://lt_K7qP2mX9vR4tN8wB@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" />
                   <button type="button" class="eye" data-i="showSecret">Показать</button>
                 </div>
               </label>
@@ -712,7 +714,8 @@
               </div>
               <label class="field cap"><span data-i="urlType">Как подключаться</span></label>
               <div class="seg" id="loftNet">
-                <button type="button" class="on">GET</button>
+                <button type="button" class="on" data-i="kindAuto">Авто</button>
+                <button type="button">GET</button>
                 <button type="button">WS</button>
                 <button type="button">H2</button>
                 <button type="button">QUIC</button>
@@ -721,13 +724,6 @@
               <label class="field"><span data-i="ePath">Путь</span>
                 <input class="mono" value="/static/v3/build" />
               </label>
-            </div>
-            <div class="set-row">
-              <div>
-                <div class="k" data-i="tun">Интерфейс туннеля</div>
-                <div class="s" data-i="tunD">Packet Tunnel. Маршрут машины — в Настройках.</div>
-              </div>
-              <div class="toggle on"><i></i></div>
             </div>
           </div>
 
@@ -744,9 +740,6 @@
             <label class="field"><span data-i="sstpUrl">Сервер</span>
               <input class="mono" value="https://vpn.example.com" />
             </label>
-            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
-              <input class="mono" value="vpn.example.com" />
-            </label>
             <div class="set-row">
               <div>
                 <div class="k" data-i="sstpTls">Проверка сертификата</div>
@@ -761,13 +754,6 @@
               </div>
               <div class="toggle"><i></i></div>
             </div>
-            <div class="set-row">
-              <div>
-                <div class="k" data-i="tun">Интерфейс туннеля</div>
-                <div class="s" data-i="sstpTunD">Адрес с сервера на интерфейсе.</div>
-              </div>
-              <div class="toggle on"><i></i></div>
-            </div>
           </div>
 
           <div id="edit-main-trojan" class="hidden">
@@ -779,9 +765,6 @@
             </label>
             <label class="field"><span data-i="trojanUrl">Сервер</span>
               <input class="mono" value="trojan://edge.example.com:443" />
-            </label>
-            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
-              <input class="mono" value="edge.example.com" />
             </label>
             <div class="set-row">
               <div>
@@ -800,7 +783,7 @@
             <div id="vless-link">
               <label class="field"><span data-i="vlessUrl">Ссылка vless://</span>
                 <div class="secret">
-                  <input class="mono" type="password" value="vless://uuid@de1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome" />
+                  <input class="mono" value="vless://••••••@de1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome" data-mask="vless://••••••@de1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome" data-full="vless://3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c@de1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome" />
                   <button type="button" class="eye" data-i="showSecret">Показать</button>
                 </div>
               </label>
@@ -870,15 +853,9 @@
               </div>
               <div class="toggle on"><i></i></div>
             </div>
-            <div class="set-row">
-              <div>
-                <div class="k" data-i="tun">Интерфейс туннеля</div>
-                <div class="s" data-i="sstpTunD">Адрес с сервера на интерфейсе.</div>
-              </div>
-              <div class="toggle on"><i></i></div>
-            </div>
           </div>
 
+          <button type="button" class="ghost-sm" id="editAdvBtn" data-i="onbAdv">Дополнительно</button>
           <div id="edit-adv-loft" class="hidden">
             <div class="set-row">
               <div>
@@ -900,6 +877,9 @@
           </div>
 
           <div id="edit-adv-sstp" class="hidden">
+            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+              <input class="mono" value="vpn.example.com" />
+            </label>
             <label class="field"><span data-i="dns">DNS</span>
               <input class="mono" placeholder="пусто — с сервера, иначе шлюз" data-ph="dnsPhSstp" />
             </label>
@@ -920,6 +900,9 @@
           </div>
 
           <div id="edit-adv-trojan" class="hidden">
+            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+              <input class="mono" value="edge.example.com" />
+            </label>
             <label class="field"><span data-i="dns">DNS</span>
               <input class="mono" placeholder="адреса через запятую" data-ph="dnsPhVless" />
             </label>
@@ -948,7 +931,7 @@
           <div class="btns">
             <button type="button" class="go" data-i="save">Сохранить</button>
           </div>
-          <div class="end-row">
+          <div class="btns" id="editDelRow">
             <button type="button" class="danger" data-del="Home" data-i="delete">Удалить</button>
           </div>
         </div>
@@ -959,12 +942,8 @@
           <div class="title" data-i="settings">Настройки</div>
           <button type="button" class="qr" data-i="reset">Сбросить маршруты</button>
         </div>
-        <div class="seg" id="setTabs">
-          <button type="button" class="on" data-settab="0" data-i="setGen">Общие</button>
-          <button type="button" data-settab="1" data-i="setRoute">Маршрут</button>
-          <button type="button" data-settab="2" data-i="setClient">Клиент</button>
-        </div>
-        <div class="scroll">
+        <div class="scroll" id="setScroll">
+          <div class="grp" id="grp-0" data-i="setGen">Общие</div>
           <div id="set-0">
             <div class="set-row">
               <div>
@@ -1002,7 +981,8 @@
               <div class="toggle"><i></i></div>
             </div>
           </div>
-          <div id="set-1" class="hidden">
+          <div class="grp" id="grp-1" data-i="setRoute">Маршрут</div>
+          <div id="set-1">
             <div class="set-row">
               <div>
                 <div class="k" data-i="defRoute">Маршрут по умолчанию</div>
@@ -1026,7 +1006,8 @@
               <div class="toggle on" id="setSplit"><i></i></div>
             </div>
           </div>
-          <div id="set-2" class="hidden">
+          <div class="grp" id="grp-2" data-i="setClient">Подключение</div>
+          <div id="set-2">
             <div class="set-row">
               <div>
                 <div class="k" data-i="auto">Подключать автоматически</div>
@@ -1036,11 +1017,21 @@
             </div>
             <div class="set-row">
               <div>
-                <div class="k" data-i="reconnect">Автоматический реконнект</div>
+                <div class="k" data-i="reconnect">Переподключаться при обрыве</div>
                 <div class="s" data-i="reconnectD">Оборвалось — подключиться снова.</div>
               </div>
               <div class="toggle on"><i></i></div>
             </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="demand">Включаться само</div>
+                <div class="s" data-i="demandD">iOS включит VPN в чужих Wi‑Fi и на сотовой, а в доверенных сетях — нет.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+            <label class="field" style="margin-top:10px"><span data-i="trusted">Доверенные Wi‑Fi</span>
+              <input placeholder="Home-WiFi, Office" />
+            </label>
             <div class="set-row">
               <div>
                 <div class="k" data-i="extIp">Показывать внешний IP</div>
@@ -1050,7 +1041,7 @@
             </div>
           </div>
           <div class="links">
-            <button type="button" data-i="defaults">По умолчанию</button>
+            <button type="button" data-confirm="defaults" data-i="defaults">По умолчанию</button>
             <button type="button" data-go="journal" data-i="journal">Журнал</button>
             <button type="button" data-go="about" data-i="about">О программе</button>
           </div>
@@ -1140,9 +1131,10 @@
             </div>
           </div>
           <label class="field"><span data-i="pasteL">Или вставить URI</span>
-            <textarea class="paste" placeholder="loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home"></textarea>
+            <textarea class="paste" data-ph="pastePh" placeholder="loft://…, sstp://…, vless://…"></textarea>
           </label>
-          <div class="btns">
+          <div class="row-2">
+            <button type="button" class="ghost" data-i="pasteBtn">Вставить</button>
             <button type="button" class="go" data-i="scanAdd">Добавить</button>
           </div>
         </div>
@@ -1165,8 +1157,11 @@
             </div>
           </div>
           <p class="hint mono" style="word-break:break-all">loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home</p>
-          <p class="hint" data-i="shareHint">Адрес — loft://, один фронт. Ключ в URI — секрет. Несколько фронтов или несколько подключений — файл .loft.</p>
           <p class="hint" data-i="warnExport">В файле есть ключ доступа. Не передавайте посторонним.</p>
+          <div class="row-2" style="margin-top:12px">
+            <button type="button" class="go" data-i="shareBtn">Поделиться</button>
+            <button type="button" class="ghost" data-i="copyLink">Скопировать ссылку</button>
+          </div>
         </div>
       </div>
 
@@ -1180,9 +1175,10 @@
 status  ip=10.8.0.14  mtu=1280  front=get
 tun   packet-tunnel  up
 hold  armed</pre>
-        <div class="row-2" style="margin-top:10px">
+        <div class="row-3">
           <button type="button" class="ghost" data-i="copy">Скопировать</button>
-          <button type="button" class="ghost" data-i="clearLog">Очистить</button>
+          <button type="button" class="ghost" data-i="shareBtn">Поделиться</button>
+          <button type="button" class="ghost" data-confirm="clear" data-i="clearLog">Очистить</button>
         </div>
       </div>
 
@@ -1265,14 +1261,36 @@ hold  armed</pre>
           <button type="button" class="danger" data-del="Home"><span data-i="delete">Удалить</span></button>
         </div>
       </div>
+      <div class="scrim hidden" id="detScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 data-i="detT">Подробности</h3>
+            <button type="button" class="row"><span data-i="detOver">Адрес в сети loft</span><span class="s mono">10.8.0.14</span></button>
+            <button type="button" class="row"><span data-i="detFront">Способ</span><span class="s mono">get</span></button>
+            <button type="button" class="row"><span data-i="detMtu">MTU</span><span class="s mono">1280</span></button>
+            <button type="button" class="row"><span data-i="detServer">Сервер</span><span class="s mono">cdn.example.com</span></button>
+          </div>
+          <button type="button" class="cancel" data-close="detScrim" data-i="close">Закрыть</button>
+        </div>
+      </div>
+      <div class="scrim mid hidden" id="cfScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 id="cfTitle"></h3>
+            <p class="sub" id="cfSub"></p>
+            <button type="button" class="row danger" data-close="cfScrim" id="cfGo"></button>
+          </div>
+          <button type="button" class="cancel" data-close="cfScrim" data-i="cancel">Отмена</button>
+        </div>
+      </div>
       <div class="scrim hidden" id="addScrim">
         <div style="width:100%">
           <div class="sheet">
             <h3 data-i="addSheet">Новое подключение</h3>
             <button type="button" class="row" data-go="scan"><span data-i="addScan">Сканировать QR</span></button>
-            <button type="button" class="row" data-go="edit"><span data-i="addPaste">Вставить ссылку</span></button>
+            <button type="button" class="row" data-go="edit" data-new="1"><span data-i="addPaste">Вставить ссылку</span></button>
             <button type="button" class="row" data-go="scan"><span data-i="fromFile">Из файла</span></button>
-            <button type="button" class="row" data-go="edit" data-entry="manual"><span data-i="addManual">Вручную</span></button>
+            <button type="button" class="row" data-go="edit" data-new="1" data-entry="manual"><span data-i="addManual">Вручную</span></button>
           </div>
           <button type="button" class="cancel" data-close="addScrim" data-i="cancel">Отмена</button>
         </div>
@@ -1342,6 +1360,31 @@ hold  armed</pre>
   <script>
     const I = {
       ru: {
+        copyLink: "Скопировать ссылку",
+        pastePh: "loft://…, sstp://…, vless://…",
+        pasteBtn: "Вставить",
+        cfClrS: "Строки пропадут с этого устройства.",
+        cfClrT: "Очистить журнал?",
+        cfDefGo: "Вернуть",
+        cfDefS: "Все переключатели вернутся к заводским.",
+        cfDefT: "Вернуть настройки по умолчанию?",
+        trusted: "Доверенные Wi‑Fi",
+        demandD: "iOS включит VPN в чужих Wi‑Fi и на сотовой, а в доверенных сетях — нет.",
+        demand: "Включаться само",
+        scanBtn: "Сканировать",
+        shareBtn: "Поделиться",
+        newTitle: "Новое подключение",
+        detServer: "Сервер",
+        detMtu: "MTU",
+        detFront: "Способ",
+        detOver: "Адрес в сети loft",
+        detT: "Подробности",
+        sparkCap: "скорость за минуту",
+        kindAutoV: "Авто",
+        txK: "ОТДАЧА",
+        rxK: "ПРИЁМ",
+        methodK: "СПОСОБ",
+        pillBusy: "Подключение: Home…",
         "split.add": "Добавить",
         "split.add.body": "Адрес или CIDR. Имя сервиса — чтобы в списке было понятно.",
         "split.add.body.ignore": "CIDR, который не ставить в эту зону. Переживает обновление репозитория.",
@@ -1358,7 +1401,7 @@ hold  armed</pre>
         "split.d": "Зона едет через Loft или мимо. Сервис только состоит в зоне.",
         "split.empty": "В этой зоне пока пусто.",
         "split.ignore": "Игнор",
-        "split.export.body": "Keenetic поймёт оба. Loft пишет зону в REM zone:, имя сервиса в комментарии.",
+        "split.export.body": "Все зоны в одном файле loft-routes: зона — в REM zone:, имя сервиса — в комментарии.",
         "split.export.fmt": "Формат",
         "split.export.keen": "Keenetic .bat",
         "split.export.loft": "Loft",
@@ -1441,7 +1484,7 @@ hold  armed</pre>
         nJournal: "Журнал", nAbout: "О программе", nIos: "Настройки → VPN",
         connect: "Подключить", popConnect: "Подключить", disconnect: "Отключить",
         connecting: "Подключение…", disconnecting: "Отключение…", cancel: "Отмена",
-        pillOn: "Подключено: Home 0:12", pillOff: "Не подключено",
+        pillOn: "Подключено: Home 0:12", pillOff: "Не подключено · Home ›",
         frontK: "ФРОНТ", tunK: "ТУННЕЛЬ",
         journal: "Журнал", reset: "Сбросить маршруты", settings: "Настройки",
         tabHome: "Дом", close: "Закрыть", backSet: "‹ Настройки",
@@ -1470,12 +1513,12 @@ hold  armed</pre>
         sstpTls: "Проверка сертификата", sstpTlsD: "Проверять сертификат HTTPS-сервера.",
         sstpPap: "PAP / CHAP", sstpPapD: "Менее безопасно. По умолчанию только MSCHAPv2.",
         vlessUuid: "UUID", vlessUrl: "Ссылка vless://",
-        mux: "Мультиплекс", muxD: "Несколько TCP в одной GET-сессии.",
+        mux: "Мультиплекс", muxD: "Все соединения — по одной сессии с нодой.",
         dns: "DNS", dnsPhLoft: "пусто — с ноды", dnsPhSstp: "пусто — с сервера, иначе шлюз", dnsPhVless: "адреса через запятую",
         dnsSys: "DNS в систему", dnsSysD: "Пока туннель поднят, прописать резолверы в Packet Tunnel.",
         dnsRep: "Только эти адреса", dnsRepD: "Не брать DNS с сервера и шлюз PPP.",
         save: "Сохранить", back: "Назад", qr: "QR",
-        setGen: "Общие", setRoute: "Маршрут", setClient: "Клиент",
+        setGen: "Общие", setRoute: "Маршрут", setClient: "Подключение",
         simple: "Упрощенный интерфейс", simpleD: "Дом — открыть и закрыть.",
         rateUnit: "Единицы скорости", rateUnitD: "Как показывать ↑↓ на доме.",
         uKbit: "кбит/с", uKb: "КБ/с",
@@ -1483,10 +1526,10 @@ hold  armed</pre>
         rateDown: "↓ 12.4 Мбит/с", delQ: "Удалить %s?",
         diag: "Расширенный журнал", diagD: "Маршруты, DNS, Packet Tunnel. Файл с ротацией.",
         defRoute: "Маршрут по умолчанию", defRouteD: "Весь интернет через лофт. Выкл — только сеть лофта.",
-        hold: "Не открывать прямой интернет", holdD: "Последний туннель умер — сеть закрыта.",
+        hold: "Блокировать интернет при обрыве", holdD: "Пока VPN не вернётся, прямого интернета нет.",
         split: "Раздельная маршрутизация", splitD: "Зона едет через Loft или мимо. Сервис только состоит в зоне.",
-        auto: "Подключать автоматически", autoD: "После ключа и живого фронта",
-        reconnect: "Автоматический реконнект", reconnectD: "Оборвалось — подключиться снова.",
+        auto: "Подключать при запуске", autoD: "Открыли приложение — подключается последнее.",
+        reconnect: "Переподключаться при обрыве", reconnectD: "Оборвалось — подключиться снова.",
         extIp: "Показывать внешний IP", extIpD: "После подключения спросить адрес у сервиса через это соединение.",
         defaults: "По умолчанию", about: "О программе",
         keyStep: "Шаг 1 из 2", keyTitle: "Ключ доступа",
@@ -1502,7 +1545,7 @@ hold  armed</pre>
         scanT: "Сканер QR",
         scanHint: "Камера. loft://, sstp://, vless:// или .loft.",
         fromFile: "Из файла", fromPhotos: "Из Фото",
-        pasteL: "Или вставить URI", scanAdd: "Добавить",
+        pasteL: "Или вставить ссылку", scanAdd: "Добавить",
         shareT: "QR",
         shareHint: "Адрес — loft://, один фронт. Ключ в URI — секрет. Несколько фронтов или несколько подключений — файл .loft.",
         journalD: "Строки фронта и сессии. Ключ сокращается.",
@@ -1516,6 +1559,31 @@ hold  armed</pre>
         iosNot: "Не подключено"
       },
       en: {
+        copyLink: "Copy link",
+        pastePh: "loft://…, sstp://…, vless://…",
+        pasteBtn: "Paste",
+        cfClrS: "The lines leave this device.",
+        cfClrT: "Clear the journal?",
+        cfDefGo: "Restore",
+        cfDefS: "Every switch goes back to its factory value.",
+        cfDefT: "Restore the default settings?",
+        trusted: "Trusted Wi‑Fi",
+        demandD: "iOS turns the VPN on in other Wi‑Fi and on cellular, not in trusted networks.",
+        demand: "Turn on by itself",
+        scanBtn: "Scan",
+        shareBtn: "Share",
+        newTitle: "New connection",
+        detServer: "Server",
+        detMtu: "MTU",
+        detFront: "Method",
+        detOver: "loft network address",
+        detT: "Details",
+        sparkCap: "speed, last minute",
+        kindAutoV: "Auto",
+        txK: "UP",
+        rxK: "DOWN",
+        methodK: "METHOD",
+        pillBusy: "Connecting: Home…",
         "split.add": "Add",
         "split.add.body": "Address or CIDR. Service name is what you see in the list.",
         "split.add.body.ignore": "CIDR to keep out of this zone. Survives a repository update.",
@@ -1532,7 +1600,7 @@ hold  armed</pre>
         "split.d": "A zone goes through Loft or around Loft. A service only belongs to a zone.",
         "split.empty": "Nothing in this zone yet.",
         "split.ignore": "Ignore",
-        "split.export.body": "Keenetic reads both. Loft writes the zone in REM zone: and the service name in the rem.",
+        "split.export.body": "All zones in one loft-routes file: the zone in REM zone:, the service name in a comment.",
         "split.export.fmt": "Format",
         "split.export.keen": "Keenetic .bat",
         "split.export.loft": "Loft",
@@ -1615,7 +1683,7 @@ hold  armed</pre>
         nJournal: "Journal", nAbout: "About", nIos: "Settings → VPN",
         connect: "Connect", popConnect: "Connect", disconnect: "Disconnect",
         connecting: "Connecting…", disconnecting: "Disconnecting…", cancel: "Cancel",
-        pillOn: "Connected: Home 0:12", pillOff: "Not connected",
+        pillOn: "Connected: Home 0:12", pillOff: "Not connected · Home ›",
         frontK: "FRONT", tunK: "TUNNEL",
         journal: "Journal", reset: "Reset routes", settings: "Settings",
         tabHome: "Home", close: "Close", backSet: "‹ Settings",
@@ -1644,12 +1712,12 @@ hold  armed</pre>
         sstpTls: "TLS server verification", sstpTlsD: "Verify the HTTPS server certificate.",
         sstpPap: "PAP / CHAP", sstpPapD: "Less secure. Default is MSCHAPv2 only.",
         vlessUuid: "UUID", vlessUrl: "vless:// link",
-        mux: "Mux", muxD: "Several TCP in one GET session.",
+        mux: "Mux", muxD: "All connections share one session with the node.",
         dns: "DNS", dnsPhLoft: "empty — from the node", dnsPhSstp: "empty — from the server, else the gateway", dnsPhVless: "comma-separated addresses",
         dnsSys: "DNS into the system", dnsSysD: "While the tunnel is up, write resolvers into the Packet Tunnel.",
         dnsRep: "These addresses only", dnsRepD: "Skip the server and the PPP gateway.",
         save: "Save", back: "Back", qr: "QR",
-        setGen: "General", setRoute: "Route", setClient: "Client",
+        setGen: "General", setRoute: "Route", setClient: "Connection",
         simple: "Simplified interface", simpleD: "Home: open and close.",
         rateUnit: "Speed units", rateUnitD: "How ↑↓ is shown on Home.",
         uKbit: "kbps", uKb: "kB/s",
@@ -1657,10 +1725,10 @@ hold  armed</pre>
         rateDown: "↓ 12.4 Mbit/s", delQ: "Delete %s?",
         diag: "Extended journal", diagD: "Routes, DNS, Packet Tunnel. Rotating file.",
         defRoute: "Allow default route", defRouteD: "Send all internet through loft. Off — loft net only.",
-        hold: "Don’t restore direct internet", holdD: "Last tunnel died — the machine stays dark.",
+        hold: "Block internet if the VPN drops", holdD: "No direct internet until the VPN is back.",
         split: "Split routing", splitD: "A zone goes through Loft or around Loft. A service only belongs to a zone.",
-        auto: "Connect automatically", autoD: "After a key and a live front",
-        reconnect: "Automatic reconnect", reconnectD: "If it drops, connect again.",
+        auto: "Connect at launch", autoD: "Opening the app connects the last one.",
+        reconnect: "Reconnect if it drops", reconnectD: "If it drops, connect again.",
         extIp: "Show external IP", extIpD: "After connect, ask a service for the address through this session.",
         defaults: "Defaults", about: "About",
         keyStep: "Step 1 of 2", keyTitle: "Access key",
@@ -1676,7 +1744,7 @@ hold  armed</pre>
         scanT: "Scan QR",
         scanHint: "Camera. loft://, sstp://, vless://, or a .loft.",
         fromFile: "From file", fromPhotos: "From Photos",
-        pasteL: "Or paste a URI", scanAdd: "Add",
+        pasteL: "Or paste a link", scanAdd: "Add",
         shareT: "QR",
         shareHint: "The address is loft://, one front. The key in the URI is a secret. Several fronts or several connections: a .loft file.",
         journalD: "Front and session lines. The key is shortened.",
@@ -1690,6 +1758,31 @@ hold  armed</pre>
         iosNot: "Not Connected"
       },
       zh: {
+        copyLink: "复制链接",
+        pastePh: "loft://…、sstp://…、vless://…",
+        pasteBtn: "粘贴",
+        cfClrS: "这些行会从本机删除。",
+        cfClrT: "清除日志？",
+        cfDefGo: "恢复",
+        cfDefS: "所有开关回到出厂值。",
+        cfDefT: "恢复默认设置？",
+        trusted: "受信任的 Wi‑Fi",
+        demandD: "在陌生 Wi‑Fi 和蜂窝网络下 iOS 自动开 VPN，受信任的网络不开。",
+        demand: "自动开启",
+        scanBtn: "扫描",
+        shareBtn: "分享",
+        newTitle: "新连接",
+        detServer: "服务器",
+        detMtu: "MTU",
+        detFront: "方式",
+        detOver: "loft 网络地址",
+        detT: "详情",
+        sparkCap: "近一分钟速度",
+        kindAutoV: "自动",
+        txK: "上传",
+        rxK: "下载",
+        methodK: "方式",
+        pillBusy: "正在连接: Home…",
         "split.add": "添加",
         "split.add.body": "地址或 CIDR。服务名是列表里看到的名字。",
         "split.add.body.ignore": "本区域不安装的 CIDR。仓库更新后仍保留。",
@@ -1706,7 +1799,7 @@ hold  armed</pre>
         "split.d": "区域走 Loft 或绕过 Loft。服务只属于一个区域。",
         "split.empty": "这个区域还没有条目。",
         "split.ignore": "忽略",
-        "split.export.body": "Keenetic 两种都认。Loft 把区域写进 REM zone:，服务名写进 rem。",
+        "split.export.body": "所有区域写进一个 loft-routes 文件：区域在 REM zone:，服务名在注释里。",
         "split.export.fmt": "格式",
         "split.export.keen": "Keenetic .bat",
         "split.export.loft": "Loft",
@@ -1789,7 +1882,7 @@ hold  armed</pre>
         nJournal: "日志", nAbout: "关于", nIos: "设置 → VPN",
         connect: "连接", popConnect: "连接", disconnect: "断开",
         connecting: "正在连接…", disconnecting: "正在断开…", cancel: "取消",
-        pillOn: "已连接: Home 0:12", pillOff: "未连接",
+        pillOn: "已连接: Home 0:12", pillOff: "未连接 · Home ›",
         frontK: "前置", tunK: "隧道",
         journal: "日志", reset: "重置路由", settings: "设置",
         tabHome: "主页", close: "关闭", backSet: "‹ 设置",
@@ -1818,12 +1911,12 @@ hold  armed</pre>
         sstpTls: "校验证书", sstpTlsD: "校验 HTTPS 服务器证书。",
         sstpPap: "PAP / CHAP", sstpPapD: "安全性较低。默认只用 MSCHAPv2。",
         vlessUuid: "UUID", vlessUrl: "vless:// 链接",
-        mux: "多路复用", muxD: "一条 GET 会话里多路 TCP。",
+        mux: "多路复用", muxD: "所有连接共用一条到节点的会话。",
         dns: "DNS", dnsPhLoft: "空则来自节点", dnsPhSstp: "空则来自服务器，否则网关", dnsPhVless: "逗号分隔的地址",
         dnsSys: "写入系统 DNS", dnsSysD: "隧道开着时，把解析器写入 Packet Tunnel。",
         dnsRep: "只用这些地址", dnsRepD: "不从服务器和 PPP 网关取 DNS。",
         save: "保存", back: "返回", qr: "QR",
-        setGen: "通用", setRoute: "路由", setClient: "客户端",
+        setGen: "通用", setRoute: "路由", setClient: "连接",
         simple: "简化界面", simpleD: "主页只留打开和断开。",
         rateUnit: "速率单位", rateUnitD: "主页 ↑↓ 怎么显示。",
         uKbit: "千比特/秒", uKb: "KB/秒",
@@ -1831,10 +1924,10 @@ hold  armed</pre>
         rateDown: "↓ 12.4 Mbit/s", delQ: "删除 %s？",
         diag: "扩展日志", diagD: "路由、DNS、Packet Tunnel。轮转文件。",
         defRoute: "允许默认路由", defRouteD: "全部流量走 loft。关 — 只有 loft 网。",
-        hold: "不要恢复直连", holdD: "最后一条隧道没了 — 保持断网。",
+        hold: "VPN 断开时阻断上网", holdD: "VPN 恢复之前不走直连。",
         split: "分流", splitD: "区域走 Loft 或绕过 Loft。服务只属于一个区域。",
-        auto: "自动连接", autoD: "有密钥且前置可用之后",
-        reconnect: "自动重连", reconnectD: "断了就再连接。",
+        auto: "启动时连接", autoD: "打开应用就连上次那条。",
+        reconnect: "断线自动重连", reconnectD: "断了就再连接。",
         extIp: "显示外部 IP", extIpD: "连上后通过本会话向服务询问地址。",
         defaults: "默认", about: "关于",
         keyStep: "第 1 步，共 2 步", keyTitle: "访问密钥",
@@ -1850,7 +1943,7 @@ hold  armed</pre>
         scanT: "扫描二维码",
         scanHint: "相机。loft://、sstp://、vless:// 或 .loft。",
         fromFile: "从文件", fromPhotos: "从照片",
-        pasteL: "或粘贴 URI", scanAdd: "添加",
+        pasteL: "或粘贴链接", scanAdd: "添加",
         shareT: "QR",
         shareHint: "地址是 loft://，一条前置。URI 里的密钥是秘密。多条前置或多条连接用 .loft 文件。",
         journalD: "前置与会话行。密钥会缩短。",
@@ -1870,6 +1963,7 @@ hold  armed</pre>
     let entry = "link";
     let setTab = 0;
     let onbStep = 0;
+    let editNew = false;
     let homeMode = "on";
 
     function setLang(l) {
@@ -1894,7 +1988,8 @@ hold  armed</pre>
       if (typeof paintSplitScreen === "function" && SPLIT_SCREENS.includes(cur)) paintSplitScreen(cur);
       document.querySelectorAll(".eye").forEach((b) => {
         const inp = b.parentElement.querySelector("input");
-        b.textContent = inp && inp.type === "text" ? I[l].hideSecret : I[l].showSecret;
+        const open = inp && (inp.dataset.full ? inp.value === inp.dataset.full : inp.type === "text");
+        b.textContent = open ? I[l].hideSecret : I[l].showSecret;
       });
     }
 
@@ -1914,15 +2009,16 @@ hold  armed</pre>
       root.classList.toggle("busy", homeMode === "connecting");
       const on = homeMode === "on" || homeMode === "simple";
       pill.classList.toggle("on", on);
-      pillT.textContent = on ? I[lang].pillOn : I[lang].pillOff;
+      pillT.textContent = on ? I[lang].pillOn : homeMode === "connecting" ? I[lang].pillBusy : I[lang].pillOff;
+      const dash = "—";
       if (homeMode === "connecting") {
         act.className = "ghost";
-        act.textContent = I[lang].connecting;
+        act.textContent = I[lang].cancel;
         body.setAttribute("fill", "#8A7E72");
         win.setAttribute("fill", "#3A332E");
-        over.textContent = "—";
-        front.textContent = "auto";
-        tun.textContent = "—";
+        front.textContent = I[lang].kindAutoV;
+        over.textContent = dash;
+        tun.textContent = dash;
         sparkL.textContent = I[lang].handshake;
         sparkR.textContent = "";
       } else if (on) {
@@ -1930,23 +2026,24 @@ hold  armed</pre>
         act.textContent = I[lang].disconnect;
         body.setAttribute("fill", "#F3EDE4");
         win.setAttribute("fill", "#E8B84A");
-        over.textContent = "10.8.0.14";
-        front.textContent = "get";
-        tun.textContent = "1280";
+        front.textContent = "GET";
+        over.textContent = lang === "ru" ? "12.4 Мбит/с" : "12.4 Mbit/s";
+        tun.textContent = lang === "ru" ? "1.1 Мбит/с" : "1.1 Mbit/s";
         sparkL.textContent = "▃▅▂▇▄▆▃▅▂▇";
-        sparkR.textContent = I[lang].rateDown;
+        sparkR.textContent = I[lang].sparkCap;
       } else {
         act.className = "go";
         act.textContent = I[lang].connect;
         body.setAttribute("fill", "#8A7E72");
         win.setAttribute("fill", "#3A332E");
-        over.textContent = "—";
-        front.textContent = "auto";
-        tun.textContent = "—";
+        front.textContent = I[lang].kindAutoV;
+        over.textContent = dash;
+        tun.textContent = dash;
         sparkL.textContent = "";
         sparkR.textContent = "";
       }
     }
+
 
     function paintVlessManual() {
       const reality = document.querySelector("#vlessSec button.on")?.getAttribute("data-sec") === "reality";
@@ -1958,15 +2055,23 @@ hold  armed</pre>
       if (xh) xh.classList.toggle("hidden", !xhttp);
       if (vis) vis.classList.toggle("hidden", xhttp);
     }
+    // A new connection picks its type and scans; an existing one keeps its type and shares.
     function paintEdit() {
       document.querySelectorAll("#vpnSeg button").forEach((b) => {
         b.classList.toggle("on", b.getAttribute("data-vpn") === vpn);
+        b.classList.toggle("hidden", !editNew && b.getAttribute("data-vpn") !== vpn);
       });
+      document.querySelector('#edit [data-i="editTitle"]').textContent = editNew ? I[lang].newTitle : I[lang].editTitle;
+      const hdr = document.getElementById("editHdr");
+      hdr.setAttribute("data-go", editNew ? "scan" : "share");
+      hdr.textContent = editNew ? I[lang].scanBtn : I[lang].shareBtn;
+      document.getElementById("editDelRow").classList.toggle("hidden", editNew);
+      document.getElementById("editAdvBtn").textContent = I[lang].onbAdv + (editTab === "adv" ? " ▴" : " ▾");
       document.querySelectorAll("#editTabs button").forEach((b) => {
         b.classList.toggle("on", b.getAttribute("data-edittab") === editTab);
       });
       ["loft", "sstp", "vless", "trojan"].forEach((k) => {
-        document.getElementById("edit-main-" + k).classList.toggle("hidden", !(editTab === "main" && vpn === k));
+        document.getElementById("edit-main-" + k).classList.toggle("hidden", vpn !== k);
         document.getElementById("edit-adv-" + k).classList.toggle("hidden", !(editTab === "adv" && vpn === k));
       });
       ["loft", "vless"].forEach((k) => {
@@ -1981,13 +2086,10 @@ hold  armed</pre>
       paintVlessManual();
     }
 
+    // One list with groups; the mock's nav scrolls to a group.
     function paintSettings() {
-      document.querySelectorAll("#setTabs button").forEach((b) => {
-        b.classList.toggle("on", Number(b.getAttribute("data-settab")) === setTab);
-      });
-      [0, 1, 2].forEach((i) => {
-        document.getElementById("set-" + i).classList.toggle("hidden", i !== setTab);
-      });
+      const sc = document.getElementById("setScroll");
+      sc.scrollTop = setTab ? document.getElementById("grp-" + setTab).offsetTop - sc.offsetTop : 0;
     }
 
     // Step 0 is the usual way in (QR or a copied link); 1 and 2 are the manual key and address.
@@ -2001,7 +2103,7 @@ hold  armed</pre>
     }
     document.getElementById("onbAdvBtn").addEventListener("click", () => document.getElementById("onbAdv").classList.toggle("hidden"));
 
-    const SHEETS = ["ctxScrim", "exportScrim", "delScrim", "addScrim"];
+    const SHEETS = ["ctxScrim", "exportScrim", "delScrim", "addScrim", "detScrim", "cfScrim"];
     function hideSheets() {
       SHEETS.forEach((id) => document.getElementById(id).classList.add("hidden"));
       document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
@@ -2053,6 +2155,7 @@ hold  armed</pre>
         if (extra.vpn) vpn = extra.vpn;
         if (extra.edittab) editTab = extra.edittab;
         entry = extra.entry || "link";
+        editNew = !!extra.isnew;
         paintEdit();
       }
       if (SPLIT_SCREENS.includes(id)) paintSplitScreen(id);
@@ -2085,7 +2188,8 @@ hold  armed</pre>
         edittab: el.getAttribute("data-edittab") || "",
         settab: el.getAttribute("data-settab"),
         step: el.getAttribute("data-step"),
-        entry: el.getAttribute("data-entry") || ""
+        entry: el.getAttribute("data-entry") || "",
+        isnew: el.getAttribute("data-new") === "1"
       };
     }
     function openSheet(id) {
@@ -2113,12 +2217,25 @@ hold  armed</pre>
         e.stopPropagation();
         if (b.getAttribute("data-sheet") === "export") openSheet("exportScrim");
         if (b.getAttribute("data-sheet") === "add") openSheet("addScrim");
+        if (b.getAttribute("data-sheet") === "det" && homeMode !== "off" && homeMode !== "connecting") openSheet("detScrim");
       });
     });
     document.querySelectorAll("[data-close]").forEach((b) => {
       b.addEventListener("click", (e) => {
         e.stopPropagation();
         document.getElementById(b.getAttribute("data-close")).classList.add("hidden");
+      });
+    });
+    // One confirm sheet for the quiet destructive actions (defaults, clear journal).
+    const CONFIRM = { defaults: ["cfDefT", "cfDefS", "cfDefGo"], clear: ["cfClrT", "cfClrS", "clearLog"] };
+    document.querySelectorAll("[data-confirm]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const [t, sub, go] = CONFIRM[b.getAttribute("data-confirm")];
+        document.getElementById("cfTitle").textContent = I[lang][t];
+        document.getElementById("cfSub").textContent = I[lang][sub];
+        document.getElementById("cfGo").textContent = I[lang][go];
+        openSheet("cfScrim");
       });
     });
     document.querySelectorAll("[data-del]").forEach((b) => {
@@ -2165,9 +2282,7 @@ hold  armed</pre>
         paintVlessManual();
       });
     });
-    document.querySelectorAll("#editTabs button").forEach((b) => {
-      b.addEventListener("click", () => { editTab = b.getAttribute("data-edittab"); paintEdit(); });
-    });
+    document.getElementById("editAdvBtn").addEventListener("click", () => { editTab = editTab === "adv" ? "main" : "adv"; paintEdit(); });
     document.querySelectorAll("#setTabs button").forEach((b) => {
       b.addEventListener("click", () => { setTab = Number(b.getAttribute("data-settab")); paintSettings(); });
     });
@@ -2181,6 +2296,12 @@ hold  armed</pre>
       b.addEventListener("click", () => {
         const inp = b.parentElement.querySelector("input");
         if (!inp) return;
+        if (inp.dataset.full) {
+          const open = inp.value !== inp.dataset.full;
+          inp.value = open ? inp.dataset.full : inp.dataset.mask;
+          b.textContent = open ? I[lang].hideSecret : I[lang].showSecret;
+          return;
+        }
         const show = inp.type === "password";
         inp.type = show ? "text" : "password";
         b.textContent = show ? I[lang].hideSecret : I[lang].showSecret;
@@ -2276,7 +2397,7 @@ hold  armed</pre>
       { id: "ign", en: "Ignore", ru: "Игнор", zh: "忽略", zone: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
     ];
     let splitOn = true, zoneTab = "global", splitQ = "", svcId = null, svcKind = "route";
-    let zoneId = "local", zoneAddVia = true, zoneAddRepo = "", splitFmt = "loft";
+    let zoneId = "local", zoneAddVia = true, zoneAddRepo = "";
     const T = (k) => (I[lang][k] != null ? I[lang][k] : I.en[k] != null ? I.en[k] : k);
     const loc = (o) => o[lang] || o.en;
     const esc = (v) => String(v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -2377,17 +2498,9 @@ hold  armed</pre>
         <p class="hint">${T("split.import.detect")}</p>
         <label class="field" style="margin-top:10px"><span>${T("split.zone")}</span><select>${zoneOpts(zoneTab)}</select></label>
         <div class="btns"><button type="button" class="go" data-back>${T("split.import.go")}</button></div>`,
-      splitout: () => {
-        const keen = splitFmt === "keen";
-        return head(T("split.export.title"), T("split.export.body")) + `
-          <label class="field"><span>${T("split.export.fmt")}</span></label>
-          <div class="seg"><button type="button" class="${keen ? "" : "on"}" data-sfmt="loft">${T("split.export.loft")}</button><button type="button" class="${keen ? "on" : ""}" data-sfmt="keen">${T("split.export.keen")}</button></div>
-          ${keen ? `<label class="field"><span>${T("split.zone")}</span><select>${zoneOpts(zoneTab)}</select></label>` : ""}
-          <div class="fmt">${keen
-            ? "route ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"
-            : "REM loft-routes 1.0\nREM zone: global\nroute ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube\nREM zone: local\nroute ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"}</div>
-          <div class="btns"><button type="button" class="go" data-back>${keen ? T("split.export.save.keen").replace("%@", routesIn(zoneTab)[0] ? loc(routesIn(zoneTab)[0]) : "routes") : T("split.export.save")}</button></div>`;
-      },
+      splitout: () => head(T("split.export.title"), T("split.export.body")) + `
+          <div class="fmt">REM loft-routes 1.0\nREM zone: global\nroute ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube\nREM zone: local\nroute ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN</div>
+          <div class="btns"><button type="button" class="go" data-back>${T("split.export.save")}</button></div>`,
     };
     function paintSplitScreen(id) {
       const el = document.getElementById(id + "-body");
@@ -2427,8 +2540,7 @@ hold  armed</pre>
         if (from.splitlists === "zone") { const z = zoneId && zoneById(zoneId); if (z) z.repo = url; else zoneAddRepo = url; }
         else zoneById(zoneTab).repo = url;
         goBack();
-      } else if ((el = at("[data-sfmt]"))) { splitFmt = el.getAttribute("data-sfmt"); paintSplitScreen("splitout"); }
-      else if ((el = at(".toggle"))) { el.classList.toggle("on"); }
+      } else if ((el = at(".toggle"))) { el.classList.toggle("on"); }
       else if ((el = at("[data-go]"))) { show(el.getAttribute("data-go"), attrsOf(el)); }
       else if (at("[data-back]")) { goBack(); }
     });
