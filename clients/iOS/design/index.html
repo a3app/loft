@@ -292,7 +292,7 @@
     .seg.cap { background: transparent; padding: 0; gap: 6px; justify-content: flex-end; }
     .type-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
     .type-row .k { flex: 1; font-size: 13.5px; }
-    .type-row .seg.cap { flex: 0 0 auto; width: 168px; margin: 0; }
+    .type-row .seg.cap { flex: 0 0 auto; width: auto; margin: 0; }
     label.field.cap { margin-bottom: 4px; }
     .pair {
       display: grid; grid-template-columns: 1fr 80px; gap: 8px;
@@ -339,7 +339,8 @@
     .card .grow { flex: 1; min-width: 0; overflow: hidden; }
     .card .side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
     .card .sk { font-size: 10.5px; color: var(--stone); }
-    .card.on .sk { color: var(--lamp); }
+    .card .live { display: none; font-size: 10.5px; color: var(--lamp); }
+    .card.on .live { display: inline; }
     .mini {
       flex-shrink: 0; width: 90px; height: 28px; border: 0; border-radius: 10px;
       padding: 0 4px; font: 600 10px var(--ui); cursor: pointer;
@@ -536,12 +537,15 @@
     <button type="button" data-go="list" data-list="swipe" data-i="nSwipe">Список · свайп</button>
     <button type="button" data-go="list" data-list="ctx" data-i="nCtx">Список · меню</button>
     <button type="button" data-go="list" data-list="export" data-i="nExp">Список · экспорт</button>
+    <button type="button" data-go="list" data-list="add" data-i="nAdd">Список · добавить</button>
     <button type="button" data-go="edit" data-vpn="loft" data-edittab="main" data-i="nEdit">Правка</button>
     <button type="button" data-go="edit" data-vpn="loft" data-edittab="adv" data-i="nEditAdv">Правка · расширенные</button>
     <button type="button" data-go="edit" data-vpn="sstp" data-edittab="main" data-i="nEditSstp">Правка · SSTP</button>
     <button type="button" data-go="edit" data-vpn="vless" data-edittab="main" data-i="nEditVless">Правка · VLESS</button>
+    <button type="button" data-go="edit" data-vpn="trojan" data-edittab="main" data-i="nEditTrojan">Правка · Trojan</button>
     <button type="button" data-go="scan" data-i="nScan">Сканер QR</button>
     <button type="button" data-go="share" data-i="nShare">QR для шаринга</button>
+    <button type="button" data-go="onboard" data-step="0" data-i="nOnb0">Онбординг · начало</button>
     <button type="button" data-go="onboard" data-step="1" data-i="nOnb">Онбординг · ключ</button>
     <button type="button" data-go="onboard" data-step="2" data-i="nOnb2">Онбординг · адрес</button>
     <button type="button" data-go="settings" data-settab="0" data-i="nSet">Настройки · общие</button>
@@ -598,8 +602,7 @@
       <div class="screen hidden" id="list">
         <div class="head">
           <div class="title" data-i="conns">Подключения</div>
-          <button type="button" class="qr" data-go="scan" data-i="import">Импорт</button>
-          <button type="button" class="plus" data-go="edit" title="+">+</button>
+          <button type="button" class="plus" data-sheet="add" title="+">+</button>
         </div>
         <p class="subline" data-i="connsSub">Каждое — свой ключ и адрес. Активное одно.</p>
         <div class="scroll">
@@ -615,9 +618,8 @@
                 <div class="m">cdn.example.com</div>
               </div>
               <div class="side">
-                <span class="sk" data-i="active">активно</span>
-                <button type="button" class="ghost-link" data-go="edit" data-i="edit">Править</button>
-                <button type="button" class="chip" data-sheet="export" data-i="export">Экспорт</button>
+                <span class="live" data-i="active">активно</span>
+                <span class="sk">loft · get</span>
               </div>
             </div>
           </div>
@@ -634,8 +636,6 @@
               </div>
               <div class="side">
                 <span class="sk">sstp</span>
-                <button type="button" class="ghost-link" data-go="edit" data-vpn="sstp" data-i="edit">Править</button>
-                <button type="button" class="chip" data-sheet="export" data-i="export">Экспорт</button>
               </div>
             </div>
           </div>
@@ -652,12 +652,9 @@
               </div>
               <div class="side">
                 <span class="sk">vless</span>
-                <button type="button" class="ghost-link" data-go="edit" data-vpn="vless" data-i="edit">Править</button>
-                <button type="button" class="chip" data-sheet="export" data-i="export">Экспорт</button>
               </div>
             </div>
           </div>
-          <p class="hint" data-i="listHint">Свайп влево — удалить, вправо — править. Долгое нажатие — меню. Выбранное экспортируется как .loft. Тап по Office отключит Home: туннель на iOS один.</p>
         </div>
       </div>
 
@@ -677,6 +674,7 @@
               <button type="button" class="on" data-vpn="loft" data-i="vpnLoft">loft</button>
               <button type="button" data-vpn="sstp" data-i="vpnSstp">SSTP</button>
               <button type="button" data-vpn="vless" data-i="vpnVless">VLESS</button>
+              <button type="button" data-vpn="trojan" data-i="vpnTrojan">Trojan</button>
             </div>
           </div>
           <div class="seg" id="editTabs">
@@ -767,6 +765,28 @@
               <div>
                 <div class="k" data-i="tun">Интерфейс туннеля</div>
                 <div class="s" data-i="sstpTunD">Адрес с сервера на интерфейсе.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-main-trojan" class="hidden">
+            <label class="field"><span data-i="trojanPass">Пароль</span>
+              <div class="secret">
+                <input type="password" value="••••••••" />
+                <button type="button" class="eye" data-i="showSecret">Показать</button>
+              </div>
+            </label>
+            <label class="field"><span data-i="trojanUrl">Сервер</span>
+              <input class="mono" value="trojan://edge.example.com:443" />
+            </label>
+            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+              <input class="mono" value="edge.example.com" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sstpTls">Проверка сертификата</div>
+                <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
               </div>
               <div class="toggle on"><i></i></div>
             </div>
@@ -899,6 +919,19 @@
             </div>
           </div>
 
+          <div id="edit-adv-trojan" class="hidden">
+            <label class="field"><span data-i="dns">DNS</span>
+              <input class="mono" placeholder="адреса через запятую" data-ph="dnsPhVless" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsSys">DNS в систему</div>
+                <div class="s" data-i="dnsSysD">Пока туннель поднят, прописать резолверы в Packet Tunnel.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
           <div id="edit-adv-vless" class="hidden">
             <label class="field"><span data-i="dns">DNS</span>
               <input class="mono" placeholder="адреса через запятую" data-ph="dnsPhVless" />
@@ -964,7 +997,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="diag">Расширенный журнал</div>
-                <div class="s" data-i="diagD">Маршруты, DNS, loft-priv. Файл с ротацией.</div>
+                <div class="s" data-i="diagD">Маршруты, DNS, Packet Tunnel. Файл с ротацией.</div>
               </div>
               <div class="toggle"><i></i></div>
             </div>
@@ -1035,32 +1068,44 @@
             <h1 id="onbTitle" data-i="keyTitle">Ключ доступа</h1>
             <p class="hint" id="onbBody" data-i="keyBody">Введите ключ доступа, который вам выдали.</p>
           </div>
-          <div id="onb1">
+          <div id="onb0">
+            <div class="btns">
+              <button type="button" class="go" data-go="scan" data-i="addScan">Сканировать QR</button>
+              <button type="button" class="ghost" data-go="home" data-mode="connecting" data-i="addPaste">Вставить ссылку</button>
+            </div>
+            <p class="hint" data-i="startHint">Если ссылка уже скопирована, нажмите «Вставить ссылку».</p>
+            <button type="button" class="ghost-sm" style="margin:14px auto 0" data-go="onboard" data-step="1" data-i="startManual">Ввести ключ и адрес вручную</button>
+          </div>
+          <div id="onb1" class="hidden">
             <label class="field">
               <input class="mono" placeholder="lt_" />
             </label>
             <p class="hint" data-i="keyHint">Начинается с lt_. Его показывают один раз — сохраните.</p>
             <div class="btns">
               <button type="button" class="go" data-go="onboard" data-step="2" data-i="continue">Продолжить</button>
-              <button type="button" class="ghost" data-go="scan" data-i="keyOrfile">Или импортировать файл или QR</button>
+              <button type="button" class="ghost" data-go="onboard" data-step="0" data-i="back">Назад</button>
             </div>
           </div>
           <div id="onb2" class="hidden">
             <label class="field"><span data-i="url">URL</span>
               <input class="mono" placeholder="https://" value="https://" />
             </label>
-            <label class="field"><span data-i="urlType">Как подключаться</span></label>
-            <div class="seg" id="onbKind">
-              <button type="button" class="on">GET</button>
-              <button type="button">WS</button>
-              <button type="button">H2</button>
-              <button type="button">QUIC</button>
-              <button type="button">H3</button>
+            <button type="button" class="ghost-sm" id="onbAdvBtn" data-i="onbAdv">Дополнительно</button>
+            <div id="onbAdv" class="hidden">
+              <label class="field"><span data-i="urlType">Как подключаться</span></label>
+              <div class="seg" id="onbKind">
+                <button type="button" class="on" data-i="kindAuto">Авто</button>
+                <button type="button">GET</button>
+                <button type="button">WS</button>
+                <button type="button">H2</button>
+                <button type="button">QUIC</button>
+                <button type="button">H3</button>
+              </div>
+              <label class="field"><span data-i="path">Путь (если давали)</span>
+                <input class="mono" placeholder="/static/v3/build" />
+              </label>
+              <p class="hint" data-i="urlHint">HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.</p>
             </div>
-            <label class="field"><span data-i="path">Путь (если давали)</span>
-              <input class="mono" value="/static/v3/build" />
-            </label>
-            <p class="hint" data-i="urlHint">HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.</p>
             <div class="btns">
               <button type="button" class="go" data-i="urlGo">Подключить</button>
               <button type="button" class="ghost" data-go="onboard" data-step="1" data-i="back">Назад</button>
@@ -1154,6 +1199,7 @@ hold  armed</pre>
           <div class="protos">
             <div class="proto"><span class="k">loft/1.0</span><span class="v">get · ws · h2 · quic · h3 · mask</span></div>
             <div class="proto"><span class="k">SSTP</span><span class="v">ppp · mschapv2 · pap</span></div>
+            <div class="proto"><span class="k">Trojan</span><span class="v">tcp · tls · reality · xhttp</span></div>
             <div class="proto"><span class="k">VLESS</span><span class="v">tcp · tls</span></div>
           </div>
           <p class="blurb" data-i="blurb">С улицы — обычный HTTPS.
@@ -1217,6 +1263,18 @@ hold  armed</pre>
           <button type="button" data-go="edit"><span data-i="edit">Править</span></button>
           <button type="button" data-sheet="export"><span data-i="export">Экспорт</span><span class="s">.loft</span></button>
           <button type="button" class="danger" data-del="Home"><span data-i="delete">Удалить</span></button>
+        </div>
+      </div>
+      <div class="scrim hidden" id="addScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 data-i="addSheet">Новое подключение</h3>
+            <button type="button" class="row" data-go="scan"><span data-i="addScan">Сканировать QR</span></button>
+            <button type="button" class="row" data-go="edit"><span data-i="addPaste">Вставить ссылку</span></button>
+            <button type="button" class="row" data-go="scan"><span data-i="fromFile">Из файла</span></button>
+            <button type="button" class="row" data-go="edit" data-entry="manual"><span data-i="addManual">Вручную</span></button>
+          </div>
+          <button type="button" class="cancel" data-close="addScrim" data-i="cancel">Отмена</button>
         </div>
       </div>
       <div class="scrim hidden" id="exportScrim">
@@ -1305,7 +1363,7 @@ hold  armed</pre>
         "split.export.keen": "Keenetic .bat",
         "split.export.loft": "Loft",
         "split.export.save": "Сохранить loft-routes.bat",
-        "split.export.save.keen": "Сохранить YouTube.bat",
+        "split.export.save.keen": "Сохранить %@.bat",
         "split.export.title": "Экспорт маршрутов",
         "split.import.body": "Keenetic .bat или loft-routes. Комментарий :: rem — имя сервиса.",
         "split.import.detect": "Keenetic · 214 строк · выберите зону",
@@ -1359,6 +1417,22 @@ hold  armed</pre>
         navCap: "Макет iOS по живому GUI macOS. Туннель — Packet Tunnel.",
         hApp: "Приложение",
         nHome: "Дом · в сети", nOff: "Дом · выкл", nOpen: "Дом · подключить", nSimple: "Дом · упрощенный",
+        nOnb0: "Онбординг · начало",
+        nAdd: "Список · добавить",
+        nEditTrojan: "Правка · Trojan",
+        vpnTrojan: "Trojan",
+        trojanPass: "Пароль",
+        trojanUrl: "Сервер",
+        addSheet: "Новое подключение",
+        addScan: "Сканировать QR",
+        addPaste: "Вставить ссылку",
+        addManual: "Вручную",
+        startTitle: "Добавьте подключение",
+        startBody: "Отсканируйте QR или вставьте ссылку, которую вам выдали.",
+        startHint: "Если ссылка уже скопирована, нажмите «Вставить ссылку».",
+        startManual: "Ввести ключ и адрес вручную",
+        onbAdv: "Дополнительно",
+        kindAuto: "Авто",
         nList: "Подключения", nSwipe: "Список · свайп", nCtx: "Список · меню", nExp: "Список · экспорт",
         nEdit: "Правка", nEditAdv: "Правка · расширенные", nEditSstp: "Правка · SSTP", nEditVless: "Правка · VLESS",
         nScan: "Сканер QR", nShare: "QR для шаринга",
@@ -1407,7 +1481,7 @@ hold  armed</pre>
         uKbit: "кбит/с", uKb: "КБ/с",
         lang: "Язык интерфейса", langD: "меняется сразу", langZh: "中文", langRu: "Русский", langEn: "English",
         rateDown: "↓ 12.4 Мбит/с", delQ: "Удалить %s?",
-        diag: "Расширенный журнал", diagD: "Маршруты, DNS, loft-priv. Файл с ротацией.",
+        diag: "Расширенный журнал", diagD: "Маршруты, DNS, Packet Tunnel. Файл с ротацией.",
         defRoute: "Маршрут по умолчанию", defRouteD: "Весь интернет через лофт. Выкл — только сеть лофта.",
         hold: "Не открывать прямой интернет", holdD: "Последний туннель умер — сеть закрыта.",
         split: "Раздельная маршрутизация", splitD: "Зона едет через Loft или мимо. Сервис только состоит в зоне.",
@@ -1424,7 +1498,7 @@ hold  armed</pre>
         url: "URL", urlType: "Как подключаться", path: "Путь (если давали)",
         urlHint: "HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.",
         urlGo: "Подключить",
-        onbVpn: "Дальше — стоковый лист VPN iOS. Один раз.",
+        onbVpn: "iOS спросит разрешение на VPN — нажмите «Разрешить». Это один раз.",
         scanT: "Сканер QR",
         scanHint: "Камера. loft://, sstp://, vless:// или .loft.",
         fromFile: "Из файла", fromPhotos: "Из Фото",
@@ -1463,7 +1537,7 @@ hold  armed</pre>
         "split.export.keen": "Keenetic .bat",
         "split.export.loft": "Loft",
         "split.export.save": "Save loft-routes.bat",
-        "split.export.save.keen": "Save YouTube.bat",
+        "split.export.save.keen": "Save %@.bat",
         "split.export.title": "Export routes",
         "split.import.body": "Keenetic .bat or loft-routes. :: rem is the service name.",
         "split.import.detect": "Keenetic · 214 lines · pick a zone",
@@ -1517,6 +1591,22 @@ hold  armed</pre>
         navCap: "iOS mock of the live macOS GUI. Tunnel is Packet Tunnel.",
         hApp: "App",
         nHome: "Home · up", nOff: "Home · down", nOpen: "Home · connecting", nSimple: "Home · simplified",
+        nOnb0: "Onboard · start",
+        nAdd: "List · add",
+        nEditTrojan: "Edit · Trojan",
+        vpnTrojan: "Trojan",
+        trojanPass: "Password",
+        trojanUrl: "Server",
+        addSheet: "New connection",
+        addScan: "Scan QR",
+        addPaste: "Paste link",
+        addManual: "Manually",
+        startTitle: "Add a connection",
+        startBody: "Scan the QR or paste the link you were given.",
+        startHint: "If the link is already copied, tap Paste link.",
+        startManual: "Enter the key and address by hand",
+        onbAdv: "More options",
+        kindAuto: "Auto",
         nList: "Connections", nSwipe: "List · swipe", nCtx: "List · menu", nExp: "List · export",
         nEdit: "Edit", nEditAdv: "Edit · advanced", nEditSstp: "Edit · SSTP", nEditVless: "Edit · VLESS",
         nScan: "Scan QR", nShare: "Share QR",
@@ -1565,7 +1655,7 @@ hold  armed</pre>
         uKbit: "kbps", uKb: "kB/s",
         lang: "Interface language", langD: "changes at once", langZh: "Chinese", langRu: "Russian", langEn: "English",
         rateDown: "↓ 12.4 Mbit/s", delQ: "Delete %s?",
-        diag: "Extended journal", diagD: "Routes, DNS, loft-priv. Rotating file.",
+        diag: "Extended journal", diagD: "Routes, DNS, Packet Tunnel. Rotating file.",
         defRoute: "Allow default route", defRouteD: "Send all internet through loft. Off — loft net only.",
         hold: "Don’t restore direct internet", holdD: "Last tunnel died — the machine stays dark.",
         split: "Split routing", splitD: "A zone goes through Loft or around Loft. A service only belongs to a zone.",
@@ -1582,7 +1672,7 @@ hold  armed</pre>
         url: "URL", urlType: "How to connect", path: "Path (if they gave you one)",
         urlHint: "HTTPS. GET file, WS channel, H2/H3 CONNECT, QUIC UDP.",
         urlGo: "Connect",
-        onbVpn: "Next is the stock iOS VPN sheet. Once.",
+        onbVpn: "iOS will ask to allow the VPN — tap Allow. Only once.",
         scanT: "Scan QR",
         scanHint: "Camera. loft://, sstp://, vless://, or a .loft.",
         fromFile: "From file", fromPhotos: "From Photos",
@@ -1621,7 +1711,7 @@ hold  armed</pre>
         "split.export.keen": "Keenetic .bat",
         "split.export.loft": "Loft",
         "split.export.save": "保存 loft-routes.bat",
-        "split.export.save.keen": "保存 YouTube.bat",
+        "split.export.save.keen": "保存 %@.bat",
         "split.export.title": "导出路由",
         "split.import.body": "Keenetic .bat 或 loft-routes。:: rem 是服务名。",
         "split.import.detect": "Keenetic · 214 行 · 选择区域",
@@ -1675,6 +1765,22 @@ hold  armed</pre>
         navCap: "按正在出货的 macOS GUI 做的 iOS 模型。隧道是 Packet Tunnel。",
         hApp: "应用",
         nHome: "主页 · 在线", nOff: "主页 · 关闭", nOpen: "主页 · 正在连接", nSimple: "主页 · 简化",
+        nOnb0: "引导 · 开始",
+        nAdd: "列表 · 添加",
+        nEditTrojan: "编辑 · Trojan",
+        vpnTrojan: "Trojan",
+        trojanPass: "密码",
+        trojanUrl: "服务器",
+        addSheet: "新连接",
+        addScan: "扫描二维码",
+        addPaste: "粘贴链接",
+        addManual: "手动",
+        startTitle: "添加连接",
+        startBody: "扫描二维码，或粘贴发给你的链接。",
+        startHint: "链接已经复制的话，点「粘贴链接」。",
+        startManual: "手动输入密钥和地址",
+        onbAdv: "更多选项",
+        kindAuto: "自动",
         nList: "连接", nSwipe: "列表 · 滑动", nCtx: "列表 · 菜单", nExp: "列表 · 导出",
         nEdit: "编辑", nEditAdv: "编辑 · 高级", nEditSstp: "编辑 · SSTP", nEditVless: "编辑 · VLESS",
         nScan: "扫描二维码", nShare: "分享二维码",
@@ -1723,7 +1829,7 @@ hold  armed</pre>
         uKbit: "千比特/秒", uKb: "KB/秒",
         lang: "界面语言", langD: "立即生效", langZh: "中文", langRu: "Русский", langEn: "English",
         rateDown: "↓ 12.4 Mbit/s", delQ: "删除 %s？",
-        diag: "扩展日志", diagD: "路由、DNS、loft-priv。轮转文件。",
+        diag: "扩展日志", diagD: "路由、DNS、Packet Tunnel。轮转文件。",
         defRoute: "允许默认路由", defRouteD: "全部流量走 loft。关 — 只有 loft 网。",
         hold: "不要恢复直连", holdD: "最后一条隧道没了 — 保持断网。",
         split: "分流", splitD: "区域走 Loft 或绕过 Loft。服务只属于一个区域。",
@@ -1740,7 +1846,7 @@ hold  armed</pre>
         url: "URL", urlType: "怎么连", path: "路径（如果给了）",
         urlHint: "HTTPS。GET 是文件，WS 是通道，H2/H3 是 CONNECT，QUIC 是 UDP。",
         urlGo: "连接",
-        onbVpn: "接下来是系统那张 iOS VPN 权限页。一次。",
+        onbVpn: "iOS 会请求允许 VPN——点「允许」。只问一次。",
         scanT: "扫描二维码",
         scanHint: "相机。loft://、sstp://、vless:// 或 .loft。",
         fromFile: "从文件", fromPhotos: "从照片",
@@ -1763,7 +1869,7 @@ hold  armed</pre>
     let editTab = "main";
     let entry = "link";
     let setTab = 0;
-    let onbStep = 1;
+    let onbStep = 0;
     let homeMode = "on";
 
     function setLang(l) {
@@ -1859,7 +1965,7 @@ hold  armed</pre>
       document.querySelectorAll("#editTabs button").forEach((b) => {
         b.classList.toggle("on", b.getAttribute("data-edittab") === editTab);
       });
-      ["loft", "sstp", "vless"].forEach((k) => {
+      ["loft", "sstp", "vless", "trojan"].forEach((k) => {
         document.getElementById("edit-main-" + k).classList.toggle("hidden", !(editTab === "main" && vpn === k));
         document.getElementById("edit-adv-" + k).classList.toggle("hidden", !(editTab === "adv" && vpn === k));
       });
@@ -1884,15 +1990,18 @@ hold  armed</pre>
       });
     }
 
+    // Step 0 is the usual way in (QR or a copied link); 1 and 2 are the manual key and address.
     function paintOnboard() {
-      document.getElementById("onb1").classList.toggle("hidden", onbStep !== 1);
-      document.getElementById("onb2").classList.toggle("hidden", onbStep !== 2);
-      document.getElementById("onbStep").textContent = onbStep === 1 ? I[lang].keyStep : I[lang].urlStep;
-      document.getElementById("onbTitle").textContent = onbStep === 1 ? I[lang].keyTitle : I[lang].urlTitle;
-      document.getElementById("onbBody").textContent = onbStep === 1 ? I[lang].keyBody : I[lang].urlBody;
+      [0, 1, 2].forEach((i) => document.getElementById("onb" + i).classList.toggle("hidden", onbStep !== i));
+      const st = document.getElementById("onbStep");
+      st.classList.toggle("hidden", onbStep === 0);
+      st.textContent = onbStep === 1 ? I[lang].keyStep : I[lang].urlStep;
+      document.getElementById("onbTitle").textContent = onbStep === 0 ? I[lang].startTitle : onbStep === 1 ? I[lang].keyTitle : I[lang].urlTitle;
+      document.getElementById("onbBody").textContent = onbStep === 0 ? I[lang].startBody : onbStep === 1 ? I[lang].keyBody : I[lang].urlBody;
     }
+    document.getElementById("onbAdvBtn").addEventListener("click", () => document.getElementById("onbAdv").classList.toggle("hidden"));
 
-    const SHEETS = ["ctxScrim", "exportScrim", "delScrim"];
+    const SHEETS = ["ctxScrim", "exportScrim", "delScrim", "addScrim"];
     function hideSheets() {
       SHEETS.forEach((id) => document.getElementById(id).classList.add("hidden"));
       document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
@@ -1963,6 +2072,8 @@ hold  armed</pre>
           document.getElementById("ctxScrim").classList.remove("hidden");
         } else if (extra.list === "export") {
           document.getElementById("exportScrim").classList.remove("hidden");
+        } else if (extra.list === "add") {
+          document.getElementById("addScrim").classList.remove("hidden");
         }
       }
     }
@@ -1973,7 +2084,8 @@ hold  armed</pre>
         vpn: el.getAttribute("data-vpn") || "",
         edittab: el.getAttribute("data-edittab") || "",
         settab: el.getAttribute("data-settab"),
-        step: el.getAttribute("data-step")
+        step: el.getAttribute("data-step"),
+        entry: el.getAttribute("data-entry") || ""
       };
     }
     function openSheet(id) {
@@ -2000,6 +2112,7 @@ hold  armed</pre>
       b.addEventListener("click", (e) => {
         e.stopPropagation();
         if (b.getAttribute("data-sheet") === "export") openSheet("exportScrim");
+        if (b.getAttribute("data-sheet") === "add") openSheet("addScrim");
       });
     });
     document.querySelectorAll("[data-close]").forEach((b) => {
@@ -2124,11 +2237,8 @@ hold  armed</pre>
             row.classList.remove("open-l", "open-r");
             return;
           }
-          document.querySelectorAll(".swipe .card").forEach((c) => c.classList.remove("on"));
-          document.querySelectorAll(".swipe .mini").forEach((m) => m.classList.remove("lamp"));
-          card.classList.add("on");
-          const mini = card.querySelector(".mini");
-          if (mini) mini.classList.add("lamp");
+          // Tap opens the connection; only Connect switches the tunnel.
+          show("edit", { vpn: row.getAttribute("data-kind") });
         } else {
           row.classList.remove("open-l", "open-r");
         }
@@ -2276,7 +2386,7 @@ hold  armed</pre>
           <div class="fmt">${keen
             ? "route ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"
             : "REM loft-routes 1.0\nREM zone: global\nroute ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube\nREM zone: local\nroute ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"}</div>
-          <div class="btns"><button type="button" class="go" data-back>${keen ? T("split.export.save.keen") : T("split.export.save")}</button></div>`;
+          <div class="btns"><button type="button" class="go" data-back>${keen ? T("split.export.save.keen").replace("%@", routesIn(zoneTab)[0] ? loc(routesIn(zoneTab)[0]) : "routes") : T("split.export.save")}</button></div>`;
       },
     };
     function paintSplitScreen(id) {

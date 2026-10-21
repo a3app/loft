@@ -33,9 +33,9 @@ Same rooms as the macOS windows, laid out for one column and a thumb.
 | Screen | What |
 |--------|------|
 | Home | Status window. Mark, `loft`, status pill (tap → list), large Connect / Disconnect. Cards **OVERLAY / FRONT / TUNNEL** and spark when simplified interface is off. Tab bar below. Connecting uses this screen: pill “Not connected”, action “Connecting…”, spark “handshake”. |
-| Connections | Title, `+`, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, **host** subtitle, side **active** or kind (`get` / `sstp` / `vless`), ghost Edit. **Leading swipe** Edit, **trailing swipe** Delete. **Long-press** context: Edit / Export `.loft` (selected only) / Delete. **Import** in the header next to `+`; export is on the selected row and in its long-press menu. Tab bar below. No “Several” toggle. |
+| Connections | Title, `+`, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, **host** subtitle, side kind (`loft · get` / `sstp` / `vless`) and **active** on the live one. Tap opens the connection; only Connect switches the tunnel. **Leading swipe** Edit, **trailing swipe** Delete (with a sheet). **Long-press** context: Edit / Export `.loft` (selected only) / Delete. **`+`** opens a sheet: Scan QR · Paste link · From file · Manually. No gesture hint on the screen. Tab bar below. No “Several” toggle. |
 | Edit | Modal: **Cancel** on top returns to where it was opened. Title Connection, **QR** in the header. Name. Capsule **VPN type** loft / SSTP / VLESS / Trojan. Tabs **Main / Advanced**. loft and VLESS: capsule **Link / Manual**. loft Link is a secret `loft://` with Show/Hide; Manual is access key, host, port, GET·WS·H2·QUIC·H3, path. Both write the same profile. VLESS Link is a `vless://` string; Manual is UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint, and the fields that mode needs. Certificate check. Both write `vless://`. No SOCKS field. Tunnel interface = Packet Tunnel (forced on: there is no other inbound). SSTP: user, password, server, TLS hostname, cert check, PAP/CHAP. Trojan: password, `trojan://` server, TLS hostname, cert check. Advanced: mux (loft), DNS, DNS into the system; SSTP also “these addresses only”. Save, then Delete at the end. |
-| Onboard | Two steps, same as macOS. **1 Access key** (`lt_…`) → Continue, or import a file/QR. **2 Address**: URL, how to connect GET/WS/H2/QUIC/H3, path → Connect. Then the stock iOS VPN permission sheet, once. |
+| Onboard | Start: **Scan QR** and **Paste link** (a copied link is added at once); “Enter the key and address by hand” leads to the two macOS steps. **1 Access key** (`lt_…`) → Continue. **2 Address**: URL; **More options** hides how to connect (**Auto** first, then GET/WS/H2/QUIC/H3) and the path (a placeholder, not a value) → Connect. Then iOS asks to allow the VPN once; the screen says to tap Allow. |
 | Settings | Three tabs **General / Route / Client**. Header Reset routes. Links **Defaults \| Journal \| About**. iOS subset: language, simplified interface, speed units, extended journal; default route, hold, split with a **Lists** button (no failover); auto-connect, reconnect, external IP. Skip Dock, login item, several outbounds, SOCKS. |
 | Journal | Pushed from Settings: **‹ Settings** on top, tab bar stays. Front and session lines. The key is shortened. Copy / Clear. |
 | About | Pushed from Settings: **‹ Settings** on top. Mark, loft, `1.0.22`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
@@ -84,7 +84,7 @@ Mail / Files vocabulary on the phone. The macOS list uses a ghost Edit on the ro
 
 | Gesture | Action |
 |---------|--------|
-| Tap | Select. If another connection was up, disconnect it and connect this one. |
+| Tap | Open the connection (Edit). Connecting is the compact Connect button; if another connection was up, it goes down first. |
 | Compact Connect / Disconnect | Same as the macOS list button (`Connect` / `Disconnect`). |
 | Swipe trailing (left) | Delete, with a confirm sheet. |
 | Swipe leading (right) | Edit. |
