@@ -20,6 +20,10 @@ import (
 // ErrClosed is returned after Leave or Close.
 var ErrClosed = errors.New("mux: closed")
 
+// ErrCongested is a dropped datagram or control frame: the outbound queue
+// is full. UDP/ICMP senders treat this as a silent loss.
+var ErrCongested = errors.New("mux: congested")
+
 // Session is one mux session: streams, datagrams, and an outbound frame queue.
 type Session struct {
 	mu        sync.Mutex
@@ -126,6 +130,7 @@ func (s *Session) Accept() (*Stream, error) {
 // Push delivers decoded frames from the AEAD plaintext.
 // Data for a full stream is deferred so a bulk download cannot stall
 // Open/ICMP/small HTTP on another stream in the same batch.
+// Push never blocks: a hog stream parks then Resets; the fabric stays live.
 func (s *Session) Push(frames []wire.Frame) {
 	var rest []wire.Frame
 	for _, f := range frames {
@@ -146,12 +151,13 @@ func (s *Session) Push(frames []wire.Frame) {
 	}
 }
 
-// dataFull is true when stream id cannot accept another Data without blocking.
+// dataFull is true when stream id cannot accept another Data without parking
+// past the per-stream cap (ingest would have to block or Reset).
 func (s *Session) dataFull(id uint32) bool {
 	s.mu.Lock()
 	st := s.streams[id]
 	s.mu.Unlock()
-	return st != nil && len(st.in) >= cap(st.in)
+	return st != nil && st.full()
 }
 
 // Closed reports Leave or Close.
@@ -408,6 +414,46 @@ func (s *Session) send(f wire.Frame) error {
 	return s.sendCtx(context.Background(), f)
 }
 
+// trySend is send that never waits. A full queue returns ErrCongested so a
+// TUN/SOCKS UDP reader can keep draining the kernel.
+func (s *Session) trySend(f wire.Frame) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+	if s.shaped(f) && !s.tryRate(len(f.Payload)) {
+		return ErrCongested
+	}
+	ch := s.out
+	dataQueued := false
+	if s.priFrame(f) {
+		ch = s.pri
+	} else if f.Cmd == wire.CmdData {
+		if st := s.stream(f.StreamID); st != nil {
+			st.queued.Add(1)
+			dataQueued = true
+		}
+	}
+	undo := func() {
+		if !dataQueued {
+			return
+		}
+		if st := s.stream(f.StreamID); st != nil && st.queued.Load() > 0 {
+			st.queued.Add(-1)
+		}
+	}
+	select {
+	case ch <- f:
+		noteTraffic(f, &s.bytesUp)
+		return nil
+	case <-s.die:
+		undo()
+		return ErrClosed
+	default:
+		undo()
+		return ErrCongested
+	}
+}
+
 // sendCtx is send with a deadline. Ping uses this so a full pri queue
 // cannot pin WatchStall until die.
 func (s *Session) sendCtx(ctx context.Context, f wire.Frame) error {
@@ -459,10 +505,10 @@ func (s *Session) sendCtx(ctx context.Context, f wire.Frame) error {
 
 // handle dispatches one inbound frame. Unknown commands are ignored.
 func (s *Session) handle(f wire.Frame) {
-	if s.shaped(f) {
-		if s.waitRate(len(f.Payload)) != nil {
-			return
-		}
+	// Police inbound datagrams with a drop. Never waitRate here: a full
+	// token bucket would stall Push and stop reading the front socket.
+	if s.shaped(f) && f.Cmd == wire.CmdDgram && !s.tryRate(len(f.Payload)) {
+		return
 	}
 	noteTraffic(f, &s.bytesDown)
 	switch f.Cmd {
@@ -488,7 +534,7 @@ func (s *Session) handle(f wire.Frame) {
 			}
 		default:
 			st.kill()
-			_ = s.send(wire.Frame{Cmd: wire.CmdReset, StreamID: f.StreamID, Payload: wire.ResetPayload(wire.Internal)})
+			_ = s.trySend(wire.Frame{Cmd: wire.CmdReset, StreamID: f.StreamID, Payload: wire.ResetPayload(wire.Internal)})
 		}
 	case wire.CmdData:
 		s.mu.Lock()
@@ -514,7 +560,7 @@ func (s *Session) handle(f wire.Frame) {
 			st.kill()
 		}
 	case wire.CmdPing:
-		_ = s.send(wire.Frame{Cmd: wire.CmdPong, StreamID: f.StreamID, Payload: f.Payload})
+		_ = s.trySend(wire.Frame{Cmd: wire.CmdPong, StreamID: f.StreamID, Payload: f.Payload})
 	case wire.CmdDgram:
 		host, port, err := DecodeTarget(f.Payload)
 		if err != nil {
@@ -565,6 +611,8 @@ func (s *Session) FilterDgram(fn func(addr string, data []byte) bool) {
 }
 
 // WriteDgram sends CmdDgram: Open-target prefix plus payload, truncated to MaxPayload.
+// A full outbound queue drops the datagram (ErrCongested) so the caller keeps
+// reading the kernel socket.
 func (s *Session) WriteDgram(addr string, data []byte) error {
 	host, portStr, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -574,7 +622,7 @@ func (s *Session) WriteDgram(addr string, data []byte) error {
 	if len(pl) > wire.MaxPayload {
 		pl = pl[:wire.MaxPayload]
 	}
-	return s.send(wire.Frame{Cmd: wire.CmdDgram, Payload: pl})
+	return s.trySend(wire.Frame{Cmd: wire.CmdDgram, Payload: pl})
 }
 
 // ReadDgram waits for the next datagram not stolen by FilterDgram.
@@ -617,11 +665,15 @@ type Stream struct {
 	rdead  atomic.Int64 // unix nano; 0 = none
 	wdead  atomic.Int64
 	queued atomic.Int32 // bulk Data frames sitting in sess.out
+	parkMu sync.Mutex
+	park   [][]byte
+	parkN  int
+	wake   chan struct{} // cap 1; parked Data is readable
 }
 
 // newStream is an inbound or outbound stream on s.
 func newStream(s *Session, id uint32) *Stream {
-	return &Stream{sess: s, id: id, in: make(chan []byte, 64), done: make(chan struct{})}
+	return &Stream{sess: s, id: id, in: make(chan []byte, 64), done: make(chan struct{}), wake: make(chan struct{}, 1)}
 }
 
 // Target is the Open host:port.
@@ -660,27 +712,142 @@ func (st *Stream) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+// streamParkMax is extra Data a full stream may hold before Reset.
+// in cap 64 × 12 KiB plus this is about 1 MiB, one BDP of slack, then RST
+// so one hog cannot stall mux ingest / kernel rcvbuf.
+const streamParkMax = 256 << 10
+
+// full is true when in and the park are both at cap (next Data Resets).
+func (st *Stream) full() bool {
+	if len(st.in) < cap(st.in) {
+		return false
+	}
+	st.parkMu.Lock()
+	n := st.parkN
+	st.parkMu.Unlock()
+	return n >= streamParkMax
+}
+
 // recv waits for the next Data chunk or a read deadline.
 func (st *Stream) recv() (chunk []byte, ok bool, err error) {
-	ns := st.rdead.Load()
-	if ns == 0 {
-		chunk, ok = <-st.in
-		return chunk, ok, nil
+	for {
+		if b, ok := st.takeIn(); ok {
+			if b != nil {
+				st.pumpPark()
+				return b, true, nil
+			}
+			if p := st.takePark(); p != nil {
+				return p, true, nil
+			}
+			return nil, false, nil
+		}
+		if p := st.takePark(); p != nil {
+			return p, true, nil
+		}
+		ns := st.rdead.Load()
+		if ns == 0 {
+			select {
+			case chunk, ok = <-st.in:
+				if ok {
+					st.pumpPark()
+					return chunk, true, nil
+				}
+				if p := st.takePark(); p != nil {
+					return p, true, nil
+				}
+				return nil, false, nil
+			case <-st.wake:
+				continue
+			}
+		}
+		d := time.Until(time.Unix(0, ns))
+		if d <= 0 {
+			return nil, false, errTimeout
+		}
+		t := time.NewTimer(d)
+		select {
+		case chunk, ok = <-st.in:
+			t.Stop()
+			if ok {
+				st.pumpPark()
+				return chunk, true, nil
+			}
+			if p := st.takePark(); p != nil {
+				return p, true, nil
+			}
+			return nil, false, nil
+		case <-st.wake:
+			t.Stop()
+			continue
+		case <-t.C:
+			return nil, false, errTimeout
+		}
 	}
-	d := time.Until(time.Unix(0, ns))
-	if d <= 0 {
-		return nil, false, errTimeout
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	// Do not select on st.done: kill() closes done and in together, and
-	// a deadline select would randomly return EOF while Data is still
-	// buffered (live GET mux-down EOF after origin Close).
+}
+
+// takeIn is a non-blocking read from in. ok false = empty; b nil + ok true = closed.
+func (st *Stream) takeIn() (b []byte, ok bool) {
 	select {
-	case chunk, ok = <-st.in:
-		return chunk, ok, nil
-	case <-t.C:
-		return nil, false, errTimeout
+	case chunk, open := <-st.in:
+		if !open {
+			return nil, true
+		}
+		return chunk, true
+	default:
+		return nil, false
+	}
+}
+
+// takePark pops the oldest parked chunk.
+func (st *Stream) takePark() []byte {
+	st.parkMu.Lock()
+	defer st.parkMu.Unlock()
+	if len(st.park) == 0 {
+		return nil
+	}
+	b := st.park[0]
+	st.park[0] = nil
+	st.park = st.park[1:]
+	st.parkN -= len(b)
+	if st.parkN < 0 {
+		st.parkN = 0
+	}
+	return b
+}
+
+// pumpPark moves parked chunks into in without blocking.
+func (st *Stream) pumpPark() {
+	for {
+		b := st.takePark()
+		if b == nil || st.dead.Load() {
+			return
+		}
+		select {
+		case st.in <- b:
+		case <-st.done:
+			return
+		default:
+			if !st.dead.Load() {
+				st.unpark(b)
+			}
+			return
+		}
+	}
+}
+
+// unpark puts b back at the head of the park (order-preserving).
+func (st *Stream) unpark(b []byte) {
+	st.parkMu.Lock()
+	st.park = append([][]byte{b}, st.park...)
+	st.parkN += len(b)
+	st.parkMu.Unlock()
+}
+
+// kick wakes a reader waiting in recv after a park.
+func (st *Stream) kick() {
+	select {
+	case st.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -731,7 +898,7 @@ func (st *Stream) Reset(c wire.Code) {
 	if st.dead.Load() {
 		return
 	}
-	_ = st.sess.send(wire.Frame{Cmd: wire.CmdReset, StreamID: st.id, Payload: wire.ResetPayload(c)})
+	_ = st.sess.trySend(wire.Frame{Cmd: wire.CmdReset, StreamID: st.id, Payload: wire.ResetPayload(c)})
 	st.kill()
 }
 
@@ -754,15 +921,42 @@ func (st *Stream) kill() {
 	}
 	close(st.done)
 	close(st.in)
+	st.parkMu.Lock()
+	st.park = nil
+	st.parkN = 0
+	st.parkMu.Unlock()
+	st.kick()
 	st.sess.drop(st.id)
 }
 
-// push queues inbound Data. Dropped if the stream is already dead.
+// push queues inbound Data. Never blocks. A hog stream parks up to
+// streamParkMax then Resets so mux ingest keeps reading the front.
 func (st *Stream) push(b []byte) {
-	select {
-	case st.in <- append([]byte(nil), b...):
-	case <-st.done:
+	if st.dead.Load() {
+		return
 	}
+	buf := append([]byte(nil), b...)
+	select {
+	case st.in <- buf:
+		return
+	case <-st.done:
+		return
+	default:
+	}
+	st.parkMu.Lock()
+	if st.dead.Load() {
+		st.parkMu.Unlock()
+		return
+	}
+	if st.parkN+len(buf) > streamParkMax {
+		st.parkMu.Unlock()
+		st.Reset(wire.StreamReset)
+		return
+	}
+	st.park = append(st.park, buf)
+	st.parkN += len(buf)
+	st.parkMu.Unlock()
+	st.kick()
 }
 
 // LocalAddr is a dummy mux address for net.Conn.

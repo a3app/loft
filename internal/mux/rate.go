@@ -59,6 +59,38 @@ func (s *Session) waitRate(n int) error {
 	return b.wait(n, s.die)
 }
 
+// tryRate takes n tokens or returns false. Never waits.
+func (s *Session) tryRate(n int) bool {
+	if n <= 0 {
+		return true
+	}
+	b := s.rate.Load()
+	if b == nil {
+		return true
+	}
+	return b.try(n)
+}
+
+func (b *bucket) try(n int) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.rate <= 0 {
+		return true
+	}
+	now := time.Now()
+	b.tokens += now.Sub(b.last).Seconds() * b.rate
+	if b.tokens > b.burst {
+		b.tokens = b.burst
+	}
+	b.last = now
+	need := float64(n)
+	if b.tokens < need {
+		return false
+	}
+	b.tokens -= need
+	return true
+}
+
 func (s *Session) shaped(f wire.Frame) bool {
 	switch f.Cmd {
 	case wire.CmdData, wire.CmdDgram:

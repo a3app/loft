@@ -448,10 +448,14 @@ func TestPushDoesNotStarveOtherStream(t *testing.T) {
 		}
 		done <- string(buf)
 	}()
-	go s.Push([]wire.Frame{
-		{Cmd: wire.CmdData, StreamID: 2, Payload: []byte("more")},
-		{Cmd: wire.CmdData, StreamID: 4, Payload: []byte("ping")},
-	})
+	pushed := make(chan struct{})
+	go func() {
+		s.Push([]wire.Frame{
+			{Cmd: wire.CmdData, StreamID: 2, Payload: []byte("more")},
+			{Cmd: wire.CmdData, StreamID: 4, Payload: []byte("ping")},
+		})
+		close(pushed)
+	}()
 	select {
 	case got := <-done:
 		if got != "ping" {
@@ -459,6 +463,58 @@ func TestPushDoesNotStarveOtherStream(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("stream 2 blocked behind full stream 1")
+	}
+	select {
+	case <-pushed:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Push blocked on full stream")
+	}
+}
+
+// TestWriteDgramDropsWhenFull returns immediately when out and pri are full.
+func TestWriteDgramDropsWhenFull(t *testing.T) {
+	s := NewClient()
+	defer s.Close()
+	for i := 0; i < cap(s.out); i++ {
+		s.out <- wire.Frame{Cmd: wire.CmdData, Payload: []byte("x")}
+	}
+	for i := 0; i < cap(s.pri); i++ {
+		s.pri <- wire.Frame{Cmd: wire.CmdPing}
+	}
+	t0 := time.Now()
+	err := s.WriteDgram("1.2.3.4:1", []byte("z"))
+	if time.Since(t0) > 50*time.Millisecond {
+		t.Fatalf("blocked %s", time.Since(t0))
+	}
+	if err != ErrCongested {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// TestPushParksThenResets Resets a hog stream once park is full, without blocking Push.
+func TestPushParksThenResets(t *testing.T) {
+	s := NewServer()
+	defer s.Close()
+	s.Push([]wire.Frame{{Cmd: wire.CmdOpen, StreamID: 2, Payload: EncodeTarget("a.example", 443)}})
+	st, err := s.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk := make([]byte, 4096)
+	for i := 0; i < cap(st.in); i++ {
+		s.handle(wire.Frame{Cmd: wire.CmdData, StreamID: 2, Payload: chunk})
+	}
+	n := 0
+	t0 := time.Now()
+	for n <= streamParkMax {
+		s.Push([]wire.Frame{{Cmd: wire.CmdData, StreamID: 2, Payload: chunk}})
+		n += len(chunk)
+	}
+	if time.Since(t0) > 200*time.Millisecond {
+		t.Fatalf("Push blocked %s", time.Since(t0))
+	}
+	if !st.dead.Load() {
+		t.Fatal("hog stream still live")
 	}
 }
 
