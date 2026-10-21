@@ -46,7 +46,7 @@ type H2 struct {
 	token []byte
 	offer wire.Cap
 	inner *rawSess
-	cc    *http2.ClientConn
+	conn  net.Conn
 }
 
 // NewH2 builds an H2 client that has not yet CONNECT'd.
@@ -88,8 +88,8 @@ func (h *H2) Park() error {
 	if h.inner != nil {
 		err = h.inner.Park()
 	}
-	if h.cc != nil {
-		_ = h.cc.Close()
+	if h.conn != nil {
+		_ = h.conn.Close()
 	}
 	return err
 }
@@ -100,8 +100,8 @@ func (h *H2) Close() error {
 	if h.inner != nil {
 		err = h.inner.Close()
 	}
-	if h.cc != nil {
-		_ = h.cc.Close()
+	if h.conn != nil {
+		_ = h.conn.Close()
 	}
 	return err
 }
@@ -131,66 +131,19 @@ func (h *H2) Start(ctx context.Context) error {
 	return h.connectH2(ctx, c, sni, path, addr)
 }
 
-// connectH2 issues CONNECT on c and starts raw mux on the 200 body.
+// connectH2 issues RFC 8441 CONNECT on c and starts raw mux on the 200 body.
 func (h *H2) connectH2(ctx context.Context, c net.Conn, sni, path, addr string) error {
-	t2 := &http2.Transport{
-		ReadIdleTimeout:  20 * time.Second,
-		MaxReadFrameSize: 1 << 20,
-	}
-	cc, err := t2.NewClientConn(c)
+	stream, err := h2ExtendedConnect(ctx, c, sni, path)
 	if err != nil {
 		c.Close()
-		return err
-	}
-	pr, pw := io.Pipe()
-	// Handshake ctx must not own the CONNECT stream: loft-probe cancels it
-	// after Start, which would RST a live mux.
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodConnect, "https://"+sni+path, pr)
-	if err != nil {
-		_ = cc.Close()
-		return err
-	}
-	req.Host = sni
-	req.Header.Set(":protocol", "loft")
-	type rt struct {
-		resp *http.Response
-		err  error
-	}
-	ch := make(chan rt, 1)
-	go func() {
-		resp, err := cc.RoundTrip(req)
-		ch <- rt{resp, err}
-	}()
-	var resp *http.Response
-	select {
-	case <-ctx.Done():
-		_ = pw.Close()
-		_ = cc.Close()
-		return ctx.Err()
-	case r := <-ch:
-		resp, err = r.resp, r.err
-	}
-	if err != nil {
-		_ = pw.Close()
-		_ = cc.Close()
 		return fmt.Errorf("h2 connect: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		_ = pw.Close()
-		_ = resp.Body.Close()
-		_ = cc.Close()
-		return fmt.Errorf("h2 connect: status %d", resp.StatusCode)
-	}
-	conn := &pipeConn{Reader: resp.Body, Writer: pw, closer: func() error {
-		_ = pw.Close()
-		return resp.Body.Close()
-	}}
-	inner, err := startRaw(ctx, conn, h.token, h.offer, addr, sni)
+	inner, err := startRaw(ctx, stream, h.token, h.offer, addr, sni)
 	if err != nil {
-		_ = cc.Close()
+		_ = stream.Close()
 		return err
 	}
-	h.cc = cc
+	h.conn = c
 	h.inner = inner
 	return nil
 }
