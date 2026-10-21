@@ -175,6 +175,14 @@
     .spark .l { letter-spacing: .12em; color: var(--lamp); display: flex; flex-direction: column; gap: 2px; }
     .spark .l .up { color: var(--stone); }
     .home.simple .cards, .home.simple .spark { display: none; }
+    .iprows { margin-top: 12px; border-top: 1px solid var(--line); }
+    .iprows .r {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 12.5px;
+    }
+    .iprows .r .k { color: var(--mute); }
+    .iprows .r .v { font-family: var(--mono); font-size: 12px; }
+    .home.simple .iprows, .home:not(.live) .iprows { display: none; }
     .home.busy .spark .r { display: none; }
     .home.busy .spark .l { letter-spacing: 0; color: var(--mute); }
 
@@ -604,6 +612,10 @@
           <div class="spark" id="homeSpark">
             <span class="l"><span id="sparkL">↓ ▃▅▂▇▄▆▃▅▂▇</span><span class="up" id="sparkU">↑ ▁▂▁▃▂▁▂▃▁▂</span></span>
             <span class="r" id="sparkR">↓ 12.4 Мбит/с</span>
+          </div>
+          <div class="iprows" id="homeIPs">
+            <div class="r"><span class="k" data-i="extIpK">Внешний IP</span><span class="v">203.0.113.17</span></div>
+            <div class="r"><span class="k" data-i="overIpK">Overlay IP</span><span class="v">10.8.0.14</span></div>
           </div>
         </div>
       </div>
@@ -1380,7 +1392,7 @@ hold  armed</pre>
         detServer: "Сервер",
         detMtu: "MTU",
         detFront: "Способ",
-        detOver: "Адрес в сети loft",
+        detOver: "Адрес в сети loft", extIpK: "Внешний IP", overIpK: "Overlay IP",
         detT: "Сведения",
         sparkCap: "скорость за последнюю минуту",
         kindAutoV: "Авто",
@@ -1670,7 +1682,7 @@ hold  armed</pre>
         detServer: "Server",
         detMtu: "MTU",
         detFront: "Method",
-        detOver: "loft address",
+        detOver: "loft address", extIpK: "External IP", overIpK: "Overlay IP",
         detT: "Details",
         sparkCap: "speed, last minute",
         kindAutoV: "Auto",
@@ -1960,7 +1972,7 @@ hold  armed</pre>
         detServer: "服务器",
         detMtu: "MTU",
         detFront: "方式",
-        detOver: "loft 地址",
+        detOver: "loft 地址", extIpK: "外部 IP", overIpK: "Overlay IP",
         detT: "详细信息",
         sparkCap: "近一分钟速率",
         kindAutoV: "自动",
@@ -2284,6 +2296,7 @@ hold  armed</pre>
       root.classList.toggle("simple", homeMode === "simple");
       root.classList.toggle("busy", homeMode === "connecting");
       const on = homeMode === "on" || homeMode === "simple";
+      root.classList.toggle("live", on);
       pill.classList.toggle("on", on);
       pillT.textContent = on ? I[lang].pillOn : homeMode === "connecting" ? I[lang].pillBusy : I[lang].pillOff;
       const dash = "—";
