@@ -1,5 +1,9 @@
 #include "engine.h"
 
+#ifndef APP_ID
+#define APP_ID "harbour-loft"
+#endif
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -145,7 +149,9 @@ QString Engine::binaryPath() const
     QStringList paths;
     const QString here = QCoreApplication::applicationDirPath();
     paths << (here + QStringLiteral("/loft-front"));
-    paths << (here + QStringLiteral("/../libexec/app.loft.aurora/loft-front"));
+    paths << (here + QStringLiteral("/../libexec/") + QLatin1String(APP_ID) + QStringLiteral("/loft-front"));
+    paths << (QStringLiteral("/usr/libexec/") + QLatin1String(APP_ID) + QStringLiteral("/loft-front"));
+    paths << QStringLiteral("/usr/libexec/harbour-loft/loft-front");
     paths << QStringLiteral("/usr/libexec/app.loft.aurora/loft-front");
     paths << QStringLiteral("/usr/bin/loft-front");
     for (int i = 0; i < paths.size(); ++i) {

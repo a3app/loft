@@ -6,7 +6,7 @@ A client-side import string is described. It is **not** a loft/1.0 wire feature 
 
 The loft address is `loft://` — kind plus transport in one string. One outbound is obtained per URI. A `.loft` YAML file holds **one or several connections** and MAY mix every supported kind (`loft`, `sstp`, `vless`, `trojan`). File format: [§8](#8-loft-file).
 
-Protocol: [protocol.md](protocol.md). iOS UX: [clients/iOS/design/DESIGN.md](../clients/iOS/design/DESIGN.md). Android UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). macOS UX: [clients/macOS/design/DESIGN.md](../clients/macOS/design/DESIGN.md). Aurora UX: [clients/Aurora/design/DESIGN.md](../clients/Aurora/design/DESIGN.md).
+Protocol: [protocol.md](protocol.md). iOS UX: [clients/iOS/design/DESIGN.md](../clients/iOS/design/DESIGN.md). Android UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). macOS UX: [clients/macOS/design/DESIGN.md](../clients/macOS/design/DESIGN.md). Sailfish UX: [clients/Sailfish/design/DESIGN.md](../clients/Sailfish/design/DESIGN.md).
 
 ---
 
@@ -112,7 +112,7 @@ loft://lt_change-me-long-random@app.example.com:443?type=quic#Fast
 
 A client that can share emits `loft://` for the **selected** outbound of the **selected** connection (one QR, one front). Several fronts of that connection, or several connections: export `.loft` ([§7](#7-loft-file)). The URI is a secret: it contains the member key. Show it on-device; do not log it.
 
-iOS registers URL scheme `loft`. Android registers the same intent filter. Aurora registers `x-scheme-handler/loft`. A tap on `loft://…` in Messages opens the app and offers import.
+iOS registers URL scheme `loft`. Android registers the same intent filter. Sailfish (and Aurora) registers `x-scheme-handler/loft`. A tap on `loft://…` in Messages opens the app and offers import.
 
 ---
 
@@ -198,7 +198,7 @@ A `.vpn` JSON blob that already has host / user / password is accepted as this c
 
 ## 8. `.loft` file
 
-Family format for every loft app (iOS, Android, macOS, Aurora, later TV). YAML. The file **is** the secret.
+Family format for every loft app (iOS, Android, macOS, Sailfish, later TV). YAML. The file **is** the secret.
 
 Two shapes. Both are valid.
 

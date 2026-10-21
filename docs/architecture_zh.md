@@ -37,7 +37,7 @@ server/
   panel/              loft-panel 网页面板（规划与原型：panel/design）
 clients/
   go/cmd/loft         CLI：SOCKS5, TUN, kill-switch
-  go/cmd/loft-front   会话助手（macOS bundle；Aurora RPM libexec）
+  go/cmd/loft-front   会话助手（macOS bundle；Sailfish RPM libexec）
   go/cmd/loft-probe   覆盖网 ICMP/TCP/UDP/DNS/HTTP，不改系统路由
   go/tools/wsprobe    一次性 GET 握手（手动；不进 dist）
   macOS/Sources       Swift 5 + AppKit 菜单栏；拉起 loft-front
@@ -48,7 +48,7 @@ clients/
   MikroTik/           RouterOS 7 容器（镜像 + .rsc；先 SOCKS；不进 Dist）
   iOS/                Packet Tunnel（薄宿主 + appex；gomobile xcframework；Apple TV 在 PLAN 第 6 阶段）
   Android/            VpnService（薄 Java 宿主；gomobile AAR；UX 模型；Android TV / Google TV 在 PLAN 第 4 阶段）
-  Aurora/             ConnMan 覆盖网（QML 宿主 + loft-connman 插件 + loft-front）
+  Sailfish/           ConnMan 覆盖网（QML 宿主 + loft-connman 插件 + loft-front；Aurora 是 OMP RPM）
   mobile/             iOS/Android 共用 Go 引擎（loft, SSTP, VLESS）
 ```
 

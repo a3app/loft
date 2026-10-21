@@ -1,5 +1,5 @@
-#ifndef LOFT_AURORA_ENGINE_H
-#define LOFT_AURORA_ENGINE_H
+#ifndef LOFT_SAILFISH_ENGINE_H
+#define LOFT_SAILFISH_ENGINE_H
 
 #include <QObject>
 #include <QProcess>

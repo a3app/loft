@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(app.loft.aurora
+# Sailfish OS is the client. Aurora OS is the OMP packaging flavor.
+project(loft
     LANGUAGES C CXX
     VERSION 1.0.0
     DESCRIPTION "Loft overlay client"
@@ -20,27 +21,45 @@ include(CheckIncludeFile)
 
 if(PKG_CONFIG_FOUND)
     pkg_check_modules(AURORA QUIET auroraapp)
+    pkg_check_modules(SAILFISHAPP QUIET sailfishapp)
     pkg_check_modules(CONNMAN QUIET connman)
     pkg_check_modules(GLIB QUIET glib-2.0)
     pkg_check_modules(DBUS QUIET dbus-1)
 endif()
 
-set(LOFT_LIBEXEC "${CMAKE_INSTALL_FULL_LIBEXECDIR}/${PROJECT_NAME}")
+set(LOFT_OS "" CACHE STRING "sailfish or aurora")
+if(LOFT_OS STREQUAL "")
+    if(AURORA_FOUND)
+        set(LOFT_OS "aurora")
+    else()
+        set(LOFT_OS "sailfish")
+    endif()
+endif()
+
+if(LOFT_OS STREQUAL "aurora")
+    set(LOFT_APP_ID "app.loft.aurora")
+    set(LOFT_DESKTOP "${CMAKE_CURRENT_SOURCE_DIR}/aurora/app.loft.aurora.desktop")
+else()
+    set(LOFT_APP_ID "harbour-loft")
+    set(LOFT_DESKTOP "${CMAKE_CURRENT_SOURCE_DIR}/sailfish/harbour-loft.desktop")
+endif()
+
+set(LOFT_LIBEXEC "${CMAKE_INSTALL_FULL_LIBEXECDIR}/${LOFT_APP_ID}")
 set(LOFT_HELPER "${LOFT_LIBEXEC}/loft-connman")
 set(LOFT_FRONT_BIN "${LOFT_LIBEXEC}/loft-front")
 set(LOFT_SCRIPT_BIN "${CMAKE_INSTALL_FULL_LIBDIR}/connman/scripts/loft-script")
 
-add_executable(${PROJECT_NAME}
+add_executable(${LOFT_APP_ID}
     src/main.cpp
     src/engine.cpp
     src/engine.h
 )
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    APP_ID="app.loft.aurora"
+target_compile_definitions(${LOFT_APP_ID} PRIVATE
+    APP_ID="${LOFT_APP_ID}"
 )
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(${LOFT_APP_ID}
     Qt5::Core
     Qt5::Network
     Qt5::Qml
@@ -48,23 +67,27 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 if(Qt5DBus_FOUND)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_QT_DBUS)
-    target_link_libraries(${PROJECT_NAME} Qt5::DBus)
+    target_compile_definitions(${LOFT_APP_ID} PRIVATE HAVE_QT_DBUS)
+    target_link_libraries(${LOFT_APP_ID} Qt5::DBus)
 endif()
 
-if(AURORA_FOUND)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE AURORA)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${AURORA_INCLUDE_DIRS})
-    target_link_libraries(${PROJECT_NAME} ${AURORA_LIBRARIES})
+if(LOFT_OS STREQUAL "aurora" AND AURORA_FOUND)
+    target_compile_definitions(${LOFT_APP_ID} PRIVATE AURORA)
+    target_include_directories(${LOFT_APP_ID} PRIVATE ${AURORA_INCLUDE_DIRS})
+    target_link_libraries(${LOFT_APP_ID} ${AURORA_LIBRARIES})
+elseif(SAILFISHAPP_FOUND)
+    target_compile_definitions(${LOFT_APP_ID} PRIVATE SAILFISH)
+    target_include_directories(${LOFT_APP_ID} PRIVATE ${SAILFISHAPP_INCLUDE_DIRS})
+    target_link_libraries(${LOFT_APP_ID} ${SAILFISHAPP_LIBRARIES})
 endif()
 
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${LOFT_APP_ID}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(DIRECTORY qml
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/${LOFT_APP_ID}
 )
-install(FILES app.loft.aurora.desktop
+install(FILES ${LOFT_DESKTOP}
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
 
@@ -72,13 +95,13 @@ set(LOFT_MARK "${CMAKE_CURRENT_SOURCE_DIR}/../../docs/brand/svg/loft-icon.svg")
 if(EXISTS "${LOFT_MARK}")
     install(FILES "${LOFT_MARK}"
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
-        RENAME app.loft.aurora.svg
+        RENAME ${LOFT_APP_ID}.svg
     )
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bin/loft-front")
     install(PROGRAMS bin/loft-front
-        DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}
+        DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/${LOFT_APP_ID}
     )
 endif()
 
@@ -88,7 +111,7 @@ target_compile_definitions(loft-connman PRIVATE
     LOFT_SCRIPT="${LOFT_SCRIPT_BIN}"
 )
 install(TARGETS loft-connman
-    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/${LOFT_APP_ID}
 )
 
 if(DBUS_FOUND)

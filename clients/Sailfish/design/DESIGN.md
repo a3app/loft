@@ -1,4 +1,4 @@
-# Loft · Aurora OS client
+# Loft · Sailfish OS client
 
 **English** · [Русский](DESIGN_ru.md) · [中文](DESIGN_zh.md)
 
@@ -20,7 +20,7 @@ A `.loft` file holds **one or several connections**. Kinds mix: `loft`, `sstp`, 
 
 Share: scan a QR or load a file/image with `loft://`, `sstp://`, `vless://`, `trojan://`, or a `.loft`.
 
-Aurora Settings shows the same VPN row the plugin starts. The app does not replace Settings.
+Settings shows the same VPN row the plugin starts. The app does not replace Settings. Aurora OS uses the same GUI.
 
 Language of the adapter is **Qt 5 / QML Silica**. The mock is HTML; the later GUI is Silica pages (no Widgets, no Compose).
 
@@ -38,7 +38,7 @@ Language of the adapter is **Qt 5 / QML Silica**. The mock is HTML; the later GU
 | Cover | Lamp + Connect/Disconnect. Peek from the home screen. |
 | Log | Last lines from loft-front. No key material. Behind Advanced. |
 
-## 3. Aurora chrome
+## 3. Sailfish chrome
 
 Do not restyle Settings → VPN. The mock shows how **Loft** looks in *their* list: status Connected, type Loft, the switch is the system row, not a second switch in our app.
 
@@ -54,7 +54,7 @@ Zones: Through Loft / Around Loft. Direction lives on the zone.
 
 ## 4. Visual
 
-Same loft tokens as iOS, Android, and macOS: Ink `#1A1714`, Lamp `#E8B84A`, Paper `#E8DFD2`, Avenir Next. The phone chrome in the mock is loft (dark paper). Silica pulley and cover are Aurora; we do not copy Material or iOS nav.
+Same loft tokens as iOS, Android, and macOS: Ink `#1A1714`, Lamp `#E8B84A`, Paper `#E8DFD2`, Avenir Next. The phone chrome in the mock is loft (dark paper). Silica pulley and cover are Sailfish; we do not copy Material or iOS nav.
 
 Type: headings Demi, body Regular, keys SF Mono / Sail Sans. Connected = lamp on. Down = lamp off, stone L.
 

@@ -20,7 +20,7 @@
 #include <unistd.h>
 
 #ifndef LOFT_FRONT
-#define LOFT_FRONT "/usr/libexec/app.loft.aurora/loft-front"
+#define LOFT_FRONT "/usr/libexec/harbour-loft/loft-front"
 #endif
 #ifndef LOFT_SCRIPT
 #define LOFT_SCRIPT "/usr/lib/connman/scripts/loft-script"

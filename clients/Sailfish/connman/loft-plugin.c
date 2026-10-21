@@ -5,15 +5,16 @@
  * provider properties, then apply overlay IP / DNS / MTU from the notify
  * script (same ss a{ss} contract as OpenVPN).
  *
- * Compile only against the Aurora SDK (connman-devel). Dist does not
- * build this file on macOS.
+ * Compile against the Sailfish or Aurora SDK (connman-devel). Dist does
+ * not build this file on macOS. CMake sets LOFT_HELPER to the flavor
+ * libexec (harbour-loft or app.loft.aurora).
  */
 
 #define LOFT_VPN_TYPE  "loft"
 #define LOFT_VPN_LABEL "Loft"
 
 #ifndef LOFT_HELPER
-#define LOFT_HELPER "/usr/libexec/app.loft.aurora/loft-connman"
+#define LOFT_HELPER "/usr/libexec/harbour-loft/loft-connman"
 #endif
 #ifndef SCRIPTDIR
 #define SCRIPTDIR "/usr/lib/connman/scripts"

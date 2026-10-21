@@ -85,7 +85,7 @@ flowchart LR
 | [docs/mikrotik.md](docs/mikrotik.md) | RouterOS 7 container client. Catalog: [clients/MikroTik/](clients/MikroTik/). |
 | [docs/ios.md](docs/ios.md) | iOS Packet Tunnel client. Catalog: [clients/iOS/](clients/iOS/). |
 | [docs/android.md](docs/android.md) | Android VpnService client. Catalog: [clients/Android/](clients/Android/). |
-| [docs/aurora.md](docs/aurora.md) | Aurora OS ConnMan client. Catalog: [clients/Aurora/](clients/Aurora/). |
+| [docs/sailfish.md](docs/sailfish.md) | Sailfish OS ConnMan client. Catalog: [clients/Sailfish/](clients/Sailfish/). Aurora OS is the OMP packaging. |
 | [docs/share.md](docs/share.md) | Import URI `loft://` and `.loft` files (one or several connections). |
 
 ## Repository
@@ -102,7 +102,7 @@ clients/Keenetic  Entware / OpkgTun (plan and mock)
 clients/MikroTik  RouterOS 7 container (image + .rsc)
 clients/iOS       Packet Tunnel (thin host + appex)
 clients/Android   VpnService (thin Java host)
-clients/Aurora    ConnMan overlay (thin QML host)
+clients/Sailfish  ConnMan overlay (Silica; Aurora is the OMP RPM)
 clients/mobile    shared Go engine (gomobile bind)
 ```
 

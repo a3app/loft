@@ -20,7 +20,7 @@ Checksums: `loft-clients-SHA256SUMS.txt`, `loft-node-SHA256SUMS.txt`, `loft-pane
 
 CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`.
 
-Not in Dist: iOS / Android / Aurora / Keenetic / MikroTik clients (catalog and mocks).
+Not in Dist: iOS / Android / Sailfish / Keenetic / MikroTik clients (catalog and mocks).
 
 ## What it does
 
@@ -72,7 +72,7 @@ macOS:
 
 Оверлей внутри TLS 1.3. Приложения ходят в локальные SOCKS5 или TUN. Потоки в одном mux, ChaCha20-Poly1305, снаружи обычный HTTPS: GET, WebSocket, HTTP/2, QUIC или HTTP/3. Перед нодой может стоять CDN. Протокол **loft/1.0**. Ссылка `loft://`.
 
-В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Aurora, Keenetic, MikroTik в этот Dist не входят.
+В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Sailfish, Keenetic, MikroTik в этот Dist не входят.
 
 1.0.24: хранение ключей членов — по желанию, ссылку можно показать снова; мастер «Домен и DNS» создаёт провайдера, зону, A/AAAA и CAA; страница доменов живая (Cloudflare, DigitalOcean, Namecheap, вручную; HTTP-01 и DNS-01). Протокол loft/1.0.
 
@@ -82,6 +82,6 @@ macOS:
 
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
-本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Aurora / Keenetic / MikroTik 不在这次包里。
+本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Sailfish / Keenetic / MikroTik 不在这次包里。
 
 1.0.24：可选保存成员密钥，链接可再次查看；向导「域名和 DNS」会创建提供商、区域、A/AAAA 和 CAA；域名页可用（Cloudflare、DigitalOcean、Namecheap、手动；HTTP-01 和 DNS-01）。协议仍是 loft/1.0。

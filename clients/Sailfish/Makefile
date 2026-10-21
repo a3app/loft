@@ -1,4 +1,5 @@
-# Cross loft-front for the phone. Open the tree in Aurora IDE for the QML RPM.
+# Cross loft-front for the phone. Open the tree in the Sailfish SDK
+# (-DLOFT_OS=sailfish) or Aurora IDE (-DLOFT_OS=aurora) for the QML RPM.
 ROOT := $(abspath ../..)
 GO ?= go
 FRONT := bin/loft-front

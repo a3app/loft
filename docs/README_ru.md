@@ -45,7 +45,7 @@ flowchart LR
 | [mikrotik_ru.md](mikrotik_ru.md) | RouterOS 7: контейнер, SOCKS, policy routing. |
 | [ios_ru.md](ios_ru.md) | iOS: Packet Tunnel, Personal VPN. Apple TV позже. |
 | [android_ru.md](android_ru.md) | Android: VpnService. Android TV / Google TV позже. |
-| [aurora_ru.md](aurora_ru.md) | ОС Аврора: оверлей ConnMan, loft-front. |
+| [sailfish_ru.md](sailfish_ru.md) | Sailfish OS: оверлей ConnMan, loft-front. ОС Аврора — пакет OMP. |
 | [share_ru.md](share_ru.md) | URI импорта: `loft://`, `.loft` (одно или несколько подключений), QR. |
 
 | Ещё | |
@@ -53,5 +53,5 @@ flowchart LR
 | [../README_ru.md](../README_ru.md) | Обзор |
 | [../server/README_ru.md](../server/README_ru.md) | loft-node |
 | [../server/debian/README_ru.md](../server/debian/README_ru.md) | Установщик и `.deb` |
-| [../clients/README_ru.md](../clients/README_ru.md) | CLI, macOS, Keenetic, MikroTik, iOS, Android, Aurora |
+| [../clients/README_ru.md](../clients/README_ru.md) | CLI, macOS, Keenetic, MikroTik, iOS, Android, Sailfish |
 | [brand/README_ru.md](brand/README_ru.md) | Марка |

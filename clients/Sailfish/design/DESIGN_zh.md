@@ -1,4 +1,4 @@
-# Loft · Aurora OS 客户端
+# Loft · Sailfish OS 客户端
 
 [English](DESIGN.md) · [Русский](DESIGN_ru.md) · **中文**
 
@@ -20,7 +20,7 @@ v1：磁盘上的命名连接，导入/导出 `.loft`，打开/断开，不要�
 
 分享：扫二维码，或载入带 `loft://`、`sstp://`、`vless://`、`trojan://` 或 `.loft` 的文件/图片。
 
-Aurora 设置里显示的就是插件拉起的那条 VPN。应用不替代设置。
+设置里显示的就是插件拉起的那条 VPN。应用不替代设置。Aurora OS 用同一套 GUI。
 
 适配器语言是 **Qt 5 / QML Silica**。模型是 HTML；后面的 GUI 是 Silica 页（不用 Widgets，不用 Compose）。
 
@@ -38,7 +38,7 @@ Aurora 设置里显示的就是插件拉起的那条 VPN。应用不替代设置
 | 封面 | 灯 + 打开/断开。从主屏 Peek。 |
 | 日志 | loft-front 最近几行。没有密钥材料。藏在「高级」后面。 |
 
-## 3. Aurora 外壳
+## 3. Sailfish 外壳
 
 不要改 设置 → VPN 的样子。模型只说明 **Loft** 在 *他们* 的列表里长什么样：状态 Connected，类型 Loft，开关是系统那一行，不是我们应用里第二个开关。
 
@@ -54,7 +54,7 @@ URL scheme `loft`，点 `loft://…` 会提议导入。
 
 ## 4. 视觉
 
-跟 iOS、Android、macOS 同一套 loft 记号：Ink `#1A1714`，Lamp `#E8B84A`，Paper `#E8DFD2`，Avenir Next。模型里的手机外壳是 loft（深色纸）。Silica pulley 和封面是 Aurora；不抄 Material 或 iOS 导航。
+跟 iOS、Android、macOS 同一套 loft 记号：Ink `#1A1714`，Lamp `#E8B84A`，Paper `#E8DFD2`，Avenir Next。模型里的手机外壳是 loft（深色纸）。Silica pulley 和封面是 Sailfish；不抄 Material 或 iOS 导航。
 
 字体：标题 Demi，正文 Regular，密钥 SF Mono / Sail Sans。已连接 = 灯亮。已关闭 = 灯灭，石头色 L。
 

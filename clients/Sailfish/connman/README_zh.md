@@ -11,7 +11,7 @@
 | 文件 | 作用 | 安装 |
 |------|------|---------|
 | `loft-plugin.c` | ConnMan VPN 驱动。类型名 `loft`。 | `%{_libdir}/connman/plugins-vpn/loft.so` |
-| `loft-connman.c` | VPN 客户端：拉起 loft-front，把 STATUS 映射成脚本环境。 | `%{_libexecdir}/app.loft.aurora/loft-connman` |
+| `loft-connman.c` | VPN 客户端：拉起 loft-front，把 STATUS 映射成脚本环境。 | `%{_libexecdir}/harbour-loft/loft-connman`（Aurora：`app.loft.aurora`） |
 | `loft-script.c` | D-Bus notify `ss a{ss}`（OpenVPN 约定）。 | `%{_libdir}/connman/scripts/loft-script` |
 | `loft.conf` | `[VPNBinary]` User/Group。 | `/etc/connman/vpn-plugin/loft.conf` |
 | `../settings/*.qml` | 设置 → 网络，类型 **Loft**。 | `%{_datadir}/sailfish-vpn/loft/` |
@@ -20,6 +20,6 @@ Provider 属性：`Host`, `Name`, `Domain`, `Loft.Token`, `Loft.URL`, `Loft.Type
 
 发夹（hairpin）：`Host` / `--host` 变成 `trusted_ip`，ConnMan 在默认路由之前把前置钉在 tun 外面。
 
-GUI 从不打开 `/dev/net/tun`。`.so` 只对 Aurora SDK（`connman-devel`）编译。Dist 不在 macOS 上编它。
+GUI 从不打开 `/dev/net/tun`。`.so` 对 Sailfish 或 Aurora SDK（`connman-devel`）编译。Dist 不在 macOS 上编它。
 
-方案：[../PLAN_zh.md](../PLAN_zh.md)。对接：[../../../docs/aurora_zh.md](../../../docs/aurora_zh.md)。
+方案：[../PLAN.md](../PLAN.md)。对接：[../../../docs/sailfish_zh.md](../../../docs/sailfish_zh.md)。

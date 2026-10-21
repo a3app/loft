@@ -6,7 +6,7 @@
 
 Адрес loft — `loft://`: тип подключения и транспорт в одной строке. Один исходящий на URI. Файл `.loft` (YAML) держит **одно или несколько подключений** и **может** смешивать все поддерживаемые типы (`loft`, `sstp`, `vless`, `trojan`). Формат файла: [§8](#8-файл-loft).
 
-Протокол: [protocol_ru.md](protocol_ru.md). UX iOS: [clients/iOS/design/DESIGN_ru.md](../clients/iOS/design/DESIGN_ru.md). UX Android: [clients/Android/design/DESIGN_ru.md](../clients/Android/design/DESIGN_ru.md). UX macOS: [clients/macOS/design/DESIGN_ru.md](../clients/macOS/design/DESIGN_ru.md). UX Аврора: [clients/Aurora/design/DESIGN_ru.md](../clients/Aurora/design/DESIGN_ru.md).
+Протокол: [protocol_ru.md](protocol_ru.md). UX iOS: [clients/iOS/design/DESIGN_ru.md](../clients/iOS/design/DESIGN_ru.md). UX Android: [clients/Android/design/DESIGN_ru.md](../clients/Android/design/DESIGN_ru.md). UX macOS: [clients/macOS/design/DESIGN_ru.md](../clients/macOS/design/DESIGN_ru.md). UX Sailfish: [clients/Sailfish/design/DESIGN_ru.md](../clients/Sailfish/design/DESIGN_ru.md).
 
 ---
 
@@ -112,7 +112,7 @@ loft://lt_change-me-long-random@app.example.com:443?type=quic#Fast
 
 Клиент, который умеет шарить, выдаёт `loft://` для **выбранного** исходящего **выбранного** подключения (один QR, один фронт). Несколько фронтов этого подключения или несколько подключений: экспорт `.loft` ([§7](#7-файл-loft)). URI — секрет: в нём ключ участника. Показывать на устройстве; в журнал не писать.
 
-iOS регистрирует схему URL `loft`. Android — тот же фильтр intent. Аврора — `x-scheme-handler/loft`. Тап по `loft://…` в Сообщениях открывает приложение и предлагает импорт.
+iOS регистрирует схему URL `loft`. Android — тот же фильтр intent. Sailfish (и Аврора) — `x-scheme-handler/loft`. Тап по `loft://…` в Сообщениях открывает приложение и предлагает импорт.
 
 ---
 
@@ -198,7 +198,7 @@ JSON `.vpn` с host / user / password принимается как это по�
 
 ## 8. Файл `.loft`
 
-Семейный формат всех приложений loft (iOS, Android, macOS, Аврора, позже TV). YAML. Файл **и есть** секрет.
+Семейный формат всех приложений loft (iOS, Android, macOS, Sailfish, позже TV). YAML. Файл **и есть** секрет.
 
 Две формы. Обе законны.
 

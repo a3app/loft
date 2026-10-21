@@ -85,7 +85,7 @@ flowchart LR
 | [docs/mikrotik_ru.md](docs/mikrotik_ru.md) | Клиент RouterOS 7 (контейнер). Каталог: [clients/MikroTik/](clients/MikroTik/). |
 | [docs/ios_ru.md](docs/ios_ru.md) | Клиент iOS (Packet Tunnel). Каталог: [clients/iOS/](clients/iOS/). |
 | [docs/android_ru.md](docs/android_ru.md) | Клиент Android (VpnService). Каталог: [clients/Android/](clients/Android/). |
-| [docs/aurora_ru.md](docs/aurora_ru.md) | Клиент ОС Аврора (ConnMan). Каталог: [clients/Aurora/](clients/Aurora/). |
+| [docs/sailfish_ru.md](docs/sailfish_ru.md) | Клиент Sailfish OS (ConnMan). Каталог: [clients/Sailfish/](clients/Sailfish/). ОС Аврора — пакет OMP. |
 | [docs/share_ru.md](docs/share_ru.md) | Ссылка импорта `loft://` и файлы `.loft` (одно или несколько подключений). |
 
 ## Репозиторий
@@ -102,7 +102,7 @@ clients/Keenetic  Entware / OpkgTun (план и макет)
 clients/MikroTik  контейнер RouterOS 7 (образ + .rsc)
 clients/iOS       Packet Tunnel (хост + appex)
 clients/Android   VpnService (хост на Java)
-clients/Aurora    оверлей ConnMan (тонкий хост QML)
+clients/Sailfish  оверлей ConnMan (Silica; Аврора — RPM OMP)
 clients/mobile    общий движок на Go (gomobile bind)
 ```
 

@@ -46,7 +46,7 @@ flowchart LR
 | [mikrotik.md](mikrotik.md) | RouterOS 7 container client. |
 | [ios.md](ios.md) | iOS Packet Tunnel. |
 | [android.md](android.md) | Android VpnService. |
-| [aurora.md](aurora.md) | Aurora OS ConnMan. |
+| [sailfish.md](sailfish.md) | Sailfish OS ConnMan. Aurora OS is the OMP packaging. |
 | [yandex-cdn_ru.md](yandex-cdn_ru.md) | Yandex Cloud CDN operator guide (RU). |
 
 [Download](https://github.com/a3app/loft/releases/latest) · [Source](https://github.com/a3app/loft)

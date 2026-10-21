@@ -6,7 +6,7 @@
 
 loft 地址是 `loft://`：类型加传输写在一串里。一条 URI 一个出站。`.loft` YAML 文件装着**一条或多条连接**，**可以**混用所有支持的类型（`loft`、`sstp`、`vless`、`trojan`）。文件格式：[§8](#8-loft-文件)。
 
-协议：[protocol_zh.md](protocol_zh.md)。iOS UX：[clients/iOS/design/DESIGN_zh.md](../clients/iOS/design/DESIGN_zh.md)。Android UX：[clients/Android/design/DESIGN_zh.md](../clients/Android/design/DESIGN_zh.md)。macOS UX：[clients/macOS/design/DESIGN_zh.md](../clients/macOS/design/DESIGN_zh.md)。Aurora UX：[clients/Aurora/design/DESIGN_zh.md](../clients/Aurora/design/DESIGN_zh.md)。
+协议：[protocol_zh.md](protocol_zh.md)。iOS UX：[clients/iOS/design/DESIGN_zh.md](../clients/iOS/design/DESIGN_zh.md)。Android UX：[clients/Android/design/DESIGN_zh.md](../clients/Android/design/DESIGN_zh.md)。macOS UX：[clients/macOS/design/DESIGN_zh.md](../clients/macOS/design/DESIGN_zh.md)。Sailfish UX：[clients/Sailfish/design/DESIGN_zh.md](../clients/Sailfish/design/DESIGN_zh.md)。
 
 ---
 
@@ -112,7 +112,7 @@ loft://lt_change-me-long-random@app.example.com:443?type=quic#Fast
 
 会分享的客户端，给**当前选中**连接的**当前选中**出站发 `loft://`（一个二维码，一个前置）。这条连接有多个前置，或多条连接：导出 `.loft`（[§8](#8-loft-文件)）。URI 是秘密：里面有访问密钥。在设备上显示；不要写进日志。
 
-iOS 注册 URL scheme `loft`。Android 注册同样的 intent filter。Aurora 注册 `x-scheme-handler/loft`。在信息里点 `loft://…` 会打开应用并提示导入。
+iOS 注册 URL scheme `loft`。Android 注册同样的 intent filter。Sailfish（以及 Aurora）注册 `x-scheme-handler/loft`。在信息里点 `loft://…` 会打开应用并提示导入。
 
 ---
 
@@ -198,7 +198,7 @@ outbounds:
 
 ## 8. `.loft` 文件
 
-所有 loft 应用的全系格式（iOS、Android、macOS、Aurora，以后还有 TV）。YAML。文件**本身就是**秘密。
+所有 loft 应用的全系格式（iOS、Android、macOS、Sailfish，以后还有 TV）。YAML。文件**本身就是**秘密。
 
 两种形态。都合法。
 

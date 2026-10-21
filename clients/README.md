@@ -5,7 +5,7 @@
 | | |
 |--|--|
 | [`go/cmd/loft`](go/cmd/loft/) | CLI: SOCKS5, TUN. Protocol 1.0 reference |
-| [`go/cmd/loft-front`](go/cmd/loft-front/) | Session process. macOS and Aurora launch this |
+| [`go/cmd/loft-front`](go/cmd/loft-front/) | Session process. macOS and Sailfish launch this |
 | [`go/cmd/loft-probe`](go/cmd/loft-probe/) | ICMP/TCP/UDP/DNS/HTTP through a session |
 | [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Automated GET/WS throughput vs the macOS connect path |
 | [`macOS/`](macOS/) | Menu-bar app. UX: [`macOS/design/DESIGN.md`](macOS/design/DESIGN.md) |
@@ -13,7 +13,7 @@
 | [`MikroTik/`](MikroTik/) | RouterOS 7 container. Mock: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Thin host + appex. Mock: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md) phase 6 |
 | [`Android/`](Android/) | VpnService. Thin Java host. Mock: [`Android/design/index.html`](Android/design/index.html). Android TV / Google TV: [`Android/PLAN.md`](Android/PLAN.md) phase 4 |
-| [`Aurora/`](Aurora/) | ConnMan overlay. Thin QML host + loft-front. Mock: [`Aurora/design/index.html`](Aurora/design/index.html) |
+| [`Sailfish/`](Sailfish/) | ConnMan overlay. Thin QML host + loft-front. Aurora OS is the OMP RPM. Mock: [`Sailfish/design/index.html`](Sailfish/design/index.html) |
 | [`mobile/`](mobile/) | Shared Go engine (`gomobile bind`). No GUI. |
 
 Shared code: `internal/`. Artifacts: `dist/clients/`.

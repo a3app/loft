@@ -37,7 +37,7 @@ server/
   panel/              loft-panel web admin (plan and mock: panel/design)
 clients/
   go/cmd/loft         CLI: SOCKS5, TUN, kill-switch
-  go/cmd/loft-front   session helper (macOS bundle; Aurora RPM libexec)
+  go/cmd/loft-front   session helper (macOS bundle; Sailfish RPM libexec)
   go/cmd/loft-probe   overlay ICMP/TCP/UDP/DNS/HTTP without rewriting routes
   go/tools/wsprobe    one-shot GET handshake (manual; not in dist)
   macOS/Sources       Swift 5 + AppKit menu bar; launches loft-front
@@ -48,7 +48,7 @@ clients/
   MikroTik/           RouterOS 7 container (image + .rsc; SOCKS first; not Dist)
   iOS/                Packet Tunnel (thin host + appex; gomobile xcframework; Apple TV in PLAN phase 6)
   Android/            VpnService (thin Java host; gomobile AAR; UX mock; Android TV / Google TV in PLAN phase 4)
-  Aurora/             ConnMan overlay (QML host + loft-connman plugin + loft-front)
+  Sailfish/           ConnMan overlay (QML host + loft-connman plugin + loft-front; Aurora is the OMP RPM)
   mobile/             shared Go engine for iOS/Android (loft, SSTP, VLESS)
 ```
 

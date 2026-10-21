@@ -1,4 +1,4 @@
-Name:       app.loft.aurora
+Name:       harbour-loft
 Summary:    Loft overlay client
 Version:    1.0.0
 Release:    1
@@ -10,6 +10,7 @@ BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(Qt5DBus)
+BuildRequires:  pkgconfig(sailfishapp)
 BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:  pkgconfig(connman)
@@ -17,14 +18,14 @@ Requires:   sailfishsilica-qt5
 Requires:   connman
 
 %description
-Loft overlay client for Aurora OS. The QML app writes YAML. ConnMan
+Loft overlay client for Sailfish OS. The QML app writes YAML. ConnMan
 owns the tun via the loft VPN plugin; loft-front is the session.
 
 %prep
 %setup -q -n %{name}-%{version}
 
 %build
-%cmake
+%cmake -DLOFT_OS=sailfish
 %cmake_build
 
 %install

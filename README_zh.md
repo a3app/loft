@@ -85,7 +85,7 @@ flowchart LR
 | [docs/mikrotik_zh.md](docs/mikrotik_zh.md) | RouterOS 7 容器客户端。目录：[clients/MikroTik/](clients/MikroTik/)。 |
 | [docs/ios_zh.md](docs/ios_zh.md) | iOS Packet Tunnel 客户端。目录：[clients/iOS/](clients/iOS/)。 |
 | [docs/android_zh.md](docs/android_zh.md) | Android VpnService 客户端。目录：[clients/Android/](clients/Android/)。 |
-| [docs/aurora_zh.md](docs/aurora_zh.md) | Aurora OS ConnMan 客户端。目录：[clients/Aurora/](clients/Aurora/)。 |
+| [docs/sailfish_zh.md](docs/sailfish_zh.md) | Sailfish OS ConnMan 客户端。目录：[clients/Sailfish/](clients/Sailfish/)。Aurora OS 是 OMP 打包。 |
 | [docs/share_zh.md](docs/share_zh.md) | 导入链接 `loft://` 和 `.loft` 文件（一条或多条连接）。 |
 
 ## 仓库
@@ -102,7 +102,7 @@ clients/Keenetic  Entware / OpkgTun（方案和模型）
 clients/MikroTik  RouterOS 7 容器（镜像 + .rsc）
 clients/iOS       Packet Tunnel（薄宿主 + appex）
 clients/Android   VpnService（薄 Java 宿主）
-clients/Aurora    ConnMan 覆盖网（薄 QML 宿主）
+clients/Sailfish  ConnMan 覆盖网（Silica；Aurora 是 OMP RPM）
 clients/mobile    共用 Go 引擎（gomobile bind）
 ```
 

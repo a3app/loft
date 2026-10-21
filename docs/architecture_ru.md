@@ -37,7 +37,7 @@ server/
   panel/              веб-панель loft-panel (план и макет: panel/design)
 clients/
   go/cmd/loft         CLI: SOCKS5, TUN, kill-switch
-  go/cmd/loft-front   помощник сессии (бандл macOS; RPM Авроры, libexec)
+  go/cmd/loft-front   помощник сессии (бандл macOS; RPM Sailfish, libexec)
   go/cmd/loft-probe   ICMP/TCP/UDP/DNS/HTTP оверлея без переписывания маршрутов
   go/tools/wsprobe    одноразовое GET-рукопожатие (вручную; не в dist)
   macOS/Sources       Swift 5 + AppKit, строка меню; запускает loft-front
@@ -48,7 +48,7 @@ clients/
   MikroTik/           контейнер RouterOS 7 (образ + .rsc; сначала SOCKS; не в Dist)
   iOS/                Packet Tunnel (тонкий хост + appex; gomobile xcframework; Apple TV в плане, фаза 6)
   Android/            VpnService (тонкий хост Java; gomobile AAR; UX-макет; Android TV / Google TV в плане, фаза 4)
-  Aurora/             оверлей ConnMan (хост QML + плагин loft-connman + loft-front)
+  Sailfish/           оверлей ConnMan (хост QML + плагин loft-connman + loft-front; Аврора — RPM OMP)
   mobile/             общий движок Go для iOS/Android (loft, SSTP, VLESS)
 ```
 

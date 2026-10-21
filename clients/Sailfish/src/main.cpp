@@ -6,6 +6,9 @@
 #ifdef AURORA
 #include <auroraapp.h>
 #include <QQuickView>
+#elif defined(SAILFISH)
+#include <sailfishapp.h>
+#include <QQuickView>
 #else
 #include <QQmlApplicationEngine>
 #endif
@@ -24,10 +27,20 @@ int main(int argc, char *argv[])
     view->setSource(Aurora::Application::pathTo(QStringLiteral("qml/loft.qml")));
     view->show();
     return app->exec();
+#elif defined(SAILFISH)
+    QScopedPointer<QGuiApplication> app(SailfishApp::application(argc, argv));
+    app->setOrganizationName(QStringLiteral("loft"));
+    app->setApplicationName(QStringLiteral("loft"));
+    Engine engine;
+    QScopedPointer<QQuickView> view(SailfishApp::createView());
+    view->rootContext()->setContextProperty(QStringLiteral("engine"), &engine);
+    view->setSource(SailfishApp::pathTo(QStringLiteral("qml/loft.qml")));
+    view->show();
+    return app->exec();
 #else
     QGuiApplication app(argc, argv);
     app.setOrganizationName(QStringLiteral("loft"));
-    app.setApplicationName(QStringLiteral("aurora"));
+    app.setApplicationName(QStringLiteral("loft"));
     Engine engine;
     QQmlApplicationEngine qml;
     qml.rootContext()->setContextProperty(QStringLiteral("engine"), &engine);
