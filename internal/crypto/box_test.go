@@ -5,9 +5,7 @@ package crypto
 import (
 	"bytes"
 	"crypto/ecdh"
-	"io"
 	"testing"
-	"time"
 )
 
 // TestSealOpen round-trips ChaCha20-Poly1305 and rejects a wrong AAD.
@@ -48,6 +46,13 @@ func TestLooksLikeAuth(t *testing.T) {
 	}
 	if LooksLikeAuth([]byte{tagAuth}) {
 		t.Fatal("short 0x02")
+	}
+	v1 := append([]byte{tagAuth}, bytes.Repeat([]byte{0x11}, 16+16)...)
+	if LooksLikeAuth(v1) {
+		t.Fatal("1.0.16 HMAC-only 0x02")
+	}
+	if LooksLikeAuth([]byte{0x03, 1, 2, 3}) {
+		t.Fatal("0x03")
 	}
 }
 
@@ -95,64 +100,29 @@ func TestCheckAuthAnyPicksMatchingKey(t *testing.T) {
 	}
 }
 
-func makeAuthV1(token []byte) (blob, nonce []byte) {
-	nonce = bytes.Repeat([]byte{0x11}, 16)
-	blob = append([]byte{tagAuth}, nonce...)
-	blob = append(blob, mac16(token, nonce)...)
-	return blob, nonce
-}
-
-// TestAuthV1AndTicket accepts the 1.0.16 proof and a 0x03 ticket as Legacy.
-func TestAuthV1AndTicket(t *testing.T) {
+// TestAuthRejectsV1AndTicket: HMAC-only 0x02 and tag 0x03 are not auth.
+func TestAuthRejectsV1AndTicket(t *testing.T) {
 	token := []byte("token-secret")
-	blob, nonce := makeAuthV1(token)
-	hello := []byte("hello-v1")
-	a, err := FinishAuth([][]byte{token}, append(append([]byte{}, blob...), hello...), nil)
-	if err != nil || !a.Legacy || len(a.EphN) != 0 || !bytes.Equal(a.Rest, hello) {
-		t.Fatalf("v1 %+v %v", a, err)
+	nonce := bytes.Repeat([]byte{0x11}, 16)
+	v1 := append([]byte{tagAuth}, nonce...)
+	v1 = append(v1, bytes.Repeat([]byte{0x22}, AuthSize)...)
+	if _, err := FinishAuth([][]byte{token}, v1, nil); err == nil {
+		t.Fatal("accepted 1.0.16 HMAC-only 0x02")
 	}
-	want, err := DeriveKey(token, nonce)
-	if err != nil || !bytes.Equal(a.Key, want) {
-		t.Fatalf("v1 key %v", err)
-	}
-	seen := NewNonces()
-	first, err := FinishAuth([][]byte{token}, blob, seen)
-	if err != nil || first.Replay {
-		t.Fatalf("v1 first %+v %v", first, err)
-	}
-	retry, err := FinishAuth([][]byte{token}, blob, seen)
-	if err != nil || !retry.Replay || !bytes.Equal(retry.Key, first.Key) {
-		t.Fatalf("v1 retry %+v %v", retry, err)
-	}
-
-	tk, err := MakeTicket(token, "phone", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := FinishAuth([][]byte{token}, append(append([]byte{}, tk...), hello...), nil)
-	if err != nil || !b.Legacy || !bytes.Equal(b.Rest, hello) {
-		t.Fatalf("ticket %+v %v", b, err)
-	}
-	_, tn, _, err := OpenTicket(token, tk)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tkey, err := DeriveKey(token, tn)
-	if err != nil || !bytes.Equal(b.Key, tkey) {
-		t.Fatalf("ticket key %v", err)
+	if _, err := FinishAuth([][]byte{token}, []byte{0x03, 1, 2, 3}, nil); err == nil {
+		t.Fatal("accepted 0x03")
 	}
 }
 
-// TestAuthV2PreferredOverV1: a DH proof is not parsed as HMAC(lt_, nonce).
-func TestAuthV2PreferredOverV1(t *testing.T) {
+func TestAuthDH(t *testing.T) {
 	token := []byte("token-secret")
 	blob, _, sk, err := MakeAuth(token)
 	if err != nil {
 		t.Fatal(err)
 	}
 	a, err := FinishAuth([][]byte{token}, blob, nil)
-	if err != nil || a.Legacy || len(a.EphN) != EphSize {
-		t.Fatalf("v2 %+v %v", a, err)
+	if err != nil || len(a.EphN) != EphSize {
+		t.Fatalf("dh %+v %v", a, err)
 	}
 	key, err := SessionKey(sk, a.EphN, a.Nonce)
 	if err != nil || !bytes.Equal(key, a.Key) {
@@ -209,20 +179,5 @@ func TestSealNonceUnique(t *testing.T) {
 	pt, err = Open(key, b, nil)
 	if err != nil || string(pt) != "two" {
 		t.Fatalf("open b: %q %v", pt, err)
-	}
-}
-
-type failReader struct{}
-
-func (failReader) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
-
-// TestMakeTicketRandFail does not mint a ticket with a zero nonce.
-func TestMakeTicketRandFail(t *testing.T) {
-	old := entropy
-	entropy = failReader{}
-	t.Cleanup(func() { entropy = old })
-	tk, err := MakeTicket([]byte("token-secret"), "phone", time.Hour)
-	if err == nil || tk != nil {
-		t.Fatalf("want err, got %v %x", err, tk)
 	}
 }

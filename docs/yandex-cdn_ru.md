@@ -66,7 +66,7 @@ curl -sI --max-time 5 --resolve loft.example.com:444:ORIGIN_IPV4 \
 
 Клиент к краю и egress ноды в интернет — тоже IPv4 (`tcp4`). Пока overlay IPv6 не выдан, DNS-заглушка отвечает на AAAA пустым NOERROR, иначе Happy Eyeballs выходит в нативный IPv6 ноды.
 
-Нода уже ставит на GET `Cache-Control: private, no-store`, `CDN-Cache-Control: no-store`, `Vary: Cookie, X-Request-Id`. Этого мало: кэш на **ресурсе CDN** всё равно выключается (шаг 2 визарда).
+Нода уже ставит на GET `Cache-Control: private, no-store`, `CDN-Cache-Control: no-store`, `Vary: Cookie`. Этого мало: кэш на **ресурсе CDN** всё равно выключается (шаг 2 визарда).
 
 Nginx перед loft GET на `:444` не нужен: нода сама origin. Если на той же машине nginx слушает 80/443 (другие сайты), loft-node — `:444`. Ребро origin pull идёт на `:444`. Nginx как в гайдах Xray (шаг 7) на этом пути нет; ставить его перед GET — буфер, `proxy_read_timeout` и срез `Cookie`/`X-Session`.
 

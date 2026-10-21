@@ -1,9 +1,6 @@
 // Package crypto seals mux with ChaCha20-Poly1305, proves membership with
 // clockless HMAC (0x02) bound to a client X25519 pub, and derives the
 // session key from the DH secret (HKDF info "loft-v1").
-//
-// The node still accepts the 1.0.16 proof and 0x03 tickets (Legacy).
-// Drop that path in 1.1. Clients of this tree always send 0x02+eph.
 package crypto
 
 import (
@@ -22,42 +19,26 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-// entropy is crypto/rand; tests swap it to force MakeTicket / nonce-prefix failure.
+// entropy is crypto/rand; tests swap it to force nonce-prefix failure.
 var entropy io.Reader = rand.Reader
 
 // AEAD and auth sizes. Seal is nonce[12] || ChaCha20-Poly1305 (RFC 8439).
 // Handshake Status is eph_n[32] || Seal (UnwrapHello / WrapHello).
 const (
-	NonceSize  = 12
-	KeySize    = 32
-	AuthSize   = 16
-	EphSize    = 32
-	ProofLen   = 1 + 16 + EphSize + AuthSize // tag + nonce + eph_c + mac
-	proofLenV1 = 1 + 16 + AuthSize           // 1.0.16: tag + nonce + mac
+	NonceSize = 12
+	KeySize   = 32
+	AuthSize  = 16
+	EphSize   = 32
+	ProofLen  = 1 + 16 + EphSize + AuthSize // tag + nonce + eph_c + mac
 )
 
-// Auth blob tags: 0x02 clockless proof. 0x03 is a 1.0.16 resume ticket;
-// FinishAuth still accepts it as Legacy until 1.1.
-const (
-	tagAuth   byte = 0x02 // nonce + eph_c + HMAC(key, "lft-a2"||nonce||eph_c)
-	tagTicket byte = 0x03 // 1.0.16 ticket; HKDF(lt_, ticket nonce)
-)
+const tagAuth byte = 0x02 // nonce + eph_c + HMAC(key, "lft-a2"||nonce||eph_c)
 
-// LooksLikeAuth is the GET handshake Cookie: tag 0x02 or leftover 0x03.
+// LooksLikeAuth is the GET handshake Cookie: tag 0x02 of ProofLen.
 // AEAD uplink is nonce[12]||ct and is not this shape. A 1/256 first-byte
 // collision still fails FinishAuth; the GET front then treats it as mux.
 func LooksLikeAuth(blob []byte) bool {
-	if len(blob) < 1 {
-		return false
-	}
-	switch blob[0] {
-	case tagAuth:
-		return len(blob) >= proofLenV1
-	case tagTicket:
-		return len(blob) >= 1+8+16+1+AuthSize
-	default:
-		return false
-	}
+	return len(blob) >= ProofLen && blob[0] == tagAuth
 }
 
 // ErrAuth is a failed proof or AEAD open.
@@ -188,13 +169,6 @@ func Open(key, blob, aad []byte) ([]byte, error) {
 // aeadOverhead is the Poly1305 tag size.
 func aeadOverhead() int { return 16 }
 
-// mac16 is HMAC-SHA256 truncated to 16 bytes.
-func mac16(key, data []byte) []byte {
-	m := hmac.New(sha256.New, key)
-	m.Write(data)
-	return m.Sum(nil)[:AuthSize]
-}
-
 // authMAC is HMAC-SHA256(lt_, "lft-a2" || nonce || eph_c)[:16].
 func authMAC(token, nonce, ephC []byte) []byte {
 	m := hmac.New(sha256.New, token)
@@ -232,7 +206,6 @@ type Auth struct {
 	EphN   []byte
 	Key    []byte
 	Replay bool // same nonce+eph_c inside TTL (GET Cookie retry)
-	Legacy bool // 1.0.16 proof or 0x03 ticket; first message is Seal without eph_n
 }
 
 type hsRec struct {
@@ -307,113 +280,31 @@ func (n *Nonces) establish(nonce, ephC []byte) (ephN, key []byte, replay bool, e
 	return ephN, key, false, nil
 }
 
-// establishV1 caches a 1.0.16 HKDF(lt_, nonce) key so a GET Cookie retry is
-// idempotent. A DH handshake on the same nonce is refused.
-func (n *Nonces) establishV1(nonce, key []byte) (out []byte, replay bool, err error) {
-	if n == nil {
-		return key, false, nil
-	}
-	k := string(nonce)
-	now := time.Now()
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.sweepLocked(now)
-	if rec, ok := n.hs[k]; ok && now.Sub(rec.t) < n.ttl {
-		if len(rec.ephC) != 0 {
-			return nil, false, ErrAuth
-		}
-		return rec.key, true, nil
-	}
-	n.hs[k] = &hsRec{key: append([]byte(nil), key...), t: now}
-	return key, false, nil
-}
-
-// FinishAuth verifies 0x02 (DH first, then 1.0.16), or a 0x03 ticket.
-// A wrong key does not burn a valid blob. Drop Legacy in 1.1.
+// FinishAuth verifies 0x02 (nonce || eph_c || HMAC). A wrong key does not
+// burn a valid blob.
 func FinishAuth(tokens [][]byte, blob []byte, seen *Nonces) (Auth, error) {
 	var z Auth
-	if len(blob) < 1 {
+	if len(blob) < ProofLen || blob[0] != tagAuth {
 		return z, ErrAuth
 	}
-	switch blob[0] {
-	case tagAuth:
-		return finishAuth02(tokens, blob, seen)
-	case tagTicket:
-		return finishAuth03(tokens, blob)
-	default:
-		return z, ErrAuth
-	}
-}
-
-func finishAuth02(tokens [][]byte, blob []byte, seen *Nonces) (Auth, error) {
-	var z Auth
-	if len(blob) >= ProofLen {
-		nonce := blob[1:17]
-		ephC := blob[17 : 17+EphSize]
-		sum := blob[17+EphSize : ProofLen]
-		for _, t := range tokens {
-			if !hmac.Equal(sum, authMAC(t, nonce, ephC)) {
-				continue
-			}
-			ephN, key, replay, err := seen.establish(nonce, ephC)
-			if err != nil {
-				return z, err
-			}
-			return Auth{
-				Token:  t,
-				Nonce:  append([]byte(nil), nonce...),
-				Rest:   blob[ProofLen:],
-				EphN:   ephN,
-				Key:    key,
-				Replay: replay,
-			}, nil
-		}
-	}
-	if len(blob) >= proofLenV1 {
-		nonce := blob[1:17]
-		sum := blob[17:proofLenV1]
-		for _, t := range tokens {
-			if !hmac.Equal(sum, mac16(t, nonce)) {
-				continue
-			}
-			key, err := DeriveKey(t, nonce)
-			if err != nil {
-				return z, err
-			}
-			key, replay, err := seen.establishV1(nonce, key)
-			if err != nil {
-				return z, err
-			}
-			return Auth{
-				Token:  t,
-				Nonce:  append([]byte(nil), nonce...),
-				Rest:   blob[proofLenV1:],
-				Key:    key,
-				Replay: replay,
-				Legacy: true,
-			}, nil
-		}
-	}
-	return z, ErrAuth
-}
-
-func finishAuth03(tokens [][]byte, blob []byte) (Auth, error) {
-	var z Auth
+	nonce := blob[1:17]
+	ephC := blob[17 : 17+EphSize]
+	sum := blob[17+EphSize : ProofLen]
 	for _, t := range tokens {
-		_, nonce, rest, err := OpenTicket(t, blob)
-		if err != nil {
+		if !hmac.Equal(sum, authMAC(t, nonce, ephC)) {
 			continue
 		}
-		key, err := DeriveKey(t, nonce)
+		ephN, key, replay, err := seen.establish(nonce, ephC)
 		if err != nil {
 			return z, err
 		}
 		return Auth{
 			Token:  t,
 			Nonce:  append([]byte(nil), nonce...),
-			Rest:   rest,
+			Rest:   blob[ProofLen:],
+			EphN:   ephN,
 			Key:    key,
-			Legacy: true,
+			Replay: replay,
 		}, nil
 	}
 	return z, ErrAuth
@@ -435,63 +326,6 @@ func CheckAuthAny(tokens [][]byte, blob []byte, seen *Nonces) (token, nonce, res
 		return nil, nil, nil, err
 	}
 	return a.Token, a.Nonce, a.Rest, nil
-}
-
-// MakeTicket mints a leftover Status lease blob (not an auth method).
-// rand failure returns an error: a zero nonce must not be issued.
-func MakeTicket(token []byte, instance string, ttl time.Duration) ([]byte, error) {
-	exp := time.Now().Add(ttl).Unix()
-	var eb [8]byte
-	binary.BigEndian.PutUint64(eb[:], uint64(exp))
-	nonce := make([]byte, 16)
-	if _, err := io.ReadFull(entropy, nonce); err != nil {
-		return nil, err
-	}
-	mac := mac16(token, ticketMAC(eb[:], nonce, instance))
-	out := []byte{tagTicket}
-	out = append(out, eb[:]...)
-	out = append(out, nonce...)
-	out = append(out, []byte{byte(len(instance))}...)
-	out = append(out, instance...)
-	out = append(out, mac...)
-	return out, nil
-}
-
-// OpenTicket checks tag 0x03, issuer-clock expiry, and HMAC. rest is trailing Hello bytes.
-func OpenTicket(token, blob []byte) (instance string, nonce, rest []byte, err error) {
-	if len(blob) < 1+8+16+1+AuthSize || blob[0] != tagTicket {
-		var b0 byte
-		if len(blob) > 0 {
-			b0 = blob[0]
-		}
-		return "", nil, nil, fmt.Errorf("crypto: ticket form len=%d tag=%d", len(blob), b0)
-	}
-	body := blob[1:]
-	exp := int64(binary.BigEndian.Uint64(body[:8]))
-	if time.Now().Unix() > exp {
-		return "", nil, nil, fmt.Errorf("crypto: ticket expired")
-	}
-	nonce = body[8:24]
-	n := int(body[24])
-	if 25+n+AuthSize > len(body) {
-		return "", nil, nil, fmt.Errorf("crypto: ticket n=%d body=%d", n, len(body))
-	}
-	instance = string(body[25 : 25+n])
-	mac := body[25+n : 25+n+AuthSize]
-	want := mac16(token, ticketMAC(body[:8], nonce, instance))
-	if !hmac.Equal(mac, want) {
-		return "", nil, nil, fmt.Errorf("crypto: ticket mac")
-	}
-	return instance, nonce, body[25+n+AuthSize:], nil
-}
-
-// ticketMAC is exp||nonce||instance, the HMAC input for tag 0x03.
-func ticketMAC(exp, nonce []byte, instance string) []byte {
-	b := make([]byte, 0, 8+16+len(instance))
-	b = append(b, exp...)
-	b = append(b, nonce...)
-	b = append(b, instance...)
-	return b
 }
 
 // RandomID is 12 random bytes as 24 hex characters (client instance_id).

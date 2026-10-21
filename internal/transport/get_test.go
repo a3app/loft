@@ -26,9 +26,6 @@ import (
 )
 
 func cookieHandshake(r *http.Request) bool {
-	if r.Header.Get("X-Auth") == "1" {
-		return true
-	}
 	c := r.Header.Get("Cookie")
 	if !strings.HasPrefix(c, "session=") {
 		return false
@@ -99,8 +96,8 @@ func TestGETEcho(t *testing.T) {
 	}
 }
 
-// TestGETLegacyV1Handshake: a 1.0.16 client (no eph_c, HMAC(lt_, nonce)) still joins.
-func TestGETLegacyV1Handshake(t *testing.T) {
+// TestGETRejectsLegacyV1Handshake: HMAC-only 0x02, path new, X-Auth are 404.
+func TestGETRejectsLegacyV1Handshake(t *testing.T) {
 	const token = "test-token-please-change"
 	gs := NewGETServer(token, "/static/v3/build")
 	ts := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
@@ -114,8 +111,7 @@ func TestGETLegacyV1Handshake(t *testing.T) {
 	h := wire.Hello{InstanceID: "legacy-phone", Caps: wire.MemberCaps}
 	auth := append(proof, h.Encode()...)
 
-	url := ts.URL + "/static/v3/build/new/1.js"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/static/v3/build/new/1.js", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,70 +122,8 @@ func TestGETLegacyV1Handshake(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status %d", resp.StatusCode)
-	}
-	sid := resp.Header.Get("X-Session")
-	if sid == "" || sid == "new" {
-		t.Fatalf("sid %q", sid)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	key, err := ecrypto.DeriveKey([]byte(token), nonce)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plain, err := ecrypto.Open(key, body, []byte(sid))
-	if err != nil {
-		t.Fatalf("open as v1 (no eph_n prefix): %v", err)
-	}
-	st, err := wire.DecodeStatus(plain)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !st.Code.OK() {
-		t.Fatalf("code %v", st.Code)
-	}
-	if len(st.Ticket) == 0 {
-		t.Fatal("legacy Status missing 0x03 ticket")
-	}
-	inst, tn, _, err := ecrypto.OpenTicket([]byte(token), st.Ticket)
-	if err != nil || inst != sid {
-		t.Fatalf("ticket inst=%q err=%v", inst, err)
-	}
-	tkey, err := ecrypto.DeriveKey([]byte(token), tn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resume := append(append([]byte{}, st.Ticket...), h.Encode()...)
-	req2, err := http.NewRequest(http.MethodGet, ts.URL+"/static/v3/build/new/1.js", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req2.Header.Set("Cookie", "session="+wire.EncodeUplink(resume, 0))
-	req2.Header.Set("X-Auth", "1")
-	resp2, err := http.DefaultClient.Do(req2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp2.Body.Close()
-	if resp2.StatusCode != 200 {
-		t.Fatalf("ticket status %d", resp2.StatusCode)
-	}
-	sid2 := resp2.Header.Get("X-Session")
-	body2, err := io.ReadAll(resp2.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plain2, err := ecrypto.Open(tkey, body2, []byte(sid2))
-	if err != nil {
-		t.Fatalf("open ticket session: %v", err)
-	}
-	st2, err := wire.DecodeStatus(plain2)
-	if err != nil || !st2.Code.OK() {
-		t.Fatalf("ticket status decode %v %v", st2, err)
 	}
 }
 
@@ -1882,11 +1816,11 @@ func TestPickClientNoRotateWhenOff(t *testing.T) {
 	}
 }
 
-func TestSetCDNHeadersVaryIncludesLegacyUplink(t *testing.T) {
+func TestSetCDNHeadersVaryCookie(t *testing.T) {
 	rec := httptest.NewRecorder()
 	setCDNHeaders(rec)
 	got := rec.Header().Get("Vary")
-	if got != "Cookie, X-Request-Id" {
+	if got != "Cookie" {
 		t.Fatalf("Vary=%q", got)
 	}
 }
@@ -1899,7 +1833,7 @@ func TestUplinkHeaderFindsSessionAmongCookies(t *testing.T) {
 	}
 	r2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	r2.Header.Set("X-Request-Id", "OLD")
-	if got := uplinkHeader(r2); got != "OLD" {
+	if got := uplinkHeader(r2); got != "" {
 		t.Fatalf("rid %q", got)
 	}
 }

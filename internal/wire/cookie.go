@@ -1,8 +1,7 @@
 package wire
 
 // Cookie encoding for GET uplink. Handshake Cookie stays base64url.
-// Later GETs MAY use Z85 when Status uplink_enc is 1. A node MAY still
-// accept the older X-Request-Id header.
+// Later GETs MAY use Z85 when Status uplink_enc is 1.
 
 import (
 	"encoding/base64"

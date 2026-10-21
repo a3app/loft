@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -144,8 +143,9 @@ func TestGETDebugClientHeadersAndEcho(t *testing.T) {
 	cap.checkNewClient(t)
 }
 
-func TestGETMuxAcceptsOldRequestID(t *testing.T) {
+func TestGETMuxIgnoresXRequestId(t *testing.T) {
 	const token = "test-token-please-change"
+	echo := debugEchoTCP(t)
 	gs := NewGETServer(token, "/static/v3/build")
 	ts := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
 	t.Cleanup(ts.Close)
@@ -162,16 +162,15 @@ func TestGETMuxAcceptsOldRequestID(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer g.Close()
-	pad, err := wire.EncodeBatch([]wire.Frame{{Cmd: wire.CmdPad, Payload: []byte{1, 2, 3, 4}}})
+	leave, err := wire.EncodeBatch([]wire.Frame{{Cmd: wire.CmdLeave}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	blob, err := ecrypto.Seal(g.key, pad, []byte(g.sid))
+	blob, err := ecrypto.Seal(g.key, leave, []byte(g.sid))
 	if err != nil {
 		t.Fatal(err)
 	}
-	seq := g.seq.Add(1)
-	url := ts.URL + "/static/v3/build/" + g.sid + "/" + strconv.FormatUint(seq, 10) + ".js"
+	url := ts.URL + "/static/v3/build/" + g.sid + "/99.js"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -183,8 +182,13 @@ func TestGETMuxAcceptsOldRequestID(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		t.Fatalf("old X-Request-Id mux status %d", resp.StatusCode)
+		t.Fatalf("empty Cookie poll %d", resp.StatusCode)
 	}
+	conn, err := g.Open(echo.Addr().String())
+	if err != nil {
+		t.Fatalf("Leave in X-Request-Id ingested: %v", err)
+	}
+	conn.Close()
 }
 
 func TestGETEchoSurvivesH2Rotate(t *testing.T) {

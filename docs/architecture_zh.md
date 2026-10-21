@@ -67,7 +67,7 @@ client.Holder
             TLS 1.3 (uTLS)
             auth 0x02 (nonce || eph_c || HMAC)
             Hello MemberCaps（没有 CapRelay；loft-node 中继上有 ExtraCaps）
-            eph_n || AEAD(Status)   // 1.0.16 客户端：HMAC(lt_, nonce)，只 Seal，0x03 ticket；1.1 去掉
+            eph_n || AEAD(Status)
             mux Open / Data / Close / Dgram / Leave
 ```
 

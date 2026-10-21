@@ -67,7 +67,7 @@ client.Holder
             TLS 1.3 (uTLS)
             auth 0x02 (nonce || eph_c || HMAC)
             Hello MemberCaps (без CapRelay; ExtraCaps у loft-node relay)
-            eph_n || AEAD(Status)   // клиенты 1.0.16: HMAC(lt_, nonce), только Seal, билет 0x03; убрать в 1.1
+            eph_n || AEAD(Status)
             mux Open / Data / Close / Dgram / Leave
 ```
 

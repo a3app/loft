@@ -1585,7 +1585,7 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	blob, _ := wire.DecodeUplink(uplinkHeader(r))
 
 	var ss *serverSess
-	tryHS := r.Header.Get("X-Auth") == "1" || sid == "new" || ecrypto.LooksLikeAuth(blob)
+	tryHS := ecrypto.LooksLikeAuth(blob)
 	if tryHS {
 		a, err := frontAuth(s.Token, blob, s.Seen)
 		if err != nil {
@@ -1632,7 +1632,6 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				st = withDecoy(netconf.DefaultSession().Status(wire.OK, "", "", "", 1280, 0), s.Decoy)
 			}
 			finishStatus(&st, a.Token, ss.id, a.Rest, ss.mux, remoteAddr(r.RemoteAddr))
-			stampLegacyTicket(&st, a, ss.id)
 			if st.InstanceID == "" {
 				if h, err := wire.DecodeHello(a.Rest); err == nil {
 					st.InstanceID = h.InstanceID
@@ -2254,20 +2253,17 @@ func parseGETPath(prefix, p string) (sid string, seq string) {
 }
 
 // setCDNHeaders disables caching so a CDN does not store AEAD bodies.
-// Vary lists Cookie and the older X-Request-Id uplink so a caching edge
-// does not mix Cookie clients with X-Request-Id-only clients.
 func setCDNHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	w.Header().Set("CDN-Cache-Control", "no-store")
 	w.Header().Set("X-Accel-Expires", "0")
-	w.Header().Set("Vary", "Cookie, X-Request-Id")
+	w.Header().Set("Vary", "Cookie")
 }
 
-// uplinkHeader is Cookie session= (live GET uplink). An edge may prepend
-// its own Cookie; scan every Cookie header. X-Request-Id is the older
-// generic header; a node still accepts it.
+// uplinkHeader is Cookie session= (GET uplink). An edge may prepend
+// its own Cookie; scan every Cookie header.
 func uplinkHeader(r *http.Request) string {
 	if r == nil {
 		return ""
@@ -2277,7 +2273,7 @@ func uplinkHeader(r *http.Request) string {
 			return v
 		}
 	}
-	return r.Header.Get("X-Request-Id")
+	return ""
 }
 
 func sessionCookieValue(raw string) string {

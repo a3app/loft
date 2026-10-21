@@ -4,7 +4,6 @@ package transport
 
 import (
 	"net"
-	"time"
 
 	ecrypto "github.com/a3app/loft/internal/crypto"
 	"github.com/a3app/loft/internal/identity"
@@ -34,28 +33,9 @@ func clientTokens(fallback []byte) [][]byte {
 	return nil
 }
 
-// frontAuth checks 0x02 (DH, then 1.0.16) or a 0x03 ticket.
+// frontAuth checks 0x02 (nonce || eph_c || HMAC).
 func frontAuth(fallback, blob []byte, seen *ecrypto.Nonces) (ecrypto.Auth, error) {
 	return ecrypto.FinishAuth(clientTokens(fallback), blob, seen)
-}
-
-// stampLegacyTicket mints a 1.0.16 Status ticket so an old client can resume
-// with 0x03. HMAC is the matching member key. Drop with FinishAuth Legacy in 1.1.
-func stampLegacyTicket(st *wire.Status, a ecrypto.Auth, sid string) {
-	if st == nil || !a.Legacy || !st.Code.OK() || len(a.Token) == 0 {
-		return
-	}
-	inst := sid
-	if inst == "" {
-		inst = st.InstanceID
-	}
-	if inst == "" {
-		return
-	}
-	tk, err := ecrypto.MakeTicket(a.Token, inst, 24*time.Hour)
-	if err == nil {
-		st.Ticket = tk
-	}
 }
 
 // verifyAny reports whether hello.SessionID is loft: sid v3 under the node

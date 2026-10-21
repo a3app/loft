@@ -199,7 +199,6 @@ func serveRaw(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces) {
 	ms, reused := adoptServerMux(a.Rest, a.Token)
 	st := info.Status("h2")
 	finishStatus(&st, a.Token, "h2", a.Rest, ms, conn.RemoteAddr())
-	stampLegacyTicket(&st, a, "h2")
 	sealed, err := ecrypto.Seal(a.Key, st.Encode(), nil)
 	if err != nil {
 		return

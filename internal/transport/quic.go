@@ -291,7 +291,6 @@ func serveQUICStream(c *quic.Conn, st *quic.Stream, seen *ecrypto.Nonces, info N
 	ms, reused := adoptServerMux(a.Rest, a.Token)
 	status := info.Status("quic")
 	finishStatus(&status, a.Token, "quic", a.Rest, ms, c.RemoteAddr())
-	stampLegacyTicket(&status, a, "quic")
 	sealed, err := ecrypto.Seal(a.Key, status.Encode(), nil)
 	if err != nil {
 		return

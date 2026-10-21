@@ -334,7 +334,6 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		st = withDecoy(netconf.DefaultSession().Status(wire.OK, "", "", "", 1280, 0), s.Decoy)
 	}
 	finishStatus(&st, a.Token, "ws", a.Rest, ms, remoteAddr(r.RemoteAddr))
-	stampLegacyTicket(&st, a, "ws")
 	sealed, err := ecrypto.Seal(a.Key, st.Encode(), nil)
 	if err != nil {
 		return

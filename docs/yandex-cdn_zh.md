@@ -66,7 +66,7 @@ origin 防火墙放行来自 Yandex CDN 地址的 IPv4。纯 IPv6 的 origin 边
 
 客户端到边缘、以及节点出网，也是 IPv4（`tcp4`）。覆盖网 IPv6 还没发下来时，DNS 桩对 AAAA 回空 NOERROR，否则 Happy Eyeballs 会走节点的原生 IPv6。
 
-节点已经给 GET 加上 `Cache-Control: private, no-store`、`CDN-Cache-Control: no-store`、`Vary: Cookie, X-Request-Id`。这还不够：**CDN 资源**上的缓存照样要关掉（向导第 2 步）。
+节点已经给 GET 加上 `Cache-Control: private, no-store`、`CDN-Cache-Control: no-store`、`Vary: Cookie`。这还不够：**CDN 资源**上的缓存照样要关掉（向导第 2 步）。
 
 `:444` 上 loft GET 前面不需要 Nginx：节点自己就是 origin。同一台机器上 nginx 听 80/443（别的站点）的话，loft-node 听 `:444`。边缘的 origin pull 打到 `:444`。这条路上没有 Xray 指南（第 7 步）那种 nginx；把它放在 GET 前面只会缓冲、`proxy_read_timeout`，再切掉 `Cookie`/`X-Session`。
 
