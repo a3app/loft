@@ -14,7 +14,7 @@ This mock follows the **shipping macOS GUI** (`clients/macOS`, `L10n.swift`, sta
 
 The inbound is the system VPN (Packet Tunnel). One profile at a time: loft (`lt_…`, no password), SSTP (user + password), or VLESS (`vless://`).
 
-v1: named connections on disk, import/export `.loft`, Open loft / Disconnect, hold, split from protocol lists. `select: auto` inside loft YAML. One tunnel at a time.
+v1: named connections on disk, import/export `.loft`, Connect / Disconnect, hold, split from protocol lists. `select: auto` inside loft YAML. One tunnel at a time.
 
 A `.loft` file holds **one or several connections**. Kinds mix: `loft`, `sstp`, `vless`. The loft address string in the UI is `loft://`. Spec: [docs/share.md](../../../docs/share.md).
 
@@ -32,20 +32,37 @@ Same rooms as the macOS windows, laid out for one column and a thumb.
 
 | Screen | What |
 |--------|------|
-| Home | Status window. Mark, `loft`, status pill (tap → list), large Open loft / Disconnect. Cards **OVERLAY / FRONT / TUNNEL** and spark when simplified interface is off. Footer **Journal \| Reset routes \| Settings**. Connecting uses this screen: pill “Not connected”, action “Connecting…”, spark “handshake”. |
-| Connections | Title, `+`, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, **host** subtitle, side **active** or kind (`get` / `sstp` / `vless`), ghost Edit. **Leading swipe** Edit, **trailing swipe** Delete. **Long-press** context: Edit / Export `.loft` (selected only) / Delete. Footer **Import \| Export \| Settings**. No “Several” toggle. |
-| Edit | Title Connection, **QR** in the header. Name. Capsule **VPN type** loft / SSTP / VLESS / Trojan. Tabs **Main / Advanced**. loft and VLESS: capsule **Link / Manual**. loft Link is a secret `loft://` with Show/Hide; Manual is access key, host, port, GET·WS·H2·QUIC·H3, path. Both write the same profile. VLESS Link is a `vless://` string; Manual is UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint, and the fields that mode needs. Certificate check. Both write `vless://`. No SOCKS field. Tunnel interface = Packet Tunnel (forced on: there is no other inbound). SSTP: user, password, server, TLS hostname, cert check, PAP/CHAP. Trojan: password, `trojan://` server, TLS hostname, cert check. Advanced: mux (loft), DNS, DNS into the system; SSTP also “these addresses only”. Save, Back, Delete. |
-| Onboard | Two steps, same as macOS. **1 Access key** (`lt_…`) → Continue, or import a file/QR. **2 Address**: URL, how to connect GET/WS/H2/QUIC/H3, path → Open loft. Then the stock iOS VPN permission sheet, once. |
-| Settings | Three tabs **General / Route / Client**. Header Reset routes. Links **Defaults \| Journal \| About**. iOS subset: language, simplified interface, speed units, extended journal; default route, hold, split (no failover); auto-connect, reconnect, external IP. Skip Dock, login item, several outbounds, SOCKS. |
-| Journal | Front and session lines. The key is shortened. Copy / Clear / Back. |
-| About | Mark, loft, `1.0.22`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
-| Scan | Camera QR. From file / From Photos. Paste `loft://` / `sstp://` / `vless://`. |
-| Share QR | `loft://` of one front. Several fronts or several connections → `.loft`. Warns that the file contains the key. |
+| Home | Status window. Mark, `loft`, status pill (tap → list), large Connect / Disconnect. Cards **OVERLAY / FRONT / TUNNEL** and spark when simplified interface is off. Tab bar below. Connecting uses this screen: pill “Not connected”, action “Connecting…”, spark “handshake”. |
+| Connections | Title, `+`, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, **host** subtitle, side **active** or kind (`get` / `sstp` / `vless`), ghost Edit. **Leading swipe** Edit, **trailing swipe** Delete. **Long-press** context: Edit / Export `.loft` (selected only) / Delete. **Import** in the header next to `+`; export is on the selected row and in its long-press menu. Tab bar below. No “Several” toggle. |
+| Edit | Modal: **Cancel** on top returns to where it was opened. Title Connection, **QR** in the header. Name. Capsule **VPN type** loft / SSTP / VLESS / Trojan. Tabs **Main / Advanced**. loft and VLESS: capsule **Link / Manual**. loft Link is a secret `loft://` with Show/Hide; Manual is access key, host, port, GET·WS·H2·QUIC·H3, path. Both write the same profile. VLESS Link is a `vless://` string; Manual is UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint, and the fields that mode needs. Certificate check. Both write `vless://`. No SOCKS field. Tunnel interface = Packet Tunnel (forced on: there is no other inbound). SSTP: user, password, server, TLS hostname, cert check, PAP/CHAP. Trojan: password, `trojan://` server, TLS hostname, cert check. Advanced: mux (loft), DNS, DNS into the system; SSTP also “these addresses only”. Save, then Delete at the end. |
+| Onboard | Two steps, same as macOS. **1 Access key** (`lt_…`) → Continue, or import a file/QR. **2 Address**: URL, how to connect GET/WS/H2/QUIC/H3, path → Connect. Then the stock iOS VPN permission sheet, once. |
+| Settings | Three tabs **General / Route / Client**. Header Reset routes. Links **Defaults \| Journal \| About**. iOS subset: language, simplified interface, speed units, extended journal; default route, hold, split with a **Lists** button (no failover); auto-connect, reconnect, external IP. Skip Dock, login item, several outbounds, SOCKS. |
+| Journal | Pushed from Settings: **‹ Settings** on top, tab bar stays. Front and session lines. The key is shortened. Copy / Clear. |
+| About | Pushed from Settings: **‹ Settings** on top. Mark, loft, `1.0.22`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
+| Scan | Modal: **Cancel** on top. Camera QR. From file / From Photos. Paste `loft://` / `sstp://` / `vless://`. |
+| Share QR | Modal: **Close** on top. `loft://` of one front. Several fronts or several connections → `.loft`. Warns that the file contains the key. |
 | iOS Settings → VPN | Stock list. loft Connected, type loft. Toggle is the system tunnel. |
 
-**Simplified interface** (Settings → General): Home is mark, pill, Open loft / Disconnect, footer. Cards and spark hide. List still has Connect/Disconnect and name. Settings stay complete.
+**Simplified interface** (Settings → General): Home is mark, pill, Connect / Disconnect, tab bar. Cards and spark hide. List still has Connect/Disconnect and name. Settings stay complete.
 
 macOS-only chrome that this mock does not draw: menu-bar popover, SOCKS5 card and port, Dock icon, login item, several simultaneous outbounds, drag-and-drop plate.
+
+### Split routing
+
+The macOS model (macOS DESIGN §5): a **zone** goes through Loft or around it, a **service** (name + CIDRs) only belongs to a zone, an **ignore** CIDR is never routed and survives list pulls. Built-in zones Local (around, LAN) and Global (through, `global.bat`); own zones come from the editor. On iOS “through Loft” is the Packet Tunnel’s `includedRoutes` and “around” its `excludedRoutes`; with the tunnel off everything is direct anyway. There is no remembered direct hop as on macOS.
+
+Entry: Settings → Route → the toggle and the gold **Lists**. The screens open inside the Settings tab, with **‹ Settings** / **‹ Back** on top.
+
+| Screen | What |
+|--------|------|
+| Lists | Title and the same toggle, a line (through goes into the tunnel, around goes direct). **Zone** + **Zones** → editor. Zone capsules with the service count. Quiet line `Global · Through Loft`. Search. Rows: name, first CIDRs, network count, source (repo / own / ignore); tap edits. **+ Add**. Bottom **Import · Export · Repository**. |
+| Network | Entry Route / Ignore, network or address (one CIDR per line when editing), service, zone. Add / Save. |
+| Zones | Rows: name, network count · list file, direction, “Built-in”. **+ Add zone**. |
+| Zone | Name (locked on a built-in), direction Through / Around Loft, list address + **Lists**, auto-update, Save; an own zone has Delete zone (services → Global). A new zone has the same fields. |
+| Repository | List address of the open zone + **Lists**, auto-update, last pull, Update now. |
+| Catalog | loft-routes lists: World, Russia, China, Iran, Kazakhstan, Belarus; the current one is lit. A tap sets the address and goes back. |
+| Import | From file (iOS Files), detected format and line count, zone, Add. |
+| Export | Format Loft / Keenetic .bat, a zone for .bat, a sample, Save (share sheet). |
 
 ---
 
@@ -53,9 +70,9 @@ macOS-only chrome that this mock does not draw: menu-bar popover, SOCKS5 card an
 
 Do not restyle Settings → VPN. The mock shows how **loft** looks in *their* VPN list: status Connected, type loft, toggle is the system tunnel, not a second switch in our app.
 
-Open loft calls `NETunnelProviderManager`. If the user disables loft in Settings, the app shows down.
+Connect calls `NETunnelProviderManager`. If the user disables loft in Settings, the app shows down.
 
-VPN permission is the stock sheet once. After that, Open loft does not ask again.
+VPN permission is the stock sheet once. After that, Connect does not ask again.
 
 Camera permission is the stock sheet the first time Scan opens (`NSCameraUsageDescription`). Photos uses `PHPicker` (no full library access). Files picker accepts images, text, YAML, `.loft`.
 
@@ -82,7 +99,7 @@ Same loft tokens as macOS: Ink `#1A1714`, Lamp `#E8B84A`, Paper `#E8DFD2`, Aveni
 
 Type: headings Demi, body Regular, keys SF Mono. Connected = lamp window on. Down = lamp off, stone L.
 
-Safe area: status bar + home indicator. One column. Thumb reach: Open loft / Disconnect is the large control on Home. Footer three pills sit on the home indicator.
+Safe area: status bar + home indicator. One column. Thumb reach: Connect / Disconnect is the large control on Home. The tab bar **Home · Connections · Settings** sits on the home indicator, on Home, Connections, Settings and the screens pushed from it (Journal, About). Edit, Scanner and Share QR are modal without it; Onboarding is full screen.
 
 Scan: dark finder, lamp-colored corner brackets, two actions under the finder (From file / From Photos).
 
@@ -92,14 +109,14 @@ VPN type is a **capsule** (lamp fill on the selected kind), Main/Advanced and Se
 
 ## 5. Copy
 
-Canonical strings are `L10n.swift` in the macOS GUI. The mock defaults to Russian (`?lang=en` or the RU/EN control). Home connect is **Open loft**, not Connect; the list compact button is **Connect**. The key is **Access key**, not Member key.
+Canonical strings are `L10n.swift` in the macOS GUI. The mock defaults to Russian (`?lang=en` or the RU/EN control). Home, onboarding and the list compact button use one word: **Connect**; while it runs, **Connecting…**. The key is **Access key**, not Member key.
 
 | id | EN | RU |
 |----|----|----|
-| connect | Open loft | Открыть лофт |
+| connect | Connect | Подключить |
 | pop_connect | Connect | Подключить |
 | disconnect | Disconnect | Отключить |
-| connecting | Connecting… | Подключить… |
+| connecting | Connecting… | Подключение… |
 | pill_on | Connected | Подключено |
 | pill_off | Not connected | Не подключено |
 | journal | Journal | Журнал |
@@ -117,7 +134,7 @@ Canonical strings are `L10n.swift` in the macOS GUI. The mock defaults to Russia
 | edit_main / edit_adv | Main / Advanced | Основные / Расширенные |
 | key_title | Access key | Ключ доступа |
 | url_title | Address | Адрес |
-| url_go | Open loft | Открыть лофт |
+| url_go | Connect | Подключить |
 | simple | Simplified interface | Упрощенный интерфейс |
 | hold | Don’t restore direct internet | Не открывать прямой интернет |
 | split | Split routing | Раздельная маршрутизация |
