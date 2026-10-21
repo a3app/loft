@@ -172,11 +172,8 @@ table.t{width:100%;border-spacing:0;font-size:14px}
 .rule .n{width:24px;height:24px;border-radius:12px;background:var(--th);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:0 0 24px}
 .rule .tail{margin-left:auto;font-size:12px;color:var(--mute)}
 .rules{border:1px solid var(--line);border-radius:4px;overflow:hidden}
-.prio-list{border:1px solid var(--line);border-radius:4px;overflow:hidden}
-.prio-row{display:flex;align-items:center;gap:12px;padding:6px 12px;border-top:1px solid var(--line);background:var(--field)}
-.prio-row:first-child{border-top:0}
-.prio-row .chk{flex:1;min-width:0}
-.prio-row .sub{display:block;font-size:12px;color:var(--mute)}
+tr.off td{color:var(--mute)}
+.plain{margin:0;padding:0 0 0 18px;line-height:1.7}
 
 /* поля с подписью на рамке */
 .fld{position:relative;margin-top:8px}
@@ -502,8 +499,8 @@ V.members=()=>{
    <td><span class="sq" style="background:${vcol(n,m.vlan)}"></span>${n.id}${v?' · '+v.id+' '+esc(v.name):''}</td><td class="mono">${m.ip||'—'}</td><td>${x[0]}</td><td class="num">${m.multi?x[1].split(' / ')[0]+' / '+(m.multi_limit||8):x[1].split(' / ')[0]+' / 1'}</td><td><span class="dot ${x[3]?'on':''}"></span>${x[2]}</td></tr>`}).join('')));
 };
 V.network=()=>pageHead('Сеть и IP','Адреса и маршруты сервера, оверлей loft и вышестоящие VPN-каналы для выхода в интернет и приёма.')+
- `<div class="tabs" role="tablist">${[['addr','Адреса и маршруты'],['up','Внешние каналы']].map(([k,t])=>`<button class="tab ${S.tab.network===k?'on':''}" role="tab" aria-selected="${S.tab.network===k}" type="button" onclick="S.tab.network='${k}';render()">${t}</button>`).join('')}</div>`+
- (S.tab.network==='addr'?netAddr():netUp());
+ `<div class="tabs" role="tablist">${[['addr','Адреса и маршруты'],['up','Внешние каналы'],['prio','Приоритеты подключений']].map(([k,t])=>`<button class="tab ${S.tab.network===k?'on':''}" role="tab" aria-selected="${S.tab.network===k}" type="button" onclick="S.tab.network='${k}';render()">${t}</button>`).join('')}</div>`+
+ (S.tab.network==='addr'?netAddr():S.tab.network==='prio'?netPrio():netUp());
 function netAddr(){
   const del=`<button class="icb del" type="button" aria-label="Удалить" onclick="toast('Применено — подтвердите в течение 2 минут');S.npend=1;render()">${ic('i-trash')}</button>`;
   return (S.npend?`<div class="note" role="status"><span><b>Применено: добавлен адрес 203.0.113.12/32.</b> <span class="mute">Подтвердите, иначе через <b>1:54</b> изменение откатится само.</span></span><span class="note-acts"><button class="btn sm ghost" type="button" onclick="S.npend=0;toast('Изменение откачено');render()">Откатить сейчас</button><button class="btn sm pri" type="button" onclick="S.npend=0;toast('Изменение сохранено');render()">Подтвердить</button></span></div>`:'')+
@@ -566,22 +563,32 @@ const lastT=x=>x==='block'?'блокировать':'напрямую';
 const liveOf=p=>p.use.find(k=>CH[k].on&&CH[k].st==='up');
 function prioChain(p){return p.use.map(k=>`<span class="${CH[k].on&&CH[k].st==='up'?'':'mute'}">${chT(k)}</span>`).join(' → ')+` → <span class="mute">${lastT(p.last)}</span>`}
 const usedBy=i=>EXR.filter(r=>r[2]===i).length+(EXDEF===i?1:0);
-function prioBlock(){
-  return blk('Приоритеты подключений','Список каналов по порядку: трафик идёт через первый работающий, при сбое — через следующий. Канал пропускается, пока он выключен, не подключён или не проходит проверку связи. Приоритет выбирают в правилах выхода.',
-   `<div class="acts"><button class="btn" type="button" onclick="openPrio(-1)">${ic('i-plus')}Добавить приоритет</button></div>`+
-   table(['Приоритет','Порядок каналов','Сейчас','Правил',{t:'',r:1}],PRIO.map((p,i)=>{const l=liveOf(p);
-    return `<tr class="click" onclick="openPrio(${i})"><td><b>${esc(p.t)}</b></td><td>${prioChain(p)}</td><td>${l?`<span class="okt">${chT(l)}</span>`:`<span class="mute">${lastT(p.last)}</span>`}</td><td class="num">${usedBy(i)||'—'}</td><td class="r"><div class="cell-acts"><button class="icb del" type="button" aria-label="Удалить приоритет" ${usedBy(i)?'disabled title="Выбран в правилах выхода"':''} onclick="event.stopPropagation()">${ic('i-trash')}</button></div></td></tr>`}).join('')));
+// Priorities tab: pick a list at the top, edit its order in place.
+function netPrio(){
+  if(!PRIO[S.prio])S.prio=0;
+  const p=PRIO[S.prio],live=liveOf(p),n=usedBy(S.prio);
+  const order=p.use.concat(Object.keys(CH).filter(k=>!p.use.includes(k)));
+  const chk=c=>c.chk?`${c.chk[0]==='ping'?'ping':'TCP'} <span class="mono">${c.chk[1]}</span>`:'<span class="mute">нет</span>';
+  const uses=EXR.map((r,i)=>r[2]===S.prio?`${i+1}. ${({member:'член',tag:'тег',list:'список'})[r[0]]} <b>${esc(r[1])}</b>`:'').filter(Boolean).concat(EXDEF===S.prio?['остальной трафик членов']:[]);
+  return `<p class="blk-d">Список каналов по порядку: трафик идёт через первый работающий, при сбое — через следующий. Канал пропускается, пока он выключен, не подключён или не проходит проверку связи. Списков может быть несколько — каждое правило выхода выбирает свой.</p>
+  <div class="netbar" role="tablist" aria-label="Приоритет">${PRIO.map((x,i)=>`<button type="button" role="tab" aria-selected="${i===S.prio}" class="netchip ${i===S.prio?'on':''}" onclick="S.prio=${i};render()"><span class="dot ${liveOf(x)?'on':''}"></span><b>${esc(x.t)}</b><span class="mono">${x.use.length} ${x.use.length===1?'канал':x.use.length<5?'канала':'каналов'}</span></button>`).join('')}
+   <button type="button" class="btn" onclick="openPrioNew()">${ic('i-plus')}Список</button></div>`+
+  blk(esc(p.t),live?`Сейчас трафик идёт через <b>${chT(live)}</b>.`:`Ни один канал не работает — трафик ${p.last==='block'?'блокируется':'идёт напрямую'}.`,
+   `<div class="acts"><button class="btn" type="button" onclick="openPrioNew(${S.prio})">Переименовать</button><button class="btn" type="button" ${n?'disabled title="Выбран в правилах выхода"':''}>${ic('i-trash')}Удалить список</button></div>`+
+   table(['№','Подключение','Тип','Проверка связи',{t:'Порядок',r:1}],order.map((k,j)=>{const c=CH[k],on=p.use.includes(k),now=k===live;
+    return `<tr class="${on?'':'off'}"><td class="num">${on?p.use.indexOf(k)+1:'—'}</td><td>${who(sw(on,'Использовать'),esc(c.title)+(now?' <span class="pill ok">сейчас</span>':''),`<span class="sub ${CHST[c.st][1]?'okt':''}"><span class="mono">${k}</span> · ${CHST[c.st][0]}</span>`)}</td><td>${c.t==='vpn'?c.kind:CHT[c.t]}</td><td>${chk(c)}</td><td class="r"><div class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${on&&p.use.indexOf(k)>0?'':'disabled'}>↑</button><button class="icb" type="button" aria-label="Ниже" ${on&&p.use.indexOf(k)<p.use.length-1?'':'disabled'}>↓</button></div></td></tr>`}).join(''))+
+   `<div class="fld" style="max-width:420px;margin-top:20px"><label for="pr2">Если ни один не работает</label><select id="pr2"><option ${p.last==='direct'?'selected':''}>Выходить напрямую</option><option ${p.last==='block'?'selected':''}>Блокировать</option></select></div>
+   <p class="hint">Включите подключения, которые входят в список, и расставьте их стрелками. Проверка связи настраивается в окне подключения на вкладке «Внешние каналы».</p>
+   <div class="acts" style="margin-top:16px"><button class="btn pri" type="button">Сохранить</button><button class="btn" type="button" onclick="render()">Отменить</button></div>`)+
+  blk('Где используется',uses.length?'Правила выхода, которые ведут в этот список.':'Список пока не выбран ни в одном правиле выхода.',
+   uses.length?`<div class="card"><ul class="plain">${uses.map(u=>`<li>${u}</li>`).join('')}</ul></div><p class="hint">Правила меняются на вкладке <a href="#network" onclick="S.tab.network='up';render();return false">Внешние каналы</a>.</p>`:'');
 }
-function openPrio(i){
-  const p=i>=0?PRIO[i]:{t:'',use:[],last:'direct'};
-  const all=Object.keys(CH),order=p.use.concat(all.filter(k=>!p.use.includes(k)));
-  const row=(k,j)=>{const c=CH[k],on=p.use.includes(k);
-   return `<div class="prio-row"><label class="chk"><input type="checkbox" ${on?'checked':''}><span>${esc(c.title)} <span class="sub"><span class="mono">${k}</span> · ${CHST[c.st][0]}</span></span></label><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${j?'':'disabled'}>↑</button><button class="icb" type="button" aria-label="Ниже" ${j<order.length-1?'':'disabled'}>↓</button></span></div>`};
-  dialog(i>=0?'Приоритет «'+esc(p.t)+'»':'Новый приоритет','Отметьте каналы и расставьте их по порядку. Трафик идёт через первый работающий.',
-   `<div class="fld"><label for="pr1">Название</label><input id="pr1" value="${esc(p.t)}" placeholder="Например, Основной" maxlength="40"></div>
-    <div><div class="dlg-sec">Каналы по порядку</div><div class="prio-list">${order.map(row).join('')}</div></div>
-    <div class="fld"><label for="pr2">Если ни один не работает</label><select id="pr2"><option ${p.last==='direct'?'selected':''}>Выходить напрямую</option><option ${p.last==='block'?'selected':''}>Блокировать</option></select></div>`,
-   `<button class="btn pri" type="button" onclick="closeDlg()">${i>=0?'Сохранить':'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+function openPrioNew(i){
+  const ed=i!=null,p=ed?PRIO[i]:null;
+  dialog(ed?'Переименовать список':'Новый список приоритетов',ed?'':'Порядок каналов можно скопировать из другого списка и поправить.',
+   `<div class="fld"><label for="pr1">Название</label><input id="pr1" value="${ed?esc(p.t):''}" placeholder="Например, Офис" maxlength="40"></div>
+    ${ed?'':`<div class="fld"><label for="pr3">Начать с</label><select id="pr3"><option>Пустого списка</option>${PRIO.map(x=>`<option>Копии «${esc(x.t)}»</option>`).join('')}</select></div>`}`,
+   `<button class="btn pri" type="button" onclick="closeDlg()">${ed?'Сохранить':'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
 }
 function netUp(){
   const add=(t,l,x='')=>`<div class="acts"><button class="btn" type="button" onclick="openChan('new:${t}')">${ic('i-plus')}${l}</button>${x}</div>`;
@@ -592,10 +599,9 @@ function netUp(){
   blk('Сети ZeroTier','Подключение к сети ZeroTier по 16-значному ID сети. Новому участнику может понадобиться авторизация у администратора сети.',add('zt','Добавить подключение')+chanTable('zt'))+
   blk('Прокси-подключения','Выход через прокси-сервер по HTTP, HTTPS или SOCKS5. Можно пользоваться само по себе или как первым звеном цепочки для Xray.',add('px','Добавить подключение')+chanTable('px'))+
   blk('Xray','Канал по ссылке vless://, trojan:// или ss://. «Через» — канал, через который Xray подключается к своему серверу.',add('xr','Добавить подключение')+chanTable('xr'))+
-  prioBlock()+
-  blk('Правила выхода','Проверяются сверху вниз, срабатывает первое подходящее, и трафик уходит по выбранному приоритету. Сам сервер — панель, обновления, почта — всегда выходит напрямую.',
+  blk('Правила выхода','Проверяются сверху вниз, срабатывает первое подходящее, и трафик уходит по выбранному списку приоритетов. Сам сервер — панель, обновления, почта — всегда выходит напрямую.',
    `<div class="acts"><button class="btn" type="button" onclick="openExit(-1)">${ic('i-plus')}Добавить правило</button></div><div class="rules">
-   ${EXR.map(([m,v,c],i)=>`<div class="rule click" onclick="openExit(${i})"><span class="n">${i+1}</span><span>${what[m](v)} → <b>${esc(PRIO[c].t)}</b></span><span class="tail">${prioChain(PRIO[c])}</span><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${i?'':'disabled'} onclick="event.stopPropagation()">↑</button><button class="icb" type="button" aria-label="Ниже" ${i<EXR.length-1?'':'disabled'} onclick="event.stopPropagation()">↓</button><button class="icb del" type="button" aria-label="Удалить правило" onclick="event.stopPropagation()">${ic('i-trash')}</button></span></div>`).join('')}
+   ${EXR.map(([m,v,c],i)=>`<div class="rule click" onclick="openExit(${i})"><span class="n">${i+1}</span><span>${what[m](v)} → <b>${esc(PRIO[c].t)}</b></span><span class="tail"><a href="#network" onclick="event.stopPropagation();S.prio=${c};S.tab.network='prio';render();return false">${prioChain(PRIO[c])}</a></span><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${i?'':'disabled'} onclick="event.stopPropagation()">↑</button><button class="icb" type="button" aria-label="Ниже" ${i<EXR.length-1?'':'disabled'} onclick="event.stopPropagation()">↓</button><button class="icb del" type="button" aria-label="Удалить правило" onclick="event.stopPropagation()">${ic('i-trash')}</button></span></div>`).join('')}
    <div class="rule click" style="background:var(--bg)" onclick="openExitDefault()"><span class="n">∗</span><span>Остальной трафик членов → <b>напрямую</b> <span class="mono mute">eth0</span></span></div></div>
    <p class="hint">ICMP (ping) и DNS-запросы к ноде идут напрямую.</p>`)+
   blk('Приём через канал','Внешний IP канала становится адресом сервера; ответы уходят тем же каналом. Только для каналов со своим внешним IP.',
@@ -606,9 +612,9 @@ function openExit(i){const r=i>=0?EXR[i]:['member','',0];
  dialog(i>=0?'Правило '+(i+1):'Новое правило','Чей трафик и куда он выходит.',
   `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1">${[['member','Член сети'],['tag','Члены с тегом'],['list','Адреса из списка']].map(([k,l])=>`<option ${r[0]===k?'selected':''}>${l}</option>`).join('')}</select></div>
    <div class="fld"><label for="ru2">Кто или что</label><select id="ru2"><option>${r[1]||'alice-phone'}</option></select></div>
-   <div class="fld"><label for="ru3">Приоритет</label><select id="ru3">${exitTo(r[2])}</select></div>`,
+   <div class="fld"><label for="ru3">Список приоритетов</label><select id="ru3">${exitTo(r[2])}</select></div>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">${i>=0?'Сохранить':'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
-function openExitDefault(){dialog('Остальной трафик членов','Куда выходит то, что не подошло ни под одно правило.',`<div class="fld"><label for="rd1">Приоритет</label><select id="rd1">${exitTo(EXDEF)}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
+function openExitDefault(){dialog('Остальной трафик членов','Куда выходит то, что не подошло ни под одно правило.',`<div class="fld"><label for="rd1">Список приоритетов</label><select id="rd1">${exitTo(EXDEF)}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 
 /* ── Домены: зоны, записи, сертификаты, DNS-провайдеры ── */
 // Record: [name, type, value, priority, made by the panel, check in a manual zone: ok | missing | differs]
