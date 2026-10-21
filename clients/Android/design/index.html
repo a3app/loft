@@ -177,13 +177,17 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .spark {
-      display: flex; justify-content: flex-start; gap: 10px; align-items: flex-start;
-      margin-top: 12px; color: var(--mute); font-size: 11.5px;
+      display: flex; align-items: stretch; gap: 12px;
+      margin-top: 14px; color: var(--mute); font-size: 11.5px; min-height: 40px;
     }
-    .spark .l { letter-spacing: .12em; color: var(--lamp); display: flex; flex-direction: column; gap: 2px; }
-    .spark .l .up { color: var(--stone); }
-    .spark .r { display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+    .spark .g { flex: 1; min-width: 0; display: flex; align-items: center; }
+    .spark .g svg { display: block; width: 100%; height: 40px; overflow: visible; }
+    .spark .r {
+      display: flex; flex-direction: column; justify-content: space-around; align-items: flex-end;
+      font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
     .spark .r .dn { color: var(--lamp); }
+    .spark .r .up { color: var(--stone); }
     .home.simple .cards, .home.simple .spark { display: none; }
     .iprows { margin-top: 12px; border-top: 1px solid var(--line); }
     .iprows .r {
@@ -194,7 +198,6 @@
     .iprows .r .v { font-family: var(--mono); font-size: 12px; }
     .home.simple .iprows, .home:not(.live) .iprows { display: none; }
     .home.busy .spark .r { display: none; }
-    .home.busy .spark .l { letter-spacing: 0; color: var(--mute); }
 
     .foot {
       display: flex; gap: 6px; margin-top: auto; padding-top: 12px;
@@ -632,6 +635,7 @@
     <button type="button" data-go="home" data-mode="on" data-vpn="sstp" data-i="nHomeSstp">Дом · SSTP</button>
     <button type="button" data-go="home" data-mode="on" data-vpn="vless" data-i="nHomeVless">Дом · VLESS</button>
     <button type="button" data-go="home" data-mode="on" data-vpn="trojan" data-i="nHomeTrojan">Дом · Trojan</button>
+    <button type="button" data-go="home" data-mode="on" data-spark="bars" data-i="nHomeBars">Дом · столбики</button>
     <button type="button" data-go="list" data-i="nList">Подключения</button>
     <button type="button" data-go="list" data-list="swipe" data-i="nSwipe">Список · свайп</button>
     <button type="button" data-go="list" data-list="ctx" data-i="nCtx">Список · меню</button>
@@ -696,8 +700,8 @@
             <div class="plate"><div class="k" id="cardK3">ОПЦИИ</div><div class="v" id="cardV3">mux · mask</div></div>
           </div>
           <div class="spark" id="homeSpark">
-            <span class="l"><span id="sparkL">▃▅▂▇▄▆▃▅▂▇</span><span class="up" id="sparkU">▁▂▁▃▂▁▂▃▁▂</span></span>
-            <span class="r" id="sparkR"><span class="dn">↓ 12.4 Мбит/с</span><span>↑ 1.1 Мбит/с</span></span>
+            <div class="g" id="sparkL"></div>
+            <div class="r" id="sparkR"><span class="dn">↓ 12.4 Мбит/с</span><span class="up">↑ 1.1 Мбит/с</span></div>
           </div>
           <div class="iprows" id="homeIPs">
             <div class="r"><span class="k" data-i="extIpK">Внешний IP</span><span class="v">203.0.113.17</span></div>
@@ -1062,6 +1066,16 @@
               <select>
                 <option data-i="uKbit">кбит/с</option>
                 <option data-i="uKb">КБ/с</option>
+              </select>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sparkK">График скорости</div>
+                <div class="s" data-i="sparkD">Как рисовать ↓↑ на доме.</div>
+              </div>
+              <select id="sparkSel">
+                <option value="lines" data-i="sparkLines">Линии</option>
+                <option value="bars" data-i="sparkBars">Столбики</option>
               </select>
             </div>
             <div class="set-row">
@@ -1653,6 +1667,7 @@ hold  armed</pre>
         nHomeSstp: "Дом · SSTP",
         nHomeVless: "Дом · VLESS",
         nHomeTrojan: "Дом · Trojan",
+        nHomeBars: "Дом · столбики",
         nOnb0: "Начало · первый запуск",
         nAdd: "Список · добавить",
         nEditTrojan: "Правка · Trojan",
@@ -1776,6 +1791,10 @@ hold  armed</pre>
         simple: "Упрощённый интерфейс",
         simpleD: "На доме только Подключить и Отключить.",
         rateUnit: "Единицы скорости",
+        sparkK: "График скорости",
+        sparkD: "Как рисовать ↓↑ на доме.",
+        sparkLines: "Линии",
+        sparkBars: "Столбики",
         rateUnitD: "Как показывать ↑↓ на доме.",
         uKbit: "кбит/с",
         uKb: "КБ/с",
@@ -1965,6 +1984,7 @@ hold  armed</pre>
         nHomeSstp: "Home · SSTP",
         nHomeVless: "Home · VLESS",
         nHomeTrojan: "Home · Trojan",
+        nHomeBars: "Home · bars",
         nOnb0: "Onboarding · start",
         nAdd: "List · add",
         nEditTrojan: "Edit · Trojan",
@@ -2088,6 +2108,10 @@ hold  armed</pre>
         simple: "Simplified Interface",
         simpleD: "Home is Connect and Disconnect only.",
         rateUnit: "Speed Units",
+        sparkK: "Speed chart",
+        sparkD: "How ↓↑ is drawn on Home.",
+        sparkLines: "Lines",
+        sparkBars: "Bars",
         rateUnitD: "How ↑↓ is shown on Home.",
         uKbit: "kbit/s",
         uKb: "kB/s",
@@ -2277,6 +2301,7 @@ hold  armed</pre>
         nHomeSstp: "主页 · SSTP",
         nHomeVless: "主页 · VLESS",
         nHomeTrojan: "主页 · Trojan",
+        nHomeBars: "主页 · 柱形",
         nOnb0: "引导 · 开始",
         nAdd: "列表 · 添加",
         nEditTrojan: "编辑 · Trojan",
@@ -2400,6 +2425,10 @@ hold  armed</pre>
         simple: "简化界面",
         simpleD: "主页只留连接和断开。",
         rateUnit: "速率单位",
+        sparkK: "速度图",
+        sparkD: "主页上 ↓↑ 怎么画。",
+        sparkLines: "曲线",
+        sparkBars: "柱形",
         rateUnitD: "主页 ↑↓ 的显示方式。",
         uKbit: "kbit/s",
         uKb: "kB/s",
@@ -2500,6 +2529,43 @@ hold  armed</pre>
       trojan: [["protoK", "Trojan"], ["transK", "TCP"], ["secK", "TLS"]],
     };
     let homeVpn = "loft";
+    // Speed over the last minute. Settings pick smooth lines (default) or thin bars.
+    let sparkStyle = "lines";
+    const SPARK_DN = [.32,.38,.35,.46,.52,.44,.4,.55,.63,.58,.5,.47,.56,.68,.74,.66,.6,.64,.72,.8,.7,.62,.58,.66,.75,.83,.78,.7,.64,.69,.77,.86,.8,.72,.68,.74,.82,.9,.84,.78];
+    const SPARK_UP = [.1,.12,.11,.14,.16,.13,.12,.15,.18,.16,.14,.13,.15,.19,.2,.18,.16,.17,.2,.22,.19,.17,.16,.18,.2,.23,.21,.19,.17,.18,.21,.24,.22,.2,.18,.2,.22,.25,.23,.21];
+    function sparkSVG(style, w) {
+      const H = 40, n = SPARK_DN.length;
+      if (style === "bars") {
+        const gap = 2, bw = Math.max(1, (w - gap * (n - 1)) / n), rowH = 17;
+        // Older samples fade out to the left.
+        const row = (arr, y0, color) => arr.map((v, i) => {
+          const h = Math.max(2, v * rowH), x = i * (bw + gap);
+          const op = (0.3 + 0.7 * (i / (n - 1))).toFixed(2);
+          return `<rect x="${x.toFixed(1)}" y="${(y0 + rowH - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(1.5, bw / 2).toFixed(1)}" fill="${color}" opacity="${op}"/>`;
+        }).join("");
+        return `<svg viewBox="0 0 ${w} ${H}" aria-hidden="true">${row(SPARK_DN, 0, "#E8B84A")}${row(SPARK_UP.map((v) => v * 3), 23, "#A89A8C")}</svg>`;
+      }
+      const pts = (arr) => arr.map((v, i) => [i * (w - 4) / (n - 1), H - 3 - v * (H - 8)]);
+      // Catmull-Rom through the samples, as cubic Béziers.
+      const curve = (p) => p.reduce((d, pt, i) => {
+        if (i === 0) return `M${pt[0].toFixed(1)},${pt[1].toFixed(1)}`;
+        const p0 = p[i - 2] || p[i - 1], p1 = p[i - 1], p3 = p[i + 1] || pt;
+        const c1 = [p1[0] + (pt[0] - p0[0]) / 6, p1[1] + (pt[1] - p0[1]) / 6];
+        const c2 = [pt[0] - (p3[0] - p1[0]) / 6, pt[1] - (p3[1] - p1[1]) / 6];
+        return d + ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${pt[0].toFixed(1)},${pt[1].toFixed(1)}`;
+      }, "");
+      const dn = pts(SPARK_DN), up = pts(SPARK_UP), dl = dn[n - 1], ul = up[n - 1];
+      const dPath = curve(dn);
+      return `<svg viewBox="0 0 ${w} ${H}" aria-hidden="true">
+        <defs><linearGradient id="spFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8B84A" stop-opacity=".32"/><stop offset="1" stop-color="#E8B84A" stop-opacity="0"/></linearGradient></defs>
+        <path d="${dPath} L${dl[0].toFixed(1)},${H} L0,${H} Z" fill="url(#spFill)"/>
+        <path d="${dPath}" fill="none" stroke="#E8B84A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${curve(up)}" fill="none" stroke="#A89A8C" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>
+        <circle cx="${dl[0].toFixed(1)}" cy="${dl[1].toFixed(1)}" r="5" fill="#E8B84A" opacity=".18"/>
+        <circle cx="${dl[0].toFixed(1)}" cy="${dl[1].toFixed(1)}" r="2.4" fill="#E8B84A"/>
+        <circle cx="${ul[0].toFixed(1)}" cy="${ul[1].toFixed(1)}" r="1.9" fill="#A89A8C"/>
+      </svg>`;
+    }
     function paintHome() {
       const root = document.getElementById("home");
       const act = document.getElementById("homeAct");
@@ -2533,23 +2599,20 @@ hold  armed</pre>
         body.setAttribute("fill", "#8A7E72");
         win.setAttribute("fill", "#3A332E");
         sparkL.textContent = I[lang].handshake;
-        document.getElementById("sparkU").textContent = "";
         sparkR.textContent = "";
       } else if (on) {
         act.className = "danger";
         act.textContent = I[lang].disconnect;
         body.setAttribute("fill", "#F3EDE4");
         win.setAttribute("fill", "#E8B84A");
-        sparkL.textContent = "▃▅▂▇▄▆▃▅▂▇";
-        document.getElementById("sparkU").textContent = "▁▂▁▃▂▁▂▃▁▂";
-        sparkR.innerHTML = `<span class="dn">↓ 12.4 ${mbit}</span><span>↑ 1.1 ${mbit}</span>`;
+        sparkL.innerHTML = sparkSVG(sparkStyle, sparkL.clientWidth || 180);
+        sparkR.innerHTML = `<span class="dn">↓ 12.4 ${mbit}</span><span class="up">↑ 1.1 ${mbit}</span>`;
       } else {
         act.className = "go";
         act.textContent = I[lang].connect;
         body.setAttribute("fill", "#8A7E72");
         win.setAttribute("fill", "#3A332E");
         sparkL.textContent = "";
-        document.getElementById("sparkU").textContent = "";
         sparkR.textContent = "";
       }
     }
@@ -2633,6 +2696,7 @@ hold  armed</pre>
       const p = [id];
       if (id === "home" && x.mode && x.mode !== "on") p.push(x.mode);
       if (id === "home" && x.vpn && x.vpn !== "loft") p.push(x.vpn);
+      if (id === "home" && x.spark && x.spark !== "lines") p.push(x.spark);
       if (x.list) p.push(x.list);
       if (id === "edit") {
         if (x.vpn && x.vpn !== "loft") p.push(x.vpn);
@@ -2654,6 +2718,7 @@ hold  armed</pre>
       return true;
     }
     window.addEventListener("hashchange", fromHash);
+    document.getElementById("sparkSel").addEventListener("change", (e) => { sparkStyle = e.target.value; });
     function show(id, extra) {
       extra = extra || {};
       hideSheets();
@@ -2669,6 +2734,7 @@ hold  armed</pre>
           (b.getAttribute("data-list") || "") === (extra.list || "") &&
           (b.getAttribute("data-mode") || "") === (extra.mode || "") &&
           (b.getAttribute("data-vpn") || "") === (extra.vpn || "") &&
+          (b.getAttribute("data-spark") || "") === (extra.spark || "") &&
           (b.getAttribute("data-edittab") || "") === (extra.edittab || "") &&
           (b.getAttribute("data-settab") || "") === (extra.settab != null ? String(extra.settab) : "") &&
           (b.getAttribute("data-step") || "") === (extra.step != null ? String(extra.step) : "");
@@ -2684,6 +2750,11 @@ hold  armed</pre>
       if (id === "home") {
         homeMode = extra.mode || "on";
         homeVpn = extra.vpn || "loft";
+        // A nav entry or link sets the chart; a plain tab tap keeps the Settings pick.
+        if (extra.mode || extra.fromHash) {
+          sparkStyle = extra.spark || "lines";
+          document.getElementById("sparkSel").value = sparkStyle;
+        }
         paintHome();
       }
       if (id === "edit") {
@@ -2720,6 +2791,7 @@ hold  armed</pre>
         list: el.getAttribute("data-list") || "",
         mode: el.getAttribute("data-mode") || "",
         vpn: el.getAttribute("data-vpn") || "",
+        spark: el.getAttribute("data-spark") || "",
         edittab: el.getAttribute("data-edittab") || "",
         settab: el.getAttribute("data-settab"),
         step: el.getAttribute("data-step"),
