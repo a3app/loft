@@ -374,7 +374,7 @@ The popover follows system appearance. Brand accent is the lamp (yellow / red). 
 Two steps. Without a key and an address, Connect is unavailable.
 
 1. **Access key.** “Enter the access key you were given.” Field `lt_…`. Validation: prefix `lt_` + 48 hex. Hint: it starts with `lt_`; it is shown once.
-2. **Address.** “Enter the address you were given with the key.” URL, type GET | WS | H2 | QUIC | H3, optional path. “Open Loft” → handshake, then the popover.
+2. **Address.** “Enter the address you were given with the key.” URL, type GET | WS | H2 | QUIC | H3, optional path. “Connect” → handshake, then the popover.
 3. **Or import a file** from the key screen.
 
 This screen does not mention peer, SHA-256, or revocation.
@@ -404,7 +404,7 @@ Canonical locale is English. Copy lives in [`lang/`](../lang/) — one `{code}.l
 | id | English |
 |----|---------|
 | pop_connect | Connect |
-| connect | Open Loft |
+| connect | Connect |
 | disconnect | Disconnect |
 | connecting | Connecting… |
 | key.title | Access key |

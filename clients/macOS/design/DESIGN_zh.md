@@ -377,7 +377,7 @@ Loft 窗口是当前窗口时，菜单栏是 **Loft** | **连接** | **工具** 
 两步。没有密钥和地址，打开不可用。
 
 1. **访问密钥。** 「输入发给你的访问密钥。」字段 `lt_…`。校验：前缀 `lt_` + 48 hex。提示：以 `lt_` 开头；只显示一次 — 请保存。
-2. **地址。** 「输入和密钥一起发给你的地址。」URL，类型 GET | WebSocket，可选 path。「打开 Loft」→ 握手，然后弹出层。
+2. **地址。** 「输入和密钥一起发给你的地址。」URL，类型 GET | WebSocket，可选 path。「连接」→ 握手，然后弹出层。
 3. **或导入文件**，从密钥屏幕。
 
 这个屏幕不提 peer、SHA-256、吊销。
@@ -409,7 +409,7 @@ Exclusive：
 
 | id | English |
 |----|---------|
-| connect | Open Loft |
+| connect | Connect |
 | disconnect | Disconnect |
 | connecting | Opening… |
 | key.title | Access key |

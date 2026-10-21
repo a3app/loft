@@ -957,7 +957,7 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="reconnect">Автоматический реконнект</div>
-                <div class="s" data-i="reconnectD">Оборвалось — снова открыть лофт.</div>
+                <div class="s" data-i="reconnectD">Оборвалось — подключиться снова.</div>
               </div>
               <div class="toggle on"><i></i></div>
             </div>
@@ -1015,7 +1015,7 @@
             </label>
             <p class="hint" data-i="urlHint">HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.</p>
             <div class="btns">
-              <button type="button" class="go" data-i="urlGo">Открыть лофт</button>
+              <button type="button" class="go" data-i="urlGo">Подключить</button>
               <button type="button" class="ghost" data-go="onboard" data-step="1" data-i="back">Назад</button>
             </div>
             <p class="hint" data-i="onbVpn">Дальше — стоковый лист VPN iOS. Один раз.</p>
@@ -1206,8 +1206,8 @@ hold  armed</pre>
         nOnb: "Онбординг · ключ", nOnb2: "Онбординг · адрес",
         nSet: "Настройки · общие", nSetR: "Настройки · маршрут", nSetC: "Настройки · клиент",
         nJournal: "Журнал", nAbout: "О программе", nIos: "Настройки → VPN",
-        connect: "Открыть лофт", popConnect: "Подключить", disconnect: "Отключить",
-        connecting: "Подключить…", disconnecting: "Отключение…", cancel: "Отмена",
+        connect: "Подключить", popConnect: "Подключить", disconnect: "Отключить",
+        connecting: "Подключение…", disconnecting: "Отключение…", cancel: "Отмена",
         pillOn: "Подключено: Home 0:12", pillOff: "Не подключено",
         frontK: "ФРОНТ", tunK: "ТУННЕЛЬ",
         journal: "Журнал", reset: "Сбросить маршруты", settings: "Настройки",
@@ -1253,7 +1253,7 @@ hold  armed</pre>
         hold: "Не открывать прямой интернет", holdD: "Последний туннель умер — сеть закрыта.",
         split: "Раздельная маршрутизация", splitD: "Мимо — через прямой маршрут до лофта.",
         auto: "Подключать автоматически", autoD: "После ключа и живого фронта",
-        reconnect: "Автоматический реконнект", reconnectD: "Оборвалось — снова открыть лофт.",
+        reconnect: "Автоматический реконнект", reconnectD: "Оборвалось — подключиться снова.",
         extIp: "Показывать внешний IP", extIpD: "После подключения спросить адрес у сервиса через это соединение.",
         defaults: "По умолчанию", about: "О программе",
         keyStep: "Шаг 1 из 2", keyTitle: "Ключ доступа",
@@ -1264,7 +1264,7 @@ hold  armed</pre>
         urlBody: "Введите адрес, который выдали вместе с ключом.",
         url: "URL", urlType: "Как подключаться", path: "Путь (если давали)",
         urlHint: "HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.",
-        urlGo: "Открыть лофт",
+        urlGo: "Подключить",
         onbVpn: "Дальше — стоковый лист VPN iOS. Один раз.",
         scanT: "Сканер QR",
         scanHint: "Камера. loft://, sstp://, vless:// или .loft.",
@@ -1292,7 +1292,7 @@ hold  armed</pre>
         nOnb: "Onboard · key", nOnb2: "Onboard · address",
         nSet: "Settings · general", nSetR: "Settings · route", nSetC: "Settings · client",
         nJournal: "Journal", nAbout: "About", nIos: "Settings → VPN",
-        connect: "Open loft", popConnect: "Connect", disconnect: "Disconnect",
+        connect: "Connect", popConnect: "Connect", disconnect: "Disconnect",
         connecting: "Connecting…", disconnecting: "Disconnecting…", cancel: "Cancel",
         pillOn: "Connected: Home 0:12", pillOff: "Not connected",
         frontK: "FRONT", tunK: "TUNNEL",
@@ -1339,7 +1339,7 @@ hold  armed</pre>
         hold: "Don’t restore direct internet", holdD: "Last tunnel died — the machine stays dark.",
         split: "Split routing", splitD: "Around loft uses the direct route from before loft.",
         auto: "Connect automatically", autoD: "After a key and a live front",
-        reconnect: "Automatic reconnect", reconnectD: "If it drops, open loft again.",
+        reconnect: "Automatic reconnect", reconnectD: "If it drops, connect again.",
         extIp: "Show external IP", extIpD: "After connect, ask a service for the address through this session.",
         defaults: "Defaults", about: "About",
         keyStep: "Step 1 of 2", keyTitle: "Access key",
@@ -1350,7 +1350,7 @@ hold  armed</pre>
         urlBody: "Enter the address you were given with the key.",
         url: "URL", urlType: "How to connect", path: "Path (if they gave you one)",
         urlHint: "HTTPS. GET file, WS channel, H2/H3 CONNECT, QUIC UDP.",
-        urlGo: "Open loft",
+        urlGo: "Connect",
         onbVpn: "Next is the stock iOS VPN sheet. Once.",
         scanT: "Scan QR",
         scanHint: "Camera. loft://, sstp://, vless://, or a .loft.",
@@ -1378,7 +1378,7 @@ hold  armed</pre>
         nOnb: "引导 · 密钥", nOnb2: "引导 · 地址",
         nSet: "设置 · 通用", nSetR: "设置 · 路由", nSetC: "设置 · 客户端",
         nJournal: "日志", nAbout: "关于", nIos: "设置 → VPN",
-        connect: "打开 Loft", popConnect: "打开", disconnect: "断开",
+        connect: "连接", popConnect: "连接", disconnect: "断开",
         connecting: "正在连接…", disconnecting: "正在断开…", cancel: "取消",
         pillOn: "已连接: Home 0:12", pillOff: "未连接",
         frontK: "前置", tunK: "隧道",
@@ -1425,7 +1425,7 @@ hold  armed</pre>
         hold: "不要恢复直连", holdD: "最后一条隧道没了 — 保持断网。",
         split: "分流", splitD: "绕过 loft 的走连上之前的直连路由。",
         auto: "自动连接", autoD: "有密钥且前置可用之后",
-        reconnect: "自动重连", reconnectD: "断了就再打开 loft。",
+        reconnect: "自动重连", reconnectD: "断了就再连接。",
         extIp: "显示外部 IP", extIpD: "连上后通过本会话向服务询问地址。",
         defaults: "默认", about: "关于",
         keyStep: "第 1 步，共 2 步", keyTitle: "访问密钥",
@@ -1436,7 +1436,7 @@ hold  armed</pre>
         urlBody: "输入和密钥一起发给你的地址。",
         url: "URL", urlType: "怎么连", path: "路径（如果给了）",
         urlHint: "HTTPS。GET 是文件，WS 是通道，H2/H3 是 CONNECT，QUIC 是 UDP。",
-        urlGo: "打开 Loft",
+        urlGo: "连接",
         onbVpn: "接下来是系统那张 iOS VPN 权限页。一次。",
         scanT: "扫描二维码",
         scanHint: "相机。loft://、sstp://、vless:// 或 .loft。",
