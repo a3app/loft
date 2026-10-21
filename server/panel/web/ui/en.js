@@ -1992,5 +1992,9 @@ window.LOFT_EN = {
   "Остальной трафик": "Rest of traffic",
   "по умолчанию: $": "default: $",
   "Перетащите плашку на список слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — в «Сеть и IP» → «Внешние каналы» → «Правила выхода».": "Drag a chip onto a list on the left. A member rule beats a tag rule. Address lists (by site) are in “Network and IP” → “External channels” → “Egress rules”.",
-  "Остальной трафик выходит": "The rest of traffic leaves"
+  "Остальной трафик выходит": "The rest of traffic leaves",
+  "Списков приоритетов пока нет — их создают в «Приоритетах подключений».": "There are no priority lists yet — create them in “Connection priorities”.",
+  "Списков пока нет. Добавьте список слева и выберите его на вкладке «Применение» или в правилах выхода.": "No lists yet. Add a list on the left and pick it on the “Assignment” tab or in the egress rules.",
+  "Список сохранён": "List saved",
+  "Напрямую или блокируются по правилам: $": "Direct or blocked by rules: $"
 };
