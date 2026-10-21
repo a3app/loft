@@ -294,3 +294,88 @@ func TestDialThroughProxiesAndFail(t *testing.T) {
 		t.Fatal("no UDP reply through SOCKS")
 	}
 }
+
+func TestPrioParseRender(t *testing.T) {
+	conf := "channel a dev wa check ping probe 1.1.1.1 every 5 fails 2\n" +
+		"channel b socks5 127.0.0.1:1 check tcp probe example.com:443\n" +
+		"prio main a b then direct\nprio none then block\n" +
+		"rule member bob via main\ndefault via none\n"
+	c, err := Parse(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := c.Channel("a").Check; k == nil || k.Kind != "ping" || k.Every != 5 || k.Fails != 2 {
+		t.Fatalf("check %+v", k)
+	}
+	if p := c.Prio("main"); p == nil || strings.Join(p.Use, ",") != "a,b" || p.Last != Direct {
+		t.Fatalf("prio %+v", p)
+	}
+	c2, err := Parse(Render(c))
+	if err != nil || Render(c2) != Render(c) {
+		t.Fatalf("round trip: %v\n%s", err, Render(c2))
+	}
+	for _, bad := range []string{
+		"channel a socks5 1.2.3.4:5 check ping probe 1.1.1.1", // ping needs an interface
+		"channel a dev x check tcp probe nohost",              // tcp needs host:port
+		"channel a dev x check dns probe 1.1.1.1",
+		"channel a dev x probe 1.1.1.1", // probe before check
+		"channel a dev x check ping probe 1.1.1.1 every 0",
+		"prio p nowhere then direct",
+		"prio p then maybe",
+		"channel a dev x\nprio p a a then direct",
+		"channel a dev x\nprio a a then direct", // a channel and a prio
+		"prio p then direct\nprio p then block",
+	} {
+		if _, err := Parse(bad); err == nil {
+			t.Fatalf("%q parsed", bad)
+		}
+	}
+}
+
+func TestPrioSkipsDeadAndNoLink(t *testing.T) {
+	echo := echoTCP(t)
+	socks, _ := socksServer(t, "u", "p")
+	dead, _ := net.Listen("tcp", "127.0.0.1:0")
+	deadAddr := dead.Addr().String()
+	dead.Close()
+	// gone: the proxy is not there. down: a live proxy whose link check fails.
+	conf := "channel gone socks5 " + deadAddr + " fail block\n" +
+		"channel down socks5 " + socks + " user u pass p check tcp probe " + deadAddr + " every 1 fails 1\n" +
+		"channel px socks5 " + socks + " user u pass p\n" +
+		"prio main gone down px then block\nprio last gone then direct\nprio shut gone then block\n" +
+		"rule member bob via main\nrule member carol via last\nrule member dave via shut\n"
+	c, err := Parse(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := New(c, Options{SysNet: t.TempDir()})
+	defer r.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for !r.ch["down"].noLinkNow() {
+		if time.Now().After(deadline) {
+			t.Fatal("down never lost its link")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for _, st := range r.Status() {
+		if st.Name == "down" && st.State != "nolink" {
+			t.Fatalf("down is %s", st.State)
+		}
+	}
+	ctx := context.Background()
+	// The prio does not follow gone's fail (block); it moves on past down to px.
+	conn, used, err := r.DialTCP(ctx, Who{Member: "bob"}, echo)
+	if err != nil || used != "px" {
+		t.Fatalf("bob: %s %v", used, err)
+	}
+	roundTrip(t, conn)
+	conn.Close()
+	if conn, used, err := r.DialTCP(ctx, Who{Member: "carol"}, echo); err != nil || used != Direct {
+		t.Fatalf("carol: %s %v", used, err)
+	} else {
+		conn.Close()
+	}
+	if _, used, err := r.DialTCP(ctx, Who{Member: "dave"}, echo); err == nil || used != Block {
+		t.Fatalf("dave: %s %v", used, err)
+	}
+}

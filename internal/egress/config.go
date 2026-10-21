@@ -2,19 +2,25 @@
 // (the server's own route), through a kernel interface (a WireGuard,
 // OpenVPN or ZeroTier channel), through a SOCKS5 or HTTP(S) proxy, or
 // through an SSTP session the node holds itself. Rules pick a channel by
-// member, member tag or named address list; each channel names what to do
-// when it fails (another channel, direct, block).
+// member, member tag or named address list and send it to a priority list:
+// channels in order, the first one that works carries the traffic, then a
+// last step (direct or block). A channel can check its link; while the
+// check fails, priorities skip it. A rule may still name a channel; then its
+// fail chain (another channel, direct, block) is the order, as before.
 //
 // egress.conf, next to network.conf:
 //
-//	channel wg-nl dev wg-nl fail wg-fi
-//	channel px-office socks5 192.0.2.40:1080 user loft pass "s3cret" udp proxy via wg-nl fail direct
-//	channel web http 192.0.2.41:3128 tls fail block
-//	channel office sstp vpn.example.org:443 user office pass x auth mschapv2 fail direct
-//	rule member bob via px-office
-//	rule tag office via wg-nl
-//	rule list blocked-ru via wg-nl
-//	default direct
+//	channel wg-nl dev wg-nl check ping probe 1.1.1.1 every 10 fails 3
+//	channel wg-fi dev wg-fi
+//	channel px-office socks5 192.0.2.40:1080 user loft pass "s3cret" udp proxy via wg-nl check tcp probe example.com:443
+//	channel web http 192.0.2.41:3128 tls
+//	channel office sstp vpn.example.org:443 user office pass x auth mschapv2
+//	prio main wg-nl wg-fi then direct
+//	prio de px-office then block
+//	rule member bob via de
+//	rule tag office via main
+//	rule list blocked-ru via main
+//	default via main
 package egress
 
 import (
@@ -56,10 +62,28 @@ type Channel struct {
 	// Off: the channel is switched off; traffic for it takes Fail.
 	Off bool
 	// Fail is the next step when this channel is down: a channel, direct or block.
+	// Only rules that name the channel itself follow it; priorities do not.
 	Fail string
+	// Check probes the link through the channel; nil = no check.
+	Check *Check
 }
 
-// Rule sends matching traffic to Via (a channel, direct or block).
+// Check is a link probe: ping (kernel-interface channels only) or a TCP connect.
+type Check struct {
+	Kind  string // ping | tcp
+	Probe string // ping: an IP or host; tcp: host:port
+	Every int    // seconds between probes; 0 = 10
+	Fails int    // failures in a row before "no link"; 0 = 3
+}
+
+// Prio is a priority list: channels in order, then Last (direct or block).
+type Prio struct {
+	Name string
+	Use  []string
+	Last string // direct | block; empty = direct
+}
+
+// Rule sends matching traffic to Via (a priority, a channel, direct or block).
 type Rule struct {
 	Match string // member | tag | list
 	Value string
@@ -69,8 +93,19 @@ type Rule struct {
 // Config is a parsed egress.conf.
 type Config struct {
 	Channels []Channel
+	Prios    []Prio
 	Rules    []Rule
-	Default  string // a channel, direct or block; empty = direct
+	Default  string // a priority, a channel, direct or block; empty = direct
+}
+
+// Prio returns the priority list called name.
+func (c *Config) Prio(name string) *Prio {
+	for i := range c.Prios {
+		if c.Prios[i].Name == name {
+			return &c.Prios[i]
+		}
+	}
+	return nil
 }
 
 // Channel returns the channel called name.
@@ -208,6 +243,28 @@ func (c *Config) line(t []string) error {
 				ch.Auth = v
 			case "fail":
 				ch.Fail = v
+			case "check":
+				if ch.Check == nil {
+					ch.Check = &Check{}
+				}
+				ch.Check.Kind = v
+			case "probe", "every", "fails":
+				if ch.Check == nil {
+					return fmt.Errorf("%s needs check first", k)
+				}
+				if k == "probe" {
+					ch.Check.Probe = v
+					break
+				}
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 {
+					return fmt.Errorf("%s %q: a positive number", k, v)
+				}
+				if k == "every" {
+					ch.Check.Every = n
+				} else {
+					ch.Check.Fails = n
+				}
 			default:
 				return fmt.Errorf("unknown channel option %q", k)
 			}
@@ -218,6 +275,18 @@ func (c *Config) line(t []string) error {
 			}
 		}
 		c.Channels = append(c.Channels, ch)
+	case "prio":
+		if len(t) < 4 || t[len(t)-2] != "then" {
+			return errors.New("prio NAME CHANNEL… then direct|block")
+		}
+		p := Prio{Name: t[1], Use: t[2 : len(t)-2], Last: t[len(t)-1]}
+		if !validName(p.Name) {
+			return fmt.Errorf("prio name %q: lowercase letters, digits, - _ .", p.Name)
+		}
+		if c.Prio(p.Name) != nil {
+			return fmt.Errorf("prio %s twice", p.Name)
+		}
+		c.Prios = append(c.Prios, p)
 	case "rule":
 		if len(t) != 5 || t[3] != "via" {
 			return errors.New("rule member|tag|list VALUE via CHANNEL")
@@ -233,7 +302,7 @@ func (c *Config) line(t []string) error {
 		case len(t) == 3 && t[1] == "via":
 			c.Default = t[2]
 		default:
-			return errors.New("default direct | default block | default via CHANNEL")
+			return errors.New("default direct | default block | default via PRIO|CHANNEL")
 		}
 	default:
 		return fmt.Errorf("unknown command %q", t[0])
@@ -241,7 +310,9 @@ func (c *Config) line(t []string) error {
 	return nil
 }
 
-func (c *Config) target(s string) bool { return s == Direct || s == Block || c.Channel(s) != nil }
+func (c *Config) target(s string) bool {
+	return s == Direct || s == Block || c.Channel(s) != nil || c.Prio(s) != nil
+}
 
 // check resolves names and refuses loops in via and fail.
 func (c *Config) check() error {
@@ -260,7 +331,30 @@ func (c *Config) check() error {
 		default:
 			return fmt.Errorf("channel %s: auth %q (auto, mschapv2, pap)", ch.Name, ch.Auth)
 		}
-		if ch.Fail != "" && !c.target(ch.Fail) {
+		if k := ch.Check; k != nil {
+			switch k.Kind {
+			case "ping":
+				if ch.Kind != KindDev {
+					return fmt.Errorf("channel %s: ping checks need a kernel interface; use check tcp", ch.Name)
+				}
+				if k.Probe == "" {
+					return fmt.Errorf("channel %s: check ping needs probe ADDRESS", ch.Name)
+				}
+			case "tcp":
+				if _, _, err := net.SplitHostPort(k.Probe); err != nil {
+					return fmt.Errorf("channel %s: check tcp needs probe HOST:PORT", ch.Name)
+				}
+			default:
+				return fmt.Errorf("channel %s: check %q (ping, tcp)", ch.Name, k.Kind)
+			}
+			if k.Every > 3600 || k.Fails > 100 {
+				return fmt.Errorf("channel %s: every is up to 3600 s, fails up to 100", ch.Name)
+			}
+		}
+		if c.Prio(ch.Name) != nil {
+			return fmt.Errorf("%s is both a channel and a prio", ch.Name)
+		}
+		if ch.Fail != "" && (ch.Fail != Direct && ch.Fail != Block && c.Channel(ch.Fail) == nil) {
 			return fmt.Errorf("channel %s: fail %q is no channel", ch.Name, ch.Fail)
 		}
 		if ch.Via != "" {
@@ -285,6 +379,21 @@ func (c *Config) check() error {
 				return fmt.Errorf("channel %s: fail goes round in a circle", ch.Name)
 			}
 			seen[x.Name] = true
+		}
+	}
+	for _, p := range c.Prios {
+		if p.Last != Direct && p.Last != Block {
+			return fmt.Errorf("prio %s: then %q (direct, block)", p.Name, p.Last)
+		}
+		seen := map[string]bool{}
+		for _, u := range p.Use {
+			if c.Channel(u) == nil {
+				return fmt.Errorf("prio %s: %q is no channel", p.Name, u)
+			}
+			if seen[u] {
+				return fmt.Errorf("prio %s: %s twice", p.Name, u)
+			}
+			seen[u] = true
 		}
 	}
 	for _, r := range c.Rules {
@@ -329,7 +438,24 @@ func Render(c *Config) string {
 		opt("udp", ch.UDP)
 		opt("via", ch.Via)
 		opt("fail", ch.Fail)
+		if k := ch.Check; k != nil {
+			opt("check", k.Kind)
+			opt("probe", k.Probe)
+			if k.Every > 0 {
+				fmt.Fprintf(&b, " every %d", k.Every)
+			}
+			if k.Fails > 0 {
+				fmt.Fprintf(&b, " fails %d", k.Fails)
+			}
+		}
 		b.WriteByte('\n')
+	}
+	for _, p := range c.Prios {
+		last := p.Last
+		if last == "" {
+			last = Direct
+		}
+		fmt.Fprintf(&b, "prio %s %s then %s\n", p.Name, strings.Join(p.Use, " "), last)
 	}
 	for _, r := range c.Rules {
 		fmt.Fprintf(&b, "rule %s %s via %s\n", r.Match, Quote(r.Value), r.Via)

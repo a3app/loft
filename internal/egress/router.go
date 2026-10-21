@@ -50,6 +50,7 @@ type chanState struct {
 	lastErr   string
 	sstp      SSTPConn
 	sstpState string
+	noLink    bool // the link check failed Fails times in a row
 }
 
 // Router applies one egress.conf. Make a new one on reload and Close the old.
@@ -78,10 +79,17 @@ func New(cfg *Config, opt Options) *Router {
 	r := &Router{cfg: cfg, opt: opt, ch: map[string]*chanState{}}
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	for _, c := range cfg.Channels {
-		cs := &chanState{ch: c}
-		r.ch[c.Name] = cs
+		r.ch[c.Name] = &chanState{ch: c}
+	}
+	// Start sessions and probes only once r.ch is whole: a probe through a
+	// proxy reads it for the via channel.
+	for _, c := range cfg.Channels {
+		cs := r.ch[c.Name]
 		if c.Kind == KindSSTP && !c.Off {
 			go r.holdSSTP(cs)
+		}
+		if c.Check != nil && !c.Off {
+			go r.probe(cs)
 		}
 	}
 	return r
@@ -158,8 +166,9 @@ func (r *Router) up(cs *chanState) bool {
 	cs.mu.Lock()
 	down := time.Now().Before(cs.downUntil)
 	sstp := cs.sstp
+	noLink := cs.noLink
 	cs.mu.Unlock()
-	if cs.ch.Off {
+	if cs.ch.Off || noLink {
 		return false
 	}
 	switch cs.ch.Kind {
@@ -225,8 +234,16 @@ func inList(entries []string, host string) bool {
 
 var errBlocked = errors.New("blocked by the exit rules")
 
-// steps walks a route through fail links: every hop it may try in order.
+// steps is every hop a route may try in order: a priority's channels and
+// its last step, or a channel followed through its fail links.
 func (r *Router) steps(first string) []string {
+	if p := r.cfg.Prio(first); p != nil {
+		last := p.Last
+		if last == "" {
+			last = Direct
+		}
+		return append(append([]string{}, p.Use...), last)
+	}
 	var out []string
 	seen := map[string]bool{}
 	for s := first; s != "" && !seen[s]; {
@@ -341,7 +358,7 @@ func (r *Router) count(cs *chanState, c net.Conn) net.Conn {
 type Status struct {
 	Name  string `json:"name"`
 	Kind  string `json:"kind"`
-	State string `json:"state"` // up | down | connecting | off
+	State string `json:"state"` // up | down | connecting | nolink | off
 	Error string `json:"error,omitempty"`
 	TX    uint64 `json:"tx"`
 	RX    uint64 `json:"rx"`
@@ -358,6 +375,11 @@ func (r *Router) Status() []Status {
 		if !r.up(cs) {
 			st.State = "down"
 		}
+		cs.mu.Lock()
+		if cs.noLink {
+			st.State = "nolink"
+		}
+		cs.mu.Unlock()
 		if c.Off {
 			st.State = "off"
 		}
@@ -374,4 +396,10 @@ func (r *Router) Status() []Status {
 		out = append(out, st)
 	}
 	return out
+}
+
+func (cs *chanState) noLinkNow() bool {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return cs.noLink
 }
