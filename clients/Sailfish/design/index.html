@@ -271,6 +271,27 @@
     .pull-menu { display: none; flex-direction: column; align-items: center; gap: 2px; margin: -4px -16px 12px; padding: 10px 0 12px; background: linear-gradient(#2a2420, #211c19); border-bottom: 1px solid var(--line); }
     .screen.pulled .pull-menu { display: flex; }
     .pull-menu button { background: none; border: 0; cursor: pointer; color: var(--lamp); font: 500 15px var(--ui); padding: 7px 12px; }
+    .pull-menu button.hidden { display: none; }
+    .dlghdr button.accept.off { opacity: .35; pointer-events: none; }
+    /* export page rows */
+    .exp-row { display: flex; width: 100%; justify-content: space-between; align-items: center; padding: 14px 4px; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--snow); font: 500 15px var(--ui); cursor: pointer; text-align: left; }
+    .exp-row .s { color: var(--mute); font-size: 11px; font-weight: 400; }
+    /* Silica context menu: opens under the row and pushes the rest down */
+    #ctxScrim { background: transparent; }
+    #ctxScrim .ctx { top: 214px; left: 16px; right: 16px; background: #2a2420; border-radius: 0; box-shadow: none; }
+    #ctxScrim .ctx button { justify-content: center; color: var(--lamp); border-bottom: 0; padding: 11px 16px; }
+    #ctxScrim .ctx button .s { display: none; }
+    #ctxScrim .ctx button.danger { color: var(--lamp); }
+    .phone.ctxopen #list .swipe:not(:first-child) { transform: translateY(132px); transition: transform .15s; }
+    /* hold: Home tells why the internet is closed */
+    .held { display: none; margin: 10px 0 0; padding: 12px; border-radius: 12px; background: rgba(200,90,80,.14); }
+    .home.hold .held { display: block; }
+    .held b { display: block; font-size: 13px; }
+    .held span { display: block; font-size: 11px; color: var(--stone); margin: 4px 0 8px; }
+    .set-row.tsw { margin-top: 4px; }
+    .cover-act { margin-top: 18px; display: flex; justify-content: center; }
+    .cover-act button { width: 44px; height: 44px; border: 0; border-radius: 22px; background: none; color: var(--snow); cursor: pointer; }
+    .cover-act svg { width: 28px; height: 28px; }
     /* remorse: the action runs after a countdown; a tap cancels it */
     .scrim.remorse { background: transparent; align-items: flex-start; padding: 40px 0 0; }
     .remorse-bar { width: 100%; background: #2a2420; padding: 12px 16px 14px; cursor: pointer; }
@@ -580,8 +601,10 @@
     .cover-card h3 { margin: 0; font-size: 18px; letter-spacing: -0.03em; }
     .cover-card .sub { color: var(--mute); font-size: 12px; margin-top: 6px; }
     .cover-card .go { margin-top: 16px; }
-    .os-sw { margin: -4px 0 12px; font-size: 12px; color: var(--stone); }
-    .os-sw a { color: var(--lamp); }
+    /* which OS of the family: the same segmented look as the language switch */
+    .os-sw a { flex: 1; text-align: center; padding: 6px 0; font: 600 12px var(--ui); color: var(--stone); text-decoration: none; border-radius: 8px; }
+    .os-sw a:hover { background: #211c19; }
+    .os-sw a.on { background: var(--lamp); color: var(--ink); }
   </style>
 </head>
 <body>
@@ -594,7 +617,7 @@
       loft
     </div>
     <p data-i="navCap">Макет приложения Sailfish OS. Туннель — ConnMan, сессия — loft-front.</p>
-    <p class="os-sw"><b>Sailfish OS</b> · <a href="aurora.html" onclick="this.href='aurora.html'+location.hash.replace('-pulley','-menu')">ОС Аврора</a></p>
+    <div class="lang os-sw" role="tablist" aria-label="ОС"><a class="on" href="index.html" aria-current="page">Sailfish OS</a><a href="aurora.html" onclick="this.href='aurora.html'+location.hash.replace('-pulley','-menu')">ОС Аврора</a></div>
     <div class="lang">
       <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
       <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
@@ -605,6 +628,7 @@
     <button type="button" data-go="home" data-mode="off" data-i="nOff">Дом · выкл</button>
     <button type="button" data-go="home" data-mode="connecting" data-i="nOpen">Дом · подключение</button>
     <button type="button" data-go="home" data-mode="simple" data-i="nSimple">Дом · упрощённый</button>
+    <button type="button" data-go="home" data-mode="hold" data-i="nHold">Дом · без интернета</button>
     <button type="button" data-go="home" data-mode="on" data-pulley="1" data-i="nPulley">Дом · меню</button>
     <button type="button" data-go="home" data-mode="on" data-vpn="sstp" data-i="nHomeSstp">Дом · SSTP</button>
     <button type="button" data-go="home" data-mode="on" data-vpn="vless" data-i="nHomeVless">Дом · VLESS</button>
@@ -612,9 +636,10 @@
     <button type="button" data-go="home" data-mode="on" data-spark="bars" data-i="nHomeBars">Дом · столбики</button>
     <button type="button" data-go="list" data-i="nList">Подключения</button>
     <button type="button" data-go="list" data-list="ctx" data-i="nCtx">Список · меню</button>
-    <button type="button" data-go="list" data-list="export" data-i="nExp">Список · экспорт</button>
+    <button type="button" data-go="export" data-i="nExp">Экспорт</button>
     <button type="button" data-go="list" data-pulley="1" data-i="nAdd">Список · добавить</button>
     <button type="button" data-go="edit" data-vpn="loft" data-edittab="main" data-i="nEdit">Правка</button>
+    <button type="button" data-go="edit" data-vpn="loft" data-edittab="main" data-pulley="1" data-i="nEditP">Правка · меню</button>
     <button type="button" data-go="edit" data-vpn="loft" data-edittab="adv" data-i="nEditAdv">Правка · дополнительно</button>
     <button type="button" data-go="edit" data-vpn="sstp" data-edittab="main" data-i="nEditSstp">Правка · SSTP</button>
     <button type="button" data-go="edit" data-vpn="vless" data-edittab="main" data-i="nEditVless">Правка · VLESS</button>
@@ -625,6 +650,7 @@
     <button type="button" data-go="onboard" data-step="1" data-i="nOnb">Начало · ключ</button>
     <button type="button" data-go="onboard" data-step="2" data-i="nOnb2">Начало · адрес</button>
     <button type="button" data-go="settings" data-settab="0" data-i="nSet">Настройки · общие</button>
+    <button type="button" data-go="settings" data-settab="0" data-pulley="1" data-i="nSetP">Настройки · меню</button>
     <button type="button" data-go="settings" data-settab="1" data-i="nSetR">Настройки · маршрут</button>
     <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · подключение</button>
     <h4 data-i="hRoutes">Раздельная маршрутизация</h4>
@@ -637,6 +663,7 @@
     <button type="button" data-go="splitin" data-i="nSin">Маршруты · импорт</button>
     <button type="button" data-go="splitout" data-i="nSout">Маршруты · экспорт</button>
     <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
+    <button type="button" data-go="journal" data-pulley="1" data-i="nJournalP">Журнал · меню</button>
     <button type="button" data-go="about" data-i="nAbout">О программе</button>
     <h4>Sailfish</h4>
     <button type="button" data-go="cover" data-i="nCover">Обложка</button>
@@ -663,6 +690,7 @@
               <i></i><span id="homePillT" data-i="pillOn">Подключено: Home 0:12</span>
             </div>
           </div>
+          <div class="held"><b data-i="heldT">Интернет закрыт, пока Loft не вернётся</b><span data-i="heldD">Так задано «Без VPN — без интернета».</span><button type="button" class="ghost-sm" data-confirm="reset" data-i="reset">Сбросить маршруты</button></div>
           <div class="btns">
             <button type="button" class="danger" id="homeAct" data-i="disconnect">Отключить</button>
           </div>
@@ -745,10 +773,11 @@
       </div>
 
       <div class="screen hidden" id="edit">
+        <div class="pull-ind"></div>
+        <div class="pull-menu"><button type="button" class="only-old" data-del="Home" data-i="delete">Удалить</button><button type="button" class="only-old" data-go="export" data-i="export">Экспорт</button><button type="button" class="only-old" data-go="share" data-i="shareQr">Поделиться QR</button><button type="button" class="only-new" data-go="scan" data-i="addScan">Сканировать QR-код</button></div>
         <div class="dlghdr"><button type="button" data-back data-i="cancel">Отмена</button><button type="button" class="accept" data-back data-i="save">Сохранить</button></div>
         <div class="head">
           <div class="title" data-i="editTitle">Подключение</div>
-          <button type="button" class="qr" id="editHdr" data-go="share" data-i="shareBtn">Поделиться</button>
         </div>
         <div class="scroll">
           <label class="field"><span data-i="name">Имя</span>
@@ -1008,17 +1037,15 @@
             </div>
           </div>
 
-          <div class="btns" id="editDelRow">
-            <button type="button" class="danger" data-del="Home" data-i="delete">Удалить</button>
-          </div>
         </div>
       </div>
 
       <div class="screen hidden" id="settings">
+        <div class="pull-ind"></div>
+        <div class="pull-menu"><button type="button" data-go="about" data-i="about">О программе</button><button type="button" data-go="journal" data-i="journal">Журнал</button><button type="button" data-confirm="defaults" data-i="defaults">По умолчанию</button><button type="button" data-confirm="reset" data-i="reset">Сбросить маршруты</button></div>
         <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
         <div class="head">
           <div class="title" data-i="settings">Настройки</div>
-          <button type="button" class="qr" data-i="reset">Сбросить маршруты</button>
         </div>
         <div class="scroll" id="setScroll">
           <div class="grp" id="grp-0" data-i="setGen">Общие</div>
@@ -1117,11 +1144,6 @@
               </div>
               <div class="toggle"><i></i></div>
             </div>
-          </div>
-          <div class="links">
-            <button type="button" data-confirm="defaults" data-i="defaults">По умолчанию</button>
-            <button type="button" data-go="journal" data-i="journal">Журнал</button>
-            <button type="button" data-go="about" data-i="about">О программе</button>
           </div>
         </div>
       </div>
@@ -1243,7 +1265,20 @@
         </div>
       </div>
 
+      <div class="screen hidden" id="export">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="head"><div class="title" data-i="expSheet">Экспорт Home</div></div>
+        <p class="subline" data-i="warnExport">В файле есть ключ доступа. Никому не передавайте.</p>
+        <div class="scroll">
+          <button type="button" class="exp-row"><span data-i="expLoft">Home.loft</span><span class="s" data-i="expLoftS">это подключение</span></button>
+          <button type="button" class="exp-row" data-go="share"><span data-i="expQr">QR loft://</span><span class="s" data-i="expQrS">один канал</span></button>
+          <button type="button" class="exp-row"><span data-i="expAll">Family.loft</span><span class="s" data-i="expAllS">все три · loft + sstp + vless</span></button>
+        </div>
+      </div>
+
       <div class="screen hidden" id="journal">
+        <div class="pull-ind"></div>
+        <div class="pull-menu"><button type="button" data-confirm="clear" data-i="clearLog">Очистить</button><button type="button" data-i="shareBtn">Поделиться</button><button type="button" data-i="copy">Скопировать</button></div>
         <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
         <div class="hero" style="padding-top:0">
           <h1 data-i="journal">Журнал</h1>
@@ -1253,11 +1288,6 @@
 status  ip=10.8.0.14  mtu=1280  front=get
 tun   connman-loft   up
 hold  armed</pre>
-        <div class="row-3">
-          <button type="button" class="ghost" data-i="copy">Скопировать</button>
-          <button type="button" class="ghost" data-i="shareBtn">Поделиться</button>
-          <button type="button" class="ghost" data-confirm="clear" data-i="clearLog">Очистить</button>
-        </div>
       </div>
 
       <div class="screen hidden" id="about">
@@ -1283,6 +1313,8 @@ hold  armed</pre>
       </div>
 
       <div class="screen hidden" id="split">
+        <div class="pull-ind"></div>
+        <div class="pull-menu"><button type="button" data-go="splitrepo" data-i="splitRepoP">Репозиторий</button><button type="button" data-go="splitout" data-i="splitOutP">Экспорт</button><button type="button" data-go="splitin" data-i="splitInP">Импорт</button><button type="button" data-go="zones" data-i="splitZonesP">Зоны</button></div>
         <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
         <div class="scroll dyn" id="split-body"></div>
       </div>
@@ -1330,10 +1362,7 @@ hold  armed</pre>
 
       <div class="scrim hidden" id="ctxScrim">
         <div class="ctx" id="ctxMenu">
-          <div class="preview">
-            <div class="n">Home</div>
-            <div class="m" style="color:var(--mute);font-size:11px;margin-top:2px;font-family:var(--mono)">cdn.example.com</div>
-          </div>
+          <div class="preview hidden"><div class="n">Home</div><div class="m">cdn.example.com</div></div>
           <button type="button" data-go="edit"><span data-i="edit">Править</span></button>
           <button type="button" data-sheet="export"><span data-i="export">Экспорт</span><span class="s">.loft</span></button>
           <button type="button" class="danger" data-del="Home"><span data-i="delete">Удалить</span></button>
@@ -1366,18 +1395,6 @@ hold  armed</pre>
           <button type="button" class="cancel" data-close="addScrim" data-i="cancel">Отмена</button>
         </div>
       </div>
-      <div class="scrim hidden" id="exportScrim">
-        <div style="width:100%">
-          <div class="sheet">
-            <h3 data-i="expSheet">Экспорт Home</h3>
-            <p class="sub" data-i="warnExport">В файле есть ключ доступа. Никому не передавайте.</p>
-            <button type="button" class="row"><span data-i="expLoft">Home.loft</span><span class="s" data-i="expLoftS">это подключение</span></button>
-            <button type="button" class="row" data-go="share"><span data-i="expQr">QR loft://</span><span class="s" data-i="expQrS">один канал</span></button>
-            <button type="button" class="row"><span data-i="expAll">Family.loft</span><span class="s" data-i="expAllS">все три · loft + sstp + vless</span></button>
-          </div>
-          <button type="button" class="cancel" data-close="exportScrim" data-i="cancel">Отмена</button>
-        </div>
-      </div>
       <div class="scrim remorse hidden" id="delScrim">
         <div class="remorse-bar" data-close="delScrim"><b id="delTitle">Удаление Office</b><span data-i="remorseCancel">Нажмите, чтобы отменить</span><i></i></div>
       </div>
@@ -1392,9 +1409,10 @@ hold  armed</pre>
           <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
           <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
         </svg>
-        <h3>Loft</h3>
-        <div class="sub">Home · 10.8.0.14</div>
-        <button type="button" class="danger" data-i="disconnect">Отключить</button>
+        <h3>Home</h3>
+        <div class="sub" data-i="pillOnShort">Подключено</div>
+        <div class="sub mono">10.8.0.14</div>
+        <div class="cover-act"><button type="button" aria-label="Отключить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg></button></div>
       </div>
     </div>
 
@@ -1422,6 +1440,20 @@ hold  armed</pre>
   <script>
     const I = {
       ru: {
+        "split.off": "Выключена",
+        "split.on": "Включена",
+        pillOnShort: "Подключено",
+        splitZonesP: "Зоны",
+        splitInP: "Импорт",
+        splitOutP: "Экспорт",
+        splitRepoP: "Репозиторий",
+        nSetP: "Настройки · меню",
+        nEditP: "Правка · меню",
+        nJournalP: "Журнал · меню",
+        heldD: "Так задано «Без VPN — без интернета».",
+        heldT: "Интернет закрыт, пока Loft не вернётся",
+        nHold: "Дом · без интернета",
+        shareQr: "Поделиться QR",
         sysType: "Тип: loft. OpenVPN и IPsec остаются штатными строками ниже.",
         sysOn: "Подключено",
         sysCap: "Системный список. Тумблер — строка ConnMan Loft, не второй выключатель в приложении.",
@@ -1557,7 +1589,7 @@ hold  armed</pre>
         nList: "Подключения",
         nSwipe: "Список · свайп",
         nCtx: "Список · меню",
-        nExp: "Список · экспорт",
+        nExp: "Экспорт",
         nEdit: "Правка",
         nEditAdv: "Правка · дополнительно",
         nEditSstp: "Правка · SSTP",
@@ -1729,6 +1761,20 @@ hold  armed</pre>
         iosNot: "Не подключено"
       },
       en: {
+        "split.off": "Off",
+        "split.on": "On",
+        pillOnShort: "Connected",
+        splitZonesP: "Zones",
+        splitInP: "Import",
+        splitOutP: "Export",
+        splitRepoP: "Repository",
+        nSetP: "Settings · menu",
+        nEditP: "Edit · menu",
+        nJournalP: "Log · menu",
+        heldD: "That is what “No Internet without VPN” does.",
+        heldT: "The internet is closed until Loft is back",
+        nHold: "Home · held",
+        shareQr: "Share QR",
         sysType: "Type: loft. OpenVPN and IPsec stay stock rows below.",
         sysOn: "Connected",
         sysCap: "System list. The switch is the ConnMan Loft row, not a second toggle in the app.",
@@ -1864,7 +1910,7 @@ hold  armed</pre>
         nList: "Connections",
         nSwipe: "List · swipe",
         nCtx: "List · menu",
-        nExp: "List · export",
+        nExp: "Export",
         nEdit: "Edit",
         nEditAdv: "Edit · advanced",
         nEditSstp: "Edit · SSTP",
@@ -2036,6 +2082,20 @@ hold  armed</pre>
         iosNot: "Not Connected"
       },
       zh: {
+        "split.off": "已关闭",
+        "split.on": "已开启",
+        pillOnShort: "已连接",
+        splitZonesP: "区域",
+        splitInP: "导入",
+        splitOutP: "导出",
+        splitRepoP: "仓库",
+        nSetP: "设置 · 菜单",
+        nEditP: "编辑 · 菜单",
+        nJournalP: "日志 · 菜单",
+        heldD: "这是「没有 VPN 就没有互联网」的作用。",
+        heldT: "在 Loft 恢复前互联网已关闭",
+        nHold: "主页 · 断网保持",
+        shareQr: "分享二维码",
         sysType: "类型：loft。OpenVPN 和 IPsec 仍是下面的系统行。",
         sysOn: "已连接",
         sysCap: "系统列表。开关是 ConnMan 的 Loft 行，不是应用里的第二个开关。",
@@ -2171,7 +2231,7 @@ hold  armed</pre>
         nList: "连接",
         nSwipe: "列表 · 滑动",
         nCtx: "列表 · 菜单",
-        nExp: "列表 · 导出",
+        nExp: "导出",
         nEdit: "编辑",
         nEditAdv: "编辑 · 高级",
         nEditSstp: "编辑 · SSTP",
@@ -2445,6 +2505,7 @@ hold  armed</pre>
       const sparkR = document.getElementById("sparkR");
       root.classList.toggle("simple", homeMode === "simple");
       root.classList.toggle("busy", homeMode === "connecting");
+      root.classList.toggle("hold", homeMode === "hold");
       const on = homeMode === "on" || homeMode === "simple";
       root.classList.toggle("live", on);
       pill.classList.toggle("on", on);
@@ -2492,10 +2553,10 @@ hold  armed</pre>
         b.classList.toggle("hidden", !editNew && b.getAttribute("data-vpn") !== vpn);
       });
       document.querySelector('#edit [data-i="editTitle"]').textContent = editNew ? I[lang].newTitle : I[lang].editTitle;
-      const hdr = document.getElementById("editHdr");
-      hdr.setAttribute("data-go", editNew ? "scan" : "share");
-      hdr.textContent = editNew ? I[lang].scanBtn : I[lang].shareBtn;
-      document.getElementById("editDelRow").classList.toggle("hidden", editNew);
+      document.querySelectorAll("#edit .only-old").forEach((b) => b.classList.toggle("hidden", editNew));
+      document.querySelectorAll("#edit .only-new").forEach((b) => b.classList.toggle("hidden", !editNew));
+      // 2. Silica dialog: Save is off until the form is valid; a new one starts empty.
+      document.querySelector("#edit .dlghdr .accept").classList.toggle("off", editNew);
       document.getElementById("editAdvBtn").textContent = I[lang].onbAdv + (editTab === "adv" ? " ▴" : " ▾");
       document.querySelectorAll("#editTabs button").forEach((b) => {
         b.classList.toggle("on", b.getAttribute("data-edittab") === editTab);
@@ -2533,9 +2594,10 @@ hold  armed</pre>
     }
     document.getElementById("onbAdvBtn").addEventListener("click", () => document.getElementById("onbAdv").classList.toggle("hidden"));
 
-    const SHEETS = ["ctxScrim", "exportScrim", "delScrim", "addScrim", "detScrim", "cfScrim"];
+    const SHEETS = ["ctxScrim", "delScrim", "addScrim", "detScrim", "cfScrim"];
     function hideSheets() {
       SHEETS.forEach((id) => document.getElementById(id).classList.add("hidden"));
+      document.getElementById("phone").classList.remove("ctxopen");
       document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
     }
     // Tabs are the three rooms; Journal and About are pushed from Settings.
@@ -2543,7 +2605,7 @@ hold  armed</pre>
     const SPLIT_SCREENS = ["split", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
     const TAB_OF = {}; // Silica: no tab bar
 
-    const PARENT = { list: "home", settings: "home", edit: "list", scan: "list", share: "list", journal: "settings", about: "settings",
+    const PARENT = { list: "home", settings: "home", export: "list", edit: "list", scan: "list", share: "list", journal: "settings", about: "settings",
       split: "settings", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
     let cur = "home";
     const from = {};
@@ -2639,9 +2701,7 @@ hold  armed</pre>
           const office = document.querySelector('.swipe[data-id="office"]');
           if (office) office.classList.add("open-r");
         } else if (extra.list === "ctx") {
-          document.getElementById("ctxScrim").classList.remove("hidden");
-        } else if (extra.list === "export") {
-          document.getElementById("exportScrim").classList.remove("hidden");
+          openSheet("ctxScrim");
         } else if (extra.list === "add") {
           document.getElementById("addScrim").classList.remove("hidden");
         }
@@ -2663,6 +2723,7 @@ hold  armed</pre>
     }
     function openSheet(id) {
       SHEETS.forEach((s) => document.getElementById(s).classList.toggle("hidden", s !== id));
+      document.getElementById("phone").classList.toggle("ctxopen", id === "ctxScrim");
     }
     document.querySelectorAll("[data-go]").forEach((b) => {
       b.addEventListener("click", (e) => {
@@ -2684,7 +2745,7 @@ hold  armed</pre>
     document.querySelectorAll("[data-sheet]").forEach((b) => {
       b.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (b.getAttribute("data-sheet") === "export") openSheet("exportScrim");
+        if (b.getAttribute("data-sheet") === "export") show("export");
         if (b.getAttribute("data-sheet") === "add") openSheet("addScrim");
         if (b.getAttribute("data-sheet") === "det" && homeMode !== "off" && homeMode !== "connecting") openSheet("detScrim");
       });
@@ -2696,7 +2757,7 @@ hold  armed</pre>
       });
     });
     // One confirm sheet for the quiet destructive actions (defaults, clear journal).
-    const CONFIRM = { defaults: ["cfDefT", "cfDefS", "cfDefGo"], clear: ["cfClrT", "cfClrS", "clearLog"] };
+    const CONFIRM = { defaults: ["cfDefT", "cfDefS", "cfDefGo"], clear: ["cfClrT", "cfClrS", "clearLog"], reset: ["reset", "reset", "reset"] };
     document.querySelectorAll("[data-confirm]").forEach((b) => {
       b.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -2903,15 +2964,15 @@ hold  armed</pre>
     const SPLIT_PAINT = {
       split: () => {
         const z = zoneById(zoneTab);
-        return `<div class="head"><div class="title">${T("split")}</div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>
-          <p class="subline">${splitOn ? T("split.sub") : T("split.sub.off")}</p>
+        return `<div class="head"><div class="title">${T("split")}</div></div>
+          <div class="set-row tsw"><div><div class="k">${T(splitOn ? "split.on" : "split.off")}</div><div class="s">${splitOn ? T("split.sub") : T("split.sub.off")}</div></div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>
           <div class="zhead"><span class="lbl">${T("split.zone")}</span><button type="button" class="ghost-sm" data-go="zones">${T("split.zones")}</button></div>
           <div class="ztabs">${ZONES.map((x) => `<button type="button" class="${x.id === zoneTab ? "on" : ""}" data-ztab="${x.id}">${esc(zoneName(x.id))} <span>${routesIn(x.id).length}</span></button>`).join("")}</div>
           <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}</div>
           <label class="field"><input type="search" data-sq value="${esc(splitQ)}" placeholder="${esc(T("split.search"))}" /></label>
           <div class="rlist ${splitOn ? "" : "dim"}" id="splitRows">${splitRows()}</div>
           <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>
-          <div class="row-3"><button type="button" class="ghost" data-go="splitin">${T("import")}</button><button type="button" class="ghost" data-go="splitout">${T("export")}</button><button type="button" class="ghost" data-go="splitrepo">${T("split.repo")}</button></div>`;
+`;
       },
       splitsvc: () => {
         const r = svcId && ROUTES.find((x) => x.id === svcId);
