@@ -3,6 +3,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +47,38 @@ func TestMergePathFires(t *testing.T) {
 	case <-out:
 	case <-ctx.Done():
 		t.Fatal("no merge")
+	}
+}
+
+func TestOverlayStallQuietPing(t *testing.T) {
+	if overlayStall(true, false, false, true) {
+		t.Fatal("recent bytes")
+	}
+	if !overlayStall(true, false, false, false) {
+		t.Fatal("quiet ping")
+	}
+	if !overlayStall(false, true, true, true) {
+		t.Fatal("radio+node")
+	}
+}
+
+func TestNoteStallFiresAfterPersist(t *testing.T) {
+	d := NewDrive(io.Discard)
+	if d.noteStall(true) || d.noteStall(true) {
+		t.Fatal("early fire")
+	}
+	if !d.noteStall(true) {
+		t.Fatal("need persist")
+	}
+	if d.noteStall(true) {
+		t.Fatal("cooldown")
+	}
+	d.fails = 0
+	if d.noteStall(false) {
+		t.Fatal("clear")
+	}
+	if d.fails != 0 {
+		t.Fatal(d.fails)
 	}
 }
 

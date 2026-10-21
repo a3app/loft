@@ -24,17 +24,18 @@ import (
 
 // Drive writes one-line events to a writer (file + stderr).
 type Drive struct {
-	mu     sync.Mutex
-	w      io.Writer
-	f      *os.File
-	front  atomic.Value // string host:port
-	last   PathInfo
-	fails  int
-	ticks  int
-	fired  time.Time
-	prevUp uint64
-	prevDn uint64
-	prime  bool
+	mu       sync.Mutex
+	w        io.Writer
+	f        *os.File
+	front    atomic.Value // string host:port
+	last     PathInfo
+	fails    int
+	ticks    int
+	fired    time.Time
+	seenByte time.Time
+	prevUp   uint64
+	prevDn   uint64
+	prime    bool
 }
 
 var driveLog atomic.Pointer[Drive]
@@ -167,8 +168,17 @@ func frontHostPort(raw string) string {
 	return host
 }
 
-// WatchStall samples path/radio/overlay ping once a second. It logs stalls
-// and does not Close the live GET: a brief cell hole must keep mux.
+const (
+	stallNeed   = 3
+	stallCool   = 8 * time.Second
+	stallQuiet  = 12 * time.Second
+	nodeProbeTO = 2500 * time.Millisecond
+	muxPingTO   = 2500 * time.Millisecond
+)
+
+// WatchStall samples path/radio/overlay ping once a second. A brief cell
+// hole keeps mux. Persistent mux ping-dead while the node SYN still works
+// is GET HOL: fire a path event so Supervise rebinds GET (or Parks others).
 func WatchStall(ctx context.Context, h *Holder, d *Drive) <-chan struct{} {
 	ch := make(chan struct{}, 1)
 	if h == nil || d == nil {
@@ -184,14 +194,14 @@ func WatchStall(ctx context.Context, h *Holder, d *Drive) <-chan struct{} {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				d.tick(ctx, h)
+				d.tick(ctx, h, ch)
 			}
 		}
 	}()
 	return ch
 }
 
-func (d *Drive) tick(ctx context.Context, h *Holder) {
+func (d *Drive) tick(ctx context.Context, h *Holder, fire chan<- struct{}) {
 	p := SamplePath()
 	if p.Key() != d.last.Key() {
 		d.Event("PATH", append(pathKV(p), "was="+d.last.Egress)...)
@@ -211,7 +221,7 @@ func (d *Drive) tick(ctx context.Context, h *Holder) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			nodeMs, nodeErr = probeTCP(ctx, host, 800*time.Millisecond)
+			nodeMs, nodeErr = probeTCP(ctx, host, nodeProbeTO)
 		}()
 	}
 	sess := h.Session()
@@ -219,7 +229,7 @@ func (d *Drive) tick(ctx context.Context, h *Holder) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+			pctx, cancel := context.WithTimeout(ctx, muxPingTO)
 			defer cancel()
 			pingMs, pingErr = sess.Ping(pctx)
 		}()
@@ -262,10 +272,54 @@ func (d *Drive) tick(ctx context.Context, h *Holder) {
 	radioDead := radioErr != nil
 	pingDead := pingErr != nil
 	nodeDead := nodeErr != nil
-	// node SYN timeout during handoff is normal while ping still answers.
-	if pingDead || (radioDead && nodeDead) {
+	if ru > 0 || rd > 0 {
+		d.seenByte = time.Now()
+	}
+	recent := !d.seenByte.IsZero() && time.Since(d.seenByte) < stallQuiet
+	// Ping-dead while GET bodies are still moving is bulk, not HOL.
+	// Rebind then cancels in-flight GETs and RST the SOCKS stream.
+	stall := overlayStall(pingDead, radioDead, nodeDead, recent)
+	if stall {
 		d.Event("STALL", "reason="+stallWhy(radioDead, pingDead, nodeDead), "radio="+probeKV(radioMs, radioErr), "ping="+pingKV(sess, pingMs, pingErr), "node="+probeKV(nodeMs, nodeErr))
 	}
+	if d.noteStall(stall) && fire != nil {
+		select {
+		case fire <- struct{}{}:
+		default:
+		}
+		d.Event("PATH", append(pathKV(p), "why=stall")...)
+	}
+}
+
+// overlayStall is persistent HOL: mux ping-dead and no overlay bytes for
+// stallQuiet, or both radio and node SYN dead. Recent bytes are bulk.
+func overlayStall(pingDead, radioDead, nodeDead, recentBytes bool) bool {
+	if recentBytes {
+		return radioDead && nodeDead
+	}
+	return pingDead || (radioDead && nodeDead)
+}
+
+// noteStall counts consecutive stall samples. True after stallNeed in a
+// row, then cooldown so GET rebind does not churn the H2 pool every tick.
+func (d *Drive) noteStall(stall bool) bool {
+	if d == nil {
+		return false
+	}
+	if !stall {
+		d.fails = 0
+		return false
+	}
+	d.fails++
+	if d.fails < stallNeed {
+		return false
+	}
+	if !d.fired.IsZero() && time.Since(d.fired) < stallCool {
+		return false
+	}
+	d.fired = time.Now()
+	d.fails = 0
+	return true
 }
 
 func stallWhy(radio, ping, node bool) string {
