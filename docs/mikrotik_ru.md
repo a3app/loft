@@ -2,7 +2,7 @@
 
 [English](mikrotik.md) · **Русский** · [中文](mikrotik_zh.md)
 
-Как loft работает на плате MikroTik. Каталог: [clients/MikroTik/](../clients/MikroTik/). План: [clients/MikroTik/PLAN_ru.md](../clients/MikroTik/PLAN_ru.md). Макет: [clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
+Как loft работает на плате MikroTik. Каталог: [clients/MikroTik/](../clients/MikroTik/). Макет: [clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
 
 Образ собирается `make -C clients/MikroTik image`. В Dist его пока нет. Доппакеты RouterOS выпускает только MikroTik; loft едет контейнером.
 

@@ -4,7 +4,7 @@
 
 Container client for MikroTik **RouterOS 7**. The same `loft` binary as Linux CLI, inside `/container`. Not a vendor `.npk`.
 
-Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/mikrotik.md](../../docs/mikrotik.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
+Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/mikrotik.md](../../docs/mikrotik.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
 
 ## What the operator gets
 
@@ -31,7 +31,6 @@ Need RouterOS **7.12+**, extra package `container`, `device-mode container=yes` 
 ```
 clients/MikroTik/
   README.md          this file
-  PLAN.md            phases
   design/            UX spec and HTML walkthrough
   pack/              Dockerfile, client.yaml, check/install/policy/uplink/uninstall.rsc
   Makefile           linux loft + docker save

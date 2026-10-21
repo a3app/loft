@@ -10,7 +10,7 @@
 | [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Automated GET/WS throughput vs the macOS connect path |
 | [`macOS/`](macOS/) | Menu-bar app. UX: [`macOS/design/DESIGN.md`](macOS/design/DESIGN.md) |
 | [`Keenetic/`](Keenetic/) | Entware / OpkgTun. Plan: [`Keenetic/PLAN.md`](Keenetic/PLAN.md). Mock: [`Keenetic/design/index.html`](Keenetic/design/index.html) |
-| [`MikroTik/`](MikroTik/) | RouterOS 7 container. Plan: [`MikroTik/PLAN.md`](MikroTik/PLAN.md). Mock: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
+| [`MikroTik/`](MikroTik/) | RouterOS 7 container. Mock: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Thin host + appex. Mock: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md) phase 6 |
 | [`Android/`](Android/) | VpnService. Thin Java host. Mock: [`Android/design/index.html`](Android/design/index.html). Android TV / Google TV: [`Android/PLAN.md`](Android/PLAN.md) phase 4 |
 | [`Aurora/`](Aurora/) | ConnMan overlay. Thin QML host + loft-front. Mock: [`Aurora/design/index.html`](Aurora/design/index.html) |

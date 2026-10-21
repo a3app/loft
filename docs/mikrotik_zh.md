@@ -2,7 +2,7 @@
 
 [English](mikrotik.md) · [Русский](mikrotik_ru.md) · **中文**
 
-loft 在 MikroTik 板上怎么跑。目录：[clients/MikroTik/](../clients/MikroTik/)。计划：[clients/MikroTik/PLAN_zh.md](../clients/MikroTik/PLAN_zh.md)。模型：[clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。
+loft 在 MikroTik 板上怎么跑。目录：[clients/MikroTik/](../clients/MikroTik/)。模型：[clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。
 
 镜像用 `make -C clients/MikroTik image` 打。暂不进 Dist。RouterOS 额外包只有厂商能发；loft 以容器镜像交付。
 

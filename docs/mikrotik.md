@@ -2,7 +2,7 @@
 
 **English** · [Русский](mikrotik_ru.md) · [中文](mikrotik_zh.md)
 
-How loft runs on a MikroTik board. Catalog: [clients/MikroTik/](../clients/MikroTik/). Plan: [clients/MikroTik/PLAN.md](../clients/MikroTik/PLAN.md). Mock: [clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html). Protocol: [protocol.md](protocol.md).
+How loft runs on a MikroTik board. Catalog: [clients/MikroTik/](../clients/MikroTik/). Mock: [clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html). Protocol: [protocol.md](protocol.md).
 
 The image is built with `make -C clients/MikroTik image`. Dist does not ship it yet. MikroTik extra packages are vendor-only; loft ships as a container image.
 

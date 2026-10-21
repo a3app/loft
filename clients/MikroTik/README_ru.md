@@ -4,7 +4,7 @@
 
 Клиент-контейнер для MikroTik **RouterOS 7**. Тот же бинарник `loft`, что и Linux CLI, внутри `/container`. Это не `.npk` MikroTik.
 
-Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Как устроено: [docs/mikrotik_ru.md](../../docs/mikrotik_ru.md). План: [PLAN_ru.md](PLAN_ru.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
+Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Как устроено: [docs/mikrotik_ru.md](../../docs/mikrotik_ru.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
 
 ## Что получает оператор
 
@@ -31,7 +31,6 @@ RouterOS решает **куда** идут пакеты (mangle, таблицы
 ```
 clients/MikroTik/
   README.md          этот файл
-  PLAN.md            фазы
   design/            UX и HTML-проходка
   pack/              Dockerfile, client.yaml, *.rsc
   Makefile           linux loft + docker save

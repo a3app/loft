@@ -4,7 +4,7 @@
 
 MikroTik **RouterOS 7** 上的容器客户端。就是 Linux CLI 那份 `loft`，跑在 `/container` 里。不是厂商 `.npk`。
 
-协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/mikrotik_zh.md](../../docs/mikrotik_zh.md)。计划：[PLAN_zh.md](PLAN_zh.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
+协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/mikrotik_zh.md](../../docs/mikrotik_zh.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
 
 ## 运营方拿到什么
 
@@ -31,7 +31,6 @@ RouterOS 管包**往哪走**（mangle、路由表、address-list）。loft 管�
 ```
 clients/MikroTik/
   README.md          本文件
-  PLAN.md            阶段
   design/            UX 和 HTML 走查
   pack/              Dockerfile、client.yaml、*.rsc
   Makefile           linux loft + docker save
