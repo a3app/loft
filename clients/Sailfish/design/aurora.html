@@ -1,0 +1,3047 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — Аврора</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --ink-2: #241f1b;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+      --au-bg: #1c232b;
+      --au-card: #27303a;
+      --au-ink: #e8eef4;
+      --au-mute: #8a98a6;
+      --au-line: #35404c;
+      --au-hi: #4db6e2;
+      --ios-bg: #f2f2f7;
+      --ios-card: #ffffff;
+      --ios-ink: #1c1c1e;
+      --ios-mute: #6c6c70;
+      --ios-line: #c6c6c8;
+      --ios-blue: #007aff;
+      --ios-green: #34c759;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      height: 100%;
+    }
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #3A332E transparent;
+    }
+    nav::-webkit-scrollbar { width: 6px; }
+    nav::-webkit-scrollbar-track { background: transparent; }
+    nav::-webkit-scrollbar-thumb {
+      background: #3A332E;
+      border-radius: 6px;
+    }
+    nav::-webkit-scrollbar-thumb:hover { background: #8A7E72; }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 14px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav button {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 6px 10px; border-radius: 8px; cursor: pointer;
+    }
+    nav button:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang { display: flex; gap: 4px; margin: 4px 8px 10px; }
+    .lang button { flex: 1; text-align: center; padding: 6px 0; font-weight: 600; font-size: 12px; }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage-wrap {
+      padding: 28px; display: flex; align-items: center; justify-content: center;
+      min-height: 0; overflow: auto;
+      scrollbar-width: none;
+    }
+    .stage-wrap::-webkit-scrollbar { width: 0; height: 0; }
+
+    .phone {
+      width: 320px; height: 660px;
+      background: #181512;
+      border: 10px solid #2c2622;
+      border-radius: 42px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      color: var(--snow);
+    }
+    .pulley {
+      position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+      width: 42px; height: 5px; background: #3a332e; border-radius: 3px; z-index: 5;
+    }
+    .sb {
+      height: 36px; padding: 12px 18px 0;
+      display: flex; justify-content: space-between; font-size: 11px; font-weight: 600;
+      color: var(--snow); letter-spacing: .02em;
+    }
+    .home-ind {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      width: 96px; height: 4px; background: #3a332e; border-radius: 2px; z-index: 4;
+    }
+    .screen {
+      position: absolute; inset: 0;
+      padding: 48px 16px 22px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .screen .scroll {
+      flex: 1; overflow: auto; min-height: 0; padding-bottom: 8px;
+      scrollbar-width: none;
+    }
+    .screen .scroll::-webkit-scrollbar { width: 0; height: 0; }
+    .hidden { display: none !important; }
+
+    .lamp {
+      width: 12px; height: 12px; border-radius: 3px; background: var(--mute);
+      display: inline-block; vertical-align: middle;
+    }
+    .lamp.on { background: var(--lamp); box-shadow: 0 0 12px rgba(232,184,74,.55); }
+    .lamp.wait { background: var(--lamp-hi); box-shadow: 0 0 8px rgba(243,210,122,.35); }
+
+    .hero { text-align: center; padding: 4px 8px 0; }
+    .hero .mark { width: 56px; height: 56px; margin: 0 auto 8px; }
+    .hero h1 { margin: 0; font-size: 22px; letter-spacing: -0.04em; font-weight: 600; }
+    .hero .sub { color: var(--mute); font-size: 12px; margin-top: 6px; line-height: 1.4; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin: 10px auto 0; padding: 4px 12px 4px 8px;
+      background: #211c19; border-radius: 12px; cursor: pointer;
+      font-size: 11.5px; color: var(--mute);
+    }
+    .pill i {
+      width: 7px; height: 7px; border-radius: 3.5px; background: var(--mute);
+    }
+    .pill.on i { background: var(--lamp); }
+    .pill.err i { background: var(--err); }
+
+    .go, .ghost, .danger {
+      border: 0; border-radius: 14px; padding: 12px 16px; cursor: pointer;
+      font: 600 15px var(--ui); width: 100%;
+    }
+    .go { background: var(--lamp); color: var(--ink); }
+    .ghost { background: #2a2420; color: var(--snow); }
+    .danger { background: rgba(226,75,75,.15); color: #f0a0a0; }
+    .btns { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 10px 0 0; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+
+    .cards { display: flex; gap: 6px; margin-top: 16px; cursor: pointer; }
+    .plate {
+      flex: 1; background: #211c19; border-radius: 10px; padding: 8px 8px 10px; min-width: 0;
+    }
+    .plate .k {
+      font-size: 9px; letter-spacing: .08em; color: var(--mute); text-transform: uppercase; font-weight: 600;
+    }
+    .plate .v {
+      font-family: var(--ui); font-size: 12.5px; font-weight: 600; margin-top: 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .spark {
+      display: flex; align-items: stretch; gap: 12px;
+      margin-top: 14px; color: var(--mute); font-size: 11.5px; min-height: 40px;
+    }
+    .spark .g { flex: 1; min-width: 0; display: flex; align-items: center; }
+    .spark .g svg { display: block; width: 100%; height: 40px; overflow: visible; }
+    .spark .r {
+      display: flex; flex-direction: column; justify-content: space-around; align-items: flex-end;
+      font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .spark .r .dn { color: var(--lamp); }
+    .spark .r .up { color: var(--stone); }
+    .home.simple .cards, .home.simple .spark { display: none; }
+    .iprows { margin-top: 12px; border-top: 1px solid var(--line); }
+    .iprows .r {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 12.5px;
+    }
+    .iprows .r .k { color: var(--mute); }
+    .iprows .r .v { font-family: var(--mono); font-size: 12px; }
+    .home.simple .iprows, .home:not(.live) .iprows { display: none; }
+    .home.busy .spark .r { display: none; }
+
+    .foot {
+      display: flex; gap: 6px; margin-top: auto; padding-top: 12px;
+      border-top: 1px solid var(--line); flex-shrink: 0;
+    }
+    .foot button {
+      flex: 1; border: 0; border-radius: 10px; padding: 8px 4px;
+      font: 600 9.5px var(--ui); background: #2a2420; color: var(--snow); cursor: pointer;
+      white-space: normal; line-height: 1.2; min-height: 36px;
+    }
+
+    .ghost-sm {
+      background: none; border: 0; color: var(--lamp); font: 600 12px var(--ui);
+      cursor: pointer; padding: 6px 0; display: block;
+    }
+    .zhead { display: flex; justify-content: space-between; align-items: center; margin: 2px 0 4px; }
+    .zhead .lbl { font-size: 12px; color: var(--mute); }
+    .ztabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 0 8px; }
+    .ztabs::-webkit-scrollbar { height: 0; }
+    .ztabs button {
+      flex: 0 0 auto; border: 0; border-radius: 999px; padding: 7px 12px; cursor: pointer;
+      background: #211c19; color: var(--stone); font: 600 12px var(--ui);
+    }
+    .ztabs button.on { background: var(--lamp); color: var(--ink); }
+    .ztabs button span { font-weight: 500; opacity: .7; }
+    .policy { color: var(--mute); font-size: 12px; margin: 0 0 10px; }
+    .rrow {
+      display: flex; gap: 8px; align-items: center; justify-content: space-between;
+      background: #211c19; border: 1px solid #2e2824; border-radius: 12px;
+      padding: 9px 12px; margin-bottom: 6px; cursor: pointer;
+    }
+    .rrow.live { border-color: rgba(232,184,74,.45); }
+    .rrow .grow { min-width: 0; }
+    .rrow .n { font-weight: 600; font-size: 13.5px; }
+    .rrow .m { color: var(--mute); font: 400 10.5px var(--mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rrow .meta { text-align: right; font-size: 11px; color: var(--stone); flex-shrink: 0; }
+    .rrow .meta .src { color: var(--mute); font-size: 10px; margin-top: 2px; }
+    .rlist.dim { opacity: .5; }
+    .row-3 { display: flex; gap: 6px; margin-top: 10px; }
+    .row-3 .ghost { flex: 1; font-size: 12px; padding: 10px 4px; }
+    .repo-row { display: flex; gap: 6px; margin-top: 4px; }
+    .repo-row input { flex: 1; min-width: 0; margin-top: 0 !important; }
+    .repo-row .ghost { width: auto; flex: 0 0 auto; padding: 0 12px; font-size: 12px; }
+    .fmt {
+      background: #211c19; border-radius: 10px; padding: 10px; margin: 10px 0;
+      font: 400 10px var(--mono); color: var(--stone); white-space: pre-wrap; word-break: break-all;
+    }
+
+    .tabbar {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+      display: flex; padding: 6px 8px 20px;
+      background: #181512; border-top: 1px solid var(--line);
+    }
+    .tabbar button {
+      flex: 1; border: 0; background: none; cursor: pointer; color: var(--mute);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      font: 600 9.5px var(--ui); padding: 2px 0;
+    }
+    .tabbar svg { width: 22px; height: 22px; }
+    .tabbar button.on { color: var(--lamp); }
+    .tabbar { display: none !important; }
+    .phone.tabbed .screen { padding-bottom: 22px; }
+    /* Silica: page title on the right in the highlight colour, back indicator on the left */
+    .head .title { text-align: right; color: var(--lamp); font-weight: 500; }
+    .screen:not(.home):not(#onboard) .hero:has(h1:first-child) { text-align: right; }
+    .screen:not(.home):not(#onboard) .hero h1 { color: var(--lamp); font-weight: 500; }
+    .screen > .title { text-align: right; color: var(--lamp); font-weight: 500 !important; }
+    .navbar button[data-back].bk { font: 300 22px var(--ui); color: var(--stone); padding: 0 6px 0 0; line-height: 1; }
+    .dlghdr { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 8px; }
+    .dlghdr button { background: none; border: 0; cursor: pointer; font: 500 15px var(--ui); color: var(--stone); padding: 4px 0; }
+    .dlghdr button.accept { color: var(--lamp); font-size: 18px; }
+    /* pulley menu: a lit line at the top; pulled, its items stand centred over the page */
+    /* Aurora 5: AppBar on top of the page content; its "more" opens a PopupMenu over it */
+    .appbar { display: flex; align-items: center; gap: 2px; min-height: 40px; margin: -6px -8px 8px; position: relative; z-index: 3; }
+    .appbar .ab-t { flex: 1; min-width: 0; font: 600 17px var(--ui); letter-spacing: -0.02em; padding: 0 6px; }
+    .appbar button { width: 38px; height: 38px; border: 0; border-radius: 10px; background: none; color: var(--snow); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: 400 22px var(--ui); }
+    .appbar button:hover { background: #2a2420; }
+    .appbar button svg { width: 22px; height: 22px; }
+    .appbar .bk { color: var(--stone); font-weight: 300; }
+    .popmenu { display: none; position: absolute; right: 10px; top: 86px; z-index: 8; min-width: 200px; background: #2e2824; border-radius: 12px; overflow: hidden; box-shadow: 0 16px 36px rgba(0,0,0,.5); }
+    .screen.pulled .popmenu { display: block; }
+    .popmenu button { display: block; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--snow); font: 500 14px var(--ui); padding: 13px 16px; cursor: pointer; }
+    .popmenu button:last-child { border-bottom: 0; }
+    /* remorse: the action runs after a countdown; a tap cancels it */
+    .scrim.remorse { background: transparent; align-items: flex-start; padding: 40px 0 0; }
+    .remorse-bar { width: 100%; background: #2a2420; padding: 12px 16px 14px; cursor: pointer; }
+    .remorse-bar b { display: block; font-size: 14px; color: var(--snow); }
+    .remorse-bar span { font-size: 11px; color: var(--stone); }
+    .remorse-bar i { display: block; height: 3px; margin-top: 10px; background: var(--lamp); border-radius: 2px; animation: remorse 5s linear forwards; }
+    @keyframes remorse { from { width: 100%; } to { width: 0; } }
+    .phone.tabbed .screen { padding-bottom: 76px; }
+    .navbar {
+      display: flex; align-items: center; min-height: 28px; margin: 0 0 6px;
+    }
+    .navbar button {
+      background: none; border: 0; color: var(--lamp); font: 500 13px var(--ui);
+      cursor: pointer; padding: 4px 0;
+    }
+
+    .head {
+      display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
+    }
+    .head .title {
+      font-size: 20px; font-weight: 600; letter-spacing: -0.03em; margin: 0; flex: 1;
+    }
+    .head .plus {
+      width: 28px; height: 28px; border: 0; border-radius: 8px; cursor: pointer;
+      background: var(--lamp); color: var(--ink); font: 600 16px var(--ui);
+    }
+    .head .qr {
+      border: 0; border-radius: 8px; padding: 6px 8px; cursor: pointer;
+      background: #2a2420; color: var(--snow); font: 600 10px var(--ui);
+      max-width: 118px; line-height: 1.15; white-space: normal;
+    }
+    .subline { color: var(--mute); font-size: 12.5px; margin: 0 0 12px; }
+
+    label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
+    label.field input, label.field select, label.field textarea {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 10px; padding: 10px 12px; font: 400 14px var(--ui);
+    }
+    label.field input.mono, label.field textarea { font-family: var(--mono); font-size: 12px; }
+    .secret {
+      display: flex; align-items: stretch; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; border-radius: 10px;
+    }
+    .secret input {
+      flex: 1; background: none; border: 0; color: var(--snow); padding: 10px 12px;
+      font: 400 11px var(--mono); min-width: 0;
+    }
+    .secret .eye {
+      border: 0; background: none; color: var(--mute); font: 600 11px var(--ui);
+      padding: 0 12px; cursor: pointer; white-space: nowrap;
+    }
+
+    .seg {
+      display: flex; background: #211c19; border-radius: 10px; padding: 3px; gap: 2px; margin: 0 0 14px;
+    }
+    .seg button {
+      flex: 1; border: 0; background: none; color: var(--stone);
+      font: 600 11px var(--ui); padding: 8px 2px; border-radius: 8px; cursor: pointer;
+    }
+    .seg button.on { background: #2a2420; color: var(--snow); }
+    .seg button.ico { display: flex; align-items: center; justify-content: center; gap: 5px; }
+    .seg button.ico svg { width: 13px; height: 13px; flex: 0 0 auto; }
+    .seg.cap { background: transparent; padding: 0; gap: 6px; justify-content: flex-end; }
+    .type-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
+    .type-row .k { flex: 1; font-size: 13.5px; }
+    .type-row .seg.cap { flex: 0 0 auto; width: auto; margin: 0; }
+    label.field.cap { margin-bottom: 4px; }
+    .pair {
+      display: grid; grid-template-columns: 1fr 80px; gap: 8px;
+    }
+    .seg.cap button {
+      background: #211c19; border-radius: 999px; padding: 7px 8px; font-size: 12px;
+    }
+    .seg.cap button.on { background: var(--lamp); color: var(--ink); }
+
+    .set-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--line);
+    }
+    .set-row .k { font-size: 14px; }
+    .grp {
+      margin: 14px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--mute);
+    }
+    .grp:first-child { margin-top: 0; }
+    .set-row .s { color: var(--mute); font-size: 11px; margin-top: 2px; line-height: 1.35; }
+    .set-row select {
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 8px; padding: 6px 8px; font: 400 12px var(--ui); max-width: 120px;
+    }
+    .toggle {
+      width: 42px; height: 26px; border-radius: 13px; background: #3a332e; position: relative; flex-shrink: 0;
+    }
+    .toggle i {
+      position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #d8cfc4;
+    }
+    .toggle.on { background: var(--lamp); }
+    .toggle.on i { left: 19px; background: var(--ink); }
+    .links {
+      display: flex; justify-content: center; gap: 12px; margin-top: 16px;
+    }
+    .links button {
+      background: none; border: 0; color: var(--mute); font: 500 11.5px var(--ui); cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .card {
+      background: #211c19; border: 1px solid #2e2824; border-radius: 12px;
+      padding: 8px 10px; margin-bottom: 0; display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; gap: 8px;
+    }
+    .card .n { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card .m { color: var(--mute); font-size: 11px; margin-top: 2px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card.on { border-color: rgba(232,184,74,.45); }
+    .card .grow { flex: 1; min-width: 0; overflow: hidden; }
+    .card .side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+    .card .sk { font-size: 10.5px; color: var(--stone); }
+    .card .live { display: none; font-size: 10.5px; color: var(--lamp); }
+    .card.on .live { display: inline; }
+    .mini {
+      flex-shrink: 0; width: 90px; height: 28px; border: 0; border-radius: 10px;
+      padding: 0 4px; font: 600 10px var(--ui); cursor: pointer;
+      background: #2a2420; color: var(--snow);
+      display: flex; align-items: center; justify-content: center;
+      white-space: nowrap;
+    }
+    .mini.lamp { background: var(--lamp); color: var(--ink); }
+    .ghost-link {
+      background: none; border: 0; color: var(--mute); font: 500 11.5px var(--ui);
+      cursor: pointer; padding: 0;
+    }
+    .chip {
+      display: none; border: 0; border-radius: 8px; padding: 4px 7px; cursor: pointer;
+      font: 600 10px var(--ui); background: rgba(232,184,74,.16); color: var(--lamp);
+      white-space: nowrap;
+    }
+    .card.on .chip { display: inline-block; }
+    .swipe {
+      position: relative; margin-bottom: 8px; border-radius: 12px; overflow: hidden;
+      touch-action: pan-y;
+    }
+    .swipe .behind {
+      position: absolute; inset: 0;
+      display: flex; justify-content: space-between;
+    }
+    .swipe .act {
+      width: 84px; display: flex; align-items: center; justify-content: center;
+      font: 600 12px var(--ui); border: 0; cursor: pointer; color: var(--ink);
+    }
+    .swipe .act-edit { background: var(--lamp); }
+    .swipe .act-del { background: var(--err); color: #fff; margin-left: auto; }
+    .swipe .card { margin: 0; position: relative; z-index: 1; transition: transform .18s ease; }
+    .swipe.open-l .card { transform: translateX(84px); }
+    .swipe.open-r .card { transform: translateX(-84px); }
+    .scrim {
+      position: absolute; inset: 0; background: rgba(10,9,8,.5);
+      z-index: 6; display: flex; align-items: flex-end; padding: 16px 16px 28px;
+    }
+    .scrim.mid { align-items: center; }
+    .sheet {
+      background: #2a2420; border-radius: 16px; width: 100%; overflow: hidden;
+    }
+    .sheet h3 { margin: 0; padding: 16px 16px 6px; font-size: 13px; color: var(--mute); font-weight: 600; }
+    .sheet p.sub { margin: 0 16px 10px; font-size: 12px; color: var(--stone); line-height: 1.4; }
+    .sheet button.row {
+      display: flex; width: 100%; justify-content: space-between; align-items: center;
+      padding: 14px 16px; background: none; border: 0; border-top: 1px solid var(--line);
+      color: var(--snow); font: 500 15px var(--ui); cursor: pointer; text-align: left;
+    }
+    .sheet button.row .s { color: var(--mute); font-size: 11px; font-weight: 400; }
+    .sheet button.row.danger { color: #f0a0a0; }
+    .scrim button.cancel {
+      display: block; width: 100%; margin-top: 8px; border: 0;
+      background: #211c19; color: var(--snow); border-radius: 14px;
+      padding: 14px 16px; font: 600 15px var(--ui); cursor: pointer;
+    }
+    .ctx {
+      position: absolute; left: 36px; right: 36px; top: 168px; z-index: 7;
+      background: #2e2824; border-radius: 14px; overflow: hidden;
+      box-shadow: 0 18px 40px rgba(0,0,0,.45);
+    }
+    .ctx .preview { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+    .ctx button {
+      display: flex; width: 100%; justify-content: space-between; align-items: center;
+      padding: 13px 16px; background: none; border: 0; border-bottom: 1px solid var(--line);
+      color: var(--snow); font: 500 15px var(--ui); cursor: pointer;
+    }
+    .ctx button:last-child { border-bottom: 0; }
+    .ctx button.danger { color: #f0a0a0; }
+    .row-2 { display: flex; gap: 8px; }
+    .row-2 .go, .row-2 .ghost { flex: 1; }
+    .finder {
+      position: relative;
+      height: 220px; margin: 8px 0 12px;
+      background: #0a0908;
+      border-radius: 16px; overflow: hidden;
+    }
+    .finder .noise {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 40% 35%, rgba(232,184,74,.12), transparent 50%),
+        repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(243,237,228,.03) 3px, rgba(243,237,228,.03) 4px);
+    }
+    .finder .frame { position: absolute; inset: 28px; border: 0; }
+    .finder .frame i {
+      position: absolute; width: 22px; height: 22px; border-color: var(--lamp); border-style: solid;
+    }
+    .finder .frame i:nth-child(1) { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .finder .frame i:nth-child(2) { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    .finder .frame i:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+    .finder .frame i:nth-child(4) { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+    .qr-fake {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 92px; height: 92px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+      padding: 6px; background: #f3ede4; border-radius: 4px;
+    }
+    .qr-fake b { background: #1a1714; border-radius: 0.5px; }
+    .qr-fake b.off { background: transparent; }
+    .paste {
+      display: block; width: 100%; min-height: 64px; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 10px; padding: 10px 12px; font: 400 11px var(--mono);
+      resize: none;
+    }
+    .spin {
+      width: 22px; height: 22px; border: 2px solid #2e2824; border-top-color: var(--lamp);
+      border-radius: 50%; margin: 0 auto 10px; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .log {
+      flex: 1; background: #211c19; border-radius: 12px; padding: 12px;
+      font: 400 11px var(--mono); color: var(--stone); line-height: 1.55;
+      overflow: auto; white-space: pre-wrap; min-height: 0;
+      scrollbar-width: none;
+    }
+    .log::-webkit-scrollbar { width: 0; height: 0; }
+    .about { text-align: center; }
+    .about .ver { color: var(--mute); font-size: 12.5px; margin-top: 4px; }
+    .about .kick { color: var(--mute); font-size: 11px; margin: 18px 0 8px; }
+    .protos { max-width: 280px; margin: 0 auto; }
+    .proto {
+      display: grid; grid-template-columns: 52px 1fr; gap: 4px 8px;
+      font-size: 12.5px; margin: 3px 0; text-align: left;
+    }
+    .proto .k { color: var(--mute); text-align: right; }
+    .proto .v { font-family: var(--mono); font-size: 10px; line-height: 1.35; }
+    .blurb { color: var(--stone); font-size: 13.5px; line-height: 1.4; margin: 22px 16px 0; white-space: pre-line; }
+    .made { color: var(--mute); font-size: 12px; margin-top: 28px; }
+    .made .heart { color: var(--lamp); }
+
+    .pair { display: flex; gap: 8px; margin-top: 8px; }
+    .pair .ghost, .pair .go { flex: 1; }
+    .end-row { display: flex; justify-content: space-between; margin-top: 8px; }
+    .end-row button {
+      background: none; border: 0; color: var(--mute); font: 500 12.5px var(--ui); cursor: pointer; padding: 8px 0;
+    }
+    .end-row button.danger { color: var(--copper); }
+
+    /* Sailfish system surfaces */
+    .sys {
+      width: 320px; height: 680px;
+      background: var(--au-bg); color: var(--au-ink);
+      border: 8px solid #2c2622; border-radius: 36px;
+      overflow: hidden; position: relative;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      font-size: 13px;
+    }
+    .sys .pulley { background: #4a5866; }
+    .sys .sb { color: var(--au-ink); }
+    .sys .home-ind { background: #4a5866; }
+    .sys main { padding: 44px 16px 24px; }
+    .sys h2 { margin: 0 0 4px; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+    .sys .cap { color: var(--au-mute); margin: 0 0 14px; font-size: 12px; line-height: 1.4; }
+    .a-group {
+      background: var(--au-card); border-radius: 12px; overflow: hidden;
+    }
+    .a-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 13px 16px; border-bottom: 1px solid var(--au-line);
+    }
+    .a-row:last-child { border-bottom: 0; }
+    .a-row .l { font-size: 15px; }
+    .a-status { color: var(--au-hi); font-size: 12px; font-weight: 500; }
+    .a-sw {
+      width: 48px; height: 28px; border-radius: 14px; background: var(--au-hi); position: relative;
+    }
+    .a-sw i {
+      position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff;
+    }
+
+    .cover-stage {
+      width: 320px; height: 680px;
+      background: #0a0908;
+      border: 8px solid #2c2622; border-radius: 36px;
+      overflow: hidden; position: relative;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    }
+    .cover-stage .sb { color: var(--stone); }
+    .cover-card {
+      position: absolute; left: 36px; right: 36px; top: 160px;
+      background: #211c19; border-radius: 18px; padding: 22px 16px 16px;
+      text-align: center;
+    }
+    .cover-card .mark { width: 40px; height: 40px; margin: 0 auto 10px; }
+    .cover-card h3 { margin: 0; font-size: 18px; letter-spacing: -0.03em; }
+    .cover-card .sub { color: var(--mute); font-size: 12px; margin-top: 6px; }
+    .cover-card .go { margin-top: 16px; }
+    .os-sw { margin: -4px 0 12px; font-size: 12px; color: var(--stone); }
+    .os-sw a { color: var(--lamp); }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+        <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+        <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+      </svg>
+      loft
+    </div>
+    <p data-i="navCap">Макет приложения ОС Аврора 5. Туннель — ConnMan, сессия — loft-front.</p>
+    <p class="os-sw"><b>ОС Аврора</b> · <a href="index.html" onclick="this.href='index.html'+location.hash">Sailfish OS</a></p>
+    <div class="lang">
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
+      <button type="button" id="lang-zh" onclick="setLang('zh')">中文</button>
+    </div>
+    <h4 data-i="hApp">Приложение</h4>
+    <button type="button" class="on" data-go="home" data-mode="on" data-i="nHome">Дом · в сети</button>
+    <button type="button" data-go="home" data-mode="off" data-i="nOff">Дом · выкл</button>
+    <button type="button" data-go="home" data-mode="connecting" data-i="nOpen">Дом · подключение</button>
+    <button type="button" data-go="home" data-mode="simple" data-i="nSimple">Дом · упрощённый</button>
+    <button type="button" data-go="home" data-mode="on" data-pulley="1" data-i="nPulley">Дом · меню</button>
+    <button type="button" data-go="home" data-mode="on" data-vpn="sstp" data-i="nHomeSstp">Дом · SSTP</button>
+    <button type="button" data-go="home" data-mode="on" data-vpn="vless" data-i="nHomeVless">Дом · VLESS</button>
+    <button type="button" data-go="home" data-mode="on" data-vpn="trojan" data-i="nHomeTrojan">Дом · Trojan</button>
+    <button type="button" data-go="home" data-mode="on" data-spark="bars" data-i="nHomeBars">Дом · столбики</button>
+    <button type="button" data-go="list" data-i="nList">Подключения</button>
+    <button type="button" data-go="list" data-list="ctx" data-i="nCtx">Список · меню</button>
+    <button type="button" data-go="list" data-list="export" data-i="nExp">Список · экспорт</button>
+    <button type="button" data-go="list" data-pulley="1" data-i="nAdd">Список · добавить</button>
+    <button type="button" data-go="edit" data-vpn="loft" data-edittab="main" data-i="nEdit">Правка</button>
+    <button type="button" data-go="edit" data-vpn="loft" data-edittab="adv" data-i="nEditAdv">Правка · дополнительно</button>
+    <button type="button" data-go="edit" data-vpn="sstp" data-edittab="main" data-i="nEditSstp">Правка · SSTP</button>
+    <button type="button" data-go="edit" data-vpn="vless" data-edittab="main" data-i="nEditVless">Правка · VLESS</button>
+    <button type="button" data-go="edit" data-vpn="trojan" data-edittab="main" data-i="nEditTrojan">Правка · Trojan</button>
+    <button type="button" data-go="scan" data-i="nScan">Сканер QR-кода</button>
+    <button type="button" data-go="share" data-i="nShare">Поделиться QR</button>
+    <button type="button" data-go="onboard" data-step="0" data-i="nOnb0">Начало · первый запуск</button>
+    <button type="button" data-go="onboard" data-step="1" data-i="nOnb">Начало · ключ</button>
+    <button type="button" data-go="onboard" data-step="2" data-i="nOnb2">Начало · адрес</button>
+    <button type="button" data-go="settings" data-settab="0" data-i="nSet">Настройки · общие</button>
+    <button type="button" data-go="settings" data-settab="1" data-i="nSetR">Настройки · маршрут</button>
+    <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · подключение</button>
+    <h4 data-i="hRoutes">Раздельная маршрутизация</h4>
+    <button type="button" data-go="split" data-i="nSplit">Маршруты · списки</button>
+    <button type="button" data-go="splitsvc" data-i="nSvc">Маршруты · сеть</button>
+    <button type="button" data-go="zones" data-i="nZones">Маршруты · зоны</button>
+    <button type="button" data-go="zone" data-i="nZone">Маршруты · зона</button>
+    <button type="button" data-go="splitrepo" data-i="nRepo">Маршруты · репозиторий</button>
+    <button type="button" data-go="splitlists" data-i="nLists">Маршруты · каталог</button>
+    <button type="button" data-go="splitin" data-i="nSin">Маршруты · импорт</button>
+    <button type="button" data-go="splitout" data-i="nSout">Маршруты · экспорт</button>
+    <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
+    <button type="button" data-go="about" data-i="nAbout">О программе</button>
+    <h4>Аврора</h4>
+    <button type="button" data-go="cover" data-i="nCover">Обложка</button>
+    <button type="button" data-go="sysvpn" data-i="nSys">Настройки → VPN</button>
+  </nav>
+
+  <div class="stage-wrap">
+    <div class="phone" id="phone">
+      <div class="pulley"></div>
+      <div class="sb"><span>12:00</span><span>LTE  ·  84%</span></div>
+      <div class="home-ind"></div>
+
+      <div class="screen home" id="home">
+        <div class="appbar"><span class="ab-t"></span><button type="button" data-go="list" aria-label="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg></button><button type="button" data-go="settings" aria-label="Настройки"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button><button type="button" data-menu aria-label="Ещё">⋮</button></div>
+        <div class="popmenu"><button type="button" data-go="scan" data-i="addScan">Сканировать QR-код</button></div>
+        <div class="scroll" style="display:flex;flex-direction:column">
+          <div class="hero">
+            <svg class="mark" id="homeMark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+              <path id="homeBody" fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+              <path id="homeWin" fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+            </svg>
+            <h1>loft</h1>
+            <div class="pill on" id="homePill" data-go="list">
+              <i></i><span id="homePillT" data-i="pillOn">Подключено: Home 0:12</span>
+            </div>
+          </div>
+          <div class="btns">
+            <button type="button" class="danger" id="homeAct" data-i="disconnect">Отключить</button>
+          </div>
+          <div class="cards" id="homeCards" data-sheet="det">
+            <div class="plate"><div class="k" id="cardK1">ПРОТОКОЛ</div><div class="v" id="cardV1">loft/1.0</div></div>
+            <div class="plate"><div class="k" id="cardK2">ФРОНТ</div><div class="v" id="cardV2">GET</div></div>
+            <div class="plate"><div class="k" id="cardK3">ОПЦИИ</div><div class="v" id="cardV3">mux · mask</div></div>
+          </div>
+          <div class="spark" id="homeSpark">
+            <div class="g" id="sparkL"></div>
+            <div class="r" id="sparkR"><span class="dn">↓ 12.4 Мбит/с</span><span class="up">↑ 1.1 Мбит/с</span></div>
+          </div>
+          <div class="iprows" id="homeIPs">
+            <div class="r"><span class="k" data-i="extIpK">Внешний IP</span><span class="v">203.0.113.17</span></div>
+            <div class="r"><span class="k" data-i="overIpK">Overlay IP</span><span class="v">10.8.0.14</span></div>
+            <div class="r"><span class="k" data-i="routeK">Маршрут</span><span class="v">10.8.0.1</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="list">
+        <div class="appbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button><span class="ab-t" data-i="conns">Подключения</span><button type="button" data-menu aria-label="Добавить">+</button></div>
+        <div class="popmenu"><button type="button" data-go="scan" data-i="addScan">Сканировать QR-код</button><button type="button" data-go="edit" data-new="1" data-i="addPaste">Вставить ссылку</button><button type="button" data-go="scan" data-i="fromFile">Из файла</button><button type="button" data-go="edit" data-new="1" data-entry="manual" data-i="addManual">Вручную</button></div>
+        <p class="subline" data-i="connsSub">У каждого свой ключ и адрес. Одновременно активно одно.</p>
+        <div class="scroll">
+          <div class="swipe" data-id="home" data-kind="loft">
+            <div class="behind">
+              <button type="button" class="act act-edit" data-go="edit" data-i="edit">Править</button>
+              <button type="button" class="act act-del" data-del="Home" data-i="delete">Удалить</button>
+            </div>
+            <div class="card on">
+              <button type="button" class="mini lamp" data-i="disconnect">Отключить</button>
+              <div class="grow">
+                <div class="n">Home</div>
+                <div class="m">cdn.example.com</div>
+              </div>
+              <div class="side">
+                <span class="live" data-i="active">активно</span>
+                <span class="sk">loft · get</span>
+              </div>
+            </div>
+          </div>
+          <div class="swipe" data-id="office" data-kind="sstp">
+            <div class="behind">
+              <button type="button" class="act act-edit" data-go="edit" data-vpn="sstp" data-i="edit">Править</button>
+              <button type="button" class="act act-del" data-del="Office" data-i="delete">Удалить</button>
+            </div>
+            <div class="card">
+              <button type="button" class="mini" data-i="popConnect">Подключить</button>
+              <div class="grow">
+                <div class="n">Office</div>
+                <div class="m">vpn.example.com</div>
+              </div>
+              <div class="side">
+                <span class="sk">sstp</span>
+              </div>
+            </div>
+          </div>
+          <div class="swipe" data-id="travel" data-kind="vless">
+            <div class="behind">
+              <button type="button" class="act act-edit" data-go="edit" data-vpn="vless" data-i="edit">Править</button>
+              <button type="button" class="act act-del" data-del="Travel" data-i="delete">Удалить</button>
+            </div>
+            <div class="card">
+              <button type="button" class="mini" data-i="popConnect">Подключить</button>
+              <div class="grow">
+                <div class="n">Travel</div>
+                <div class="m">de1.example.com</div>
+              </div>
+              <div class="side">
+                <span class="sk">vless</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="edit">
+        <div class="dlghdr"><button type="button" data-back data-i="cancel">Отмена</button><button type="button" class="accept" data-back data-i="save">Сохранить</button></div>
+        <div class="head">
+          <div class="title" data-i="editTitle">Подключение</div>
+          <button type="button" class="qr" id="editHdr" data-go="share" data-i="shareBtn">Поделиться</button>
+        </div>
+        <div class="scroll">
+          <label class="field"><span data-i="name">Имя</span>
+            <input value="Home" />
+          </label>
+          <div class="type-row">
+            <div class="k" data-i="vpnType">Тип VPN</div>
+            <div class="seg cap" id="vpnSeg">
+              <button type="button" class="on" data-vpn="loft" data-i="vpnLoft">loft</button>
+              <button type="button" data-vpn="sstp" data-i="vpnSstp">SSTP</button>
+              <button type="button" data-vpn="vless" data-i="vpnVless">VLESS</button>
+              <button type="button" data-vpn="trojan" data-i="vpnTrojan">Trojan</button>
+            </div>
+          </div>
+
+          <div id="edit-main-loft">
+            <div class="seg" id="loftEntry">
+              <button type="button" class="on ico" data-entry="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span data-i="entryLink">Ссылка</span></button>
+              <button type="button" class="ico" data-entry="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg><span data-i="entryMan">Вручную</span></button>
+            </div>
+            <div id="loft-link">
+              <label class="field"><span data-i="loftUri">Адрес loft://</span>
+                <div class="secret">
+                  <input class="mono" value="loft://lt_••••••@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" data-mask="loft://lt_••••••@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" data-full="loft://lt_K7qP2mX9vR4tN8wB@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" />
+                  <button type="button" class="eye" data-i="showSecret">Показать</button>
+                </div>
+              </label>
+            </div>
+            <div id="loft-manual" class="hidden">
+              <label class="field"><span data-i="eKey">Ключ доступа</span>
+                <div class="secret">
+                  <input class="mono" type="password" value="lt_••••••••••••" />
+                  <button type="button" class="eye" data-i="showSecret">Показать</button>
+                </div>
+              </label>
+              <div class="pair">
+                <label class="field"><span data-i="vlessHost">Адрес</span>
+                  <input class="mono" value="cdn.example.com" />
+                </label>
+                <label class="field"><span data-i="vlessPort">Порт</span>
+                  <input class="mono" value="443" />
+                </label>
+              </div>
+              <label class="field cap"><span data-i="urlType">Способ</span></label>
+              <div class="seg" id="loftNet">
+                <button type="button" class="on" data-i="kindAuto">Авто</button>
+                <button type="button">GET</button>
+                <button type="button">WS</button>
+                <button type="button">H2</button>
+                <button type="button">QUIC</button>
+                <button type="button">H3</button>
+              </div>
+              <label class="field"><span data-i="ePath">Путь</span>
+                <input class="mono" value="/static/v3/build" />
+              </label>
+            </div>
+          </div>
+
+          <div id="edit-main-sstp" class="hidden">
+            <label class="field"><span data-i="sstpUser">Имя пользователя</span>
+              <input value="alice" />
+            </label>
+            <label class="field"><span data-i="sstpPass">Пароль</span>
+              <div class="secret">
+                <input type="password" value="••••••••" />
+                <button type="button" class="eye" data-i="showSecret">Показать</button>
+              </div>
+            </label>
+            <label class="field"><span data-i="sstpUrl">Сервер</span>
+              <input class="mono" value="https://vpn.example.com" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sstpTls">Проверка сертификата</div>
+                <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sstpPap">PAP / CHAP</div>
+                <div class="s" data-i="sstpPapD">Слабее. По умолчанию только MSCHAPv2.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-main-trojan" class="hidden">
+            <label class="field"><span data-i="trojanPass">Пароль</span>
+              <div class="secret">
+                <input type="password" value="••••••••" />
+                <button type="button" class="eye" data-i="showSecret">Показать</button>
+              </div>
+            </label>
+            <label class="field"><span data-i="trojanUrl">Сервер</span>
+              <input class="mono" value="trojan://edge.example.com:443" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sstpTls">Проверка сертификата</div>
+                <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-main-vless" class="hidden">
+            <div class="seg" id="vlessEntry">
+              <button type="button" class="on ico" data-entry="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span data-i="entryLink">Ссылка</span></button>
+              <button type="button" class="ico" data-entry="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg><span data-i="entryMan">Вручную</span></button>
+            </div>
+            <div id="vless-link">
+              <label class="field"><span data-i="vlessUrl">Ссылка vless://</span>
+                <div class="secret">
+                  <input class="mono" value="vless://••••••@de1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome" data-mask="vless://••••••@de1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome" data-full="vless://3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c@de1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome" />
+                  <button type="button" class="eye" data-i="showSecret">Показать</button>
+                </div>
+              </label>
+            </div>
+            <div id="vless-manual" class="hidden">
+              <label class="field"><span data-i="vlessUuid">UUID</span>
+                <div class="secret">
+                  <input class="mono" type="password" value="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                  <button type="button" class="eye" data-i="showSecret">Показать</button>
+                </div>
+              </label>
+              <div class="pair">
+                <label class="field"><span data-i="vlessHost">Адрес</span>
+                  <input class="mono" value="de1.example.com" />
+                </label>
+                <label class="field"><span data-i="vlessPort">Порт</span>
+                  <input class="mono" value="443" />
+                </label>
+              </div>
+              <label class="field cap"><span data-i="vlessSec">Безопасность</span></label>
+              <div class="seg" id="vlessSec">
+                <button type="button" data-sec="tls">TLS</button>
+                <button type="button" class="on" data-sec="reality">REALITY</button>
+              </div>
+              <label class="field cap"><span data-i="vlessNet">Транспорт</span></label>
+              <div class="seg" id="vlessNet">
+                <button type="button" class="on" data-net="tcp">TCP</button>
+                <button type="button" data-net="xhttp">XHTTP</button>
+              </div>
+              <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+                <input class="mono" value="www.example.com" />
+              </label>
+              <label class="field"><span data-i="vlessFp">Отпечаток TLS</span>
+                <input class="mono" value="chrome" />
+              </label>
+              <div id="vless-reality">
+                <label class="field"><span data-i="vlessPbk">Открытый ключ</span>
+                  <div class="secret">
+                    <input class="mono" type="password" value="••••••••" />
+                    <button type="button" class="eye" data-i="showSecret">Показать</button>
+                  </div>
+                </label>
+                <label class="field"><span data-i="vlessSid">Short ID</span>
+                  <input class="mono" value="abcd" />
+                </label>
+              </div>
+              <div id="vless-xhttp" class="hidden">
+                <label class="field"><span data-i="ePath">Путь</span>
+                  <input class="mono" value="/path" />
+                </label>
+                <label class="field"><span data-i="vlessXhost">Заголовок Host</span>
+                  <input class="mono" value="" />
+                </label>
+              </div>
+              <div class="set-row" id="vless-vision">
+                <div>
+                  <div class="k" data-i="vlessVision">Vision</div>
+                  <div class="s" data-i="vlessVisionD">xtls-rprx-vision на TCP.</div>
+                </div>
+                <div class="toggle"><i></i></div>
+              </div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sstpTls">Проверка сертификата</div>
+                <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+          </div>
+
+          <button type="button" class="ghost-sm" id="editAdvBtn" data-i="onbAdv">Дополнительно</button>
+          <div id="edit-adv-loft" class="hidden">
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="mux">Мультиплекс</div>
+                <div class="s" data-i="muxD">Все соединения идут в одной сессии с нодой.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <label class="field"><span data-i="dns">DNS</span>
+              <input class="mono" placeholder="пусто — с ноды" data-ph="dnsPhLoft" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsSys">DNS в систему</div>
+                <div class="s" data-i="dnsSysD">Пока туннель подключён, DNS-серверы задаются через системный VPN.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-adv-sstp" class="hidden">
+            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+              <input class="mono" value="vpn.example.com" />
+            </label>
+            <label class="field"><span data-i="dns">DNS</span>
+              <input class="mono" placeholder="пусто — с сервера, иначе шлюз" data-ph="dnsPhSstp" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsRep">Только эти адреса</div>
+                <div class="s" data-i="dnsRepD">Не брать DNS с сервера и шлюза PPP.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsSys">DNS в систему</div>
+                <div class="s" data-i="dnsSysD">Пока туннель подключён, DNS-серверы задаются через системный VPN.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-adv-trojan" class="hidden">
+            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+              <input class="mono" value="edge.example.com" />
+            </label>
+            <label class="field"><span data-i="dns">DNS</span>
+              <input class="mono" placeholder="адреса через запятую" data-ph="dnsPhVless" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsSys">DNS в систему</div>
+                <div class="s" data-i="dnsSysD">Пока туннель подключён, DNS-серверы задаются через системный VPN.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
+          <div id="edit-adv-vless" class="hidden">
+            <label class="field"><span data-i="dns">DNS</span>
+              <input class="mono" placeholder="адреса через запятую" data-ph="dnsPhVless" />
+            </label>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="dnsSys">DNS в систему</div>
+                <div class="s" data-i="dnsSysD">Пока туннель подключён, DNS-серверы задаются через системный VPN.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+
+          <div class="btns" id="editDelRow">
+            <button type="button" class="danger" data-del="Home" data-i="delete">Удалить</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="settings">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="head">
+          <div class="title" data-i="settings">Настройки</div>
+          <button type="button" class="qr" data-i="reset">Сбросить маршруты</button>
+        </div>
+        <div class="scroll" id="setScroll">
+          <div class="grp" id="grp-0" data-i="setGen">Общие</div>
+          <div id="set-0">
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="simple">Упрощённый интерфейс</div>
+                <div class="s" data-i="simpleD">На доме только Подключить и Отключить.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="rateUnit">Единицы скорости</div>
+                <div class="s" data-i="rateUnitD">Как показывать ↑↓ на доме.</div>
+              </div>
+              <select>
+                <option data-i="uKbit">кбит/с</option>
+                <option data-i="uKb">КБ/с</option>
+              </select>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="sparkK">График скорости</div>
+                <div class="s" data-i="sparkD">Как рисовать ↓↑ на доме.</div>
+              </div>
+              <select id="sparkSel">
+                <option value="lines" data-i="sparkLines">Линии</option>
+                <option value="bars" data-i="sparkBars">Столбики</option>
+              </select>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="lang">Язык интерфейса</div>
+                <div class="s" data-i="langD">Применяется сразу.</div>
+              </div>
+              <select id="langSel" onchange="setLang(this.value)">
+                <option value="en" data-i="langEn">English</option>
+                <option value="ru" data-i="langRu">Русский</option>
+                <option value="zh" data-i="langZh">中文</option>
+              </select>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="diag">Расширенный журнал</div>
+                <div class="s" data-i="diagD">Маршруты, DNS, системный VPN. Журнал с ротацией.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+          <div class="grp" id="grp-1" data-i="setRoute">Маршрут</div>
+          <div id="set-1">
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="defRoute">Маршрут по умолчанию</div>
+                <div class="s" data-i="defRouteD">Весь интернет через loft. Выкл — только сеть loft.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="hold">Без VPN — без интернета</div>
+                <div class="s" data-i="holdD">Пока туннель не подключён, прямой доступ в интернет закрыт.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="split">Раздельная маршрутизация</div>
+                <div class="s" data-i="splitD">Трафик зоны идёт через loft или в обход. Сервис только принадлежит зоне.</div>
+                <button type="button" class="ghost-sm" data-go="split" data-i="split_lists">Списки</button>
+              </div>
+              <div class="toggle on" id="setSplit"><i></i></div>
+            </div>
+          </div>
+          <div class="grp" id="grp-2" data-i="setClient">Подключение</div>
+          <div id="set-2">
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="auto">Подключаться при запуске</div>
+                <div class="s" data-i="autoD">При открытии приложения подключается выбранное подключение.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="reconnect">Переподключаться при обрыве</div>
+                <div class="s" data-i="reconnectD">Если сессия оборвалась — подключиться снова.</div>
+              </div>
+              <div class="toggle on"><i></i></div>
+            </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="extIp">Показывать внешний IP</div>
+                <div class="s" data-i="extIpD">После подключения запросить адрес у сервиса через это соединение.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+          <div class="links">
+            <button type="button" data-confirm="defaults" data-i="defaults">По умолчанию</button>
+            <button type="button" data-go="journal" data-i="journal">Журнал</button>
+            <button type="button" data-go="about" data-i="about">О программе</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="onboard">
+        <div class="scroll" style="display:flex;flex-direction:column">
+          <div class="hero" style="padding-top:4px">
+            <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+              <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+              <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+            </svg>
+            <div class="sub" id="onbStep" data-i="keyStep">Шаг 1 из 2</div>
+            <h1 id="onbTitle" data-i="keyTitle">Ключ доступа</h1>
+            <p class="hint" id="onbBody" data-i="keyBody">Введите ключ доступа, который вам выдали.</p>
+          </div>
+          <div id="onb0">
+            <div class="btns">
+              <button type="button" class="go" data-go="scan" data-i="addScan">Сканировать QR-код</button>
+              <button type="button" class="ghost" data-go="home" data-mode="connecting" data-i="addPaste">Вставить ссылку</button>
+            </div>
+            <p class="hint" data-i="startHint">Если ссылка уже в буфере, нажмите «Вставить ссылку».</p>
+            <button type="button" class="ghost-sm" style="margin:14px auto 0" data-go="onboard" data-step="1" data-i="startManual">Ввести ключ и адрес вручную</button>
+          </div>
+          <div id="onb1" class="hidden">
+            <label class="field">
+              <input class="mono" placeholder="lt_" />
+            </label>
+            <p class="hint" data-i="keyHint">Начинается с lt_. Его показывают один раз — сохраните.</p>
+            <div class="btns">
+              <button type="button" class="go" data-go="onboard" data-step="2" data-i="continue">Продолжить</button>
+              <button type="button" class="ghost" data-go="onboard" data-step="0" data-i="back">Назад</button>
+            </div>
+          </div>
+          <div id="onb2" class="hidden">
+            <label class="field"><span data-i="url">URL</span>
+              <input class="mono" placeholder="https://" value="https://" />
+            </label>
+            <button type="button" class="ghost-sm" id="onbAdvBtn" data-i="onbAdv">Дополнительно</button>
+            <div id="onbAdv" class="hidden">
+              <label class="field"><span data-i="urlType">Способ</span></label>
+              <div class="seg" id="onbKind">
+                <button type="button" class="on" data-i="kindAuto">Авто</button>
+                <button type="button">GET</button>
+                <button type="button">WS</button>
+                <button type="button">H2</button>
+                <button type="button">QUIC</button>
+                <button type="button">H3</button>
+              </div>
+              <label class="field"><span data-i="path">Путь (если давали)</span>
+                <input class="mono" placeholder="/static/v3/build" />
+              </label>
+              <p class="hint" data-i="urlHint">HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.</p>
+            </div>
+            <div class="btns">
+              <button type="button" class="go" data-i="urlGo">Подключить</button>
+              <button type="button" class="ghost" data-go="onboard" data-step="1" data-i="back">Назад</button>
+            </div>
+            <p class="hint" data-i="onbVpn">Если Аврора спросит разрешение на VPN — нажмите «Разрешить». Это один раз.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="scan">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="title" data-i="scanT" style="font-size:20px;font-weight:600;letter-spacing:-0.03em;margin:0 0 8px">Сканер QR-кода</div>
+        <div class="scroll">
+          <div class="finder">
+            <div class="noise"></div>
+            <div class="qr-fake" aria-hidden="true">
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b></b><b class="off"></b><b></b><b></b><b></b><b class="off"></b><b></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b class="off"></b><b></b><b class="off"></b><b></b><b class="off"></b><b></b><b class="off"></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b></b><b class="off"></b><b></b><b></b><b></b><b class="off"></b><b></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+            </div>
+            <div class="frame"><i></i><i></i><i></i><i></i></div>
+          </div>
+          <p class="hint" data-i="scanHint">Камера. loft://, sstp://, vless:// или .loft.</p>
+          <div class="btns">
+            <div class="row-2">
+              <button type="button" class="ghost" data-i="fromFile">Из файла</button>
+              <button type="button" class="ghost" data-i="fromPhotos">Из галереи</button>
+            </div>
+          </div>
+          <label class="field"><span data-i="pasteL">Или вставить ссылку</span>
+            <textarea class="paste" data-ph="pastePh" placeholder="loft://…, sstp://…, vless://…"></textarea>
+          </label>
+          <div class="row-2">
+            <button type="button" class="ghost" data-i="pasteBtn">Вставить</button>
+            <button type="button" class="go" data-i="scanAdd">Добавить</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="share">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="title" data-i="shareT" style="font-size:20px;font-weight:600;letter-spacing:-0.03em;margin:0 0 8px">QR</div>
+        <div class="scroll">
+          <div class="finder" style="height:240px">
+            <div class="noise"></div>
+            <div class="qr-fake" style="width:120px;height:120px;gap:3px;padding:8px" aria-hidden="true">
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b></b><b class="off"></b><b></b><b></b><b></b><b class="off"></b><b></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b class="off"></b><b></b><b class="off"></b><b></b><b class="off"></b><b></b><b class="off"></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+              <b></b><b class="off"></b><b></b><b></b><b></b><b class="off"></b><b></b>
+              <b></b><b></b><b></b><b class="off"></b><b></b><b></b><b></b>
+            </div>
+          </div>
+          <p class="hint mono" style="word-break:break-all">loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home</p>
+          <p class="hint" data-i="shareHint">Адрес — loft://, один канал. Ключ в URI — секрет. Несколько каналов или подключений — файл .loft.</p>
+          <div class="row-2" style="margin-top:12px">
+            <button type="button" class="go" data-i="shareBtn">Поделиться</button>
+            <button type="button" class="ghost" data-i="copyLink">Скопировать ссылку</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="journal">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="hero" style="padding-top:0">
+          <h1 data-i="journal">Журнал</h1>
+          <p class="hint" data-i="journalD">Строки канала и сессии. Ключ в журнале сокращается.</p>
+        </div>
+        <pre class="log">get   cdn.example.com  hello ok
+status  ip=10.8.0.14  mtu=1280  front=get
+tun   connman-loft   up
+hold  armed</pre>
+        <div class="row-3">
+          <button type="button" class="ghost" data-i="copy">Скопировать</button>
+          <button type="button" class="ghost" data-i="shareBtn">Поделиться</button>
+          <button type="button" class="ghost" data-confirm="clear" data-i="clearLog">Очистить</button>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="about">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll about">
+          <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true" style="width:72px;height:72px;margin:8px auto 10px;display:block">
+            <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+            <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+          </svg>
+          <h1 style="margin:0;font-size:22px;letter-spacing:-0.04em">loft</h1>
+          <div class="ver">1.0.22</div>
+          <div class="kick" data-i="protos">протоколы</div>
+          <div class="protos">
+            <div class="proto"><span class="k">loft/1.0</span><span class="v">get · ws · h2 · quic · h3 · mask</span></div>
+            <div class="proto"><span class="k">SSTP</span><span class="v">ppp · mschapv2 · pap</span></div>
+            <div class="proto"><span class="k">Trojan</span><span class="v">tcp · tls · reality · xhttp</span></div>
+            <div class="proto"><span class="k">VLESS</span><span class="v">tcp · tls</span></div>
+          </div>
+          <p class="blurb" data-i="blurb">Снаружи — обычный HTTPS.
+Внутри — своя сеть.</p>
+          <p class="made">Made with love <span class="heart">♥</span> by A³</p>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="split">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="split-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitsvc">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="splitsvc-body"></div>
+      </div>
+
+      <div class="screen hidden" id="zones">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="zones-body"></div>
+      </div>
+
+      <div class="screen hidden" id="zone">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="zone-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitrepo">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="splitrepo-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitlists">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="splitlists-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitin">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="splitin-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitout">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="splitout-body"></div>
+      </div>
+
+      <div class="tabbar" id="tabbar">
+        <button type="button" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span data-i="tabHome">Дом</span></button>
+        <button type="button" data-tab="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg><span data-i="conns">Подключения</span></button>
+        <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span data-i="settings">Настройки</span></button>
+      </div>
+
+      <div class="scrim hidden" id="ctxScrim">
+        <div class="ctx" id="ctxMenu">
+          <div class="preview">
+            <div class="n">Home</div>
+            <div class="m" style="color:var(--mute);font-size:11px;margin-top:2px;font-family:var(--mono)">cdn.example.com</div>
+          </div>
+          <button type="button" data-go="edit"><span data-i="edit">Править</span></button>
+          <button type="button" data-sheet="export"><span data-i="export">Экспорт</span><span class="s">.loft</span></button>
+          <button type="button" class="danger" data-del="Home"><span data-i="delete">Удалить</span></button>
+        </div>
+      </div>
+      <div class="scrim hidden" id="detScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 data-i="detT">Сведения</h3>
+            <button type="button" class="row"><span data-i="detOver">Адрес в сети loft</span><span class="s mono">10.8.0.14</span></button>
+            <button type="button" class="row"><span data-i="detFront">Способ</span><span class="s mono">get</span></button>
+            <button type="button" class="row"><span data-i="detMtu">MTU</span><span class="s mono">1280</span></button>
+            <button type="button" class="row"><span data-i="detServer">Сервер</span><span class="s mono">cdn.example.com</span></button>
+          </div>
+          <button type="button" class="cancel" data-close="detScrim" data-i="close">Закрыть</button>
+        </div>
+      </div>
+      <div class="scrim remorse hidden" id="cfScrim">
+        <div class="remorse-bar" data-close="cfScrim"><b id="cfTitle"></b><span data-i="remorseCancel">Нажмите, чтобы отменить</span><i></i><span id="cfSub" hidden></span><span id="cfGo" hidden></span></div>
+      </div>
+      <div class="scrim hidden" id="addScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 data-i="addSheet">Новое подключение</h3>
+            <button type="button" class="row" data-go="scan"><span data-i="addScan">Сканировать QR-код</span></button>
+            <button type="button" class="row" data-go="edit" data-new="1"><span data-i="addPaste">Вставить ссылку</span></button>
+            <button type="button" class="row" data-go="scan"><span data-i="fromFile">Из файла</span></button>
+            <button type="button" class="row" data-go="edit" data-new="1" data-entry="manual"><span data-i="addManual">Вручную</span></button>
+          </div>
+          <button type="button" class="cancel" data-close="addScrim" data-i="cancel">Отмена</button>
+        </div>
+      </div>
+      <div class="scrim hidden" id="exportScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 data-i="expSheet">Экспорт Home</h3>
+            <p class="sub" data-i="warnExport">В файле есть ключ доступа. Никому не передавайте.</p>
+            <button type="button" class="row"><span data-i="expLoft">Home.loft</span><span class="s" data-i="expLoftS">это подключение</span></button>
+            <button type="button" class="row" data-go="share"><span data-i="expQr">QR loft://</span><span class="s" data-i="expQrS">один канал</span></button>
+            <button type="button" class="row"><span data-i="expAll">Family.loft</span><span class="s" data-i="expAllS">все три · loft + sstp + vless</span></button>
+          </div>
+          <button type="button" class="cancel" data-close="exportScrim" data-i="cancel">Отмена</button>
+        </div>
+      </div>
+      <div class="scrim remorse hidden" id="delScrim">
+        <div class="remorse-bar" data-close="delScrim"><b id="delTitle">Удаление Office</b><span data-i="remorseCancel">Нажмите, чтобы отменить</span><i></i></div>
+      </div>
+    </div>
+
+    <div class="cover-stage hidden" id="cover">
+      <div class="pulley"></div>
+      <div class="sb"><span>12:00</span><span>LTE  ·  84%</span></div>
+      <div class="home-ind"></div>
+      <div class="cover-card">
+        <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+          <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+          <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+        </svg>
+        <h3>Loft</h3>
+        <div class="sub">Home · 10.8.0.14</div>
+        <button type="button" class="danger" data-i="disconnect">Отключить</button>
+      </div>
+    </div>
+
+    <div class="sys hidden" id="sysvpn">
+      <div class="pulley"></div>
+      <div class="sb"><span>12:00</span><span>LTE  ·  84%</span></div>
+      <div class="home-ind"></div>
+      <main>
+        <h2>VPN</h2>
+        <p class="cap" data-i="sysCap">Системный список. Тумблер — строка ConnMan Loft, не второй выключатель в приложении.</p>
+        <div class="a-group">
+          <div class="a-row">
+            <div>
+              <div class="l">Loft</div>
+              <div class="a-status" data-i="sysOn">Подключено</div>
+            </div>
+            <div class="a-sw"><i></i></div>
+          </div>
+        </div>
+        <p class="cap" style="margin-top:18px" data-i="sysType">Тип: loft. OpenVPN и IPsec остаются штатными строками ниже.</p>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const I = {
+      ru: {
+        sysType: "Тип: loft. OpenVPN и IPsec остаются штатными строками ниже.",
+        sysOn: "Подключено",
+        sysCap: "Системный список. Тумблер — строка ConnMan Loft, не второй выключатель в приложении.",
+        remorseCancel: "Нажмите, чтобы отменить",
+        nSys: "Настройки → VPN",
+        nCover: "Обложка",
+        nPulley: "Дом · меню",
+        copyLink: "Скопировать ссылку",
+        pastePh: "loft://…, sstp://…, vless://…",
+        pasteBtn: "Вставить",
+        cfClrS: "Записи журнала будут удалены с этого устройства.",
+        cfClrT: "Очистить журнал?",
+        cfDefGo: "Сбросить",
+        cfDefS: "Все параметры вернутся к значениям по умолчанию.",
+        cfDefT: "Сбросить настройки?",
+        trusted: "Доверенные сети Wi‑Fi",
+        demandD: "Система подключает VPN в сотовой сети и в недоверенных Wi‑Fi. В доверенных сетях — нет.",
+        demand: "Подключаться по требованию",
+        scanBtn: "Сканировать",
+        shareBtn: "Поделиться",
+        newTitle: "Новое подключение",
+        detServer: "Сервер",
+        detMtu: "MTU",
+        detFront: "Фронт",
+        detOver: "Адрес в сети loft", extIpK: "Внешний IP", overIpK: "Overlay IP", routeK: "Маршрут",
+        detT: "Сведения",
+        kindAutoV: "Авто",
+        protoK: "ПРОТОКОЛ",
+        frontK: "ФРОНТ",
+        transK: "ТРАНСПОРТ",
+        authK: "ВХОД",
+        secK: "ЗАЩИТА",
+        optK: "ОПЦИИ",
+        pillBusy: "Подключение: Home…",
+        "split.add": "Добавить",
+        "split.add.body": "Адрес или префикс CIDR. Имя сервиса видно в списке.",
+        "split.add.body.ignore": "Префикс, который не входит в эту зону. Сохраняется при обновлении списка.",
+        "split.add.ignore": "Исключение",
+        "split.add.kind": "Запись",
+        "split.add.route": "Маршрут",
+        "split.add.go": "Добавить",
+        "split.add.name": "Сервис",
+        "split.add.net": "Сеть или адрес",
+        "split.add.title": "Сеть",
+        split_add_save: "Сохранить",
+        "split.bypass": "В обход loft",
+        "split.via": "Через loft",
+        "split.d": "Трафик зоны идёт через loft или в обход. Сервис только принадлежит зоне.",
+        "split.empty": "В этой зоне пока пусто.",
+        "split.ignore": "Исключение",
+        "split.export.body": "Все зоны в одном файле loft-routes: зона — в REM zone:, имя сервиса — в комментарии.",
+        "split.export.fmt": "Формат",
+        "split.export.keen": "Keenetic .bat",
+        "split.export.loft": "loft",
+        "split.export.save": "Сохранить loft-routes.bat",
+        "split.export.save.keen": "Сохранить %@.bat",
+        "split.export.title": "Экспорт маршрутов",
+        "split.import.body": "Keenetic .bat или loft-routes. Комментарий :: rem — имя сервиса.",
+        "split.import.detect": "Keenetic · 214 строк · выберите зону",
+        "split.import.go": "Добавить 214 маршрутов",
+        "split.import.title": "Импорт маршрутов",
+        "split.net": "сеть",
+        "split.nets": "сетей",
+        "split.rdef": "Направление",
+        "split.repo": "Репозиторий",
+        "split.repo.auto": "Обновлять автоматически",
+        "split.repo.auto.d": "Раз в сутки. Свои записи не затирает.",
+        "split.repo.body": "Файл .bat с GitHub или своего хоста. Заполняет эту зону. Свои строки не трогает.",
+        "split.repo.last": "Сегодня · 214 маршрутов",
+        "split.repo.none": "Списка пока нет",
+        "split.repo.pull": "Обновить сейчас",
+        "split.repo.url": "Адрес списка",
+        "split.repo.pick": "Списки",
+        "split.lists": "Списки",
+        "split.lists.body": "Из каталога loft-routes. Свой URL по-прежнему можно вставить.",
+        "split.search": "Найти сервис",
+        "split.src.me": "свои",
+        "split.src.ignore": "исключ.",
+        "split.src.repo": "список",
+        "split.sub.off": "Выкл — списки не пишутся в системную таблицу маршрутов.",
+        "split.zone": "Зона",
+        "split.zone.global": "Global",
+        "split.zone.local": "Local",
+        "split.zones": "Зоны",
+        "split.zones.add": "Добавить зону",
+        "split.zones.add.body": "Имя, направление, необязательный адрес списка. Сервисы следуют за зоной.",
+        "split.zones.add.go": "Добавить",
+        "split.zones.add.title": "Новая зона",
+        "split.zones.builtin": "Встроенная",
+        "split.zones.del": "Удалить зону",
+        "split.zones.edit.title": "Зона",
+        "split.zones.move": "Сервисы перейдут в Global.",
+        "split.zones.name": "Имя",
+        "split.zones.save": "Сохранить",
+        split_lists: "Списки",
+        "split.sub": "Через loft — в туннель. В обход loft — напрямую, мимо туннеля.",
+        backGen: "‹ Назад",
+        nSplit: "Маршруты · списки",
+        nSvc: "Маршруты · сеть",
+        nZones: "Маршруты · зоны",
+        nZone: "Маршруты · зона",
+        nRepo: "Маршруты · репозиторий",
+        nLists: "Маршруты · каталог",
+        nSin: "Маршруты · импорт",
+        nSout: "Маршруты · экспорт",
+        hRoutes: "Раздельная маршрутизация",
+        navCap: "Макет приложения ОС Аврора 5. Туннель — ConnMan, сессия — loft-front.",
+        hApp: "Приложение",
+        nHome: "Дом · в сети",
+        nOff: "Дом · выкл",
+        nOpen: "Дом · подключение",
+        nSimple: "Дом · упрощённый",
+        nHomeSstp: "Дом · SSTP",
+        nHomeVless: "Дом · VLESS",
+        nHomeTrojan: "Дом · Trojan",
+        nHomeBars: "Дом · столбики",
+        nOnb0: "Начало · первый запуск",
+        nAdd: "Список · добавить",
+        nEditTrojan: "Правка · Trojan",
+        vpnTrojan: "Trojan",
+        trojanPass: "Пароль",
+        trojanUrl: "Сервер",
+        addSheet: "Новое подключение",
+        addScan: "Сканировать QR-код",
+        addPaste: "Вставить ссылку",
+        addManual: "Вручную",
+        startTitle: "Добавьте подключение",
+        startBody: "Отсканируйте QR или вставьте ссылку, которую вам выдали.",
+        startHint: "Если ссылка уже в буфере, нажмите «Вставить ссылку».",
+        startManual: "Ввести ключ и адрес вручную",
+        onbAdv: "Дополнительно",
+        kindAuto: "Авто",
+        nList: "Подключения",
+        nSwipe: "Список · свайп",
+        nCtx: "Список · меню",
+        nExp: "Список · экспорт",
+        nEdit: "Правка",
+        nEditAdv: "Правка · дополнительно",
+        nEditSstp: "Правка · SSTP",
+        nEditVless: "Правка · VLESS",
+        nScan: "Сканер QR-кода",
+        nShare: "Поделиться QR",
+        nOnb: "Начало · ключ",
+        nOnb2: "Начало · адрес",
+        nSet: "Настройки · общие",
+        nSetR: "Настройки · маршрут",
+        nSetC: "Настройки · подключение",
+        nJournal: "Журнал",
+        nAbout: "О программе",
+        nIos: "Настройки → VPN",
+        connect: "Подключить",
+        popConnect: "Подключить",
+        disconnect: "Отключить",
+        connecting: "Подключение…",
+        disconnecting: "Отключение…",
+        cancel: "Отмена",
+        pillOn: "Подключено: Home 0:12",
+        pillOff: "Не подключено · Home ›",
+        frontK: "ФРОНТ",
+        tunK: "ТУННЕЛЬ",
+        journal: "Журнал",
+        reset: "Сбросить маршруты",
+        settings: "Настройки",
+        tabHome: "Дом",
+        close: "Закрыть",
+        backSet: "‹ Настройки",
+        conns: "Подключения",
+        connsSub: "У каждого свой ключ и адрес. Одновременно активно одно.",
+        active: "активно",
+        edit: "Править",
+        delete: "Удалить",
+        export: "Экспорт",
+        import: "Импорт",
+        listHint: "Долгое нажатие — меню: править, экспорт, удалить. Выбранное экспортируется как .loft. Тап по Office отключит Home: туннель один.",
+        expSheet: "Экспорт Home",
+        warnExport: "В файле есть ключ доступа. Никому не передавайте.",
+        expLoft: "Home.loft",
+        expLoftS: "это подключение",
+        expQr: "QR loft://",
+        expQrS: "один канал",
+        expAll: "Family.loft",
+        expAllS: "все три · loft + sstp + vless",
+        delSub: "Подключение будет удалено с устройства. Если это текущая сессия, она закроется.",
+        editTitle: "Подключение",
+        name: "Имя",
+        vpnType: "Тип VPN",
+        vpnLoft: "loft",
+        vpnSstp: "SSTP",
+        vpnVless: "VLESS",
+        editMain: "Основные",
+        editAdv: "Дополнительно",
+        loftUri: "Адрес loft://",
+        entryLink: "Ссылка",
+        entryMan: "Вручную",
+        eKey: "Ключ доступа",
+        ePath: "Путь",
+        vlessHost: "Адрес",
+        vlessPort: "Порт",
+        vlessSec: "Безопасность",
+        vlessNet: "Транспорт",
+        vlessFp: "Отпечаток TLS",
+        vlessPbk: "Открытый ключ",
+        vlessSid: "Short ID",
+        vlessXhost: "Заголовок Host",
+        vlessVision: "Vision",
+        vlessVisionD: "xtls-rprx-vision на TCP.",
+        showSecret: "Показать",
+        hideSecret: "Скрыть",
+        tun: "Интерфейс туннеля",
+        tunD: "Системный VPN (ConnMan). Маршрут устройства — в Настройках.",
+        sstpTunD: "Адрес с сервера на интерфейсе.",
+        sstpUser: "Имя пользователя",
+        sstpPass: "Пароль",
+        sstpUrl: "Сервер",
+        sstpSni: "Имя хоста TLS",
+        sstpTls: "Проверка сертификата",
+        sstpTlsD: "Проверять сертификат HTTPS-сервера.",
+        sstpPap: "PAP / CHAP",
+        sstpPapD: "Слабее. По умолчанию только MSCHAPv2.",
+        vlessUuid: "UUID",
+        vlessUrl: "Ссылка vless://",
+        mux: "Мультиплекс",
+        muxD: "Все соединения идут в одной сессии с нодой.",
+        dns: "DNS",
+        dnsPhLoft: "пусто — с ноды",
+        dnsPhSstp: "пусто — с сервера, иначе шлюз",
+        dnsPhVless: "адреса через запятую",
+        dnsSys: "DNS в систему",
+        dnsSysD: "Пока туннель подключён, DNS-серверы задаются через системный VPN.",
+        dnsRep: "Только эти адреса",
+        dnsRepD: "Не брать DNS с сервера и шлюза PPP.",
+        save: "Сохранить",
+        back: "Назад",
+        qr: "QR",
+        setGen: "Общие",
+        setRoute: "Маршрут",
+        setClient: "Подключение",
+        simple: "Упрощённый интерфейс",
+        simpleD: "На доме только Подключить и Отключить.",
+        rateUnit: "Единицы скорости",
+        sparkK: "График скорости",
+        sparkD: "Как рисовать ↓↑ на доме.",
+        sparkLines: "Линии",
+        sparkBars: "Столбики",
+        rateUnitD: "Как показывать ↑↓ на доме.",
+        uKbit: "кбит/с",
+        uKb: "КБ/с",
+        lang: "Язык интерфейса",
+        langD: "Применяется сразу.",
+        langZh: "中文",
+        langRu: "Русский",
+        langEn: "English",
+        rateDown: "↓ 12,4 Мбит/с",
+        delQ: "Удаление %s",
+        diag: "Расширенный журнал",
+        diagD: "Маршруты, DNS, системный VPN. Журнал с ротацией.",
+        defRoute: "Маршрут по умолчанию",
+        defRouteD: "Весь интернет через loft. Выкл — только сеть loft.",
+        hold: "Без VPN — без интернета",
+        holdD: "Пока туннель не подключён, прямой доступ в интернет закрыт.",
+        split: "Раздельная маршрутизация",
+        splitD: "Трафик зоны идёт через loft или в обход. Сервис только принадлежит зоне.",
+        auto: "Подключаться при запуске",
+        autoD: "При открытии приложения подключается выбранное подключение.",
+        reconnect: "Переподключаться при обрыве",
+        reconnectD: "Если сессия оборвалась — подключиться снова.",
+        extIp: "Показывать внешний IP",
+        extIpD: "После подключения запросить адрес у сервиса через это соединение.",
+        defaults: "По умолчанию",
+        about: "О программе",
+        keyStep: "Шаг 1 из 2",
+        keyTitle: "Ключ доступа",
+        keyBody: "Введите ключ доступа, который вам выдали.",
+        keyHint: "Начинается с lt_. Его показывают один раз — сохраните.",
+        continue: "Продолжить",
+        keyOrfile: "Или импортировать файл или QR",
+        urlStep: "Шаг 2 из 2",
+        urlTitle: "Адрес",
+        urlBody: "Введите адрес, который выдали вместе с ключом.",
+        url: "URL",
+        urlType: "Способ",
+        path: "Путь (если давали)",
+        urlHint: "HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.",
+        urlGo: "Подключить",
+        onbVpn: "Если Аврора спросит разрешение на VPN — нажмите «Разрешить». Это один раз.",
+        scanT: "Сканер QR-кода",
+        scanHint: "Камера. loft://, sstp://, vless:// или .loft.",
+        fromFile: "Из файла",
+        fromPhotos: "Из галереи",
+        pasteL: "Или вставить ссылку",
+        scanAdd: "Добавить",
+        shareT: "QR",
+        shareHint: "Адрес — loft://, один канал. Ключ в URI — секрет. Несколько каналов или подключений — файл .loft.",
+        journalD: "Строки канала и сессии. Ключ в журнале сокращается.",
+        copy: "Скопировать",
+        clearLog: "Очистить",
+        protos: "протоколы",
+        blurb: "Снаружи — обычный HTTPS.\nВнутри — своя сеть.",
+        handshake: "рукопожатие",
+        iosCap: "Системный список VPN. Тумблер — туннель loft, не второй выключатель в приложении.",
+        iosOn: "Подключено",
+        iosType: "Тип",
+        iosServer: "Сервер",
+        iosIke: "IKEv2 Office — встроенный клиент iOS, не приложение loft.",
+        iosNot: "Не подключено"
+      },
+      en: {
+        sysType: "Type: loft. OpenVPN and IPsec stay stock rows below.",
+        sysOn: "Connected",
+        sysCap: "System list. The switch is the ConnMan Loft row, not a second toggle in the app.",
+        remorseCancel: "Tap to cancel",
+        nSys: "Settings → VPN",
+        nCover: "Cover",
+        nPulley: "Home · menu",
+        copyLink: "Copy Link",
+        pastePh: "loft://…, sstp://…, vless://…",
+        pasteBtn: "Paste",
+        cfClrS: "Log entries will be removed from this device.",
+        cfClrT: "Clear the log?",
+        cfDefGo: "Reset",
+        cfDefS: "All settings return to their defaults.",
+        cfDefT: "Reset settings?",
+        trusted: "Trusted Wi‑Fi",
+        demandD: "The system connects the VPN on cellular and untrusted Wi‑Fi. Trusted networks stay off.",
+        demand: "Connect On Demand",
+        scanBtn: "Scan",
+        shareBtn: "Share",
+        newTitle: "New Connection",
+        detServer: "Server",
+        detMtu: "MTU",
+        detFront: "Front",
+        detOver: "loft address", extIpK: "External IP", overIpK: "Overlay IP", routeK: "Route",
+        detT: "Details",
+        kindAutoV: "Auto",
+        protoK: "PROTOCOL",
+        frontK: "FRONT",
+        transK: "TRANSPORT",
+        authK: "AUTH",
+        secK: "SECURITY",
+        optK: "OPTIONS",
+        pillBusy: "Connecting: Home…",
+        "split.add": "Add",
+        "split.add.body": "Address or CIDR prefix. The service name is what you see in the list.",
+        "split.add.body.ignore": "Prefix kept out of this zone. Survives a list update.",
+        "split.add.ignore": "Exclusion",
+        "split.add.kind": "Entry",
+        "split.add.route": "Route",
+        "split.add.go": "Add",
+        "split.add.name": "Service",
+        "split.add.net": "Network or address",
+        "split.add.title": "Network",
+        split_add_save: "Save",
+        "split.bypass": "Bypass loft",
+        "split.via": "Through loft",
+        "split.d": "A zone’s traffic goes through loft or around it. A service only belongs to a zone.",
+        "split.empty": "This zone is empty.",
+        "split.ignore": "Exclusion",
+        "split.export.body": "All zones in one loft-routes file: the zone in REM zone:, the service name in a comment.",
+        "split.export.fmt": "Format",
+        "split.export.keen": "Keenetic .bat",
+        "split.export.loft": "loft",
+        "split.export.save": "Save loft-routes.bat",
+        "split.export.save.keen": "Save %@.bat",
+        "split.export.title": "Export Routes",
+        "split.import.body": "Keenetic .bat or loft-routes. :: rem is the service name.",
+        "split.import.detect": "Keenetic · 214 lines · pick a zone",
+        "split.import.go": "Add 214 routes",
+        "split.import.title": "Import Routes",
+        "split.net": "net",
+        "split.nets": "nets",
+        "split.rdef": "Direction",
+        "split.repo": "Repository",
+        "split.repo.auto": "Update Automatically",
+        "split.repo.auto.d": "Once a day. Leaves your own rows alone.",
+        "split.repo.body": "A .bat file from GitHub or your host. Fills this zone. Your own rows stay.",
+        "split.repo.last": "Today · 214 routes",
+        "split.repo.none": "No list yet",
+        "split.repo.pull": "Update Now",
+        "split.repo.url": "List URL",
+        "split.repo.pick": "Lists",
+        "split.lists": "Lists",
+        "split.lists.body": "From the loft repository. You can still paste any URL.",
+        "split.search": "Find a service",
+        "split.src.me": "own",
+        "split.src.ignore": "excl.",
+        "split.src.repo": "list",
+        "split.sub.off": "Off — lists are not installed in the system routing table.",
+        "split.zone": "Zone",
+        "split.zone.global": "Global",
+        "split.zone.local": "Local",
+        "split.zones": "Zones",
+        "split.zones.add": "Add Zone",
+        "split.zones.add.body": "Name, direction, optional list URL. Services follow the zone.",
+        "split.zones.add.go": "Add",
+        "split.zones.add.title": "New Zone",
+        "split.zones.builtin": "Built-in",
+        "split.zones.del": "Delete Zone",
+        "split.zones.edit.title": "Zone",
+        "split.zones.move": "Services move to Global.",
+        "split.zones.name": "Name",
+        "split.zones.save": "Save",
+        split_lists: "Lists",
+        "split.sub": "Through loft enters the tunnel. Bypass loft stays direct, outside it.",
+        backGen: "‹ Back",
+        nSplit: "Routes · lists",
+        nSvc: "Routes · network",
+        nZones: "Routes · zones",
+        nZone: "Routes · zone",
+        nRepo: "Routes · repository",
+        nLists: "Routes · catalog",
+        nSin: "Routes · import",
+        nSout: "Routes · export",
+        hRoutes: "Split Routing",
+        navCap: "Aurora OS 5 app mock. Tunnel is ConnMan, session is loft-front.",
+        hApp: "App",
+        nHome: "Home · up",
+        nOff: "Home · down",
+        nOpen: "Home · connecting",
+        nSimple: "Home · simplified",
+        nHomeSstp: "Home · SSTP",
+        nHomeVless: "Home · VLESS",
+        nHomeTrojan: "Home · Trojan",
+        nHomeBars: "Home · bars",
+        nOnb0: "Onboarding · start",
+        nAdd: "List · add",
+        nEditTrojan: "Edit · Trojan",
+        vpnTrojan: "Trojan",
+        trojanPass: "Password",
+        trojanUrl: "Server",
+        addSheet: "New Connection",
+        addScan: "Scan QR Code",
+        addPaste: "Paste Link",
+        addManual: "Manual",
+        startTitle: "Add a Connection",
+        startBody: "Scan the QR code or paste the link you were given.",
+        startHint: "If the link is already on the clipboard, tap Paste Link.",
+        startManual: "Enter the key and address manually",
+        onbAdv: "Advanced",
+        kindAuto: "Auto",
+        nList: "Connections",
+        nSwipe: "List · swipe",
+        nCtx: "List · menu",
+        nExp: "List · export",
+        nEdit: "Edit",
+        nEditAdv: "Edit · advanced",
+        nEditSstp: "Edit · SSTP",
+        nEditVless: "Edit · VLESS",
+        nScan: "Scan QR Code",
+        nShare: "Share QR",
+        nOnb: "Onboarding · key",
+        nOnb2: "Onboarding · address",
+        nSet: "Settings · general",
+        nSetR: "Settings · route",
+        nSetC: "Settings · connection",
+        nJournal: "Log",
+        nAbout: "About",
+        nIos: "Settings → VPN",
+        connect: "Connect",
+        popConnect: "Connect",
+        disconnect: "Disconnect",
+        connecting: "Connecting…",
+        disconnecting: "Disconnecting…",
+        cancel: "Cancel",
+        pillOn: "Connected: Home 0:12",
+        pillOff: "Not Connected · Home ›",
+        frontK: "FRONT",
+        tunK: "TUNNEL",
+        journal: "Log",
+        reset: "Reset Routes",
+        settings: "Settings",
+        tabHome: "Home",
+        close: "Close",
+        backSet: "‹ Settings",
+        conns: "Connections",
+        connsSub: "Each has its own key and address. Only one is active at a time.",
+        active: "active",
+        edit: "Edit",
+        delete: "Delete",
+        export: "Export",
+        import: "Import",
+        listHint: "Press and hold for the menu: edit, export, delete. The selected row exports as .loft. Tapping Office disconnects Home: one tunnel.",
+        expSheet: "Export Home",
+        warnExport: "The file contains the access key. Do not share it.",
+        expLoft: "Home.loft",
+        expLoftS: "this connection",
+        expQr: "QR loft://",
+        expQrS: "one front",
+        expAll: "Family.loft",
+        expAllS: "all three · loft + sstp + vless",
+        delSub: "The connection will be removed from this device. If it is the live session, that session closes.",
+        editTitle: "Connection",
+        name: "Name",
+        vpnType: "VPN Type",
+        vpnLoft: "loft",
+        vpnSstp: "SSTP",
+        vpnVless: "VLESS",
+        editMain: "Main",
+        editAdv: "Advanced",
+        loftUri: "loft:// Address",
+        entryLink: "Link",
+        entryMan: "Manual",
+        eKey: "Access Key",
+        ePath: "Path",
+        vlessHost: "Address",
+        vlessPort: "Port",
+        vlessSec: "Security",
+        vlessNet: "Transport",
+        vlessFp: "TLS Fingerprint",
+        vlessPbk: "Public Key",
+        vlessSid: "Short ID",
+        vlessXhost: "Host Header",
+        vlessVision: "Vision",
+        vlessVisionD: "xtls-rprx-vision on TCP.",
+        showSecret: "Show",
+        hideSecret: "Hide",
+        tun: "Tunnel Interface",
+        tunD: "System VPN (ConnMan). The device route is in Settings.",
+        sstpTunD: "The address from the server on the interface.",
+        sstpUser: "Username",
+        sstpPass: "Password",
+        sstpUrl: "Server",
+        sstpSni: "TLS Hostname",
+        sstpTls: "Certificate Verification",
+        sstpTlsD: "Verify the HTTPS server certificate.",
+        sstpPap: "PAP / CHAP",
+        sstpPapD: "Weaker. Default is MSCHAPv2 only.",
+        vlessUuid: "UUID",
+        vlessUrl: "vless:// Link",
+        mux: "Mux",
+        muxD: "All connections share one session with the node.",
+        dns: "DNS",
+        dnsPhLoft: "empty — from the node",
+        dnsPhSstp: "empty — from the server, else the gateway",
+        dnsPhVless: "comma-separated addresses",
+        dnsSys: "System-Wide DNS",
+        dnsSysD: "While the tunnel is up, write resolvers into the ConnMan.",
+        dnsRep: "These Addresses Only",
+        dnsRepD: "Do not take DNS from the server or the PPP gateway.",
+        save: "Save",
+        back: "Back",
+        qr: "QR",
+        setGen: "General",
+        setRoute: "Route",
+        setClient: "Connection",
+        simple: "Simplified Interface",
+        simpleD: "Home is Connect and Disconnect only.",
+        rateUnit: "Speed Units",
+        sparkK: "Speed chart",
+        sparkD: "How ↓↑ is drawn on Home.",
+        sparkLines: "Lines",
+        sparkBars: "Bars",
+        rateUnitD: "How ↑↓ is shown on Home.",
+        uKbit: "kbit/s",
+        uKb: "kB/s",
+        lang: "Language",
+        langD: "Applies immediately.",
+        langZh: "中文",
+        langRu: "Русский",
+        langEn: "English",
+        rateDown: "↓ 12.4 Mbit/s",
+        delQ: "Deleting %s",
+        diag: "Extended Log",
+        diagD: "Routes, DNS, ConnMan. Rotating log file.",
+        defRoute: "Default Route",
+        defRouteD: "All internet through loft. Off — loft network only.",
+        hold: "No Internet without VPN",
+        holdD: "Until the tunnel is up, direct internet stays blocked.",
+        split: "Split Routing",
+        splitD: "A zone’s traffic goes through loft or around it. A service only belongs to a zone.",
+        auto: "Connect at Launch",
+        autoD: "Opening the app brings up the selected connection.",
+        reconnect: "Reconnect on Disconnect",
+        reconnectD: "If the session disconnects, connect again.",
+        extIp: "Show Public IP",
+        extIpD: "After connect, ask a service for the address through this session.",
+        defaults: "Defaults",
+        about: "About",
+        keyStep: "Step 1 of 2",
+        keyTitle: "Access Key",
+        keyBody: "Enter the access key you were given.",
+        keyHint: "It starts with lt_. Shown once — keep it.",
+        continue: "Continue",
+        keyOrfile: "Or import a file or QR",
+        urlStep: "Step 2 of 2",
+        urlTitle: "Address",
+        urlBody: "Enter the address you were given with the key.",
+        url: "URL",
+        urlType: "Method",
+        path: "Path (if you were given one)",
+        urlHint: "HTTPS. GET is a file, WS a channel, H2/H3 CONNECT, QUIC UDP.",
+        urlGo: "Connect",
+        onbVpn: "If Aurora asks to allow the VPN, tap Allow. Only once.",
+        scanT: "Scan QR Code",
+        scanHint: "Camera. loft://, sstp://, vless://, or a .loft.",
+        fromFile: "From Files",
+        fromPhotos: "From gallery",
+        pasteL: "Or paste a link",
+        scanAdd: "Add",
+        shareT: "QR",
+        shareHint: "The address is loft://, one front. The key in the URI is a secret. Several fronts or connections: a .loft file.",
+        journalD: "Front and session lines. The key is shortened in the log.",
+        copy: "Copy",
+        clearLog: "Clear",
+        protos: "protocols",
+        blurb: "On the outside, ordinary HTTPS.\nInside, a network of its own.",
+        handshake: "handshake",
+        iosCap: "System VPN list. The switch is loft’s tunnel, not a second toggle in the app.",
+        iosOn: "Connected",
+        iosType: "Type",
+        iosServer: "Server",
+        iosIke: "IKEv2 Office is the built-in iOS client, not the loft app.",
+        iosNot: "Not Connected"
+      },
+      zh: {
+        sysType: "类型：loft。OpenVPN 和 IPsec 仍是下面的系统行。",
+        sysOn: "已连接",
+        sysCap: "系统列表。开关是 ConnMan 的 Loft 行，不是应用里的第二个开关。",
+        remorseCancel: "点按取消",
+        nSys: "设置 → VPN",
+        nCover: "封面",
+        nPulley: "主页 · 菜单",
+        copyLink: "拷贝链接",
+        pastePh: "loft://…、sstp://…、vless://…",
+        pasteBtn: "粘贴",
+        cfClrS: "日志记录将从本机删除。",
+        cfClrT: "清除日志？",
+        cfDefGo: "还原",
+        cfDefS: "所有设置恢复为默认值。",
+        cfDefT: "还原默认设置？",
+        trusted: "受信任的 Wi‑Fi",
+        demandD: "在蜂窝网络和未受信任的 Wi‑Fi 下系统会连接 VPN。受信任的网络不连接。",
+        demand: "按需连接",
+        scanBtn: "扫描",
+        shareBtn: "分享",
+        newTitle: "新连接",
+        detServer: "服务器",
+        detMtu: "MTU",
+        detFront: "前置",
+        detOver: "loft 地址", extIpK: "外部 IP", overIpK: "Overlay IP", routeK: "路由",
+        detT: "详细信息",
+        kindAutoV: "自动",
+        protoK: "协议",
+        frontK: "前置",
+        transK: "传输",
+        authK: "认证",
+        secK: "安全",
+        optK: "选项",
+        pillBusy: "正在连接: Home…",
+        "split.add": "添加",
+        "split.add.body": "地址或 CIDR 前缀。服务名是列表里显示的名字。",
+        "split.add.body.ignore": "不写入本区域的前缀。规则集更新后仍保留。",
+        "split.add.ignore": "排除",
+        "split.add.kind": "条目",
+        "split.add.route": "路由",
+        "split.add.go": "添加",
+        "split.add.name": "服务",
+        "split.add.net": "网段或地址",
+        "split.add.title": "网段",
+        split_add_save: "保存",
+        "split.bypass": "绕过 loft",
+        "split.via": "经 loft",
+        "split.d": "区域流量走 loft 或绕过。服务只属于一个区域。",
+        "split.empty": "此区域还没有条目。",
+        "split.ignore": "排除",
+        "split.export.body": "所有区域写入一个 loft-routes 文件：区域在 REM zone:，服务名在注释里。",
+        "split.export.fmt": "格式",
+        "split.export.keen": "Keenetic .bat",
+        "split.export.loft": "loft",
+        "split.export.save": "保存 loft-routes.bat",
+        "split.export.save.keen": "保存 %@.bat",
+        "split.export.title": "导出路由",
+        "split.import.body": "Keenetic .bat 或 loft-routes。:: rem 是服务名。",
+        "split.import.detect": "Keenetic · 214 行 · 选择区域",
+        "split.import.go": "添加 214 条路由",
+        "split.import.title": "导入路由",
+        "split.net": "网段",
+        "split.nets": "个网段",
+        "split.rdef": "方向",
+        "split.repo": "规则集",
+        "split.repo.auto": "自动更新",
+        "split.repo.auto.d": "每天一次。不覆盖你自己的条目。",
+        "split.repo.body": "来自 GitHub 或自有主机的 .bat。填入此区域。你自己的行保留。",
+        "split.repo.last": "今天 · 214 条路由",
+        "split.repo.none": "还没有列表",
+        "split.repo.pull": "立即更新",
+        "split.repo.url": "列表地址",
+        "split.repo.pick": "列表",
+        "split.lists": "列表",
+        "split.lists.body": "来自 loft 仓库。自定义地址仍可粘贴。",
+        "split.search": "查找服务",
+        "split.src.me": "自定义",
+        "split.src.ignore": "排除",
+        "split.src.repo": "列表",
+        "split.sub.off": "关 — 列表不写入系统路由表。",
+        "split.zone": "区域",
+        "split.zone.global": "Global",
+        "split.zone.local": "Local",
+        "split.zones": "区域",
+        "split.zones.add": "添加区域",
+        "split.zones.add.body": "名称、方向、可选列表地址。服务跟随此区域。",
+        "split.zones.add.go": "添加",
+        "split.zones.add.title": "新区域",
+        "split.zones.builtin": "内置",
+        "split.zones.del": "删除区域",
+        "split.zones.edit.title": "区域",
+        "split.zones.move": "服务将移到 Global。",
+        "split.zones.name": "名称",
+        "split.zones.save": "保存",
+        split_lists: "列表",
+        "split.sub": "经 loft 的流量进入隧道。绕过 loft 的直连，不进隧道。",
+        backGen: "‹ 返回",
+        nSplit: "路由 · 列表",
+        nSvc: "路由 · 网络",
+        nZones: "路由 · 区域",
+        nZone: "路由 · 区域编辑",
+        nRepo: "路由 · 规则集",
+        nLists: "路由 · 目录",
+        nSin: "路由 · 导入",
+        nSout: "路由 · 导出",
+        hRoutes: "分流",
+        navCap: "Aurora OS 5 应用模型。隧道是 ConnMan，会话是 loft-front。",
+        hApp: "应用",
+        nHome: "主页 · 已连接",
+        nOff: "主页 · 未连接",
+        nOpen: "主页 · 正在连接",
+        nSimple: "主页 · 简化",
+        nHomeSstp: "主页 · SSTP",
+        nHomeVless: "主页 · VLESS",
+        nHomeTrojan: "主页 · Trojan",
+        nHomeBars: "主页 · 柱形",
+        nOnb0: "引导 · 开始",
+        nAdd: "列表 · 添加",
+        nEditTrojan: "编辑 · Trojan",
+        vpnTrojan: "Trojan",
+        trojanPass: "密码",
+        trojanUrl: "服务器",
+        addSheet: "新连接",
+        addScan: "扫描二维码",
+        addPaste: "粘贴链接",
+        addManual: "手动",
+        startTitle: "添加连接",
+        startBody: "扫描二维码，或粘贴发给你的链接。",
+        startHint: "链接已在剪贴板时，点「粘贴链接」。",
+        startManual: "手动输入密钥和地址",
+        onbAdv: "高级",
+        kindAuto: "自动",
+        nList: "连接",
+        nSwipe: "列表 · 滑动",
+        nCtx: "列表 · 菜单",
+        nExp: "列表 · 导出",
+        nEdit: "编辑",
+        nEditAdv: "编辑 · 高级",
+        nEditSstp: "编辑 · SSTP",
+        nEditVless: "编辑 · VLESS",
+        nScan: "扫描二维码",
+        nShare: "分享二维码",
+        nOnb: "引导 · 密钥",
+        nOnb2: "引导 · 地址",
+        nSet: "设置 · 通用",
+        nSetR: "设置 · 路由",
+        nSetC: "设置 · 连接",
+        nJournal: "日志",
+        nAbout: "关于",
+        nIos: "设置 → VPN",
+        connect: "连接",
+        popConnect: "连接",
+        disconnect: "断开",
+        connecting: "正在连接…",
+        disconnecting: "正在断开…",
+        cancel: "取消",
+        pillOn: "已连接: Home 0:12",
+        pillOff: "未连接 · Home ›",
+        frontK: "前置",
+        tunK: "隧道",
+        journal: "日志",
+        reset: "重置路由",
+        settings: "设置",
+        tabHome: "主页",
+        close: "关闭",
+        backSet: "‹ 设置",
+        conns: "连接",
+        connsSub: "每条有自己的密钥和地址。同时只激活一条。",
+        active: "当前",
+        edit: "编辑",
+        delete: "删除",
+        export: "导出",
+        import: "导入",
+        listHint: "长按出菜单：编辑、导出、删除。选中行导出为 .loft。点 Office 会先断开 Home：只有一条隧道。",
+        expSheet: "导出 Home",
+        warnExport: "文件里有访问密钥。不要分享给他人。",
+        expLoft: "Home.loft",
+        expLoftS: "这条连接",
+        expQr: "QR loft://",
+        expQrS: "一条前置",
+        expAll: "Family.loft",
+        expAllS: "全部三条 · loft + sstp + vless",
+        delSub: "这条连接将从本机删除。如果它是当前会话，会话会关闭。",
+        editTitle: "连接",
+        name: "名称",
+        vpnType: "VPN 类型",
+        vpnLoft: "loft",
+        vpnSstp: "SSTP",
+        vpnVless: "VLESS",
+        editMain: "主要",
+        editAdv: "高级",
+        loftUri: "loft:// 地址",
+        entryLink: "链接",
+        entryMan: "手动",
+        eKey: "访问密钥",
+        ePath: "路径",
+        vlessHost: "地址",
+        vlessPort: "端口",
+        vlessSec: "安全",
+        vlessNet: "传输",
+        vlessFp: "TLS 指纹",
+        vlessPbk: "公钥",
+        vlessSid: "Short ID",
+        vlessXhost: "Host 头",
+        vlessVision: "Vision",
+        vlessVisionD: "TCP 上的 xtls-rprx-vision。",
+        showSecret: "显示",
+        hideSecret: "隐藏",
+        tun: "隧道接口",
+        tunD: "系统 VPN（ConnMan）。整机路由在设置里。",
+        sstpTunD: "服务器下发的地址写在接口上。",
+        sstpUser: "用户名",
+        sstpPass: "密码",
+        sstpUrl: "服务器",
+        sstpSni: "TLS 主机名",
+        sstpTls: "证书校验",
+        sstpTlsD: "校验 HTTPS 服务器证书。",
+        sstpPap: "PAP / CHAP",
+        sstpPapD: "安全性较低。默认只用 MSCHAPv2。",
+        vlessUuid: "UUID",
+        vlessUrl: "vless:// 链接",
+        mux: "多路复用",
+        muxD: "所有连接共用一条到节点的会话。",
+        dns: "DNS",
+        dnsPhLoft: "空则来自节点",
+        dnsPhSstp: "空则来自服务器，否则网关",
+        dnsPhVless: "逗号分隔的地址",
+        dnsSys: "写入系统 DNS",
+        dnsSysD: "隧道开启时，把解析器写入 ConnMan。",
+        dnsRep: "仅这些地址",
+        dnsRepD: "不从服务器和 PPP 网关取 DNS。",
+        save: "保存",
+        back: "返回",
+        qr: "QR",
+        setGen: "通用",
+        setRoute: "路由",
+        setClient: "连接",
+        simple: "简化界面",
+        simpleD: "主页只留连接和断开。",
+        rateUnit: "速率单位",
+        sparkK: "速度图",
+        sparkD: "主页上 ↓↑ 怎么画。",
+        sparkLines: "曲线",
+        sparkBars: "柱形",
+        rateUnitD: "主页 ↑↓ 的显示方式。",
+        uKbit: "kbit/s",
+        uKb: "kB/s",
+        lang: "界面语言",
+        langD: "立即生效",
+        langZh: "中文",
+        langRu: "Русский",
+        langEn: "English",
+        rateDown: "↓ 12.4 Mbit/s",
+        delQ: "正在删除 %s",
+        diag: "详细日志",
+        diagD: "路由、DNS、ConnMan。轮转文件。",
+        defRoute: "默认路由",
+        defRouteD: "全部流量走 loft。关 — 只有 loft 网。",
+        hold: "无 VPN 时禁止联网",
+        holdD: "隧道未接通时，直连互联网保持关闭。",
+        split: "分流",
+        splitD: "区域流量走 loft 或绕过。服务只属于一个区域。",
+        auto: "启动时连接",
+        autoD: "打开应用后连接当前选中的那条。",
+        reconnect: "断线重连",
+        reconnectD: "会话中断后重新连接。",
+        extIp: "显示公网 IP",
+        extIpD: "连上后通过本会话向服务查询地址。",
+        defaults: "默认",
+        about: "关于",
+        keyStep: "第 1 步，共 2 步",
+        keyTitle: "访问密钥",
+        keyBody: "输入发给你的访问密钥。",
+        keyHint: "以 lt_ 开头。只显示一次 — 请保存。",
+        continue: "继续",
+        keyOrfile: "或导入文件或二维码",
+        urlStep: "第 2 步，共 2 步",
+        urlTitle: "地址",
+        urlBody: "输入和密钥一起发给你的地址。",
+        url: "URL",
+        urlType: "方式",
+        path: "路径（如果给了）",
+        urlHint: "HTTPS。GET 是文件，WS 是通道，H2/H3 是 CONNECT，QUIC 是 UDP。",
+        urlGo: "连接",
+        onbVpn: "如果 Aurora 请求允许 VPN，点「允许」。只问一次。",
+        scanT: "扫描二维码",
+        scanHint: "相机。loft://、sstp://、vless:// 或 .loft。",
+        fromFile: "从文件",
+        fromPhotos: "从相册",
+        pasteL: "或粘贴链接",
+        scanAdd: "添加",
+        shareT: "QR",
+        shareHint: "地址是 loft://，一条前置。URI 里的密钥是秘密。多条前置或多条连接用 .loft 文件。",
+        journalD: "前置与会话行。密钥在日志里会缩短。",
+        copy: "拷贝",
+        clearLog: "清除",
+        protos: "协议",
+        blurb: "外面是普通 HTTPS。\n里面是自己的网络。",
+        handshake: "握手",
+        iosCap: "系统 VPN 列表。开关是 loft 隧道，不是应用里第二个开关。",
+        iosOn: "已连接",
+        iosType: "类型",
+        iosServer: "服务器",
+        iosIke: "IKEv2 Office 是系统自带客户端，不是 loft。",
+        iosNot: "未连接"
+      }
+    };
+    let lang = "ru";
+    let vpn = "loft";
+    let editTab = "main";
+    let entry = "link";
+    let setTab = 0;
+    let onbStep = 0;
+    let editNew = false;
+    let homeMode = "on";
+
+    function setLang(l) {
+      if (!I[l]) return;
+      lang = l;
+      document.getElementById("lang-zh").classList.toggle("on", l === "zh");
+      document.getElementById("lang-ru").classList.toggle("on", l === "ru");
+      document.getElementById("lang-en").classList.toggle("on", l === "en");
+      document.documentElement.lang = l;
+      const sel = document.getElementById("langSel");
+      if (sel) sel.value = l;
+      document.querySelectorAll("[data-i]").forEach((el) => {
+        const k = el.getAttribute("data-i");
+        if (I[l][k] != null) el.textContent = I[l][k];
+      });
+      document.querySelectorAll("[data-ph]").forEach((el) => {
+        const k = el.getAttribute("data-ph");
+        if (I[l][k] != null) el.setAttribute("placeholder", I[l][k]);
+      });
+      paintHome();
+      paintOnboard();
+      if (typeof paintSplitScreen === "function" && SPLIT_SCREENS.includes(cur)) paintSplitScreen(cur);
+      document.querySelectorAll(".eye").forEach((b) => {
+        const inp = b.parentElement.querySelector("input");
+        const open = inp && (inp.dataset.full ? inp.value === inp.dataset.full : inp.type === "text");
+        b.textContent = open ? I[l].hideSecret : I[l].showSecret;
+      });
+    }
+
+    const HOME_CARDS = {
+      loft: [["protoK", "loft/1.0"], ["frontK", "GET"], ["optK", "mux · mask"]],
+      sstp: [["protoK", "SSTP"], ["transK", "PPP"], ["authK", "CHAP"]],
+      vless: [["protoK", "VLESS"], ["transK", "TCP"], ["secK", "REALITY"]],
+      trojan: [["protoK", "Trojan"], ["transK", "TCP"], ["secK", "TLS"]],
+    };
+    let homeVpn = "loft";
+    // Speed over the last minute. Settings pick smooth lines (default) or thin bars.
+    let sparkStyle = "lines";
+    const SPARK_DN = [.32,.38,.35,.46,.52,.44,.4,.55,.63,.58,.5,.47,.56,.68,.74,.66,.6,.64,.72,.8,.7,.62,.58,.66,.75,.83,.78,.7,.64,.69,.77,.86,.8,.72,.68,.74,.82,.9,.84,.78];
+    const SPARK_UP = [.1,.12,.11,.14,.16,.13,.12,.15,.18,.16,.14,.13,.15,.19,.2,.18,.16,.17,.2,.22,.19,.17,.16,.18,.2,.23,.21,.19,.17,.18,.21,.24,.22,.2,.18,.2,.22,.25,.23,.21];
+    function sparkSVG(style, w) {
+      const H = 40, n = SPARK_DN.length;
+      if (style === "bars") {
+        const gap = 2, bw = Math.max(1, (w - gap * (n - 1)) / n), rowH = 17;
+        // Older samples fade out to the left.
+        const row = (arr, y0, color) => arr.map((v, i) => {
+          const h = Math.max(2, v * rowH), x = i * (bw + gap);
+          const op = (0.3 + 0.7 * (i / (n - 1))).toFixed(2);
+          return `<rect x="${x.toFixed(1)}" y="${(y0 + rowH - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(1.5, bw / 2).toFixed(1)}" fill="${color}" opacity="${op}"/>`;
+        }).join("");
+        return `<svg viewBox="0 0 ${w} ${H}" aria-hidden="true">${row(SPARK_DN, 0, "#E8B84A")}${row(SPARK_UP.map((v) => v * 3), 23, "#A89A8C")}</svg>`;
+      }
+      const pts = (arr) => arr.map((v, i) => [i * (w - 4) / (n - 1), H - 3 - v * (H - 8)]);
+      // Catmull-Rom through the samples, as cubic Béziers.
+      const curve = (p) => p.reduce((d, pt, i) => {
+        if (i === 0) return `M${pt[0].toFixed(1)},${pt[1].toFixed(1)}`;
+        const p0 = p[i - 2] || p[i - 1], p1 = p[i - 1], p3 = p[i + 1] || pt;
+        const c1 = [p1[0] + (pt[0] - p0[0]) / 6, p1[1] + (pt[1] - p0[1]) / 6];
+        const c2 = [pt[0] - (p3[0] - p1[0]) / 6, pt[1] - (p3[1] - p1[1]) / 6];
+        return d + ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${pt[0].toFixed(1)},${pt[1].toFixed(1)}`;
+      }, "");
+      const dn = pts(SPARK_DN), up = pts(SPARK_UP), dl = dn[n - 1], ul = up[n - 1];
+      const dPath = curve(dn);
+      return `<svg viewBox="0 0 ${w} ${H}" aria-hidden="true">
+        <defs><linearGradient id="spFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8B84A" stop-opacity=".32"/><stop offset="1" stop-color="#E8B84A" stop-opacity="0"/></linearGradient></defs>
+        <path d="${dPath} L${dl[0].toFixed(1)},${H} L0,${H} Z" fill="url(#spFill)"/>
+        <path d="${dPath}" fill="none" stroke="#E8B84A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${curve(up)}" fill="none" stroke="#A89A8C" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>
+        <circle cx="${dl[0].toFixed(1)}" cy="${dl[1].toFixed(1)}" r="5" fill="#E8B84A" opacity=".18"/>
+        <circle cx="${dl[0].toFixed(1)}" cy="${dl[1].toFixed(1)}" r="2.4" fill="#E8B84A"/>
+        <circle cx="${ul[0].toFixed(1)}" cy="${ul[1].toFixed(1)}" r="1.9" fill="#A89A8C"/>
+      </svg>`;
+    }
+    function paintHome() {
+      const root = document.getElementById("home");
+      const act = document.getElementById("homeAct");
+      const pill = document.getElementById("homePill");
+      const pillT = document.getElementById("homePillT");
+      const body = document.getElementById("homeBody");
+      const win = document.getElementById("homeWin");
+      // Cards follow the protocol: what it is, how it rides, and its options.
+      const set = HOME_CARDS[homeVpn] || HOME_CARDS.loft;
+      const live = homeMode === "on" || homeMode === "simple";
+      set.forEach(([k, v], i) => {
+        document.getElementById("cardK" + (i + 1)).textContent = I[lang][k];
+        let val = v;
+        if (homeVpn === "loft" && !live && k === "frontK") val = I[lang].kindAutoV;
+        if (homeVpn === "loft" && !live && k === "optK") val = "—";
+        document.getElementById("cardV" + (i + 1)).textContent = val;
+      });
+      const mbit = lang === "ru" ? "Мбит/с" : "Mbit/s";
+      const sparkL = document.getElementById("sparkL");
+      const sparkR = document.getElementById("sparkR");
+      root.classList.toggle("simple", homeMode === "simple");
+      root.classList.toggle("busy", homeMode === "connecting");
+      const on = homeMode === "on" || homeMode === "simple";
+      root.classList.toggle("live", on);
+      pill.classList.toggle("on", on);
+      pillT.textContent = on ? I[lang].pillOn : homeMode === "connecting" ? I[lang].pillBusy : I[lang].pillOff;
+      const dash = "—";
+      if (homeMode === "connecting") {
+        act.className = "ghost";
+        act.textContent = I[lang].cancel;
+        body.setAttribute("fill", "#8A7E72");
+        win.setAttribute("fill", "#3A332E");
+        sparkL.textContent = I[lang].handshake;
+        sparkR.textContent = "";
+      } else if (on) {
+        act.className = "danger";
+        act.textContent = I[lang].disconnect;
+        body.setAttribute("fill", "#F3EDE4");
+        win.setAttribute("fill", "#E8B84A");
+        sparkL.innerHTML = sparkSVG(sparkStyle, sparkL.clientWidth || 180);
+        sparkR.innerHTML = `<span class="dn">↓ 12.4 ${mbit}</span><span class="up">↑ 1.1 ${mbit}</span>`;
+      } else {
+        act.className = "go";
+        act.textContent = I[lang].connect;
+        body.setAttribute("fill", "#8A7E72");
+        win.setAttribute("fill", "#3A332E");
+        sparkL.textContent = "";
+        sparkR.textContent = "";
+      }
+    }
+
+
+    function paintVlessManual() {
+      const reality = document.querySelector("#vlessSec button.on")?.getAttribute("data-sec") === "reality";
+      const xhttp = document.querySelector("#vlessNet button.on")?.getAttribute("data-net") === "xhttp";
+      const real = document.getElementById("vless-reality");
+      const xh = document.getElementById("vless-xhttp");
+      const vis = document.getElementById("vless-vision");
+      if (real) real.classList.toggle("hidden", !reality);
+      if (xh) xh.classList.toggle("hidden", !xhttp);
+      if (vis) vis.classList.toggle("hidden", xhttp);
+    }
+    // A new connection picks its type and scans; an existing one keeps its type and shares.
+    function paintEdit() {
+      document.querySelectorAll("#vpnSeg button").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-vpn") === vpn);
+        b.classList.toggle("hidden", !editNew && b.getAttribute("data-vpn") !== vpn);
+      });
+      document.querySelector('#edit [data-i="editTitle"]').textContent = editNew ? I[lang].newTitle : I[lang].editTitle;
+      const hdr = document.getElementById("editHdr");
+      hdr.setAttribute("data-go", editNew ? "scan" : "share");
+      hdr.textContent = editNew ? I[lang].scanBtn : I[lang].shareBtn;
+      document.getElementById("editDelRow").classList.toggle("hidden", editNew);
+      document.getElementById("editAdvBtn").textContent = I[lang].onbAdv + (editTab === "adv" ? " ▴" : " ▾");
+      document.querySelectorAll("#editTabs button").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-edittab") === editTab);
+      });
+      ["loft", "sstp", "vless", "trojan"].forEach((k) => {
+        document.getElementById("edit-main-" + k).classList.toggle("hidden", vpn !== k);
+        document.getElementById("edit-adv-" + k).classList.toggle("hidden", !(editTab === "adv" && vpn === k));
+      });
+      ["loft", "vless"].forEach((k) => {
+        const link = document.getElementById(k + "-link");
+        const man = document.getElementById(k + "-manual");
+        if (link) link.classList.toggle("hidden", entry !== "link");
+        if (man) man.classList.toggle("hidden", entry !== "manual");
+        document.querySelectorAll("#" + k + "Entry button").forEach((b) => {
+          b.classList.toggle("on", b.getAttribute("data-entry") === entry);
+        });
+      });
+      paintVlessManual();
+    }
+
+    // One list with groups; the mock's nav scrolls to a group.
+    function paintSettings() {
+      const sc = document.getElementById("setScroll");
+      sc.scrollTop = setTab ? document.getElementById("grp-" + setTab).offsetTop - sc.offsetTop : 0;
+    }
+
+    // Step 0 is the usual way in (QR or a copied link); 1 and 2 are the manual key and address.
+    function paintOnboard() {
+      [0, 1, 2].forEach((i) => document.getElementById("onb" + i).classList.toggle("hidden", onbStep !== i));
+      const st = document.getElementById("onbStep");
+      st.classList.toggle("hidden", onbStep === 0);
+      st.textContent = onbStep === 1 ? I[lang].keyStep : I[lang].urlStep;
+      document.getElementById("onbTitle").textContent = onbStep === 0 ? I[lang].startTitle : onbStep === 1 ? I[lang].keyTitle : I[lang].urlTitle;
+      document.getElementById("onbBody").textContent = onbStep === 0 ? I[lang].startBody : onbStep === 1 ? I[lang].keyBody : I[lang].urlBody;
+    }
+    document.getElementById("onbAdvBtn").addEventListener("click", () => document.getElementById("onbAdv").classList.toggle("hidden"));
+
+    const SHEETS = ["ctxScrim", "exportScrim", "delScrim", "addScrim", "detScrim", "cfScrim"];
+    function hideSheets() {
+      SHEETS.forEach((id) => document.getElementById(id).classList.add("hidden"));
+      document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
+    }
+    // Tabs are the three rooms; Journal and About are pushed from Settings.
+    // Edit, Scanner and QR are modal: Cancel / Close returns where they came from.
+    const SPLIT_SCREENS = ["split", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
+    const TAB_OF = {}; // Silica: no tab bar
+
+    const PARENT = { list: "home", settings: "home", edit: "list", scan: "list", share: "list", journal: "settings", about: "settings",
+      split: "settings", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
+    let cur = "home";
+    const from = {};
+    // Every mock state has its own address: #edit-sstp, #settings-route, #home-off.
+    // The nav and taps inside the phone write it; opening a link shows that state.
+    const SETTAB_SLUG = ["", "route", "connection"], STEP_SLUG = ["", "key", "address"];
+    function slugOf(id, x) {
+      const p = [id];
+      if (id === "home" && x.mode && x.mode !== "on") p.push(x.mode);
+      if (x.pulley) p.push("menu");
+      if (id === "home" && x.vpn && x.vpn !== "loft") p.push(x.vpn);
+      if (id === "home" && x.spark && x.spark !== "lines") p.push(x.spark);
+      if (x.list) p.push(x.list);
+      if (id === "edit") {
+        if (x.vpn && x.vpn !== "loft") p.push(x.vpn);
+        if (x.edittab === "adv") p.push("adv");
+        if (x.isnew) p.push("new");
+      }
+      if (id === "settings" && x.settab) p.push(SETTAB_SLUG[+x.settab]);
+      if (id === "onboard" && x.step) p.push(STEP_SLUG[+x.step]);
+      return p.filter(Boolean).join("-");
+    }
+    function fromHash() {
+      const h = decodeURIComponent(location.hash.slice(1));
+      if (!h) return false;
+      const b = [...document.querySelectorAll("nav button[data-go]")].find((x) => slugOf(x.getAttribute("data-go"), attrsOf(x)) === h);
+      if (b) { show(b.getAttribute("data-go"), Object.assign(attrsOf(b), { fromHash: true })); return true; }
+      const id = h.split("-")[0];
+      if (!document.getElementById(id)) return false;
+      show(id, { fromHash: true });
+      return true;
+    }
+    window.addEventListener("hashchange", fromHash);
+    document.querySelectorAll("[data-menu]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      b.closest(".screen").classList.toggle("pulled");
+    }));
+    document.getElementById("phone").addEventListener("click", (e) => {
+      if (!e.target.closest("[data-menu]") && !e.target.closest(".popmenu")) document.querySelectorAll(".screen.pulled").forEach((x) => x.classList.remove("pulled"));
+    }, true);
+    document.getElementById("sparkSel").addEventListener("change", (e) => { sparkStyle = e.target.value; });
+    function show(id, extra) {
+      extra = extra || {};
+      hideSheets();
+      if (id !== cur && !extra.back) from[id] = cur;
+      cur = id;
+      if (!extra.fromHash) history.replaceState(null, "", location.pathname + location.search + "#" + slugOf(id, extra));
+      const tab = TAB_OF[id];
+      document.getElementById("phone").classList.toggle("tabbed", !!tab);
+      document.getElementById("tabbar").classList.toggle("hidden", !tab);
+      document.querySelectorAll("#tabbar button").forEach((b) => b.classList.toggle("on", b.getAttribute("data-tab") === tab));
+      document.querySelectorAll("nav button[data-go]").forEach((b) => {
+        const same = b.getAttribute("data-go") === id &&
+          (b.getAttribute("data-list") || "") === (extra.list || "") &&
+          (b.getAttribute("data-mode") || "") === (extra.mode || "") &&
+          (b.getAttribute("data-pulley") || "") === (extra.pulley || "") &&
+          (b.getAttribute("data-vpn") || "") === (extra.vpn || "") &&
+          (b.getAttribute("data-spark") || "") === (extra.spark || "") &&
+          (b.getAttribute("data-edittab") || "") === (extra.edittab || "") &&
+          (b.getAttribute("data-settab") || "") === (extra.settab != null ? String(extra.settab) : "") &&
+          (b.getAttribute("data-step") || "") === (extra.step != null ? String(extra.step) : "");
+        b.classList.toggle("on", same);
+      });
+      const phone = document.getElementById("phone");
+      const SYS = ["cover", "sysvpn"];
+      SYS.forEach((k) => document.getElementById(k).classList.toggle("hidden", k !== id));
+      if (SYS.includes(id)) { phone.classList.add("hidden"); return; }
+      phone.classList.remove("hidden");
+      phone.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
+      document.getElementById(id).classList.remove("hidden");
+      document.getElementById(id).classList.toggle("pulled", !!extra.pulley);
+      if (id === "home") {
+        homeMode = extra.mode || "on";
+        homeVpn = extra.vpn || "loft";
+        // A nav entry or link sets the chart; a plain tab tap keeps the Settings pick.
+        if (extra.mode || extra.fromHash) {
+          sparkStyle = extra.spark || "lines";
+          document.getElementById("sparkSel").value = sparkStyle;
+        }
+        paintHome();
+      }
+      if (id === "edit") {
+        if (extra.vpn) vpn = extra.vpn;
+        if (extra.edittab) editTab = extra.edittab;
+        entry = extra.entry || "link";
+        editNew = !!extra.isnew;
+        paintEdit();
+      }
+      if (SPLIT_SCREENS.includes(id)) paintSplitScreen(id);
+      if (id === "settings") {
+        if (extra.settab != null && extra.settab !== "") setTab = Number(extra.settab);
+        paintSettings();
+      }
+      if (id === "onboard") {
+        if (extra.step) onbStep = Number(extra.step);
+        paintOnboard();
+      }
+      if (id === "list") {
+        if (extra.list === "swipe") {
+          const office = document.querySelector('.swipe[data-id="office"]');
+          if (office) office.classList.add("open-r");
+        } else if (extra.list === "ctx") {
+          document.getElementById("ctxScrim").classList.remove("hidden");
+        } else if (extra.list === "export") {
+          document.getElementById("exportScrim").classList.remove("hidden");
+        } else if (extra.list === "add") {
+          document.getElementById("addScrim").classList.remove("hidden");
+        }
+      }
+    }
+    function attrsOf(el) {
+      return {
+        list: el.getAttribute("data-list") || "",
+        mode: el.getAttribute("data-mode") || "",
+        pulley: el.getAttribute("data-pulley") || "",
+        vpn: el.getAttribute("data-vpn") || "",
+        spark: el.getAttribute("data-spark") || "",
+        edittab: el.getAttribute("data-edittab") || "",
+        settab: el.getAttribute("data-settab"),
+        step: el.getAttribute("data-step"),
+        entry: el.getAttribute("data-entry") || "",
+        isnew: el.getAttribute("data-new") === "1"
+      };
+    }
+    function openSheet(id) {
+      SHEETS.forEach((s) => document.getElementById(s).classList.toggle("hidden", s !== id));
+    }
+    document.querySelectorAll("[data-go]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        show(b.getAttribute("data-go"), attrsOf(b));
+      });
+    });
+    document.querySelectorAll("#tabbar button").forEach((b) => {
+      b.addEventListener("click", () => show(b.getAttribute("data-tab"), { mode: b.getAttribute("data-tab") === "home" ? homeMode : "" }));
+    });
+    function goBack() {
+      let to = from[cur] || PARENT[cur] || "home";
+      if (to === cur || ["cover", "sysvpn"].includes(to)) to = PARENT[cur] || "home";
+      show(to, { back: true, mode: to === "home" ? homeMode : "" });
+    }
+    document.querySelectorAll("[data-back]").forEach((b) => {
+      b.addEventListener("click", (e) => { e.stopPropagation(); goBack(); });
+    });
+    document.querySelectorAll("[data-sheet]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (b.getAttribute("data-sheet") === "export") openSheet("exportScrim");
+        if (b.getAttribute("data-sheet") === "add") openSheet("addScrim");
+        if (b.getAttribute("data-sheet") === "det" && homeMode !== "off" && homeMode !== "connecting") openSheet("detScrim");
+      });
+    });
+    document.querySelectorAll("[data-close]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        document.getElementById(b.getAttribute("data-close")).classList.add("hidden");
+      });
+    });
+    // One confirm sheet for the quiet destructive actions (defaults, clear journal).
+    const CONFIRM = { defaults: ["cfDefT", "cfDefS", "cfDefGo"], clear: ["cfClrT", "cfClrS", "clearLog"] };
+    document.querySelectorAll("[data-confirm]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const [t, sub, go] = CONFIRM[b.getAttribute("data-confirm")];
+        document.getElementById("cfTitle").textContent = I[lang][go]; // remorse names the action
+        document.getElementById("cfSub").textContent = I[lang][sub];
+        document.getElementById("cfGo").textContent = I[lang][go];
+        openSheet("cfScrim");
+      });
+    });
+    document.querySelectorAll("[data-del]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const name = b.getAttribute("data-del");
+        document.getElementById("delTitle").textContent = I[lang].delQ.replace("%s", name);
+        openSheet("delScrim");
+      });
+    });
+    document.getElementById("ctxScrim").addEventListener("click", (e) => {
+      if (e.target.id === "ctxScrim") hideSheets();
+    });
+    document.querySelectorAll(".toggle").forEach((t) => {
+      t.addEventListener("click", () => t.classList.toggle("on"));
+    });
+    document.querySelectorAll("#vpnSeg button").forEach((b) => {
+      b.addEventListener("click", () => {
+        vpn = b.getAttribute("data-vpn");
+        entry = "link";
+        paintEdit();
+      });
+    });
+    document.querySelectorAll("#loftEntry button, #vlessEntry button").forEach((b) => {
+      b.addEventListener("click", () => {
+        entry = b.getAttribute("data-entry");
+        paintEdit();
+      });
+    });
+    document.querySelectorAll("#loftNet button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#loftNet button").forEach((x) => x.classList.toggle("on", x === b));
+      });
+    });
+    document.querySelectorAll("#vlessSec button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#vlessSec button").forEach((x) => x.classList.toggle("on", x === b));
+        paintVlessManual();
+      });
+    });
+    document.querySelectorAll("#vlessNet button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#vlessNet button").forEach((x) => x.classList.toggle("on", x === b));
+        paintVlessManual();
+      });
+    });
+    document.getElementById("editAdvBtn").addEventListener("click", () => { editTab = editTab === "adv" ? "main" : "adv"; paintEdit(); });
+    document.querySelectorAll("#setTabs button").forEach((b) => {
+      b.addEventListener("click", () => { setTab = Number(b.getAttribute("data-settab")); paintSettings(); });
+    });
+    document.querySelectorAll("#onbKind button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#onbKind button").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+      });
+    });
+    document.querySelectorAll(".eye").forEach((b) => {
+      b.addEventListener("click", () => {
+        const inp = b.parentElement.querySelector("input");
+        if (!inp) return;
+        if (inp.dataset.full) {
+          const open = inp.value !== inp.dataset.full;
+          inp.value = open ? inp.dataset.full : inp.dataset.mask;
+          b.textContent = open ? I[lang].hideSecret : I[lang].showSecret;
+          return;
+        }
+        const show = inp.type === "password";
+        inp.type = show ? "text" : "password";
+        b.textContent = show ? I[lang].hideSecret : I[lang].showSecret;
+      });
+    });
+
+    const THRESH = 48;
+    document.querySelectorAll(".swipe").forEach((row) => {
+      let x0 = 0, y0 = 0, dx = 0, armed = false, moved = false, hold = null;
+      const card = row.querySelector(".card");
+      function endHold() { if (hold) { clearTimeout(hold); hold = null; } }
+      row.addEventListener("pointerdown", (e) => {
+        if (e.button && e.button !== 0) return;
+        if (e.target.closest("button")) return;
+        x0 = e.clientX; y0 = e.clientY; dx = 0; armed = true; moved = false;
+        endHold();
+        hold = setTimeout(() => {
+          hold = null; armed = false;
+          document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
+          const n = row.querySelector(".n").textContent;
+          const m = row.querySelector(".m").textContent;
+          const prev = document.querySelector("#ctxMenu .preview");
+          prev.querySelector(".n").textContent = n;
+          prev.querySelector(".m").textContent = m;
+          const exp = document.querySelector('#ctxMenu [data-sheet="export"]');
+          exp.style.display = card.classList.contains("on") ? "" : "none";
+          document.querySelector('#ctxMenu [data-del]').setAttribute("data-del", n);
+          openSheet("ctxScrim");
+        }, 480);
+      });
+      row.addEventListener("pointermove", (e) => {
+        if (!armed) return;
+        dx = e.clientX - x0;
+        const dy = e.clientY - y0;
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) { moved = true; endHold(); }
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 6) {
+          card.style.transition = "none";
+          card.style.transform = "translateX(" + Math.max(-84, Math.min(84, dx)) + "px)";
+        }
+      });
+      function finish() {
+        if (!armed) return;
+        armed = false;
+        endHold();
+        card.style.transition = "";
+        card.style.transform = "";
+        document.querySelectorAll(".swipe").forEach((s) => {
+          if (s !== row) s.classList.remove("open-l", "open-r");
+        });
+        if (dx > THRESH) { row.classList.add("open-l"); row.classList.remove("open-r"); }
+        else if (dx < -THRESH) { row.classList.add("open-r"); row.classList.remove("open-l"); }
+        else if (!moved) {
+          if (row.classList.contains("open-l") || row.classList.contains("open-r")) {
+            row.classList.remove("open-l", "open-r");
+            return;
+          }
+          // Tap opens the connection; only Connect switches the tunnel.
+          show("edit", { vpn: row.getAttribute("data-kind") });
+        } else {
+          row.classList.remove("open-l", "open-r");
+        }
+        dx = 0;
+      }
+      row.addEventListener("pointerup", finish);
+      row.addEventListener("pointercancel", finish);
+      row.addEventListener("pointerleave", () => { if (armed) finish(); });
+    });
+
+    /* Split routing, as on macOS: a zone goes through Loft or around it; a
+       service (name + CIDRs) only belongs to a zone; an ignore CIDR is never
+       routed and survives list pulls. Here "through" is the ConnMan's
+       included routes and "around" its excluded routes. */
+    const LIST_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
+    const LIST_CATALOG = [
+      { id: "global", file: "global.bat", en: "World", ru: "Мир", zh: "全球" },
+      { id: "ru", file: "ru.bat", en: "Russia", ru: "Россия", zh: "俄罗斯" },
+      { id: "cn", file: "cn.bat", en: "China", ru: "Китай", zh: "中国" },
+      { id: "ir", file: "ir.bat", en: "Iran", ru: "Иран", zh: "伊朗" },
+      { id: "kz", file: "kz.bat", en: "Kazakhstan", ru: "Казахстан", zh: "哈萨克斯坦" },
+      { id: "by", file: "by.bat", en: "Belarus", ru: "Беларусь", zh: "白俄罗斯" },
+    ];
+    const ZONES = [
+      { id: "local", builtin: true, def: false, repo: "", auto: true },
+      { id: "global", builtin: true, def: true, repo: LIST_BASE + "global.bat", auto: true },
+    ];
+    const ROUTES = [
+      { id: "yt", en: "YouTube", zone: "global", cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
+      { id: "cf", en: "Cloudflare", zone: "global", cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
+      { id: "gpt", en: "ChatGPT", zone: "global", cidrs: ["104.18.32.0/24"], src: "me" },
+      { id: "nf", en: "Netflix", zone: "global", cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
+      { id: "yandex", en: "Yandex", ru: "Яндекс", zone: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "me" },
+      { id: "lan", en: "LAN", ru: "Локальная сеть", zh: "局域网", zone: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
+      { id: "ign", en: "Exclusion", ru: "Исключение", zh: "排除", zone: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
+    ];
+    let splitOn = true, zoneTab = "global", splitQ = "", svcId = null, svcKind = "route";
+    let zoneId = "local", zoneAddVia = true, zoneAddRepo = "";
+    const T = (k) => (I[lang][k] != null ? I[lang][k] : I.en[k] != null ? I.en[k] : k);
+    const loc = (o) => o[lang] || o.en;
+    const esc = (v) => String(v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    const zoneById = (id) => ZONES.find((z) => z.id === id);
+    const zoneName = (id) => { const z = zoneById(id); return (z && (z[lang] || z.en)) || T("split.zone." + id); };
+    const routesIn = (id) => ROUTES.filter((r) => r.zone === id);
+    const nets = (n) => {
+      if (lang === "ru") { const d = n % 10, h = n % 100; return n + " " + (d === 1 && h !== 11 ? T("split.net") : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "сети" : T("split.nets")); }
+      return n + " " + (n === 1 ? T("split.net") : T("split.nets"));
+    };
+    const dirOf = (def) => (def ? T("split.via") : T("split.bypass"));
+    const repoFile = (u) => String(u || "").split("?")[0].split("/").filter(Boolean).pop() || "";
+    const zoneOpts = (sel) => ZONES.map((z) => `<option value="${z.id}" ${z.id === sel ? "selected" : ""}>${esc(zoneName(z.id))}</option>`).join("");
+    const head = (title, sub) => `<div class="head"><div class="title">${title}</div></div>${sub ? `<p class="subline">${sub}</p>` : ""}`;
+    const dirSeg = (def, attr) => `<label class="field"><span>${T("split.rdef")}</span></label>
+      <div class="seg"><button type="button" class="${def ? "on" : ""}" ${attr}="via">${T("split.via")}</button><button type="button" class="${def ? "" : "on"}" ${attr}="bypass">${T("split.bypass")}</button></div>`;
+    function repoFields(url, auto, pull) {
+      return `<label class="field"><span>${T("split.repo.url")}</span>
+          <div class="repo-row"><input class="mono" data-zrepo value="${esc(url)}" placeholder="https://" /><button type="button" class="ghost" data-lists>${T("split.repo.pick")}</button></div>
+        </label>
+        <div class="set-row"><div><div class="k">${T("split.repo.auto")}</div><div class="s">${T("split.repo.auto.d")}</div></div><div class="toggle ${auto ? "on" : ""}"><i></i></div></div>
+        <p class="hint">${repoFile(url) ? T("split.repo.last") : T("split.repo.none")}</p>
+        ${pull ? `<div class="btns"><button type="button" class="go" data-back>${T("split.repo.pull")}</button></div>` : ""}`;
+    }
+    function splitRows() {
+      const q = splitQ.trim().toLowerCase();
+      const rows = routesIn(zoneTab).filter((r) => !q || loc(r).toLowerCase().includes(q)).map((r) => `
+        <div class="rrow" data-svc="${r.id}">
+          <div class="grow"><div class="n">${esc(loc(r))}</div><div class="m">${r.cidrs.slice(0, 2).join(" ")}${r.cidrs.length > 2 ? " …" : ""}</div></div>
+          <div class="meta">${nets(r.cidrs.length)}<div class="src">${T("split.src." + r.src)}</div></div>
+        </div>`).join("");
+      return rows || `<p class="hint">${T("split.empty")}</p>`;
+    }
+    const SPLIT_PAINT = {
+      split: () => {
+        const z = zoneById(zoneTab);
+        return `<div class="head"><div class="title">${T("split")}</div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>
+          <p class="subline">${splitOn ? T("split.sub") : T("split.sub.off")}</p>
+          <div class="zhead"><span class="lbl">${T("split.zone")}</span><button type="button" class="ghost-sm" data-go="zones">${T("split.zones")}</button></div>
+          <div class="ztabs">${ZONES.map((x) => `<button type="button" class="${x.id === zoneTab ? "on" : ""}" data-ztab="${x.id}">${esc(zoneName(x.id))} <span>${routesIn(x.id).length}</span></button>`).join("")}</div>
+          <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}</div>
+          <label class="field"><input type="search" data-sq value="${esc(splitQ)}" placeholder="${esc(T("split.search"))}" /></label>
+          <div class="rlist ${splitOn ? "" : "dim"}" id="splitRows">${splitRows()}</div>
+          <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>
+          <div class="row-3"><button type="button" class="ghost" data-go="splitin">${T("import")}</button><button type="button" class="ghost" data-go="splitout">${T("export")}</button><button type="button" class="ghost" data-go="splitrepo">${T("split.repo")}</button></div>`;
+      },
+      splitsvc: () => {
+        const r = svcId && ROUTES.find((x) => x.id === svcId);
+        const ign = svcKind === "ignore";
+        return head(T("split.add.title"), ign ? T("split.add.body.ignore") : T("split.add.body")) + `
+          <label class="field"><span>${T("split.add.kind")}</span></label>
+          <div class="seg"><button type="button" class="${ign ? "" : "on"}" data-kind="route">${T("split.add.route")}</button><button type="button" class="${ign ? "on" : ""}" data-kind="ignore">${T("split.add.ignore")}</button></div>
+          <label class="field"><span>${T("split.add.net")}</span>${r
+            ? `<textarea class="paste">${r.cidrs.join("\n")}</textarea>`
+            : `<input class="mono" placeholder="142.250.0.0/16" />`}</label>
+          <label class="field"><span>${T("split.add.name")}</span><input value="${esc(r ? loc(r) : "")}" placeholder="${esc(ign ? T("split.ignore") : "YouTube")}" /></label>
+          <label class="field"><span>${T("split.zone")}</span><select>${zoneOpts(r ? r.zone : zoneTab)}</select></label>
+          <div class="btns"><button type="button" class="go" data-back>${r ? T("split_add_save") : T("split.add.go")}</button></div>`;
+      },
+      zones: () => head(T("split.zones"), T("split.zones.add.body")) + ZONES.map((z) => {
+        const f = repoFile(z.repo);
+        return `<div class="rrow" data-zone="${z.id}">
+          <div class="grow"><div class="n">${esc(zoneName(z.id))}</div><div class="m">${nets(routesIn(z.id).length)}${f ? " · " + f : ""}</div></div>
+          <div class="meta">${dirOf(z.def)}${z.builtin ? `<div class="src">${T("split.zones.builtin")}</div>` : ""}</div>
+        </div>`;
+      }).join("") + `<button type="button" class="ghost-sm" data-zone="new">+ ${T("split.zones.add")}</button>`,
+      zone: () => {
+        const z = zoneId && zoneById(zoneId);
+        if (!z) {
+          return head(T("split.zones.add.title"), T("split.zones.add.body")) + `
+            <label class="field"><span>${T("split.zones.name")}</span><input placeholder="EU" /></label>
+            ${dirSeg(zoneAddVia, "data-zdef")}
+            ${repoFields(zoneAddRepo, true, false)}
+            <div class="btns"><button type="button" class="go" data-back>${T("split.zones.add.go")}</button></div>`;
+        }
+        const n = routesIn(z.id).length;
+        return head(T("split.zones.edit.title"), (z.builtin ? T("split.zones.builtin") + " · " : "") + nets(n)) + `
+          <label class="field"><span>${T("split.zones.name")}</span><input value="${esc(zoneName(z.id))}" ${z.builtin ? "disabled" : ""} /></label>
+          ${dirSeg(z.def, "data-zdef")}
+          ${repoFields(z.repo, z.auto, false)}
+          <div class="btns"><button type="button" class="go" data-back>${T("split.zones.save")}</button></div>
+          ${z.builtin ? "" : `<div class="end-row"><button type="button" class="danger" data-back>${T("split.zones.del")}</button></div><p class="hint">${T("split.zones.move")}</p>`}`;
+      },
+      splitrepo: () => {
+        const z = zoneById(zoneTab);
+        return head(T("split.repo"), esc(zoneName(z.id)) + " · " + T("split.repo.body")) + repoFields(z.repo, z.auto, true);
+      },
+      splitlists: () => {
+        const target = from.splitlists === "zone" ? (zoneId ? (zoneById(zoneId) || {}).repo : zoneAddRepo) : (zoneById(zoneTab) || {}).repo;
+        return head(T("split.lists"), T("split.lists.body")) + LIST_CATALOG.map((e) => `
+          <div class="rrow ${target === LIST_BASE + e.file ? "live" : ""}" data-listpick="${e.file}">
+            <div class="grow"><div class="n">${esc(loc(e))}</div><div class="m">${e.file}</div></div>
+            <div class="meta">${T("split.src.repo")}</div>
+          </div>`).join("");
+      },
+      splitin: () => head(T("split.import.title"), T("split.import.body")) + `
+        <div class="btns"><button type="button" class="ghost">${T("fromFile")}</button></div>
+        <p class="hint">${T("split.import.detect")}</p>
+        <label class="field" style="margin-top:10px"><span>${T("split.zone")}</span><select>${zoneOpts(zoneTab)}</select></label>
+        <div class="btns"><button type="button" class="go" data-back>${T("split.import.go")}</button></div>`,
+      splitout: () => head(T("split.export.title"), T("split.export.body")) + `
+          <div class="fmt">REM loft-routes 1.0\nREM zone: global\nroute ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube\nREM zone: local\nroute ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN</div>
+          <div class="btns"><button type="button" class="go" data-back>${T("split.export.save")}</button></div>`,
+    };
+    function paintSplitScreen(id) {
+      const el = document.getElementById(id + "-body");
+      if (el && SPLIT_PAINT[id]) el.innerHTML = SPLIT_PAINT[id]();
+    }
+    const phoneEl = document.getElementById("phone");
+    phoneEl.addEventListener("click", (e) => {
+      const at = (sel) => e.target.closest(sel);
+      let el;
+      if (at("#setSplit")) { splitOn = at("#setSplit").classList.contains("on"); return; }
+      if (!at(".dyn")) return;
+      if ((el = at("[data-split]"))) {
+        splitOn = !splitOn;
+        document.getElementById("setSplit").classList.toggle("on", splitOn);
+        paintSplitScreen("split");
+      } else if ((el = at("[data-ztab]"))) { zoneTab = el.getAttribute("data-ztab"); paintSplitScreen("split"); }
+      else if ((el = at("[data-svc]"))) {
+        const id = el.getAttribute("data-svc");
+        svcId = id === "new" ? null : id;
+        const r = svcId && ROUTES.find((x) => x.id === svcId);
+        svcKind = r && r.src === "ignore" ? "ignore" : "route";
+        show("splitsvc");
+      } else if ((el = at("[data-kind]"))) { svcKind = el.getAttribute("data-kind"); paintSplitScreen("splitsvc"); }
+      else if ((el = at("[data-zone]"))) {
+        const id = el.getAttribute("data-zone");
+        zoneId = id === "new" ? null : id;
+        zoneAddVia = true; zoneAddRepo = "";
+        show("zone");
+      } else if ((el = at("[data-zdef]"))) {
+        const via = el.getAttribute("data-zdef") === "via";
+        const z = zoneId && zoneById(zoneId);
+        if (z) z.def = via; else zoneAddVia = via;
+        paintSplitScreen("zone");
+      } else if (at("[data-lists]")) { show("splitlists"); }
+      else if ((el = at("[data-listpick]"))) {
+        const url = LIST_BASE + el.getAttribute("data-listpick");
+        if (from.splitlists === "zone") { const z = zoneId && zoneById(zoneId); if (z) z.repo = url; else zoneAddRepo = url; }
+        else zoneById(zoneTab).repo = url;
+        goBack();
+      } else if ((el = at(".toggle"))) { el.classList.toggle("on"); }
+      else if ((el = at("[data-go]"))) { show(el.getAttribute("data-go"), attrsOf(el)); }
+      else if (at("[data-back]")) { goBack(); }
+    });
+    phoneEl.addEventListener("input", (e) => {
+      if (e.target.matches("[data-sq]")) { splitQ = e.target.value; document.getElementById("splitRows").innerHTML = splitRows(); }
+    });
+    const boot = new URLSearchParams(location.search);
+    setLang(I[boot.get("lang")] ? boot.get("lang") : "ru");
+    paintHome();
+    const s = boot.get("s");
+    const g = boot.get("g");
+    if (fromHash()) {
+      // the address names the screen
+    } else if (s) {
+      const extra = { list: g || "" };
+      if (boot.get("mode")) extra.mode = boot.get("mode");
+      if (boot.get("vpn")) extra.vpn = boot.get("vpn");
+      if (boot.get("tab")) extra.edittab = boot.get("tab");
+      if (boot.get("set")) extra.settab = boot.get("set");
+      if (boot.get("step")) extra.step = boot.get("step");
+      show(s, extra);
+    }
+  </script>
+</body>
+</html>
