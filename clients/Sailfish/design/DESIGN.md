@@ -185,7 +185,7 @@ Mock: [`aurora.html`](aurora.html). Same package tree as Sailfish (`aurora/`, `a
 
 | Screen | Aurora 5 |
 |--------|----------|
-| Home | AppBar on top with icon buttons **Connections** and **Settings**, and **⋮** → PopupMenu with **Scan QR code** (`aurora.html#home-menu`). No pulley, no lit line. |
+| Home | AppBar on top with icon buttons **Connections**, **Settings** and **Scan QR code**; Home has just this one action, so it sits on the bar, no PopupMenu. No pulley, no lit line. |
 | Connections | AppBar: **‹**, title “Connections”, **+** → PopupMenu with **Scan QR code · Paste link · From file · Manually** (`#list-menu`). |
 | Press and hold | The context menu (Edit / Export `.loft` / Delete) shows as a PopupMenu over the content. |
 | Onboard | The consent hint reads “If Aurora asks to allow the VPN, tap Allow. Only once.” |

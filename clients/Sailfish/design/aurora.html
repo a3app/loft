@@ -269,12 +269,15 @@
     /* pulley menu: a lit line at the top; pulled, its items stand centred over the page */
     /* Aurora 5: AppBar on top of the page content; its "more" opens a PopupMenu over it */
     .appbar { display: flex; align-items: center; gap: 2px; min-height: 40px; margin: -6px -8px 8px; position: relative; z-index: 3; }
+    .screen.pulled .appbar { z-index: 8; }
     .appbar .ab-t { flex: 1; min-width: 0; font: 600 17px var(--ui); letter-spacing: -0.02em; padding: 0 6px; }
     .appbar button { width: 38px; height: 38px; border: 0; border-radius: 10px; background: none; color: var(--snow); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: 400 22px var(--ui); }
     .appbar button:hover { background: #2a2420; }
     .appbar button svg { width: 22px; height: 22px; }
     .appbar .bk { color: var(--stone); font-weight: 300; }
-    .popmenu { display: none; position: absolute; right: 10px; top: 86px; z-index: 8; min-width: 200px; background: #2e2824; border-radius: 12px; overflow: hidden; box-shadow: 0 16px 36px rgba(0,0,0,.5); }
+    /* the PopupMenu hangs from its AppBar button over a dimmed page */
+    .screen.pulled::before { content: ""; position: absolute; inset: 0; background: rgba(10,9,8,.6); z-index: 7; }
+    .popmenu { display: none; position: absolute; right: 8px; top: 74px; z-index: 8; min-width: 180px; background: #2e2824; border-radius: 12px; overflow: hidden; box-shadow: 0 16px 36px rgba(0,0,0,.5); }
     .screen.pulled .popmenu { display: block; }
     .popmenu button { display: block; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--snow); font: 500 14px var(--ui); padding: 13px 16px; cursor: pointer; }
     .popmenu button:last-child { border-bottom: 0; }
@@ -528,7 +531,7 @@
     .proto .v { font-family: var(--mono); font-size: 10px; line-height: 1.35; }
     .blurb { color: var(--stone); font-size: 13.5px; line-height: 1.4; margin: 22px 16px 0; white-space: pre-line; }
     .made { color: var(--mute); font-size: 12px; margin-top: 28px; }
-    .made .heart { color: var(--lamp); }
+    .made .heart { color: var(--lamp); vertical-align: -1px; margin: 0 1px; }
 
     .pair { display: flex; gap: 8px; margin-top: 8px; }
     .pair .ghost, .pair .go { flex: 1; }
@@ -612,7 +615,6 @@
     <button type="button" data-go="home" data-mode="off" data-i="nOff">Дом · выкл</button>
     <button type="button" data-go="home" data-mode="connecting" data-i="nOpen">Дом · подключение</button>
     <button type="button" data-go="home" data-mode="simple" data-i="nSimple">Дом · упрощённый</button>
-    <button type="button" data-go="home" data-mode="on" data-pulley="1" data-i="nPulley">Дом · меню</button>
     <button type="button" data-go="home" data-mode="on" data-vpn="sstp" data-i="nHomeSstp">Дом · SSTP</button>
     <button type="button" data-go="home" data-mode="on" data-vpn="vless" data-i="nHomeVless">Дом · VLESS</button>
     <button type="button" data-go="home" data-mode="on" data-vpn="trojan" data-i="nHomeTrojan">Дом · Trojan</button>
@@ -657,8 +659,7 @@
       <div class="home-ind"></div>
 
       <div class="screen home" id="home">
-        <div class="appbar"><span class="ab-t"></span><button type="button" data-go="list" aria-label="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg></button><button type="button" data-go="settings" aria-label="Настройки"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button><button type="button" data-menu aria-label="Ещё">⋮</button></div>
-        <div class="popmenu"><button type="button" data-go="scan" data-i="addScan">Сканировать QR-код</button></div>
+        <div class="appbar"><span class="ab-t"></span><button type="button" data-go="list" aria-label="Подключения"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg></button><button type="button" data-go="settings" aria-label="Настройки"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button><button type="button" data-go="scan" aria-label="Сканировать QR-код"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><path d="M9 9h2v2H9zM13 13h2v2h-2zM13 9h2M9 13v2"/></svg></button></div>
         <div class="scroll" style="display:flex;flex-direction:column">
           <div class="hero">
             <svg class="mark" id="homeMark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
@@ -1281,7 +1282,7 @@ hold  armed</pre>
           </div>
           <p class="blurb" data-i="blurb">Снаружи — обычный HTTPS.
 Внутри — своя сеть.</p>
-          <p class="made">Made with love <span class="heart">♥</span> by A³</p>
+          <p class="made">Made with love <svg class="heart" viewBox="0 0 7 6" width="12" height="10" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true"><rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/><rect x="0" y="1" width="7" height="2"/><rect x="1" y="3" width="5" height="1"/><rect x="2" y="4" width="3" height="1"/><rect x="3" y="5" width="1" height="1"/></svg> by A³</p>
         </div>
       </div>
 
