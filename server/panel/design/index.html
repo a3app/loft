@@ -1575,7 +1575,7 @@ function vpnFields(kind,c,nw,id){
 }
 function openChan(id){
   const nw=id.startsWith('new:'),t=nw?id.slice(4):CH[id].t,c=nw?{}:CH[id],name=nw?'':c.title;
-  const head=`<div><div class="fld"><label for="c1">Имя подключения</label><input id="c1" value="${name}" placeholder="Например, Офис в Амстердаме" maxlength="40"></div><div class="hint">${nw?'Как подключение называется в панели. Системное имя (wg0, zt1…) панель назначит сама.':'Как подключение называется в панели. Системное имя: <span class="mono">'+id+'</span>.'}</div></div>
+  const head=`<div><div class="fld"><label for="c1">Имя подключения</label><input id="c1" value="${name}" placeholder="Например, Офис в Амстердаме" maxlength="40"></div>${nw?'':'<div class="hint">Как подключение называется в панели. Системное имя: <span class="mono">'+id+'</span>.</div>'}</div>
    <label class="chk"><input type="checkbox" checked><span>Использовать для выхода в интернет<span class="hint" style="display:block;margin:0">Канал можно выбрать в правилах выхода.</span></span></label>`;
   const title=nw?'Новое подключение · '+CHT[t]:'Подключение '+c.title;
   const foot=`<button class="btn pri" type="button" onclick="closeDlg()">${nw?'Добавить':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`;

@@ -582,7 +582,6 @@ window.LOFT_EN = {
   "КБ": "KB",
   "Каждая сеть loft устроена как управляемый свитч: член сети — порт, у порта свой VLAN и адрес, между VLAN — правила доступа. Править можно на схеме или текстом конфига: оба вида всегда показывают одно и то же.": "Each loft network works like a managed switch: a member is a port, each port has its own VLAN and address, and access rules sit between VLANs. You can edit on the diagram or in the config text: both views always show the same thing.",
   "Как подключение называется в панели. Системное имя": "What the panel calls this connection. System name",
-  "Как подключение называется в панели. Системное имя (wg0, zt1…) панель назначит сама.": "What the panel calls this connection. The panel picks the system name (wg0, zt1…) itself.",
   "Как сейчас": "As now",
   "Канал": "Channel",
   "Канал $": "Channel $",
