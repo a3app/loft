@@ -78,7 +78,7 @@ func TestChannelSaveWireGuard(t *testing.T) {
 		t.Fatalf("systemctl %v", f.systemd)
 	}
 	eg, _ := os.ReadFile(o.egressFile())
-	if !strings.Contains(string(eg), "channel wg-nl dev wg-nl fail direct") {
+	if !strings.Contains(string(eg), "channel wg-nl dev wg-nl\n") {
 		t.Fatalf("egress.conf:\n%s", eg)
 	}
 	// The key is kept when the page sends none.
@@ -105,7 +105,9 @@ func TestChannelChecks(t *testing.T) {
 		{Name: "px", Type: admproto.ChanPX, PX: &admproto.PXConf{Kind: "ftp", Addr: "1.2.3.4:8080"}},
 		{Name: "px", Type: admproto.ChanPX, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4"}},
 		{Name: "px", Type: admproto.ChanPX, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80", UDP: "proxy"}},
-		{Name: "px", Type: admproto.ChanPX, Fail: "nowhere", PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
+		{Name: "px", Type: admproto.ChanPX, Check: &admproto.ChanCheck{Kind: "ping", Probe: "1.1.1.1"}, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
+		{Name: "px", Type: admproto.ChanPX, Check: &admproto.ChanCheck{Kind: "tcp", Probe: "nohost"}, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
+		{Name: "px", Type: admproto.ChanPX, Check: &admproto.ChanCheck{Kind: "tcp", Probe: "a.example:443", Every: 9999}, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
 		{Name: "zt", Type: admproto.ChanZT, ZT: &admproto.ZTConf{Network: "123"}},
 		{Name: "vpn", Type: admproto.ChanOVPN, OVPN: &admproto.OVPNConf{Config: "client\nremote a 1194\nup /bin/sh\n"}},
 		{Name: "vpn", Type: admproto.ChanOVPN, OVPN: &admproto.OVPNConf{Config: "client\nremote a 1194\n--script-security 2\n"}},
@@ -128,16 +130,39 @@ func TestChannelChecks(t *testing.T) {
 func TestChannelRulesAndDelete(t *testing.T) {
 	o, _ := chanOps(t)
 	ctx := context.Background()
-	o.ChannelSave(ctx, wgChan("wg-nl"))
-	px := admproto.Channel{Name: "px", Type: admproto.ChanPX, On: true, Exit: true, Via: "wg-nl", Fail: "block",
-		PX: &admproto.PXConf{Kind: "socks5", Addr: "192.0.2.40:1080", User: "u", Password: "p w", UDP: "proxy"}}
+	w := wgChan("wg-nl")
+	w.Check = &admproto.ChanCheck{Kind: "ping", Probe: "1.1.1.1"}
+	if _, err := o.ChannelSave(ctx, w); err != nil {
+		t.Fatal(err)
+	}
+	px := admproto.Channel{Name: "px", Type: admproto.ChanPX, On: true, Exit: true, Via: "wg-nl",
+		Check: &admproto.ChanCheck{Kind: "tcp", Probe: "example.com:443", Every: 5},
+		PX:    &admproto.PXConf{Kind: "socks5", Addr: "192.0.2.40:1080", User: "u", Password: "p w", UDP: "proxy"}}
 	if _, err := o.ChannelSave(ctx, px); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := o.ChannelRules(ctx, admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "nowhere"}}}); err == nil {
-		t.Fatal("rule to no channel")
+	for _, bad := range []admproto.Prio{{Title: ""}, {Title: "x", Use: []string{"nowhere"}}, {Title: "x", Use: []string{"px", "px"}}, {Title: "x", Last: "maybe"}} {
+		if _, err := o.ChannelPrio(ctx, bad); err == nil {
+			t.Fatalf("list %+v saved", bad)
+		}
 	}
-	v, err := o.ChannelRules(ctx, admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "px"}, {Match: "tag", Value: "office", Via: "wg-nl"}}, Default: "direct"})
+	v, err := o.ChannelPrio(ctx, admproto.Prio{Title: "Main", Use: []string{"wg-nl", "px"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Prios) != 1 || v.Prios[0].ID != "prio1" || v.Prios[0].Last != "direct" {
+		t.Fatalf("prios %+v", v.Prios)
+	}
+	if _, err := o.ChannelPrio(ctx, admproto.Prio{Title: "main"}); err == nil {
+		t.Fatal("two lists with one name")
+	}
+	if _, err := o.ChannelPrio(ctx, admproto.Prio{Title: "Proxy", Use: []string{"px"}, Last: "block"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.ChannelRules(ctx, admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "px"}}}); err == nil {
+		t.Fatal("a rule straight to a channel")
+	}
+	v, err = o.ChannelRules(ctx, admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "prio2"}, {Match: "tag", Value: "office", Via: "prio1"}}, Default: "prio1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,18 +174,29 @@ func TestChannelRulesAndDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("node cannot read egress.conf: %v\n%s", err, eg)
 	}
-	if p := cfg.Channel("px"); p.Kind != "socks5" || p.Pass != "p w" || p.Via != "wg-nl" || p.UDP != "proxy" {
+	if p := cfg.Channel("px"); p.Kind != "socks5" || p.Pass != "p w" || p.Via != "wg-nl" || p.UDP != "proxy" || p.Check == nil || p.Check.Every != 5 || p.Check.Fails != 3 {
 		t.Fatalf("px %+v", p)
 	}
+	if p := cfg.Prio("prio1"); p == nil || strings.Join(p.Use, " ") != "wg-nl px" || p.Last != "direct" || cfg.Default != "prio1" {
+		t.Fatalf("prio1 %+v, default %s\n%s", p, cfg.Default, eg)
+	}
 	if _, err := o.ChannelDelete(ctx, "wg-nl"); err == nil {
-		t.Fatal("deleted a channel rules and px use")
+		t.Fatal("deleted a channel a list and px use")
 	}
 	nr := wgChan("wg-nl")
 	nr.Exit = false
 	if _, err := o.ChannelSave(ctx, nr); err == nil {
-		t.Fatal("exit switched off under a rule")
+		t.Fatal("exit switched off under a list")
+	}
+	if _, err := o.ChannelPrioDelete(ctx, "prio1"); err == nil {
+		t.Fatal("deleted a list rules use")
 	}
 	o.ChannelRules(ctx, admproto.ExitRules{Default: "direct"})
+	for _, id := range []string{"prio1", "prio2"} {
+		if _, err := o.ChannelPrioDelete(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := o.ChannelDelete(ctx, "px"); err != nil {
 		t.Fatal(err)
 	}
@@ -169,6 +205,42 @@ func TestChannelRulesAndDelete(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(o.Root, "etc/wireguard/wg-nl.conf")); err == nil {
 		t.Fatal("wg config left")
+	}
+}
+
+// A store from before priority lists: rules name channels, channels chain on failure.
+func TestMigrateFailChains(t *testing.T) {
+	s := chanStore{
+		Channels: []admproto.Channel{{Name: "wg0", Title: "NL", Type: admproto.ChanWG, Exit: true, Fail: "wg1"}, {Name: "wg1", Type: admproto.ChanWG, Exit: true, Fail: "block"},
+			{Name: "px0", Type: admproto.ChanPX, Exit: true, PX: &admproto.PXConf{Kind: "socks5", Addr: "192.0.2.1:1080"}}},
+		Rules: admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "wg0"}, {Match: "tag", Value: "x", Via: "wg0"}, {Match: "list", Value: "l", Via: "block"}}, Default: "px0"},
+	}
+	migrate(&s)
+	if len(s.Prios) != 2 {
+		t.Fatalf("prios %+v", s.Prios)
+	}
+	a, b := s.Prios[0], s.Prios[1]
+	if a.ID != "prio1" || a.Title != "NL" || strings.Join(a.Use, " ") != "wg0 wg1" || a.Last != "block" {
+		t.Fatalf("first %+v", a)
+	}
+	if b.Title != "px0" || strings.Join(b.Use, " ") != "px0" || b.Last != "direct" {
+		t.Fatalf("second %+v", b)
+	}
+	if s.Rules.Rules[0].Via != "prio1" || s.Rules.Rules[1].Via != "prio1" || s.Rules.Rules[2].Via != "block" || s.Rules.Default != "prio2" {
+		t.Fatalf("rules %+v", s.Rules)
+	}
+	for _, c := range s.Channels {
+		if c.Fail != "" {
+			t.Fatalf("%s keeps fail %q", c.Name, c.Fail)
+		}
+	}
+	if _, err := EgressConf(s); err != nil {
+		t.Fatal(err)
+	}
+	before := len(s.Prios)
+	migrate(&s)
+	if len(s.Prios) != before {
+		t.Fatal("a second read made more lists")
 	}
 }
 

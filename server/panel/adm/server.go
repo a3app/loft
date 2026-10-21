@@ -50,6 +50,7 @@ func opDeadline(op string) time.Duration {
 	case admproto.OpPackages, admproto.OpPackageUnit, admproto.OpMTProtoGet, admproto.OpMTProtoSet, admproto.OpNetState, admproto.OpNetChange, admproto.OpChannels:
 		return 45 * time.Second
 	case admproto.OpChannelSave, admproto.OpChannelDelete, admproto.OpChannelSwitch, admproto.OpChannelRules,
+		admproto.OpChannelPrio, admproto.OpChannelPrioDelete,
 		admproto.OpNodeSave, admproto.OpNodeLists, admproto.OpNodeToken,
 		admproto.OpMailDomain, admproto.OpMailBox, admproto.OpMailAlias, admproto.OpMailCerts, admproto.OpMailApply:
 		return 90 * time.Second
@@ -104,6 +105,7 @@ func mutating(op string) bool {
 		admproto.OpPackagesApply, admproto.OpPackageUnit, admproto.OpMTProtoSet, admproto.OpUpdateApply, admproto.OpTimezoneSet,
 		admproto.OpNetChange, admproto.OpNetConfirm, admproto.OpNetRevert,
 		admproto.OpChannelSave, admproto.OpChannelDelete, admproto.OpChannelSwitch, admproto.OpChannelRules,
+		admproto.OpChannelPrio, admproto.OpChannelPrioDelete,
 		admproto.OpNodeSave, admproto.OpNodeLists, admproto.OpNodeToken,
 		admproto.OpMailDomain, admproto.OpMailBox, admproto.OpMailAlias, admproto.OpMailCerts, admproto.OpMailApply,
 		admproto.OpSysUserSave, admproto.OpSysUserDelete, admproto.OpGuardSet, admproto.OpGuardBan, admproto.OpGuardUnban,
@@ -252,6 +254,18 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.ChannelRules(ctx, b)
+	case admproto.OpChannelPrio:
+		var b admproto.Prio
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.ChannelPrio(ctx, b)
+	case admproto.OpChannelPrioDelete:
+		var b admproto.ChannelName
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.ChannelPrioDelete(ctx, b.Name)
 	case admproto.OpMail:
 		return s.Ops.Mail(ctx)
 	case admproto.OpMailDomain:

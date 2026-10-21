@@ -65,6 +65,9 @@ const (
 	OpChannelDelete = "channels.delete" // ChannelName → ChannelsView
 	OpChannelSwitch = "channels.switch" // ChannelSwitch → ChannelsView
 	OpChannelRules  = "channels.rules"  // ExitRules → ChannelsView
+	// OpChannelPrio adds (empty ID) or changes a priority list.
+	OpChannelPrio       = "channels.prio"        // Prio → ChannelsView
+	OpChannelPrioDelete = "channels.prio.delete" // ChannelName (the list ID) → ChannelsView
 
 	OpMail       = "mail.get"    // → MailView
 	OpMailDomain = "mail.domain" // MailDomainSave → MailView
@@ -387,16 +390,17 @@ const (
 // Channel is one upstream channel. Secrets go in and never come out: a
 // reply blanks them and sets Has….
 type Channel struct {
-	Name   string `json:"name"`  // system name (wg0, zt1…), set by the helper on create
-	Title  string `json:"title"` // what the panel shows; any text
-	Type   string `json:"type"`
-	On     bool   `json:"on"`
-	Exit   bool   `json:"exit"`             // may carry members' internet traffic (rules, default)
-	Accept bool   `json:"accept,omitempty"` // take connections on the channel's external IP
-	Fail   string `json:"fail,omitempty"`   // direct | block | another channel; empty = direct
-	Via    string `json:"via,omitempty"`    // reach this channel's server through another channel
-	Table  int    `json:"table,omitempty"`  // routing table, assigned by the helper
-	Dev    string `json:"dev,omitempty"`    // kernel interface, set by the helper
+	Name   string     `json:"name"`  // system name (wg0, zt1…), set by the helper on create
+	Title  string     `json:"title"` // what the panel shows; any text
+	Type   string     `json:"type"`
+	On     bool       `json:"on"`
+	Exit   bool       `json:"exit"`             // may carry members' internet traffic (rules, default)
+	Accept bool       `json:"accept,omitempty"` // take connections on the channel's external IP
+	Fail   string     `json:"fail,omitempty"`   // before priority lists: direct | block | another channel; moved into a list on read
+	Check  *ChanCheck `json:"check,omitempty"`  // link probe; nil = none
+	Via    string     `json:"via,omitempty"`    // reach this channel's server through another channel
+	Table  int        `json:"table,omitempty"`  // routing table, assigned by the helper
+	Dev    string     `json:"dev,omitempty"`    // kernel interface, set by the helper
 
 	WG   *WGConf   `json:"wg,omitempty"`
 	SSTP *SSTPConf `json:"sstp,omitempty"`
@@ -404,6 +408,22 @@ type Channel struct {
 	ZT   *ZTConf   `json:"zt,omitempty"`
 	PX   *PXConf   `json:"px,omitempty"`
 	XR   *XRConf   `json:"xr,omitempty"`
+}
+
+// ChanCheck is a channel's link probe: while it fails, priority lists skip the channel.
+type ChanCheck struct {
+	Kind  string `json:"kind"`            // ping (wg, ovpn, zt) | tcp
+	Probe string `json:"probe"`           // ping: IP or host; tcp: host:port
+	Every int    `json:"every,omitempty"` // seconds; 0 = 10
+	Fails int    `json:"fails,omitempty"` // failures in a row before "no link"; 0 = 3
+}
+
+// Prio is a priority list: channels in order, then Last.
+type Prio struct {
+	ID    string   `json:"id"`    // set by the helper (prio1, prio2…); rules name it
+	Title string   `json:"title"` // what the panel shows
+	Use   []string `json:"use"`   // channel names in order
+	Last  string   `json:"last"`  // direct | block
 }
 
 // WGConf is the interface and its peers.
@@ -469,7 +489,7 @@ type XRConf struct {
 	Port int    `json:"port,omitempty"` // local SOCKS port, assigned by the helper
 }
 
-// ExitRule is one rule: Match member | tag | list, Value, Via a channel, direct or block.
+// ExitRule is one rule: Match member | tag | list, Value, Via a priority list ID, direct or block.
 type ExitRule struct {
 	Match string `json:"match"`
 	Value string `json:"value"`
@@ -496,7 +516,7 @@ type ChannelSwitch struct {
 // ChannelStatus is what a channel is doing now.
 type ChannelStatus struct {
 	Name       string   `json:"name"`
-	State      string   `json:"state"` // up | down | connecting | off | denied
+	State      string   `json:"state"` // up | down | connecting | nolink | off | denied
 	Detail     string   `json:"detail,omitempty"`
 	Dev        string   `json:"dev,omitempty"`
 	Addrs      []string `json:"addrs,omitempty"`
@@ -516,6 +536,7 @@ type ChannelsView struct {
 	Channels []Channel       `json:"channels"`
 	Status   []ChannelStatus `json:"status"`
 	Rules    ExitRules       `json:"rules"`
+	Prios    []Prio          `json:"prios"`
 	Lists    []string        `json:"lists"` // named lists in node.conf
 }
 

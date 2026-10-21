@@ -43,6 +43,7 @@ const (
 
 type chanStore struct {
 	Channels []admproto.Channel `json:"channels"`
+	Prios    []admproto.Prio    `json:"prios,omitempty"`
 	Rules    admproto.ExitRules `json:"rules"`
 }
 
@@ -60,7 +61,11 @@ func (o *Ops) readChans() (chanStore, error) {
 	if err != nil {
 		return s, err
 	}
-	return s, json.Unmarshal(b, &s)
+	if err := json.Unmarshal(b, &s); err != nil {
+		return s, err
+	}
+	migrate(&s)
+	return s, nil
 }
 
 func (o *Ops) writeChans(s chanStore) error {
@@ -197,11 +202,9 @@ func checkChannel(c *admproto.Channel, old *admproto.Channel, s chanStore) error
 	if old != nil && old.Type != c.Type {
 		return errors.New("a channel keeps its type: delete it and add a new one")
 	}
-	target := func(x string) bool {
-		return x == "" || x == egress.Direct || x == egress.Block || (x != c.Name && find(s, x) >= 0)
-	}
-	if !target(c.Fail) {
-		return fmt.Errorf("on failure: %q is no channel", c.Fail)
+	c.Fail = "" // failover lives in priority lists now
+	if err := checkCheck(c); err != nil {
+		return err
 	}
 	if c.Via != "" && (c.Via == c.Name || find(s, c.Via) < 0) {
 		return fmt.Errorf("connect through: %q is no channel", c.Via)
@@ -385,7 +388,10 @@ func (o *Ops) Channels(ctx context.Context) (admproto.ChannelsView, error) {
 	if err != nil {
 		return admproto.ChannelsView{}, err
 	}
-	v := admproto.ChannelsView{Rules: s.Rules, Channels: []admproto.Channel{}}
+	v := admproto.ChannelsView{Rules: s.Rules, Channels: []admproto.Channel{}, Prios: s.Prios}
+	if v.Prios == nil {
+		v.Prios = []admproto.Prio{}
+	}
 	for _, c := range s.Channels {
 		v.Channels = append(v.Channels, redact(c))
 	}
@@ -424,9 +430,9 @@ func (o *Ops) ChannelSave(ctx context.Context, c admproto.Channel) (admproto.Cha
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, err
 	}
-	if !c.Exit && usedByRules(s, c.Name) {
+	if p := prioUsing(s, c.Name); !c.Exit && p != nil {
 		o.chanMu.Unlock()
-		return admproto.ChannelsView{}, errors.New("exit rules send traffic to this channel: keep \"use for internet exit\" or change the rules first")
+		return admproto.ChannelsView{}, fmt.Errorf("priority list %q uses this channel: keep \"use for internet exit\" or take it out of the list first", p.Title)
 	}
 	if c.Table == 0 {
 		c.Table = freeTable(s)
@@ -485,14 +491,14 @@ func (o *Ops) ChannelDelete(ctx context.Context, name string) (admproto.Channels
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, fmt.Errorf("no channel %q", name)
 	}
-	if usedByRules(s, name) {
+	if p := prioUsing(s, name); p != nil {
 		o.chanMu.Unlock()
-		return admproto.ChannelsView{}, errors.New("exit rules send traffic to this channel: change them first")
+		return admproto.ChannelsView{}, fmt.Errorf("priority list %q uses this channel: take it out first", p.Title)
 	}
 	for _, c := range s.Channels {
-		if c.Fail == name || c.Via == name {
+		if c.Via == name {
 			o.chanMu.Unlock()
-			return admproto.ChannelsView{}, fmt.Errorf("channel %s uses it (on failure or connect through)", c.Name)
+			return admproto.ChannelsView{}, fmt.Errorf("channel %s connects through it", c.Name)
 		}
 	}
 	next := s
@@ -538,17 +544,10 @@ func (o *Ops) ChannelRules(ctx context.Context, r admproto.ExitRules) (admproto.
 		return admproto.ChannelsView{}, err
 	}
 	ok := func(v string) error {
-		if v == egress.Direct || v == egress.Block {
+		if v == egress.Direct || v == egress.Block || findPrio(s, v) >= 0 {
 			return nil
 		}
-		i := find(s, v)
-		if i < 0 {
-			return fmt.Errorf("%q is no channel", v)
-		}
-		if !s.Channels[i].Exit {
-			return fmt.Errorf("channel %s is not used for internet exit", v)
-		}
-		return nil
+		return fmt.Errorf("%q is no priority list", v)
 	}
 	if len(r.Rules) > 200 {
 		o.chanMu.Unlock()
@@ -585,7 +584,10 @@ func (o *Ops) ChannelRules(ctx context.Context, r admproto.ExitRules) (admproto.
 func EgressConf(s chanStore) (string, error) {
 	c := &egress.Config{Default: s.Rules.Default}
 	for _, ch := range s.Channels {
-		e := egress.Channel{Name: ch.Name, Fail: ch.Fail, Off: !ch.On}
+		e := egress.Channel{Name: ch.Name, Off: !ch.On}
+		if k := ch.Check; k != nil {
+			e.Check = &egress.Check{Kind: k.Kind, Probe: k.Probe, Every: k.Every, Fails: k.Fails}
+		}
 		switch ch.Type {
 		case admproto.ChanWG, admproto.ChanOVPN, admproto.ChanZT:
 			e.Kind, e.Dev = egress.KindDev, firstNonEmpty(ch.Dev, "loft-none")
@@ -605,6 +607,9 @@ func EgressConf(s chanStore) (string, error) {
 			e.Kind, e.Addr, e.UDP = egress.KindSOCKS5, "127.0.0.1:"+strconv.Itoa(ch.XR.Port), "proxy"
 		}
 		c.Channels = append(c.Channels, e)
+	}
+	for _, p := range s.Prios {
+		c.Prios = append(c.Prios, egress.Prio{Name: p.ID, Use: p.Use, Last: p.Last})
 	}
 	for _, r := range s.Rules.Rules {
 		c.Rules = append(c.Rules, egress.Rule{Match: r.Match, Value: r.Value, Via: r.Via})
@@ -1150,6 +1155,10 @@ func (o *Ops) channelStatus(ctx context.Context, s chanStore) []admproto.Channel
 					st.Addrs = []string{n.IP}
 				}
 			}
+		}
+		// The node's link check: the channel is up but carries nothing.
+		if n, ok := node[c.Name]; ok && n.State == "nolink" && st.State == "up" {
+			st.State, st.Detail = "nolink", n.Error
 		}
 		if !c.On {
 			st.State = "off"
