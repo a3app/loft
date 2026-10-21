@@ -704,7 +704,7 @@ final class ConnectionsWindowController: NSWindowController {
 
     /// Opens the editor with a blank GET profile.
     @objc private func manual() {
-        let p = LoftProfile(id: "", name: "", token: "", url: "", kind: "get", path: "/static/js", socks: "auto", tun: true, mux: true, instanceID: "", file: "")
+        let p = LoftProfile(id: "", name: "", token: "", url: "", kind: "get", path: "/static/v3/build", socks: "auto", tun: true, mux: true, instanceID: "", file: "")
         AppDelegate.shared?.showEdit(p)
     }
 }
@@ -1465,7 +1465,7 @@ final class EditWindowController: NSWindowController {
                     if let s = kindSeg { form.addSubview(s) }
                     y += 40
                     lab("vless_path")
-                    pathF = field("/static/js", ep.path)
+                    pathF = field("/static/v3/build", ep.path)
                 } else {
                     lab("loft_uri")
                     keyF = field("loft://lt_@host/path", ShareURI.emit(profile), secure: true)
@@ -1930,7 +1930,8 @@ final class OnboardWindowController: NSWindowController {
         url = field.stringValue.trimmingCharacters(in: .whitespaces)
         path = pathF?.stringValue ?? path
         if url.isEmpty || url == "https://" { return }
-        var p = LoftProfile(id: "", name: Palette.hostOf(url), token: token, url: url, kind: kind, path: path.isEmpty ? "/static/js" : path, socks: "auto", tun: true, mux: true, instanceID: "", file: "")
+        let pathNow = kind == "get" ? (path.isEmpty ? "/static/v3/build" : path) : ""
+        var p = LoftProfile(id: "", name: Palette.hostOf(url), token: token, url: url, kind: kind, path: pathNow, socks: "auto", tun: true, mux: true, instanceID: "", file: "")
         p.id = engine.store.slug(p.name)
         if p.id.isEmpty { p.id = UUID().uuidString }
         engine.store.saveEdited(p)

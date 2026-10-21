@@ -858,7 +858,16 @@ final class ProfileStore {
             else if LoftProfile.knownFront(head) { kind = head }
             else { kind = "get" }
             let name = ob.name.isEmpty ? (headName.isEmpty ? fileName : headName) : ob.name
-            let path = ob.path.isEmpty ? (headPath.isEmpty ? "/static/js" : headPath) : ob.path
+            let path: String
+            if !ob.path.isEmpty {
+                path = ob.path
+            } else if !headPath.isEmpty {
+                path = headPath
+            } else if kind == "get" {
+                path = "/static/v3/build"
+            } else {
+                path = ""
+            }
             let user = ob.user.isEmpty ? headUser : ob.user
             return LoftProfile(
                 id: fileName,

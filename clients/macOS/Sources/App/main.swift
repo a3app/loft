@@ -1,26 +1,31 @@
 // Process entry for the loft macOS menubar app.
-// `--probe` runs loft-front once and exits; `--shot` dumps UI PNGs; otherwise NSApp runs.
+// `--probe` handshakes every saved profile (no TUN) and exits; `--shot` dumps UI PNGs; otherwise NSApp runs.
 
 import AppKit
 
 if CommandLine.arguments.contains("--probe") {
     let engine = SessionController()
-    engine.boot()
-    guard let p = engine.store.active() else {
+    engine.store.load()
+    FrontHelper.reapOrphans()
+    let list = engine.store.profiles
+    if list.isEmpty {
         fputs("no profile\n", stderr)
         exit(1)
     }
-    fputs("probe \(p.name) \(p.kind) \(p.url) \(p.path)\n", stderr)
-    do {
+    var failed = 0
+    for p in list {
+        fputs("probe \(p.name) \(p.kind) \(p.url) \(p.path)\n", stderr)
         let h = FrontHelper()
-        try h.start(profile: p, socksBind: engine.store.socksBind(for: p), probe: true)
-        fputs("ok overlay=\(h.overlayIP)\n", stderr)
-        h.stop()
-        exit(0)
-    } catch {
-        fputs("fail \(error.localizedDescription)\n", stderr)
-        exit(2)
+        do {
+            try h.start(profile: p, socksBind: "off", probe: true)
+            fputs("ok overlay=\(h.overlayIP)\n", stderr)
+            h.stop()
+        } catch {
+            fputs("fail \(error.localizedDescription)\n", stderr)
+            failed += 1
+        }
     }
+    exit(failed == 0 ? 0 : 2)
 }
 
 if CommandLine.arguments.contains("--shot") {

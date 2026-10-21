@@ -32,15 +32,47 @@ final class FrontHelper {
     private var outRest = ""
     private var errRest = ""
 
-    /// SIGTERM any leftover loft-front processes.
+    /// SIGTERM leftover loft-front from this bundle. Leaves debug binaries (other paths) alone.
     static func reapOrphans() {
+        guard let bin = binaryPath() else { return }
         let p = Process()
-        p.arguments = ["-TERM", "loft-front"]
-        p.standardOutput = Pipe()
+        p.arguments = ["-ax", "-o", "pid=,command="]
+        let out = Pipe()
+        p.standardOutput = out
         p.standardError = Pipe()
-        do { try p.start(at: "/usr/bin/killall") } catch { return }
+        do { try p.start(at: "/bin/ps") } catch { return }
         p.waitUntilExit()
-        Thread.sleep(forTimeInterval: 0.15)
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        guard let text = String(data: data, encoding: .utf8) else { return }
+        let selfPid = getpid()
+        var n = 0
+        for raw in text.split(separator: "\n") {
+            let s = raw.trimmingCharacters(in: .whitespaces)
+            guard let sp = s.firstIndex(of: " "), let pid = Int32(s[..<sp]), pid > 1, pid != selfPid else { continue }
+            let cmd = s[s.index(after: sp)...].trimmingCharacters(in: .whitespaces)
+            guard cmd == bin || cmd.hasPrefix(bin + " ") else { continue }
+            kill(pid, SIGTERM)
+            n += 1
+        }
+        if n > 0 { Thread.sleep(forTimeInterval: 0.15) }
+    }
+
+    /// CLI `-path` for loft-front. GET keeps the profile path; other fronts omit a
+    /// leftover GET cover so loft-front uses its per-kind default (`/api/v1/tunnel` for h2/h3).
+    static func cliPath(kind: String, path: String) -> String? {
+        let k = kind.lowercased()
+        if k == "sstp" || k == "vless" || k == "trojan" { return nil }
+        let p = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch k {
+        case "get", "auto":
+            return p.isEmpty ? nil : p
+        case "h2", "h3":
+            if p.isEmpty { return nil }
+            if p.hasPrefix("/static/") || p.hasSuffix(".js") { return nil }
+            return p
+        default:
+            return nil
+        }
     }
 
     /// Path to bundled `loft-front` next to the app executable.
@@ -77,7 +109,7 @@ final class FrontHelper {
             throw NSError(domain: "loft", code: 20, userInfo: [NSLocalizedDescriptionKey: "no loft-front"])
         }
         let kind = profile.kind.isEmpty ? "auto" : profile.kind
-        let path = (profile.isSSTP || profile.isVLESS || profile.isTrojan) ? "" : (profile.path.isEmpty ? "/static/js" : profile.path)
+        let path = FrontHelper.cliPath(kind: kind, path: profile.path)
         let socks = socksBind
         if profile.isSSTP {
             LoftLog.shared.add("front", "spawn sstp \(profile.url) user=\(profile.user) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0)")
@@ -86,7 +118,7 @@ final class FrontHelper {
         } else if profile.isTrojan {
             LoftLog.shared.add("front", "spawn trojan \(profile.url) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0)")
         } else {
-            LoftLog.shared.add("front", "spawn \(kind) \(profile.url) path=\(path) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) mux=\(profile.mux ? 1 : 0)")
+            LoftLog.shared.add("front", "spawn \(kind) \(profile.url) path=\(path ?? "") socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) mux=\(profile.mux ? 1 : 0)")
         }
         let p = Process()
         var args = [
@@ -95,7 +127,7 @@ final class FrontHelper {
             "-type", kind,
             "-socks", socks.isEmpty ? "off" : socks,
         ]
-        if !path.isEmpty {
+        if let path = path, !path.isEmpty {
             args += ["-path", path]
         }
         if !profile.mux { args.append("-mux=0") }
@@ -214,17 +246,17 @@ final class FrontHelper {
         if overlayIP.isEmpty && p.isRunning {
             LoftLog.shared.add("front", "timeout 25s")
         }
-        if !lastError.isEmpty && overlayIP.isEmpty {
+        if overlayIP.isEmpty {
+            let running = p.isRunning
+            let err = lastError
             stop()
-            throw NSError(domain: "loft", code: 21, userInfo: [NSLocalizedDescriptionKey: lastError])
-        }
-        if overlayIP.isEmpty && p.isRunning == false && !probe {
-            stop()
-            throw NSError(domain: "loft", code: 22, userInfo: [NSLocalizedDescriptionKey: lastError.isEmpty ? "front" : lastError])
-        }
-        if overlayIP.isEmpty && !probe {
-            stop()
-            throw NSError(domain: "loft", code: 23, userInfo: [NSLocalizedDescriptionKey: lastError.isEmpty ? "front timeout" : lastError])
+            if !err.isEmpty {
+                throw NSError(domain: "loft", code: 21, userInfo: [NSLocalizedDescriptionKey: err])
+            }
+            if !running {
+                throw NSError(domain: "loft", code: 22, userInfo: [NSLocalizedDescriptionKey: "front"])
+            }
+            throw NSError(domain: "loft", code: 23, userInfo: [NSLocalizedDescriptionKey: "front timeout"])
         }
     }
 
