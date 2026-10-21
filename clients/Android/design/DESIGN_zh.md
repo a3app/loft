@@ -2,7 +2,7 @@
 
 [English](DESIGN.md) · [Русский](DESIGN_ru.md) · **中文**
 
-手机应用加一个 `VpnService`。标志、色板、Avenir Next：[`brand/`](../../../docs/brand/)。交互模型：[`index.html`](index.html)。协议：[docs/protocol_zh.md](../../../docs/protocol_zh.md)。导入 URI：[docs/share_zh.md](../../../docs/share_zh.md)。
+手机应用加一个 `VpnService`。标志、色板、Avenir Next：[`brand/`](../../../docs/brand/)。交互模型：[`index.html`](index.html)；每个状态都有自己的链接，比如 `index.html#edit-sstp`、`#settings-route`、`#home-off`（点到哪儿地址就跟到哪儿）。协议：[docs/protocol_zh.md](../../../docs/protocol_zh.md)。导入 URI：[docs/share_zh.md](../../../docs/share_zh.md)。
 
 Java 容器在 [`../app/`](../app/)。活会话是 `LoftVpnService` 里的 Go，不是 `loft-front`。薄宿主已经能粘贴 YAML；这个模型是要换掉粘贴屏的 GUI。
 

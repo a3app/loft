@@ -2,7 +2,7 @@
 
 [English](DESIGN.md) · **Русский** · [中文](DESIGN_zh.md)
 
-Приложение и Packet Tunnel. Марка, палитра и Avenir Next: [`brand/`](../../../docs/brand/). Интерактивный макет: [`index.html`](index.html). Протокол: [docs/protocol_ru.md](../../../docs/protocol_ru.md). URI импорта: [docs/share_ru.md](../../../docs/share_ru.md).
+Приложение и Packet Tunnel. Марка, палитра и Avenir Next: [`brand/`](../../../docs/brand/). Интерактивный макет: [`index.html`](index.html); у каждого состояния своя ссылка, например `index.html#edit-sstp`, `#settings-route`, `#home-off` (адрес меняется по мере кликов). Протокол: [docs/protocol_ru.md](../../../docs/protocol_ru.md). URI импорта: [docs/share_ru.md](../../../docs/share_ru.md).
 
 Контейнер SwiftUI позже в [`../App/`](../App/). Живая сессия — Go внутри Network Extension, не `loft-front`.
 

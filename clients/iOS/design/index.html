@@ -2121,11 +2121,39 @@ hold  armed</pre>
       split: "settings", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
     let cur = "home";
     const from = {};
+    // Every mock state has its own address: #edit-sstp, #settings-route, #home-off.
+    // The nav and taps inside the phone write it; opening a link shows that state.
+    const SETTAB_SLUG = ["", "route", "connection"], STEP_SLUG = ["", "key", "address"];
+    function slugOf(id, x) {
+      const p = [id];
+      if (id === "home" && x.mode && x.mode !== "on") p.push(x.mode);
+      if (x.list) p.push(x.list);
+      if (id === "edit") {
+        if (x.vpn && x.vpn !== "loft") p.push(x.vpn);
+        if (x.edittab === "adv") p.push("adv");
+        if (x.isnew) p.push("new");
+      }
+      if (id === "settings" && x.settab) p.push(SETTAB_SLUG[+x.settab]);
+      if (id === "onboard" && x.step) p.push(STEP_SLUG[+x.step]);
+      return p.filter(Boolean).join("-");
+    }
+    function fromHash() {
+      const h = decodeURIComponent(location.hash.slice(1));
+      if (!h) return false;
+      const b = [...document.querySelectorAll("nav button[data-go]")].find((x) => slugOf(x.getAttribute("data-go"), attrsOf(x)) === h);
+      if (b) { show(b.getAttribute("data-go"), Object.assign(attrsOf(b), { fromHash: true })); return true; }
+      const id = h.split("-")[0];
+      if (!document.getElementById(id)) return false;
+      show(id, { fromHash: true });
+      return true;
+    }
+    window.addEventListener("hashchange", fromHash);
     function show(id, extra) {
       extra = extra || {};
       hideSheets();
       if (id !== cur && !extra.back) from[id] = cur;
       cur = id;
+      if (!extra.fromHash) history.replaceState(null, "", location.pathname + location.search + "#" + slugOf(id, extra));
       const tab = TAB_OF[id];
       document.getElementById("phone").classList.toggle("tabbed", !!tab);
       document.getElementById("tabbar").classList.toggle("hidden", !tab);
@@ -2556,7 +2584,9 @@ hold  armed</pre>
     paintHome();
     const s = boot.get("s");
     const g = boot.get("g");
-    if (s) {
+    if (fromHash()) {
+      // the address names the screen
+    } else if (s) {
       const extra = { list: g || "" };
       if (boot.get("mode")) extra.mode = boot.get("mode");
       if (boot.get("vpn")) extra.vpn = boot.get("vpn");

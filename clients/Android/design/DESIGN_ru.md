@@ -2,7 +2,7 @@
 
 [English](DESIGN.md) · **Русский** · [中文](DESIGN_zh.md)
 
-Приложение и `VpnService`. Марка, палитра и Avenir Next: [`brand/`](../../../docs/brand/). Интерактивный макет: [`index.html`](index.html). Протокол: [docs/protocol_ru.md](../../../docs/protocol_ru.md). URI импорта: [docs/share_ru.md](../../../docs/share_ru.md).
+Приложение и `VpnService`. Марка, палитра и Avenir Next: [`brand/`](../../../docs/brand/). Интерактивный макет: [`index.html`](index.html); у каждого состояния своя ссылка, например `index.html#edit-sstp`, `#settings-route`, `#home-off` (адрес меняется по мере кликов). Протокол: [docs/protocol_ru.md](../../../docs/protocol_ru.md). URI импорта: [docs/share_ru.md](../../../docs/share_ru.md).
 
 Контейнер Java в [`../app/`](../app/). Живая сессия — Go внутри `LoftVpnService`, не `loft-front`. Тонкий хост уже вставляет YAML; этот макет — GUI, который заменит экран вставки.
 

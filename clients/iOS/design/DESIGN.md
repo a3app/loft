@@ -2,7 +2,7 @@
 
 **English** · [Русский](DESIGN_ru.md) · [中文](DESIGN_zh.md)
 
-Phone app plus a Packet Tunnel. Mark, palette, and Avenir Next: [`brand/`](../../../docs/brand/). Interactive mock: [`index.html`](index.html). Protocol: [docs/protocol.md](../../../docs/protocol.md). Import URI: [docs/share.md](../../../docs/share.md).
+Phone app plus a Packet Tunnel. Mark, palette, and Avenir Next: [`brand/`](../../../docs/brand/). Interactive mock: [`index.html`](index.html); every state has its own link, e.g. `index.html#edit-sstp`, `#settings-route`, `#home-off` (the address changes as you click). Protocol: [docs/protocol.md](../../../docs/protocol.md). Import URI: [docs/share.md](../../../docs/share.md).
 
 The SwiftUI container will live in [`../App/`](../App/) later. A live session is Go inside the Network Extension, not `loft-front`.
 
