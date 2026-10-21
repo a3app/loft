@@ -386,17 +386,21 @@ func TestProbeTLSSeesDestCert(t *testing.T) {
 
 func TestServerCapsMarksQUICWhenDecoy(t *testing.T) {
 	c := ServerCaps(&config.ServerConfig{Decoy: []string{"www.example:443"}}, false)
-	if c&wire.CapQUIC != 0 || c&wire.CapH3 != 0 {
-		t.Fatalf("decoy node advertised quic/h3: %x", c)
-	}
-	if !c.Has(wire.CapQUICMark | wire.CapH3Mark) {
-		t.Fatalf("decoy node must advertise quic_mark and h3_mark: %x", c)
-	}
-	if f := c.Fronts(); !slices.Contains(f, wire.FrontQUIC) || !slices.Contains(f, wire.FrontH3) {
-		t.Fatalf("fronts %v", f)
+	if c.Has(wire.CapQUIC) || c.Has(wire.CapH3) || c.Has(wire.CapQUICMark) || c.Has(wire.CapH3Mark) {
+		t.Fatalf("GET-only decoy advertised quic: %v", c.Names())
 	}
 	if c&wire.CapDecoy == 0 {
 		t.Fatal("missing CapDecoy")
+	}
+	on := ServerCaps(&config.ServerConfig{Decoy: []string{"www.example:443"}, Fronts: []string{"get", "quic", "h3"}}, false)
+	if on.Has(wire.CapQUIC) || on.Has(wire.CapH3) {
+		t.Fatalf("decoy advertised raw quic/h3: %v", on.Names())
+	}
+	if !on.Has(wire.CapQUICMark | wire.CapH3Mark) {
+		t.Fatalf("decoy with quic listed must advertise marks: %v", on.Names())
+	}
+	if f := on.Fronts(); !slices.Contains(f, wire.FrontQUIC) || !slices.Contains(f, wire.FrontH3) {
+		t.Fatalf("fronts %v", f)
 	}
 }
 

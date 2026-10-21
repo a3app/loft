@@ -26,7 +26,7 @@ The Debian layout of the node is collected here: a POSIX installer, a systemd un
 
 The process runs as user `loft`. It binds TCP and UDP 443 with `CAP_NET_BIND_SERVICE`. The token is never on the command line.
 
-A new install writes `auth shared disable` and an `operator` key in `members.keys`. `/root/loft-client.yaml` gets that `lt_`, not `LOFT_TOKEN`. `LOFT_TOKEN` in `loft.env` stays the node secret (mask, controller seed). To keep the old one-token overlay, put `auth shared enable` in `node.conf` while `members.keys` is empty. After a binary upgrade, an existing shared-token node without that line will refuse clients until you add the line or issue keys.
+A new install writes `fronts get` and `auth shared disable`, and an `operator` key in `members.keys`. `/root/loft-client.yaml` is GET-only with that `lt_`, not `LOFT_TOKEN`. `LOFT_TOKEN` in `loft.env` stays the node secret (mask, controller seed). To keep the old one-token overlay, put `auth shared enable` in `node.conf` while `members.keys` is empty. After a binary upgrade, an existing shared-token node without that line will refuse clients until you add the line or issue keys. List `ws`, `h2`, `quic`, or `h3` in `fronts` to opt those paths in.
 
 ---
 

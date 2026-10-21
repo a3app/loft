@@ -18,5 +18,3 @@ mask: true
 
 fronts:
   - get
-  - ws
-  - h2

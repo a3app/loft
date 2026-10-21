@@ -316,7 +316,7 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // memberLink is the loft:// address (GET front, docs/share.md §2) and a .loft
-// file with GET and WebSocket outbounds pinned to the controller key.
+// file with a GET outbound pinned to the controller key.
 func memberLink(in admproto.NodeInfo, key, name string) (string, string) {
 	host := in.Host
 	link := "loft://" + url.PathEscape(key) + "@" + host + in.GetPath + "?type=get&fp=chrome#" + url.PathEscape(name)
@@ -329,7 +329,6 @@ func memberLink(in admproto.NodeInfo, key, name string) (string, string) {
 		fmt.Fprintf(&b, "controller_pub: %s\n", in.ControllerPub)
 	}
 	fmt.Fprintf(&b, "outbounds:\n  - name: get\n    type: get\n    url: https://%s\n    path: %s\n    fingerprint: chrome\n", host, in.GetPath)
-	fmt.Fprintf(&b, "  - name: ws\n    type: ws\n    url: wss://%s%s\n    fingerprint: chrome\n", host, in.WSPath)
 	return link, b.String()
 }
 

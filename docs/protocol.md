@@ -57,7 +57,7 @@ String fields on Hello, Status, and most fleet records are `u8 length || bytes`,
 
 A node advertises enabled fronts in Status `caps`. A client advertises the fronts it will use in Hello `caps`. After the first Status the client MUST use only the intersection, in its configured order, and MUST move to the next remaining front when the current one fails.
 
-Default try order, when both sides enable every front: `get`, `ws`, `h2`, `quic`, `h3`.
+Omitted `fronts` on a node is `get`. `ws`, `h2`, `quic`, `h3`, and `connect` are off until listed. Default try order, when both sides list every transport front: `get`, `ws`, `h2`, `quic`, `h3`.
 
 ### 3.1 Decoy splice
 

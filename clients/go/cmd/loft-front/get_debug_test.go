@@ -20,6 +20,20 @@ import (
 	"github.com/a3app/loft/internal/transport"
 )
 
+func TestFrontOrderDefaultGET(t *testing.T) {
+	got := frontOrder("auto", "https://example.com", true, true)
+	if len(got) != 1 || got[0] != "get" {
+		t.Fatalf("auto https %v", got)
+	}
+	if got := frontOrder("get", "https://example.com", true, true); len(got) != 1 || got[0] != "get" {
+		t.Fatalf("get %v", got)
+	}
+	ws := frontOrder("auto", "wss://example.com/api/v1/sync", true, true)
+	if len(ws) != 2 || ws[0] != "ws" || ws[1] != "get" {
+		t.Fatalf("auto wss %v", ws)
+	}
+}
+
 func TestOutboundForH2MaxAge(t *testing.T) {
 	frontH2MaxAgeMS = 60000
 	t.Cleanup(func() { frontH2MaxAgeMS = 0 })

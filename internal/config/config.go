@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/a3app/loft/internal/startup"
+	"github.com/a3app/loft/internal/wire"
 )
 
 // ClientConfig is clients/go/configs/client.yaml.
@@ -19,7 +20,7 @@ type ClientConfig struct {
 	MemberID      string            `yaml:"member_id,omitempty"`
 	InstanceID    string            `yaml:"instance_id,omitempty"`
 	Select        string            `yaml:"select"` // get | ws | h2 | quic | h3 | auto
-	Fronts        []string          `yaml:"fronts"` // enabled fronts; empty = all outbound types
+	Fronts        []string          `yaml:"fronts"` // extra filter; empty = outbound types (else GET)
 	Outbounds     []Outbound        `yaml:"outbounds"`
 	ExtraCaps     uint64            `yaml:"-"`
 	Bootstrap     string            `yaml:"bootstrap"` // HTTPS URL of signed roster manifest
@@ -117,7 +118,7 @@ type ServerConfig struct {
 	WSPath        string              `yaml:"ws_path"`
 	H2Path        string              `yaml:"h2_path"`
 	H3Path        string              `yaml:"h3_path"`
-	Fronts        []string            `yaml:"fronts"`      // enabled fronts; empty = all
+	Fronts        []string            `yaml:"fronts"`      // enabled fronts; empty = GET
 	Decoy         []string            `yaml:"decoy"`       // this node's splice origins; first = identity; empty = off
 	DecoyProxy    bool                `yaml:"decoy_proxy"` // send a PROXY v1 header on TCP splice (own nginx with proxy_protocol only)
 	CDNPeers      []string            `yaml:"cdn_peers"`   // CIDRs allowed to use own SNI without sid (CDN origin pull)
@@ -297,7 +298,7 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 // IsRelay is role relay (TLS edge); otherwise this node is the controller.
 func (c *ServerConfig) IsRelay() bool { return c.Role == "relay" }
 
-// EnabledFronts is cfg.fronts, else outbound types, else FrontOrder.
+// EnabledFronts is cfg.fronts, else outbound types, else GET.
 func (c *ClientConfig) EnabledFronts() []string {
 	if len(c.Fronts) > 0 {
 		return c.Fronts
@@ -312,7 +313,7 @@ func (c *ClientConfig) EnabledFronts() []string {
 		out = append(out, o.Type)
 	}
 	if len(out) == 0 {
-		return append([]string(nil), []string{"get", "ws", "h2", "quic", "h3"}...)
+		return wire.DefaultFronts()
 	}
 	return out
 }
@@ -330,10 +331,10 @@ func (c *ClientConfig) Allows(front string) bool {
 	return false
 }
 
-// EnabledFronts is cfg.fronts, else every protocol front.
+// EnabledFronts is cfg.fronts, else GET.
 func (c *ServerConfig) EnabledFronts() []string {
 	if len(c.Fronts) == 0 {
-		return []string{"get", "ws", "h2", "quic", "h3"}
+		return wire.DefaultFronts()
 	}
 	return append([]string(nil), c.Fronts...)
 }

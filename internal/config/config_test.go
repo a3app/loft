@@ -29,6 +29,9 @@ func TestLoadServerTokenFromEnv(t *testing.T) {
 	if c.Role != "controller" {
 		t.Fatalf("role %q", c.Role)
 	}
+	if got := c.EnabledFronts(); len(got) != 1 || got[0] != "get" {
+		t.Fatalf("default fronts %v", got)
+	}
 }
 
 // TestLoadServerYAMLFallback still loads a legacy node.yaml mapping.
@@ -150,6 +153,9 @@ func TestLoadClientH2MaxAge(t *testing.T) {
 	}
 	if c.Outbounds[0].H2MaxAgeMS != 60000 {
 		t.Fatalf("h2_max_age_ms %d", c.Outbounds[0].H2MaxAgeMS)
+	}
+	if got := c.EnabledFronts(); len(got) != 1 || got[0] != "get" {
+		t.Fatalf("client fronts %v", got)
 	}
 }
 

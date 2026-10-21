@@ -15,7 +15,7 @@ token: "change-me-long-random"
 
 select: auto
 
-# fronts: [get, ws, h2, quic, h3]
+# fronts: [get]
 
 outbounds:
   - name: node

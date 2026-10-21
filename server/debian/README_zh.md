@@ -26,7 +26,7 @@
 
 进程以用户 `loft` 跑。TCP 和 UDP 443 靠 `CAP_NET_BIND_SERVICE` 绑定。令牌从不出现在命令行。
 
-新安装会写 `auth shared disable`，并在 `members.keys` 里放一把 `operator` 密钥。`/root/loft-client.yaml` 拿到的是这个 `lt_`，不是 `LOFT_TOKEN`。`loft.env` 里的 `LOFT_TOKEN` 仍是节点密钥（伪装、控制器 seed）。要留着旧的单令牌覆盖网，在 `members.keys` 还空着时把 `auth shared enable` 写进 `node.conf`。二进制升级之后，已有的共享令牌节点如果没有这行，会拒绝客户端，直到你补上这行或签发密钥。
+新安装会写 `fronts get` 和 `auth shared disable`，并在 `members.keys` 里放一把 `operator` 密钥。`/root/loft-client.yaml` 只有 GET，拿到的是这个 `lt_`，不是 `LOFT_TOKEN`。`loft.env` 里的 `LOFT_TOKEN` 仍是节点密钥（伪装、控制器 seed）。要留着旧的单令牌覆盖网，在 `members.keys` 还空着时把 `auth shared enable` 写进 `node.conf`。二进制升级之后，已有的共享令牌节点如果没有这行，会拒绝客户端，直到你补上这行或签发密钥。要 `ws`、`h2`、`quic`、`h3` 就写进 `fronts`。
 
 ---
 

@@ -373,7 +373,7 @@ func TestWizardFlow(t *testing.T) {
 	if j["state"] != "done" || res["link"] != "loft://lt_"+strings.Repeat("a", 48)+"@vpn.example.org/static/js?type=get&fp=chrome#Alice" {
 		t.Fatalf("member %v", j)
 	}
-	if !strings.Contains(res["file"].(string), "controller_pub: ab12") || !strings.Contains(res["file"].(string), "url: wss://vpn.example.org/api/v1/sync") {
+	if !strings.Contains(res["file"].(string), "controller_pub: ab12") || !strings.Contains(res["file"].(string), "type: get") || strings.Contains(res["file"].(string), "type: ws") {
 		t.Fatalf("file %s", res["file"])
 	}
 	j = e.job(e.do("POST", "/api/wizard/member", map[string]string{"id": "alice-phone"}, c, csrf), c)

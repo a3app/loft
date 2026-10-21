@@ -4,14 +4,18 @@ package wire
 
 import "testing"
 
-// TestParseFrontsDefaultAll treats a nil list as FrontOrder.
-func TestParseFrontsDefaultAll(t *testing.T) {
+// TestParseFrontsDefaultGET treats a nil list as GET only.
+func TestParseFrontsDefaultGET(t *testing.T) {
 	got, err := ParseFronts(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != len(FrontOrder) {
+	if len(got) != 1 || got[0] != FrontGET {
 		t.Fatalf("%v", got)
+	}
+	all, err := ParseFronts(FrontOrder)
+	if err != nil || len(all) != len(FrontOrder) {
+		t.Fatalf("explicit all %v %v", all, err)
 	}
 }
 

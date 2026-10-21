@@ -11,8 +11,9 @@ ws_path: /api/v1/sync
 h2_path: /api/v1/tunnel
 h3_path: /api/v1/tunnel
 
-# fronts: leave empty for get, ws, h2, quic, h3. Drop a name to disable it.
+# fronts: omit or [get] = public GET path. List ws, h2, quic, h3 to opt in.
 # connect is HTTP CONNECT splice (mux-off TCP); off unless listed.
+fronts: [get]
 # fronts: [get, ws, h2, quic, h3]
 # fronts: [get, ws, h2, quic, h3, connect]
 
@@ -59,7 +60,7 @@ enrol: list
 #   - id: ru1
 #     url: https://203.0.113.10
 #     decoy: www.google.com:443
-#     fronts: [get, ws, h2]
+#     fronts: [get]
 #     weight: 100
 
 # extra node addresses the client may fail over to (host:port, unsigned)

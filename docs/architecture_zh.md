@@ -71,7 +71,7 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`select: auto` 时，`Supervise` 按列表顺序试配置好的出站。第一次 Status 之后只留前置的交集。失败就换下一条还在的前置，再试未签名的 `replicas`，再试签过的名册。
+`select: auto` 时，`Supervise` 按列表顺序试配置好的出站。第一次 Status 之后只留前置的交集。失败就换下一条还在的前置，再试未签名的 `replicas`，再试签过的名册。节点省略 `fronts` 只宣告 GET；`ws`、`h2`、`quic`、`h3` 要显式列出。
 
 `WatchPath` 大约一秒采四次默认 IPv4 出口。Wi-Fi / LTE / VPN 地址一变，就把活着的前置丢掉，让 Supervise 用新的 `0x02` 和同一个 `instance_id` 续上。SOCKS5 和 TUN 还绑着（`Holder`）；覆盖网 IP 不变。有 cap `hold` 时，mux 流在 `gap_hold_ms`（默认 8 秒）里还在，里面的 TCP 不 RST。GET 握手按 `instance_id` 捡起停着的 mux，跟 WS 一样（新的 HTTP sid，同一条 mux）。`loft` 和 `loft-front` 都跑这个循环。
 

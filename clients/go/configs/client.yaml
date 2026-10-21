@@ -30,9 +30,9 @@ select: auto
 # client may read the certificate a probe would see). CDN fronts keep
 # the CDN hostname.
 #
-# fronts: enabled transports. Empty = every outbound type below.
-# Drop a name to refuse it even if the node offers it.
-# fronts: [get, ws, h2, quic, h3]
+# fronts: extra filter. Empty = outbound types below (stock is GET).
+# List names to refuse anything else the node offers.
+# fronts: [get]
 
 outbounds:
   - name: cdn-get
@@ -43,28 +43,16 @@ outbounds:
     fingerprint: chrome
     header_budget: 12288
     inflight: 4
+    # h2_max_age_ms: 0   # 0 = keep HTTP/2 until the edge drops it
     insecure_skip_verify: false
 
-  - name: cdn-ws
-    type: ws
-    url: wss://app.example.com/api/v1/sync
-    fingerprint: chrome
-    insecure_skip_verify: false
-
-  - name: quic
-    type: quic
-    url: https://app.example.com:443
-    fingerprint: chrome
-    insecure_skip_verify: false
-
-  - name: h2
-    type: h2
-    url: https://app.example.com
-    path: /api/v1/tunnel
-    fingerprint: chrome
-
-  - name: h3
-    type: h3
-    url: https://app.example.com
-    path: /api/v1/tunnel
-    fingerprint: chrome
+  # Direct-origin fronts. Off on the node until listed in fronts.
+  # - name: origin-ws
+  #   type: ws
+  #   url: wss://app.example.com/api/v1/sync
+  #   fingerprint: chrome
+  # - name: origin-h2
+  #   type: h2
+  #   url: https://app.example.com
+  #   path: /api/v1/tunnel
+  #   fingerprint: chrome

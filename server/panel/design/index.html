@@ -449,7 +449,7 @@ V.main=()=>pageHead('Обзор','Состояние сервера и ноды 
 <div class="cards">
   <section class="card"><div class="card-h"><h2>Нода loft</h2>${pill('работает','ok')}</div>
     <dl class="kv"><div><dt>Роль</dt><dd>controller</dd></div><div><dt>Слушает</dt><dd class="mono">0.0.0.0:443 tcp</dd></div>
-    <div><dt>Прочий трафик</dt><dd class="mono">→ nginx 127.0.0.1:8443</dd></div><div><dt>Фронты</dt><dd>get, ws, h2</dd></div>
+    <div><dt>Прочий трафик</dt><dd class="mono">→ nginx 127.0.0.1:8443</dd></div><div><dt>Фронты</dt><dd>get</dd></div>
     <div><dt>Сертификат</dt><dd>до 10.01.2027</dd></div><div><dt>Версия</dt><dd>1.0.22</dd></div></dl></section>
   <section class="card"><div class="card-h"><h2>Члены сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
     <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${NETS.flatMap(n=>n.members).filter(m=>m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${Object.values(EXTRA).filter(x=>x[3]).length}</div><div class="mute">в сети</div></div><div><div class="big num">${NETS.flatMap(n=>n.members).filter(m=>!m.authorized).length}</div><div class="mute">выключено</div></div></div>
@@ -1437,9 +1437,9 @@ function delMember(id){const [n,m]=findMember(id);n.members.splice(n.members.ind
 
 /* изменения ноды применяются только перезапуском: нода читает настройки при старте */
 const pend=()=>`<div class="note" role="status"><span><b>2 изменения ждут перезапуска ноды.</b> <span class="mute">Подключения членов прервутся на 2–3 секунды и восстановятся сами.</span></span><span class="note-acts"><button class="btn sm" type="button">Что изменено</button><button class="btn sm pri" type="button">Перезапустить</button></span></div>`;
-const FRONTS=[['get','HTTP GET','Долгие запросы обычного HTTPS. Проходит почти везде, в том числе через CDN.',1,0],['ws','WebSocket','Один долгий WebSocket к пути, похожему на API.',1,0],['h2','HTTP/2 CONNECT','Туннель внутри HTTP/2. Быстрее GET при хорошем канале.',1,0],
- ['quic','QUIC','Своё QUIC-соединение по UDP/443.',0],['h3','HTTP/3','HTTP/3 CONNECT поверх QUIC.',0]];
-const RELAYS=[['de-1','de1.example.net:443','get, ws, h2','100','в сети','34','12 с назад'],['fi-1','fi1.example.net:443','get','100','выведен','0','—'],['nl-1','nl1.example.net:443','все','100','не в сети','—','—']];
+const FRONTS=[['get','HTTP GET','Публичный путь по умолчанию. Обычный HTTPS GET, в том числе через CDN.',1,0],['ws','WebSocket','Опция. Один WebSocket на путь API. Прямой origin, не CDN.',0],['h2','HTTP/2 CONNECT','Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.',0],
+ ['quic','QUIC','Опция. Своё QUIC по UDP/443.',0],['h3','HTTP/3','Опция. HTTP/3 CONNECT поверх QUIC.',0]];
+const RELAYS=[['de-1','de1.example.net:443','get','100','в сети','34','12 с назад'],['fi-1','fi1.example.net:443','get','100','выведен','0','—'],['nl-1','nl1.example.net:443','get','100','не в сети','—','—']];
 const LISTS=[['blocked-ru','2 140','.example.ru, 198.51.100.0/24, …'],['local','14','.lan, 192.168.0.0/16, …'],['ads','38 512','ads.example.com, .tracker.example, …']];
 V.node=()=>{
  const t=S.tab.node;
@@ -1458,7 +1458,7 @@ function nodeMain(){
   <div class="fld"><label for="nd2">Слушать</label><input id="nd2" class="mono" value=":443"></div>
   <div><div class="fld"><label for="nd3">Адрес для клиентов</label><input id="nd3" class="mono" value="vpn.example.net" readonly></div><div class="hint">Меняется в мастере установки — шаг «Домен и DNS».</div></div>
   <div><div class="fld"><label for="nd4">Сертификат</label><input id="nd4" class="mono" value="vpn.example.net · до 10.01.2027" readonly></div><div class="hint">Выпускается в мастере установки и продлевается сам.</div></div>`))+
- blk('Фронты','Способы, которыми клиент может достучаться до ноды. Клиент перебирает включённые сам.',
+ blk('Фронты','Публичный путь — GET. Остальные фронты включаются здесь, если нужен прямой origin без CDN.',
   `<div class="rules">${FRONTS.map(f=>`<label class="rule chk" style="cursor:pointer"><input type="checkbox" ${f[3]?'checked':''}><span><b>${f[1]}</b> <span class="mono mute">${f[0]}</span><span class="hint" style="display:block;margin:0">${f[2]}</span></span></label>`).join('')}</div>
   <div class="fgrid" style="margin-top:20px"><div><div class="fld"><label for="nd5">Соединений HTTP/2 для GET</label><select id="nd5"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div><div class="hint">Сколько параллельных HTTP/2-соединений клиент держит для фронта GET.</div></div></div>`);
 }

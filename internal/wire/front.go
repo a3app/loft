@@ -15,8 +15,12 @@ const (
 	FrontConnect = "connect"
 )
 
-// FrontOrder is the default try-list when both sides enable everything.
+// FrontOrder is the try-list when both sides list every transport front.
 var FrontOrder = []string{FrontGET, FrontWS, FrontH2, FrontQUIC, FrontH3}
+
+// DefaultFronts is the public path when config omits fronts: GET only.
+// ws, h2, quic, h3, and connect stay off until listed.
+func DefaultFronts() []string { return []string{FrontGET} }
 
 // FrontBits is the cap mask of transport fronts (not other features).
 const FrontBits = CapGET | CapWS | CapQUIC | CapH2 | CapH3 | CapConnect
@@ -66,10 +70,10 @@ func ParseFront(s string) (string, error) {
 	}
 }
 
-// ParseFronts deduplicates names, preserving order. Empty list is FrontOrder.
+// ParseFronts deduplicates names, preserving order. Empty list is DefaultFronts.
 func ParseFronts(list []string) ([]string, error) {
 	if len(list) == 0 {
-		return append([]string(nil), FrontOrder...), nil
+		return DefaultFronts(), nil
 	}
 	seen := map[string]bool{}
 	var out []string

@@ -116,9 +116,10 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 			return admproto.NodeConfig{}, fmt.Errorf("unknown front %q", f)
 		}
 	}
-	c.Fronts = in.Fronts
-	if len(c.Fronts) == len(knownFronts) {
-		c.Fronts = nil // all
+	if slices.Equal(in.Fronts, prev.EnabledFronts()) {
+		c.Fronts = prev.Fronts
+	} else {
+		c.Fronts = in.Fronts
 	}
 	if in.GetH2 < 1 || in.GetH2 > 4 {
 		return admproto.NodeConfig{}, errors.New("HTTP/2 connections for GET: 1–4")

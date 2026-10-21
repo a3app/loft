@@ -50,7 +50,7 @@ func (o *Ops) NodeInfo() (admproto.NodeInfo, error) {
 		return admproto.NodeInfo{}, fmt.Errorf("node.conf: %w", err)
 	}
 	in := admproto.NodeInfo{Advertise: c.Advertise, GetPath: c.GetPath, WSPath: c.WSPath, RosterPath: c.RosterPath,
-		Fronts: c.Fronts, Decoy: c.Decoy, Mask: c.Mask}
+		Fronts: c.EnabledFronts(), Decoy: c.Decoy, Mask: c.Mask}
 	if u, err := url.Parse(c.Advertise); err == nil {
 		in.Host = u.Hostname()
 	}

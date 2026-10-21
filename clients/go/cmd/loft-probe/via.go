@@ -267,7 +267,7 @@ func (v *socksVia) close() error {
 	return nil
 }
 
-// dialFront tries GET and WS in order and returns the first working Dialer.
+// dialFront tries the requested front. Stock public path is GET.
 func dialFront(ctx context.Context, token, raw, kind, path, cdnName string) (transport.Dialer, string, error) {
 	kind = strings.ToLower(strings.TrimSpace(kind))
 	var order []string
@@ -275,14 +275,14 @@ func dialFront(ctx context.Context, token, raw, kind, path, cdnName string) (tra
 	case "ws":
 		order = []string{"ws", "get"}
 	case "get":
-		order = []string{"get", "ws"}
+		order = []string{"get"}
 	case "h2", "quic", "h3":
 		order = []string{kind}
 	default:
 		if strings.HasPrefix(raw, "ws://") || strings.HasPrefix(raw, "wss://") {
 			order = []string{"ws", "get"}
 		} else {
-			order = []string{"get", "ws"}
+			order = []string{"get"}
 		}
 	}
 	var last error

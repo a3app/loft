@@ -259,7 +259,8 @@ func main() {
 	<-ctx.Done()
 }
 
-// frontOrder is the try-list for -type. Probe may fall back get↔ws; h2/quic/h3 stay.
+// frontOrder is the try-list for -type. Stock public path is GET.
+// WS fallback is only for an explicit ws URL or -type ws.
 func frontOrder(kind, raw string, muxOn, fallback bool) []string {
 	kind = strings.ToLower(strings.TrimSpace(kind))
 	if kind == "auto" {
@@ -270,9 +271,6 @@ func frontOrder(kind, raw string, muxOn, fallback bool) []string {
 	}
 	switch kind {
 	case "get":
-		if fallback {
-			return []string{"get", "ws"}
-		}
 		return []string{"get"}
 	case "ws":
 		if fallback {
@@ -283,9 +281,12 @@ func frontOrder(kind, raw string, muxOn, fallback bool) []string {
 		return []string{kind}
 	case "":
 		if strings.HasPrefix(raw, "ws://") || strings.HasPrefix(raw, "wss://") {
-			return []string{"ws", "get"}
+			if fallback {
+				return []string{"ws", "get"}
+			}
+			return []string{"ws"}
 		}
-		return []string{"get", "ws"}
+		return []string{"get"}
 	default:
 		return []string{kind}
 	}

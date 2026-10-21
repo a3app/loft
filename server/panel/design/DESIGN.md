@@ -57,7 +57,7 @@ Draft vs applied: every change stays in a draft. A bar shows how many lines diff
 
 ## 5. Node
 
-Tabs: Main (role, listen, advertise, certificate from Domains, fronts get/ws/h2/quic/h3, `get_h2`), Masking (decoy list, `mask` and `pbk`, cover site, request paths), Relays and CDN (`enrol`, `relays[]`, `cdn_peers`), Lists (signed lists for clients; egress rules reuse them), Access (controller key, shared token, token rotation, trace).
+Tabs: Main (role, listen, advertise, certificate from Domains, fronts — default GET; ws/h2/quic/h3 opt-in, `get_h2`), Masking (decoy list, `mask` and `pbk`, cover site, request paths), Relays and CDN (`enrol`, `relays[]`, `cdn_peers`), Lists (signed lists for clients; egress rules reuse them), Access (controller key, shared token, token rotation, trace).
 
 QUIC and HTTP/3 are shown greyed with the reason while decoy is on.
 

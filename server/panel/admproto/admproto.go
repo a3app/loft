@@ -205,7 +205,7 @@ type NodeInfo struct {
 	GetPath       string   `json:"get_path"`       // GET front path
 	WSPath        string   `json:"ws_path"`        // WebSocket front path
 	RosterPath    string   `json:"roster_path"`    // signed roster, the client bootstrap
-	Fronts        []string `json:"fronts"`         // enabled; empty = all
+	Fronts        []string `json:"fronts"`         // enabled; empty = GET
 	Decoy         []string `json:"decoy"`          // splice origins
 	Mask          bool     `json:"mask"`           // pbk would be needed (not exported here)
 	ControllerPub string   `json:"controller_pub"` // Ed25519 hex, for client pinning

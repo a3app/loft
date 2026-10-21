@@ -1201,7 +1201,7 @@
 
   /* ── the loft node: node.conf, lists, relays, access ── */
   L.nd = null; L.ndDraft = null; L.pres = null;
-  const FR = [['get', 'HTTP GET', 'Долгие запросы обычного HTTPS. Проходит почти везде, в том числе через CDN.'], ['ws', 'WebSocket', 'Один долгий WebSocket к пути, похожему на API.'], ['h2', 'HTTP/2 CONNECT', 'Туннель внутри HTTP/2. Быстрее GET при хорошем канале.'], ['quic', 'QUIC', 'Своё QUIC-соединение по UDP/443.'], ['h3', 'HTTP/3', 'HTTP/3 CONNECT поверх QUIC.']];
+  const FR = [['get', 'HTTP GET', 'Публичный путь по умолчанию. Обычный HTTPS GET, в том числе через CDN.'], ['ws', 'WebSocket', 'Опция. Один WebSocket на путь API. Прямой origin, не CDN.'], ['h2', 'HTTP/2 CONNECT', 'Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.'], ['quic', 'QUIC', 'Опция. Своё QUIC по UDP/443.'], ['h3', 'HTTP/3', 'Опция. HTTP/3 CONNECT поверх QUIC.']];
   async function loadNode() {
     const [c, p] = await Promise.allSettled([api('GET', '/api/nodecfg'), api('GET', '/api/presence')]);
     if (c.status === 'fulfilled') { L.nd = c.value; L.ndDraft = JSON.parse(JSON.stringify(c.value)); } else toast('Настройки ноды не прочитаны: ' + c.reason.message);
@@ -1247,7 +1247,7 @@
         <div class="fld"><label for="nd2">Слушать</label><input id="nd2" class="mono" value="${esc(d.listen)}" ${dis()} onchange="LIVE.ndSet('listen',this.value.trim())"></div>
         <div><div class="fld"><label for="nd3">Адрес для клиентов</label><input id="nd3" class="mono" value="${esc(c.advertise.replace(/^https:\/\//, ''))}" readonly></div><div class="hint">Меняется в мастере установки — шаг «Домен и DNS».</div></div>
         <div><div class="fld"><label for="nd4">Сертификат</label><input id="nd4" class="mono" value="${esc((c.cert_names || []).join(', ') || '—')}${c.cert_until ? ' · до ' + new Date(c.cert_until).toLocaleDateString(LOC()) : ''}" readonly></div><div class="hint">Выпускается в мастере установки и продлевается сам.</div></div>`)) +
-      blk('Фронты', 'Способы, которыми клиент может достучаться до ноды. Клиент перебирает включённые сам.',
+      blk('Фронты', 'Публичный путь — GET. Остальные фронты включаются здесь, если нужен прямой origin без CDN.',
         `<div class="rules">${FR.map(([k, l, h]) => `<label class="rule chk" style="cursor:pointer"><input type="checkbox" ${d.fronts.includes(k) ? 'checked' : ''} ${dis()} onchange="LIVE.ndFront('${k}',this.checked)"><span><b>${l}</b> <span class="mono mute">${k}</span><span class="hint" style="display:block;margin:0">${h}</span></span></label>`).join('')}</div>
         <div class="fgrid" style="margin-top:20px"><div><div class="fld"><label for="nd5">Соединений HTTP/2 для GET</label><select id="nd5" ${dis()} onchange="LIVE.ndSet('get_h2',+this.value)">${[1, 2, 3, 4].map(x => `<option ${d.get_h2 === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div class="hint">Сколько параллельных HTTP/2-соединений клиент держит для фронта GET.</div></div></div>`);
   }
@@ -1273,7 +1273,7 @@
     const cf = (d.cdn_peers || []).length;
     return blk('Ретрансляторы', 'Другие серверы, которые принимают членов и передают трафик сюда. Ключей и адресов членов у них нет.',
         `<div class="acts">${own ? `<button class="btn pri" type="button" onclick="LIVE.openRelay(-1)">${ic('i-plus')}Добавить ретранслятор</button>` : ''}<div class="fld" style="margin:0;min-width:min(260px,100%)"><label for="rl0">Кто может подключиться</label><select id="rl0" ${dis()} onchange="LIVE.ndSet('enrol',this.value)"><option value="list" ${d.enrol === 'list' ? 'selected' : ''}>Только из списка</option><option value="open" ${d.enrol === 'open' ? 'selected' : ''}>Любой с токеном</option></select></div></div>` +
-        table(['Ретранслятор', 'Адрес для клиентов', 'Фронты', 'Вес', 'Состояние', 'Подключений', 'Отклик'], d.relays.map((r, i) => { const s = st(r); return `<tr class="click" onclick="LIVE.openRelay(${i})"><td><b>${esc(r.id)}</b></td><td class="mono">${esc((r.url || '—').replace(/^https:\/\//, ''))}</td><td>${esc((r.fronts || []).join(', ') || 'все')}</td><td class="num">${r.weight || 100}</td><td>${s[0]}</td><td class="num">${s[1]}</td><td>${s[2]}</td></tr>`; }).join('') || `<tr><td colspan="7" class="mute">Ретрансляторов нет.</td></tr>`)) +
+        table(['Ретранслятор', 'Адрес для клиентов', 'Фронты', 'Вес', 'Состояние', 'Подключений', 'Отклик'], d.relays.map((r, i) => { const s = st(r); return `<tr class="click" onclick="LIVE.openRelay(${i})"><td><b>${esc(r.id)}</b></td><td class="mono">${esc((r.url || '—').replace(/^https:\/\//, ''))}</td><td>${esc((r.fronts || []).join(', ') || 'get')}</td><td class="num">${r.weight || 100}</td><td>${s[0]}</td><td class="num">${s[1]}</td><td>${s[2]}</td></tr>`; }).join('') || `<tr><td colspan="7" class="mute">Ретрансляторов нет.</td></tr>`)) +
       blk('CDN', 'Члены могут подключаться через CDN по фронту GET. Нода принимает запросы со своим именем от адресов CDN.',
         `<div class="card"><label class="chk" style="margin-bottom:16px"><input type="checkbox" ${cf ? 'checked' : ''} ${dis()} onchange="LIVE.ndCDN(this.checked)">Cloudflare</label>
         <dl class="kv"><div><dt>Диапазоны CDN</dt><dd>${cf ? cf + ' ' + plural(cf, 'подсеть', 'подсети', 'подсетей') : 'нет'}</dd></div></dl>${cf && own ? `<div class="acts" style="margin:16px 0 0"><button class="btn sm" type="button" onclick="LIVE.ndCDN(true)">Обновить диапазоны</button></div>` : ''}</div>`);
@@ -1283,18 +1283,20 @@
     try { const r = await api('POST', '/api/nodecfg/cdn', {}); L.ndSet('cdn_peers', r.ranges); toast('Диапазоны Cloudflare получены — примените'); } catch (e) { toast(e.message); render(); }
   };
   L.openRelay = i => {
-    const nw = i < 0, r = nw ? { id: '', url: '', fronts: [], weight: 100, drain: false } : L.ndDraft.relays[i], own = L.can('node');
+    const nw = i < 0, r = nw ? { id: '', url: '', fronts: ['get'], weight: 100, drain: false } : L.ndDraft.relays[i], own = L.can('node');
+    const rf = r.fronts && r.fronts.length ? r.fronts : ['get'];
     dialog(nw ? 'Новый ретранслятор' : 'Ретранслятор ' + esc(r.id), 'Сервер с нодой loft в роли ретранслятора. Он подключается сюда сам, по токену ноды.', `
       <div class="fld"><label for="ry1">Имя</label><input id="ry1" class="mono" value="${esc(r.id)}" ${nw ? '' : 'readonly'} placeholder="de-1"></div>
       <div class="fld"><label for="ry2">Адрес для клиентов</label><input id="ry2" class="mono" value="${esc(r.url)}" placeholder="https://de1.example.net"></div>
-      <div><div class="dlg-sec" style="margin:0">Фронты</div><div class="chk-row">${FR.map(([k, l]) => `<label class="chk"><input type="checkbox" data-rf="${k}" ${!(r.fronts || []).length || r.fronts.includes(k) ? 'checked' : ''}>${l}</label>`).join('')}</div></div>
+      <div><div class="dlg-sec" style="margin:0">Фронты</div><div class="chk-row">${FR.map(([k, l]) => `<label class="chk"><input type="checkbox" data-rf="${k}" ${rf.includes(k) ? 'checked' : ''}>${l}</label>`).join('')}</div></div>
       <div><div class="fld"><label for="ry3">Вес</label><input id="ry3" class="num" value="${r.weight || 100}"></div><div class="hint">Чем больше, тем чаще клиенты выбирают этот ретранслятор (1–255).</div></div>
       <label class="chk"><input id="ry4" type="checkbox" ${r.drain ? 'checked' : ''}>Вывести<span class="hint" style="display:block;margin:0">Новые клиенты сюда не идут; подключение ретранслятора закрывается.</span></label>`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.relaySave(${i})">${nw ? 'Добавить' : 'Готово'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить ретранслятор" style="margin-left:auto" onclick="LIVE.relayDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
   L.relaySave = i => {
     const fr = [...document.querySelectorAll('[data-rf]')].filter(x => x.checked).map(x => x.dataset.rf);
-    const r = { id: $('#ry1').value.trim(), url: $('#ry2').value.trim(), fronts: fr.length === FR.length ? [] : fr, weight: parseInt($('#ry3').value, 10) || 100, drain: $('#ry4').checked };
+    if (!fr.length) { toast('Нужен хотя бы один фронт'); return; }
+    const r = { id: $('#ry1').value.trim(), url: $('#ry2').value.trim(), fronts: fr, weight: parseInt($('#ry3').value, 10) || 100, drain: $('#ry4').checked };
     if (!/^[a-z][a-z0-9-]{0,11}$/.test(r.id)) { toast('Имя: латинская буква, затем буквы, цифры или дефис'); return; }
     const all = L.ndDraft.relays.slice();
     if (i < 0) all.push(r); else all[i] = r;

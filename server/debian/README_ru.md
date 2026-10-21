@@ -26,7 +26,7 @@
 
 Процесс идёт от пользователя `loft`. TCP и UDP 443 биндит с `CAP_NET_BIND_SERVICE`. Токен на командной строке не бывает.
 
-Новая установка пишет `auth shared disable` и ключ `operator` в `members.keys`. `/root/loft-client.yaml` получает этот `lt_`, не `LOFT_TOKEN`. `LOFT_TOKEN` в `loft.env` остаётся секретом ноды (mask, seed). Старый оверлей на одном токене: `auth shared enable` в `node.conf`, пока `members.keys` пуст. После обновления бинарника нода без этой строки и без ключей клиентов не пустит, пока не добавите строку или не выдадите ключи.
+Новая установка пишет `fronts get` и `auth shared disable`, и ключ `operator` в `members.keys`. `/root/loft-client.yaml` — только GET, с этим `lt_`, не `LOFT_TOKEN`. `LOFT_TOKEN` в `loft.env` остаётся секретом ноды (mask, seed). Старый оверлей на одном токене: `auth shared enable` в `node.conf`, пока `members.keys` пуст. После обновления бинарника нода без этой строки и без ключей клиентов не пустит, пока не добавите строку или не выдадите ключи. `ws`, `h2`, `quic`, `h3` — явно в `fronts`.
 
 ---
 

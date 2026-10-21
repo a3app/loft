@@ -57,7 +57,7 @@ Hello、Status 和多数机群记录的字符串字段是 `u8 length || bytes`�
 
 节点在 Status `caps` 里宣告开着的前置。客户端在 Hello `caps` 里宣告它会用的前置。第一次 Status 之后，客户端 MUST 只用交集，按自己配置的顺序，当前这条挂了 MUST 切到剩下的下一条前置。
 
-两边都开了全部前置时，默认尝试顺序：`get`、`ws`、`h2`、`quic`、`h3`。
+节点省略 `fronts` 就是 `get`。`ws`、`h2`、`quic`、`h3`、`connect` 没列入就关。两边都列出全部传输前置时的尝试顺序：`get`、`ws`、`h2`、`quic`、`h3`。
 
 ### 3.1 诱饵拼接
 

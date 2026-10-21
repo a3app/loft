@@ -71,7 +71,7 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`Supervise` tries configured outbounds in list order when `select: auto`. After the first Status it keeps only the intersection of fronts. On failure it moves to the next remaining front, then unsigned `replicas`, then the signed roster.
+`Supervise` tries configured outbounds in list order when `select: auto`. After the first Status it keeps only the intersection of fronts. On failure it moves to the next remaining front, then unsigned `replicas`, then the signed roster. A node that omits `fronts` advertises GET only; `ws`, `h2`, `quic`, and `h3` are listed explicitly.
 
 `WatchPath` samples the default IPv4 egress about four times a second. A Wi-Fi / LTE / VPN address change drops the live front so Supervise can resume with a fresh `0x02` and the same `instance_id`. SOCKS5 and TUN stay bound (`Holder`); the overlay IP does not change. With cap `hold`, mux streams stay for `gap_hold_ms` (default 8 s) and inner TCP does not RST. GET handshake adopts a parked mux by `instance_id` the same way WS does (new HTTP sid, same mux). `loft` and `loft-front` both run this loop.
 

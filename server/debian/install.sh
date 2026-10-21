@@ -528,7 +528,7 @@ controller $CONTROLLER
 cert $LOFT_TLS/fullchain.pem
 key $LOFT_TLS/privkey.pem
 ${DECOY_BLOCK}${MASK_LINE}
-fronts get ws h2
+fronts get
 EOF
 	else
 		write_file "$LOFT_YAML" 0640 <<EOF
@@ -536,6 +536,7 @@ role controller
 listen $LISTEN
 cert $LOFT_TLS/fullchain.pem
 key $LOFT_TLS/privkey.pem
+fronts get
 get_path /static/js
 ws_path /api/v1/sync
 h2_path /api/v1/tunnel
@@ -671,11 +672,6 @@ select: auto
 bootstrap: $ADVERTISE/static/v3/manifest.json
 controller_pub: $PUB
 outbounds:
-  - name: node-ws
-    type: ws
-    url: wss://$HOST/api/v1/sync
-    fingerprint: chrome
-    insecure_skip_verify: true
   - name: node-get
     type: get
     url: $ADVERTISE
