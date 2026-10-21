@@ -27,6 +27,8 @@ final class StatusWindowController: NSWindowController {
     private let setBtn = PillButton(frame: .zero)
     private let footLine = FlippedView(frame: .zero)
     private let cards = [LoftPlate(), LoftPlate(), LoftPlate()]
+    /// Several on: the other live sessions, collapsed under the spark.
+    private var others: SessionRows!
 
     /// Builds the status window around `engine` and reloads on `.loftState`.
     init(engine: SessionController) {
@@ -115,6 +117,10 @@ final class StatusWindowController: NSWindowController {
         c.addSubview(resetBtn)
         c.addSubview(splitBtn)
         c.addSubview(setBtn)
+        others = SessionRows(host: c)
+        others.plateFill = Palette.field
+        others.onPrefer = { [weak self] id in self?.engine.prefer(id) }
+        others.onToggle = { [weak self] id in self?.engine.toggle(id) }
     }
 
     /// Relays session state into captions, cards, and spark.
@@ -212,7 +218,9 @@ final class StatusWindowController: NSWindowController {
             sparkR.frame = NSRect(x: w - 22 - 160, y: 300, width: 160, height: 18)
             sparkR.isHidden = wideSpark
         }
-        let bodyH: CGFloat = simple ? 310 : 490
+        let rest = simple ? [] : engine.otherLive()
+        let restEnd = others.place(rest, engine: engine, x: 22, y: 330, width: w - 44, inset: 10, gap: 6)
+        let bodyH: CGFloat = simple ? 310 : (rest.isEmpty ? 490 : max(490, restEnd + 88))
         footLine.frame = NSRect(x: 0, y: bodyH - 72, width: w, height: 1)
         let gap: CGFloat = 8
         let inner = w - 40

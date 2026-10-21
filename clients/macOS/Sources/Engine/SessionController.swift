@@ -200,6 +200,21 @@ final class SessionController {
     /// True while that profile is asking the echo API.
     func extIPBusy(of id: String) -> Bool { lives[id]?.extIPBusy ?? false }
 
+    /// Connect time of one live profile.
+    func connectedAt(of id: String) -> Date? { lives[id]?.connectedAt }
+
+    /// Several on: the other up, connecting, or failed sessions, freshest first.
+    func otherLive() -> [LoftProfile] {
+        guard store.multi else { return [] }
+        return profilesByFreshness().filter { p in
+            guard p.id != displayID else { return false }
+            switch state(of: p.id) {
+            case .on, .connecting, .error: return true
+            case .off, .disconnecting: return false
+            }
+        }
+    }
+
     /// Profiles for the Connections list: last connected first, then name.
     func profilesByFreshness() -> [LoftProfile] {
         store.profiles.sorted { a, b in

@@ -43,6 +43,9 @@ final class PopoverView: FlippedView {
     private let quitBtn = GhostButton(frame: .zero)
     private let line = FlippedView(frame: .zero)
     private let connHit = ActionButton(frame: .zero)
+    /// Several on: line above the collapsed sessions.
+    private let othersLine = FlippedView(frame: .zero)
+    private lazy var others = SessionRows(host: self)
     private var showRows = true
     private var showNet = false
     private var showReset = false
@@ -108,6 +111,10 @@ final class PopoverView: FlippedView {
 
         line.wantsLayer = true
         line.layer?.backgroundColor = Palette.line.cgColor
+        othersLine.wantsLayer = true
+        othersLine.layer?.backgroundColor = Palette.line.cgColor
+        others.onPrefer = { [weak self] id in self?.engine?.prefer(id) }
+        others.onToggle = { [weak self] id in self?.engine?.toggle(id) }
 
         openBtn.font = Palette.body(12.5)
         openBtn.tone = Palette.stone
@@ -133,7 +140,7 @@ final class PopoverView: FlippedView {
         connHit.action = #selector(tapSwitch)
 
         // connHit under the row so the value can still hover as a link.
-        for v in [mark, titleLab, subDot, subLab, rateUp, rateDown, actionBtn, resetBtn, connHit, kConn, vConn, kOver, tunBadge, vOver, kExt, vExt, kRoute, vRoute, kSocks, vSocks, sparkL, sparkR, line, openBtn, journalBtn, quitBtn] as [NSView] {
+        for v in [mark, titleLab, subDot, subLab, rateUp, rateDown, actionBtn, resetBtn, connHit, kConn, vConn, kOver, tunBadge, vOver, kExt, vExt, kRoute, vRoute, kSocks, vSocks, sparkL, sparkR, othersLine, line, openBtn, journalBtn, quitBtn] as [NSView] {
             addSubview(v)
         }
     }
@@ -332,7 +339,15 @@ final class PopoverView: FlippedView {
             sparkL.isHidden = false
             sparkL.show(spark.text, scroll: spark.scroll, keepMoving: connecting || disconnecting)
             y += 24
+            let rest = engine.otherLive()
+            othersLine.isHidden = rest.isEmpty
+            if !rest.isEmpty {
+                othersLine.frame = NSRect(x: pad, y: y - 2, width: w - pad * 2, height: 1)
+                y = others.place(rest, engine: engine, x: pad, y: y + 4, width: w - pad * 2, inset: 2, gap: 0) + 6
+            }
         } else {
+            othersLine.isHidden = true
+            _ = others.place([], engine: engine, x: 0, y: 0, width: 0, inset: 0, gap: 0)
             for v in [kConn, vConn, kOver, vOver, tunBadge, kExt, vExt, kRoute, vRoute, kSocks, vSocks, sparkL, sparkR, connHit] as [NSView] {
                 v.isHidden = true
             }
