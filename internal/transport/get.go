@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -345,6 +346,63 @@ func (g *GET) die() {
 	g.dead.Do(func() { close(g.done) })
 }
 
+// Rebind replaces GET HTTP/2 sockets after an egress change.
+// Mux, sid, key, seq, and the pump stay. Inflight GETs finish on
+// drained clients or retry the same seq (radioGap). CONNECT splice
+// on the old pool dies; mux Open does not. The node keys the session
+// on sid, not the client address.
+func (g *GET) Rebind() error {
+	if !g.started.Load() || len(g.key) == 0 || g.sid == "" || g.sid == "new" {
+		return fmt.Errorf("get rebind: not live")
+	}
+	select {
+	case <-g.done:
+		return fmt.Errorf("get rebind: not live")
+	default:
+	}
+	n := int(g.liveH2.Load())
+	if n < 1 {
+		n = 1
+	}
+	if n > 4 {
+		n = 4
+	}
+	next := make([]*http.Client, 0, n)
+	for i := 0; i < n; i++ {
+		cl, err := httpClient(g.cfg, string(g.token))
+		if err != nil {
+			for _, c := range next {
+				if c != nil {
+					c.CloseIdleConnections()
+				}
+			}
+			return err
+		}
+		next = append(next, cl)
+	}
+	now := time.Now()
+	g.poolMu.Lock()
+	seen := make(map[*http.Client]struct{}, len(g.clients)+1)
+	for _, c := range g.clients {
+		g.parkDrainLocked(c, now)
+		seen[c] = struct{}{}
+	}
+	if g.client != nil {
+		if _, ok := seen[g.client]; !ok {
+			g.parkDrainLocked(g.client, now)
+		}
+	}
+	g.clients = next
+	g.born = make([]time.Time, len(next))
+	for i := range g.born {
+		g.born[i] = now
+	}
+	g.client = next[0]
+	g.sweepDrainLocked(now)
+	g.poolMu.Unlock()
+	return nil
+}
+
 // Park stops the pump without Leave or mux.Close. Same GET sid resumes.
 func (g *GET) Park() error {
 	if g.stop != nil {
@@ -558,22 +616,12 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 				// die()+resume slams 16 new GETs and the edge stays calm;
 				// mux looks like “traffic then packet loss”. Back off on
 				// the same sid instead.
-				if enhanceCalm(err) {
-					g.noteCalm()
-					g.busy.Store(false)
-					continue
-				}
-				if frontReset(err) || radioGap(err) {
-					fmt.Fprintf(os.Stderr, "get front reset\n")
-					g.busy.Store(false)
-					g.dropIdleFront()
-					if strings.Contains(strings.ToLower(err.Error()), "goaway") {
-						g.queueNote(wire.TuneGoaway)
-					} else {
-						g.queueNote(wire.TuneReset)
-					}
-				}
 				tries++
+				if getGiveUp(tries, t0) {
+					fmt.Fprintf(os.Stderr, "get front give up seq=%d %v\n", j.seq, err)
+					g.die()
+					return
+				}
 				if g.applied.Load() >= j.seq && j.seq > 0 {
 					break
 				}
@@ -584,25 +632,31 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 				} else {
 					payload = nil
 				}
-				if radioGap(err) {
-					wait := time.Duration(tries) * 200 * time.Millisecond
-					if wait > 2*time.Second {
-						wait = 2 * time.Second
-					}
-					select {
-					case <-ctx.Done():
+				if enhanceCalm(err) {
+					g.noteCalm()
+					g.busy.Store(false)
+					if !g.waitCalm(ctx, j.seq) {
 						return
-					case <-time.After(wait):
 					}
 					continue
 				}
-				if tries > 8 || time.Since(t0) > 12*time.Second {
-					fmt.Fprintf(os.Stderr, "get front give up seq=%d %v\n", j.seq, err)
-					g.die()
-					return
+				if frontReset(err) || radioGap(err) {
+					fmt.Fprintf(os.Stderr, "get front reset seq=%d %v\n", j.seq, err)
+					g.busy.Store(false)
+					g.dropIdleFront()
+					if strings.Contains(strings.ToLower(err.Error()), "goaway") {
+						g.queueNote(wire.TuneGoaway)
+					} else {
+						g.queueNote(wire.TuneReset)
+					}
 				}
 				wait := 50 * time.Millisecond
-				if !frontReset(err) {
+				if radioGap(err) {
+					wait = time.Duration(tries) * 200 * time.Millisecond
+					if wait > 2*time.Second {
+						wait = 2 * time.Second
+					}
+				} else if !frontReset(err) {
 					wait = time.Duration(tries) * 150 * time.Millisecond
 				}
 				if cap := gapHoldDuration(); wait > cap {
@@ -618,7 +672,17 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 	}
 }
 
-const getCalmBackoff = 2 * time.Second
+const (
+	getRetryMax    = 8
+	getRetryWindow = 12 * time.Second
+	getCalmBackoff = 2 * time.Second
+)
+
+// getGiveUp is the worker retry cap: radioGap used to continue past this
+// and occupy inflight forever (SOCKS HOL, LIVE n=1, no die/resume).
+func getGiveUp(tries int, t0 time.Time) bool {
+	return tries > getRetryMax || time.Since(t0) > getRetryWindow
+}
 
 func enhanceCalm(err error) bool {
 	if err == nil {
@@ -1201,8 +1265,12 @@ func (g *GET) roundTripAt(ctx context.Context, auth, uplink []byte, seq uint64) 
 	// finishMux(empty) and skip that seq — the next DATA was a hole in the
 	// TLS record stream (ERR_SSL_PROTOCOL_ERROR / LibreSSL bad decrypt).
 	timeout := g.tripTimeout(len(auth) > 0)
-	rctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	rctx, cancel := context.WithCancel(ctx)
+	idle := time.AfterFunc(timeout, cancel)
+	defer func() {
+		idle.Stop()
+		cancel()
+	}()
 	req, err := http.NewRequestWithContext(rctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, nil, seq, err
@@ -1225,6 +1293,9 @@ func (g *GET) roundTripAt(ctx context.Context, auth, uplink []byte, seq uint64) 
 	}
 	hdr := wire.EncodeUplink(blob, enc)
 	req.Header.Set("Cookie", "session="+hdr)
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		GotFirstResponseByte: func() { idle.Reset(timeout) },
+	}))
 
 	t0 := time.Now()
 	cli := g.pickClient()
@@ -1240,6 +1311,7 @@ func (g *GET) roundTripAt(ctx context.Context, auth, uplink []byte, seq uint64) 
 		return nil, nil, seq, err
 	}
 	defer resp.Body.Close()
+	resp.Body = idleReader{ReadCloser: resp.Body, idle: idle, d: timeout}
 	if resp.StatusCode == http.StatusMethodNotAllowed {
 		g.noteTrip(ttfb, time.Since(t0), len(blob), 0, fmt.Errorf("status"))
 		return nil, nil, seq, fmt.Errorf("GET front: method not allowed (use type get)")
@@ -1282,6 +1354,22 @@ func (g *GET) roundTripAt(ctx context.Context, auth, uplink []byte, seq uint64) 
 	return body, resp.Header, seq, nil
 }
 
+// idleReader resets the GET idle timer on each body byte so a streaming
+// bulk response is not killed by the TTFB budget.
+type idleReader struct {
+	io.ReadCloser
+	idle *time.Timer
+	d    time.Duration
+}
+
+func (r idleReader) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	if n > 0 && r.idle != nil {
+		r.idle.Reset(r.d)
+	}
+	return n, err
+}
+
 func (g *GET) tripTimeout(auth bool) time.Duration {
 	if auth {
 		return 20 * time.Second
@@ -1289,10 +1377,7 @@ func (g *GET) tripTimeout(auth bool) time.Duration {
 	if d := g.prof.TripTimeout; d > 0 {
 		return d
 	}
-	if g.prof.Name != "" && g.prof.Name != "generic" {
-		return 15 * time.Second
-	}
-	return 4 * time.Second
+	return 15 * time.Second
 }
 
 // finishMux applies downlink in GET seq order.

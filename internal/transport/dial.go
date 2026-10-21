@@ -35,8 +35,31 @@ type Dialer interface {
 	Close() error
 }
 
+// rebindable replaces front sockets after an egress change without Park.
+// GET does this (HTTP sid is not the client 4-tuple). ws/h2/quic/h3 do not.
+type rebindable interface {
+	Rebind() error
+}
+
+// rebindFront keeps d live across a path change. False means Park + 0x02.
+func rebindFront(d Dialer) bool {
+	if d == nil {
+		return false
+	}
+	select {
+	case <-d.Done():
+		return false
+	default:
+	}
+	r, ok := d.(rebindable)
+	if !ok {
+		return false
+	}
+	return r.Rebind() == nil
+}
+
 // Start opens one outbound using member Hello caps (no CapRelay).
-// A path drop still holds: MemberCaps keeps CapHold; resume is 0x02 + instance_id.
+// GET path change rebinds HTTP/2. Other fronts Park; resume is 0x02 + instance_id.
 func Start(ctx context.Context, token string, o config.Outbound) (Dialer, error) {
 	return startWithOffer(ctx, token, o, wire.MemberCaps)
 }
@@ -107,7 +130,8 @@ func startFront(ctx context.Context, token string, o config.Outbound, offer wire
 	}
 }
 
-// Supervise keeps a dialer up across metro / LTE drops: TUN stays, session resumes with 0x02.
+// Supervise keeps a dialer up across metro / LTE drops: TUN stays.
+// GET rebinds HTTP/2 (same sid). Other fronts Park; resume is 0x02 + instance_id.
 func Supervise(ctx context.Context, cfg *config.ClientConfig, use func(Dialer, config.Outbound)) error {
 	return SuperviseOn(ctx, cfg, WatchPath(ctx), use)
 }
@@ -168,26 +192,35 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 			ttlTimer = time.NewTimer(wait)
 			ttlC = ttlTimer.C
 		}
-		select {
-		case <-d.Done():
-			_ = parkOrClose(d)
-			rotateN.Add(1)
-			delay = 200 * time.Millisecond
-		case <-path:
-			_ = parkOrClose(d)
-			rotateN.Add(1)
-			delay = 0
-		case <-ttlC:
-			_ = d.Close()
-			rotateN.Add(1)
-			delay = 200 * time.Millisecond
-		case <-ctx.Done():
-			_ = d.Close()
-			clearClientHold()
-			if ttlTimer != nil {
-				ttlTimer.Stop()
+		alive := true
+		for alive {
+			select {
+			case <-d.Done():
+				_ = parkOrClose(d)
+				rotateN.Add(1)
+				delay = 200 * time.Millisecond
+				alive = false
+			case <-path:
+				if rebindFront(d) {
+					continue
+				}
+				_ = parkOrClose(d)
+				rotateN.Add(1)
+				delay = 0
+				alive = false
+			case <-ttlC:
+				_ = d.Close()
+				rotateN.Add(1)
+				delay = 200 * time.Millisecond
+				alive = false
+			case <-ctx.Done():
+				_ = d.Close()
+				clearClientHold()
+				if ttlTimer != nil {
+					ttlTimer.Stop()
+				}
+				return ctx.Err()
 			}
-			return ctx.Err()
 		}
 		if ttlTimer != nil {
 			ttlTimer.Stop()

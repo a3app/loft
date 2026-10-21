@@ -232,7 +232,7 @@ func LoadClient(path string) (*ClientConfig, error) {
 			o.HeaderBudget = 16 * 1024
 		}
 		if o.Inflight <= 0 {
-			o.Inflight = 48
+			o.Inflight = 8
 		}
 		if o.Type == "" {
 			return nil, fmt.Errorf("outbound %q: type is required", o.Name)

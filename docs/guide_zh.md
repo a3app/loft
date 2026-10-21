@@ -214,7 +214,7 @@ ALL_PROXY=socks5://127.0.0.1:1080 curl https://example.com
 
 本机监听：SOCKS5（`client.yaml` 和 GUI 里 `127.0.0.1:1080`）。CLI `loft` / `loft-front` 没写端口就绑 `127.0.0.1:18080`，好跟开着的客户端并排。`tun: auto` 才有 TUN。`-if en0`（或本机/网关 IPv4）把前置套接字钉在那条路上；`loft-front`、`loft-probe`、`loft-bench` 同一个标志。`loft-front` / `loft-bench` 的 `-h2-max-age` 就是 YAML `h2_max_age_ms`（0 = 留到出错）。
 
-Wi-Fi / LTE / VPN 路径一变：SOCKS 和 TUN 还在，覆盖网 IP 还在，助手进程还在。前置 TCP 用新的 `0x02` 和同一个 `instance_id` 重拨。有 cap `hold` 时，mux 流在 `gap_hold_ms`（默认 8 秒）里还在，里面的 TCP 不断。Leave 还是会拆会话。
+Wi-Fi / LTE / VPN 路径一变：SOCKS 和 TUN 还在，覆盖网 IP 还在，助手进程还在。GET 从新出口换 HTTP/2；sid 和 mux 留下。别的前置走 Park；续上是新的 `0x02` 和同一个 `instance_id`。有 cap `hold` 时，停着的 mux 流在 `gap_hold_ms`（默认 8 秒）里还在，里面的 TCP 不断。Leave 还是会拆会话。
 
 客户端 YAML `pause: starlink` 在已知的 15 秒 LEO 切换窗口附近不发 mux Data。控制帧照发。这是本地的，不是协议字段。
 

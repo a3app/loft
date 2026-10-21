@@ -104,7 +104,7 @@ TLS，然后 HTTP upgrade。路径是节点本地的（默认 `/api/v1/sync`）�
 
 第一个 GET：Cookie `session=<base64url(auth blob)>`。blob 是标签 `0x02`（或遗留的 `0x03` ticket）。路径里已经带着客户端选的会话 id（24 hex）。响应 200，`Cache-Control: private, no-store`，体是 AEAD(Status)，AAD = 这个会话 id。节点 SHOULD 用同一个 id 回 `X-Session`（老客户端走路径 `new`，靠这个头）。
 
-后续 GET：Cookie `session=`，里面是 AEAD(mux 批次) 的 base64url 或 Z85，AAD = 会话 id，体是 AEAD(mux 批次)。节点 SHOULD 在体前面加 CmdReport（`applied` = 最后一段连续收下的 GET seq）。客户端收到了 MUST 停止重试上行 seq ≤ `applied`。握手是验得过的 `0x02`/`0x03` Cookie；后面的 GET 是 AEAD。节点 MUST 仍接受老客户端的 `X-Auth: 1`、路径 `new`、以及 `X-Request-Id` 上行。认证失败 MUST 回 404 带 HTML。上行 MUST 塞进一个头（Status `header_budget` 是编码后 Cookie 字节；省略时默认 16 KiB HTTP 头）。Status `uplink_enc` 1 是 `~` 加上 `u16be length || AEAD blob` 的 Z85（RFC 32）；0 和省略是 base64url。握手 Cookie 仍是 base64url。节点 MUST 两种都收。Status `h2_conns`（1–4）是到这条前置的 HTTP/2 连接数；0 保持一条。Inflight 是这些连接上未完成 GET 的总数。客户端 MAY 按本地 max-age 换一条 HTTP/2（省略或 0 就留到出错）；mux 和 GET 会话 id 不变。HTTP 413：预算减半，下限 1024，再拆开。HTTP 405：这条前置不是 GET。Inflight 2–8（协议默认 4；Status `inflight` 是上限）。客户端看到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST 在同一会话上退避，MAY 在下一条已经带着 mux 的 GET 上发 CmdTune event 1。节点 MAY 降低这条前置的 `header_budget` / `inflight`，并在这个 GET 体里回 CmdTune event 0。空闲时上行空着：至少等 `keepalive_ms / 2`（且不少于 1 秒）。已经带着 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点 SHOULD 为下行把 GET 最多攥 250 ms，MUST NOT 攥超过 1 秒。上行里已经有 CmdData 时，节点 MAY 一下行 Data 入队就回。这条上行有 ≥ 2 KiB CmdData 时，节点 SHOULD 把这个 GET 体封顶 96 KiB，好让下一条 Cookie 快点转出去；纯下载的 GET 仍是 256 KiB（多条流时 192 KiB）。
+后续 GET：Cookie `session=`，里面是 AEAD(mux 批次) 的 base64url 或 Z85，AAD = 会话 id，体是 AEAD(mux 批次)。节点 SHOULD 在体前面加 CmdReport（`applied` = 最后一段连续收下的 GET seq）。客户端收到了 MUST 停止重试上行 seq ≤ `applied`。握手是验得过的 `0x02`/`0x03` Cookie；后面的 GET 是 AEAD。节点 MUST 仍接受老客户端的 `X-Auth: 1`、路径 `new`、以及 `X-Request-Id` 上行。认证失败 MUST 回 404 带 HTML。上行 MUST 塞进一个头（Status `header_budget` 是编码后 Cookie 字节；省略时默认 16 KiB HTTP 头）。Status `uplink_enc` 1 是 `~` 加上 `u16be length || AEAD blob` 的 Z85（RFC 32）；0 和省略是 base64url。握手 Cookie 仍是 base64url。节点 MUST 两种都收。Status `h2_conns`（1–4）是到这条前置的 HTTP/2 连接数；0 保持一条。Inflight 是这些连接上未完成 GET 的总数。客户端 MAY 按本地 max-age 换一条 HTTP/2（省略或 0 就留到出错）；mux 和 GET 会话 id 不变。客户端 MAY 在本机出口变更后同样更换 HTTP/2 池；mux、GET 会话 id、seq 和 AEAD 密钥留下，不再做一次 `0x02`。节点按 sid 认会话，不按客户端地址。旧池上的 CONNECT 拼接随这些套接字一起断。HTTP 413：预算减半，下限 1024，再拆开。HTTP 405：这条前置不是 GET。Inflight 2–8（协议默认 4；Status `inflight` 是上限）。客户端看到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST 在同一会话上退避，MAY 在下一条已经带着 mux 的 GET 上发 CmdTune event 1。节点 MAY 降低这条前置的 `header_budget` / `inflight`，并在这个 GET 体里回 CmdTune event 0。空闲时上行空着：至少等 `keepalive_ms / 2`（且不少于 1 秒）。已经带着 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点 SHOULD 为下行把 GET 最多攥 250 ms，MUST NOT 攥超过 1 秒。上行里已经有 CmdData 时，节点 MAY 一下行 Data 入队就回。这条上行有 ≥ 2 KiB CmdData 时，节点 SHOULD 把这个 GET 体封顶 96 KiB，好让下一条 Cookie 快点转出去；纯下载的 GET 仍是 256 KiB（多条流时 192 KiB）。
 
 HTTP/2 断了但没 Leave，会话不结束。客户端进程退出前 MUST 再发一个 GET，上行批次里带着 CmdLeave。节点于是关掉 mux 会话，忘掉 GET 会话 id，Detach，Release。`lease_hold` 仍为 `ok_resumed` 留着覆盖网 IP。
 
@@ -148,7 +148,7 @@ GET mux 在请求/响应上轮询一套流协议。节点 MAY 在 Status 里置�
 
 ### 4.2 续上
 
-换路径或进程重启发一条新的 `0x02`，新临时密钥，同一个 Hello `instance_id`。Hold 按已认证成员加 instance 把停着的 mux 再挂上。副本故障切换是在新节点上发 `0x02`；覆盖网 IP 跟着 `lease_hold` 和 instance。Status MAY 仍带空的 `ticket` 字段（长度 0）。
+GET MAY 在本机出口变更后不断会话、不再发 `0x02`（§3.4）。`ws`、`h2`、`quic`、`h3` 换路径、GET 换池失败、或进程重启，发一条新的 `0x02`，新临时密钥，同一个 Hello `instance_id`。Hold 按已认证成员加 instance 把停着的 mux 再挂上。副本故障切换是在新节点上发 `0x02`；覆盖网 IP 跟着 `lease_hold` 和 instance。Status MAY 仍带空的 `ticket` 字段（长度 0）。
 
 ### 4.3 会话密钥
 
@@ -314,7 +314,7 @@ Leave 结束 mux 会话。stream_id 是 0。载荷为空。节点 MUST 关掉会
 
 断开之后，`lease_hold_ms`（默认 45 秒）为这个实例留着 IP。Leave 立刻 Release `Online`；保持只是为续上预订 IP。GET 会话没 Leave 就消失了，仍保持 `Online`，直到节点下次再见到这个会话。
 
-Hello 和 Status 都宣告 `hold` 时，意外的前置掉线（换路径、无线空洞）在 `gap_hold_ms`（默认 8 秒）内 MUST NOT Close mux 流。客户端用新的 `0x02` 和同一个 `instance_id` 重拨；节点只把停着的 mux 挂给证明匹配的那位成员。里面的 TCP 不断。`gap_hold_ms` 内没续上，节点 Close mux。Leave 仍立刻 Close。
+Hello 和 Status 都宣告 `hold` 时，意外的前置掉线（无线空洞，或换路径走到 Park）在 `gap_hold_ms`（默认 8 秒）内 MUST NOT Close mux 流。GET 在同一 sid 上换 HTTP/2 不算掉线。走到 Park 的客户端用新的 `0x02` 和同一个 `instance_id` 重拨；节点只把停着的 mux 挂给证明匹配的那位成员。里面的 TCP 不断。`gap_hold_ms` 内没续上，节点 Close mux。Leave 仍立刻 Close。
 
 客户端 MAY 在已知空洞附近在本地暂停 draft Data（不上线路）；resin 照发。
 

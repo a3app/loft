@@ -1,8 +1,8 @@
 package transport
 
-// Path watch: physical IPv4 change (Wi-Fi / LTE) closes the live front so
-// Supervise redials. -if pins the key to that NIC: a leftover TUN 0/1 is
-// not a path change and must not RST the GET session.
+// Path watch: physical IPv4 change (Wi-Fi / LTE). Supervise rebinds GET
+// HTTP/2 (same sid) and Parks other fronts. -if pins the key to that NIC:
+// a leftover TUN 0/1 is not a path change and must not RST the GET session.
 
 import (
 	"context"

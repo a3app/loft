@@ -214,7 +214,7 @@ ALL_PROXY=socks5://127.0.0.1:1080 curl https://example.com
 
 Local listeners: SOCKS5 (`127.0.0.1:1080` in `client.yaml` and the GUI). CLI `loft` / `loft-front` without an explicit port bind `127.0.0.1:18080` so they can sit beside the open client. TUN if `tun: auto`. `-if en0` (or a local/gateway IPv4) pins front sockets to that path; same flag on `loft-front`, `loft-probe`, `loft-bench`. `loft-front` / `loft-bench` `-h2-max-age` is YAML `h2_max_age_ms` (0 = keep until error).
 
-Wi-Fi / LTE / VPN path change: SOCKS and TUN stay up, overlay IP stays, the helper process stays. The front TCP is redialed with a fresh `0x02` and the same `instance_id`. With cap `hold`, mux streams stay for `gap_hold_ms` (default 8 s) and inner TCP stays up. Leave still tears the session.
+Wi-Fi / LTE / VPN path change: SOCKS and TUN stay up, overlay IP stays, the helper process stays. GET replaces HTTP/2 from the new egress; sid and mux stay. Other fronts Park; resume is a fresh `0x02` and the same `instance_id`. With cap `hold`, Parked mux streams stay for `gap_hold_ms` (default 8 s) and inner TCP stays up. Leave still tears the session.
 
 Client YAML `pause: starlink` skips sending mux Data around the known 15 s LEO handover windows. Control frames still go. This is local; it is not a protocol field.
 

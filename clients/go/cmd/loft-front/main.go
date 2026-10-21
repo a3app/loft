@@ -342,7 +342,7 @@ func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 		Fingerprint:  "chrome",
 		Insecure:     true,
 		HeaderBudget: 16 << 10,
-		Inflight:     48,
+		Inflight:     8,
 		H2MaxAgeMS:   frontH2MaxAgeMS,
 	}
 	if p, err := cdn.Lookup(o.CDN); err == nil && o.CDN != "" {

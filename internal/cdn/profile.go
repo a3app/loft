@@ -31,10 +31,9 @@ func GenericGET() Profile {
 		Name:         "generic",
 		Front:        "get",
 		HeaderBudget: 16 << 10,
-		// Node ingestAndPull serializes mux Pull by GET seq, so inflight>1
-		// pipelines RTT without reordering Data/Close. 32 × ~12 KiB headers
-		// at 100 ms front RTT is ~30 Mbit/s uplink (ZeroTier-class).
-		Inflight:     48,
+		// Node ingestAndPull serializes mux Pull by GET seq. Inflight
+		// pipelines RTT; 48 queued a 2s TTFB path until tripTimeout.
+		Inflight:     8,
 		Path:         "/static/js",
 		Ext:          ".js",
 		UplinkHeader: "Cookie",
