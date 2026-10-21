@@ -308,6 +308,8 @@
       font: 600 11px var(--ui); padding: 8px 2px; border-radius: 8px; cursor: pointer;
     }
     .seg button.on { background: #2a2420; color: var(--snow); }
+    .seg button.ico { display: flex; align-items: center; justify-content: center; gap: 5px; }
+    .seg button.ico svg { width: 13px; height: 13px; flex: 0 0 auto; }
     .seg.cap { background: transparent; padding: 0; gap: 6px; justify-content: flex-end; }
     .type-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
     .type-row .k { flex: 1; font-size: 13.5px; }
@@ -769,8 +771,8 @@
 
           <div id="edit-main-loft">
             <div class="seg" id="loftEntry">
-              <button type="button" class="on" data-entry="link" data-i="entryLink">Ссылка</button>
-              <button type="button" data-entry="manual" data-i="entryMan">Вручную</button>
+              <button type="button" class="on ico" data-entry="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span data-i="entryLink">Ссылка</span></button>
+              <button type="button" class="ico" data-entry="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg><span data-i="entryMan">Вручную</span></button>
             </div>
             <div id="loft-link">
               <label class="field"><span data-i="loftUri">Адрес loft://</span>
@@ -860,8 +862,8 @@
 
           <div id="edit-main-vless" class="hidden">
             <div class="seg" id="vlessEntry">
-              <button type="button" class="on" data-entry="link" data-i="entryLink">Ссылка</button>
-              <button type="button" data-entry="manual" data-i="entryMan">Вручную</button>
+              <button type="button" class="on ico" data-entry="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span data-i="entryLink">Ссылка</span></button>
+              <button type="button" class="ico" data-entry="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg><span data-i="entryMan">Вручную</span></button>
             </div>
             <div id="vless-link">
               <label class="field"><span data-i="vlessUrl">Ссылка vless://</span>
