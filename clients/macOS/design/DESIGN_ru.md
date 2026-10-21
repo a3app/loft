@@ -421,7 +421,7 @@ Popover следует системному appearance. Акцент марки 
 | front | Front |
 | socks | SOCKS5 |
 | launch | Open at login |
-| auto | Connect automatically |
+| auto | Connect at launch |
 | quit | Quit |
 | conns.sub | Each has its own key and address. One is active. |
 | conns.sub.multi | Each opens on its own. |
@@ -436,7 +436,7 @@ Popover следует системному appearance. Акцент марки 
 | socks_share | Shared SOCKS |
 | socks_port | SOCKS5 port (Settings; a connection may set its own) |
 | failover | Hand to a live one |
-| hold | Keep direct Internet closed |
+| hold | No internet without the VPN |
 | split | Split routing |
 | split.d | Зона едет через Loft или мимо. Сервис только состоит в зоне. |
 | split.via | Through Loft |

@@ -421,7 +421,7 @@ Exclusive：
 | front | Front |
 | socks | SOCKS5 |
 | launch | Open at login |
-| auto | Connect automatically |
+| auto | Connect at launch |
 | quit | Quit |
 | menu_quit | Quit Loft |
 | open | Open Loft |

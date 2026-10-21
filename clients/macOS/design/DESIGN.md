@@ -416,7 +416,7 @@ Canonical locale is English. Copy lives in [`lang/`](../lang/) — one `{code}.l
 | front | Front |
 | socks | SOCKS5 |
 | launch | Open at login |
-| auto | Connect automatically |
+| auto | Connect at launch |
 | quit | Quit |
 | menu_quit | Quit Loft |
 | open | Open Loft |
@@ -436,7 +436,7 @@ Canonical locale is English. Copy lives in [`lang/`](../lang/) — one `{code}.l
 | socks_share | Shared SOCKS |
 | socks_port | SOCKS5 port (Settings; a connection may set its own) |
 | failover | Hand to a live one |
-| hold | Keep direct Internet closed |
+| hold | No internet without the VPN |
 | split | Split routing |
 | split.d | A zone goes through Loft or around Loft. A service only belongs to a zone. |
 | split.via | Through Loft |
