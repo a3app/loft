@@ -186,6 +186,43 @@
       white-space: normal; line-height: 1.2; min-height: 36px;
     }
 
+    .ghost-sm {
+      background: none; border: 0; color: var(--lamp); font: 600 12px var(--ui);
+      cursor: pointer; padding: 6px 0; display: block;
+    }
+    .zhead { display: flex; justify-content: space-between; align-items: center; margin: 2px 0 4px; }
+    .zhead .lbl { font-size: 12px; color: var(--mute); }
+    .ztabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 0 8px; }
+    .ztabs::-webkit-scrollbar { height: 0; }
+    .ztabs button {
+      flex: 0 0 auto; border: 0; border-radius: 999px; padding: 7px 12px; cursor: pointer;
+      background: #211c19; color: var(--stone); font: 600 12px var(--ui);
+    }
+    .ztabs button.on { background: var(--lamp); color: var(--ink); }
+    .ztabs button span { font-weight: 500; opacity: .7; }
+    .policy { color: var(--mute); font-size: 12px; margin: 0 0 10px; }
+    .rrow {
+      display: flex; gap: 8px; align-items: center; justify-content: space-between;
+      background: #211c19; border: 1px solid #2e2824; border-radius: 12px;
+      padding: 9px 12px; margin-bottom: 6px; cursor: pointer;
+    }
+    .rrow.live { border-color: rgba(232,184,74,.45); }
+    .rrow .grow { min-width: 0; }
+    .rrow .n { font-weight: 600; font-size: 13.5px; }
+    .rrow .m { color: var(--mute); font: 400 10.5px var(--mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rrow .meta { text-align: right; font-size: 11px; color: var(--stone); flex-shrink: 0; }
+    .rrow .meta .src { color: var(--mute); font-size: 10px; margin-top: 2px; }
+    .rlist.dim { opacity: .5; }
+    .row-3 { display: flex; gap: 6px; margin-top: 10px; }
+    .row-3 .ghost { flex: 1; font-size: 12px; padding: 10px 4px; }
+    .repo-row { display: flex; gap: 6px; margin-top: 4px; }
+    .repo-row input { flex: 1; min-width: 0; margin-top: 0 !important; }
+    .repo-row .ghost { width: auto; flex: 0 0 auto; padding: 0 12px; font-size: 12px; }
+    .fmt {
+      background: #211c19; border-radius: 10px; padding: 10px; margin: 10px 0;
+      font: 400 10px var(--mono); color: var(--stone); white-space: pre-wrap; word-break: break-all;
+    }
+
     .tabbar {
       position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
       display: flex; padding: 6px 8px 20px;
@@ -510,6 +547,15 @@
     <button type="button" data-go="settings" data-settab="0" data-i="nSet">Настройки · общие</button>
     <button type="button" data-go="settings" data-settab="1" data-i="nSetR">Настройки · маршрут</button>
     <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · клиент</button>
+    <h4 data-i="hRoutes">Раздельная маршрутизация</h4>
+    <button type="button" data-go="split" data-i="nSplit">Маршруты · списки</button>
+    <button type="button" data-go="splitsvc" data-i="nSvc">Маршруты · сеть</button>
+    <button type="button" data-go="zones" data-i="nZones">Маршруты · зоны</button>
+    <button type="button" data-go="zone" data-i="nZone">Маршруты · зона</button>
+    <button type="button" data-go="splitrepo" data-i="nRepo">Маршруты · репозиторий</button>
+    <button type="button" data-go="splitlists" data-i="nLists">Маршруты · каталог</button>
+    <button type="button" data-go="splitin" data-i="nSin">Маршруты · импорт</button>
+    <button type="button" data-go="splitout" data-i="nSout">Маршруты · экспорт</button>
     <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
     <button type="button" data-go="about" data-i="nAbout">О программе</button>
     <h4>iOS</h4>
@@ -941,9 +987,10 @@
             <div class="set-row">
               <div>
                 <div class="k" data-i="split">Раздельная маршрутизация</div>
-                <div class="s" data-i="splitD">Мимо — через прямой маршрут до лофта.</div>
+                <div class="s" data-i="splitD">Зона едет через Loft или мимо. Сервис только состоит в зоне.</div>
+                <button type="button" class="ghost-sm" data-go="split" data-i="split_lists">Списки</button>
               </div>
-              <div class="toggle"><i></i></div>
+              <div class="toggle on" id="setSplit"><i></i></div>
             </div>
           </div>
           <div id="set-2" class="hidden">
@@ -1115,6 +1162,46 @@ hold  armed</pre>
         </div>
       </div>
 
+      <div class="screen hidden" id="split">
+        <div class="navbar"><button type="button" data-back data-i="backSet">‹ Настройки</button></div>
+        <div class="scroll dyn" id="split-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitsvc">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="splitsvc-body"></div>
+      </div>
+
+      <div class="screen hidden" id="zones">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="zones-body"></div>
+      </div>
+
+      <div class="screen hidden" id="zone">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="zone-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitrepo">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="splitrepo-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitlists">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="splitlists-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitin">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="splitin-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitout">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="splitout-body"></div>
+      </div>
+
       <div class="tabbar" id="tabbar">
         <button type="button" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span data-i="tabHome">Дом</span></button>
         <button type="button" data-tab="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg><span data-i="conns">Подключения</span></button>
@@ -1197,6 +1284,78 @@ hold  armed</pre>
   <script>
     const I = {
       ru: {
+        "split.add": "Добавить",
+        "split.add.body": "Адрес или CIDR. Имя сервиса — чтобы в списке было понятно.",
+        "split.add.body.ignore": "CIDR, который не ставить в эту зону. Переживает обновление репозитория.",
+        "split.add.ignore": "Игнор",
+        "split.add.kind": "Запись",
+        "split.add.route": "Маршрут",
+        "split.add.go": "Добавить",
+        "split.add.name": "Сервис",
+        "split.add.net": "Сеть или адрес",
+        "split.add.title": "Сеть",
+        "split_add_save": "Сохранить",
+        "split.bypass": "Мимо Loft",
+        "split.via": "Через Loft",
+        "split.d": "Зона едет через Loft или мимо. Сервис только состоит в зоне.",
+        "split.empty": "В этой зоне пока пусто.",
+        "split.ignore": "Игнор",
+        "split.export.body": "Keenetic поймёт оба. Loft пишет зону в REM zone:, имя сервиса в комментарии.",
+        "split.export.fmt": "Формат",
+        "split.export.keen": "Keenetic .bat",
+        "split.export.loft": "Loft",
+        "split.export.save": "Сохранить loft-routes.bat",
+        "split.export.save.keen": "Сохранить YouTube.bat",
+        "split.export.title": "Экспорт маршрутов",
+        "split.import.body": "Keenetic .bat или loft-routes. Комментарий :: rem — имя сервиса.",
+        "split.import.detect": "Keenetic · 214 строк · выберите зону",
+        "split.import.go": "Добавить 214 маршрутов",
+        "split.import.title": "Импорт маршрутов",
+        "split.net": "сеть",
+        "split.nets": "сетей",
+        "split.rdef": "Направление",
+        "split.repo": "Репозиторий",
+        "split.repo.auto": "Обновлять автоматически",
+        "split.repo.auto.d": "Раз в сутки, свои записи не затирает.",
+        "split.repo.body": "Raw .bat с GitHub или своего хоста. Заполняет эту зону. Свои строки не трогает.",
+        "split.repo.last": "Сегодня · 214 маршрутов",
+        "split.repo.none": "Пока нет списка",
+        "split.repo.pull": "Обновить сейчас",
+        "split.repo.url": "Адрес списка",
+        "split.repo.pick": "Списки",
+        "split.lists": "Списки",
+        "split.lists.body": "Из репозитория loft. Свой URL по-прежнему можно вставить.",
+        "split.search": "Найти сервис",
+        "split.src.me": "свои",
+        "split.src.ignore": "игнор",
+        "split.src.repo": "репо",
+        "split.sub.off": "Выкл — списки не ставятся в систему.",
+        "split.zone": "Зона",
+        "split.zone.global": "Global",
+        "split.zone.local": "Local",
+        "split.zones": "Зоны",
+        "split.zones.add": "Добавить зону",
+        "split.zones.add.body": "Имя, направление, необязательный адрес списка. Сервисы едут как зона.",
+        "split.zones.add.go": "Добавить",
+        "split.zones.add.title": "Новая зона",
+        "split.zones.builtin": "Встроенная",
+        "split.zones.del": "Удалить зону",
+        "split.zones.edit.title": "Зона",
+        "split.zones.move": "Сервисы перейдут в Global.",
+        "split.zones.name": "Имя",
+        "split.zones.save": "Сохранить",
+        "split_lists": "Списки",
+        "split.sub": "Через Loft — в туннель. Мимо Loft — напрямую, в обход туннеля.",
+        "backGen": "‹ Назад",
+        "nSplit": "Маршруты · списки",
+        "nSvc": "Маршруты · сеть",
+        "nZones": "Маршруты · зоны",
+        "nZone": "Маршруты · зона",
+        "nRepo": "Маршруты · репозиторий",
+        "nLists": "Маршруты · каталог",
+        "nSin": "Маршруты · импорт",
+        "nSout": "Маршруты · экспорт",
+        "hRoutes": "Раздельная маршрутизация",
         navCap: "Макет iOS по живому GUI macOS. Туннель — Packet Tunnel.",
         hApp: "Приложение",
         nHome: "Дом · в сети", nOff: "Дом · выкл", nOpen: "Дом · подключить", nSimple: "Дом · упрощенный",
@@ -1251,7 +1410,7 @@ hold  armed</pre>
         diag: "Расширенный журнал", diagD: "Маршруты, DNS, loft-priv. Файл с ротацией.",
         defRoute: "Маршрут по умолчанию", defRouteD: "Весь интернет через лофт. Выкл — только сеть лофта.",
         hold: "Не открывать прямой интернет", holdD: "Последний туннель умер — сеть закрыта.",
-        split: "Раздельная маршрутизация", splitD: "Мимо — через прямой маршрут до лофта.",
+        split: "Раздельная маршрутизация", splitD: "Зона едет через Loft или мимо. Сервис только состоит в зоне.",
         auto: "Подключать автоматически", autoD: "После ключа и живого фронта",
         reconnect: "Автоматический реконнект", reconnectD: "Оборвалось — подключиться снова.",
         extIp: "Показывать внешний IP", extIpD: "После подключения спросить адрес у сервиса через это соединение.",
@@ -1283,6 +1442,78 @@ hold  armed</pre>
         iosNot: "Не подключено"
       },
       en: {
+        "split.add": "Add",
+        "split.add.body": "Address or CIDR. Service name is what you see in the list.",
+        "split.add.body.ignore": "CIDR to keep out of this zone. Survives a repository update.",
+        "split.add.ignore": "Ignore",
+        "split.add.kind": "Entry",
+        "split.add.route": "Route",
+        "split.add.go": "Add",
+        "split.add.name": "Service",
+        "split.add.net": "Network or address",
+        "split.add.title": "Network",
+        "split_add_save": "Save",
+        "split.bypass": "Around Loft",
+        "split.via": "Through Loft",
+        "split.d": "A zone goes through Loft or around Loft. A service only belongs to a zone.",
+        "split.empty": "Nothing in this zone yet.",
+        "split.ignore": "Ignore",
+        "split.export.body": "Keenetic reads both. Loft writes the zone in REM zone: and the service name in the rem.",
+        "split.export.fmt": "Format",
+        "split.export.keen": "Keenetic .bat",
+        "split.export.loft": "Loft",
+        "split.export.save": "Save loft-routes.bat",
+        "split.export.save.keen": "Save YouTube.bat",
+        "split.export.title": "Export routes",
+        "split.import.body": "Keenetic .bat or loft-routes. :: rem is the service name.",
+        "split.import.detect": "Keenetic · 214 lines · pick a zone",
+        "split.import.go": "Add 214 routes",
+        "split.import.title": "Import routes",
+        "split.net": "net",
+        "split.nets": "nets",
+        "split.rdef": "Direction",
+        "split.repo": "Repository",
+        "split.repo.auto": "Update automatically",
+        "split.repo.auto.d": "Once a day. Leaves your own rows alone.",
+        "split.repo.body": "Raw .bat from GitHub or your host. Fills this zone. Your own rows stay.",
+        "split.repo.last": "Today · 214 routes",
+        "split.repo.none": "No list yet",
+        "split.repo.pull": "Update now",
+        "split.repo.url": "List URL",
+        "split.repo.pick": "Lists",
+        "split.lists": "Lists",
+        "split.lists.body": "From the loft repository. You can still paste any URL.",
+        "split.search": "Find a service",
+        "split.src.me": "mine",
+        "split.src.ignore": "ignore",
+        "split.src.repo": "repo",
+        "split.sub.off": "Off — lists stay out of the system table.",
+        "split.zone": "Zone",
+        "split.zone.global": "Global",
+        "split.zone.local": "Local",
+        "split.zones": "Zones",
+        "split.zones.add": "Add zone",
+        "split.zones.add.body": "Name, direction, optional list URL. Services follow the zone.",
+        "split.zones.add.go": "Add",
+        "split.zones.add.title": "New zone",
+        "split.zones.builtin": "Built-in",
+        "split.zones.del": "Delete zone",
+        "split.zones.edit.title": "Zone",
+        "split.zones.move": "Services move to Global.",
+        "split.zones.name": "Name",
+        "split.zones.save": "Save",
+        "split_lists": "Lists",
+        "split.sub": "Through Loft goes into the tunnel. Around Loft goes direct, outside it.",
+        "backGen": "‹ Back",
+        "nSplit": "Routes · lists",
+        "nSvc": "Routes · network",
+        "nZones": "Routes · zones",
+        "nZone": "Routes · zone",
+        "nRepo": "Routes · repository",
+        "nLists": "Routes · catalog",
+        "nSin": "Routes · import",
+        "nSout": "Routes · export",
+        "hRoutes": "Split routing",
         navCap: "iOS mock of the live macOS GUI. Tunnel is Packet Tunnel.",
         hApp: "App",
         nHome: "Home · up", nOff: "Home · down", nOpen: "Home · connecting", nSimple: "Home · simplified",
@@ -1337,7 +1568,7 @@ hold  armed</pre>
         diag: "Extended journal", diagD: "Routes, DNS, loft-priv. Rotating file.",
         defRoute: "Allow default route", defRouteD: "Send all internet through loft. Off — loft net only.",
         hold: "Don’t restore direct internet", holdD: "Last tunnel died — the machine stays dark.",
-        split: "Split routing", splitD: "Around loft uses the direct route from before loft.",
+        split: "Split routing", splitD: "A zone goes through Loft or around Loft. A service only belongs to a zone.",
         auto: "Connect automatically", autoD: "After a key and a live front",
         reconnect: "Automatic reconnect", reconnectD: "If it drops, connect again.",
         extIp: "Show external IP", extIpD: "After connect, ask a service for the address through this session.",
@@ -1369,6 +1600,78 @@ hold  armed</pre>
         iosNot: "Not Connected"
       },
       zh: {
+        "split.add": "添加",
+        "split.add.body": "地址或 CIDR。服务名是列表里看到的名字。",
+        "split.add.body.ignore": "本区域不安装的 CIDR。仓库更新后仍保留。",
+        "split.add.ignore": "忽略",
+        "split.add.kind": "条目",
+        "split.add.route": "路由",
+        "split.add.go": "添加",
+        "split.add.name": "服务",
+        "split.add.net": "网段或地址",
+        "split.add.title": "网段",
+        "split_add_save": "保存",
+        "split.bypass": "绕过 Loft",
+        "split.via": "经 Loft",
+        "split.d": "区域走 Loft 或绕过 Loft。服务只属于一个区域。",
+        "split.empty": "这个区域还没有条目。",
+        "split.ignore": "忽略",
+        "split.export.body": "Keenetic 两种都认。Loft 把区域写进 REM zone:，服务名写进 rem。",
+        "split.export.fmt": "格式",
+        "split.export.keen": "Keenetic .bat",
+        "split.export.loft": "Loft",
+        "split.export.save": "保存 loft-routes.bat",
+        "split.export.save.keen": "保存 YouTube.bat",
+        "split.export.title": "导出路由",
+        "split.import.body": "Keenetic .bat 或 loft-routes。:: rem 是服务名。",
+        "split.import.detect": "Keenetic · 214 行 · 选择区域",
+        "split.import.go": "添加 214 条路由",
+        "split.import.title": "导入路由",
+        "split.net": "网段",
+        "split.nets": "个网段",
+        "split.rdef": "方向",
+        "split.repo": "仓库",
+        "split.repo.auto": "自动更新",
+        "split.repo.auto.d": "每天一次。不覆盖你自己的行。",
+        "split.repo.body": "来自 GitHub 或自己主机的 raw .bat。填入此区域。你自己的行保留。",
+        "split.repo.last": "今天 · 214 条路由",
+        "split.repo.none": "还没有列表",
+        "split.repo.pull": "立即更新",
+        "split.repo.url": "列表地址",
+        "split.repo.pick": "列表",
+        "split.lists": "列表",
+        "split.lists.body": "来自 loft 仓库。自定义地址仍可粘贴。",
+        "split.search": "查找服务",
+        "split.src.me": "自己的",
+        "split.src.ignore": "忽略",
+        "split.src.repo": "仓库",
+        "split.sub.off": "关 — 列表不写入系统表。",
+        "split.zone": "区域",
+        "split.zone.global": "Global",
+        "split.zone.local": "Local",
+        "split.zones": "区域",
+        "split.zones.add": "添加区域",
+        "split.zones.add.body": "名称、方向、可选列表地址。服务跟随此区域。",
+        "split.zones.add.go": "添加",
+        "split.zones.add.title": "新区域",
+        "split.zones.builtin": "内置",
+        "split.zones.del": "删除区域",
+        "split.zones.edit.title": "区域",
+        "split.zones.move": "服务将移到 Global。",
+        "split.zones.name": "名称",
+        "split.zones.save": "保存",
+        "split_lists": "列表",
+        "split.sub": "走 Loft 的进隧道。绕过 Loft 的直连，不进隧道。",
+        "backGen": "‹ 返回",
+        "nSplit": "路由 · 列表",
+        "nSvc": "路由 · 网络",
+        "nZones": "路由 · 区域",
+        "nZone": "路由 · 区域编辑",
+        "nRepo": "路由 · 仓库",
+        "nLists": "路由 · 目录",
+        "nSin": "路由 · 导入",
+        "nSout": "路由 · 导出",
+        "hRoutes": "分流",
         navCap: "按正在出货的 macOS GUI 做的 iOS 模型。隧道是 Packet Tunnel。",
         hApp: "应用",
         nHome: "主页 · 在线", nOff: "主页 · 关闭", nOpen: "主页 · 正在连接", nSimple: "主页 · 简化",
@@ -1423,7 +1726,7 @@ hold  armed</pre>
         diag: "扩展日志", diagD: "路由、DNS、loft-priv。轮转文件。",
         defRoute: "允许默认路由", defRouteD: "全部流量走 loft。关 — 只有 loft 网。",
         hold: "不要恢复直连", holdD: "最后一条隧道没了 — 保持断网。",
-        split: "分流", splitD: "绕过 loft 的走连上之前的直连路由。",
+        split: "分流", splitD: "区域走 Loft 或绕过 Loft。服务只属于一个区域。",
         auto: "自动连接", autoD: "有密钥且前置可用之后",
         reconnect: "自动重连", reconnectD: "断了就再连接。",
         extIp: "显示外部 IP", extIpD: "连上后通过本会话向服务询问地址。",
@@ -1482,6 +1785,7 @@ hold  armed</pre>
       });
       paintHome();
       paintOnboard();
+      if (typeof paintSplitScreen === "function" && SPLIT_SCREENS.includes(cur)) paintSplitScreen(cur);
       document.querySelectorAll(".eye").forEach((b) => {
         const inp = b.parentElement.querySelector("input");
         b.textContent = inp && inp.type === "text" ? I[l].hideSecret : I[l].showSecret;
@@ -1595,8 +1899,11 @@ hold  armed</pre>
     }
     // Tabs are the three rooms; Journal and About are pushed from Settings.
     // Edit, Scanner and QR are modal: Cancel / Close returns where they came from.
+    const SPLIT_SCREENS = ["split", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
     const TAB_OF = { home: "home", list: "list", settings: "settings", journal: "settings", about: "settings" };
-    const PARENT = { edit: "list", scan: "list", share: "list", journal: "settings", about: "settings" };
+    SPLIT_SCREENS.forEach((id) => { TAB_OF[id] = "settings"; });
+    const PARENT = { edit: "list", scan: "list", share: "list", journal: "settings", about: "settings",
+      split: "settings", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
     let cur = "home";
     const from = {};
     function show(id, extra) {
@@ -1639,6 +1946,7 @@ hold  armed</pre>
         entry = extra.entry || "link";
         paintEdit();
       }
+      if (SPLIT_SCREENS.includes(id)) paintSplitScreen(id);
       if (id === "settings") {
         if (extra.settab != null && extra.settab !== "") setTab = Number(extra.settab);
         paintSettings();
@@ -1680,13 +1988,13 @@ hold  armed</pre>
     document.querySelectorAll("#tabbar button").forEach((b) => {
       b.addEventListener("click", () => show(b.getAttribute("data-tab"), { mode: b.getAttribute("data-tab") === "home" ? homeMode : "" }));
     });
+    function goBack() {
+      let to = from[cur] || PARENT[cur] || "home";
+      if (to === cur || to === "iosvpn") to = PARENT[cur] || "home";
+      show(to, { back: true, mode: to === "home" ? homeMode : "" });
+    }
     document.querySelectorAll("[data-back]").forEach((b) => {
-      b.addEventListener("click", (e) => {
-        e.stopPropagation();
-        let to = from[cur] || PARENT[cur] || "home";
-        if (to === cur || to === "iosvpn") to = PARENT[cur] || "home";
-        show(to, { back: true, mode: to === "home" ? homeMode : "" });
-      });
+      b.addEventListener("click", (e) => { e.stopPropagation(); goBack(); });
     });
     document.querySelectorAll("[data-sheet]").forEach((b) => {
       b.addEventListener("click", (e) => {
@@ -1829,6 +2137,193 @@ hold  armed</pre>
       row.addEventListener("pointerup", finish);
       row.addEventListener("pointercancel", finish);
       row.addEventListener("pointerleave", () => { if (armed) finish(); });
+    });
+
+    /* Split routing, as on macOS: a zone goes through Loft or around it; a
+       service (name + CIDRs) only belongs to a zone; an ignore CIDR is never
+       routed and survives list pulls. On iOS "through" is the Packet Tunnel's
+       included routes and "around" its excluded routes. */
+    const LIST_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
+    const LIST_CATALOG = [
+      { id: "global", file: "global.bat", en: "World", ru: "Мир", zh: "全球" },
+      { id: "ru", file: "ru.bat", en: "Russia", ru: "Россия", zh: "俄罗斯" },
+      { id: "cn", file: "cn.bat", en: "China", ru: "Китай", zh: "中国" },
+      { id: "ir", file: "ir.bat", en: "Iran", ru: "Иран", zh: "伊朗" },
+      { id: "kz", file: "kz.bat", en: "Kazakhstan", ru: "Казахстан", zh: "哈萨克斯坦" },
+      { id: "by", file: "by.bat", en: "Belarus", ru: "Беларусь", zh: "白俄罗斯" },
+    ];
+    const ZONES = [
+      { id: "local", builtin: true, def: false, repo: "", auto: true },
+      { id: "global", builtin: true, def: true, repo: LIST_BASE + "global.bat", auto: true },
+    ];
+    const ROUTES = [
+      { id: "yt", en: "YouTube", zone: "global", cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
+      { id: "cf", en: "Cloudflare", zone: "global", cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
+      { id: "gpt", en: "ChatGPT", zone: "global", cidrs: ["104.18.32.0/24"], src: "me" },
+      { id: "nf", en: "Netflix", zone: "global", cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
+      { id: "yandex", en: "Yandex", ru: "Яндекс", zone: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "me" },
+      { id: "lan", en: "LAN", ru: "Локальная сеть", zh: "局域网", zone: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
+      { id: "ign", en: "Ignore", ru: "Игнор", zh: "忽略", zone: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
+    ];
+    let splitOn = true, zoneTab = "global", splitQ = "", svcId = null, svcKind = "route";
+    let zoneId = "local", zoneAddVia = true, zoneAddRepo = "", splitFmt = "loft";
+    const T = (k) => (I[lang][k] != null ? I[lang][k] : I.en[k] != null ? I.en[k] : k);
+    const loc = (o) => o[lang] || o.en;
+    const esc = (v) => String(v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    const zoneById = (id) => ZONES.find((z) => z.id === id);
+    const zoneName = (id) => { const z = zoneById(id); return (z && (z[lang] || z.en)) || T("split.zone." + id); };
+    const routesIn = (id) => ROUTES.filter((r) => r.zone === id);
+    const nets = (n) => {
+      if (lang === "ru") { const d = n % 10, h = n % 100; return n + " " + (d === 1 && h !== 11 ? T("split.net") : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "сети" : T("split.nets")); }
+      return n + " " + (n === 1 ? T("split.net") : T("split.nets"));
+    };
+    const dirOf = (def) => (def ? T("split.via") : T("split.bypass"));
+    const repoFile = (u) => String(u || "").split("?")[0].split("/").filter(Boolean).pop() || "";
+    const zoneOpts = (sel) => ZONES.map((z) => `<option value="${z.id}" ${z.id === sel ? "selected" : ""}>${esc(zoneName(z.id))}</option>`).join("");
+    const head = (title, sub) => `<div class="head"><div class="title">${title}</div></div>${sub ? `<p class="subline">${sub}</p>` : ""}`;
+    const dirSeg = (def, attr) => `<label class="field"><span>${T("split.rdef")}</span></label>
+      <div class="seg"><button type="button" class="${def ? "on" : ""}" ${attr}="via">${T("split.via")}</button><button type="button" class="${def ? "" : "on"}" ${attr}="bypass">${T("split.bypass")}</button></div>`;
+    function repoFields(url, auto, pull) {
+      return `<label class="field"><span>${T("split.repo.url")}</span>
+          <div class="repo-row"><input class="mono" data-zrepo value="${esc(url)}" placeholder="https://" /><button type="button" class="ghost" data-lists>${T("split.repo.pick")}</button></div>
+        </label>
+        <div class="set-row"><div><div class="k">${T("split.repo.auto")}</div><div class="s">${T("split.repo.auto.d")}</div></div><div class="toggle ${auto ? "on" : ""}"><i></i></div></div>
+        <p class="hint">${repoFile(url) ? T("split.repo.last") : T("split.repo.none")}</p>
+        ${pull ? `<div class="btns"><button type="button" class="go" data-back>${T("split.repo.pull")}</button></div>` : ""}`;
+    }
+    function splitRows() {
+      const q = splitQ.trim().toLowerCase();
+      const rows = routesIn(zoneTab).filter((r) => !q || loc(r).toLowerCase().includes(q)).map((r) => `
+        <div class="rrow" data-svc="${r.id}">
+          <div class="grow"><div class="n">${esc(loc(r))}</div><div class="m">${r.cidrs.slice(0, 2).join(" ")}${r.cidrs.length > 2 ? " …" : ""}</div></div>
+          <div class="meta">${nets(r.cidrs.length)}<div class="src">${T("split.src." + r.src)}</div></div>
+        </div>`).join("");
+      return rows || `<p class="hint">${T("split.empty")}</p>`;
+    }
+    const SPLIT_PAINT = {
+      split: () => {
+        const z = zoneById(zoneTab);
+        return `<div class="head"><div class="title">${T("split")}</div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>
+          <p class="subline">${splitOn ? T("split.sub") : T("split.sub.off")}</p>
+          <div class="zhead"><span class="lbl">${T("split.zone")}</span><button type="button" class="ghost-sm" data-go="zones">${T("split.zones")}</button></div>
+          <div class="ztabs">${ZONES.map((x) => `<button type="button" class="${x.id === zoneTab ? "on" : ""}" data-ztab="${x.id}">${esc(zoneName(x.id))} <span>${routesIn(x.id).length}</span></button>`).join("")}</div>
+          <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}</div>
+          <label class="field"><input type="search" data-sq value="${esc(splitQ)}" placeholder="${esc(T("split.search"))}" /></label>
+          <div class="rlist ${splitOn ? "" : "dim"}" id="splitRows">${splitRows()}</div>
+          <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>
+          <div class="row-3"><button type="button" class="ghost" data-go="splitin">${T("import")}</button><button type="button" class="ghost" data-go="splitout">${T("export")}</button><button type="button" class="ghost" data-go="splitrepo">${T("split.repo")}</button></div>`;
+      },
+      splitsvc: () => {
+        const r = svcId && ROUTES.find((x) => x.id === svcId);
+        const ign = svcKind === "ignore";
+        return head(T("split.add.title"), ign ? T("split.add.body.ignore") : T("split.add.body")) + `
+          <label class="field"><span>${T("split.add.kind")}</span></label>
+          <div class="seg"><button type="button" class="${ign ? "" : "on"}" data-kind="route">${T("split.add.route")}</button><button type="button" class="${ign ? "on" : ""}" data-kind="ignore">${T("split.add.ignore")}</button></div>
+          <label class="field"><span>${T("split.add.net")}</span>${r
+            ? `<textarea class="paste">${r.cidrs.join("\n")}</textarea>`
+            : `<input class="mono" placeholder="142.250.0.0/16" />`}</label>
+          <label class="field"><span>${T("split.add.name")}</span><input value="${esc(r ? loc(r) : "")}" placeholder="${esc(ign ? T("split.ignore") : "YouTube")}" /></label>
+          <label class="field"><span>${T("split.zone")}</span><select>${zoneOpts(r ? r.zone : zoneTab)}</select></label>
+          <div class="btns"><button type="button" class="go" data-back>${r ? T("split_add_save") : T("split.add.go")}</button></div>`;
+      },
+      zones: () => head(T("split.zones"), T("split.zones.add.body")) + ZONES.map((z) => {
+        const f = repoFile(z.repo);
+        return `<div class="rrow" data-zone="${z.id}">
+          <div class="grow"><div class="n">${esc(zoneName(z.id))}</div><div class="m">${nets(routesIn(z.id).length)}${f ? " · " + f : ""}</div></div>
+          <div class="meta">${dirOf(z.def)}${z.builtin ? `<div class="src">${T("split.zones.builtin")}</div>` : ""}</div>
+        </div>`;
+      }).join("") + `<button type="button" class="ghost-sm" data-zone="new">+ ${T("split.zones.add")}</button>`,
+      zone: () => {
+        const z = zoneId && zoneById(zoneId);
+        if (!z) {
+          return head(T("split.zones.add.title"), T("split.zones.add.body")) + `
+            <label class="field"><span>${T("split.zones.name")}</span><input placeholder="EU" /></label>
+            ${dirSeg(zoneAddVia, "data-zdef")}
+            ${repoFields(zoneAddRepo, true, false)}
+            <div class="btns"><button type="button" class="go" data-back>${T("split.zones.add.go")}</button></div>`;
+        }
+        const n = routesIn(z.id).length;
+        return head(T("split.zones.edit.title"), (z.builtin ? T("split.zones.builtin") + " · " : "") + nets(n)) + `
+          <label class="field"><span>${T("split.zones.name")}</span><input value="${esc(zoneName(z.id))}" ${z.builtin ? "disabled" : ""} /></label>
+          ${dirSeg(z.def, "data-zdef")}
+          ${repoFields(z.repo, z.auto, false)}
+          <div class="btns"><button type="button" class="go" data-back>${T("split.zones.save")}</button></div>
+          ${z.builtin ? "" : `<div class="end-row"><button type="button" class="danger" data-back>${T("split.zones.del")}</button></div><p class="hint">${T("split.zones.move")}</p>`}`;
+      },
+      splitrepo: () => {
+        const z = zoneById(zoneTab);
+        return head(T("split.repo"), esc(zoneName(z.id)) + " · " + T("split.repo.body")) + repoFields(z.repo, z.auto, true);
+      },
+      splitlists: () => {
+        const target = from.splitlists === "zone" ? (zoneId ? (zoneById(zoneId) || {}).repo : zoneAddRepo) : (zoneById(zoneTab) || {}).repo;
+        return head(T("split.lists"), T("split.lists.body")) + LIST_CATALOG.map((e) => `
+          <div class="rrow ${target === LIST_BASE + e.file ? "live" : ""}" data-listpick="${e.file}">
+            <div class="grow"><div class="n">${esc(loc(e))}</div><div class="m">${e.file}</div></div>
+            <div class="meta">${T("split.src.repo")}</div>
+          </div>`).join("");
+      },
+      splitin: () => head(T("split.import.title"), T("split.import.body")) + `
+        <div class="btns"><button type="button" class="ghost">${T("fromFile")}</button></div>
+        <p class="hint">${T("split.import.detect")}</p>
+        <label class="field" style="margin-top:10px"><span>${T("split.zone")}</span><select>${zoneOpts(zoneTab)}</select></label>
+        <div class="btns"><button type="button" class="go" data-back>${T("split.import.go")}</button></div>`,
+      splitout: () => {
+        const keen = splitFmt === "keen";
+        return head(T("split.export.title"), T("split.export.body")) + `
+          <label class="field"><span>${T("split.export.fmt")}</span></label>
+          <div class="seg"><button type="button" class="${keen ? "" : "on"}" data-sfmt="loft">${T("split.export.loft")}</button><button type="button" class="${keen ? "on" : ""}" data-sfmt="keen">${T("split.export.keen")}</button></div>
+          ${keen ? `<label class="field"><span>${T("split.zone")}</span><select>${zoneOpts(zoneTab)}</select></label>` : ""}
+          <div class="fmt">${keen
+            ? "route ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"
+            : "REM loft-routes 1.0\nREM zone: global\nroute ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube\nREM zone: local\nroute ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"}</div>
+          <div class="btns"><button type="button" class="go" data-back>${keen ? T("split.export.save.keen") : T("split.export.save")}</button></div>`;
+      },
+    };
+    function paintSplitScreen(id) {
+      const el = document.getElementById(id + "-body");
+      if (el && SPLIT_PAINT[id]) el.innerHTML = SPLIT_PAINT[id]();
+    }
+    const phoneEl = document.getElementById("phone");
+    phoneEl.addEventListener("click", (e) => {
+      const at = (sel) => e.target.closest(sel);
+      let el;
+      if (at("#setSplit")) { splitOn = at("#setSplit").classList.contains("on"); return; }
+      if (!at(".dyn")) return;
+      if ((el = at("[data-split]"))) {
+        splitOn = !splitOn;
+        document.getElementById("setSplit").classList.toggle("on", splitOn);
+        paintSplitScreen("split");
+      } else if ((el = at("[data-ztab]"))) { zoneTab = el.getAttribute("data-ztab"); paintSplitScreen("split"); }
+      else if ((el = at("[data-svc]"))) {
+        const id = el.getAttribute("data-svc");
+        svcId = id === "new" ? null : id;
+        const r = svcId && ROUTES.find((x) => x.id === svcId);
+        svcKind = r && r.src === "ignore" ? "ignore" : "route";
+        show("splitsvc");
+      } else if ((el = at("[data-kind]"))) { svcKind = el.getAttribute("data-kind"); paintSplitScreen("splitsvc"); }
+      else if ((el = at("[data-zone]"))) {
+        const id = el.getAttribute("data-zone");
+        zoneId = id === "new" ? null : id;
+        zoneAddVia = true; zoneAddRepo = "";
+        show("zone");
+      } else if ((el = at("[data-zdef]"))) {
+        const via = el.getAttribute("data-zdef") === "via";
+        const z = zoneId && zoneById(zoneId);
+        if (z) z.def = via; else zoneAddVia = via;
+        paintSplitScreen("zone");
+      } else if (at("[data-lists]")) { show("splitlists"); }
+      else if ((el = at("[data-listpick]"))) {
+        const url = LIST_BASE + el.getAttribute("data-listpick");
+        if (from.splitlists === "zone") { const z = zoneId && zoneById(zoneId); if (z) z.repo = url; else zoneAddRepo = url; }
+        else zoneById(zoneTab).repo = url;
+        goBack();
+      } else if ((el = at("[data-sfmt]"))) { splitFmt = el.getAttribute("data-sfmt"); paintSplitScreen("splitout"); }
+      else if ((el = at(".toggle"))) { el.classList.toggle("on"); }
+      else if ((el = at("[data-go]"))) { show(el.getAttribute("data-go"), attrsOf(el)); }
+      else if (at("[data-back]")) { goBack(); }
+    });
+    phoneEl.addEventListener("input", (e) => {
+      if (e.target.matches("[data-sq]")) { splitQ = e.target.value; document.getElementById("splitRows").innerHTML = splitRows(); }
     });
     const boot = new URLSearchParams(location.search);
     setLang(I[boot.get("lang")] ? boot.get("lang") : "ru");

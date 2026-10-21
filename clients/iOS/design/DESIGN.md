@@ -36,7 +36,7 @@ Same rooms as the macOS windows, laid out for one column and a thumb.
 | Connections | Title, `+`, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, **host** subtitle, side **active** or kind (`get` / `sstp` / `vless`), ghost Edit. **Leading swipe** Edit, **trailing swipe** Delete. **Long-press** context: Edit / Export `.loft` (selected only) / Delete. **Import** in the header next to `+`; export is on the selected row and in its long-press menu. Tab bar below. No “Several” toggle. |
 | Edit | Modal: **Cancel** on top returns to where it was opened. Title Connection, **QR** in the header. Name. Capsule **VPN type** loft / SSTP / VLESS / Trojan. Tabs **Main / Advanced**. loft and VLESS: capsule **Link / Manual**. loft Link is a secret `loft://` with Show/Hide; Manual is access key, host, port, GET·WS·H2·QUIC·H3, path. Both write the same profile. VLESS Link is a `vless://` string; Manual is UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint, and the fields that mode needs. Certificate check. Both write `vless://`. No SOCKS field. Tunnel interface = Packet Tunnel (forced on: there is no other inbound). SSTP: user, password, server, TLS hostname, cert check, PAP/CHAP. Trojan: password, `trojan://` server, TLS hostname, cert check. Advanced: mux (loft), DNS, DNS into the system; SSTP also “these addresses only”. Save, then Delete at the end. |
 | Onboard | Two steps, same as macOS. **1 Access key** (`lt_…`) → Continue, or import a file/QR. **2 Address**: URL, how to connect GET/WS/H2/QUIC/H3, path → Connect. Then the stock iOS VPN permission sheet, once. |
-| Settings | Three tabs **General / Route / Client**. Header Reset routes. Links **Defaults \| Journal \| About**. iOS subset: language, simplified interface, speed units, extended journal; default route, hold, split (no failover); auto-connect, reconnect, external IP. Skip Dock, login item, several outbounds, SOCKS. |
+| Settings | Three tabs **General / Route / Client**. Header Reset routes. Links **Defaults \| Journal \| About**. iOS subset: language, simplified interface, speed units, extended journal; default route, hold, split with a **Lists** button (no failover); auto-connect, reconnect, external IP. Skip Dock, login item, several outbounds, SOCKS. |
 | Journal | Pushed from Settings: **‹ Settings** on top, tab bar stays. Front and session lines. The key is shortened. Copy / Clear. |
 | About | Pushed from Settings: **‹ Settings** on top. Mark, loft, `1.0.22`, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
 | Scan | Modal: **Cancel** on top. Camera QR. From file / From Photos. Paste `loft://` / `sstp://` / `vless://`. |
@@ -46,6 +46,23 @@ Same rooms as the macOS windows, laid out for one column and a thumb.
 **Simplified interface** (Settings → General): Home is mark, pill, Connect / Disconnect, tab bar. Cards and spark hide. List still has Connect/Disconnect and name. Settings stay complete.
 
 macOS-only chrome that this mock does not draw: menu-bar popover, SOCKS5 card and port, Dock icon, login item, several simultaneous outbounds, drag-and-drop plate.
+
+### Split routing
+
+The macOS model (macOS DESIGN §5): a **zone** goes through Loft or around it, a **service** (name + CIDRs) only belongs to a zone, an **ignore** CIDR is never routed and survives list pulls. Built-in zones Local (around, LAN) and Global (through, `global.bat`); own zones come from the editor. On iOS “through Loft” is the Packet Tunnel’s `includedRoutes` and “around” its `excludedRoutes`; with the tunnel off everything is direct anyway. There is no remembered direct hop as on macOS.
+
+Entry: Settings → Route → the toggle and the gold **Lists**. The screens open inside the Settings tab, with **‹ Settings** / **‹ Back** on top.
+
+| Screen | What |
+|--------|------|
+| Lists | Title and the same toggle, a line (through goes into the tunnel, around goes direct). **Zone** + **Zones** → editor. Zone capsules with the service count. Quiet line `Global · Through Loft`. Search. Rows: name, first CIDRs, network count, source (repo / own / ignore); tap edits. **+ Add**. Bottom **Import · Export · Repository**. |
+| Network | Entry Route / Ignore, network or address (one CIDR per line when editing), service, zone. Add / Save. |
+| Zones | Rows: name, network count · list file, direction, “Built-in”. **+ Add zone**. |
+| Zone | Name (locked on a built-in), direction Through / Around Loft, list address + **Lists**, auto-update, Save; an own zone has Delete zone (services → Global). A new zone has the same fields. |
+| Repository | List address of the open zone + **Lists**, auto-update, last pull, Update now. |
+| Catalog | loft-routes lists: World, Russia, China, Iran, Kazakhstan, Belarus; the current one is lit. A tap sets the address and goes back. |
+| Import | From file (iOS Files), detected format and line count, zone, Add. |
+| Export | Format Loft / Keenetic .bat, a zone for .bat, a sample, Save (share sheet). |
 
 ---
 
