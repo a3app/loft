@@ -43,6 +43,33 @@ func TestOutboundForH2MaxAge(t *testing.T) {
 	}
 }
 
+func TestOutboundForH2IgnoresGETCoverPath(t *testing.T) {
+	for _, kind := range []string{"h2", "h3"} {
+		for _, path := range []string{"", "/static/js", "/static/v3/build", "app.js"} {
+			o := outboundFor("https://loft.example:444", kind, path, "")
+			if o.Path != "/api/v1/tunnel" {
+				t.Fatalf("%s path %q → %q", kind, path, o.Path)
+			}
+		}
+		o := outboundFor("https://loft.example:444", kind, "/custom/connect", "")
+		if o.Path != "/custom/connect" {
+			t.Fatalf("%s custom %q", kind, o.Path)
+		}
+	}
+	get := outboundFor("https://loft.example:444", "get", "/static/v3/build", "")
+	if get.Path != "/static/v3/build" {
+		t.Fatalf("get kept %q", get.Path)
+	}
+	empty := outboundFor("https://loft.example:444", "get", "", "")
+	if empty.Path != "/static/v3/build" {
+		t.Fatalf("empty get %q", empty.Path)
+	}
+	legacy := outboundFor("https://loft.example:444", "get", "/static/js", "")
+	if legacy.Path != "/static/js" {
+		t.Fatalf("explicit legacy get %q", legacy.Path)
+	}
+}
+
 func TestDebugFrontGETProbeAndEcho(t *testing.T) {
 	const token = "test-token-please-change"
 	echo, err := net.Listen("tcp", "127.0.0.1:0")

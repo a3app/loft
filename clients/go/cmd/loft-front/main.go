@@ -36,7 +36,7 @@ func main() {
 	token := flag.String("token", "", "member key")
 	rawURL := flag.String("url", "", "front URL")
 	kind := flag.String("type", "auto", "get | ws | h2 | quic | h3 | sstp | vless | trojan | auto")
-	path := flag.String("path", "", "GET path; default /static/js for get")
+	path := flag.String("path", "", "GET path; empty get is "+config.DefaultGETPath)
 	user := flag.String("user", "", "SSTP username")
 	insecure := flag.Bool("insecure", false, "SSTP: skip TLS verify")
 	pap := flag.Bool("pap", false, "SSTP: allow PAP and CHAP-MD5")
@@ -358,19 +358,27 @@ func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 	case "get":
 		o.URL = httpOrigin(raw)
 		if o.Path == "" {
-			o.Path = "/static/js"
+			o.Path = config.DefaultGETPath
 		}
 	case "ws":
 		o.URL = withWSPath(wsURL(raw), "/api/v1/sync")
 	case "h2", "h3":
 		o.URL = httpOrigin(raw)
-		if o.Path == "" {
+		// GUI used to pass the GET cover (/static/js) for every loft kind.
+		// CONNECT Match is /api/v1/tunnel; a leftover GET path is 404.
+		if o.Path == "" || getCoverPath(o.Path) {
 			o.Path = "/api/v1/tunnel"
 		}
 	case "quic":
 		o.URL = httpOrigin(raw)
 	}
 	return o
+}
+
+// getCoverPath is a GET static cover. It is not an h2/h3 CONNECT resource.
+func getCoverPath(p string) bool {
+	p = strings.TrimSpace(p)
+	return strings.HasPrefix(p, "/static/") || strings.HasSuffix(p, ".js")
 }
 
 // httpOrigin maps a ws(s) URL to the matching http(s) origin.
