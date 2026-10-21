@@ -220,7 +220,7 @@ func (s *H2Server) Match(r *http.Request) bool {
 
 // ServeHTTP answers CONNECT 200 and runs raw mux on the hijacked body.
 func (s *H2Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodConnect {
+	if !s.Match(r) {
 		http.NotFound(w, r)
 		return
 	}
