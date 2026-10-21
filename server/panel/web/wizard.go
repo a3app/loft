@@ -300,6 +300,7 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 		if err := a.Call(ctx, admproto.OpMemberKey, admproto.MemberKey{ID: in.ID}, &k); err != nil {
 			return nil, admErr(err)
 		}
+		s.persistIssued(k)
 		nw.Members = append(nw.Members, netconf.Member{ID: in.ID, Name: firstNonEmpty(in.Name, in.ID), KeySHA256: k.KeySHA256, Authorized: true})
 		if err := a.Call(ctx, admproto.OpNetworkApply, admproto.NetworkApply{Text: netconf.RenderCommands(*nw), Expect: n.SHA256}, nil); err != nil {
 			return nil, admErr(err)

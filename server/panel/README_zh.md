@@ -12,7 +12,7 @@
 
 - 登录、会话、凭安装码创建首个所有者、`loft-panel passwd` / `users`；
 - **网段**：以交换机视图和配置编辑器编辑节点的 `network.conf`，应用时节点即时重读（仅受影响的成员重连）并自动回滚；
-- 新成员在 `members.keys` 中获得真实的 `lt_` 密钥；应用后已删除成员的密钥随之移除；
+- 新成员在 `members.keys` 中获得真实的 `lt_` 密钥；应用后已删除成员的密钥随之移除；面板可保存密钥副本，以便再次显示链接、二维码和 `.loft`（设置，默认关闭）；
 - 概览中的节点状态；
 - 安装向导：所有者、节点与面板名称、Let’s Encrypt 证书、第一个成员、首批软件包；
 - **软件包**：从封闭目录安装、升级、停用、删除软件包（Telegram MTProto 代理、WireGuard、OpenVPN、ZeroTier、fail2ban；节点、nginx、SSTP 为基础），任务日志直接显示在页面上；
@@ -33,7 +33,7 @@ server/panel/adm            助手的工作：network.conf、members.keys、syst
 server/panel/admproto       面板 ↔ 助手协议
 server/panel/catalog        面板可安装的软件包（键、apt 包名、GitHub 二进制、软件源、单元）
 server/panel/auth           argon2id、会话、登录限制
-server/panel/store          users.json
+server/panel/store          users.json, settings.json, member-keys.json
 server/panel/debian         install.sh、.deb、systemd 单元、nginx 站点
 server/panel/devstand       在笔记本上运行真实面板与助手（systemctl 为模拟）
 server/panel/design         交互规范与原型

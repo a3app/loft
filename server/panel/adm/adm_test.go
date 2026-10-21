@@ -184,6 +184,28 @@ func TestMemberKey(t *testing.T) {
 	}
 }
 
+func TestMemberGet(t *testing.T) {
+	o, _, _, _ := setup(t)
+	got, err := o.MemberGet(admproto.MemberKey{ID: "alice-phone"})
+	if err != nil || !strings.HasPrefix(got.Key, "lt_") || identity.Sum(got.Key) != got.KeySHA256 {
+		t.Fatalf("get %+v %v", got, err)
+	}
+	if _, err := o.MemberGet(admproto.MemberKey{ID: "nobody"}); err == nil || !strings.Contains(err.Error(), "no stored key") {
+		t.Fatalf("missing: %v", err)
+	}
+	k, err := o.MemberKey(admproto.MemberKey{ID: "carol"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = o.MemberGet(admproto.MemberKey{ID: "carol"})
+	if err != nil || got.Key != k.Key || got.KeySHA256 != k.KeySHA256 {
+		t.Fatalf("after issue %+v %v want %s", got, err, k.Key)
+	}
+	if _, err := o.MemberGet(admproto.MemberKey{ID: "../etc"}); err == nil {
+		t.Fatal("bad id accepted")
+	}
+}
+
 func TestNetworkFirstAndLegacy(t *testing.T) {
 	dir := t.TempDir()
 	fn := &fakeNode{active: func() string { return "active" }}

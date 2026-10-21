@@ -131,6 +131,12 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.MemberKey(b)
+	case admproto.OpMemberGet:
+		var b admproto.MemberKey
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.MemberGet(b)
 	case admproto.OpNodeStatus:
 		return s.Ops.NodeStatus(ctx), nil
 	case admproto.OpNodeRestart:

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,7 @@ type fakeAdm struct {
 	ops  *[]string
 	text *string
 	host *string
+	keys *map[string]admproto.IssuedKey
 }
 
 func (f fakeAdm) Call(_ context.Context, op string, body, out any) error {
@@ -60,7 +62,21 @@ func (f fakeAdm) Call(_ context.Context, op string, body, out any) error {
 	case admproto.OpJobGet:
 		set(admproto.Job{ID: "j1", State: "running", Log: "▸ install wireguard\n"})
 	case admproto.OpMemberKey:
-		set(admproto.IssuedKey{ID: body.(admproto.MemberKey).ID, Key: "lt_" + strings.Repeat("a", 48), KeySHA256: strings.Repeat("b", 64)})
+		in := body.(admproto.MemberKey)
+		k := admproto.IssuedKey{ID: in.ID, Key: "lt_" + strings.Repeat("a", 48), KeySHA256: strings.Repeat("b", 64)}
+		if f.keys != nil {
+			(*f.keys)[in.ID] = k
+		}
+		set(k)
+	case admproto.OpMemberGet:
+		in := body.(admproto.MemberKey)
+		if f.keys != nil {
+			if k, ok := (*f.keys)[in.ID]; ok {
+				set(k)
+				return nil
+			}
+		}
+		return errors.New("no stored key for this member")
 	}
 	return nil
 }
@@ -79,11 +95,12 @@ func newEnv(t *testing.T) *env {
 	text := "network main\nipif overlay 10.77.0.0/16\n"
 	host := "panel.example.net"
 	dir := t.TempDir()
+	keys := map[string]admproto.IssuedKey{}
 	e.srv = &Server{Store: st, Sessions: auth.NewSessions(), Limit: auth.NewLimiter(), SetupCode: "123456-abcdef",
-		Hosts: []string{"panel.example.net"}, Settings: store.OpenSettings(dir), ACME: &ACME{Dir: dir}, sleep: func(time.Duration) {}}
+		Hosts: []string{"panel.example.net"}, Settings: store.OpenSettings(dir), Keys: store.OpenMemberKeys(dir), ACME: &ACME{Dir: dir}, sleep: func(time.Duration) {}}
 	e.srv.Adm = func(by string) Adm {
 		e.by = append(e.by, by)
-		return fakeAdm{by: &e.by, ops: &e.ops, text: &text, host: &host}
+		return fakeAdm{by: &e.by, ops: &e.ops, text: &text, host: &host, keys: &keys}
 	}
 	h, err := e.srv.Handler()
 	if err != nil {

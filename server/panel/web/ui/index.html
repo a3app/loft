@@ -446,7 +446,7 @@ const MENU=[
   {id:'dom',ic:'i-dom',t:'Домены и почта',items:[['domains','Домены'],['mail','Почта','Почтовый сервер']]},
   {id:'adm',ic:'i-gear',t:'Управление',items:[['packages','Пакеты'],['users','Пользователи'],['system','Система'],['settings','Настройки']]}
 ];
-const S={route:'main',tab:{network:'addr',users:'list',node:'main'},rail:false,open:false};
+const S={route:'main',tab:{network:'addr',users:'list',node:'main'},rail:false,open:false,keepKeys:false};
 try{S.rail=localStorage.getItem('lp-rail')==='1'}catch(e){}
 const $=s=>document.querySelector(s);
 const ic=(id,s=20)=>`<svg width="${s}" height="${s}" aria-hidden="true"><use href="#${id}"/></svg>`;
@@ -1463,13 +1463,15 @@ function saveRule(i){const x=readRule();if(x.err){toast(x.err);return}const n=cu
 
 /* член сети = порт: одно окно из «Членов сети» и со свитча */
 function findMember(id){for(const n of NETS){const m=n.members.find(x=>x.id===id);if(m)return[n,m]}return[curNet(),null]}
+function keepKeys(){return !!(window.LIVE&&LIVE.keepKeys)||!!S.keepKeys}
 function openMember(id){
  const nw=id==='new';let [n,m]=nw?[curNet(),null]:findMember(id);
  const x=EXTRA[id]||['loft','0 / 1','',0];
  const opts=NETS.flatMap(N=>[[N.id,0,`${N.id} · без VLAN`]].concat(N.vlans.map(v=>[N.id,v.id,`${N.id} · ${v.id} ${v.name}`])));
  const curv=nw?(n.vlans[0]||{id:0}).id:m.vlan;
  const idx=m?n.members.indexOf(m)+1:n.members.length+1;
- dialog(nw?'Новый порт · член сети':`Порт ${idx} · ${esc(m.id)}`,nw?'Ключ покажется один раз — потом его можно только перевыпустить.':'',`
+ const keep=keepKeys();
+ dialog(nw?'Новый порт · член сети':`Порт ${idx} · ${esc(m.id)}`,nw?(keep?'Ключ сохранится в панели — его можно будет показать снова.':'Ключ покажется один раз — потом его можно только перевыпустить.'):'',`
   <div class="fld"><label for="m1">Имя</label><input id="m1" value="${m?esc(m.name):''}"></div>
   <div class="fld"><label for="m2">Идентификатор</label><input id="m2" class="mono" value="${m?esc(m.id):''}" ${nw?'':'readonly'}></div>
   <label class="chk"><input id="m0" type="checkbox" ${!m||m.authorized?'checked':''}>Порт включён — член может подключаться</label>
@@ -1482,10 +1484,15 @@ function openMember(id){
    <label class="chk"><input type="checkbox" ${x[0].includes('loft')?'checked':''}>loft</label>
    <label class="chk"><input type="checkbox" ${x[0].includes('VLESS')?'checked':''}>VLESS</label></div></div>
   ${nw?'':`<div class="dlg-sec">Профиль</div>
-  <p class="hint" style="margin:0">Ключ хранится на сервере только как отпечаток, поэтому показать профиль ещё раз нельзя. Новый ключ — новая ссылка, QR-код и файл .loft; старый перестанет действовать после «Применить».</p>
-  <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="reissueKey('${esc(m.id)}')">Перевыпустить ключ</button></div>`}`,
+  ${keep?`<p class="hint" style="margin:0">Ключ хранится в панели — его можно показать снова.</p>
+  <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="showStoredKey('${esc(m.id)}')">Показать ключ</button><button class="btn sm" type="button" onclick="reissueKey('${esc(m.id)}')">Перевыпустить ключ</button></div>`
+  :`<p class="hint" style="margin:0">Ключ хранится на сервере только как отпечаток, поэтому показать профиль ещё раз нельзя. Новый ключ — новая ссылка, QR-код и файл .loft; старый перестанет действовать после «Применить».</p>
+  <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="reissueKey('${esc(m.id)}')">Перевыпустить ключ</button></div>`}`}`,
   `<button class="btn pri" type="button" onclick="saveMember(${nw?"null":`'${m.id}'`})">${nw?'Создать и выдать профиль':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить порт" style="margin-left:auto" onclick="delMember('${m.id}')">${ic('i-trash')}</button>`}`);
 }
+function showStoredKey(id){dialog('Ключ члена '+id,'Ключ хранится в панели — его можно показать снова.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
+ <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri">loft://lt_8f3a…c21e@vpn.example.net/static/js?type=get&amp;fp=chrome#${id}</div><p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
+ <div class="acts" style="margin:0"><button class="btn sm pri" type="button">Копировать ссылку</button><button class="btn sm" type="button">${ic('i-down',16)}Скачать .loft</button><button class="btn sm" type="button">Копировать ключ</button></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`)}
 function reissueKey(id){dialog('Ключ члена '+id,'Показан один раз. После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
  <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri">loft://lt_8f3a…c21e@vpn.example.net/static/js?type=get&amp;fp=chrome#${id}</div><p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
  <div class="acts" style="margin:0"><button class="btn sm pri" type="button">Копировать ссылку</button><button class="btn sm" type="button">${ic('i-down',16)}Скачать .loft</button><button class="btn sm" type="button">Копировать ключ</button></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`)}
@@ -1581,7 +1588,8 @@ V.settings=()=>pageHead('Настройки','Настройки самой па
  blk('Мастер установки','Пройти шаги первой настройки заново: домен, сертификат, первый член сети, пакеты. Уже сделанное не стирается.',`<button class="btn" type="button" onclick="S.wz.step=2;go('setup')">Открыть мастер</button>`)+
  blk('Панель','',grid(`<div><div class="fld"><label for="st1">Адрес панели</label><input id="st1" class="mono" value="panel.example.net" readonly></div><div class="hint">Имена и сертификаты меняются в мастере установки — шаги «Домен и DNS» и «Сертификат».</div></div>
   <div><div class="fld"><label for="st2">Язык по умолчанию</label><select id="st2"><option value="en">English</option><option value="ru">Русский</option><option value="zh">中文</option></select></div><div class="hint">Для страницы входа и тех, кто не выбрал язык сам.</div></div>
-  <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3"><option>Europe/Moscow</option><option>UTC</option></select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`))+
+  <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3"><option>Europe/Moscow</option><option>UTC</option></select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`) +
+  `<div><label class="chk"><input id="stKeep" type="checkbox" ${S.keepKeys?'checked':''} onchange="S.keepKeys=this.checked"><span>Хранить ключи членов</span></label><div class="hint">Ссылка, QR-код и файл .loft открываются снова без перевыпуска. Копия лежит в каталоге данных панели, права 0600. Выключение стирает копию в панели; файл на ноде остаётся.</div></div>`)+
  blk('Вход','Блокировка адресов после неудачных входов — в <a href="#system">Системе</a>.',grid(`<div class="fld"><label for="st4">Выходить при бездействии</label><select id="st4"><option>через 30 минут</option><option>через 8 часов</option><option>не выходить</option></select></div>
   <div class="fld"><label for="st5">Срок сессии</label><select id="st5"><option>7 дней</option><option>30 дней</option></select></div>`))+
  blk('Уведомления','Письма о событиях уходят через SMTP-сервер, указанный здесь.',`<div class="card">${grid(`<div class="fld"><label for="st6">Кому</label><input id="st6" type="email" value="admin@example.net"></div>

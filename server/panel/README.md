@@ -12,7 +12,7 @@ First working slice. Real today:
 
 - sign-in, sessions, first owner by setup code, `loft-panel passwd` / `users`;
 - **Segments**: the node's `network.conf` in the switch view and the config editor, apply by live reload (the node re-reads the files; only affected members reconnect) and automatic rollback;
-- new members get a real `lt_` key in `members.keys`; removed members lose theirs on apply;
+- new members get a real `lt_` key in `members.keys`; removed members lose theirs on apply; the panel can keep a copy of the key so the operator can show the link, QR and `.loft` again (Settings, off by default);
 - node state on the overview;
 - the setup wizard: owner, node and panel names, Let’s Encrypt certificates, first member, first packages;
 - **Packages**: install, upgrade, switch off and remove packages from a closed catalog (Telegram MTProto proxy, WireGuard, OpenVPN, ZeroTier, fail2ban; the node, nginx and SSTP as the base), with the job log on the page;
@@ -33,7 +33,7 @@ server/panel/adm            what the helper does: network.conf, members.keys, sy
 server/panel/admproto       panel ↔ helper wire
 server/panel/catalog        the packages the panel may install (keys, apt names, GitHub binaries, repos, units)
 server/panel/auth           argon2id, sessions, login limits
-server/panel/store          users.json
+server/panel/store          users.json, settings.json, member-keys.json
 server/panel/debian         install.sh, .deb, systemd units, nginx site
 server/panel/devstand       real panel + helper on a laptop (fake systemctl)
 server/panel/design         UX spec and mock

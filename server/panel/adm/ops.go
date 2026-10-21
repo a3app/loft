@@ -249,6 +249,27 @@ func (o *Ops) MemberKey(req admproto.MemberKey) (admproto.IssuedKey, error) {
 	return admproto.IssuedKey{ID: req.ID, Key: plain, KeySHA256: sha}, nil
 }
 
+// MemberGet returns the plaintext already in members.keys. It does not mint
+// a new key. Empty means the ring has no row for this id (never issued, or
+// Filter dropped it).
+func (o *Ops) MemberGet(req admproto.MemberKey) (admproto.IssuedKey, error) {
+	if !memberID.MatchString(req.ID) {
+		return admproto.IssuedKey{}, fmt.Errorf("member id %q: latin letters, digits, . _ -; up to 64", req.ID)
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	r, err := identity.Load(o.keys())
+	if err != nil {
+		return admproto.IssuedKey{}, fmt.Errorf("members.keys: %w", err)
+	}
+	tok := r.TokenFor(req.ID)
+	if len(tok) == 0 {
+		return admproto.IssuedKey{}, errors.New("no stored key for this member")
+	}
+	plain := string(tok)
+	return admproto.IssuedKey{ID: req.ID, Key: plain, KeySHA256: identity.Sum(plain)}, nil
+}
+
 // saveRing writes members.keys through a temp file so a crash never leaves
 // it half written (the node would refuse every member).
 func (o *Ops) saveRing(r *identity.Ring) error {

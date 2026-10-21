@@ -30,6 +30,7 @@ const (
 	OpNetworkGet   = "network.get"   // → Network
 	OpNetworkApply = "network.apply" // NetworkApply → Network
 	OpMemberKey    = "member.key"    // MemberKey → IssuedKey
+	OpMemberGet    = "member.get"    // MemberKey → IssuedKey (plaintext already in members.keys)
 	OpNodeStatus   = "node.status"   // → NodeStatus
 	OpNodeRestart  = "node.restart"  // → NodeStatus
 	OpNodeInfo     = "node.info"     // → NodeInfo
@@ -129,7 +130,8 @@ type MemberKey struct {
 	ID string `json:"id"`
 }
 
-// IssuedKey is shown to the operator once.
+// IssuedKey is the plaintext member secret. The panel shows it on issue;
+// with keep_member_keys it may show it again from its own store.
 type IssuedKey struct {
 	ID        string `json:"id"`
 	Key       string `json:"key"`
@@ -658,8 +660,8 @@ type MailView struct {
 	Boxes     []MailBox     `json:"boxes"`
 	Aliases   []MailAlias   `json:"aliases"`
 	Services  []MailService `json:"services"`
-	Webmail   bool          `json:"webmail"`          // Roundcube is installed
-	WebHosts  []string      `json:"web_hosts"`        // where it answers
+	Webmail   bool          `json:"webmail"`         // Roundcube is installed
+	WebHosts  []string      `json:"web_hosts"`       // where it answers
 	Error     string        `json:"error,omitempty"` // the last apply failed
 }
 
@@ -714,12 +716,12 @@ type SysUserDelete struct {
 
 // GuardConf is what the operator sets.
 type GuardConf struct {
-	Fails    int      `json:"fails"`     // failed logins…
-	FindMin  int      `json:"find_min"`  // …within this many minutes
-	BanSec   int      `json:"ban_sec"`   // ban for; -1: for good
-	Scanners bool     `json:"scanners"`  // ban requests for /wp-login.php, /.env and the like
-	Logins   bool     `json:"logins"`    // count ssh and mail logins too (the panel's always)
-	Allow    []string `json:"allow"`     // never banned: addresses and subnets
+	Fails    int      `json:"fails"`    // failed logins…
+	FindMin  int      `json:"find_min"` // …within this many minutes
+	BanSec   int      `json:"ban_sec"`  // ban for; -1: for good
+	Scanners bool     `json:"scanners"` // ban requests for /wp-login.php, /.env and the like
+	Logins   bool     `json:"logins"`   // count ssh and mail logins too (the panel's always)
+	Allow    []string `json:"allow"`    // never banned: addresses and subnets
 }
 
 // GuardBan is one banned address. Sec is the ban's length for a manual

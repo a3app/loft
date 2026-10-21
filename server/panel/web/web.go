@@ -47,12 +47,14 @@ type Server struct {
 	hostsMu sync.RWMutex
 	// Settings is the wizard's state; ACME issues certificates.
 	Settings *store.SettingsFile
-	ACME     *ACME
-	jobs     jobs
-	pres     presence
-	dom      domains
-	mail     mailCache
-	bk       backups
+	// Keys is the optional panel copy of member secrets (keep_member_keys).
+	Keys *store.MemberKeys
+	ACME *ACME
+	jobs jobs
+	pres presence
+	dom  domains
+	mail mailCache
+	bk   backups
 	// ReleasesAPI and HTTP are for following GitHub releases (tests).
 	ReleasesAPI string
 	HTTP        *http.Client
@@ -76,6 +78,8 @@ const cookieName = "loft_panel"
 // dummyHash is verified for unknown logins so timing does not reveal them.
 var dummyHash, _ = auth.Hash("not a real password, only for timing")
 
+var errKeyNotStored = errors.New("key is not stored")
+
 // Handler returns the full HTTP handler.
 func (s *Server) Handler() (http.Handler, error) {
 	if s.sleep == nil {
@@ -89,6 +93,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("GET /api/network", s.need(area("members,segments", store.View), s.networkGet))
 	mux.HandleFunc("POST /api/network/check", s.need(area("members,segments", store.View), s.networkCheck))
 	mux.HandleFunc("POST /api/network/apply", s.need(area("members,segments", store.Change), s.networkApply))
+	mux.HandleFunc("GET /api/members/key", s.need(area("members", store.Change), s.memberKeyGet))
 	mux.HandleFunc("POST /api/members/key", s.need(area("members", store.Change), s.memberKey))
 	mux.HandleFunc("GET /api/node", s.need(anyone, s.nodeStatus))
 	mux.HandleFunc("POST /api/node/restart", s.need(area("node", store.Change), s.nodeRestart))
@@ -456,16 +461,18 @@ func (s *Server) me(u store.User, csrf string) *meJSON {
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	out := struct {
-		Setup   bool    `json:"setup"`
-		Me      *meJSON `json:"me,omitempty"`
-		Wizard  bool    `json:"wizard"`            // the owner has not finished the wizard
-		Lang    string  `json:"lang"`              // the panel's default language
-		Version string  `json:"version,omitempty"` // signed in only: the footer shows it
+		Setup          bool    `json:"setup"`
+		Me             *meJSON `json:"me,omitempty"`
+		Wizard         bool    `json:"wizard"` // the owner has not finished the wizard
+		Lang           string  `json:"lang"`   // the panel's default language
+		KeepMemberKeys bool    `json:"keep_member_keys"`
+		Version        string  `json:"version,omitempty"` // signed in only: the footer shows it
 	}{Setup: s.Store.Empty(), Lang: "ru"}
 	if s.Settings != nil {
 		if st, err := s.Settings.Get(); err == nil {
 			out.Wizard = !st.WizardDone
 			out.Lang = firstOf(st.Lang, "ru")
+			out.KeepMemberKeys = st.KeepMemberKeys
 		}
 	}
 	if c, err := r.Cookie(cookieName); err == nil {
@@ -652,6 +659,40 @@ func (s *Server) networkApply(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type memberKeyOut struct {
+	admproto.IssuedKey
+	Link string `json:"link,omitempty"`
+	File string `json:"file,omitempty"`
+	QR   string `json:"qr,omitempty"`
+}
+
+func (s *Server) keepMemberKeys() bool {
+	if s.Settings == nil {
+		return false
+	}
+	st, err := s.Settings.Get()
+	return err == nil && st.KeepMemberKeys
+}
+
+func (s *Server) persistIssued(k admproto.IssuedKey) {
+	if s.Keys == nil || !s.keepMemberKeys() || k.ID == "" || k.Key == "" {
+		return
+	}
+	if err := s.Keys.Put(k.ID, k.Key, k.KeySHA256); err != nil {
+		s.logf("keep member key %s: %v", k.ID, err)
+	}
+}
+
+func (s *Server) wrapIssued(ctx context.Context, a Adm, k admproto.IssuedKey) memberKeyOut {
+	out := memberKeyOut{IssuedKey: k}
+	var info admproto.NodeInfo
+	if err := a.Call(ctx, admproto.OpNodeInfo, nil, &info); err == nil && info.Host != "" {
+		out.Link, out.File = memberLink(info, k.Key, k.ID)
+		out.QR, _ = qrSVG(out.Link)
+	}
+	return out
+}
+
 func (s *Server) memberKey(w http.ResponseWriter, r *http.Request) {
 	var in admproto.MemberKey
 	if !readJSON(w, r, 4<<10, &in) {
@@ -664,19 +705,56 @@ func (s *Server) memberKey(w http.ResponseWriter, r *http.Request) {
 		admFail(w, err)
 		return
 	}
-	// The link, the .loft file and the QR code go with the key: it is shown once.
-	out := struct {
-		admproto.IssuedKey
-		Link string `json:"link,omitempty"`
-		File string `json:"file,omitempty"`
-		QR   string `json:"qr,omitempty"`
-	}{IssuedKey: k}
-	var info admproto.NodeInfo
-	if err := a.Call(r.Context(), admproto.OpNodeInfo, nil, &info); err == nil && info.Host != "" {
-		out.Link, out.File = memberLink(info, k.Key, in.ID)
-		out.QR, _ = qrSVG(out.Link)
+	s.persistIssued(k)
+	ok(w, s.wrapIssued(r.Context(), a, k))
+}
+
+func (s *Server) memberKeyGet(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		fail(w, http.StatusBadRequest, "member id required")
+		return
 	}
-	ok(w, out)
+	auditTarget(r, id)
+	if !s.keepMemberKeys() {
+		fail(w, http.StatusNotFound, "member keys are not kept")
+		return
+	}
+	k, err := s.lookupMemberKey(r.Context(), userOf(r).Login, id)
+	if err != nil {
+		if errors.Is(err, errKeyNotStored) {
+			fail(w, http.StatusNotFound, err.Error())
+			return
+		}
+		admFail(w, err)
+		return
+	}
+	ok(w, s.wrapIssued(r.Context(), s.Adm(userOf(r).Login), k))
+}
+
+func (s *Server) lookupMemberKey(ctx context.Context, by, id string) (admproto.IssuedKey, error) {
+	var stored store.StoredKey
+	var have bool
+	if s.Keys != nil {
+		var err error
+		stored, have, err = s.Keys.Get(id)
+		if err != nil {
+			return admproto.IssuedKey{}, err
+		}
+	}
+	var peeked admproto.IssuedKey
+	peekErr := s.Adm(by).Call(ctx, admproto.OpMemberGet, admproto.MemberKey{ID: id}, &peeked)
+	if peekErr == nil && peeked.Key != "" {
+		s.persistIssued(peeked)
+		return peeked, nil
+	}
+	if have && stored.Key != "" {
+		return admproto.IssuedKey{ID: id, Key: stored.Key, KeySHA256: stored.SHA256}, nil
+	}
+	if peekErr != nil && !strings.Contains(peekErr.Error(), "no stored key") {
+		return admproto.IssuedKey{}, peekErr
+	}
+	return admproto.IssuedKey{}, errKeyNotStored
 }
 
 func (s *Server) nodeStatus(w http.ResponseWriter, r *http.Request) {

@@ -86,7 +86,7 @@ func serve(args []string) error {
 		return err
 	}
 	srv := &web.Server{Store: st, Sessions: sess, Limit: auth.NewLimiter(), UIDir: *ui, Log: lg,
-		Settings: settings, Audit: store.OpenAudit(*data), ACME: &web.ACME{Dir: *data, URL: *acmeDir},
+		Settings: settings, Keys: store.OpenMemberKeys(*data), Audit: store.OpenAudit(*data), ACME: &web.ACME{Dir: *data, URL: *acmeDir},
 		Adm: func(by string) web.Adm { return admproto.Client{Path: *sock, By: by} }}
 	srv.SetSeenFile(*data)
 	srv.SetDomainsFile(*data)
