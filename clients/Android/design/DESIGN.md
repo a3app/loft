@@ -33,9 +33,9 @@ The same rooms as on iOS and macOS, in Material chrome: a bottom navigation bar,
 | Home | Mark, `loft`, status pill (tap → list), large Connect / Disconnect. Off: pill “Not connected · Home ›”. Connecting: pill “Connecting: Home…”, a **Cancel** button, spark “handshake”. Cards **METHOD / DOWN / UP** and spark “speed, last minute” (↓ in lamp, ↑ in stone) when simplified interface is off; tapping the cards opens a **Details** sheet (loft network address, method, MTU, server). Below, while connected, rows **External IP** and **Overlay IP**, as in the macOS popover (not in simplified interface). Navigation bar below. |
 | Connections | Title, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, host, side kind (`loft · get` / `sstp` / `vless` / `trojan`) and **active** on the live one. Tap opens the connection; only Connect switches the tunnel. **Swipe right** edits, **left** deletes (with a dialog), `ItemTouchHelper`. **Long-press** menu: Edit / Export `.loft` (selected only) / Delete. **FAB `+`** opens a sheet: Scan QR · Paste link · From file · Manually. No gesture hint on the screen. |
 | Edit | Full-screen dialog: **✕** on top returns to where it was opened. A new connection has the title “New connection”, kind loft / SSTP / VLESS / Trojan and **Scan** in the top bar. An existing one shows its kind as one capsule (it cannot change), a **⋮** menu in the top bar (Share QR, Export `.loft`) and a red **Delete** at the end with a dialog. loft and VLESS: **Link / Manual** (icons: a chain link and a pencil); the link shows the server and hides only the key, Show reveals all of it. loft Manual: access key, host, port, method (**Auto**·GET·WS·H2·QUIC·H3), path. VLESS Manual: UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint and the mode’s fields. SSTP: user, password, server, cert check, PAP/CHAP. Trojan: password, `trojan://` server, cert check. No interface toggle: the tunnel is always `VpnService`. A folding **More options**: mux (loft), DNS, DNS into the system; SSTP and Trojan keep the TLS hostname here, SSTP also “these addresses only”. Save. |
-| Onboard | Start: **Scan QR** and **Paste link** (a copied link is added at once); “Enter the key and address by hand” leads to two steps: **1 Access key** (`lt_…`) → Continue, **2 Address**: URL; **More options** hides the method (**Auto** first) and the path → Connect. Then the stock Android **Connection request** once; the screen says to tap OK. |
-| Settings | One list with groups **General / Route / Connection**. Header Reset routes. Links **Defaults \| Journal \| About**; Defaults asks first. General: simplified interface, speed units, language, extended journal. Route: default route, **No internet without the VPN** (not a toggle: on Android it is the system “Always-on VPN” and “Block connections without VPN”, with an **Open VPN settings** link), split with a **Lists** button. Connection: **Connect at launch**, **Reconnect if it drops**, external IP. |
-| Journal | From Settings, **←** on top, the navigation bar stays. Front and session lines, the key shortened. Copy / Share / Clear (with a dialog). |
+| Onboard | Start: **Scan QR Code** and **Paste link** (a copied link is added at once); “Enter the key and address by hand” leads to two steps: **1 Access key** (`lt_…`) → Continue, **2 Address**: URL; **More options** hides the method (**Auto** first) and the path → Connect. Then the system Android **Connection request** once; the screen says to tap OK. |
+| Settings | One list with groups **General / Route / Connection**. Header Reset routes. Links **Defaults \| Log \| About**; Defaults asks first. General: simplified interface, speed units, language, extended log. Route: default route, **No Internet without VPN** (not a toggle: on Android it is the system **Always-on VPN** and **Block connections without VPN**, with an **Open VPN settings** link), split routing with a **Lists** button. Connection: **Connect at Launch**, **Reconnect on Disconnect**, public IP. |
+| Log | From Settings, **←** on top, the navigation bar stays. Front and session lines, the key shortened. Copy / Share / Clear (with a dialog). |
 | About | From Settings, **←** on top. Mark, loft, version, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
 | Scan | **✕** on top. Camera QR. From file (SAF) / From gallery (Photo Picker). Field “Or paste a link”, buttons **Paste** and **Add**. Confirm shows name, kind, transport, host; the secret is hidden. |
 | Share QR | **✕** on top. The QR and the `loft://` line, the key warning, **Share** and **Copy link**. |
@@ -44,9 +44,9 @@ The same rooms as on iOS and macOS, in Material chrome: a bottom navigation bar,
 
 ### Split routing
 
-The macOS model (macOS DESIGN §5): a **zone** goes through Loft or around it, a **service** (name + CIDRs) only belongs to a zone, an **ignore** CIDR is never routed and survives list pulls. Built-in zones Local (around, LAN) and Global (through, `global.bat`); own zones come from the editor. On Android “through Loft” is `VpnService.Builder.addRoute` and “around” is `excludeRoute` (Android 13+); on older versions “around” is cut out of the tunnel routes. With the tunnel off everything is direct anyway.
+The macOS model (macOS DESIGN §5): a **zone** goes through loft or around it, a **service** (name + CIDRs) only belongs to a zone, an **exclusion** CIDR is never routed and survives list pulls. Built-in zones Local (bypass, LAN) and Global (through, `global.bat`); own zones come from the editor. On Android “through loft” is `VpnService.Builder.addRoute` and “bypass” is `excludeRoute` (Android 13+); on older versions “bypass” is cut out of the tunnel routes. With the tunnel off everything is direct anyway.
 
-Entry: Settings → Route → the toggle and the gold **Lists**. The screens open inside the Settings tab with **←** on top. They are the iOS ones: Lists (toggle, zone tabs with service counts, `Global · Through Loft`, search, service rows, **+ Add**, Import · Export · Repository), Network (Route / Ignore, networks, service, zone), Zones, Zone (name, direction, list address + **Lists**, auto-update; an own zone has Delete zone, services → Global), Repository, Catalog (World, Russia, China, Iran, Kazakhstan, Belarus), Import (from a file via SAF), Export (all zones in one loft-routes file, share sheet; no Keenetic .bat format).
+Entry: Settings → Route → the toggle and the gold **Lists**. The screens open inside the Settings tab with **←** on top. They are the iOS ones: Lists (toggle, zone tabs with service counts, `Global · Through loft`, search, service rows, **+ Add**, Import · Export · Repository), Network (Route / Exclusion, networks, service, zone), Zones, Zone (name, direction, list address + **Lists**, auto-update; an own zone has Delete zone, services → Global), Repository, Catalog (World, Russia, China, Iran, Kazakhstan, Belarus), Import (from a file via SAF), Export (all zones in one loft-routes file, share sheet; no Keenetic .bat format).
 
 ## 3. Android chrome
 
@@ -72,7 +72,7 @@ Intent filter `loft`: tapping `loft://…` offers import. `.loft` files open thr
 
 A live session is a **foreground service** (type `connectedDevice`). The shade shows the name, kind · transport · overlay IP, Disconnect. On API 33+ there is also the notification permission sheet, once.
 
-**No internet without the VPN** on Android is the system **Always-on VPN** and **Block connections without VPN**. The app opens that Settings page; the user flips the switches.
+**No Internet without VPN** on Android is the system **Always-on VPN** and **Block connections without VPN**. The app opens that Settings page; the user flips the switches.
 
 Quick Settings tile: one tap connects or disconnects the active profile. Lamp lit = online.
 
@@ -86,7 +86,7 @@ System surfaces in the mock (Connection request, Settings → VPN, shade, tile) 
 
 ## 5. Copy
 
-Shared strings — buttons, settings, routes — come from `clients/macOS/lang/*.lang` and read the same on macOS, iOS and Android. Android has its own lines only where there is no counterpart: Connection request, the system hold switches, shade, tile, “From gallery”. The mock is in Russian, English and Chinese.
+Shared strings — buttons, settings, routes — come from `clients/macOS/lang/*.lang` and read the same on macOS, iOS and Android. Android has its own lines only where there is no counterpart: Connection request, the system hold switches, notification, tile, “From gallery”. Copy uses each language’s VPN register (Android Settings Always-on VPN, operator Russian, 分流/始终开启的 VPN in Chinese).
 
 | id | EN | RU |
 |----|----|----|
@@ -94,14 +94,14 @@ Shared strings — buttons, settings, routes — come from `clients/macOS/lang/*
 | connecting | Connecting… | Подключение… |
 | disconnect | Disconnect | Отключить |
 | pill_off | Not connected · Home › | Не подключено · Home › |
-| key_title | Access key | Ключ доступа |
-| hold | No internet without the VPN | Без VPN — без интернета |
-| auto | Connect at launch | Подключать при запуске |
-| reconnect | Reconnect if it drops | Переподключаться при обрыве |
-| split | Split routing | Раздельная маршрутизация |
-| scan | Scan QR | Сканировать QR |
+| key_title | Access Key | Ключ доступа |
+| hold | No Internet without VPN | Без VPN — без интернета |
+| auto | Connect at Launch | Подключаться при запуске |
+| reconnect | Reconnect on Disconnect | Переподключаться при обрыве |
+| split | Split Routing | Раздельная маршрутизация |
+| scan | Scan QR Code | Сканировать QR-код |
 | from_gallery | From gallery | Из галереи |
-| open_sys | Open VPN settings | Открыть Настройки VPN |
+| open_sys | Open VPN settings | Открыть настройки VPN |
 | always | Always-on VPN | VPN всегда включён |
-| block | Block connections without VPN | Блокировать без VPN |
+| block | Block connections without VPN | Блокировать подключения без VPN |
 | consent | Connection request | Запрос подключения |
