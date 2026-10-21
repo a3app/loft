@@ -78,10 +78,10 @@ func TestRoute(t *testing.T) {
 			t.Fatalf("%+v %s: %s, want %s", x.who, x.host, got, x.want)
 		}
 	}
-	if s := strings.Join(r.steps("wg-nl"), ">"); s != "wg-nl>px>direct" {
+	if s := strings.Join(r.steps("wg-nl", false), ">"); s != "wg-nl>px>direct" {
 		t.Fatalf("steps %s", s)
 	}
-	if s := strings.Join(r.steps("office"), ">"); s != "office>direct" {
+	if s := strings.Join(r.steps("office", false), ">"); s != "office>direct" {
 		t.Fatalf("steps %s", s)
 	}
 }
@@ -377,5 +377,66 @@ func TestPrioSkipsDeadAndNoLink(t *testing.T) {
 	}
 	if _, used, err := r.DialTCP(ctx, Who{Member: "dave"}, echo); err == nil || used != Block {
 		t.Fatalf("dave: %s %v", used, err)
+	}
+}
+
+func TestPrioMultiAndLimits(t *testing.T) {
+	conf := "channel a socks5 127.0.0.1:1\nchannel b socks5 127.0.0.1:2\nchannel c socks5 127.0.0.1:3\n" +
+		"prio m a b c then block multi limit b 50/10 limit c 0/5\nrule member bob via m\n"
+	c, err := Parse(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.Prio("m")
+	if !p.Multi || p.Limits["b"] != (Limit{50, 10}) || p.Limits["c"] != (Limit{0, 5}) {
+		t.Fatalf("prio %+v", p)
+	}
+	if r := Render(c); !strings.Contains(r, "prio m a b c then block multi limit b 50/10 limit c 0/5\n") {
+		t.Fatalf("render:\n%s", r)
+	}
+	for _, bad := range []string{
+		"channel a dev x\nprio p a then direct limit z 1/1", // not in the list
+		"channel a dev x\nprio p a then direct limit a 1",
+		"channel a dev x\nprio p a then direct fast",
+	} {
+		if _, err := Parse(bad); err == nil {
+			t.Fatalf("%q parsed", bad)
+		}
+	}
+	r := New(c, Options{SysNet: t.TempDir()})
+	defer r.Close()
+	// Multipath: each new connection starts one channel further, then the rest in order.
+	seen := map[string]bool{}
+	for range 3 {
+		st := r.steps("m", true)
+		if len(st) != 4 || st[3] != Block {
+			t.Fatalf("steps %v", st)
+		}
+		seen[st[0]] = true
+	}
+	if len(seen) != 3 {
+		t.Fatalf("multipath starts %v", seen)
+	}
+	if s := strings.Join(r.steps("m", false), ">"); s != "a>b>c>block" {
+		t.Fatalf("no spread: %s", s)
+	}
+}
+
+func TestLimitedConn(t *testing.T) {
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+	// 1 Mbit/s = 125 kB/s; the burst is 64 kB, so 192 kB takes about a second.
+	l := &limited{Conn: a, out: limiter(1)}
+	go io.Copy(io.Discard, b)
+	start := time.Now()
+	if _, err := l.Write(make([]byte, 192<<10)); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d < 700*time.Millisecond || d > 3*time.Second {
+		t.Fatalf("192 kB at 1 Mbit/s took %v", d)
+	}
+	if limiter(0) != nil {
+		t.Fatal("0 must mean no limit")
 	}
 }

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // SSTPConn is a held SSTP session that can open TCP and UDP through it
@@ -53,11 +55,19 @@ type chanState struct {
 	noLink    bool // the link check failed Fails times in a row
 }
 
+// prioState is a priority list at run time: where multipath starts next,
+// and the shared speed limits of its channels (in, out).
+type prioState struct {
+	next atomic.Uint64
+	lim  map[string][2]*rate.Limiter
+}
+
 // Router applies one egress.conf. Make a new one on reload and Close the old.
 type Router struct {
 	cfg    *Config
 	opt    Options
 	ch     map[string]*chanState
+	prio   map[string]*prioState
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -76,7 +86,14 @@ func New(cfg *Config, opt Options) *Router {
 	if opt.Log == nil {
 		opt.Log = func(string, ...any) {}
 	}
-	r := &Router{cfg: cfg, opt: opt, ch: map[string]*chanState{}}
+	r := &Router{cfg: cfg, opt: opt, ch: map[string]*chanState{}, prio: map[string]*prioState{}}
+	for _, p := range cfg.Prios {
+		ps := &prioState{lim: map[string][2]*rate.Limiter{}}
+		for ch, l := range p.Limits {
+			ps.lim[ch] = [2]*rate.Limiter{limiter(l.In), limiter(l.Out)}
+		}
+		r.prio[p.Name] = ps
+	}
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	for _, c := range cfg.Channels {
 		r.ch[c.Name] = &chanState{ch: c}
@@ -235,14 +252,20 @@ func inList(entries []string, host string) bool {
 var errBlocked = errors.New("blocked by the exit rules")
 
 // steps is every hop a route may try in order: a priority's channels and
-// its last step, or a channel followed through its fail links.
-func (r *Router) steps(first string) []string {
+// its last step, or a channel followed through its fail links. spread
+// turns a multipath list one channel further for each new connection.
+func (r *Router) steps(first string, spread bool) []string {
 	if p := r.cfg.Prio(first); p != nil {
 		last := p.Last
 		if last == "" {
 			last = Direct
 		}
-		return append(append([]string{}, p.Use...), last)
+		use := p.Use
+		if p.Multi && spread && len(use) > 1 {
+			k := int(r.prio[p.Name].next.Add(1) % uint64(len(use)))
+			use = append(append([]string{}, use[k:]...), use[:k]...)
+		}
+		return append(append([]string{}, use...), last)
 	}
 	var out []string
 	seen := map[string]bool{}
@@ -272,7 +295,8 @@ func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn,
 		return nil, "", err
 	}
 	var last error = errBlocked
-	for _, s := range r.steps(r.Route(who, host)) {
+	route := r.Route(who, host)
+	for _, s := range r.steps(route, true) {
 		switch s {
 		case Direct:
 			c, err := (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, "tcp4", target)
@@ -288,7 +312,13 @@ func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn,
 		c, err := r.dialOn(cctx, cs, target)
 		cancel()
 		if err == nil {
-			return r.count(cs, c), s, nil
+			c = r.count(cs, c)
+			if ps := r.prio[route]; ps != nil {
+				if l, ok := ps.lim[s]; ok {
+					c = &limited{Conn: c, in: l[0], out: l[1]}
+				}
+			}
+			return c, s, nil
 		}
 		last = fmt.Errorf("%s: %v", s, err)
 		r.fail(cs, err)

@@ -15,8 +15,8 @@
 //	channel px-office socks5 192.0.2.40:1080 user loft pass "s3cret" udp proxy via wg-nl check tcp probe example.com:443
 //	channel web http 192.0.2.41:3128 tls
 //	channel office sstp vpn.example.org:443 user office pass x auth mschapv2
-//	prio main wg-nl wg-fi then direct
-//	prio de px-office then block
+//	prio main wg-nl wg-fi then direct limit wg-fi 50/10
+//	prio de px-office web then block multi
 //	rule member bob via de
 //	rule tag office via main
 //	rule list blocked-ru via main
@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -77,10 +78,21 @@ type Check struct {
 }
 
 // Prio is a priority list: channels in order, then Last (direct or block).
+// Multi spreads new connections over the working channels in turn instead
+// of sending them all to the first one. Limits cap a channel's speed for
+// everyone who leaves by this list.
 type Prio struct {
-	Name string
-	Use  []string
-	Last string // direct | block; empty = direct
+	Name   string
+	Use    []string
+	Last   string // direct | block; empty = direct
+	Multi  bool
+	Limits map[string]Limit
+}
+
+// Limit is a speed cap in Mbit/s; 0 = none. In is towards members (what
+// they download), Out is from them.
+type Limit struct {
+	In, Out int
 }
 
 // Rule sends matching traffic to Via (a priority, a channel, direct or block).
@@ -276,10 +288,30 @@ func (c *Config) line(t []string) error {
 		}
 		c.Channels = append(c.Channels, ch)
 	case "prio":
-		if len(t) < 4 || t[len(t)-2] != "then" {
-			return errors.New("prio NAME CHANNEL… then direct|block")
+		then := slices.Index(t, "then")
+		if len(t) < 4 || then < 2 || then == len(t)-1 {
+			return errors.New("prio NAME CHANNEL… then direct|block [multi] [limit CHANNEL IN/OUT]…")
 		}
-		p := Prio{Name: t[1], Use: t[2 : len(t)-2], Last: t[len(t)-1]}
+		p := Prio{Name: t[1], Use: t[2:then], Last: t[then+1]}
+		for rest := t[then+2:]; len(rest) > 0; {
+			switch {
+			case rest[0] == "multi":
+				p.Multi, rest = true, rest[1:]
+			case rest[0] == "limit" && len(rest) >= 3:
+				in, out, ok := strings.Cut(rest[2], "/")
+				a, err1 := strconv.Atoi(in)
+				b, err2 := strconv.Atoi(out)
+				if !ok || err1 != nil || err2 != nil || a < 0 || b < 0 {
+					return fmt.Errorf("limit %s %q: IN/OUT in Mbit/s, 0 = none", rest[1], rest[2])
+				}
+				if p.Limits == nil {
+					p.Limits = map[string]Limit{}
+				}
+				p.Limits[rest[1]], rest = Limit{a, b}, rest[3:]
+			default:
+				return fmt.Errorf("prio %s: unknown option %q", p.Name, rest[0])
+			}
+		}
 		if !validName(p.Name) {
 			return fmt.Errorf("prio name %q: lowercase letters, digits, - _ .", p.Name)
 		}
@@ -395,6 +427,14 @@ func (c *Config) check() error {
 			}
 			seen[u] = true
 		}
+		for ch, l := range p.Limits {
+			if !seen[ch] {
+				return fmt.Errorf("prio %s: limit on %s, which is not in the list", p.Name, ch)
+			}
+			if l.In > 100000 || l.Out > 100000 {
+				return fmt.Errorf("prio %s: limit on %s is over 100000 Mbit/s", p.Name, ch)
+			}
+		}
 	}
 	for _, r := range c.Rules {
 		if !c.target(r.Via) {
@@ -455,7 +495,16 @@ func Render(c *Config) string {
 		if last == "" {
 			last = Direct
 		}
-		fmt.Fprintf(&b, "prio %s %s then %s\n", p.Name, strings.Join(p.Use, " "), last)
+		fmt.Fprintf(&b, "prio %s %s then %s", p.Name, strings.Join(p.Use, " "), last)
+		if p.Multi {
+			b.WriteString(" multi")
+		}
+		for _, u := range p.Use {
+			if l, ok := p.Limits[u]; ok && (l.In > 0 || l.Out > 0) {
+				fmt.Fprintf(&b, " limit %s %d/%d", u, l.In, l.Out)
+			}
+		}
+		b.WriteByte('\n')
 	}
 	for _, r := range c.Rules {
 		fmt.Fprintf(&b, "rule %s %s via %s\n", r.Match, Quote(r.Value), r.Via)

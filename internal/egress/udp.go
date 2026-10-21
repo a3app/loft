@@ -46,7 +46,8 @@ func (u *UDP) Send(target string, data []byte) {
 	if err != nil {
 		return
 	}
-	for _, s := range u.r.steps(u.r.Route(u.who, host)) {
+	// No spreading: a member's datagrams to one host keep one way out.
+	for _, s := range u.r.steps(u.r.Route(u.who, host), false) {
 		if s == Block {
 			return
 		}
