@@ -12,9 +12,9 @@ The Java container lives in [`../app/`](../app/). A live session is Go inside `L
 
 The inbound is the system VPN (`VpnService`). One profile at a time: loft (`lt_…`, no password), SSTP (user + password), VLESS (`vless://`), or Trojan (`trojan://`).
 
-v1: named connections on disk, import/export `.loft`, Connect/Disconnect, hold, split from protocol lists. `select: auto` inside loft YAML. One tunnel at a time.
+v1: named connections on disk, import/export `.loft`, Connect/Disconnect, hold (through the Android system switches), split from protocol lists. `select: auto` inside loft YAML. One tunnel at a time.
 
-A `.loft` file holds **one or several connections**. Kinds mix: `loft`, `sstp`, `vless`, `trojan`. The list subtitle is **kind · transport · host** (`loft · get · cdn.example.com`). The loft address string is `loft://`. Spec: [docs/share.md](../../../docs/share.md).
+A `.loft` file holds **one or several connections**. Kinds mix: `loft`, `sstp`, `vless`, `trojan`. A list row shows the host and **kind · transport** (`loft · get`). The loft address string is `loft://`. Spec: [docs/share.md](../../../docs/share.md).
 
 Share: scan a QR or load a file/image with `loft://`, `sstp://`, `vless://`, `trojan://`, or a `.loft`.
 
@@ -26,83 +26,82 @@ Android TV / Google TV is the same `VpnService` and AAR with a Leanback flavor. 
 
 ## 2. Screens
 
+The same rooms as on iOS and macOS, in Material chrome: a bottom navigation bar, a top app bar with “←” or “✕”, a FAB, bottom sheets. System back works everywhere like “←”.
+
 | Screen | What |
 |--------|------|
-| Onboard | First launch: paste `lt_…` + URL, scan QR, or pick a `.loft` / image. Then the stock VPN connection request. |
-| Home | Lamp, connection name, Connect/Disconnect. Overlay IP, front, bytes. |
-| Connecting | Lamp dim, copy “Connecting…”. Cancel returns home down. |
-| Connections | List of profiles. Subtitle: kind · transport · host. Tap selects (and will reconnect). **Leading swipe** Edit, **trailing swipe** Delete (`ItemTouchHelper`). **Long-press** context: Edit / Export `.loft` (selected only) / Delete. The selected row (lamp) shows Export. Add → Scan or file. |
-| Scan | Camera QR. From file (SAF). From gallery (Photo Picker). Paste `loft://` / `sstp://` / `vless://` / `trojan://`. Confirm: name, kind, transport, host; secret hidden. |
-| Edit | Name, kind (`loft` / `sstp` / `vless` / `trojan`). Fields follow the kind. loft and VLESS: capsule **Link / Manual**. loft Link is a `loft://` string; Manual is member key, host, port, fronts get / ws / h2 / quic / h3, path. Both write the same profile. VLESS Link is a `vless://` string; Manual is UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint, and the fields that mode needs. Certificate check. Both write `vless://`. SSTP: user, password, server, TLS hostname, cert check, PAP/CHAP. Trojan: password, `trojan://` server, TLS hostname, cert check. Share QR of the selected outbound. Export `.loft` of this connection. |
-| Settings | Hold, split, About (software + protocol 1.0). Import a `.loft` (one or several connections). Export all as `Family.loft`. |
-| Log | Last lines from the service. No key material. Behind Advanced. |
-| VLESS / SSTP | Same scanner as Scan. Copy: “Same tunnel.” |
+| Home | Mark, `loft`, status pill (tap → list), large Connect / Disconnect. Off: pill “Not connected · Home ›”. Connecting: pill “Connecting: Home…”, a **Cancel** button, spark “handshake”. Cards **METHOD / DOWN / UP** and spark “speed, last minute” (↓ in lamp, ↑ in stone) when simplified interface is off; tapping the cards opens a **Details** sheet (loft network address, method, MTU, server). Navigation bar below. |
+| Connections | Title, subtitle “Each has its own key and address. One is active.” Row: compact Connect/Disconnect, name, host, side kind (`loft · get` / `sstp` / `vless` / `trojan`) and **active** on the live one. Tap opens the connection; only Connect switches the tunnel. **Swipe right** edits, **left** deletes (with a dialog), `ItemTouchHelper`. **Long-press** menu: Edit / Export `.loft` (selected only) / Delete. **FAB `+`** opens a sheet: Scan QR · Paste link · From file · Manually. No gesture hint on the screen. |
+| Edit | Full-screen dialog: **✕** on top returns to where it was opened. A new connection has the title “New connection”, kind loft / SSTP / VLESS / Trojan and **Scan** in the top bar. An existing one shows its kind as one capsule (it cannot change), a **⋮** menu in the top bar (Share QR, Export `.loft`) and a red **Delete** at the end with a dialog. loft and VLESS: **Link / Manual**; the link shows the server and hides only the key, Show reveals all of it. loft Manual: access key, host, port, method (**Auto**·GET·WS·H2·QUIC·H3), path. VLESS Manual: UUID, host, port, TLS·REALITY, TCP·XHTTP, TLS hostname, fingerprint and the mode’s fields. SSTP: user, password, server, cert check, PAP/CHAP. Trojan: password, `trojan://` server, cert check. No interface toggle: the tunnel is always `VpnService`. A folding **More options**: mux (loft), DNS, DNS into the system; SSTP and Trojan keep the TLS hostname here, SSTP also “these addresses only”. Save. |
+| Onboard | Start: **Scan QR** and **Paste link** (a copied link is added at once); “Enter the key and address by hand” leads to two steps: **1 Access key** (`lt_…`) → Continue, **2 Address**: URL; **More options** hides the method (**Auto** first) and the path → Connect. Then the stock Android **Connection request** once; the screen says to tap OK. |
+| Settings | One list with groups **General / Route / Connection**. Header Reset routes. Links **Defaults \| Journal \| About**; Defaults asks first. General: simplified interface, speed units, language, extended journal. Route: default route, **No internet without the VPN** (not a toggle: on Android it is the system “Always-on VPN” and “Block connections without VPN”, with an **Open VPN settings** link), split with a **Lists** button. Connection: **Connect at launch**, **Reconnect if it drops**, external IP. |
+| Journal | From Settings, **←** on top, the navigation bar stays. Front and session lines, the key shortened. Copy / Share / Clear (with a dialog). |
+| About | From Settings, **←** on top. Mark, loft, version, protocols loft/1.0 · SSTP · VLESS · Trojan, blurb, “Made with love by A³”. |
+| Scan | **✕** on top. Camera QR. From file (SAF) / From gallery (Photo Picker). Field “Or paste a link”, buttons **Paste** and **Add**. Confirm shows name, kind, transport, host; the secret is hidden. |
+| Share QR | **✕** on top. The QR and the `loft://` line, the key warning, **Share** and **Copy link**. |
+
+**Simplified interface**: Home is mark, pill, Connect / Disconnect, navigation bar. Cards and spark hide.
+
+### Split routing
+
+The macOS model (macOS DESIGN §5): a **zone** goes through Loft or around it, a **service** (name + CIDRs) only belongs to a zone, an **ignore** CIDR is never routed and survives list pulls. Built-in zones Local (around, LAN) and Global (through, `global.bat`); own zones come from the editor. On Android “through Loft” is `VpnService.Builder.addRoute` and “around” is `excludeRoute` (Android 13+); on older versions “around” is cut out of the tunnel routes. With the tunnel off everything is direct anyway.
+
+Entry: Settings → Route → the toggle and the gold **Lists**. The screens open inside the Settings tab with **←** on top. They are the iOS ones: Lists (toggle, zone tabs with service counts, `Global · Through Loft`, search, service rows, **+ Add**, Import · Export · Repository), Network (Route / Ignore, networks, service, zone), Zones, Zone (name, direction, list address + **Lists**, auto-update; an own zone has Delete zone, services → Global), Repository, Catalog (World, Russia, China, Iran, Kazakhstan, Belarus), Import (from a file via SAF), Export (all zones in one loft-routes file, share sheet; no Keenetic .bat format).
 
 ## 3. Android chrome
 
-Do not restyle Settings → Network & internet → VPN. The mock shows how **loft** looks in *their* VPN list: status Connected, type VPN, the switch is the system tunnel, not a second switch in our app.
+Do not repaint Settings → Network & internet → VPN. The mock shows how **loft** looks in *their* VPN list: status Connected, the switch is the system tunnel, not a second toggle in our app.
 
-Our Connect calls `VpnService.prepare` once, then `startForegroundService(LoftVpnService)`. If the user disables loft in Settings, the app shows down.
+Connect calls `VpnService.prepare` once, then `startForegroundService(LoftVpnService)`. If the user turns loft off in Settings, the app shows off.
 
-VPN permission is the stock **Connection request** sheet once. After that, Connect does not ask again.
+VPN permission is the stock **Connection request** dialog once. After that Connect does not ask again.
 
-Camera permission is the stock sheet the first time Scan opens. Gallery uses the system Photo Picker (no broad media permission). SAF accepts images, text, YAML, `.loft`.
+Camera permission is the stock sheet on the first Scan. The gallery is the system Photo Picker (no broad media access). SAF: images, text, YAML, `.loft`.
 
-Intent filter `loft` so a tap on `loft://…` offers import. `.loft` files open through the same detector.
+Intent filter `loft`: tapping `loft://…` offers import. `.loft` files open through the same detector.
 
 ### List gestures
 
-Same family as iOS. Views `ItemTouchHelper` plus a long-press `PopupMenu`. Not a pencil-only row.
-
 | Gesture | Action |
 |---------|--------|
-| Tap | Select. If another connection was up, disconnect it and connect this one. |
-| Swipe trailing (left) | Delete, with a confirm dialog. |
-| Swipe leading (right) | Edit. |
-| Long-press | Menu: Edit; Export `.loft` when this row is selected; Delete. |
-| Export on the selected row | Sheet: this connection as `Name.loft`; QR `loft://` of the live front; all connections as `Family.loft`. |
+| Tap | Open the connection (Edit). The compact Connect button connects; if another connection was up, it goes down first. |
+| Swipe left | Delete, with a confirm dialog. |
+| Swipe right | Edit. |
+| Long-press | Menu: Edit; Export `.loft` when the row is selected; Delete. |
+| Export | Sheet: this connection as `Name.loft`; QR `loft://` of the live front; all connections as `Family.loft`. |
 
-A connected session is a **foreground service** (type `connectedDevice`). The shade shows name, overlay IP, Disconnect. API 33+ also needs the notification permission sheet once.
+A live session is a **foreground service** (type `connectedDevice`). The shade shows the name, kind · transport · overlay IP, Disconnect. On API 33+ there is also the notification permission sheet, once.
 
-Hold maps onto the system toggles **Always-on VPN** and **Block connections without VPN**. The app can deep-link into that Settings page; the user flips those switches. Copy uses *route* / *direct Internet*, not “kill switch”.
+**No internet without the VPN** on Android is the system **Always-on VPN** and **Block connections without VPN**. The app opens that Settings page; the user flips the switches.
 
-Quick Settings tile: one tap Connect/Disconnect of the active profile. Lamp on = up.
+Quick Settings tile: one tap connects or disconnects the active profile. Lamp lit = online.
 
 ## 4. Visual
 
-Same loft tokens as iOS and macOS: Ink `#1A1714`, Lamp `#E8B84A`, Paper `#E8DFD2`, Avenir Next. The phone chrome in the mock is loft (dark paper), not Material You purple.
+The same tokens as iOS and macOS: Ink `#1A1714`, Lamp `#E8B84A`, Paper `#E8DFD2`, Avenir Next. The app chrome is loft (dark paper), not lilac Material You; the components are Material: a bottom navigation bar (the active tab is a lamp capsule under the icon), a top app bar with “←” / “✕” and a ⋮ menu, a 56 dp FAB with 16 dp corners, bottom sheets and dialogs.
 
-Type: headings Demi, body Regular, keys SF Mono / Roboto Mono. Connected = lamp window on. Down = lamp off, stone L.
+Type: Demi headings, Regular body, Roboto Mono for keys. Online = the lamp window lit. Off = the lamp dark, a stone L.
 
-Safe area: status bar + gesture pill. One column. Thumb reach: Connect is the large control on Home.
-
-Scan: dark finder, lamp-colored corner brackets, two actions under the finder (From file / From gallery).
-
-System surfaces in the mock (Settings, Connection request, shade, tiles) keep stock Android chrome so the product boundary is visible.
+System surfaces in the mock (Connection request, Settings → VPN, shade, tile) keep stock Android chrome so the product boundary is visible.
 
 ## 5. Copy
 
-| EN | RU |
-|----|----|
-| loft | loft |
-| Connect | Подключить |
-| Disconnect | Отключить |
-| Connecting… | Подключаем… |
-| Connection | Подключение |
-| Member key | Ключ участника |
-| All traffic | Весь трафик |
-| Hold the route | Удерживать маршрут |
-| Direct Internet | Прямой Интернет |
-| Reset routes | Сбросить маршруты |
-| Scan QR | Сканировать QR |
-| From file | Из файла |
-| From gallery | Из галереи |
-| Share QR | QR of the import URI |
-| Edit | Править |
-| Delete | Удалить |
-| Export | Экспорт |
-| VLESS | VLESS |
-| VPN is in Android Settings | VPN — в Настройках Android |
-| Connection request | Запрос подключения |
-| Always-on VPN | VPN всегда включён |
-| Block connections without VPN | Блокировать без VPN |
+Shared strings — buttons, settings, routes — come from `clients/macOS/lang/*.lang` and read the same on macOS, iOS and Android. Android has its own lines only where there is no counterpart: Connection request, the system hold switches, shade, tile, “From gallery”. The mock is in Russian, English and Chinese.
+
+| id | EN | RU |
+|----|----|----|
+| connect | Connect | Подключить |
+| connecting | Connecting… | Подключение… |
+| disconnect | Disconnect | Отключить |
+| pill_off | Not connected · Home › | Не подключено · Home › |
+| key_title | Access key | Ключ доступа |
+| hold | No internet without the VPN | Без VPN — без интернета |
+| auto | Connect at launch | Подключать при запуске |
+| reconnect | Reconnect if it drops | Переподключаться при обрыве |
+| split | Split routing | Раздельная маршрутизация |
+| scan | Scan QR | Сканировать QR |
+| from_gallery | From gallery | Из галереи |
+| open_sys | Open VPN settings | Открыть Настройки VPN |
+| always | Always-on VPN | VPN всегда включён |
+| block | Block connections without VPN | Блокировать без VPN |
+| consent | Connection request | Запрос подключения |
