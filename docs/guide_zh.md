@@ -91,7 +91,8 @@ channel wg-fi dev wg-fi
 channel px socks5 192.0.2.40:1080 user u pass "p w" udp proxy check tcp probe example.com:443
 channel web http 192.0.2.41:3128 tls      # HTTP 或 HTTPS 代理（CONNECT）
 channel office sstp vpn.example.org:443 user office pass x auth mschapv2
-prio main wg-nl wg-fi px then direct      # 优先级列表：第一个可用通道，然后 direct 或 block
+prio main wg-nl wg-fi px then direct limit wg-fi 50/10   # 优先级列表：第一个可用通道，然后 direct 或 block；wg-fi 限速 50/10 Mbit/s
+prio both wg-nl wg-fi then direct multi  # 多路径：新连接依次分配到可用通道
 prio work office then block
 rule member bob via work
 rule tag staff via main
@@ -99,7 +100,7 @@ rule list blocked via main                # node.conf 中 lists 的列表
 default via main
 ```
 
-规则按顺序匹配，然后是 `default`；每条规则指向一个优先级列表（或 `direct`、`block`）。列表先用第一个能承载流量的通道，再用下一个，最后是 `then` 那一步。通道处于 `off`、没有接口、最近 20 秒连接失败或连通性检查不通过时会被跳过：`check ping`（内核接口）或 `check tcp` 每 `every` 秒（10）发一次探测，连续 `fails` 次（3）失败即判定断连；一次成功就恢复。规则仍可以直接指向通道——此时顺序由该通道的 `fail` 链（通道、`direct`、`block`）决定，与旧文件相同。代理可经由（`via`）另一通道。`dev` 把套接字绑定到接口（SO_BINDTODEVICE）；系统需要相应路由规则（`ip rule add oif DEV lookup TABLE` 并在 TABLE 中设默认路由），由 loft-panel 配置。TCP 流与成员数据报遵循规则；ICMP 与发往节点的 DNS 查询直连。节点在 SIGHUP 时重新读取该文件，并每 5 秒写入 `egress-status.json`（状态、字节数、连接数）。
+规则按顺序匹配，然后是 `default`；每条规则指向一个优先级列表（或 `direct`、`block`）。列表先用第一个能承载流量的通道，再用下一个，最后是 `then` 那一步。通道处于 `off`、没有接口、最近 20 秒连接失败或连通性检查不通过时会被跳过：`check ping`（内核接口）或 `check tcp` 每 `every` 秒（10）发一次探测，连续 `fails` 次（3）失败即判定断连；一次成功就恢复。规则仍可以直接指向通道——此时顺序由该通道的 `fail` 链（通道、`direct`、`block`）决定，与旧文件相同。`multi` 让列表变成多路径：每个新 TCP 连接从下一个通道开始（成员到同一主机的 UDP 保持一条路）。`limit 通道 入/出` 为按该列表出去的所有人限制该通道速度，单位 Mbit/s（入是到成员的方向，0 表示不限）。代理可经由（`via`）另一通道。`dev` 把套接字绑定到接口（SO_BINDTODEVICE）；系统需要相应路由规则（`ip rule add oif DEV lookup TABLE` 并在 TABLE 中设默认路由），由 loft-panel 配置。TCP 流与成员数据报遵循规则；ICMP 与发往节点的 DNS 查询直连。节点在 SIGHUP 时重新读取该文件，并每 5 秒写入 `egress-status.json`（状态、字节数、连接数）。
 
 `LOFT_TOKEN` 是节点密钥（伪装、控制器 seed）。客户端用 `members.keys` 里的每成员密钥。`auth shared enable`（YAML 里 `auth_shared: true`）在密钥环空着时把 `LOFT_TOKEN` 当客户端密钥——旧的单令牌覆盖网。环不空就绝不掺节点令牌，标志开着也不行。新安装写 `auth shared disable`，签发一把 `operator` 密钥。
 
