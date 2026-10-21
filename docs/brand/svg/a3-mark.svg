@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- A³ maker mark. Snow A, lamp 3, ink ground. Live text: Avenir Next Demi. -->
+  <defs>
+    <radialGradient id="a3glow" cx="50%" cy="46%" r="48%">
+      <stop offset="0%" stop-color="#2C2723"/>
+      <stop offset="100%" stop-color="#1A1714"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#a3glow)"/>
+  <text x="488" y="690" text-anchor="middle"
+        font-family="Avenir Next, Avenir, Helvetica Neue, sans-serif"
+        font-size="560" font-weight="600" fill="#F3EDE4">A</text>
+  <text x="760" y="390" text-anchor="middle"
+        font-family="Avenir Next, Avenir, Helvetica Neue, sans-serif"
+        font-size="220" font-weight="600" fill="#E8B84A">3</text>
+</svg>

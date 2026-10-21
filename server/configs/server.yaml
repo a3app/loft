@@ -1,0 +1,80 @@
+listen: ":443"
+cert: /etc/loft/fullchain.pem
+key: /etc/loft/privkey.pem
+token: "change-me-long-random"
+
+# Optional real website root. Empty = built-in cover page.
+cover_dir: ""
+
+get_path: /static/js
+ws_path: /api/v1/sync
+h2_path: /api/v1/tunnel
+h3_path: /api/v1/tunnel
+
+# fronts: leave empty for get, ws, h2, quic, h3. Drop a name to disable it.
+# connect is HTTP CONNECT splice (mux-off TCP); off unless listed.
+# fronts: [get, ws, h2, quic, h3]
+# fronts: [get, ws, h2, quic, h3, connect]
+
+# decoy: this node's identity. Unauthorized TCP (any SNI, including the
+# advertise hostname) and UDP/443 are spliced here — an active probe sees
+# that origin's live TLS/QUIC. First entry is what the node "is".
+# Empty list = off.
+decoy:
+  - www.google.com:443
+
+# cidrs that may complete TLS on own SNI without session_id (CDN origin pull).
+# Empty = every own-SNI probe is spliced.
+# cdn_peers:
+#   - 77.88.0.0/16
+
+# mask: loft TLS wears a dest-shaped leaf (probes still splice).
+mask: true
+
+role: controller
+advertise: https://controller.example
+roster_path: /static/v3/manifest.json
+lists_path: /static/v3/lists.json
+
+# named address lists; the client maps names to direct/via/drop
+# lists:
+#   yandex:
+#     - yandex.ru
+#     - .yandex.ru
+#   youtube:
+#     - youtube.com
+#     - .googlevideo.com
+#   direct:
+#     - .ru
+#   drop:
+#     - ads.example
+
+# relays: allowlist for enrol (id must match). Live roster = advertise + heartbeats.
+enrol: list
+# auth_shared: false
+#   false (default): clients use members.keys. Empty ring does not accept LOFT_TOKEN.
+#   true: empty members.keys → LOFT_TOKEN is the client secret (old one-token overlay).
+#   A non-empty ring never mixes LOFT_TOKEN, even when this is true.
+# relays:
+#   - id: ru1
+#     url: https://203.0.113.10
+#     decoy: www.google.com:443
+#     fronts: [get, ws, h2]
+#     weight: 100
+
+# extra node addresses the client may fail over to (host:port, unsigned)
+# replicas:
+#   - 203.0.113.10:443
+
+# session event log (GET seq / 404 / silence). Empty = off. Not on the public path.
+# Join with a client -drive log on seq + UTC. sid is truncated.
+# trace: /var/log/loft-sess.log
+
+# quic_alpn: h3   # default; do not use "loft"
+
+# canary: path-integrity testimony for TLS. Chrome-shaped ClientHello
+# through CDNs, reverse proxies, and TLS middleboxes. Does not hide SNI.
+canary:
+  fat_hello: true    # Chrome-sized ClientHello (default)
+  split_hello: false # two TLS records for ClientHello; node reassembles
+  pad: 0             # extra padding bytes, 0–2048

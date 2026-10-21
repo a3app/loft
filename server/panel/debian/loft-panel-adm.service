@@ -1,0 +1,39 @@
+[Unit]
+Description=loft server panel, root helper
+Documentation=file:///usr/share/doc/loft-panel/README.md
+Before=loft-panel.service
+
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# Root: it rewrites /var/lib/loft and restarts loft-node. It has no network
+# and talks only to the loft-panel user over /run/loft-panel-adm/adm.sock.
+ExecStart=/usr/bin/loft-panel-adm -socket /run/loft-panel-adm/adm.sock -panel-user loft-panel -node-user loft -dir /var/lib/loft -node-bin /usr/bin/loft-node
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+
+RuntimeDirectory=loft-panel-adm
+RuntimeDirectoryMode=0750
+# job.json and job.log of package and update jobs. The jobs themselves run in
+# the transient unit loft-panel-job (systemd-run), outside this sandbox.
+StateDirectory=loft-panel-adm
+StateDirectoryMode=0700
+PrivateNetwork=true
+# nginx -t opens the site's sockets to test them; PrivateNetwork keeps that
+# inside an empty namespace.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+# node data and certificates, the panel's nginx site and env file
+ReadWritePaths=/var/lib/loft /etc/loft /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/loft-panel
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

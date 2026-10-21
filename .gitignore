@@ -1,0 +1,47 @@
+/loft
+/loft-node
+/loft-front
+/loft-probe
+/bin/
+dist/
+*.o
+clients/macOS/build/
+clients/macOS/design/shots/
+clients/mobile/build/
+clients/Android/.gradle/
+clients/Android/app/build/
+clients/Android/build/
+clients/Aurora/bin/
+clients/Aurora/build/
+docs/brand/__pycache__/
+docs/brand/concepts/
+.DS_Store
+
+# keys, certs, env
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.pass
+.env
+*.env
+!.env.example
+
+# local / operator secrets
+secrets/
+private/
+*.local.yaml
+*.local.yml
+*.instance
+
+# research and other local-only notes (never push)
+research_notes/
+reports/
+
+# GitHub deploy key — local only, never commit
+github-deploy
+github-deploy.pub
+/loft-panel
+/loft-panel-adm

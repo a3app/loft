@@ -1,0 +1,19 @@
+#!/bin/sh
+# loft-panel .deb prerm: stop and disable the services.
+set -e
+
+case "$1" in
+remove|deconfigure)
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl disable --now loft-panel loft-panel-adm >/dev/null 2>&1 || true
+		systemctl disable loft-panel-net >/dev/null 2>&1 || true
+	fi
+	;;
+upgrade)
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl stop loft-panel loft-panel-adm >/dev/null 2>&1 || true
+	fi
+	;;
+esac
+
+exit 0

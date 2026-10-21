@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — Aurora OS</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --ink-2: #241f1b;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", "Sail Sans", ui-monospace, Menlo, monospace;
+      --au-bg: #1c232b;
+      --au-card: #27303a;
+      --au-ink: #e8eef4;
+      --au-mute: #8a98a6;
+      --au-line: #35404c;
+      --au-hi: #4db6e2;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      height: 100%;
+    }
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #3A332E transparent;
+    }
+    nav::-webkit-scrollbar { width: 6px; }
+    nav::-webkit-scrollbar-track { background: transparent; }
+    nav::-webkit-scrollbar-thumb {
+      background: #3A332E;
+      border-radius: 6px;
+    }
+    nav::-webkit-scrollbar-thumb:hover { background: #8A7E72; }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 14px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav button {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 6px 10px; border-radius: 8px; cursor: pointer;
+    }
+    nav button:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang { display: flex; gap: 4px; margin: 4px 8px 10px; }
+    .lang button { flex: 1; text-align: center; padding: 6px 0; font-weight: 600; font-size: 12px; }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage-wrap {
+      padding: 28px; display: flex; align-items: center; justify-content: center;
+      min-height: 0; overflow: auto;
+      scrollbar-width: none;
+    }
+    .stage-wrap::-webkit-scrollbar { width: 0; height: 0; }
+
+    .phone {
+      width: 320px; height: 680px;
+      background: #181512;
+      border: 8px solid #2c2622;
+      border-radius: 36px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      color: var(--snow);
+    }
+    .pulley {
+      position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+      width: 42px; height: 5px; background: #3a332e; border-radius: 3px; z-index: 5;
+    }
+    .sb {
+      height: 36px; padding: 12px 18px 0;
+      display: flex; justify-content: space-between; font-size: 11px; font-weight: 600;
+      color: var(--snow); letter-spacing: .02em;
+    }
+    .home-ind {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      width: 96px; height: 4px; background: #3a332e; border-radius: 2px; z-index: 4;
+    }
+    .screen {
+      position: absolute; inset: 0; padding: 40px 18px 28px;
+      overflow: auto;
+      scrollbar-width: none;
+    }
+    .screen::-webkit-scrollbar { width: 0; height: 0; }
+    .screen > .title {
+      position: sticky; top: 0; z-index: 2;
+      background: #181512; padding-bottom: 8px;
+    }
+    .hidden { display: none !important; }
+
+    .lamp {
+      width: 12px; height: 12px; border-radius: 3px; background: var(--mute);
+      display: inline-block; vertical-align: middle;
+    }
+    .lamp.on { background: var(--lamp); box-shadow: 0 0 12px rgba(232,184,74,.55); }
+    .lamp.wait { background: var(--lamp-hi); box-shadow: 0 0 8px rgba(243,210,122,.35); }
+
+    .hero { text-align: center; padding: 28px 8px 8px; }
+    .hero .mark { width: 56px; height: 56px; margin: 0 auto 14px; }
+    .hero h1 { margin: 0; font-size: 22px; letter-spacing: -0.04em; font-weight: 600; }
+    .hero .name { color: var(--mute); font-size: 13px; margin-top: 4px; }
+    .hero .ip { font-family: var(--mono); font-size: 12px; color: var(--stone); margin-top: 10px; }
+
+    .go, .ghost, .danger {
+      border: 0; border-radius: 14px; padding: 14px 16px; cursor: pointer;
+      font: 600 15px var(--ui); width: 100%;
+    }
+    .go { background: var(--lamp); color: var(--ink); }
+    .ghost { background: #2a2420; color: var(--snow); }
+    .danger { background: rgba(226,75,75,.15); color: #f0a0a0; }
+    .btns { display: flex; flex-direction: column; gap: 8px; margin-top: 22px; }
+    .meta { margin-top: 18px; }
+    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .row .k { color: var(--mute); font-size: 12px; }
+    .row .v { font-size: 13px; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    .tag {
+      display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: #2a2420; color: var(--stone);
+    }
+    .tag.ok { background: rgba(125,186,106,.15); color: var(--ok); }
+    .tag.wait { background: rgba(232,184,74,.12); color: var(--lamp); }
+    .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 10px 0 0; }
+    .title {
+      font-size: 20px; font-weight: 600; letter-spacing: -0.03em; margin: 4px 0 14px;
+    }
+    label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
+    label.field.cap { margin-bottom: 4px; }
+    label.field input, label.field select {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 10px; padding: 10px 12px; font: 400 14px var(--ui);
+    }
+    label.field input.mono { font-family: var(--mono); font-size: 12px; }
+    .seg {
+      display: flex; background: #211c19; border-radius: 10px; padding: 3px; gap: 2px; margin: 0 0 14px;
+    }
+    .seg button {
+      flex: 1; border: 0; background: none; color: var(--stone);
+      font: 600 12px var(--ui); padding: 8px 4px; border-radius: 8px; cursor: pointer;
+    }
+    .seg button.on { background: var(--lamp); color: var(--ink); }
+    .pair {
+      display: grid; grid-template-columns: 1fr 80px; gap: 8px;
+    }
+    .card {
+      background: #211c19; border: 1px solid #2e2824; border-radius: 12px;
+      padding: 12px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; gap: 8px;
+    }
+    .card .n { font-weight: 600; font-size: 14px; }
+    .card .m { color: var(--mute); font-size: 11px; margin-top: 2px; }
+    .card.on { border-color: rgba(232,184,74,.45); }
+    .set-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--line);
+    }
+    .set-row .k { font-size: 14px; }
+    .set-row .s { color: var(--mute); font-size: 11px; margin-top: 2px; }
+    .toggle {
+      width: 42px; height: 26px; border-radius: 13px; background: #3a332e; position: relative; flex-shrink: 0;
+      cursor: pointer;
+    }
+    .toggle i {
+      position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #d8cfc4;
+    }
+    .toggle.on { background: var(--lamp); }
+    .toggle.on i { left: 19px; background: var(--ink); }
+    .finder {
+      position: relative;
+      height: 220px; margin: 8px 0 12px;
+      background: #0a0908;
+      border-radius: 16px; overflow: hidden;
+    }
+    .finder .noise {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 40% 35%, rgba(232,184,74,.12), transparent 50%),
+        repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(243,237,228,.03) 3px, rgba(243,237,228,.03) 4px);
+    }
+    .finder .frame { position: absolute; inset: 28px; }
+    .finder .frame i {
+      position: absolute; width: 22px; height: 22px; border-color: var(--lamp); border-style: solid;
+    }
+    .finder .frame i:nth-child(1) { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .finder .frame i:nth-child(2) { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    .finder .frame i:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+    .finder .frame i:nth-child(4) { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+    .paste {
+      display: block; width: 100%; min-height: 64px; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 10px; padding: 10px 12px; font: 400 11px var(--mono);
+      resize: none;
+    }
+    .spin {
+      width: 22px; height: 22px; border: 2px solid #2e2824; border-top-color: var(--lamp);
+      border-radius: 50%; margin: 0 auto 14px; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .log {
+      font-family: var(--mono); font-size: 11px; line-height: 1.45;
+      background: #0a0908; border-radius: 10px; padding: 10px 12px; color: var(--stone);
+      white-space: pre-wrap;
+    }
+
+    .sys {
+      width: 320px; height: 680px;
+      background: var(--au-bg); color: var(--au-ink);
+      border: 8px solid #2c2622; border-radius: 36px;
+      overflow: hidden; position: relative;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      font-size: 13px;
+    }
+    .sys .pulley { background: #4a5866; }
+    .sys .sb { color: var(--au-ink); }
+    .sys .home-ind { background: #4a5866; }
+    .sys main { padding: 44px 16px 24px; }
+    .sys h2 { margin: 0 0 4px; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+    .sys .cap { color: var(--au-mute); margin: 0 0 14px; font-size: 12px; line-height: 1.4; }
+    .a-group {
+      background: var(--au-card); border-radius: 12px; overflow: hidden;
+    }
+    .a-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 13px 16px; border-bottom: 1px solid var(--au-line);
+    }
+    .a-row:last-child { border-bottom: 0; }
+    .a-row .l { font-size: 15px; }
+    .a-status { color: var(--au-hi); font-size: 12px; font-weight: 500; }
+    .a-sw {
+      width: 48px; height: 28px; border-radius: 14px; background: var(--au-hi); position: relative;
+    }
+    .a-sw i {
+      position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff;
+    }
+
+    .cover-stage {
+      width: 320px; height: 680px;
+      background: #0a0908;
+      border: 8px solid #2c2622; border-radius: 36px;
+      overflow: hidden; position: relative;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    }
+    .cover-stage .sb { color: var(--stone); }
+    .cover-card {
+      position: absolute; left: 36px; right: 36px; top: 160px;
+      background: #211c19; border-radius: 18px; padding: 22px 16px 16px;
+      text-align: center;
+    }
+    .cover-card .mark { width: 40px; height: 40px; margin: 0 auto 10px; }
+    .cover-card h3 { margin: 0; font-size: 18px; letter-spacing: -0.03em; }
+    .cover-card .sub { color: var(--mute); font-size: 12px; margin-top: 6px; }
+    .cover-card .go { margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+        <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+        <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+      </svg>
+      loft
+    </div>
+    <p data-i="navCap">Макет приложения ОС Аврора. Туннель — ConnMan, сессия — loft-front.</p>
+    <div class="lang">
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
+    </div>
+    <h4 data-i="hApp">Приложение</h4>
+    <button type="button" class="on" data-go="home" data-i="nHome">Дом · в сети</button>
+    <button type="button" data-go="off" data-i="nOff">Дом · выкл</button>
+    <button type="button" data-go="connecting" data-i="nOpen">Подключение</button>
+    <button type="button" data-go="list" data-i="nList">Подключения</button>
+    <button type="button" data-go="scan" data-i="nScan">Сканер QR</button>
+    <button type="button" data-go="edit" data-vpn="loft" data-i="nEdit">Правка</button>
+    <button type="button" data-go="edit" data-vpn="sstp" data-i="nEditSstp">Правка · SSTP</button>
+    <button type="button" data-go="edit" data-vpn="vless" data-i="nEditVless">Правка · VLESS</button>
+    <button type="button" data-go="edit" data-vpn="trojan" data-i="nEditTrojan">Правка · Trojan</button>
+    <button type="button" data-go="settings" data-i="nSet">Настройки</button>
+    <button type="button" data-go="onboard" data-i="nOnb">Онбординг</button>
+    <button type="button" data-go="log" data-i="nLog">Журнал</button>
+    <h4>Aurora</h4>
+    <button type="button" data-go="cover" data-i="nCover">Обложка</button>
+    <button type="button" data-go="sysvpn" data-i="nSys">Настройки → VPN</button>
+  </nav>
+
+  <div class="stage-wrap">
+    <div class="phone" id="phone">
+      <div class="pulley"></div>
+      <div class="sb"><span>12:00</span><span>LTE  ·  84%</span></div>
+      <div class="home-ind"></div>
+
+      <div class="screen" id="home">
+        <div class="hero">
+          <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+            <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+            <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+          </svg>
+          <h1>Loft</h1>
+          <div class="name">Home</div>
+          <div class="ip">10.8.0.14</div>
+        </div>
+        <div class="btns">
+          <button type="button" class="danger" data-i="close">Отключить</button>
+        </div>
+        <div class="meta">
+          <div class="row"><span class="k" data-i="sState">Состояние</span><span class="tag ok" data-i="sUp">в сети</span></div>
+          <div class="row"><span class="k" data-i="sFront">Фронт</span><span>loft · get · cdn.example.com</span></div>
+          <div class="row"><span class="k">MTU</span><span class="mono">1280</span></div>
+          <div class="row"><span class="k" data-i="sBytes">Трафик</span><span class="mono">↓ 12.4 MiB  ↑ 1.1 MiB</span></div>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="off">
+        <div class="hero">
+          <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+            <path fill="#8A7E72" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+            <path fill="#3A332E" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+          </svg>
+          <h1>Loft</h1>
+          <div class="name">Home</div>
+          <div class="ip" data-i="offIp">прямой Интернет</div>
+        </div>
+        <div class="btns">
+          <button type="button" class="go" data-i="open">Открыть Loft</button>
+        </div>
+        <p class="hint" data-i="offHint">Одна строка ConnMan. Открыть Loft поднимает системный оверлей.</p>
+      </div>
+
+      <div class="screen hidden" id="connecting">
+        <div class="hero">
+          <div class="spin"></div>
+          <h1 data-i="opening">Подключение…</h1>
+          <div class="name">Home · loft · get</div>
+        </div>
+        <div class="btns">
+          <button type="button" class="ghost" data-i="cancel">Отмена</button>
+        </div>
+        <p class="hint" data-i="openHint">Hello, Status, пересечение caps. Свежий 0x02 и тот же instance_id на смене пути. Фронты пинятся мимо tun.</p>
+      </div>
+
+      <div class="screen hidden" id="list">
+        <div class="title" data-i="listT">Подключения</div>
+        <div class="card on">
+          <div>
+            <div class="n">Home</div>
+            <div class="m">loft · get · cdn.example.com</div>
+          </div>
+          <span class="lamp on"></span>
+        </div>
+        <div class="card">
+          <div>
+            <div class="n">Office</div>
+            <div class="m">sstp · tls · vpn.example.com</div>
+          </div>
+          <span class="lamp"></span>
+        </div>
+        <div class="card">
+          <div>
+            <div class="n">Travel</div>
+            <div class="m">vless · reality · de1.example.com</div>
+          </div>
+          <span class="lamp"></span>
+        </div>
+        <div class="card">
+          <div>
+            <div class="n">Gateway</div>
+            <div class="m">trojan · reality · nl1.example.com</div>
+          </div>
+          <span class="lamp"></span>
+        </div>
+        <p class="hint" data-i="listHint">Тап выбирает и переподключает: на Авроре активна одна строка VPN. Долгое нажатие: Правка / Экспорт .loft / Удалить.</p>
+        <div class="btns">
+          <button type="button" class="go" data-go="scan" data-i="scanQr">Сканировать QR</button>
+          <button type="button" class="ghost" data-go="edit" data-vpn="loft" data-i="add">Добавить вручную</button>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="edit">
+        <div class="title" data-i="eTitle">Подключение</div>
+        <label class="field"><span data-i="eName">Имя</span>
+          <input id="eName" value="Home" />
+        </label>
+        <label class="field"><span data-i="eKind">Тип подключения</span>
+          <select id="eKind">
+            <option value="loft" selected>loft</option>
+            <option value="sstp">sstp</option>
+            <option value="vless">vless</option>
+            <option value="trojan">trojan</option>
+          </select>
+        </label>
+        <div id="edit-loft">
+          <div class="seg" id="loftEntry">
+            <button type="button" class="on" data-entry="link" data-i="entryLink">Ссылка</button>
+            <button type="button" data-entry="manual" data-i="entryMan">Вручную</button>
+          </div>
+          <div id="loft-link">
+            <label class="field"><span data-i="loftUri">Адрес loft://</span>
+              <input class="mono" value="loft://lt_…@cdn.example.com/static/v3/build?type=get&amp;cdn=yandex#Home" />
+            </label>
+          </div>
+          <div id="loft-manual" class="hidden">
+            <label class="field"><span data-i="eKey">Ключ участника</span>
+              <input class="mono" type="password" value="lt_••••••••••••" />
+            </label>
+            <div class="pair">
+              <label class="field"><span data-i="vlessHost">Адрес</span>
+                <input class="mono" value="cdn.example.com" />
+              </label>
+              <label class="field"><span data-i="vlessPort">Порт</span>
+                <input class="mono" value="443" />
+              </label>
+            </div>
+            <label class="field"><span data-i="eType">Транспорт</span>
+              <select>
+                <option selected>get</option>
+                <option>ws</option>
+                <option>h2</option>
+                <option>quic</option>
+                <option>h3</option>
+              </select>
+            </label>
+            <label class="field"><span data-i="ePath">Путь</span>
+              <input class="mono" value="/static/v3/build" />
+            </label>
+          </div>
+        </div>
+        <div id="edit-sstp" class="hidden">
+          <label class="field"><span data-i="sstpUser">Пользователь</span>
+            <input value="alice" />
+          </label>
+          <label class="field"><span data-i="sstpPass">Пароль</span>
+            <input type="password" value="••••••••" />
+          </label>
+          <label class="field"><span data-i="sstpUrl">Сервер</span>
+            <input class="mono" value="https://vpn.example.com" />
+          </label>
+          <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+            <input class="mono" value="vpn.example.com" />
+          </label>
+          <div class="set-row">
+            <div>
+              <div class="k" data-i="sstpTls">Проверка сертификата</div>
+              <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
+            </div>
+            <div class="toggle on"><i></i></div>
+          </div>
+          <div class="set-row">
+            <div>
+              <div class="k" data-i="sstpPap">PAP / CHAP</div>
+              <div class="s" data-i="sstpPapD">Менее безопасно. По умолчанию только MSCHAPv2.</div>
+            </div>
+            <div class="toggle"><i></i></div>
+          </div>
+        </div>
+        <div id="edit-vless" class="hidden">
+          <div class="seg" id="vlessEntry">
+            <button type="button" class="on" data-entry="link" data-i="entryLink">Ссылка</button>
+            <button type="button" data-entry="manual" data-i="entryMan">Вручную</button>
+          </div>
+          <div id="vless-link">
+            <label class="field"><span data-i="vlessUrl">Ссылка vless://</span>
+              <input class="mono" value="vless://uuid@de1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome" />
+            </label>
+          </div>
+          <div id="vless-manual" class="hidden">
+            <label class="field"><span data-i="vlessUuid">UUID</span>
+              <input class="mono" type="password" value="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+            </label>
+            <div class="pair">
+              <label class="field"><span data-i="vlessHost">Адрес</span>
+                <input class="mono" value="de1.example.com" />
+              </label>
+              <label class="field"><span data-i="vlessPort">Порт</span>
+                <input class="mono" value="443" />
+              </label>
+            </div>
+            <label class="field cap"><span data-i="vlessSec">Защита</span></label>
+            <div class="seg" id="vlessSec">
+              <button type="button" data-sec="tls">TLS</button>
+              <button type="button" class="on" data-sec="reality">REALITY</button>
+            </div>
+            <label class="field cap"><span data-i="vlessNet">Транспорт</span></label>
+            <div class="seg" id="vlessNet">
+              <button type="button" class="on" data-net="tcp">TCP</button>
+              <button type="button" data-net="xhttp">XHTTP</button>
+            </div>
+            <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+              <input class="mono" value="www.example.com" />
+            </label>
+            <label class="field"><span data-i="vlessFp">Отпечаток TLS</span>
+              <input class="mono" value="chrome" />
+            </label>
+            <div id="vless-reality">
+              <label class="field"><span data-i="vlessPbk">Публичный ключ</span>
+                <input class="mono" type="password" value="••••••••" />
+              </label>
+              <label class="field"><span data-i="vlessSid">Short ID</span>
+                <input class="mono" value="abcd" />
+              </label>
+            </div>
+            <div id="vless-xhttp" class="hidden">
+              <label class="field"><span data-i="ePath">Путь</span>
+                <input class="mono" value="/path" />
+              </label>
+              <label class="field"><span data-i="vlessXhost">Заголовок Host</span>
+                <input class="mono" value="" />
+              </label>
+            </div>
+            <div class="set-row" id="vless-vision">
+              <div>
+                <div class="k" data-i="vlessVision">Vision</div>
+                <div class="s" data-i="vlessVisionD">xtls-rprx-vision на TCP.</div>
+              </div>
+              <div class="toggle"><i></i></div>
+            </div>
+          </div>
+          <div class="set-row">
+            <div>
+              <div class="k" data-i="sstpTls">Проверка сертификата</div>
+              <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
+            </div>
+            <div class="toggle on"><i></i></div>
+          </div>
+        </div>
+        <div id="edit-trojan" class="hidden">
+          <label class="field"><span data-i="trojanPass">Пароль</span>
+            <input type="password" value="••••••••" />
+          </label>
+          <label class="field"><span data-i="trojanUrl">Сервер</span>
+            <input class="mono" value="trojan://secret@nl1.example.com:443?security=reality&amp;sni=www.example.com" />
+          </label>
+          <label class="field"><span data-i="sstpSni">Имя хоста TLS</span>
+            <input class="mono" value="www.example.com" />
+          </label>
+          <div class="set-row">
+            <div>
+              <div class="k" data-i="sstpTls">Проверка сертификата</div>
+              <div class="s" data-i="sstpTlsD">Проверять сертификат HTTPS-сервера.</div>
+            </div>
+            <div class="toggle on"><i></i></div>
+          </div>
+        </div>
+        <p class="hint" id="eHint" data-i="eHint">Тип — loft / sstp / vless / trojan. Поля зависят от типа.</p>
+        <div class="btns">
+          <button type="button" class="go" data-i="eSave">Сохранить</button>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="scan">
+        <div class="title" data-i="scanT">Сканер QR</div>
+        <div class="finder">
+          <div class="noise"></div>
+          <div class="frame"><i></i><i></i><i></i><i></i></div>
+        </div>
+        <p class="hint" data-i="scanHint">Камера. loft://, sstp://, vless://, trojan:// или .loft.</p>
+        <label class="field"><span data-i="pasteL">Или вставить URI</span>
+          <textarea class="paste" placeholder="loft://lt_…@cdn.example.com/static/js?type=get"></textarea>
+        </label>
+        <div class="btns">
+          <button type="button" class="go" data-i="scanAdd">Добавить</button>
+          <button type="button" class="ghost" data-i="fromFile">Из файла</button>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="settings">
+        <div class="title" data-i="setT">Настройки</div>
+        <div class="set-row">
+          <div>
+            <div class="k" data-i="hold">Удерживать маршрут</div>
+            <div class="s" data-i="holdS">default ConnMan остаётся занятым</div>
+          </div>
+          <div class="toggle on"><i></i></div>
+        </div>
+        <div class="set-row">
+          <div>
+            <div class="k" data-i="split">Сплит</div>
+            <div class="s" data-i="splitS">Зоны: Через Loft / Мимо Loft</div>
+          </div>
+          <div class="toggle"><i></i></div>
+        </div>
+        <p class="hint" data-i="setHint">.loft — одно или несколько подключений, любые из loft / sstp / vless / trojan. Экспорт выбранного — со списка. О программе: loft/1.0.</p>
+        <div class="btns">
+          <button type="button" class="ghost" data-i="imp">Импорт .loft</button>
+          <button type="button" class="ghost" data-i="exp">Экспорт Family.loft</button>
+        </div>
+      </div>
+
+      <div class="screen hidden" id="onboard">
+        <div class="hero" style="padding-top:8px">
+          <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+            <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+            <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+          </svg>
+          <h1 data-i="onbT">Ключ участника</h1>
+        </div>
+        <p class="hint" data-i="onbP">Пароля нет. QR loft://, файл .loft или ключ lt_ и URL ноды.</p>
+        <label class="field"><span>lt_…</span>
+          <input class="mono" value="lt_…" />
+        </label>
+        <div class="btns">
+          <button type="button" class="go" data-i="onbGo">Дальше</button>
+          <button type="button" class="ghost" data-go="scan" data-i="onbFile">QR или файл</button>
+        </div>
+        <p class="hint" data-i="onbVpn">Дальше — штатное согласие ConnMan, если ОС спросит. Один раз.</p>
+      </div>
+
+      <div class="screen hidden" id="log">
+        <div class="title" data-i="logT">Журнал</div>
+        <div class="log">STATUS state=up ip=10.8.0.14 gw=10.8.0.1 tun=on dns=10.8.0.1 mtu=1280
+socks5 127.0.0.1:1080
+front get cdn.example.com</div>
+        <p class="hint" data-i="logHint">Последние строки loft-front. Ключ не пишется.</p>
+      </div>
+    </div>
+
+    <div class="cover-stage hidden" id="cover">
+      <div class="pulley"></div>
+      <div class="sb"><span>12:00</span><span>LTE  ·  84%</span></div>
+      <div class="home-ind"></div>
+      <div class="cover-card">
+        <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+          <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+          <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+        </svg>
+        <h3>Loft</h3>
+        <div class="sub">Home · 10.8.0.14</div>
+        <button type="button" class="danger" data-i="close">Отключить</button>
+      </div>
+    </div>
+
+    <div class="sys hidden" id="sysvpn">
+      <div class="pulley"></div>
+      <div class="sb"><span>12:00</span><span>LTE  ·  84%</span></div>
+      <div class="home-ind"></div>
+      <main>
+        <h2>VPN</h2>
+        <p class="cap" data-i="sysCap">Системный список. Тумблер — строка ConnMan Loft, не второй выключатель в приложении.</p>
+        <div class="a-group">
+          <div class="a-row">
+            <div>
+              <div class="l">Loft</div>
+              <div class="a-status" data-i="sysOn">Подключено</div>
+            </div>
+            <div class="a-sw"><i></i></div>
+          </div>
+        </div>
+        <p class="cap" style="margin-top:18px" data-i="sysType">Тип: loft. OpenVPN и IPsec остаются штатными строками ниже.</p>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const I = {
+      ru: {
+        navCap: "Макет приложения ОС Аврора. Туннель — ConnMan, сессия — loft-front.",
+        hApp: "Приложение",
+        nHome: "Дом · в сети", nOff: "Дом · выкл", nOpen: "Подключение",
+        nList: "Подключения", nScan: "Сканер QR", nEdit: "Правка",
+        nEditSstp: "Правка · SSTP", nEditVless: "Правка · VLESS", nEditTrojan: "Правка · Trojan",
+        nSet: "Настройки",
+        nOnb: "Онбординг", nLog: "Журнал", nCover: "Обложка", nSys: "Настройки → VPN",
+        close: "Отключить", open: "Открыть Loft", cancel: "Отмена",
+        sState: "Состояние", sUp: "в сети", sFront: "Фронт", sBytes: "Трафик",
+        offIp: "прямой Интернет",
+        offHint: "Одна строка ConnMan. Открыть Loft поднимает системный оверлей.",
+        opening: "Подключение…",
+        openHint: "Hello, Status, пересечение caps. Свежий 0x02 и тот же instance_id на смене пути. Фронты пинятся мимо tun.",
+        listT: "Подключения", add: "Добавить вручную", scanQr: "Сканировать QR",
+        listHint: "Тап выбирает и переподключает: на Авроре активна одна строка VPN. Долгое нажатие: Правка / Экспорт .loft / Удалить.",
+        eTitle: "Подключение", eName: "Имя", eKind: "Тип подключения", eAddr: "Адрес", eType: "Транспорт",
+        eHint: "Тип — loft / sstp / vless / trojan. Поля зависят от типа.",
+        eHintLoft: "Ссылка — строка loft://. Вручную — ключ, хост, порт, транспорт, путь.",
+        eHintSstp: "SSTP — пользователь, пароль, сервер. Имя хоста TLS и проверка сертификата.",
+        eHintVless: "Ссылка — строка vless://. Вручную — UUID, адрес, порт, TLS или REALITY.",
+        eHintTrojan: "Trojan — пароль и строка trojan://. Имя хоста TLS и проверка сертификата.",
+        entryLink: "Ссылка", entryMan: "Вручную",
+        loftUri: "Адрес loft://", eKey: "Ключ участника", ePath: "Путь",
+        sstpUser: "Пользователь", sstpPass: "Пароль", sstpUrl: "Сервер", sstpSni: "Имя хоста TLS",
+        sstpTls: "Проверка сертификата", sstpTlsD: "Проверять сертификат HTTPS-сервера.",
+        sstpPap: "PAP / CHAP", sstpPapD: "Менее безопасно. По умолчанию только MSCHAPv2.",
+        vlessUuid: "UUID", vlessUrl: "Ссылка vless://", vlessHost: "Адрес", vlessPort: "Порт",
+        vlessSec: "Защита", vlessNet: "Транспорт", vlessFp: "Отпечаток TLS",
+        vlessPbk: "Публичный ключ", vlessSid: "Short ID", vlessXhost: "Заголовок Host",
+        vlessVision: "Vision", vlessVisionD: "xtls-rprx-vision на TCP.",
+        trojanPass: "Пароль", trojanUrl: "Сервер",
+        eSave: "Сохранить",
+        scanT: "Сканер QR",
+        scanHint: "Камера. loft://, sstp://, vless://, trojan:// или .loft.",
+        pasteL: "Или вставить URI", scanAdd: "Добавить", fromFile: "Из файла",
+        setT: "Настройки",
+        hold: "Удерживать маршрут", holdS: "default ConnMan остаётся занятым",
+        split: "Сплит", splitS: "Зоны: Через Loft / Мимо Loft",
+        setHint: ".loft — одно или несколько подключений, любые из loft / sstp / vless / trojan. Экспорт выбранного — со списка. О программе: loft/1.0.",
+        imp: "Импорт .loft", exp: "Экспорт Family.loft",
+        onbT: "Ключ участника",
+        onbP: "Пароля нет. QR loft://, файл .loft или ключ lt_ и URL ноды.",
+        onbGo: "Дальше", onbFile: "QR или файл",
+        onbVpn: "Дальше — штатное согласие ConnMan, если ОС спросит. Один раз.",
+        logT: "Журнал",
+        logHint: "Последние строки loft-front. Ключ не пишется.",
+        sysCap: "Системный список. Тумблер — строка ConnMan Loft, не второй выключатель в приложении.",
+        sysOn: "Подключено",
+        sysType: "Тип: loft. OpenVPN и IPsec остаются штатными строками ниже."
+      },
+      en: {
+        navCap: "Aurora OS app mock. Tunnel is ConnMan, session is loft-front.",
+        hApp: "App",
+        nHome: "Home · up", nOff: "Home · down", nOpen: "Connecting",
+        nList: "Connections", nScan: "Scan QR", nEdit: "Edit",
+        nEditSstp: "Edit · SSTP", nEditVless: "Edit · VLESS", nEditTrojan: "Edit · Trojan",
+        nSet: "Settings",
+        nOnb: "Onboard", nLog: "Journal", nCover: "Cover", nSys: "Settings → VPN",
+        close: "Disconnect", open: "Open Loft", cancel: "Cancel",
+        sState: "State", sUp: "online", sFront: "Front", sBytes: "Traffic",
+        offIp: "direct Internet",
+        offHint: "One ConnMan row. Open Loft brings the system overlay up.",
+        opening: "Connecting…",
+        openHint: "Hello, Status, cap intersection. Fresh 0x02 and the same instance_id on path change. Fronts sit off the tun.",
+        listT: "Connections", add: "Add manually", scanQr: "Scan QR",
+        listHint: "Tap selects and reconnects: Aurora holds one VPN row. Long-press: Edit / Export .loft / Delete.",
+        eTitle: "Connection", eName: "Name", eKind: "Connection kind", eAddr: "Address", eType: "Transport",
+        eHint: "Kind is loft / sstp / vless / trojan. The fields follow the kind.",
+        eHintLoft: "Link is a loft:// string. Manual is key, host, port, transport, path.",
+        eHintSstp: "SSTP is username, password, server. TLS hostname and certificate check.",
+        eHintVless: "Link is a vless:// string. Manual is UUID, host, port, TLS or REALITY.",
+        eHintTrojan: "Trojan is a password and a trojan:// string. TLS hostname and certificate check.",
+        entryLink: "Link", entryMan: "Manual",
+        loftUri: "loft:// address", eKey: "Member key", ePath: "Path",
+        sstpUser: "Username", sstpPass: "Password", sstpUrl: "Server", sstpSni: "TLS hostname",
+        sstpTls: "TLS server verification", sstpTlsD: "Verify the HTTPS server certificate.",
+        sstpPap: "PAP / CHAP", sstpPapD: "Less secure. Default is MSCHAPv2 only.",
+        vlessUuid: "UUID", vlessUrl: "vless:// link", vlessHost: "Address", vlessPort: "Port",
+        vlessSec: "Security", vlessNet: "Transport", vlessFp: "TLS fingerprint",
+        vlessPbk: "Public key", vlessSid: "Short ID", vlessXhost: "Host header",
+        vlessVision: "Vision", vlessVisionD: "xtls-rprx-vision on TCP.",
+        trojanPass: "Password", trojanUrl: "Server",
+        eSave: "Save",
+        scanT: "Scan QR",
+        scanHint: "Camera. loft://, sstp://, vless://, trojan://, or a .loft.",
+        pasteL: "Or paste a URI", scanAdd: "Add", fromFile: "From file",
+        setT: "Settings",
+        hold: "Hold the route", holdS: "ConnMan default stays claimed",
+        split: "Split", splitS: "Zones: Through Loft / Around Loft",
+        setHint: ".loft holds one or several connections, any mix of loft / sstp / vless / trojan. Export the selected row from the list. About: loft/1.0.",
+        imp: "Import .loft", exp: "Export Family.loft",
+        onbT: "Member key",
+        onbP: "No password. A loft:// QR, a .loft file, or an lt_ key and node URL.",
+        onbGo: "Continue", onbFile: "QR or file",
+        onbVpn: "Next is the stock ConnMan consent, if the OS asks. Once.",
+        logT: "Journal",
+        logHint: "Last loft-front lines. The key is not written.",
+        sysCap: "System list. The switch is the ConnMan Loft row, not a second toggle in the app.",
+        sysOn: "Connected",
+        sysType: "Type: loft. OpenVPN and IPsec stay stock rows below."
+      }
+    };
+    let lang = "ru";
+    let vpn = "loft";
+    let entry = "link";
+    const KINDS = ["loft", "sstp", "vless", "trojan"];
+    const NAMES = { loft: "Home", sstp: "Office", vless: "Travel", trojan: "Gateway" };
+    function applyLang() {
+      const pack = I[lang];
+      document.querySelectorAll("[data-i]").forEach((el) => {
+        const k = el.getAttribute("data-i");
+        if (pack[k]) el.textContent = pack[k];
+      });
+      document.getElementById("lang-ru").classList.toggle("on", lang === "ru");
+      document.getElementById("lang-en").classList.toggle("on", lang === "en");
+      paintEdit();
+    }
+    function setLang(v) { lang = v; applyLang(); }
+    function paintVlessManual() {
+      const reality = document.querySelector("#vlessSec button.on")?.getAttribute("data-sec") === "reality";
+      const xhttp = document.querySelector("#vlessNet button.on")?.getAttribute("data-net") === "xhttp";
+      const real = document.getElementById("vless-reality");
+      const xh = document.getElementById("vless-xhttp");
+      const vis = document.getElementById("vless-vision");
+      if (real) real.classList.toggle("hidden", !reality);
+      if (xh) xh.classList.toggle("hidden", !xhttp);
+      if (vis) vis.classList.toggle("hidden", xhttp);
+    }
+    function paintEdit() {
+      const sel = document.getElementById("eKind");
+      if (sel) sel.value = vpn;
+      const name = document.getElementById("eName");
+      if (name) name.value = NAMES[vpn] || "Home";
+      KINDS.forEach((k) => {
+        const el = document.getElementById("edit-" + k);
+        if (el) el.classList.toggle("hidden", k !== vpn);
+      });
+      ["loft", "vless"].forEach((k) => {
+        const link = document.getElementById(k + "-link");
+        const man = document.getElementById(k + "-manual");
+        if (link) link.classList.toggle("hidden", entry !== "link");
+        if (man) man.classList.toggle("hidden", entry !== "manual");
+        document.querySelectorAll("#" + k + "Entry button").forEach((b) => {
+          b.classList.toggle("on", b.getAttribute("data-entry") === entry);
+        });
+      });
+      paintVlessManual();
+      const hint = document.getElementById("eHint");
+      if (hint) {
+        const key = "eHint" + vpn.charAt(0).toUpperCase() + vpn.slice(1);
+        hint.textContent = I[lang][key] || I[lang].eHint;
+      }
+    }
+    function show(id, extra) {
+      extra = extra || {};
+      if (id === "edit") {
+        if (extra.vpn) vpn = extra.vpn;
+        entry = extra.entry || "link";
+      }
+      document.querySelectorAll(".phone, .sys, .cover-stage").forEach((el) => el.classList.add("hidden"));
+      document.querySelectorAll(".screen").forEach((el) => el.classList.add("hidden"));
+      const special = document.getElementById(id);
+      if (special && (special.classList.contains("sys") || special.classList.contains("cover-stage"))) {
+        special.classList.remove("hidden");
+      } else {
+        document.getElementById("phone").classList.remove("hidden");
+        const scr = document.getElementById(id);
+        if (scr) scr.classList.remove("hidden");
+      }
+      document.querySelectorAll("nav button[data-go]").forEach((b) => {
+        const same = b.getAttribute("data-go") === id &&
+          (b.getAttribute("data-vpn") || "") === (id === "edit" ? vpn : (extra.vpn || ""));
+        b.classList.toggle("on", same);
+      });
+      if (id === "edit") paintEdit();
+    }
+    document.querySelectorAll("[data-go]").forEach((el) => {
+      el.addEventListener("click", () => {
+        show(el.getAttribute("data-go"), {
+          vpn: el.getAttribute("data-vpn") || "",
+          entry: el.getAttribute("data-entry") || ""
+        });
+      });
+    });
+    document.getElementById("eKind").addEventListener("change", (e) => {
+      vpn = e.target.value;
+      entry = "link";
+      paintEdit();
+      document.querySelectorAll("nav button[data-go]").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-go") === "edit" && (b.getAttribute("data-vpn") || "") === vpn);
+      });
+    });
+    document.querySelectorAll("#loftEntry button, #vlessEntry button").forEach((b) => {
+      b.addEventListener("click", () => {
+        entry = b.getAttribute("data-entry");
+        paintEdit();
+      });
+    });
+    document.querySelectorAll("#vlessSec button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#vlessSec button").forEach((x) => x.classList.toggle("on", x === b));
+        paintVlessManual();
+      });
+    });
+    document.querySelectorAll("#vlessNet button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#vlessNet button").forEach((x) => x.classList.toggle("on", x === b));
+        paintVlessManual();
+      });
+    });
+    document.querySelectorAll(".toggle").forEach((t) => {
+      t.addEventListener("click", () => t.classList.toggle("on"));
+    });
+    applyLang();
+  </script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/png/loft-lockup-readme-on-dark.png">
+  <img src="docs/brand/png/loft-lockup-readme.png" alt="loft — Loft Overlay For TLS" width="480">
+</picture>
+
+**English** · [Русский](README_ru.md) · [中文](README_zh.md)
+
+A private overlay is described which is carried inside TLS 1.3. Application streams are multiplexed over GET, WebSocket, HTTP/2, QUIC, or HTTP/3 and are sealed with ChaCha20-Poly1305. On the public path the session is ordinary HTTPS, and may therefore be passed through a CDN, reverse proxy, or TLS terminator. Short disconnects and packet loss are tolerated: the mux is parked and later resumed, so that inner TCP is not torn down.
+
+The protocol is **loft/1.0**. Connections are shared as **`loft://`**. YAML `kind: loft`.
+
+This repository is the specification together with a reference node, a web panel, and clients (a macOS application and CLI tools for Linux and macOS). Software `1.0.22`. A third party may implement loft from [docs/protocol.md](docs/protocol.md).
+
+## Contents
+
+- [Operators](#operators)
+- [Download](#download)
+- [App](#app)
+- [Panel](#panel)
+- [How it works](#how-it-works)
+- [Repository](#repository)
+- [Build](#build)
+- [Support](#support)
+- [License](#license)
+
+## Operators
+
+The intended use is operator access: a laboratory LAN reached from outside, a server fleet, or a site-to-site path. Members present a browser-shaped ClientHello. Should a middlebox rewrite the handshake, the session is not established.
+
+## Download
+
+Binaries are published in the [latest GitHub Release](https://github.com/a3app/loft/releases/latest). Dist uploads these names on every `v*` tag, so that the links follow the current release.
+
+| | Apple Silicon / arm64 | Intel / amd64 |
+|--|--|--|
+| macOS app | [DMG](https://github.com/a3app/loft/releases/latest/download/loft-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/latest/download/loft-macos-x86_64.dmg) |
+| macOS CLI | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-darwin-amd64.tar.gz) |
+| Linux CLI | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-linux-amd64.tar.gz) |
+| Node | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-node-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-node_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-node-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-node_amd64.deb) |
+| Panel | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-panel-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-panel_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-panel-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-panel_amd64.deb) |
+
+Checksums: [clients](https://github.com/a3app/loft/releases/latest/download/loft-clients-SHA256SUMS.txt) · [node](https://github.com/a3app/loft/releases/latest/download/loft-node-SHA256SUMS.txt) · [panel](https://github.com/a3app/loft/releases/latest/download/loft-panel-SHA256SUMS.txt). The macOS DMG is the menu-bar application (ad-hoc signed). CLI archives contain `loft`, `loft-front`, `loft-probe`, and `loft-bench`.
+
+## App
+
+The macOS client is a menu-bar application. The overlay is opened from it; several named connections may be kept; a `loft://` link or a `.loft` file may be imported. SOCKS5 and TUN remain local.
+
+| Status | Connections |
+|:--:|:--:|
+| <img src="docs/img/macos/en-status.png" alt="loft status window" width="400"> | <img src="docs/img/macos/en-connections.png" alt="Named connections" width="400"> |
+
+## Panel
+
+Web administration of one loft server: the node, its networks and members, IP addresses and upstream channels, domains with DNS records and certificates, mail, packages, and panel users. The aim is that a loft server may be installed and configured without files being edited by hand. Spec: [server/panel](server/panel/).
+
+<img src="docs/img/panel/en-overview.png" alt="loft-panel overview" width="800">
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph Client["loft client"]
+        App["SSH · browser · curl"] --> In["SOCKS5 / TUN"]
+        In --> Mux["mux<br/>Open / Data / Close / Dgram"]
+        Mux --> Seal["ChaCha20-Poly1305"]
+        Seal --> Front["get · ws · h2 · quic · h3"]
+    end
+    Front -- "TLS 1.3 HTTPS" --> Edge["CDN / reverse proxy"] --> Node["loft-node"]
+    Node --> Dest["lab · fleet · site"]
+```
+
+1. Applications speak to a local SOCKS5 or TUN listener. That listener is held by `Holder` while the front is rotated.
+2. Streams are carried on one mux and are sealed with ChaCha20-Poly1305.
+3. On the public path the session is ordinary HTTPS, so that a CDN or reverse proxy may sit in front of the node.
+4. A short disconnect causes the mux to be parked for `gap_hold_ms` (8 s by default). Resume is performed with a fresh `0x02` and the same `instance_id`; inner TCP is left standing.
+
+| | |
+|--|--|
+| [docs/protocol.md](docs/protocol.md) | The wire protocol. A third-party client or node may be implemented from it. |
+| [docs/architecture.md](docs/architecture.md) | Layout of this tree. |
+| [docs/guide.md](docs/guide.md) | Build, configuration, operation, Debian. |
+| [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN operator guide (RU). |
+| [docs/keenetic.md](docs/keenetic.md) | KeeneticOS Entware client (OpkgTun). Catalog: [clients/Keenetic/](clients/Keenetic/). |
+| [docs/ios.md](docs/ios.md) | iOS Packet Tunnel client. Catalog: [clients/iOS/](clients/iOS/). |
+| [docs/android.md](docs/android.md) | Android VpnService client. Catalog: [clients/Android/](clients/Android/). |
+| [docs/aurora.md](docs/aurora.md) | Aurora OS ConnMan client. Catalog: [clients/Aurora/](clients/Aurora/). |
+| [docs/share.md](docs/share.md) | Import URI `loft://` and `.loft` files (one or several connections). |
+
+## Repository
+
+```
+docs/             protocol, architecture, guide
+docs/brand        mark and icons
+internal/         wire, mux, crypto, transport, overlay
+server/           loft-node (controller or relay)
+server/panel      loft-panel web admin
+clients/go        loft, loft-front, loft-probe
+clients/macOS     menu-bar app (launches loft-front)
+clients/Keenetic  Entware / OpkgTun (plan and mock)
+clients/iOS       Packet Tunnel (thin host + appex)
+clients/Android   VpnService (thin Java host)
+clients/Aurora    ConnMan overlay (thin QML host)
+clients/mobile    shared Go engine (gomobile bind)
+```
+
+## Build
+
+Go 1.24+. From the repository root:
+
+```bash
+make test
+make node       # ./loft-node
+make client     # dist/clients/go/loft
+make macos      # dist/clients/macOS/loft.app
+make macos-dmg  # dist/clients/macOS/loft-*-macos-<arch>.dmg
+make macos-dmgs # both arm64 and x86_64 DMGs (CI)
+make dist       # node tarballs/.deb + CLI archives
+```
+
+A tag `vX.Y.Z` matching `VERSION` runs GitHub Actions: tests, `make dist`, macOS DMGs for arm64 and x86_64 (ad-hoc), a Release, and a pkg.go.dev ping. The same Dist workflow may be started by hand from Actions.
+
+```bash
+export LOFT_TOKEN='change-me-long-random'
+./loft-node -c server/configs/server.yaml -dir /var/lib/loft
+./dist/clients/go/loft -c clients/go/configs/client.yaml
+ALL_PROXY=socks5://127.0.0.1:1080 curl https://example.com
+```
+
+Debian package and installer: [server/debian/README.md](server/debian/README.md).
+
+## Support
+
+Work on an open internet is not free. Sponsorship is accepted so that the protocol, the node, and the clients may be kept independent.
+
+| | Network | Address |
+|--|--|--|
+| Bitcoin | Bitcoin | `bc1q3q8vzxta0yegvwkgth44a0n2ee8d9kjtjs738t` |
+| Ethereum | Ethereum | `0xEfBF2e1C8B76B6033ab00199Bdf36671ed0Dba3A` |
+| Tether | Ethereum (USDT ERC-20) | `0xEfBF2e1C8B76B6033ab00199Bdf36671ed0Dba3A` |
+| TRON | TRON | `TQq2CGEZ7rTE7RqA6rhh2H8j24qdUqd5Jx` |
+| Tether | TRON (USDT TRC20) | `TQq2CGEZ7rTE7RqA6rhh2H8j24qdUqd5Jx` |
+| Litecoin | Litecoin | `ltc1qq93zr9pjst9fy732qjuy0pltze4x4llcv30w79` |
+| Zcash | Zcash (transparent) | `t1RCtApkwLxjuG2dmR7SdnHSVR1Xrx2c6Bk` |
+
+ETH and USDT ERC-20 are received at the same Ethereum address. TRX and USDT TRC20 are received at the same TRON address. USDT must be sent on the network of that row. Details are given in [SUPPORT.md](SUPPORT.md).
+
+## License
+
+[Apache License 2.0](LICENSE). loft/1.0 may be implemented from [docs/protocol.md](docs/protocol.md) without a fee.

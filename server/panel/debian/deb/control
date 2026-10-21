@@ -1,0 +1,13 @@
+Package: loft-panel
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: @ARCH@
+Maintainer: loft
+Depends: loft-node, adduser, systemd
+Recommends: nginx
+Description: web admin for a loft server
+ Browser panel for one loft node: networks as a managed switch, members
+ and keys, and (as they land) addresses, domains, mail and packages.
+ Runs as its own user behind nginx; a small root helper on a unix socket
+ rewrites the node's files and restarts it.

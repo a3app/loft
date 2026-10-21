@@ -1,0 +1,67 @@
+#!/bin/sh
+# loft-node .deb postinst: user, dirs, token, default config, self-signed TLS.
+set -e
+
+LOFT_USER=loft
+LOFT_HOME=/var/lib/loft
+LOFT_ETC=/etc/loft
+LOFT_TLS=/etc/loft/tls
+SHARE=/usr/share/loft-node
+
+case "$1" in
+configure)
+	if ! id "$LOFT_USER" >/dev/null 2>&1; then
+		adduser --system --group --home "$LOFT_HOME" --no-create-home \
+			--shell /usr/sbin/nologin "$LOFT_USER"
+	fi
+	mkdir -p "$LOFT_ETC" "$LOFT_TLS" "$LOFT_HOME"
+	chown root:"$LOFT_USER" "$LOFT_ETC" "$LOFT_TLS"
+	chmod 0750 "$LOFT_ETC" "$LOFT_TLS"
+	chown "$LOFT_USER":"$LOFT_USER" "$LOFT_HOME"
+	chmod 0750 "$LOFT_HOME"
+
+	if [ ! -f "$LOFT_ETC/loft.env" ]; then
+		token="lt_$(openssl rand -hex 24)"
+		printf 'LOFT_TOKEN=%s\n' "$token" > "$LOFT_ETC/loft.env"
+		chown root:"$LOFT_USER" "$LOFT_ETC/loft.env"
+		chmod 0640 "$LOFT_ETC/loft.env"
+	fi
+
+	if [ ! -f "$LOFT_ETC/node.conf" ] && [ ! -f "$LOFT_ETC/node.yaml" ]; then
+		host=$(hostname -f 2>/dev/null || hostname)
+		sed "s|https://controller.example|https://$host|" \
+			"$SHARE/controller.conf" > "$LOFT_ETC/node.conf"
+		chown root:"$LOFT_USER" "$LOFT_ETC/node.conf"
+		chmod 0640 "$LOFT_ETC/node.conf"
+	fi
+
+	if [ ! -f "$LOFT_HOME/network.conf" ] && [ ! -f "$LOFT_HOME/network.yaml" ]; then
+		cp "$SHARE/network.conf" "$LOFT_HOME/network.conf"
+		chown "$LOFT_USER":"$LOFT_USER" "$LOFT_HOME/network.conf"
+		chmod 0640 "$LOFT_HOME/network.conf"
+	fi
+
+	if [ ! -f "$LOFT_TLS/fullchain.pem" ] || [ ! -f "$LOFT_TLS/privkey.pem" ]; then
+		cn=$(hostname -f 2>/dev/null || hostname)
+		openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+			-keyout "$LOFT_TLS/privkey.pem" \
+			-out "$LOFT_TLS/fullchain.pem" \
+			-subj "/CN=$cn" \
+			-addext "subjectAltName=DNS:$cn" >/dev/null 2>&1 || true
+		if [ -f "$LOFT_TLS/fullchain.pem" ]; then
+			chown root:"$LOFT_USER" "$LOFT_TLS/fullchain.pem" "$LOFT_TLS/privkey.pem"
+			chmod 0640 "$LOFT_TLS/fullchain.pem" "$LOFT_TLS/privkey.pem"
+		fi
+	fi
+
+	if command -v sysctl >/dev/null 2>&1; then
+		sysctl -p /etc/sysctl.d/99-loft.conf >/dev/null 2>&1 || true
+	fi
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl daemon-reload || true
+	fi
+	echo "loft-node: edit $LOFT_ETC/node.conf, then: systemctl enable --now loft-node"
+	;;
+esac
+
+exit 0

@@ -1,0 +1,30 @@
+#!/bin/sh
+# loft-panel .deb postrm: drop the nginx site; purge removes panel users and data.
+# The node, its members and node.conf are left alone.
+set -e
+
+drop_site() {
+	if [ -e /etc/nginx/sites-enabled/loft-panel.conf ] || [ -e /etc/nginx/sites-available/loft-panel.conf ]; then
+		rm -f /etc/nginx/sites-enabled/loft-panel.conf /etc/nginx/sites-available/loft-panel.conf
+		if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+			systemctl reload nginx >/dev/null 2>&1 || true
+		fi
+	fi
+}
+
+case "$1" in
+remove)
+	drop_site
+	command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
+	;;
+purge)
+	drop_site
+	rm -rf /var/lib/loft-panel /etc/loft-panel
+	if id loft-panel >/dev/null 2>&1; then
+		deluser --system loft-panel >/dev/null 2>&1 || true
+	fi
+	command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
+	;;
+esac
+
+exit 0

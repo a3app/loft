@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — Keenetic</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --ink-2: #241f1b;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+      --kn-bg: #eef1f4;
+      --kn-side: #ffffff;
+      --kn-ink: #1c2430;
+      --kn-mute: #6b7785;
+      --kn-line: #d8dee6;
+      --kn-teal: #0aa3a1;
+      --kn-teal-d: #08807e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      min-height: 100%;
+    }
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+    }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 14px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav button {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 6px 10px; border-radius: 8px; cursor: pointer;
+    }
+    nav button:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang { display: flex; gap: 4px; margin: 4px 8px 10px; }
+    .lang button { flex: 1; text-align: center; padding: 6px 0; font-weight: 600; font-size: 12px; }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage-wrap {
+      padding: 28px; display: flex; align-items: center; justify-content: center;
+      min-height: 0;
+    }
+
+    /* loft panel */
+    .panel {
+      width: 420px; background: #181512; border: 1px solid #2e2824;
+      border-radius: 16px; overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    }
+    .panel header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--line);
+    }
+    .panel header .t { font-weight: 600; letter-spacing: -0.03em; }
+    .panel header .sub { color: var(--mute); font-size: 12px; margin-left: auto; font-family: var(--mono); }
+    .body { padding: 16px 18px 18px; }
+    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; }
+    .row .k { color: var(--mute); font-size: 12px; }
+    .row .v { font-size: 13px; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    .lamp {
+      width: 10px; height: 10px; border-radius: 3px; background: var(--mute);
+      box-shadow: none;
+    }
+    .lamp.on { background: var(--lamp); box-shadow: 0 0 10px rgba(232,184,74,.55); }
+    label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
+    label.field input, label.field select {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 8px; padding: 8px 10px; font: 400 13px var(--ui);
+    }
+    label.field input.mono { font-family: var(--mono); font-size: 12px; }
+    .btns { display: flex; gap: 8px; margin-top: 14px; }
+    .btns button {
+      flex: 1; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      font: 600 13px var(--ui);
+    }
+    .go { background: var(--lamp); color: var(--ink); }
+    .ghost { background: #2a2420; color: var(--snow); }
+    .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 8px 0 0; }
+    .tag {
+      display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: #2a2420; color: var(--stone);
+    }
+    .tag.ok { background: rgba(125,186,106,.15); color: var(--ok); }
+    .tag.wait { background: rgba(232,184,74,.12); color: var(--lamp); }
+    .checks { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+    .checks label {
+      display: flex; align-items: center; gap: 6px;
+      background: #211c19; border: 1px solid #2e2824; border-radius: 8px;
+      padding: 6px 10px; font-size: 12px; cursor: pointer;
+    }
+    .soon {
+      opacity: .55; pointer-events: none;
+      border: 1px dashed #3a332e; border-radius: 10px; padding: 12px; margin-top: 8px;
+    }
+    .foot { padding: 10px 18px 14px; color: var(--mute); font-size: 11px; font-family: var(--mono); }
+
+    /* Keenetic frame */
+    .kn {
+      width: 640px; height: 420px; background: var(--kn-bg); color: var(--kn-ink);
+      border-radius: 12px; overflow: hidden; display: grid;
+      grid-template-columns: 176px 1fr;
+      box-shadow: 0 24px 60px rgba(0,0,0,.4);
+      font-size: 13px;
+    }
+    .kn aside {
+      background: var(--kn-side); border-right: 1px solid var(--kn-line); padding: 16px 12px;
+    }
+    .kn .logo { font-weight: 700; color: var(--kn-teal-d); letter-spacing: -0.03em; margin-bottom: 16px; padding: 0 8px; }
+    .kn aside a {
+      display: block; padding: 7px 10px; border-radius: 6px; color: var(--kn-ink);
+      text-decoration: none; margin-bottom: 2px;
+    }
+    .kn aside a.on { background: #e6f6f5; color: var(--kn-teal-d); font-weight: 600; }
+    .kn main { padding: 18px 20px; }
+    .kn h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; }
+    .kn .cap { color: var(--kn-mute); margin: 0 0 16px; font-size: 12px; }
+    .kn-card {
+      background: #fff; border: 1px solid var(--kn-line); border-radius: 10px; padding: 12px 14px;
+      display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+      margin-bottom: 8px;
+    }
+    .kn-card .name { font-weight: 600; }
+    .kn-card .meta { color: var(--kn-mute); font-size: 12px; }
+    .sw {
+      width: 38px; height: 22px; border-radius: 11px; background: #c5ccd4; position: relative;
+    }
+    .sw i {
+      position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff;
+    }
+    .sw.on { background: var(--kn-teal); }
+    .sw.on i { left: 18px; }
+    .prio {
+      background: #fff; border: 1px dashed var(--kn-line); border-radius: 10px; padding: 12px;
+    }
+    .prio h3 { margin: 0 0 8px; font-size: 13px; }
+    .prio .item {
+      padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between;
+      background: #f7f9fb; border: 1px solid var(--kn-line);
+    }
+    .prio .item.loft { background: #e6f6f5; border-color: #b7e4e3; font-weight: 600; }
+    .badge { font-size: 11px; color: var(--kn-teal-d); }
+
+    .gate {
+      text-align: center; padding: 36px 20px;
+    }
+    .gate p { color: var(--mute); font-size: 13px; }
+    .spin {
+      width: 22px; height: 22px; border: 2px solid #2e2824; border-top-color: var(--lamp);
+      border-radius: 50%; margin: 0 auto 14px; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+        <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+        <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+      </svg>
+      loft
+    </div>
+    <p data-i="navCap">Макет панели на Keenetic. Приоритеты — у них, сессия — у нас.</p>
+    <div class="lang">
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
+    </div>
+    <h4 data-i="hKeen">Keenetic</h4>
+    <button type="button" class="on" data-go="keenetic" data-i="nPrio">Приоритеты</button>
+    <h4 data-i="hPanel">Панель :8090</h4>
+    <button type="button" data-go="gate" data-i="nGate">Сессия</button>
+    <button type="button" data-go="status" data-i="nStatus">Статус</button>
+    <button type="button" data-go="edit" data-i="nEdit">Подключение</button>
+    <button type="button" data-go="fronts" data-i="nFronts">Фронты loft</button>
+    <button type="button" data-go="vless" data-i="nVless">VLESS</button>
+  </nav>
+
+  <div class="stage-wrap">
+    <!-- Keenetic -->
+    <div class="kn screen" id="keenetic">
+      <aside>
+        <div class="logo">Keenetic</div>
+        <a href="#" data-i="kNet">Интернет</a>
+        <a href="#" class="on" data-i="kOther">Другие подключения</a>
+        <a href="#" data-i="kRules">Сетевые правила</a>
+        <a href="#" data-i="kPrio">Приоритеты</a>
+      </aside>
+      <main>
+        <h2 data-i="kTitle">Другие подключения</h2>
+        <p class="cap" data-i="kCap">OpkgTun из Entware. Маршруты задаёт KeeneticOS.</p>
+        <div class="kn-card">
+          <div>
+            <div class="name">Loft</div>
+            <div class="meta">OpkgTun0 · 10.8.0.14 · MTU 1280 · loft get</div>
+          </div>
+          <span class="badge" data-i="kUse">для интернета</span>
+          <div class="sw on"><i></i></div>
+        </div>
+        <div class="kn-card">
+          <div>
+            <div class="name">WireGuard Home</div>
+            <div class="meta">Wireguard0 · штатный компонент</div>
+          </div>
+          <span></span>
+          <div class="sw"><i></i></div>
+        </div>
+        <div class="kn-card">
+          <div>
+            <div class="name">SSTP Office</div>
+            <div class="meta" data-i="kSstp">штатный клиент Keenetic — не пакет loft</div>
+          </div>
+          <span></span>
+          <div class="sw"><i></i></div>
+        </div>
+        <div class="prio">
+          <h3 data-i="kPolicy">Политика «Через Loft»</h3>
+          <div class="item loft"><span>Loft</span><span data-i="kFirst">1</span></div>
+          <div class="item"><span>ISP · GigabitEthernet0</span><span>2</span></div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Gate -->
+    <div class="panel screen hidden" id="gate">
+      <header>
+        <div class="lamp"></div>
+        <div class="t">loft</div>
+        <div class="sub">:8090</div>
+      </header>
+      <div class="body gate">
+        <div class="spin"></div>
+        <div data-i="gateT">Проверяем сессию Keenetic…</div>
+        <p data-i="gateP">Cookie вебадминки. Своего пароля нет. 401 — вход на :80 и возврат сюда.</p>
+      </div>
+      <div class="foot">http://192.168.1.1:8090/</div>
+    </div>
+
+    <!-- Status -->
+    <div class="panel screen hidden" id="status">
+      <header>
+        <div class="lamp on"></div>
+        <div class="t">loft</div>
+        <div class="sub">loft</div>
+      </header>
+      <div class="body">
+        <div class="row"><span class="k" data-i="sState">Состояние</span><span class="tag ok" data-i="sUp">в сети</span></div>
+        <div class="row"><span class="k">OpkgTun</span><span class="mono">OpkgTun0</span></div>
+        <div class="row"><span class="k" data-i="sIp">Оверлей</span><span class="mono">10.8.0.14 · gw 10.8.0.1</span></div>
+        <div class="row"><span class="k">MTU</span><span class="mono">1280</span></div>
+        <div class="row"><span class="k" data-i="sFront">Фронт</span><span>get · cdn.example.com</span></div>
+        <div class="row"><span class="k" data-i="sBytes">Трафик</span><span class="mono">↓ 42.1 MiB  ↑ 3.4 MiB</span></div>
+        <p class="hint" data-i="sHint">Маршруты устройств — в приоритетах Keenetic. Эта панель только сессию.</p>
+        <div class="btns">
+          <button type="button" class="ghost" data-i="sStop">Стоп</button>
+          <button type="button" class="go" data-i="sKeen">Приоритеты Keenetic</button>
+        </div>
+      </div>
+      <div class="foot">http://192.168.1.1:8090/</div>
+    </div>
+
+    <!-- Edit -->
+    <div class="panel screen hidden" id="edit">
+      <header>
+        <div class="lamp on"></div>
+        <div class="t" data-i="eTitle">Подключение</div>
+        <div class="sub">loft</div>
+      </header>
+      <div class="body">
+        <label class="field"><span data-i="eName">Имя</span>
+          <input value="Home" />
+        </label>
+        <label class="field"><span data-i="eKey">Ключ участника</span>
+          <input class="mono" type="password" value="lt_••••••••••••" />
+        </label>
+        <label class="field">URL
+          <input class="mono" value="https://cdn.example.com" />
+        </label>
+        <label class="field"><span data-i="eType">Тип</span>
+          <select>
+            <option>get</option>
+            <option>ws</option>
+            <option>h2</option>
+            <option>quic</option>
+            <option>h3</option>
+          </select>
+        </label>
+        <label class="field"><span data-i="ePath">Путь</span>
+          <input class="mono" value="/static/v3/build" />
+        </label>
+        <p class="hint" data-i="eHint">SNI клиент не выбирает. Его объявляет нода. CDN сохраняет hostname CDN.</p>
+        <div class="btns">
+          <button type="button" class="ghost" data-i="eSave">Сохранить</button>
+          <button type="button" class="go" data-i="eStart">Старт</button>
+        </div>
+      </div>
+      <div class="foot">/opt/etc/loft/client.yaml</div>
+    </div>
+
+    <!-- Fronts -->
+    <div class="panel screen hidden" id="fronts">
+      <header>
+        <div class="lamp on"></div>
+        <div class="t" data-i="fTitle">Фронты loft</div>
+        <div class="sub">select: auto</div>
+      </header>
+      <div class="body">
+        <p class="hint" data-i="fHint">Это не отдельные подключения Keenetic. Один OpkgTun, порядок попыток внутри loft.</p>
+        <div class="checks">
+          <label><input type="checkbox" checked /> get</label>
+          <label><input type="checkbox" checked /> ws</label>
+          <label><input type="checkbox" checked /> h2</label>
+          <label><input type="checkbox" /> quic</label>
+          <label><input type="checkbox" /> h3</label>
+        </div>
+        <div class="row"><span class="k" data-i="fLive">Живой</span><span>get</span></div>
+        <div class="row"><span class="k">caps ∩</span><span class="mono">get ws h2</span></div>
+        <p class="hint" data-i="fCdn">Профиль CDN (yandex / cloudflare) — порядок заголовков, не возможность протокола.</p>
+      </div>
+      <div class="foot">Hello caps · Status intersection</div>
+    </div>
+
+    <!-- VLESS -->
+    <div class="panel screen hidden" id="vless">
+      <header>
+        <div class="lamp"></div>
+        <div class="t">VLESS</div>
+        <div class="sub" data-i="vLater">позже</div>
+      </header>
+      <div class="body">
+        <p class="hint" data-i="vHint">Тот же OpkgTun, второй исходящий loft, когда loft режут. Не отдельная строка в Keenetic.</p>
+        <div class="soon">
+          <label class="field">UUID
+            <input class="mono" placeholder="00000000-0000-4000-8000-000000000000" disabled />
+          </label>
+          <label class="field">SNI
+            <input class="mono" placeholder="www.example.com" disabled />
+          </label>
+          <span class="tag wait" data-i="vTag">фаза 4 плана</span>
+        </div>
+        <p class="hint" data-i="vSstp">SSTP на роутере не дублируем: в Keenetic уже есть свой клиент в «Другие подключения».</p>
+      </div>
+      <div class="foot">same process · same tun</div>
+    </div>
+  </div>
+
+  <script>
+    const I = {
+      ru: {
+        navCap: "Макет панели на Keenetic. Приоритеты — у них, сессия — у нас.",
+        hKeen: "Keenetic", nPrio: "Приоритеты", hPanel: "Панель :8090",
+        nGate: "Сессия", nStatus: "Статус", nEdit: "Подключение", nFronts: "Фронты loft", nVless: "VLESS",
+        kNet: "Интернет", kOther: "Другие подключения", kRules: "Сетевые правила", kPrio: "Приоритеты",
+        kTitle: "Другие подключения", kCap: "OpkgTun из Entware. Маршруты задаёт KeeneticOS.",
+        kUse: "для интернета", kSstp: "штатный клиент Keenetic — не пакет loft",
+        kPolicy: "Политика «Через Loft»", kFirst: "1",
+        gateT: "Проверяем сессию Keenetic…",
+        gateP: "Cookie вебадминки. Своего пароля нет. 401 — вход на :80 и возврат сюда.",
+        sState: "Состояние", sUp: "в сети", sIp: "Оверлей", sFront: "Фронт", sBytes: "Трафик",
+        sHint: "Маршруты устройств — в приоритетах Keenetic. Эта панель только сессию.",
+        sStop: "Стоп", sKeen: "Приоритеты Keenetic",
+        eTitle: "Подключение", eName: "Имя", eKey: "Ключ участника", eType: "Тип", ePath: "Путь",
+        eHint: "SNI клиент не выбирает. Его объявляет нода. CDN сохраняет hostname CDN.",
+        eSave: "Сохранить", eStart: "Старт",
+        fTitle: "Фронты loft",
+        fHint: "Это не отдельные подключения Keenetic. Один OpkgTun, порядок попыток внутри loft.",
+        fLive: "Живой", fCdn: "Профиль CDN (yandex / cloudflare) — порядок заголовков, не возможность протокола.",
+        vLater: "позже",
+        vHint: "Тот же OpkgTun, второй исходящий loft, когда loft режут. Не отдельная строка в Keenetic.",
+        vTag: "фаза 4 плана",
+        vSstp: "SSTP на роутере не дублируем: в Keenetic уже есть свой клиент в «Другие подключения»."
+      },
+      en: {
+        navCap: "Keenetic panel mock. Priorities stay in Keenetic; the session is ours.",
+        hKeen: "Keenetic", nPrio: "Priorities", hPanel: "Panel :8090",
+        nGate: "Session", nStatus: "Status", nEdit: "Connection", nFronts: "loft fronts", nVless: "VLESS",
+        kNet: "Internet", kOther: "Other connections", kRules: "Network rules", kPrio: "Priorities",
+        kTitle: "Other connections", kCap: "OpkgTun from Entware. KeeneticOS owns the routes.",
+        kUse: "use for internet", kSstp: "stock Keenetic client — not the loft package",
+        kPolicy: "Policy “Via Loft”", kFirst: "1",
+        gateT: "Checking Keenetic session…",
+        gateP: "Web-admin cookie. No loft password. 401 → login on :80, then back here.",
+        sState: "State", sUp: "up", sIp: "Overlay", sFront: "Front", sBytes: "Traffic",
+        sHint: "Device routes live in Keenetic priorities. This panel is the session only.",
+        sStop: "Stop", sKeen: "Keenetic priorities",
+        eTitle: "Connection", eName: "Name", eKey: "Member key", eType: "Type", ePath: "Path",
+        eHint: "The client does not pick SNI. The node advertises it. A CDN front keeps the CDN hostname.",
+        eSave: "Save", eStart: "Start",
+        fTitle: "loft fronts",
+        fHint: "Not extra Keenetic connections. One OpkgTun; try order inside loft.",
+        fLive: "Live", fCdn: "CDN profile (yandex / cloudflare) is header order, not a protocol cap.",
+        vLater: "later",
+        vHint: "Same OpkgTun, a second loft outbound when loft is filtered. Not a new Keenetic row.",
+        vTag: "plan phase 4",
+        vSstp: "We do not ship SSTP here: Keenetic already has a client under Other connections."
+      }
+    };
+
+    function setLang(lang) {
+      document.documentElement.lang = lang;
+      document.getElementById("lang-ru").classList.toggle("on", lang === "ru");
+      document.getElementById("lang-en").classList.toggle("on", lang === "en");
+      const t = I[lang];
+      document.querySelectorAll("[data-i]").forEach((el) => {
+        const k = el.getAttribute("data-i");
+        if (t[k]) el.textContent = t[k];
+      });
+    }
+
+    function show(id) {
+      document.querySelectorAll(".screen").forEach((el) => el.classList.add("hidden"));
+      document.getElementById(id).classList.remove("hidden");
+      document.querySelectorAll("nav button[data-go]").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-go") === id);
+      });
+    }
+
+    document.querySelectorAll("nav button[data-go]").forEach((b) => {
+      b.addEventListener("click", () => show(b.getAttribute("data-go")));
+    });
+    document.querySelector("[data-i=sKeen]")?.addEventListener("click", () => show("keenetic"));
+  </script>
+</body>
+</html>

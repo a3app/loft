@@ -1,0 +1,726 @@
+package transport
+
+// Overlay switch: leases, hub/mesh/vlan Forward, loft.peer announce, DNS, ICMP.
+
+import (
+	"io"
+	"net"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/a3app/loft/internal/mux"
+	"github.com/a3app/loft/internal/netconf"
+	"github.com/a3app/loft/internal/wire"
+)
+
+// NetSwitch is the overlay fabric (nil = internet-only proxy).
+var NetSwitch *Overlay
+
+// Overlay is the node's member fabric: overlay CIDR, leases, and live sessions.
+type Overlay struct {
+	cur atomic.Pointer[netconf.Network] // swapped by Reload; read with N()
+	Reg *netconf.Registry
+	dns atomic.Pointer[dnsResolver]
+	mu  sync.Mutex
+	tab map[string]*ovPeer // overlay IP
+	byS map[*mux.Session]*ovPeer
+}
+
+// ovPeer is one attached session: overlay IP, member, instance, VLAN, P2P listen.
+type ovPeer struct {
+	ip     string
+	member string
+	inst   string
+	vlan   int
+	sess   *mux.Session
+	seen   string
+	listen uint16
+	p2pPub []byte
+	ttl    *time.Timer
+	at     time.Time
+}
+
+// NewOverlay builds a switch for n (nil network yields nil).
+func NewOverlay(n *netconf.Network) *Overlay {
+	if n == nil {
+		return nil
+	}
+	o := &Overlay{
+		Reg: netconf.NewRegistry(n),
+		tab: map[string]*ovPeer{}, byS: map[*mux.Session]*ovPeer{},
+	}
+	o.cur.Store(n)
+	o.dns.Store(newDNSResolver(n.DNSUpstream()))
+	return o
+}
+
+// N is the network the switch runs now. It changes only by Reload, so a
+// caller that needs several fields to agree takes one N() and keeps it.
+func (o *Overlay) N() *netconf.Network {
+	if o == nil {
+		return nil
+	}
+	return o.cur.Load()
+}
+
+// remoteAddr parses host:port into a TCPAddr.
+func remoteAddr(s string) net.Addr {
+	host, port, err := net.SplitHostPort(s)
+	if err != nil {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	return &net.TCPAddr{IP: ip, Port: int(wire.Port(port))}
+}
+
+// stampOverlay binds overlay from Hello without a member token.
+func stampOverlay(st *wire.Status, rest []byte, sess *mux.Session, remote net.Addr) {
+	stampOverlayAuth(st, rest, sess, remote, nil)
+}
+
+// Contains reports whether host is inside the overlay CIDR.
+func (o *Overlay) Contains(host string) bool {
+	if o == nil || o.N() == nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	_, cidr, err := net.ParseCIDR(o.N().CIDR)
+	if err != nil {
+		return false
+	}
+	return cidr.Contains(ip)
+}
+
+// Bind admits the session, stamps overlay IP/VLAN/DNS on Status, and attaches the peer.
+func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, remote net.Addr) {
+	if o == nil {
+		return
+	}
+	st.Peers = o.N().PeersMode()
+	if o.N().P2PEnabled() {
+		st.P2P = 1
+	}
+	member := hello.MemberID
+	inst := hello.InstanceID
+	ip, inst2, code := o.Reg.Admit(member, inst)
+	if code != wire.OK && code != wire.OKResumed {
+		if (member == "" || o.N().MemberByID(member) == nil) && (AuthKeys == nil || AuthKeys.Len() == 0) {
+			used := map[string]bool{}
+			o.mu.Lock()
+			for x := range o.tab {
+				used[x] = true
+			}
+			o.mu.Unlock()
+			ip, err := o.N().AllocateIP(used)
+			if err != nil {
+				st.Code = wire.IPPool
+				return
+			}
+			inst2 = inst
+			if inst2 == "" {
+				inst2 = "x"
+			}
+			st.Code = wire.OK
+			st.IP = ip
+			st.InstanceID = inst2
+			st.Gateway = o.N().Gateway
+			st.MTU = wire.U16(o.N().MTU)
+			st.DNS = o.N().DNSServers()
+			o.attach(ip, 0, sess, remote, "", inst2)
+			st.PeerHints = o.hints(ip)
+			o.stampRoutes(st)
+			o.stampPolicy(st, "")
+			o.stampTTL(st, "")
+			o.armTTL(sess, "")
+			o.stampRate(st, "")
+			o.armRate(sess, "")
+			return
+		}
+		st.Code = code
+		return
+	}
+	vlan := 0
+	if m := o.N().MemberByID(member); m != nil {
+		vlan = m.VLAN
+		st.VLAN = wire.U16(vlan)
+	}
+	st.Code = code
+	st.IP = ip
+	st.InstanceID = inst2
+	st.Gateway = o.N().Gateway
+	if o.N().MTU > 0 {
+		st.MTU = wire.U16(o.N().MTU)
+	}
+	st.DNS = o.N().DNSServers()
+	o.attach(ip, vlan, sess, remote, member, inst2)
+	st.PeerHints = o.hints(ip)
+	o.stampRoutes(st)
+	o.stampPolicy(st, member)
+	o.stampTTL(st, member)
+	o.armTTL(sess, member)
+	o.stampRate(st, member)
+	o.armRate(sess, member)
+}
+
+// stampRoutes copies managed CIDRs onto Status, skipping routes this member owns.
+// Via on the wire is the resolved overlay IP (live, then sticky).
+func (o *Overlay) stampRoutes(st *wire.Status) {
+	if o == nil || o.N() == nil || st == nil {
+		return
+	}
+	for _, r := range o.N().Routes {
+		if r.Dst == "" {
+			continue
+		}
+		via := o.resolveVia(r)
+		if via != "" && via == st.IP {
+			continue
+		}
+		if via == "" && (r.Member != "" || r.Tag != "") {
+			continue
+		}
+		st.Routes = append(st.Routes, wire.Route{Dst: r.Dst, Via: via})
+		if len(st.Routes) >= 16 {
+			break
+		}
+	}
+}
+
+// stampPolicy copies compact ACL onto Status so P2P can use the same Allow.
+func (o *Overlay) stampPolicy(st *wire.Status, member string) {
+	if o == nil || o.N() == nil || st == nil {
+		return
+	}
+	n := o.N()
+	var p wire.Policy
+	if m := n.MemberByID(member); m != nil && len(m.Tags) > 0 {
+		p.OwnTags = append([]string(nil), m.Tags...)
+	}
+	if n.ACLDefault == "drop" {
+		p.ACLDefault = 1
+	}
+	for _, r := range n.Rules {
+		p.Rules = append(p.Rules, policyRuleOf(r))
+		if len(p.Rules) >= 32 {
+			break
+		}
+	}
+	o.mu.Lock()
+	for ip, peer := range o.tab {
+		if ip == st.IP {
+			continue
+		}
+		tags := o.tagsOfLocked(peer.member)
+		if len(tags) == 0 {
+			continue
+		}
+		p.Peers = append(p.Peers, wire.PeerTags{IP: ip, Tags: tags})
+		if len(p.Peers) >= 32 {
+			break
+		}
+	}
+	o.mu.Unlock()
+	if len(p.OwnTags) == 0 && p.ACLDefault == 0 && len(p.Rules) == 0 && len(p.Peers) == 0 {
+		return
+	}
+	p.Present = true
+	st.Policy = p
+}
+
+func policyRuleOf(r netconf.Rule) wire.PolicyRule {
+	pr := wire.PolicyRule{}
+	if r.Action == "accept" {
+		pr.Action = 1
+	}
+	if r.SrcVLAN != nil {
+		v := uint16(*r.SrcVLAN)
+		pr.SrcVLAN = &v
+	}
+	if r.DstVLAN != nil {
+		v := uint16(*r.DstVLAN)
+		pr.DstVLAN = &v
+	}
+	pr.Src, pr.Dst = r.Src, r.Dst
+	pr.SrcTag, pr.DstTag = r.SrcTag, r.DstTag
+	switch r.Proto {
+	case "tcp":
+		pr.Proto = 1
+	case "udp":
+		pr.Proto = 2
+	case "icmp":
+		pr.Proto = 3
+	}
+	for _, p := range r.Dport {
+		pr.Dport = append(pr.Dport, uint16(p))
+	}
+	for _, p := range r.Sport {
+		pr.Sport = append(pr.Sport, uint16(p))
+	}
+	return pr
+}
+
+func (o *Overlay) sessionOf(member string) netconf.SessionPolicy {
+	p := netconf.DefaultSession().Merge(o.N().Session)
+	if m := o.N().MemberByID(member); m != nil {
+		p = p.Merge(m.Session)
+	}
+	return p
+}
+
+// stampTTL copies live-session max onto Status. 0 omits the tail.
+func (o *Overlay) stampTTL(st *wire.Status, member string) {
+	if o == nil || o.N() == nil || st == nil {
+		return
+	}
+	if d := o.sessionOf(member).TTL(); d > 0 {
+		st.SessionTTLMS = uint32(d / time.Millisecond)
+	}
+}
+
+// armTTL closes sess after the live-session max. Distinct from lease_hold.
+func (o *Overlay) armTTL(sess *mux.Session, member string) {
+	if o == nil || sess == nil || o.N() == nil {
+		return
+	}
+	d := o.sessionOf(member).TTL()
+	if d <= 0 {
+		return
+	}
+	o.mu.Lock()
+	peer := o.byS[sess]
+	if peer == nil {
+		o.mu.Unlock()
+		return
+	}
+	if peer.ttl != nil {
+		peer.ttl.Stop()
+	}
+	peer.ttl = time.AfterFunc(d, func() {
+		sess.Close()
+		o.Detach(sess)
+	})
+	o.mu.Unlock()
+}
+
+// stampRate copies the bulk payload cap onto Status. 0 omits the tail.
+func (o *Overlay) stampRate(st *wire.Status, member string) {
+	if o == nil || o.N() == nil || st == nil {
+		return
+	}
+	if bps := o.sessionOf(member).Rate(); bps > 0 {
+		st.RateBPS = bps
+	}
+}
+
+// armRate caps bulk Data/Dgram on sess. 0 is unlimited. Relay trunks skip this.
+func (o *Overlay) armRate(sess *mux.Session, member string) {
+	if o == nil || sess == nil || o.N() == nil || sess.Relay() {
+		return
+	}
+	sess.SetRate(uint64(o.sessionOf(member).Rate()))
+}
+
+// resolveVia is live overlay IP of Member/Tag, else sticky RouteHop.
+func (o *Overlay) resolveVia(r netconf.Route) string {
+	if o == nil {
+		return ""
+	}
+	if r.Member != "" {
+		if ip := o.liveMember(r.Member); ip != "" {
+			return ip
+		}
+	}
+	if r.Tag != "" {
+		if ip := o.liveTag(r.Tag); ip != "" {
+			return ip
+		}
+	}
+	if o.N() != nil {
+		return o.N().RouteHop(r)
+	}
+	return ""
+}
+
+func (o *Overlay) liveMember(id string) string {
+	if o == nil || id == "" {
+		return ""
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for ip, p := range o.tab {
+		if p != nil && p.member == id {
+			return ip
+		}
+	}
+	return ""
+}
+
+func (o *Overlay) liveTag(tag string) string {
+	if o == nil || tag == "" || o.N() == nil {
+		return ""
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for ip, p := range o.tab {
+		if p == nil || p.member == "" {
+			continue
+		}
+		if m := o.N().MemberByID(p.member); m != nil && m.HasTag(tag) {
+			return ip
+		}
+	}
+	return ""
+}
+
+// Routed is the overlay IP of the member that owns host, or empty.
+func (o *Overlay) Routed(host string) string {
+	if o == nil || o.N() == nil {
+		return ""
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return ""
+	}
+	best := -1
+	via := ""
+	for _, r := range o.N().Routes {
+		hop := o.resolveVia(r)
+		if hop == "" {
+			continue
+		}
+		_, cidr, err := net.ParseCIDR(r.Dst)
+		if err != nil || !cidr.Contains(ip) {
+			continue
+		}
+		ones, _ := cidr.Mask.Size()
+		if ones >= best {
+			best = ones
+			via = hop
+		}
+	}
+	return via
+}
+
+// attach records sess under overlay ip (replacing any previous row for this session).
+func (o *Overlay) attach(ip string, vlan int, sess *mux.Session, remote net.Addr, member, inst string) {
+	if sess == nil || ip == "" {
+		return
+	}
+	host := ""
+	if remote != nil {
+		host, _, _ = net.SplitHostPort(remote.String())
+		if host == "" {
+			host = remote.String()
+		}
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if old := o.byS[sess]; old != nil {
+		if old.ttl != nil {
+			old.ttl.Stop()
+		}
+		if o.tab[old.ip] == old {
+			delete(o.tab, old.ip)
+		}
+	}
+	if cur := o.tab[ip]; cur != nil && cur.sess != sess {
+		if cur.ttl != nil {
+			cur.ttl.Stop()
+		}
+		delete(o.byS, cur.sess)
+	}
+	p := &ovPeer{ip: ip, member: member, inst: inst, vlan: vlan, sess: sess, seen: host, at: time.Now()}
+	o.tab[ip] = p
+	o.byS[sess] = p
+}
+
+// SessionIP is the overlay IPv4 leased to sess, or empty if unbound.
+func (o *Overlay) SessionIP(sess *mux.Session) string {
+	if o == nil || sess == nil {
+		return ""
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if p := o.byS[sess]; p != nil {
+		return p.ip
+	}
+	return ""
+}
+
+// Detach drops sess from the table and Releases the lease (lease_hold may keep the IP).
+// A later session that already took this IP (same instance resume) is left in place.
+func (o *Overlay) Detach(sess *mux.Session) {
+	if o == nil || sess == nil {
+		return
+	}
+	o.mu.Lock()
+	p := o.byS[sess]
+	release := false
+	if p != nil {
+		if p.ttl != nil {
+			p.ttl.Stop()
+			p.ttl = nil
+		}
+		delete(o.byS, sess)
+		if o.tab[p.ip] == p {
+			delete(o.tab, p.ip)
+			release = true
+		}
+	}
+	o.mu.Unlock()
+	if release && o.Reg != nil {
+		o.Reg.Release(p.member, p.inst)
+	}
+}
+
+// SetListen records the P2P listen port and optional X25519 pub from loft.peer.
+func (o *Overlay) SetListen(sess *mux.Session, port uint16, pub []byte) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if p := o.byS[sess]; p != nil {
+		p.listen = port
+		if len(pub) == 32 {
+			p.p2pPub = append([]byte(nil), pub...)
+		}
+	}
+}
+
+// hints lists up to 16 live P2P listen ports (TLS-observed host), excluding except.
+func (o *Overlay) hints(except string) []wire.PeerHint {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	var out []wire.PeerHint
+	for ip, p := range o.tab {
+		if ip == except || p.listen == 0 || p.seen == "" {
+			continue
+		}
+		out = append(out, wire.PeerHint{IP: ip, Host: p.seen, Port: p.listen, VLAN: wire.U16(p.vlan), Pub: append([]byte(nil), p.p2pPub...)})
+		if len(out) >= 16 {
+			break
+		}
+	}
+	return out
+}
+
+// Forward splices st to the peer session (hub: policy_drop; vlan: same VLAN; mesh: Open 127.0.0.1:port).
+func (o *Overlay) Forward(st *mux.Stream, host, port string) {
+	o.forwardMember(st, host, port)
+}
+
+// forwardMember is overlay-IP Open: ACL, then splice as 127.0.0.1:port on the peer.
+func (o *Overlay) forwardMember(st *mux.Stream, host, port string) {
+	if o == nil {
+		st.Reset(wire.StreamRefused)
+		return
+	}
+	o.mu.Lock()
+	src := o.byS[st.Sess()]
+	dst := o.tab[host]
+	o.mu.Unlock()
+	if dst == nil || dst.sess == nil {
+		st.Reset(wire.StreamRefused)
+		return
+	}
+	p := o.packet(src, net.ParseIP(host), dst, "tcp", port, false)
+	if !o.N().Allow(p) {
+		if o.N().Peers == netconf.PeersVLAN && src != nil && src.vlan != dst.vlan {
+			st.Reset(wire.VLANDenied)
+			return
+		}
+		st.Reset(wire.PolicyDrop)
+		return
+	}
+	o.splice(st, dst.sess, net.JoinHostPort("127.0.0.1", port))
+}
+
+// forwardRouted is Open to a CIDR behind a member: ACL, then splice host:port on that member.
+func (o *Overlay) forwardRouted(st *mux.Stream, via, host, port string) {
+	if o == nil {
+		st.Reset(wire.StreamRefused)
+		return
+	}
+	o.mu.Lock()
+	src := o.byS[st.Sess()]
+	dst := o.tab[via]
+	o.mu.Unlock()
+	if dst == nil || dst.sess == nil {
+		st.Reset(wire.StreamRefused)
+		return
+	}
+	p := o.packet(src, net.ParseIP(host), dst, "tcp", port, true)
+	if !o.N().Allow(p) {
+		st.Reset(wire.PolicyDrop)
+		return
+	}
+	o.splice(st, dst.sess, net.JoinHostPort(host, port))
+}
+
+// packet is one overlay Open/ICMP for Allow.
+func (o *Overlay) packet(src *ovPeer, dstIP net.IP, dst *ovPeer, proto, port string, routed bool) netconf.Packet {
+	p := netconf.Packet{
+		Dst:    dstIP,
+		Proto:  proto,
+		Dport:  int(wire.Port(port)),
+		Routed: routed,
+	}
+	if o.N() != nil && dstIP != nil {
+		p.ToGW = dstIP.String() == o.N().Gateway
+	}
+	if src != nil {
+		p.Src = net.ParseIP(src.ip)
+		p.SrcVLAN = src.vlan
+		p.SrcTags = o.tagsOf(src.member)
+	}
+	if dst != nil {
+		p.DstVLAN = dst.vlan
+		p.DstTags = o.tagsOf(dst.member)
+	}
+	return p
+}
+
+// tagsOf is the live member tag list (config reload without reconnect).
+func (o *Overlay) tagsOf(id string) []string {
+	if o == nil || o.N() == nil || id == "" {
+		return nil
+	}
+	return o.tagsOfLocked(id)
+}
+
+func (o *Overlay) tagsOfLocked(id string) []string {
+	if o.N() == nil || id == "" {
+		return nil
+	}
+	if m := o.N().MemberByID(id); m != nil && len(m.Tags) > 0 {
+		return append([]string(nil), m.Tags...)
+	}
+	return nil
+}
+
+// splice copies st to an Open on dst.
+func (o *Overlay) splice(st *mux.Stream, dst *mux.Session, target string) {
+	peer, err := dst.Open(target)
+	if err != nil {
+		st.Reset(wire.StreamRefused)
+		return
+	}
+	defer peer.Close()
+	go func() { _, _ = io.Copy(peer, st); peer.Close() }()
+	_, _ = io.Copy(st, peer)
+}
+
+// DeliverICMP switches an overlay IPv4 ICMP packet.
+// Gateway address is answered here. Other members follow peers/ACL.
+func (o *Overlay) DeliverICMP(from *mux.Session, pkt []byte) {
+	if o == nil || o.N() == nil || from == nil || len(pkt) < 28 {
+		return
+	}
+	if pkt[0]>>4 != 4 || pkt[9] != 1 {
+		return
+	}
+	src := net.IP(pkt[12:16]).String()
+	dst := net.IP(pkt[16:20]).String()
+	o.mu.Lock()
+	srcP := o.byS[from]
+	dstP := o.tab[dst]
+	o.mu.Unlock()
+	if srcP == nil {
+		return
+	}
+	// Trust the session lease, not the IPv4 source. Darwin utun sources
+	// overlay pings from 169.254.8.1 (dummy p2p local).
+	if srcP.ip != src {
+		sip := net.ParseIP(srcP.ip)
+		if sip == nil || sip.To4() == nil {
+			return
+		}
+		pkt = rewriteIPv4Src(pkt, sip)
+		src = srcP.ip
+	}
+	p := o.packet(srcP, net.ParseIP(dst), dstP, "icmp", overlayICMPPort, false)
+	if dstP == nil {
+		if via := o.Routed(dst); via != "" {
+			o.mu.Lock()
+			viaP := o.tab[via]
+			o.mu.Unlock()
+			p = o.packet(srcP, net.ParseIP(dst), viaP, "icmp", overlayICMPPort, true)
+			if !o.N().Allow(p) || viaP == nil || viaP.sess == nil {
+				return
+			}
+			_ = viaP.sess.WriteDgram(net.JoinHostPort(dst, overlayICMPPort), pkt)
+			return
+		}
+	}
+	if !o.N().Allow(p) {
+		return
+	}
+	if dst == o.N().Gateway {
+		reply, ok := icmpEchoSwap(pkt)
+		if !ok {
+			return
+		}
+		_ = from.WriteDgram(net.JoinHostPort(srcP.ip, overlayICMPPort), reply)
+		return
+	}
+	if dstP == nil || dstP.sess == nil {
+		return
+	}
+	_ = dstP.sess.WriteDgram(net.JoinHostPort(dst, overlayICMPPort), pkt)
+}
+
+// parsePeerAnnounce reads loft.peer:<port> from an Open target.
+func parsePeerAnnounce(target string) (uint16, bool) {
+	host, port, err := net.SplitHostPort(target)
+	if err != nil || host != "loft.peer" {
+		return 0, false
+	}
+	p := wire.Port(port)
+	if p == 0 {
+		return 0, false
+	}
+	return p, true
+}
+
+// Handle is overlay Open: loft.peer announce, gateway:53 DNS TCP, or CIDR Forward.
+func (o *Overlay) Handle(st *mux.Stream) bool {
+	if o == nil {
+		return false
+	}
+	host, port, err := net.SplitHostPort(st.Target())
+	if err != nil {
+		return false
+	}
+	if host == "loft.peer" {
+		if p, ok := parsePeerAnnounce(st.Target()); ok {
+			var pub []byte
+			buf := make([]byte, 32)
+			_ = st.SetReadDeadline(time.Now().Add(800 * time.Millisecond))
+			if _, err := io.ReadFull(st, buf); err == nil {
+				pub = buf
+			}
+			_ = st.SetReadDeadline(time.Time{})
+			o.SetListen(st.Sess(), p, pub)
+		}
+		st.Close()
+		return true
+	}
+	if port == dnsPort && o.IsDNS(host) {
+		go o.serveDNSTCP(st)
+		return true
+	}
+	if o.Contains(host) {
+		o.forwardMember(st, host, port)
+		return true
+	}
+	if via := o.Routed(host); via != "" {
+		o.forwardRouted(st, via, host, port)
+		return true
+	}
+	return false
+}

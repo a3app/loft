@@ -1,0 +1,22 @@
+title: loft
+description: >-
+  HTTPS overlay for operators. Secure admin session that holds
+  through short disconnects and packet loss. Protocol loft/1.0.
+url: https://a3app.github.io
+baseurl: /loft
+theme: jekyll-theme-primer
+lang: en
+plugins:
+  - jekyll-seo-tag
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-titles-from-headings
+relative_links:
+  enabled: true
+  collections: true
+defaults:
+  - scope:
+      path: ""
+    values:
+      image: https://a3app.github.io/loft/brand/png/github-social-preview.png

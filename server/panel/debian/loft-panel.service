@@ -1,0 +1,44 @@
+[Unit]
+Description=loft server panel
+Documentation=file:///usr/share/doc/loft-panel/README.md
+After=network-online.target loft-panel-adm.service
+Wants=loft-panel-adm.service
+
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=loft-panel
+Group=loft-panel
+EnvironmentFile=-/etc/loft-panel/panel.env
+# PANEL_HOSTS: names the panel answers to, e.g. panel.example.net (empty = any).
+ExecStart=/usr/bin/loft-panel serve -listen ${PANEL_LISTEN} -data /var/lib/loft-panel -hosts ${PANEL_HOSTS}
+Environment=PANEL_LISTEN=127.0.0.1:8091
+Environment=PANEL_HOSTS=
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+
+StateDirectory=loft-panel
+StateDirectoryMode=0700
+NoNewPrivileges=true
+CapabilityBoundingSet=
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+# AF_NETLINK: the wizard compares DNS with the server's own addresses.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

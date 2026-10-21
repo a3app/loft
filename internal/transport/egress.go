@@ -1,0 +1,76 @@
+package transport
+
+import (
+	"context"
+	"net"
+	"sync/atomic"
+	"time"
+
+	"github.com/a3app/loft/internal/egress"
+	"github.com/a3app/loft/internal/mux"
+)
+
+// Egress is the node's exit rules (egress.conf); nil sends everything out
+// directly. Swapped on reload.
+var Egress atomic.Pointer[egress.Router]
+
+// whoOf is the member behind a session, for the exit rules.
+func whoOf(sess *mux.Session) egress.Who {
+	if NetSwitch == nil || sess == nil {
+		return egress.Who{}
+	}
+	return NetSwitch.Who(sess)
+}
+
+// dialOut opens a member's TCP connection to the internet.
+func dialOut(who egress.Who, target string) (net.Conn, error) {
+	if r := Egress.Load(); r != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		c, _, err := r.DialTCP(ctx, who, target)
+		return c, err
+	}
+	return net.DialTimeout("tcp4", target, 10*time.Second)
+}
+
+// Who returns the member attached on sess and its tags.
+func (o *Overlay) Who(sess *mux.Session) egress.Who {
+	if o == nil {
+		return egress.Who{}
+	}
+	o.mu.Lock()
+	p := o.byS[sess]
+	member := ""
+	if p != nil {
+		member = p.member
+	}
+	o.mu.Unlock()
+	w := egress.Who{Member: member}
+	if m := o.N().MemberByID(member); member != "" && m != nil {
+		w.Tags = m.Tags
+	}
+	return w
+}
+
+// Peer is one attached member session, for the status file.
+type Peer struct {
+	Member string    `json:"member"`
+	IP     string    `json:"ip"`
+	Inst   string    `json:"inst,omitempty"`
+	From   string    `json:"from,omitempty"`
+	Since  time.Time `json:"since"`
+}
+
+// Peers lists the attached sessions.
+func (o *Overlay) Peers() []Peer {
+	if o == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	out := make([]Peer, 0, len(o.tab))
+	for _, p := range o.tab {
+		out = append(out, Peer{Member: p.member, IP: p.ip, Inst: p.inst, From: p.seen, Since: p.at})
+	}
+	return out
+}

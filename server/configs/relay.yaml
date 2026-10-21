@@ -1,0 +1,22 @@
+# loft-node -c server/configs/relay.yaml
+role: relay
+id: ru1
+listen: ":443"
+advertise: https://203.0.113.10
+controller: wss://10.0.0.2/api/v1/sync
+token: "change-me-long-random"
+cert: /etc/loft/fullchain.pem
+key: /etc/loft/privkey.pem
+
+# this front's identity. Unauthorized TCP (any SNI, including advertise)
+# and UDP/443 splice here — an active probe sees that origin's live TLS/QUIC.
+decoy:
+  - www.google.com:443
+# cdn_peers:
+#   - 77.88.0.0/16
+mask: true
+
+fronts:
+  - get
+  - ws
+  - h2
