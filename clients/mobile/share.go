@@ -16,9 +16,9 @@ import (
 	"github.com/a3app/loft/internal/vless"
 )
 
-// loftTypes are overlay transports (get/ws/h2/quic/h3). YAML kind is loft.
+// loftTypes are overlay transports (get/ws/h2/quic/h3/l3). YAML kind is loft.
 var loftTypes = map[string]bool{
-	"get": true, "ws": true, "h2": true, "quic": true, "h3": true,
+	"get": true, "ws": true, "h2": true, "quic": true, "h3": true, "l3": true,
 }
 
 // ParseShare turns a QR / paste / file body into client YAML (docs/share.md).

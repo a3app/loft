@@ -341,7 +341,20 @@ func (e *Engine) runLoft(ctx context.Context, cfg *config.ClientConfig, pipe *pa
 	var once sync.Once
 	signal := func(err error) { once.Do(func() { ready <- err }) }
 	err := transport.SuperviseOn(ctx, only, path, func(d transport.Dialer, o config.Outbound) {
-		h.Set(d)
+		if live, ok := h.Live().(*inbound.L3Net); ok {
+			if p, ok := d.(transport.IPPump); ok {
+				live.Swap(d, p)
+			} else {
+				h.Set(d)
+			}
+		} else {
+			w, err := inbound.WrapL3(d)
+			if err != nil {
+				signal(err)
+				return
+			}
+			h.Set(w)
+		}
 		e.mu.Lock()
 		st := e.stack
 		e.kind = o.Type

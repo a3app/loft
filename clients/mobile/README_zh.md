@@ -12,7 +12,8 @@ iOS 产品目录：[../iOS/](../iOS/)。Android 产品目录：[../Android/](../
 
 | type | 线上 | 内层 IP | 包 |
 |------|------|----------|---------|
-| `get` `ws` `h2` `quic` `h3` | loft | Status 里的覆盖网 | gVisor → `Holder.Open` |
+| `get` `ws` `h2` `quic` `h3` | loft mux | Status 里的覆盖网 | gVisor → `Holder.Open` |
+| `l3` | loft IP | Status 里的覆盖网 | H2 CONNECT IP 泵 |
 | `sstp` | TLS + PPP（`internal/sstp`） | IPCP | L3 泵进 `sstp.Session` |
 | `vless` | VLESS TCP+TLS / REALITY / XHTTP（`internal/vless`） | 合成 / 栈 | gVisor → VLESS 拨号 |
 | `trojan` | Trojan TCP+TLS / REALITY / XHTTP（`internal/trojan`） | 合成 / 栈 | gVisor → Trojan 拨号 |

@@ -12,7 +12,8 @@
 
 | type | Протокол | Внутренний IP | Пакеты |
 |------|--------|---------------|--------|
-| `get` `ws` `h2` `quic` `h3` | loft | оверлей из Status | gVisor → `Holder.Open` |
+| `get` `ws` `h2` `quic` `h3` | loft mux | оверлей из Status | gVisor → `Holder.Open` |
+| `l3` | loft IP | оверлей из Status | IP поверх H2 CONNECT |
 | `sstp` | TLS + PPP (`internal/sstp`) | IPCP | L3-памп в `sstp.Session` |
 | `vless` | VLESS TCP+TLS / REALITY / XHTTP (`internal/vless`) | синтетический / стек | gVisor → набор VLESS |
 | `trojan` | Trojan TCP+TLS / REALITY / XHTTP (`internal/trojan`) | синтетический / стек | gVisor → набор Trojan |

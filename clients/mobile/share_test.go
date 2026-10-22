@@ -66,6 +66,23 @@ func TestParseShareLoftRejectsSSTPType(t *testing.T) {
 	}
 }
 
+func TestParseShareLoftL3(t *testing.T) {
+	y, err := ParseShare("loft://lt_abc@edge.example.com:443?type=l3#Lab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := decodeFile([]byte(y))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Outbounds) != 1 || cfg.Outbounds[0].Type != "l3" {
+		t.Fatalf("%+v", cfg.Outbounds)
+	}
+	if primaryType(cfg) != "l3" {
+		t.Fatalf("kind %q", primaryType(cfg))
+	}
+}
+
 func TestParseShareVLESS(t *testing.T) {
 	raw := "vless://550e8400-e29b-41d4-a716-446655440000@de1.example.com:443?security=tls&sni=de1.example.com#n"
 	y, err := ParseShare(raw)

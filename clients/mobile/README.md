@@ -12,7 +12,8 @@ One process, one system VPN row. YAML `outbounds[].type` picks the path:
 
 | type | Wire | Inner IP | Packets |
 |------|------|----------|---------|
-| `get` `ws` `h2` `quic` `h3` | loft | Status overlay | gVisor → `Holder.Open` |
+| `get` `ws` `h2` `quic` `h3` | loft mux | Status overlay | gVisor → `Holder.Open` |
+| `l3` | loft IP | Status overlay | H2 CONNECT IP pump |
 | `sstp` | TLS + PPP (`internal/sstp`) | IPCP | L3 pump into `sstp.Session` |
 | `vless` | VLESS TCP+TLS / REALITY / XHTTP (`internal/vless`) | synthetic / stack | gVisor → VLESS dial |
 | `trojan` | Trojan TCP+TLS / REALITY / XHTTP (`internal/trojan`) | synthetic / stack | gVisor → Trojan dial |
