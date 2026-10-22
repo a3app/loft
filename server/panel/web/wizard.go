@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a3app/loft/internal/netconf"
@@ -337,4 +338,45 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// dnsNow answers the wizard's records table: what public DNS holds now for
+// each record the panel would create, and when the zone's registration ends.
+func (s *Server) dnsNow(w http.ResponseWriter, r *http.Request) {
+	auditSkip(r)
+	var in struct {
+		Zone    string   `json:"zone"`
+		Records []Record `json:"records"`
+	}
+	if !readJSON(w, r, 8<<10, &in) {
+		return
+	}
+	zone := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(in.Zone), "."))
+	if !zoneRe.MatchString(zone) || len(in.Records) > 20 {
+		fail(w, http.StatusBadRequest, "\""+zone+"\" is not a domain name")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+	defer cancel()
+	type now struct {
+		Now   []string `json:"now"`
+		Check string   `json:"check"`
+	}
+	out := make([]now, len(in.Records))
+	var wg sync.WaitGroup
+	for i, rec := range in.Records {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, _ := lookupRecord(ctx, zone, rec)
+			out[i] = now{Now: append([]string{}, got...), Check: checkRecord(ctx, zone, rec)}
+		}()
+	}
+	until := s.rdapUntil(ctx, zone)
+	wg.Wait()
+	res := map[string]any{"records": out}
+	if !until.IsZero() {
+		res["reg_until"] = until
+	}
+	ok(w, res)
 }

@@ -523,8 +523,23 @@ func (s *Server) zoneRecords(w http.ResponseWriter, r *http.Request) {
 
 // checkRecord asks DNS whether rec is published.
 func checkRecord(ctx context.Context, zone string, rec Record) string {
+	got, checked := lookupRecord(ctx, zone, rec)
+	if !checked {
+		return "" // CAA, SRV: not checked
+	}
+	if len(got) == 0 {
+		return "missing"
+	}
+	if slices.Contains(got, strings.TrimSuffix(rec.Value, ".")) {
+		return "ok"
+	}
+	return "differs"
+}
+
+// lookupRecord is what public DNS answers now for rec's name and type;
+// checked is false for types the panel does not look up.
+func lookupRecord(ctx context.Context, zone string, rec Record) (got []string, checked bool) {
 	host := fqdn(rec.Name, zone)
-	var got []string
 	var err error
 	rv := net.DefaultResolver
 	switch rec.Type {
@@ -553,15 +568,12 @@ func checkRecord(ctx context.Context, zone string, rec Record) string {
 			got = append(got, strings.TrimSuffix(n.Host, "."))
 		}
 	default:
-		return "" // CAA, SRV: not checked
+		return nil, false
 	}
-	if err != nil || len(got) == 0 {
-		return "missing"
+	if err != nil {
+		return nil, true
 	}
-	if slices.Contains(got, strings.TrimSuffix(rec.Value, ".")) {
-		return "ok"
-	}
-	return "differs"
+	return got, true
 }
 
 var labelRe = regexp.MustCompile(`^(@|\*|(\*\.)?([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9])?)(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9])?)*)$`)
@@ -732,6 +744,20 @@ func (s *Server) followIPs(ctx context.Context) {
 
 // refreshReg asks RDAP when the zone's registration ends.
 func (s *Server) refreshReg(ctx context.Context, zone string) {
+	until := s.rdapUntil(ctx, zone)
+	s.dom.mu.Lock()
+	if z := s.dom.zone(zone); z != nil {
+		z.RegChecked = time.Now().UTC()
+		if !until.IsZero() {
+			z.RegUntil = until
+		}
+		s.dom.save()
+	}
+	s.dom.mu.Unlock()
+}
+
+// rdapUntil is when zone's registration ends, by RDAP; zero if unknown.
+func (s *Server) rdapUntil(ctx context.Context, zone string) time.Time {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://rdap.org/domain/"+zone, nil)
@@ -756,15 +782,7 @@ func (s *Server) refreshReg(ctx context.Context, zone string) {
 			}
 		}
 	}
-	s.dom.mu.Lock()
-	if z := s.dom.zone(zone); z != nil {
-		z.RegChecked = time.Now().UTC()
-		if !until.IsZero() {
-			z.RegUntil = until
-		}
-		s.dom.save()
-	}
-	s.dom.mu.Unlock()
+	return until
 }
 
 // watchDomains runs from Watch: addresses, registrations, extra certificates.

@@ -2260,8 +2260,16 @@
       const changed = name !== curNode || (W.sep ? panel : '') !== curPanel;
       const hosts = [name].concat(W.sep && panel ? [panel] : []);
       const recs = dnsRows(zone, hosts, ips);
+      // what DNS holds now for these records, and the zone's registration
+      const nowKey = JSON.stringify([zone, recs]);
+      if (W.nowKey !== nowKey && zone.includes('.')) {
+        W.nowKey = nowKey; W.now = null;
+        api('POST', '/api/domain/now', { zone, records: recs.map(r => ({ type: r[0], name: r[1], value: r[2] })) })
+          .then(v => { if (W.nowKey === nowKey) { W.now = v; if (step() === 2) L.redrawKeep(); } }, () => {});
+      }
+      const nowCell = i => { const x = W.now && W.now.records[i]; return !x ? '<span class="mute">…</span>' : x.check === 'ok' ? pill('уже есть', 'ok') : x.now.length ? `<span class="mono">${esc(x.now.join(', '))}</span>` : '<span class="mute">нет записи</span>'; };
       body = `<h1>Домен сервера</h1><p class="fs-d">Клиенты подключаются по этому имени, на него же выпускается сертификат. Через DNS-провайдера панель сама создаст записи на адрес <span class="mono">${esc(ips.join(', ') || '—')}</span>.</p>
-        <div><div class="fld"><label for="w2a">Имя для подключения клиентов</label><input id="w2a" class="mono" value="${esc(name)}" placeholder="api.example.net" oninput="LIVE.W.name=this.value;LIVE.W.check=null;LIVE.W.zone=LIVE.W.zone||''"></div><div class="hint">Попадает в ссылки loft:// и профили членов сети.</div></div>${line(W.check)}
+        <div><div class="fld"><label for="w2a">Имя для подключения клиентов</label><input id="w2a" class="mono" value="${esc(name)}" placeholder="api.example.net" oninput="LIVE.W.name=this.value;LIVE.W.check=null;LIVE.W.zone=LIVE.W.zone||''"></div><div class="hint">Попадает в ссылки loft:// и профили членов сети.${W.now && W.now.reg_until ? ` Зона ${esc(zone)} · регистрация до ${new Date(W.now.reg_until).toLocaleDateString(LOC())}.` : ''}</div></div>${line(W.check)}
         <label class="chk"><input id="w2sep" type="checkbox" ${W.sep ? 'checked' : ''} onchange="LIVE.W.sep=this.checked;LIVE.W.pcheck=null;LIVE.redrawKeep()"><span>Отдельное имя для панели<span class="hint" style="display:block;margin:0">Тот, кто проверяет адрес ноды, увидит обычную страницу веб-сервера и сертификат только с именем ноды — панель там не найти. Оба имени указывают на один IP, и по истории DNS это видно.</span></span></label>
         ${W.sep ? `<div class="fld"><label for="w2p">Имя панели</label><input id="w2p" class="mono" value="${esc(panel)}" placeholder="panel.example.net" oninput="LIVE.W.panel=this.value;LIVE.W.pcheck=null"></div>${line(W.pcheck)}` : ''}
         <div><div class="fld"><label for="w2z">Зона</label><input id="w2z" class="mono" value="${esc(zone)}" placeholder="example.net" list="w2zl" oninput="LIVE.W.zone=this.value"></div><div class="hint">В этой зоне панель ведёт записи. Подсказки — из зон провайдера.</div></div><datalist id="w2zl">${(W.pz || []).map(x => `<option value="${esc(x)}">`).join('')}</datalist>
@@ -2275,7 +2283,7 @@
            <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.checkName()">Проверить DNS</button></div>
            ${dnsBad() ? `<label class="chk"><input id="w2force" type="checkbox" ${W.force ? 'checked' : ''} onchange="LIVE.W.force=this.checked"><span>Всё равно продолжить<span class="hint" style="display:block;margin:0">Например, DNS ещё обновляется или сервер за NAT. Сертификат Let’s Encrypt не выпустится, пока имя не начнёт указывать сюда.</span></span></label>` : ''}`}
         <div class="dlg-sec">${apiDNS ? 'Панель создаст записи' : 'Нужны записи'}</div>
-        ${table(['Тип', 'Имя', 'Значение'], recs.map(r => `<tr><td class="mono">${esc(r[0])}</td><td class="mono">${esc(r[1])}</td><td class="mono">${esc(r[2])}</td></tr>`).join('') || `<tr><td colspan="3" class="mute">Нет адресов сервера — A и AAAA не создать. CAA для Let’s Encrypt всё равно будет.</td></tr>`)}
+        ${table(['Тип', 'Имя', 'Значение', 'Сейчас'], recs.map((r, i) => `<tr><td class="mono">${esc(r[0])}</td><td class="mono">${esc(r[1])}</td><td class="mono">${esc(r[2])}</td><td>${nowCell(i)}</td></tr>`).join('') || `<tr><td colspan="4" class="mute">Нет адресов сервера — A и AAAA не создать. CAA для Let’s Encrypt всё равно будет.</td></tr>`)}
         <p class="hint" style="margin:0">Сейчас нода — <span class="mono">${esc(curNode || '—')}</span>, панель — <span class="mono">${esc(curPanel || curNode || '—')}</span>.${changed ? ' При смене имён нода перезапустится — подключения прервутся на пару секунд.' : ''}</p>`;
       next = apiDNS ? 'Создать записи и дальше' : (changed ? 'Сменить имена и дальше' : 'Дальше');
       skip = 'Пропустить — работать по IP';

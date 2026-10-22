@@ -972,6 +972,8 @@ window.LOFT_EN = {
   "Пользователь": "User",
   "Пользователь $": "User $",
   "Пользователь API": "API user",
+  "Попадает в ссылки loft:// и профили членов сети.$": "Goes into loft:// links and member profiles.$",
+  "· регистрация до $": "· registered until $",
   "Канал «": "Channel «",
   "Трафик за": "Traffic over",
   "ГБ · ↑": "GB · ↑",

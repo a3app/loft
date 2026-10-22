@@ -100,6 +100,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("GET /api/jobs/{id}", s.need(anyone, s.jobGet))
 	mux.HandleFunc("GET /api/wizard", s.need(ownerOnly, s.wizard))
 	mux.HandleFunc("POST /api/domain/check", s.need(ownerOnly, s.domainCheck))
+	mux.HandleFunc("POST /api/domain/now", s.need(ownerOnly, s.dnsNow))
 	mux.HandleFunc("POST /api/domain", s.need(ownerOnly, s.domainSet))
 	mux.HandleFunc("POST /api/cert/issue", s.need(ownerOnly, s.certIssue))
 	mux.HandleFunc("POST /api/wizard/member", s.need(area("members", store.Change), s.memberCreate))
