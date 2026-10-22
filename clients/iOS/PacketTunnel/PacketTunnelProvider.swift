@@ -61,7 +61,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, MobilePacketSink {
 
     func onPacket(_ pkt: Data?) {
         guard let pkt, !pkt.isEmpty else { return }
-        packetFlow.writePackets([pkt], withProtocols: [NSNumber(value: AF_INET)])
+        let v6 = pkt[0] >> 4 == 6
+        packetFlow.writePackets([pkt], withProtocols: [NSNumber(value: v6 ? AF_INET6 : AF_INET)])
     }
 
     private func pumpReads() {
