@@ -23,6 +23,8 @@
     return j;
   }
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // a second click while a save is in flight is dropped
+  const once = fn => { let busy = false; return async (...a) => { if (busy) return; busy = true; try { return await fn(...a); } finally { busy = false; } }; };
   const LOC = () => ({ en: 'en-GB', zh: 'zh-CN', ru: 'ru-RU' }[(window.I18N && I18N.lang) || 'ru'] || 'ru-RU'); // dates follow the language
 
   /* The server speaks English (it is an API); the page speaks Russian. */
@@ -238,7 +240,7 @@
     for (let n = 0; Date.now() < until; n++) {
       await sleep(n < 3 ? 700 : 1500);
       let j;
-      try { j = await api('GET', '/api/jobs/' + id); } catch (e) { if (e.status === 404) throw e; onWait && onWait(true); continue; }
+      try { j = await api('GET', '/api/jobs/' + id); } catch (e) { if (e.status === 404 || e.status === 401) throw e; onWait && onWait(true); continue; }
       onWait && onWait(false);
       if (j.state === 'done') return j.result || {};
       if (j.state === 'error') throw new Error(ru(j.error));
@@ -266,7 +268,7 @@
     V.mail = mailView;
     V.system = systemView;
     window.pkgOn = n => !!(L.pk && L.pk.packages.some(p => PT[p.key] === n && p.installed));
-    window.openPicker = () => { if (L.pk) picker(); };
+    window.openPicker = () => { if (L.pk) { L.P.pick = null; L.P.q = ''; picker(); } };
     for (const k of Object.keys(EXTRA)) delete EXTRA[k];
     Object.setPrototypeOf(EXTRA, new Proxy({}, { get: () => ['loft', '0 / 0', 'никогда', 0] }));
 
@@ -340,7 +342,7 @@
   }
   window.goLogout = async () => {
     try { await api('POST', '/api/logout', {}); } catch (e) { /* already out */ }
-    L.me = null; L.csrf = ''; go('login');
+    location.replace('#login'); location.reload();
   };
   document.querySelectorAll('[onclick="go(\'login\')"]').forEach(b => b.setAttribute('onclick', 'goLogout()'));
 
@@ -392,6 +394,7 @@
   window.saveMember = async (id) => {
     if (id) return saveMember0(id);
     const nid = $('#m2').value.trim();
+    if (findMember(nid)[1]) { toast('Такой член уже есть'); return; }
     let k;
     try { k = await api('POST', '/api/members/key', { id: nid }); } catch (e) { toast(e.message); return; }
     saveMember0(null);
@@ -480,7 +483,7 @@
     if (location.hash === '#system' && L.me && L.sy) loadSystem().then(() => { if (S.route === 'system') render(); });
     if (location.hash === '#mail' && L.me && L.ml) loadMail().then(() => Promise.all([loadMailDNS(), loadMailStats()])).then(() => { if (S.route === 'mail') render(); });
     if (location.hash === '#users' && L.me) { L.sess = L.log = null; loadUsers().then(() => { if (S.route === 'users') render(); }); }
-    if (location.hash === '#settings' && L.me && L.can('packages')) loadSettings().then(() => { if (S.route === 'settings') render(); });
+    if (location.hash === '#settings' && L.me && L.can('settings', 1)) loadSettings().then(() => { if (S.route === 'settings') render(); });
   });
 
   const verb = { install: 'установка', remove: 'удаление', upgrade: 'обновление' };
@@ -689,7 +692,7 @@
   L.P = P;
   L.pick = (k, on) => { if (on) P.pick.add(k); else { P.pick.delete(k); deps(k).forEach(d => P.pick.delete(d)); } picker(); };
   L.pickSet = l => { P.pick = l ? new Set(l) : null; if (!l) P.q = ''; picker(); };
-  L.pickQ = v => { P.q = v; clearTimeout(L._pq); L._pq = setTimeout(() => { picker(); const e = $('#pq'); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }, 200); };
+  L.pickQ = v => { P.q = v; clearTimeout(L._pq); L._pq = setTimeout(() => { if (!$('#pq')) return; picker(); const e = $('#pq'); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }, 200); };
   L.pickApply = () => {
     const l = L.pk.packages;
     const plan = { install: l.filter(p => !p.base && !p.installed && P.pick.has(p.key)).map(p => p.key), remove: l.filter(p => !p.base && p.installed && !P.pick.has(p.key)).map(p => p.key), purge: P.wipe };
@@ -934,7 +937,7 @@
   L.openChan = id => {
     const nw = id.startsWith('new:');
     const t0 = nw ? id.slice(4) : chOf(id).type;
-    const t = t0 === 'vpn' ? (D && D.type === 'ovpn' && D._nw ? 'ovpn' : 'sstp') : t0;
+    const t = t0 === 'vpn' ? 'sstp' : t0;
     D = nw ? { _nw: true, type: t, on: true, exit: true, wg: { address: '', peers: [{ allowed_ips: ['0.0.0.0/0'], keepalive: 25 }] }, sstp: { auth: 'auto' }, ovpn: { routes: false }, zt: { managed: true }, px: { kind: 'socks5', udp: 'direct' }, xr: {} } : JSON.parse(JSON.stringify(chOf(id)));
     drawChan(nw, t0 === 'vpn');
   };
@@ -1019,7 +1022,7 @@
   L.vpnType = t => { readChan(); D.type = t; drawChan(true, true); };
   L.wgPeer = i => { readChan(); if (i < 0) D.wg.peers.push({ allowed_ips: ['0.0.0.0/0'], keepalive: 25 }); else D.wg.peers.splice(i, 1); drawChan(!!D._nw); };
   L.wgGen = async () => { try { const k = await api('POST', '/api/channels/wgkey', {}); $('#c2').value = k.private; $('#c2p').value = k.public; toast('Пара ключей создана — сохраните подключение'); } catch (e) { toast(e.message); } };
-  L.fileInto = (inp, sel) => { const f = inp.files[0]; if (!f) return; f.text().then(t => { $(sel).value = t; }); };
+  L.fileInto = (inp, sel) => { const f = inp.files[0]; inp.value = ''; if (!f) return; f.text().then(t => { $(sel).value = t; }); };
   L.xrParse = async () => {
     const box = $('#xkv'), link = $('#x1').value.trim();
     if (!box || !link) return;
@@ -1031,7 +1034,7 @@
   };
   // WireGuard .conf from a provider: open a new channel filled from it.
   L.wgFile = inp => {
-    const f = inp.files[0];
+    const f = inp.files[0]; inp.value = '';
     if (!f) return;
     f.text().then(t => {
       L.openChan('new:wg');
@@ -1053,13 +1056,13 @@
       toast('Поля заполнены из ' + f.name + ' — проверьте и добавьте');
     });
   };
-  L.chSave = async () => {
+  L.chSave = once(async () => {
     readChan();
     const c = D, nw = !!c._nw, body = { name: nw ? '' : c.name, title: c.title || '', type: c.type, on: nw ? true : c.on, exit: !!c.exit, accept: !!c.accept, check: c.check || null, via: c.via || '' };
     body[c.type] = c[c.type];
     toast(nw ? 'Добавляю подключение…' : 'Сохраняю…');
     try { L.ch = await api('POST', '/api/channels/save', body); closeDlg(); toast('Сохранено — нода перечитала каналы'); render(); } catch (e) { toast(e.message); }
-  };
+  });
   L.chSwitch = async (n, on) => { const t = tt(chOf(n)); try { L.ch = await api('POST', '/api/channels/switch', { name: n, on }); toast(on ? `«${t}» включён` : `«${t}» выключен`); } catch (e) { toast(e.message); } render(); };
   L.chAskDel = n => dialog(`Удалить подключение «${esc(tt(chOf(n)))}»?`, 'Канал отключится и его настройки удалятся с сервера.', '', `<button class="btn danger" type="button" onclick="LIVE.chDel('${n}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.chDel = async n => { closeDlg(); try { L.ch = await api('POST', '/api/channels/delete', { name: n }); toast('Подключение удалено'); } catch (e) { toast(e.message); } render(); };
@@ -1402,7 +1405,7 @@
   L.ndSet = (k, v) => { L.ndDraft[k] = v; render(); };
   L.ndFront = (f, on) => { const s = new Set(L.ndDraft.fronts); on ? s.add(f) : s.delete(f); L.ndDraft.fronts = FR.map(x => x[0]).filter(x => s.has(x)); render(); };
   L.ndRevert = () => { L.ndDraft = JSON.parse(JSON.stringify(L.nd)); render(); toast('Черновик сброшен'); };
-  L.ndApply = async () => {
+  L.ndApply = once(async () => {
     const onlyFleet = ndChanged().every(k => k === 'relays' || k === 'enrol');
     toast(onlyFleet ? 'Применяю…' : 'Применяю: нода перезапускается…');
     try {
@@ -1411,7 +1414,7 @@
       toast(onlyFleet ? 'Применено: нода перечитала ретрансляторы' : 'Применено: нода перезапущена');
     } catch (e) { toast(e.message); }
     render();
-  };
+  });
   function ndBar() {
     const ch = ndChanged();
     if (!ch || !ch.length) return '';
@@ -1523,7 +1526,7 @@
   };
   L.listDel = n => { const all = { ...L.nd.lists }; delete all[n]; saveLists(all, 'Список удалён'); };
   L.listFile = inp => {
-    const f = inp.files[0];
+    const f = inp.files[0]; inp.value = '';
     if (!f) return;
     f.text().then(t => { L.openList(''); $('#ls1').value = f.name.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 32); $('#ls2').value = entries(t).join('\n'); });
   };
@@ -1843,8 +1846,9 @@
   L.phraseGo = async () => {
     let r;
     try { r = await api('POST', '/api/system/backup/phrase', {}); } catch (e) { toast(e.message); return; }
+    L.reSys();
     dialog('Фраза восстановления', 'Запишите её не на этом сервере. Панель её не хранит и больше не покажет: без неё копии не открыть.', `<div class="uri" id="bkph" style="font-size:18px;letter-spacing:.04em">${esc(r.phrase)}</div><div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="navigator.clipboard.writeText($('#bkph').textContent).then(()=>toast('Фраза скопирована'))">Скопировать</button></div>`,
-      `<button class="btn pri" type="button" onclick="closeDlg();LIVE.reSys()">Записал</button>`);
+      `<button class="btn pri" type="button" onclick="closeDlg()">Записал</button>`);
   };
   L.reSys = async () => { await loadSystem(); render(); };
   L.openBackupCfg = () => {
@@ -1878,7 +1882,7 @@
       <button class="btn sm" type="button" style="align-self:flex-start" onclick="LIVE.storeGo(true)">Проверить доступ</button>`,
       `<button class="btn pri" type="button" onclick="LIVE.storeGo(false)">Добавить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
-  L.storeGo = async test => {
+  L.storeGo = once(async test => {
     const k = $('#st0').value, body = { kind: k, test };
     if (k === 's3') Object.assign(body, { endpoint: $('#sa1').value, bucket: $('#sa2').value, access_key: $('#sa3').value, secret_key: $('#sa4').value });
     if (k === 'sftp') Object.assign(body, { host: $('#sb1').value, user: $('#sb2').value, dir: $('#sb3').value });
@@ -1886,11 +1890,11 @@
     toast('Проверяю доступ…');
     try { await api('POST', '/api/system/backup/store', body); } catch (e) { toast(e.message); return; }
     if (test) { toast('Доступ есть: проба записана и удалена'); return; }
-    toast('Хранилище добавлено'); await loadSystem(); L.openStores(); render();
-  };
+    toast('Хранилище добавлено'); await loadSystem(); if (L.me) L.openStores(); render();
+  });
   L.storeDel = async id => {
     try { await api('POST', '/api/system/backup/store', { id, kind: 'dir', delete: true }); toast('Хранилище удалено'); } catch (e) { toast(e.message); }
-    await loadSystem(); L.openStores(); render();
+    await loadSystem(); if (L.me) L.openStores(); render();
   };
   L.openRestore = runId => {
     const B = L.sy.bk;
@@ -2051,13 +2055,13 @@
     if (!dl || id === 'manual') { if (dl) dl.innerHTML = ''; return; }
     try { const z = await api('GET', '/api/domains/provider-zones?id=' + encodeURIComponent(id)); dl.innerHTML = z.zones.map(x => `<option value="${esc(x)}">`).join(''); } catch (e) { /* typed by hand */ }
   };
-  L.zoneSave = async nw => {
+  L.zoneSave = once(async nw => {
     const create = nw ? [$('#zz3').checked ? 'addr' : '', $('#zz4').checked ? 'caa' : ''].filter(Boolean) : [];
     const name = $('#zz1').value.trim();
     toast('Сохраняю зону…');
     try { await api('POST', '/api/domains/zone', { name, provider: $('#zz2').value, create }); closeDlg(); toast('Зона сохранена'); } catch (e) { toast(e.message); }
     L.dz = name.toLowerCase(); await loadDomains(); await loadRecords(); render();
-  };
+  });
   L.zoneDel = name => dialog(`Удалить зону «${esc(name)}» из панели?`, 'Записи у провайдера останутся; панель просто перестанет вести эту зону.', '', `<button class="btn danger" type="button" onclick="LIVE.zoneDelGo('${esc(name)}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.zoneDelGo = async name => { closeDlg(); try { await api('POST', '/api/domains/zone', { name, delete: true }); toast('Зона удалена из панели'); } catch (e) { toast(e.message); } L.dz = null; await loadDomains(); await loadRecords(); render(); };
   L.openRec = i => {
@@ -2071,12 +2075,12 @@
       <label class="chk" id="rrA" ${['A', 'AAAA'].includes(r.type) ? '' : 'hidden'}><input id="rr6" type="checkbox" ${r.auto ? 'checked' : ''}>Обновлять при смене IP сервера</label>`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.recSave(${i})">${nw ? 'Добавить' : 'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить запись" style="margin-left:auto" onclick="LIVE.recDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
-  L.recSave = async i => {
+  L.recSave = once(async i => {
     const old = i >= 0 ? L.dzRecs[i] : {};
     const rec = { id: old.id || '', type: $('#rr1').value, name: $('#rr2').value.trim() || '@', value: $('#rr4').value.trim(), priority: parseInt($('#rr3').value, 10) || 0, ttl: +$('#rr5').value };
     try { await api('POST', '/api/domains/record', { zone: L.dz, record: rec, auto: $('#rr6').checked }); closeDlg(); toast('Запись сохранена'); } catch (e) { toast(e.message); }
     await loadRecords(); render();
-  };
+  });
   L.recDel = async i => { closeDlg(); try { await api('POST', '/api/domains/record', { zone: L.dz, record: { id: L.dzRecs[i].id }, delete: true }); toast('Запись удалена'); } catch (e) { toast(e.message); } await loadRecords(); render(); };
   L.openCert = id => {
     const nw = !id, c = nw ? { names: [], method: 'http-01', use: 'node' } : L.dm.certs.find(x => x.id === id), own = L.can('domains');
@@ -2088,12 +2092,12 @@
       ${nw ? '' : `<dl class="kv"><div><dt>Издатель</dt><dd>${esc(c.issuer || '—')}</dd></div><div><dt>Действует до</dt><dd>${c.until ? new Date(c.until).toLocaleDateString(LOC()) : '—'}</dd></div><div><dt>Ключ</dt><dd>${esc(c.key || '—')}</dd></div></dl>`}`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.certIssue('${nw ? '' : c.id}')">${nw ? 'Выпустить' : 'Выпустить заново'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw || c.fixed ? '' : `<button class="icb del" type="button" aria-label="Удалить сертификат" style="margin-left:auto" onclick="LIVE.certDel('${c.id}')">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
-  L.certIssue = async id => {
+  L.certIssue = once(async id => {
     const names = $('#ce1').value.split(/[\s,]+/).filter(Boolean), method = $('#ce2').value, use = $('#ce3').value;
     closeDlg(); toast('Выпускаю сертификат: это займёт до пары минут…');
     try { await job('/api/domains/cert', { names, method, use, id: id === 'node' || id === 'panel' ? '' : id }); toast('Сертификат выпущен'); } catch (e) { toast(e.message); }
     await loadDomains(); render();
-  };
+  });
   L.certDel = async id => { closeDlg(); try { await api('POST', '/api/domains/cert/delete', { id }); toast('Сертификат удалён'); } catch (e) { toast(e.message); } await loadDomains(); render(); };
   L.openPem = () => dialog('Загрузить сертификат', 'Свой сертификат от другого центра. Продлевать его вы будете сами.', `
       <div class="fld"><label for="pm1">Сертификат и цепочка (PEM)</label><textarea id="pm1" class="mono ta" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
@@ -2101,13 +2105,13 @@
       <div class="acts" style="margin:0"><label class="btn sm" style="cursor:pointer">${ic('i-up', 16)}Выбрать файлы<input type="file" multiple accept=".pem,.crt,.key,.cer,text/plain" hidden onchange="LIVE.pemFiles(this)"></label></div>
       <div class="fld"><label for="pm3">Где использовать</label><select id="pm3">${Object.entries(USE).filter(([k]) => k !== 'mail' || pkgOn('Почтовый сервер')).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>`,
     `<button class="btn pri" type="button" onclick="LIVE.pemGo()">Загрузить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
-  L.pemFiles = inp => { for (const f of inp.files) f.text().then(t => { if (/PRIVATE KEY/.test(t)) $('#pm2').value = t; else $('#pm1').value = t; }); };
-  L.pemGo = async () => {
+  L.pemFiles = inp => { const fs = [...inp.files]; inp.value = ''; for (const f of fs) f.text().then(t => { if (/PRIVATE KEY/.test(t)) $('#pm2').value = t; else $('#pm1').value = t; }); };
+  L.pemGo = once(async () => {
     const body = { fullchain: $('#pm1').value, key: $('#pm2').value, use: $('#pm3').value };
     closeDlg(); toast('Устанавливаю сертификат…');
     try { await job('/api/domains/cert/upload', body); toast('Сертификат установлен'); } catch (e) { toast(e.message); }
     await loadDomains(); render();
-  };
+  });
   L.openProviders = () => {
     const ips = (L.dm.server_ips || []).filter(x => !x.includes(':')).join(', ');
     dialog('DNS-провайдеры', 'Доступы, через которые панель ведёт записи зон и проходит проверку DNS-01. Хранятся только на этом сервере.',
@@ -2119,12 +2123,12 @@
       `<button class="btn pri" type="button" onclick="LIVE.provAdd()">Проверить и добавить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
   L.dnsHint = k => DNSK[k][1];
-  L.provAdd = async () => {
+  L.provAdd = once(async () => {
     const b = { kind: $('#dp1').value, token: $('#dp2').value, user: $('#dp3').value };
     toast('Проверяю доступ…');
-    try { await api('POST', '/api/domains/provider', b); toast('Доступ проверен и добавлен'); await loadDomains(); L.openProviders(); } catch (e) { toast(e.message); }
-  };
-  L.provDel = async id => { try { await api('POST', '/api/domains/provider', { id, delete: true }); toast('Доступ удалён'); } catch (e) { toast(e.message); } await loadDomains(); L.openProviders(); };
+    try { await api('POST', '/api/domains/provider', b); toast('Доступ проверен и добавлен'); await loadDomains(); if (L.me) L.openProviders(); } catch (e) { toast(e.message); }
+  });
+  L.provDel = async id => { try { await api('POST', '/api/domains/provider', { id, delete: true }); toast('Доступ удалён'); } catch (e) { toast(e.message); } await loadDomains(); if (L.me) L.openProviders(); };
 
   /* ── setup wizard ── */
   const parentZone = n => { n = String(n || '').trim().toLowerCase().replace(/\.$/, ''); const i = n.indexOf('.'); return (i < 0 || n.indexOf('.', i + 1) < 0) ? n : n.slice(i + 1); };

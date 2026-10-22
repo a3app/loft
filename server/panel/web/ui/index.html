@@ -1482,7 +1482,7 @@ function addNet(){const g=i=>$('#'+i).value.trim(),n=parseConf(`network ${g('n2'
 function openVlan(id){
  const n=curNet(),v=n.vlans.find(x=>x.id===id),nw=!v;
  const free=[10,20,30,40,50,60,70,80,90].find(x=>!n.vlans.some(y=>y.id===x))||n.vlans.length+1;
- dialog(nw?'Новый VLAN':'VLAN '+v.id+' · '+v.name,'Сеть '+n.id+' · '+n.cidr,`
+ dialog(nw?'Новый VLAN':'VLAN '+v.id+' · '+esc(v.name),'Сеть '+n.id+' · '+n.cidr,`
   <div class="fld"><label for="v1">Номер</label><input id="v1" class="num" value="${nw?free:v.id}"></div>
   <div class="fld"><label for="v2">Название</label><input id="v2" value="${nw?'':esc(v.name)}"></div>
   <div><div class="fld"><label for="v3">Диапазон</label><input id="v3" class="mono" value="${nw?suggestVlanCIDR(n,free):v.cidr}"></div><div class="hint">Внутри ${n.cidr} (${cidrHosts(n.cidr)}) и без пересечения с другими VLAN. Пусто — адреса из диапазона сети.</div></div>
@@ -1677,6 +1677,7 @@ function usersTab(t){
 
 /* ── диалоги ── */
 function dialog(title,sub,body,foot){
+  if(location.hash==='#login')return; // a late handler after the session ended
   $('#dlgRoot').innerHTML=`<div class="dlg-back" onclick="if(event.target===this)closeDlg()"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgT">
    <div class="dlg-top"><h2 id="dlgT">${title}</h2><button class="icb" type="button" aria-label="Закрыть" onclick="closeDlg()">${ic('i-x',22)}</button></div>
    ${sub?`<div class="dlg-sub">${sub}</div>`:''}<div class="dlg-body">${body}</div><div class="dlg-foot">${foot}</div></div></div>`;
@@ -1803,7 +1804,7 @@ function render(){
 }
 function go(r){location.hash=r}
 function setOpen(v){S.open=v;$('#app').classList.toggle('menu-open',v);$('#menuBtn').setAttribute('aria-expanded',v);$('#menuBtn').setAttribute('aria-label',v?'Закрыть меню':'Открыть меню');$('#menuBtn').innerHTML=ic(v?'i-x':'i-menu',24)}
-window.addEventListener('hashchange',()=>{S.route=location.hash.slice(1)||'main';setOpen(false);render();$('#main').scrollTop=0});
+window.addEventListener('hashchange',()=>{S.route=location.hash.slice(1)||'main';setOpen(false);closeDlg();render();$('#main').scrollTop=0});
 $('#menuBtn').onclick=()=>setOpen(!S.open);
 $('#foldBtn').onclick=()=>{S.rail=!S.rail;try{localStorage.setItem('lp-rail',S.rail?'1':'0')}catch(e){}renderMenu()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
