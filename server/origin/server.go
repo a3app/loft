@@ -167,7 +167,12 @@ func ListenAll(cfg *config.ServerConfig, h http.Handler) error {
 		info.ListsFn = currentLists
 		info.Caps |= wire.CapLists
 	}
-	if cfg.CertFile != "" && cfg.KeyFile != "" {
+	// UDP only when it will actually serve: quic/h3, or a decoy splice.
+	// ListenUDP returns nil at once when those fronts are off; treating that
+	// as ListenAll success used to exit main and kill the TCP origin.
+	udp := cfg.CertFile != "" && cfg.KeyFile != "" &&
+		(cfg.HasFront(wire.FrontQUIC) || cfg.HasFront(wire.FrontH3) || len(cfg.Decoy) > 0)
+	if udp {
 		go func() {
 			if len(cfg.Decoy) > 0 {
 				errc <- transport.ListenUDPDecoy(cfg.Listen, cfg.CertFile, cfg.KeyFile, info, cfg.EnabledFronts(), cfg.Decoy[0])
