@@ -12,7 +12,7 @@
 
 Клиент говорит протокол 1.0. Локально отдаёт SOCKS5 и TUN (уже есть в Go CLI). Учётные данные — ключ члена `lt_…`. Пароля нет.
 
-В v1 вошло: ключ, исходящие `get` / `ws` / `h2` / `quic` / `h3` через `loft-front`, несколько **подключений** (профили), импорт/экспорт `.loft`, правка профиля, connect/disconnect, TUN и hold. `select: auto` внутри профиля остаётся в Go CLI.
+В v1 вошло: ключ, исходящие `get` / `ws` / `h2` / `quic` / `h3` / `l3` через `loft-front`, несколько **подключений** (профили), импорт/экспорт `.loft`, правка профиля, connect/disconnect, TUN и hold. `select: auto` внутри профиля остаётся в Go CLI.
 
 Подключение — один именованный `client.yaml`. Несколько подключений — несколько сессий. Это отдельно от cap `multi` (несколько `instance_id` на одном ключе).
 
@@ -28,7 +28,7 @@
 |--------------|------------|
 | Подключение (профиль, `.loft`) | Один `client.yaml` **или** элемент `connections:`: `kind`, `token` / учётка, `outbounds`, `select`, опционально `bootstrap` / `controller_pub` / `fronts` / `lists_url` / `use` / `default` / `p2p` |
 | Ключ `lt_` + 48 hex | Auth blob `0x02` + HMAC; нода хранит SHA-256 |
-| URL + type + path | Один outbound: `type` `get`\|`ws`\|`h2`\|`quic`\|`h3`, `url`, `path` |
+| URL + type + path | Один outbound: `type` `get`\|`ws`\|`h2`\|`quic`\|`h3`\|`l3`, `url`, `path` |
 | Фронты в панели статуса | Живой outbound после пересечения Hello/Status `caps` |
 | IP оверлея | Status `ip` (и `mtu`, `gateway` оверлея) |
 | `select: auto` | Оставшиеся фронты → следующий outbound → Status `replicas` → roster |
@@ -44,7 +44,7 @@
 | TUN UDP | Cap `dgram`, mux `CmdDgram` |
 | Оверлей к другому члену | Status `peers` hub\|mesh\|vlan. Cap `p2p` опционален; `p2p: false` = только hub-сплайс |
 
-Hello живого `loft-front` (член, не relay): фронты, которые включает профиль (`get` / `ws` / `h2` / `quic` / `h3`), плюс `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. Cap `p2p` только если профиль разрешает слушать. Cap `relay` выкл. `hub:*` и `ctl:1` никогда не открываются.
+Hello живого `loft-front` (член, не relay): фронты, которые включает профиль (`get` / `ws` / `h2` / `quic` / `h3` / `l3`), плюс `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. Cap `p2p` только если профиль разрешает слушать. Cap `relay` выкл. `hub:*` и `ctl:1` никогда не открываются.
 
 После первого Status — только пересечение фронтов, в порядке этого клиента. Не-OK Status запрещает mux. GET 404 на auth — `auth_bad_key`.
 
@@ -83,7 +83,7 @@ Hold, failover, Packet Tunnel vs привилегированный помощн
 
 Адрес loft — `loft://<token>@host…`. Один фронт → QR `loft://`. Несколько фронтов одного подключения → `.loft` этого подключения.
 
-Правка: имя, QR, тип, затем блок типа. Вкладки **Соединение / Расширенные**. loft и VLESS — спокойная капсула **Ссылка / Вручную**. loft: вставка `loft://` или ключ / хост / порт / GET·WS·H2·QUIC·H3 / путь. Обе проекции — один профиль. VLESS: вставка `vless://` или адрес / порт / UUID / TLS·REALITY / TCP·XHTTP и поля режима. Обе проекции пишут `vless://`. SOCKS5, туннель, DNS — на «Расширенные». На этом экране нет статуса сессии и нет Connect/Disconnect.
+Правка: имя, QR, тип, затем блок типа. Вкладки **Соединение / Расширенные**. loft и VLESS — спокойная капсула **Ссылка / Вручную**. loft: вставка `loft://` или ключ / хост / порт / GET·WS·H2·QUIC·H3·L3 / путь. Обе проекции — один профиль. VLESS: вставка `vless://` или адрес / порт / UUID / TLS·REALITY / TCP·XHTTP и поля режима. Обе проекции пишут `vless://`. SOCKS5, туннель, DNS — на «Расширенные». На этом экране нет статуса сессии и нет Connect/Disconnect.
 
 Импорт и экспорт подключений идут через системные `NSOpenPanel` / `NSSavePanel`. В макете остаются зона сброса и превью YAML, чтобы был виден вид файла.
 
@@ -420,7 +420,7 @@ Popover следует системному appearance. Акцент марки 
 | key.hint | Starts with lt_. It is shown once — keep it. |
 | url.title | Address |
 | url.body | Enter the address you were given with the key. |
-| url.get / url.ws / url.h2 / url.quic / url.h3 | GET / WS / H2 / QUIC / H3 |
+| url.get / url.ws / url.h2 / url.quic / url.h3 / url.l3 | GET / WS / H2 / QUIC / H3 / L3 |
 | front | Front |
 | socks | SOCKS5 |
 | launch | Open at login |
@@ -455,7 +455,7 @@ Popover следует системному appearance. Акцент марки 
 | pop_connect / disconnect | Connect / Disconnect |
 | about.ver | 1.0.22 |
 | about.proto | протоколы (подпись; строки спецификации сразу под ней) |
-| about.loft | loft/1.0 · get · ws · h2 · quic · h3 · mask |
+| about.loft | loft/1.0 · get · ws · h2 · quic · h3 · l3 · mask |
 | about.sstp | SSTP · ppp · mschapv2 · pap |
 | about.vless | VLESS · tcp · tls |
 | about.blurb | С улицы — обычный HTTPS. Внутри горит своя сеть. |

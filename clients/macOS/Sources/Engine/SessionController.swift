@@ -1215,8 +1215,8 @@ final class SessionController {
         }
         let major = Int(LoftWire.proto >> 8)
         let minor = Int(LoftWire.proto & 0xff)
-        let mux = (displayProfile()?.mux ?? true) ? "mux" : "connect"
-        return "loft/\(major).\(minor)  ·  \(front)  ·  \(mux)  ·  mask"
+        let inner = front == "l3" ? "ip" : ((displayProfile()?.mux ?? true) ? "mux" : "connect")
+        return "loft/\(major).\(minor)  ·  \(front)  ·  \(inner)  ·  mask"
     }
 
     /// Appends a unique connecting-stage label to the spark ticker.

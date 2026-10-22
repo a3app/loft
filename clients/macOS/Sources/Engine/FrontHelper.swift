@@ -62,7 +62,7 @@ final class FrontHelper {
     }
 
     /// CLI `-path` for loft-front. GET keeps the profile path; other fronts omit a
-    /// leftover GET cover so loft-front uses its per-kind default (`/api/v1/tunnel` for h2/h3).
+    /// leftover GET cover so loft-front uses its per-kind default (`/api/v1/tunnel` for h2/h3/l3).
     static func cliPath(kind: String, path: String) -> String? {
         let k = kind.lowercased()
         if k == "sstp" || k == "vless" || k == "trojan" { return nil }
@@ -70,7 +70,7 @@ final class FrontHelper {
         switch k {
         case "get", "auto":
             return p.isEmpty ? nil : p
-        case "h2", "h3":
+        case "h2", "h3", "l3":
             if p.isEmpty { return nil }
             if p.hasPrefix("/static/") || p.hasSuffix(".js") { return nil }
             return p
@@ -134,7 +134,7 @@ final class FrontHelper {
         if let path = path, !path.isEmpty {
             args += ["-path", path]
         }
-        if !profile.mux { args.append("-mux=0") }
+        if !profile.mux || kind.lowercased() == "l3" { args.append("-mux=0") }
         if profile.isSSTP, !profile.user.isEmpty {
             args += ["-user", profile.user]
         }
@@ -526,6 +526,10 @@ enum FrontExplain {
         if low.hasPrefix("tun up") { return "tun" }
         if low.hasPrefix("front get:") { return "get" }
         if low.hasPrefix("front ws:") { return "ws" }
+        if low.hasPrefix("front h2:") { return "h2" }
+        if low.hasPrefix("front h3:") { return "h3" }
+        if low.hasPrefix("front quic:") { return "quic" }
+        if low.hasPrefix("front l3:") { return "l3" }
         return nil
     }
 
@@ -535,6 +539,10 @@ enum FrontExplain {
         case "spawn", "front": return L10n.t("st_front")
         case "get": return "GET"
         case "ws": return "WebSocket"
+        case "h2": return "H2"
+        case "h3": return "H3"
+        case "quic": return "QUIC"
+        case "l3": return "L3"
         case "tls": return "TLS"
         case "sstp": return "SSTP"
         case "vless": return "VLESS"

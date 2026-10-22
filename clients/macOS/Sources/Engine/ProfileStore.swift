@@ -64,9 +64,9 @@ struct LoftProfile {
             .joined(separator: ",")
     }
 
-    /// Loft fronts this GUI can open. SSTP is a different VPN, not a front.
-    static let frontKinds = ["get", "ws", "h2", "quic", "h3"]
-    static let frontTitles = ["GET", "WS", "H2", "QUIC", "H3"]
+    /// Loft fronts this GUI can open. `connect` is node-only; SSTP is a different VPN.
+    static let frontKinds = ["get", "ws", "h2", "quic", "h3", "l3"]
+    static let frontTitles = ["GET", "WS", "H2", "QUIC", "H3", "L3"]
 
     /// True for Microsoft SSTP (PPP over HTTPS), not a loft front.
     var isSSTP: Bool { kind.lowercased() == "sstp" }
@@ -85,7 +85,7 @@ struct LoftProfile {
         (i >= 0 && i < frontKinds.count) ? frontKinds[i] : "get"
     }
 
-    /// True for get/ws/h2/quic/h3, sstp, vless, or trojan.
+    /// True for get/ws/h2/quic/h3/l3, sstp, vless, or trojan.
     static func knownFront(_ kind: String) -> Bool {
         let k = kind.lowercased()
         return frontKinds.contains(k) || k == "sstp" || k == "vless" || k == "trojan"

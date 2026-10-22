@@ -12,7 +12,7 @@ Swift 5 + AppKit 程序在 [`../Sources/`](../Sources/)。活着的会话是拷�
 
 客户端说协议 1.0。本机露出 SOCKS5 和 TUN（Go CLI 里已经有）。凭证是成员访问密钥 `lt_…`。没有密码。
 
-v1 已带：密钥、经 `loft-front` 的出站 `get` / `ws` / `h2` / `quic` / `h3`、若干 **连接**（配置）、导入/导出 `.loft`、改配置、打开/断开、TUN 和 Hold。配置里的 `select: auto` 还在 Go CLI。
+v1 已带：密钥、经 `loft-front` 的出站 `get` / `ws` / `h2` / `quic` / `h3` / `l3`、若干 **连接**（配置）、导入/导出 `.loft`、改配置、打开/断开、TUN 和 Hold。配置里的 `select: auto` 还在 Go CLI。
 
 一条连接就是一份有名字的 `client.yaml`。几条连接就是几个会话。这和 cap `multi` 不是一回事（同一把密钥上多个 `instance_id`）。
 
@@ -28,7 +28,7 @@ v1 已带：密钥、经 `loft-front` 的出站 `get` / `ws` / `h2` / `quic` / `
 |--------|--------|
 | 连接（配置，`.loft`） | 一份 `client.yaml` **或** `connections:` 下的一项：`kind`、`token` / 凭证、`outbounds`、`select`，可选 `bootstrap` / `controller_pub` / `fronts` / `lists_url` / `use` / `default` / `p2p` |
 | 密钥 `lt_` + 48 hex | 认证 blob `0x02` + HMAC；节点存 SHA-256 |
-| URL + 类型 + path | 一条出站：`type` `get`\|`ws`\|`h2`\|`quic`\|`h3`，`url`，`path` |
+| URL + 类型 + path | 一条出站：`type` `get`\|`ws`\|`h2`\|`quic`\|`h3`\|`l3`，`url`，`path` |
 | 状态面板里的前置 | Hello/Status `caps` 求交之后活着的出站 |
 | Overlay IP | Status `ip`（以及 `mtu`、覆盖网 `gateway`） |
 | `select: auto` | 剩下的前置 → 下一条出站 → Status `replicas` → 名册 |
@@ -44,7 +44,7 @@ v1 已带：密钥、经 `loft-front` 的出站 `get` / `ws` / `h2` / `quic` / `
 | TUN UDP | Cap `dgram`，mux `CmdDgram` |
 | 到另一成员的覆盖网 | Status `peers` hub\|mesh\|vlan。Cap `p2p` 可选；`p2p: false` = 只做 hub 拼接 |
 
-活着的助手（`loft-front`，成员，不是中继）的 Hello：配置打开的前置（`get` / `ws` / `h2` / `quic` / `h3`），加上 `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`。Cap `p2p` 只在配置允许监听时开。Cap `relay` 关。`hub:*` 和 `ctl:1` 从不打开。
+活着的助手（`loft-front`，成员，不是中继）的 Hello：配置打开的前置（`get` / `ws` / `h2` / `quic` / `h3` / `l3`），加上 `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`。Cap `p2p` 只在配置允许监听时开。Cap `relay` 关。`hub:*` 和 `ctl:1` 从不打开。
 
 第一次 Status 之后，只留下前置的交集，按这个客户端的顺序。非 OK 的 Status 禁止 mux。认证时 GET 404 是 `auth_bad_key`。
 
@@ -83,7 +83,7 @@ Hold、故障切换、Packet Tunnel 对助手、「重置路由」是这张映�
 
 loft 地址栏是 `loft://<token>@host…`。一个前置 → 二维码 `loft://`。一条连接的多个前置 → 这条连接的 `.loft`。
 
-编辑：名称、类型，然后该类型的块。页签 **连接 / 高级**。loft 和 VLESS 共用一颗安静的胶囊 **链接 / 手动**，段里是链条和铅笔。loft：粘贴 `loft://`，或密钥 / 主机 / 端口 / GET·WS·H2·QUIC·H3 / 路径。两种都写入同一份配置。VLESS：粘贴 `vless://`，或地址 / 端口 / UUID / TLS·REALITY / TCP·XHTTP 以及该模式要的字段。两种都写成 `vless://`。SOCKS5、隧道、DNS 和 mux 在高级。多个出站时，这个屏幕还有这条配置的状态和打开/断开。
+编辑：名称、类型，然后该类型的块。页签 **连接 / 高级**。loft 和 VLESS 共用一颗安静的胶囊 **链接 / 手动**，段里是链条和铅笔。loft：粘贴 `loft://`，或密钥 / 主机 / 端口 / GET·WS·H2·QUIC·H3·L3 / 路径。两种都写入同一份配置。VLESS：粘贴 `vless://`，或地址 / 端口 / UUID / TLS·REALITY / TCP·XHTTP 以及该模式要的字段。两种都写成 `vless://`。SOCKS5、隧道、DNS 和 mux 在高级。多个出站时，这个屏幕还有这条配置的状态和打开/断开。
 
 ---
 
@@ -414,7 +414,7 @@ Connection 打开配置的 `NSMenu`（当前那条打勾，状态 打开/关闭/
 | key.hint | Starts with lt_. It is shown once — keep it. |
 | url.title | Address |
 | url.body | Enter the address you were given with the key. |
-| url.get / url.ws / url.h2 / url.quic / url.h3 | GET / WS / H2 / QUIC / H3 |
+| url.get / url.ws / url.h2 / url.quic / url.h3 / url.l3 | GET / WS / H2 / QUIC / H3 / L3 |
 | front | Front |
 | socks | SOCKS5 |
 | launch | Open at login |
@@ -455,7 +455,7 @@ Connection 打开配置的 `NSMenu`（当前那条打勾，状态 打开/关闭/
 | open.one / close.one | Open / Disconnect |
 | about.ver | 1.0.22 |
 | about.proto | protocols (caption; spec rows sit tight under it) |
-| about.loft | loft/1.0 · get · ws · h2 · quic · h3 · mask |
+| about.loft | loft/1.0 · get · ws · h2 · quic · h3 · l3 · mask |
 | about.sstp | SSTP · ppp · mschapv2 · pap |
 | about.vless | VLESS · tcp · tls |
 | about.blurb | From the street, ordinary HTTPS. Inside, a private network. |

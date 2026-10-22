@@ -1462,6 +1462,12 @@ final class EditWindowController: NSWindowController {
                     let fronts = LoftProfile.frontTitles
                     kindSeg = SegControl(frame: NSRect(x: 28, y: y, width: capsuleWidth(fronts), height: 28), titles: fronts, capsule: true)
                     kindSeg?.value = LoftProfile.frontIndex(profile.kind)
+                    kindSeg?.onChange = { [weak self] _ in
+                        self?.harvest()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { [weak self] in
+                            self?.paintForm()
+                        }
+                    }
                     if let s = kindSeg { form.addSubview(s) }
                     y += 40
                     lab("vless_path")
@@ -1495,7 +1501,7 @@ final class EditWindowController: NSWindowController {
             socksF = field("127.0.0.1:\(defPort)", profile.socksOn ? profile.dedicatedSocksDisplay(defaultPort: defPort) : "")
             armSocks(profile.socksOn)
             tunSw = inbound(alt ? "sstp_tun" : "tun", alt ? "sstp_tun_d" : "tun_d", profile.tun)
-            if !alt {
+            if !alt && profile.kind.lowercased() != "l3" {
                 muxSw = inbound("mux", "mux_d", profile.mux)
             }
             dnsSystemSw = inbound("dns_system", "dns_system_d", profile.dnsSystem)
@@ -1617,6 +1623,7 @@ final class EditWindowController: NSWindowController {
         if let k = kindSeg, !loftManual, !profile.isSSTP, !profile.isVLESS, !profile.isTrojan {
             profile.kind = LoftProfile.frontKind(k.value)
         }
+        if profile.kind.lowercased() == "l3" { profile.mux = false }
         if profile.isTrojan, profile.url.lowercased().hasPrefix("trojan://") {
             if let u = URL(string: profile.url), let pass = u.user, profile.token.isEmpty {
                 profile.token = pass
@@ -1773,7 +1780,7 @@ final class EditWindowController: NSWindowController {
         profile.dns = q.dns
         profile.dnsReplace = q.dnsReplace
         profile.dnsSystem = q.dnsSystem
-        if q.isSSTP || q.isVLESS || q.isTrojan { profile.mux = false }
+        if q.isSSTP || q.isVLESS || q.isTrojan || q.kind.lowercased() == "l3" { profile.mux = false }
         else { profile.mux = q.mux }
         vlessManual = false
         nameF.stringValue = profile.name
@@ -1931,7 +1938,7 @@ final class OnboardWindowController: NSWindowController {
         path = pathF?.stringValue ?? path
         if url.isEmpty || url == "https://" { return }
         let pathNow = kind == "get" ? (path.isEmpty ? "/static/v3/build" : path) : ""
-        var p = LoftProfile(id: "", name: Palette.hostOf(url), token: token, url: url, kind: kind, path: pathNow, socks: "auto", tun: true, mux: true, instanceID: "", file: "")
+        var p = LoftProfile(id: "", name: Palette.hostOf(url), token: token, url: url, kind: kind, path: pathNow, socks: "auto", tun: true, mux: kind != "l3", instanceID: "", file: "")
         p.id = engine.store.slug(p.name)
         if p.id.isEmpty { p.id = UUID().uuidString }
         engine.store.saveEdited(p)

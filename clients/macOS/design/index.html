@@ -1089,7 +1089,7 @@
           <div class="row"><span class="k">${t("route")}</span><span class="v">${routeOf(p, on, fail, locked)}</span></div>
           ${p.socks ? `<div class="row"><span class="k">SOCKS5</span><span class="v">127.0.0.1:${socksOf(p)}</span></div>` : ""}` : ""}
         </div>
-        <div class="spark">${locked ? `<span class="err">${t("route.held")}</span>` : fail ? `<span class="err">${t("err")}</span>` : live ? `<span>loft/1.0  ·  ${p.kind}  ·  mux  ·  mask</span>` : `<span>${t("session.none")}</span>`}</div>`;
+        <div class="spark">${locked ? `<span class="err">${t("route.held")}</span>` : fail ? `<span class="err">${t("err")}</span>` : live ? `<span>loft/1.0  ·  ${p.kind}  ·  ${p.kind === "l3" ? "ip" : "mux"}  ·  mask</span>` : `<span>${t("session.none")}</span>`}</div>`;
       return `
       <div class="popover">
         <div class="pop-head">
@@ -1194,7 +1194,7 @@
             <input class="field sm" placeholder="https://" value="https://" spellcheck="false" />
             <div class="label">${t("url_type")}</div>
             <div class="seg">
-              ${[["get","GET"],["ws","WS"],["h2","H2"],["quic","QUIC"],["h3","H3"]].map(([id, lab]) => `<button type="button" class="${id === "get" ? "on" : ""}" data-type="${id}">${lab}</button>`).join("")}
+              ${[["get","GET"],["ws","WS"],["h2","H2"],["quic","QUIC"],["h3","H3"],["l3","L3"]].map(([id, lab]) => `<button type="button" class="${id === "get" ? "on" : ""}" data-type="${id}">${lab}</button>`).join("")}
             </div>
             <div class="label">${t("path")}</div>
             <input class="field sm" placeholder="/static/v3/build" spellcheck="false" />
@@ -1252,7 +1252,7 @@
             </div>
             <div class="label">${t("url_type")}</div>
             <div class="seg">
-              ${[["get","GET"],["ws","WS"],["h2","H2"],["quic","QUIC"],["h3","H3"]].map(([id, lab]) => `<button type="button" class="${p.kind === id ? "on" : ""}" data-type="${id}">${lab}</button>`).join("")}
+              ${[["get","GET"],["ws","WS"],["h2","H2"],["quic","QUIC"],["h3","H3"],["l3","L3"]].map(([id, lab]) => `<button type="button" class="${p.kind === id ? "on" : ""}" data-type="${id}">${lab}</button>`).join("")}
             </div>
             <div class="label">${t("path")}</div>
             <input class="field sm" value="${p.path}" placeholder="/static/v3/build" />`
@@ -1699,7 +1699,7 @@ outbounds:
             <p class="ver">${t("about.ver")}</p>
             <div class="spec-cap">${t("protos")}</div>
             <div class="spec">
-              <span class="k">loft/1.0</span><span class="v">get · ws · h2 · quic · h3 · mask</span>
+              <span class="k">loft/1.0</span><span class="v">get · ws · h2 · quic · h3 · l3 · mask</span>
               <span class="k">SSTP</span><span class="v">ppp · mschapv2 · pap</span>
               <span class="k">VLESS</span><span class="v">tcp · tls</span>
             </div>

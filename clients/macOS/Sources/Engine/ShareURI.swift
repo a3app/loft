@@ -91,7 +91,7 @@ enum ShareURI {
             cdn: cdn,
             socks: "auto",
             tun: true,
-            mux: true,
+            mux: type != "l3",
             instanceID: "",
             file: fileName,
             maskPub: q["pbk"] ?? ""
@@ -185,6 +185,7 @@ enum ShareURI {
             p.url = "\(sch)://\(hostPart)\(pth)"
             p.path = ""
         }
+        if type == "l3" { p.mux = false }
     }
 
     /// `vless://<uuid>@<host>[:port]?…#Name` (DuckSoft / Xray share).

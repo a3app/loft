@@ -12,7 +12,7 @@ The Swift 5 + AppKit binary lives in [`../Sources/`](../Sources/). A live sessio
 
 The client speaks protocol 1.0. Locally it exposes SOCKS5 and TUN (already present in the Go CLI). Credentials are a member key `lt_…`. There is no password.
 
-v1 shipped: key, outbound `get` / `ws` / `h2` / `quic` / `h3` via `loft-front`, several **connections** (profiles), import/export `.loft`, profile edit, connect/disconnect, TUN and hold. `select: auto` inside a profile remains in the Go CLI.
+v1 shipped: key, outbound `get` / `ws` / `h2` / `quic` / `h3` / `l3` via `loft-front`, several **connections** (profiles), import/export `.loft`, profile edit, connect/disconnect, TUN and hold. `select: auto` inside a profile remains in the Go CLI.
 
 A connection is one named `client.yaml`. Several connections are several sessions. They are distinct from cap `multi` (several `instance_id` values on one key).
 
@@ -28,7 +28,7 @@ Software `1.0.22`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local.
 |--------------------|-------------|
 | Connection (profile, `.loft`) | One `client.yaml` **or** one entry under `connections:`: `kind`, `token` / creds, `outbounds`, `select`, optional `bootstrap` / `controller_pub` / `fronts` / `lists_url` / `use` / `default` / `p2p` |
 | Key `lt_` + 48 hex | Auth blob `0x02` + HMAC; the node stores SHA-256 |
-| URL + type + path | One outbound: `type` `get`\|`ws`\|`h2`\|`quic`\|`h3`, `url`, `path` |
+| URL + type + path | One outbound: `type` `get`\|`ws`\|`h2`\|`quic`\|`h3`\|`l3`, `url`, `path` |
 | FRONT card in the status pane | Live outbound after Hello/Status `caps` intersection |
 | Overlay IP | Status `ip` (and `mtu`, overlay `gateway`) |
 | `select: auto` | Remaining fronts → next outbound → Status `replicas` → roster |
@@ -44,7 +44,7 @@ Software `1.0.22`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local.
 | TUN UDP | Cap `dgram`, mux `CmdDgram` |
 | Overlay to another member | Status `peers` hub\|mesh\|vlan. Cap `p2p` optional; `p2p: false` = hub splice only |
 
-Hello of the live helper (`loft-front`, member, not a relay): fronts the profile enables (`get` / `ws` / `h2` / `quic` / `h3`), plus `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. Cap `p2p` only if the profile allows a listen. Cap `relay` is off. `hub:*` and `ctl:1` are never opened.
+Hello of the live helper (`loft-front`, member, not a relay): fronts the profile enables (`get` / `ws` / `h2` / `quic` / `h3` / `l3`), plus `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. Cap `p2p` only if the profile allows a listen. Cap `relay` is off. `hub:*` and `ctl:1` are never opened.
 
 After the first Status, only the intersection of fronts, in this client’s order. A non-OK Status forbids mux. GET 404 on auth is `auth_bad_key`.
 
@@ -83,7 +83,7 @@ Import: `.loft` or `client.yaml`. A `.loft` MAY be today’s single document **o
 
 The loft address field is `loft://<token>@host…`. One front → QR `loft://`. Several fronts of one connection → that connection’s `.loft`.
 
-Edit: name, QR, kind, then the type-specific block. Tabs **Connection / Advanced**. loft and VLESS share a quiet capsule **Link / Manual**. loft: paste `loft://`, or key / host / port / GET·WS·H2·QUIC·H3 / path. Both write the same profile. VLESS: paste `vless://`, or address / port / UUID / TLS·REALITY / TCP·XHTTP and the fields that mode needs. Both write `vless://`. SOCKS5, TUN, DNS sit on Advanced. This screen has no session status and no Connect/Disconnect.
+Edit: name, QR, kind, then the type-specific block. Tabs **Connection / Advanced**. loft and VLESS share a quiet capsule **Link / Manual**. loft: paste `loft://`, or key / host / port / GET·WS·H2·QUIC·H3·L3 / path. Both write the same profile. VLESS: paste `vless://`, or address / port / UUID / TLS·REALITY / TCP·XHTTP and the fields that mode needs. Both write `vless://`. SOCKS5, TUN, DNS sit on Advanced. This screen has no session status and no Connect/Disconnect.
 
 Import and export of connections use the system `NSOpenPanel` / `NSSavePanel`. The mock keeps a drop zone and a YAML preview so the file shape is visible.
 
@@ -415,7 +415,7 @@ Canonical locale is English. Copy lives in [`lang/`](../lang/) — one `{code}.l
 | key.hint | Starts with lt_. It is shown once — keep it. |
 | url.title | Address |
 | url.body | Enter the address you were given with the key. |
-| url.get / url.ws / url.h2 / url.quic / url.h3 | GET / WS / H2 / QUIC / H3 |
+| url.get / url.ws / url.h2 / url.quic / url.h3 / url.l3 | GET / WS / H2 / QUIC / H3 / L3 |
 | front | Front |
 | socks | SOCKS5 |
 | launch | Open at login |
@@ -456,7 +456,7 @@ Canonical locale is English. Copy lives in [`lang/`](../lang/) — one `{code}.l
 | pop_connect / disconnect | Connect / Disconnect |
 | about.ver | 1.0.22 |
 | about.proto | protocols (caption; spec rows sit tight under it) |
-| about.loft | loft/1.0 · get · ws · h2 · quic · h3 · mask |
+| about.loft | loft/1.0 · get · ws · h2 · quic · h3 · l3 · mask |
 | about.sstp | SSTP · ppp · mschapv2 · pap |
 | about.vless | VLESS · tcp · tls |
 | about.blurb | From the street, ordinary HTTPS. Inside, a private network. |
