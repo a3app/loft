@@ -127,8 +127,8 @@ func (p SessionPolicy) Rate() uint32 {
 	if p.RateBPS <= 0 {
 		return 0
 	}
-	if p.RateBPS > 0xffffffff {
-		return 0xffffffff
+	if uint64(p.RateBPS) > 1<<32-1 {
+		return ^uint32(0)
 	}
 	return uint32(p.RateBPS)
 }
