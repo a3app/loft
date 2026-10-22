@@ -58,16 +58,24 @@ func (t *tunStack) handleUDP(raw []byte) bool {
 	var s4 [4]byte
 	copy(s4[:], src)
 	t.rememberUDP(dest, udpFlow{src: s4, sport: sport, seen: time.Now()})
+	n := udpSeen.Add(1)
+	if n <= 8 {
+		fmt.Fprintf(os.Stderr, "tun udp dest=%s src=%s:%d n=%d\n", dest, net.IP(s4[:]), sport, len(payload))
+	}
+	if dport == 53 && overlayDNS(dst4) {
+		if dnsStubSync {
+			t.answerDNS(dest, payload)
+		} else {
+			go t.answerDNS(dest, payload)
+		}
+		return true
+	}
 	if t.d == nil {
 		return true
 	}
 	sess := t.d.Session()
 	if sess == nil {
 		return true
-	}
-	n := udpSeen.Add(1)
-	if n <= 8 {
-		fmt.Fprintf(os.Stderr, "tun udp dest=%s src=%s:%d n=%d\n", dest, net.IP(s4[:]), sport, len(payload))
 	}
 	_ = sess.WriteDgram(dest, payload)
 	return true

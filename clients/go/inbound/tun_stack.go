@@ -114,6 +114,10 @@ func newStack(ifc tunIO, d transport.Dialer, our net.IP, ipnet *net.IPNet) (*tun
 			local := gonet.NewTCPConn(wq, ep)
 			defer local.Close()
 			ip := net.ParseIP(id.LocalAddress.String())
+			if id.LocalPort == 53 && overlayDNS(ip) {
+				serveLocalDNSTCP(local)
+				return
+			}
 			var remote net.Conn
 			var derr error
 			switch transport.LookupAddr("", ip) {

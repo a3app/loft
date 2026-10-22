@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/a3app/loft/internal/mux"
+	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/internal/wire"
 )
 
@@ -114,6 +115,42 @@ func TestTUNNatDoesNotStarveSOCKSUDP(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("socks ReadDgram starved")
+	}
+}
+
+// TestTUNNatConsumesWhenTunOnly drains DNS replies so mux dgrams (64) do not fill.
+func TestTUNNatConsumesWhenTunOnly(t *testing.T) {
+	old := tunOnlyDgrams
+	tunOnlyDgrams = true
+	t.Cleanup(func() { tunOnlyDgrams = old })
+
+	our := net.IPv4(10, 8, 0, 82)
+	ifc := &memTun{}
+	st := &tunStack{
+		our: our.To4(),
+		ifc: ifc,
+		udpNat: map[string][]udpFlow{
+			"8.8.8.8:53": {{src: [4]byte{10, 8, 0, 82}, sport: 54321, seen: time.Now()}},
+		},
+	}
+	sess := mux.NewClient()
+	hookICMP(sess, st)
+	pl := append(mux.EncodeTarget("8.8.8.8", 53), []byte("dns-ok")...)
+	for i := 0; i < 70; i++ {
+		sess.Push([]wire.Frame{{Cmd: wire.CmdDgram, Payload: pl}})
+	}
+	if len(ifc.w) < 70 {
+		t.Fatalf("tun writes %d", len(ifc.w))
+	}
+	done := make(chan struct{})
+	go func() {
+		_, _, _ = sess.ReadDgram()
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatal("consumed dgram leaked to ReadDgram")
+	case <-time.After(50 * time.Millisecond):
 	}
 }
 
@@ -360,5 +397,123 @@ func TestUDPNatTakesPrecedence(t *testing.T) {
 	}
 	if len(w.b) != 0 {
 		t.Fatalf("gvisor inject %q", w.b)
+	}
+}
+
+func dnsQuestion(name string, qtype uint16) []byte {
+	q := make([]byte, 12)
+	binary.BigEndian.PutUint16(q[0:2], 1)
+	binary.BigEndian.PutUint16(q[4:6], 1)
+	for _, lab := range splitDNSName(name) {
+		q = append(q, byte(len(lab)))
+		q = append(q, lab...)
+	}
+	q = append(q, 0)
+	var t [4]byte
+	binary.BigEndian.PutUint16(t[0:2], qtype)
+	binary.BigEndian.PutUint16(t[2:4], 1)
+	return append(q, t[:]...)
+}
+
+func splitDNSName(name string) [][]byte {
+	var out [][]byte
+	start := 0
+	for i := 0; i <= len(name); i++ {
+		if i == len(name) || name[i] == '.' {
+			if i > start {
+				out = append(out, []byte(name[start:i]))
+			}
+			start = i + 1
+		}
+	}
+	return out
+}
+
+// TestHandleUDPGatewayDNSStubs answers 10.8.0.1:53 off-TUN and does not mux.
+func TestHandleUDPGatewayDNSStubs(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	go func() {
+		buf := make([]byte, 512)
+		n, addr, err := pc.ReadFrom(buf)
+		if err != nil {
+			return
+		}
+		buf[2] |= 0x80
+		_, _ = pc.WriteTo(buf[:n], addr)
+	}()
+	prevAddr, prevSync := dnsStubAddr, dnsStubSync
+	dnsStubAddr = pc.LocalAddr().String()
+	dnsStubSync = true
+	defer func() {
+		dnsStubAddr = prevAddr
+		dnsStubSync = prevSync
+	}()
+	transport.RememberVis(wire.Status{IP: "10.8.0.2", Gateway: "10.8.0.1"})
+	defer transport.RememberVis(wire.Status{})
+
+	ifc := &memTun{}
+	sess := mux.NewClient()
+	st := &tunStack{our: net.IPv4(10, 8, 0, 2).To4(), ifc: ifc, d: sessDial{s: sess}, udpNat: map[string][]udpFlow{}}
+	q := dnsQuestion("example.com", 1)
+	pkt := encodeUDP(net.IPv4(10, 8, 0, 2), 12345, net.IPv4(10, 8, 0, 1), 53, q)
+	if !st.handleUDP(pkt) {
+		t.Fatal("udp not consumed")
+	}
+	if fs := sess.Pull(64*1024, 20*time.Millisecond); len(fs) != 0 {
+		t.Fatalf("muxed gateway dns %d", len(fs))
+	}
+	if len(ifc.w) != 1 {
+		t.Fatalf("tun writes %d", len(ifc.w))
+	}
+	got := ifc.w[0]
+	if got[9] != ipProtoUDP {
+		t.Fatalf("proto %d", got[9])
+	}
+	if !net.IP(got[12:16]).Equal(net.IPv4(10, 8, 0, 1)) {
+		t.Fatalf("src %s", net.IP(got[12:16]))
+	}
+	if !net.IP(got[16:20]).Equal(net.IPv4(10, 8, 0, 2)) {
+		t.Fatalf("dst %s", net.IP(got[16:20]))
+	}
+	if got[28+2]&0x80 == 0 {
+		t.Fatal("not a dns response")
+	}
+}
+
+// TestStubDNSAAAANoData skips the upstream for AAAA on an IPv4-only overlay.
+func TestStubDNSAAAANoData(t *testing.T) {
+	transport.RememberVis(wire.Status{IP: "10.8.0.2"})
+	defer transport.RememberVis(wire.Status{})
+	q := dnsQuestion("example.com", dnsTypeAAAA)
+	ans := stubDNS(q)
+	if len(ans) < 12 {
+		t.Fatal("short")
+	}
+	flags := binary.BigEndian.Uint16(ans[2:4])
+	if flags&0x8000 == 0 || flags&0xf != 0 {
+		t.Fatalf("flags %#x", flags)
+	}
+	if binary.BigEndian.Uint16(ans[6:8]) != 0 {
+		t.Fatal("answers")
+	}
+}
+
+// TestHandleUDPPublicDNSStillMuxes leaves 8.8.8.8:53 on the mux.
+func TestHandleUDPPublicDNSStillMuxes(t *testing.T) {
+	transport.RememberVis(wire.Status{IP: "10.8.0.2", Gateway: "10.8.0.1"})
+	defer transport.RememberVis(wire.Status{})
+	sess := mux.NewClient()
+	st := &tunStack{our: net.IPv4(10, 8, 0, 2).To4(), d: sessDial{s: sess}, udpNat: map[string][]udpFlow{}}
+	pkt := encodeUDP(net.IPv4(10, 8, 0, 2), 9, net.IPv4(8, 8, 8, 8), 53, []byte("q"))
+	if !st.handleUDP(pkt) {
+		t.Fatal("udp not consumed")
+	}
+	fs := sess.Pull(64*1024, 80*time.Millisecond)
+	if len(fs) == 0 {
+		t.Fatal("no dgram")
 	}
 }

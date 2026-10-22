@@ -7,11 +7,16 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"sync/atomic"
 
 	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/transport"
 )
+
+// tunOnlyDgrams: Packet Tunnel has no SOCKS ReadDgram. Leaving DNS
+// replies on the mux queue (64) fills it and later resolutions die.
+var tunOnlyDgrams = runtime.GOOS == "android" || runtime.GOOS == "ios"
 
 const (
 	ipProtoICMP   = 1
@@ -313,9 +318,10 @@ func hookICMP(sess *mux.Session, t *tunStack) {
 			return t.onOverlayICMP(addr, data)
 		}
 		// TUN NAT is keyed by dest. Stealing 8.8.8.8:53 starved SOCKS
-		// UDP ASSOCIATE. Copy to TUN and leave the datagram for ReadDgram.
+		// UDP ASSOCIATE on loft-front: copy to TUN and leave for ReadDgram.
+		// Phone VpnService has no SOCKS; consume so mux dgrams (64) do not fill.
 		if t.onOverlayUDP(addr, data) {
-			return false
+			return tunOnlyDgrams
 		}
 		return t.injectUDP(addr, data)
 	})
