@@ -315,6 +315,23 @@
           ${ev.slice(0, 5).map(x => `<div class="ev"><time>${when2(x.at || x.time)}</time><span><b>${esc(whoText(x.user))}</b> ${esc(opText(x))}</span></div>`).join('') || '<p class="mute" style="margin:0">Событий пока нет.</p>'}</section>` : ''}
       </div>`;
     };
+    // the config text is checked by the node's own parser too: its word is final
+    const cfgInput0 = window.cfgInput;
+    window.cfgInput = el => {
+      cfgInput0(el);
+      clearTimeout(L._cc);
+      const text = el.value, id = curNet().id;
+      L._cc = setTimeout(async () => {
+        let r;
+        try { r = await api('POST', '/api/network/check', { text }); } catch (e) { return; }
+        if (!$('#cfgTx') || $('#cfgTx').value !== text || r.ok) return;
+        const m = /^line (\d+): (.*)$/.exec(r.error || ''), line = m ? +m[1] : 0, msg = ru(m ? m[2] : r.error);
+        CFG[id] = { text, err: { line, msg } };
+        $('#cfgSt').innerHTML = `<span class="pill warn">ошибка</span> Нода: ${line ? 'строка ' + line + ': ' : ''}${esc(msg)}`;
+        $('.cfg').classList.add('bad');
+        const ln = line && $('#cfgLn').children[line - 1]; if (ln) ln.classList.add('e');
+      }, 600);
+    };
     const segments = V.segments;
     V.segments = () => segments()
       .replace(/<button type="button" class="btn" onclick="openNet\('new'\)">[^]*?<\/button>/, ''); // the node holds one network

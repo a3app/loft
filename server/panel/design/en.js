@@ -972,6 +972,7 @@ window.LOFT_EN = {
   "Пользователь": "User",
   "Пользователь $": "User $",
   "Пользователь API": "API user",
+  "Нода: $": "Node: $",
   "Сохранил список приоритетов": "Saved a priority list",
   "Удалил список приоритетов": "Deleted a priority list",
   "Изменил зону": "Changed a zone",
