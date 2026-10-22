@@ -48,6 +48,13 @@ button{font:inherit}
 .sr-i{display:flex;align-items:baseline;gap:10px;width:100%;padding:9px 12px;border:0;border-radius:4px;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer}
 .sr-i span{color:var(--mute);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sr-i.on,.sr-i:hover{background:var(--th)}
+.helpd-back{position:fixed;inset:0;z-index:60;background:rgba(26,23,20,.35)}
+.helpd{position:fixed;top:0;right:0;bottom:0;z-index:61;width:420px;max-width:100%;overflow-y:auto;padding:24px 32px 40px;background:var(--surface);box-shadow:-12px 0 40px rgba(26,23,20,.25)}
+.helpd h2{margin:0 40px 12px 0;font-size:22px;line-height:30px}
+.helpd h3{margin:24px 0 8px;font-size:15px}
+.helpd ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--text-2)}
+.helpd .icb{position:absolute;top:20px;right:20px}
+@media (max-width:720px){.helpd{padding:20px 16px 32px}}
 .umenu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:200px;padding:6px 0;background:var(--menu);border:1px solid #3A332C;border-radius:6px;box-shadow:0 12px 28px rgba(0,0,0,.35)}
 .umenu a,.umenu button{display:block;width:100%;padding:10px 16px;border:0;background:none;color:var(--snow);font:inherit;font-size:14px;text-align:left;text-decoration:none;cursor:pointer}
 .umenu a:hover,.umenu button:hover{background:var(--menu-hover)}
@@ -466,7 +473,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
           <label for="mLang" style="position:absolute;left:-9999px">Язык</label>
           <select id="mLang"><option value="en">English</option><option value="ru">Русский</option><option value="zh">中文</option></select>
           <span style="margin-left:auto"></span>
-          <button class="hdr-ic" type="button" aria-label="Помощь"><svg width="20" height="20"><use href="#i-help"/></svg></button>
+          <button class="hdr-ic" type="button" aria-label="Помощь" onclick="setOpen(false);openHelp()"><svg width="20" height="20"><use href="#i-help"/></svg></button>
           <button class="hdr-ic" type="button" aria-label="Личный кабинет" onclick="go('me')"><svg width="20" height="20"><use href="#i-user"/></svg></button>
           <button class="hdr-ic" type="button" aria-label="Выйти" onclick="goOut()"><svg width="20" height="20"><use href="#i-out"/></svg></button>
         </div>
@@ -495,7 +502,7 @@ const sw=(on,label)=>`<label class="sw" onclick="event.stopPropagation()"><input
 const who=(ctl,title,sub)=>`<div class="who">${ctl}<span class="who-t"><b>${title}</b>${sub}</span></div>`;
 
 function pageHead(title,desc){
-  return `<div class="page-h"><h1>${title}</h1><button class="help" type="button" aria-label="Справка">${ic('i-help',20)}</button></div>
+  return `<div class="page-h"><h1>${title}</h1><button class="help" type="button" aria-label="Справка" onclick="openHelp()">${ic('i-help',20)}</button></div>
   ${desc?`<p class="page-d clamp" id="pd">${desc}</p><button class="more" type="button" onclick="const d=$('#pd');d.classList.toggle('clamp');this.textContent=d.classList.contains('clamp')?'Читать далее':'Свернуть'">Читать далее</button>`:''}`;
 }
 function blk(title,desc,body,side=''){
@@ -1809,6 +1816,34 @@ function renderFoot(){
   $('#foot').innerHTML=`<div class="foot-copy"><button class="foot-about" type="button" title="О loft panel" onclick="go('about')">Работает на loft-panel ${S.ver||'dev'}</button><div class="madeby" translate="no">Made with love ${HEART} by A<sup>3</sup></div></div>`;
 }
 const OSS=[['Go','язык и среда выполнения'],['nginx','веб-сервер за нодой'],['Xray-core','серверы и клиенты VLESS, Trojan, Shadowsocks'],['WireGuard · AmneziaWG','каналы WireGuard'],['OpenVPN','каналы по файлу .ovpn'],['ZeroTier','подключение к сетям ZeroTier'],['quic-go','QUIC и HTTP/3'],['uTLS','отпечаток TLS как у браузера'],['gVisor','сетевой стек в пространстве пользователя'],['Postfix · Dovecot · OpenDKIM','почта: отправка, приём, подпись'],['Rspamd','фильтр спама'],['Roundcube','веб-почта в браузере'],['nftables · fail2ban','защита от сканеров и перебора паролей'],['Let’s Encrypt','бесплатные сертификаты TLS']];
+/* ── справка по разделу ── */
+const HELP={
+ main:['Сводка сервера: нода, члены сети, адреса, домены, нагрузка и последние события. Карточки ведут в свои разделы.',['Проверить, что нода работает и сертификат не истекает','Добавить члена сети прямо с обзора','Открыть журнал последних изменений'],['«нет данных» у ноды — служба loft-panel-adm не отвечает: перезапустите её на сервере','Сертификат помечен — продлите его в «Доменах»']],
+ node:['Настройки ноды loft: роль, фронты, маскировка, ретрансляторы, списки и доступ. Изменения копятся в черновике.',['Включить нужные фронты (GET, WebSocket, HTTP/2, QUIC)','Добавить ретранслятор или CDN','Применить черновик — нода перезапустится на пару секунд'],['После «Применить» нода не поднялась — откройте журнал службы на вкладке «Основное»','Клиенты не подключаются — проверьте адрес для клиентов и сертификат']],
+ members:['Устройства и люди, которые подключаются к серверу. У каждого свой ключ и профиль.',['Добавить члена — панель выдаст ссылку loft://, QR-код и файл .loft','Перевыпустить ключ, если устройство потеряно','Выключить члена, не удаляя его'],['Член не в сети — проверьте, что профиль на устройстве свежий','Изменения не действуют — нажмите «Применить» в плашке сверху']],
+ segments:['Сеть loft как свитч: VLAN, правила доступа между сегментами и текст network.conf.',['Создать VLAN и раздать в нём адреса','Разрешить или запретить доступ между VLAN','Править конфиг текстом — ошибку покажет сама нода'],['Конфиг подсвечен красным — исправьте строку из сообщения','После правки ничего не поменялось — нажмите «Применить»']],
+ network:['Адреса и маршруты сервера и внешние подключения: WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray.',['Добавить IP или маршрут — без подтверждения он откатится через 2 минуты','Подключить внешний VPN для выхода в интернет','Задать правила выхода: кто через какое подключение идёт'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
+ prio:['Списки приоритетов: в каком порядке пробовать подключения, когда первое не работает.',['Создать список и перетащить подключения в нужном порядке','Включить многопутевую передачу или ограничение скорости','Назначить список членам и группам на вкладке «Применение»'],['Трафик идёт не туда — проверьте, какой список назначен члену','Все подключения не работают — сработает пункт «Если ни один не работает»']],
+ domains:['Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.',['Добавить домен через DNS-провайдера — записи панель создаст сама','Выпустить сертификат Let’s Encrypt','Для ручной зоны — проверить, что записи внесены у регистратора'],['Namecheap отказывает — укажите имя аккаунта (не e-mail), ключ и белый IP сервера','Сертификат не выпускается — имя должно указывать на этот сервер, а для HTTP-01 нужен открытый порт 80']],
+ mail:['Почтовый сервер: домены, ящики, псевдонимы и DNS-записи почты.',['Добавить почтовый домен и создать недостающие записи DNS','Завести ящик и выдать пароль','Посмотреть настройки для почтовой программы'],['Письма уходят в спам — проверьте SPF, DKIM, DMARC и PTR в «Записях DNS»','Применение не прошло — панель вернула прежние файлы, исправьте ошибку и нажмите «Применить снова»']],
+ packages:['Что установлено на сервере и обновления. Пакеты ставятся заданием, ход виден здесь же.',['Выбрать пакеты и поставить их одним заданием','Настроить окно и режим обновлений','Открыть настройки пакета шестерёнкой'],['Задание упало — откройте его журнал','Раздел меню не появился — нужный пакет ещё не установлен']],
+ users:['Кто входит в эту панель, их роли, сессии и журнал изменений. Это не члены сети.',['Пригласить пользователя ссылкой на 24 часа','Настроить роль: что видно и что можно менять','Завершить чужую сессию или найти, кто что изменил'],['Пользователь не может войти — проверьте «Может входить» и не истекло ли приглашение','Нет нужного раздела — роли не хватает прав']],
+ system:['Защита сервера, резервные копии и учётные записи Linux.',['Настроить расписание копий и хранилище','Создать фразу восстановления и записать её не на этом сервере','Восстановить сервер из копии'],['Копия не открывается — нужна фраза, которой она шифровалась','Вас заблокировала защита — войдите с другого адреса и разблокируйте свой']],
+ settings:['Настройки самой панели: язык, часовой пояс, сессии, ключи членов и уведомления.',['Запустить мастер установки заново, чтобы сменить имена и сертификат','Включить уведомления по почте и отправить пробное письмо','Задать, когда выходить при бездействии'],['Письма не приходят — проверьте сервер SMTP и отправьте пробное письмо']],
+ me:['Ваш вход в панель: права роли, пароль, API-токен и сессии.',['Сменить пароль — остальные ваши сессии завершатся','Выпустить API-токен для скриптов','Завершить сессию на чужом или потерянном устройстве'],['Токен перестал работать — его отозвали или перевыпустили: выпустите новый']]
+};
+const GUIDE={ru:'README_ru.md',en:'README.md',zh:'README_zh.md'};
+function openHelp(){
+ const h=HELP[S.route]||HELP.main,t=(MENU.flatMap(g=>g.items).find(i=>i[0]===S.route)||[0,S.route==='me'?'Личный кабинет':'Обзор'])[1];
+ closeHelp();
+ document.body.insertAdjacentHTML('beforeend',`<div class="helpd-back" id="helpB" onclick="closeHelp()"></div><aside class="helpd" id="helpD" role="dialog" aria-modal="true" aria-labelledby="helpT"><button class="icb" type="button" aria-label="Закрыть" onclick="closeHelp()">${ic('i-x',22)}</button>
+  <h2 id="helpT">${t}</h2><p>${h[0]}</p><h3>Частые действия</h3><ul>${h[1].map(x=>`<li>${x}</li>`).join('')}</ul><h3>Если что-то не так</h3><ul>${h[2].map(x=>`<li>${x}</li>`).join('')}</ul>
+  <p style="margin-top:28px"><a href="https://github.com/a3app/loft/blob/main/server/panel/${GUIDE[(window.I18N&&I18N.lang)||'ru']||GUIDE.ru}" target="_blank" rel="noopener">Подробное руководство</a></p></aside>`);
+ $('#helpD .icb').focus();
+ if(window.I18N&&I18N.apply)I18N.apply($('#helpD'));
+}
+function closeHelp(){['helpB','helpD'].forEach(id=>{const e=document.getElementById(id);if(e)e.remove()})}
+
 /* ── поиск по панели: разделы и объекты, ⌘K ── */
 // goThen opens a section and then f (a dialog), after the page is drawn
 function goThen(r,f){if(location.hash.slice(1)===r){f();return}S.after=f;go(r)}
@@ -1879,10 +1914,10 @@ function render(){
 function go(r){location.hash=r}
 function setOpen(v){S.open=v;$('#app').classList.toggle('menu-open',v);$('#menuBtn').setAttribute('aria-expanded',v);$('#menuBtn').setAttribute('aria-label',v?'Закрыть меню':'Открыть меню');$('#menuBtn').innerHTML=ic(v?'i-x':'i-menu',24)}
 function setRoute(){const [r,...a]=location.hash.slice(1).split('/');S.route=r||'main';S.arg=decodeURIComponent(a.join('/'))}
-window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();render();const f=S.after;S.after=null;if(f)f();$('#main').scrollTop=0});
+window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();closeHelp();render();const f=S.after;S.after=null;if(f)f();$('#main').scrollTop=0});
 $('#menuBtn').onclick=()=>setOpen(!S.open);
 $('#foldBtn').onclick=()=>{S.rail=!S.rail;try{localStorage.setItem('lp-rail',S.rail?'1':'0')}catch(e){}renderMenu()};
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){userMenu(false);if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){userMenu(false);if($('#helpD')){closeHelp();return}if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
 setRoute();
 render();
 </script>
