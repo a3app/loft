@@ -1,6 +1,7 @@
 # 10.13 is the floor. Go cannot ship in-process (Go 1.20 was last for 10.13).
-# loft-front is a separate helper: -macos=10.13 plus gooverlay/ so dyld does
-# not bind SecTrustEvaluateWithError (10.14) / SecTrustCopyCertificateChain (12.0).
+# loft-front is a separate helper: gooverlay/ so dyld does not bind
+# SecTrustEvaluateWithError (10.14) / SecTrustCopyCertificateChain (12.0).
+# Go 1.26 still stamps LC_BUILD_VERSION 12.0; missing Security symbols were the abort.
 export MACOSX_DEPLOYMENT_TARGET := 10.13
 MIN := 10.13
 HOSTARCH := $(shell uname -m)
@@ -103,18 +104,20 @@ $(MACOS)/loft-priv: $(OBJ)/target-arch Sources/TUN/loft-priv.c $(OBJ)/utun.o
 
 FRONT_GO := $(shell find $(ROOT)/clients/go $(ROOT)/internal -name '*.go' 2>/dev/null)
 OVERLAY_DIR := $(abspath gooverlay)
-GOROOT_GO := $(shell go env GOROOT)
+# Overlay is Go 1.26 crypto/x509 (go.mod). Dist setup-go uses that GOROOT
+# (not GOMODCACHE; go build -overlay cannot replace files under the module cache).
 OVERLAY_JSON := $(OBJ)/overlay.json
 OVERLAY_SRC := gooverlay/root_darwin.go gooverlay/security.go gooverlay/security.s
 
 $(OVERLAY_JSON): $(OVERLAY_SRC)
 	mkdir -p $(OBJ)
+	GOROOT=$$(cd $(ROOT) && go env GOROOT); \
 	printf '%s\n' \
 	  '{' \
 	  '  "Replace": {' \
-	  '    "$(GOROOT_GO)/src/crypto/x509/root_darwin.go": "$(OVERLAY_DIR)/root_darwin.go",' \
-	  '    "$(GOROOT_GO)/src/crypto/x509/internal/macos/security.go": "$(OVERLAY_DIR)/security.go",' \
-	  '    "$(GOROOT_GO)/src/crypto/x509/internal/macos/security.s": "$(OVERLAY_DIR)/security.s"' \
+	  "    \"$$GOROOT/src/crypto/x509/root_darwin.go\": \"$(OVERLAY_DIR)/root_darwin.go\"," \
+	  "    \"$$GOROOT/src/crypto/x509/internal/macos/security.go\": \"$(OVERLAY_DIR)/security.go\"," \
+	  "    \"$$GOROOT/src/crypto/x509/internal/macos/security.s\": \"$(OVERLAY_DIR)/security.s\"" \
 	  '  }' \
 	  '}' > $@
 
@@ -122,7 +125,7 @@ $(MACOS)/loft-front: $(OBJ)/target-arch $(OVERLAY_JSON) $(OVERLAY_SRC) $(ROOT)/g
 	mkdir -p $(MACOS)
 	cd $(ROOT) && CGO_ENABLED=0 GOOS=darwin GOARCH=$(GOARCH_FRONT) go build -trimpath \
 		-overlay $(OVERLAY_JSON) \
-		-ldflags="-s -w -macos=$(MIN) -X github.com/a3app/loft/internal/version.Version=$(ROOTVER)" \
+		-ldflags="-s -w -X github.com/a3app/loft/internal/version.Version=$(ROOTVER)" \
 		-o dist/clients/macOS/loft.app/Contents/MacOS/loft-front ./clients/go/cmd/loft-front
 	@if nm -u $(MACOS)/loft-front | grep -E 'SecTrustCopyCertificateChain|SecTrustEvaluateWithError'; then \
 		echo 'loft-front: still binds 10.14+/12.0 Security APIs' >&2; exit 1; \

@@ -43,7 +43,7 @@ CODESIGN_IDENTITY=auto NOTARY_PROFILE=loft make dmg
 
 Each `make app` raises the patch in [`VERSION`](VERSION) (`1.0.0` → `0.9.1` → `0.9.2`) and stamps `Info.plist`. About reads that string. Protocol software stays the repo-root `VERSION`. `BUMP=0` stamps the current file and does not write it. The DMG name includes `ARCH` (`arm64` / `x86_64`), default `uname -m`. CI (`make macos-dmgs BUMP=0`) builds both on the Apple Silicon runner: native arm64 and `ARCH=x86_64` cross.
 
-The UI binary is Swift 5 + AppKit (in-process Go cannot target 10.13 after Go 1.20). Swift stdlib is copied into `Contents/Frameworks`. The overlay session is **`loft-front`** (Go) in `Contents/MacOS/` next to `loft`. The helper is linked `-macos=10.13`; [`gooverlay/`](gooverlay/) replaces stdlib `crypto/x509` Darwin verify so dyld does not need macOS 12 Security symbols. `loft-front` speaks GET, WS, H2, QUIC and H3, mux, clockless auth, mask, CmdLeave, overlay ICMP as Dgram `:1`. Hello caps come from the Go client, not from `GETFront.swift`.
+The UI binary is Swift 5 + AppKit (in-process Go cannot target 10.13 after Go 1.20). Swift stdlib is copied into `Contents/Frameworks`. The overlay session is **`loft-front`** (Go) in `Contents/MacOS/` next to `loft`. [`gooverlay/`](gooverlay/) replaces stdlib `crypto/x509` Darwin verify so dyld does not need macOS 12 Security symbols. `loft-front` speaks GET, WS, H2, QUIC and H3, mux, clockless auth, mask, CmdLeave, overlay ICMP as Dgram `:1`. Hello caps come from the Go client, not from `GETFront.swift`.
 
 | Local | On the wire |
 |-------|-------------|

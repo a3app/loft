@@ -36,7 +36,7 @@ Protocol stays **loft/1.0**.
 
 macOS:
 
-- loft-front loads on 10.13. Go 1.22+ bound `SecTrustCopyCertificateChain` (macOS 12); dyld aborted before `main`. The helper is linked `-macos=10.13` with a stdlib overlay that uses `SecTrustEvaluate`.
+- loft-front loads on 10.13. Go 1.22+ bound `SecTrustCopyCertificateChain` (macOS 12); dyld aborted before `main`. A stdlib overlay uses `SecTrustEvaluate` so those 12.0 Security symbols are not in the binary.
 - Through-loft routes stay on utun when 0/1 owns default.
 
 Fronts:

@@ -43,7 +43,7 @@ CODESIGN_IDENTITY=auto NOTARY_PROFILE=loft make dmg
 
 每次 `make app` 把 [`VERSION`](VERSION) 的 patch +1（`1.0.0` → `0.9.1` → `0.9.2`）并盖进 `Info.plist`。关于读这个字符串。协议软件版本仍是仓库根的 `VERSION`。`BUMP=0` 盖当前文件，不改它。DMG 名带 `ARCH`（`arm64` / `x86_64`），默认 `uname -m`。CI（`make macos-dmgs BUMP=0`）在 Apple Silicon runner 上打两份：本机 arm64 和 `ARCH=x86_64` 交叉。
 
-界面是 Swift 5 + AppKit（Go 1.20 之后无法把 Go 编进进程并打 10.13）。Swift stdlib 拷进 `Contents/Frameworks`。覆盖网会话是 **`loft-front`**（Go），在 `Contents/MacOS/`，和 `loft` 挨着。助手以 `-macos=10.13` 链接；[`gooverlay/`](gooverlay/) 替换标准库 `crypto/x509` 的 Darwin 校验，这样 dyld 不需要 macOS 12 的 Security 符号。`loft-front` 说 GET、WS、H2、QUIC 和 H3，mux，clockless auth，mask，CmdLeave，覆盖网 ICMP 当作 Dgram `:1`。Hello caps 来自 Go 客户端，不是 `GETFront.swift`。
+界面是 Swift 5 + AppKit（Go 1.20 之后无法把 Go 编进进程并打 10.13）。Swift stdlib 拷进 `Contents/Frameworks`。覆盖网会话是 **`loft-front`**（Go），在 `Contents/MacOS/`，和 `loft` 挨着。[`gooverlay/`](gooverlay/) 替换标准库 `crypto/x509` 的 Darwin 校验，这样 dyld 不需要 macOS 12 的 Security 符号。`loft-front` 说 GET、WS、H2、QUIC 和 H3，mux，clockless auth，mask，CmdLeave，覆盖网 ICMP 当作 Dgram `:1`。Hello caps 来自 Go 客户端，不是 `GETFront.swift`。
 
 | 本机 | 信道上 |
 |------|--------|

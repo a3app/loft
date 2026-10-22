@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// loft overlay for macOS 10.13. Stdlib Go 1.22+ calls
-// SecTrustEvaluateWithError (10.14) then SecTrustCopyCertificateChain
-// (12.0). This copy evaluates with SecTrustEvaluate and walks the chain
-// with GetCertificateCount/AtIndex.
+// loft overlay for macOS 10.13, against the go.mod toolchain (Go 1.26).
+// Stdlib calls SecTrustEvaluateWithError (10.14) then
+// SecTrustCopyCertificateChain (12.0). This copy evaluates with
+// SecTrustEvaluate and walks the chain with GetCertificateCount/AtIndex.
+// Keep loadSystemRoots in this file: Go 1.26 defines it here.
 
 package x509
 
@@ -13,9 +14,6 @@ import (
 	"crypto/x509/internal/macos"
 	"errors"
 )
-
-// macOS has no default SSL_CERT_{FILE,DIR} paths.
-var certFiles, certDirectories []string
 
 func (c *Certificate) systemVerify(opts *VerifyOptions) (chains [][]*Certificate, err error) {
 	certs := macos.CFArrayCreateMutable()
@@ -82,14 +80,9 @@ func (c *Certificate) systemVerify(opts *VerifyOptions) (chains [][]*Certificate
 		}
 		chain[0] = append(chain[0], cert)
 	}
-
 	if len(chain[0]) == 0 {
 		// This should _never_ happen, but to be safe
 		return nil, errors.New("x509: macos certificate verification internal error")
-	}
-
-	if containsDistrustedSPKIHash(chain[0]) {
-		return nil, CertificateInvalidError{c, NoValidChains, ""}
 	}
 
 	if opts.DNSName != "" {
@@ -125,4 +118,8 @@ func exportCertificate(cert macos.CFRef) (*Certificate, error) {
 		return nil, err
 	}
 	return ParseCertificate(data)
+}
+
+func loadSystemRoots() (*CertPool, error) {
+	return &CertPool{systemPool: true}, nil
 }
