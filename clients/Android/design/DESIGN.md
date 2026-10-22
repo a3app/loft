@@ -4,7 +4,7 @@
 
 Phone app plus a `VpnService`. Mark, palette, and Avenir Next: [`brand/`](../../../docs/brand/). Interactive mock: [`index.html`](index.html); every state has its own link, e.g. `index.html#edit-sstp`, `#settings-route`, `#home-off` (the address changes as you click). Protocol: [docs/protocol.md](../../../docs/protocol.md). Import URI: [docs/share.md](../../../docs/share.md).
 
-The Java container lives in [`../app/`](../app/). A live session is Go inside `LoftVpnService`, not `loft-front`. The thin host already pastes YAML; this mock is the GUI that replaces that paste screen.
+The Java container lives in [`../app/`](../app/). A live session is Go inside `LoftVpnService`, not `loft-front`. The app implements this mock: Home / Connections / Edit / Scan / Settings.
 
 ---
 
@@ -22,7 +22,7 @@ Android Settings shows the same VPN row the app starts. The app does not replace
 
 Language of the adapter is **Java 17**. gomobile already emits Java; this process does not load the Kotlin runtime. The mock is HTML; the later GUI is Views (no Compose).
 
-Android TV / Google TV is the same `VpnService` and AAR with a Leanback flavor. Not this mock; [PLAN](../PLAN.md) phase 4. VIDAA / Tizen / webOS are out of scope.
+Android TV / Google TV is the same `VpnService` and AAR with a Leanback flavor. 10-foot mock: [`tv/`](tv/). [PLAN](../PLAN.md) phase 4. VIDAA / Tizen / webOS are out of scope.
 
 ## 2. Screens
 

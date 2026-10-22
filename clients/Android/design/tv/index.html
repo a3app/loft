@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — Android TV</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --ink-2: #241f1b;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+      --a-bg: #121212;
+      --a-card: #2a2a2a;
+      --a-ink: #e8e8e8;
+      --a-mute: #9aa0a6;
+      --a-blue: #8ab4f8;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      height: 100%;
+    }
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #3A332E transparent;
+    }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 14px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav a.phone {
+      display: block; margin: -8px 8px 14px; color: var(--lamp); font-size: 0.75rem; text-decoration: none;
+    }
+    nav button {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 6px 10px; border-radius: 8px; cursor: pointer;
+    }
+    nav button:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang { display: flex; gap: 4px; margin: 4px 8px 10px; }
+    .lang button { flex: 1; text-align: center; padding: 6px 0; font-weight: 600; font-size: 12px; }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage-wrap {
+      padding: 24px; display: flex; align-items: center; justify-content: center;
+      min-height: 0; overflow: auto;
+    }
+    .bezel {
+      background: #1c1815;
+      border: 10px solid #2c2622;
+      border-radius: 18px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      padding: 0;
+    }
+    .tv {
+      width: 960px; height: 540px;
+      background: #181512;
+      position: relative;
+      overflow: hidden;
+      color: var(--snow);
+    }
+    .tv.sys-mode { background: var(--a-bg); color: var(--a-ink); }
+    .hidden { display: none !important; }
+
+    .screen {
+      position: absolute; inset: 0;
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      padding: 36px 40px 28px 12px;
+    }
+    .screen.full { grid-template-columns: 1fr; padding: 36px 48px 28px; }
+    .rail {
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      padding-top: 8px;
+    }
+    .rail button {
+      width: 48px; height: 48px; border: 0; border-radius: 14px;
+      background: transparent; color: var(--mute); cursor: pointer;
+      display: grid; place-items: center;
+    }
+    .rail button svg { width: 24px; height: 24px; }
+    .rail button.cur { color: var(--snow); background: #2a2420; }
+    .pane { min-width: 0; padding-left: 20px; display: flex; flex-direction: column; }
+
+    .f:focus, .f.is-f {
+      outline: 3px solid var(--lamp);
+      outline-offset: 4px;
+    }
+    button.f { font-family: var(--ui); }
+
+    .hero { display: flex; align-items: center; gap: 18px; }
+    .hero .mark { width: 72px; height: 72px; flex-shrink: 0; }
+    .hero h1 { margin: 0; font-size: 34px; letter-spacing: -0.04em; font-weight: 600; }
+    .status {
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 6px; color: var(--mute); font-size: 16px;
+    }
+    .status i {
+      width: 10px; height: 10px; border-radius: 3px; background: var(--mute);
+    }
+    .status.on i { background: var(--lamp); box-shadow: 0 0 12px rgba(232,184,74,.55); }
+    .status.wait i { background: var(--lamp-hi); box-shadow: 0 0 8px rgba(243,210,122,.35); }
+
+    .home-grid {
+      flex: 1; display: grid; grid-template-columns: 1fr 300px;
+      gap: 28px; align-items: start; margin-top: 28px;
+    }
+    .cta {
+      border: 0; border-radius: 18px; padding: 18px 28px; cursor: pointer;
+      font: 600 22px var(--ui); min-width: 240px;
+    }
+    .cta.go { background: var(--lamp); color: var(--ink); }
+    .cta.off { background: rgba(226,75,75,.18); color: #f0a0a0; }
+    .cta.ghost { background: #2a2420; color: var(--snow); }
+    .hint { color: var(--mute); font-size: 14px; margin-top: 14px; }
+    .profile {
+      background: #211c19; border: 1px solid #2e2824; border-radius: 16px;
+      padding: 18px 20px;
+    }
+    .profile .n { font-size: 22px; font-weight: 600; }
+    .profile .m { color: var(--mute); font: 400 14px var(--mono); margin-top: 4px; }
+    .profile .k { color: var(--stone); font-size: 14px; margin-top: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 12px; padding: 4px 10px; border-radius: 999px;
+      background: #2a2420; color: var(--stone); font-size: 12px;
+    }
+    .stats { margin-top: 14px; display: grid; gap: 8px; }
+    .stats .r { display: flex; justify-content: space-between; font-size: 15px; }
+    .stats .k { color: var(--mute); }
+    .stats .v { font-family: var(--mono); font-size: 14px; }
+    .rates {
+      display: flex; gap: 18px; margin-top: 12px; font-variant-numeric: tabular-nums;
+    }
+    .rates .dn { color: var(--lamp); font-size: 18px; font-weight: 600; }
+    .rates .up { color: var(--stone); font-size: 18px; font-weight: 600; }
+
+    .title { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 4px; }
+    .sub { color: var(--mute); font-size: 15px; margin: 0 0 18px; }
+
+    .row-cards {
+      display: flex; gap: 14px; align-items: stretch;
+      overflow: hidden; padding: 8px 4px;
+    }
+    .pcard {
+      flex: 0 0 200px; background: #211c19; border: 1px solid #2e2824;
+      border-radius: 16px; padding: 16px; text-align: left; color: var(--snow);
+      cursor: pointer; transition: transform .12s ease;
+    }
+    .pcard .n { font-size: 18px; font-weight: 600; }
+    .pcard .m { color: var(--mute); font: 400 12px var(--mono); margin-top: 6px; }
+    .pcard .k { color: var(--stone); font-size: 13px; margin-top: 10px; }
+    .pcard.live { border-color: rgba(232,184,74,.5); }
+    .pcard.add {
+      display: grid; place-items: center; font-size: 42px; color: var(--lamp);
+      background: #1e1a17;
+    }
+    .pcard.is-f, .pcard:focus { transform: scale(1.06); }
+    .acts { display: flex; gap: 10px; margin-top: auto; padding-top: 18px; }
+    .acts button {
+      background: #2a2420; border: 0; color: var(--snow); border-radius: 12px;
+      padding: 10px 16px; font: 600 14px var(--ui); cursor: pointer;
+    }
+    .acts button.danger { background: rgba(226,75,75,.15); color: #f0a0a0; }
+
+    .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
+    .tile {
+      background: #211c19; border: 1px solid #2e2824; border-radius: 18px;
+      padding: 28px 20px; text-align: left; color: var(--snow); cursor: pointer;
+      min-height: 180px;
+    }
+    .tile .ic { width: 28px; height: 28px; margin-bottom: 16px; color: var(--lamp); }
+    .tile .ic svg { width: 28px; height: 28px; display: block; }
+    .tile .n { font-size: 18px; font-weight: 600; }
+    .tile .s { color: var(--mute); font-size: 14px; margin-top: 8px; line-height: 1.4; }
+
+    .pair {
+      display: grid; grid-template-columns: 220px 1fr; gap: 32px; align-items: center;
+      flex: 1;
+    }
+    .qr {
+      width: 220px; height: 220px; background: var(--snow); border-radius: 12px;
+      padding: 12px;
+    }
+    .qr svg { width: 100%; height: 100%; display: block; }
+    .code {
+      font: 600 36px var(--mono); letter-spacing: .18em; color: var(--lamp); margin: 8px 0 12px;
+    }
+
+    .ime {
+      background: #211c19; border: 1px solid #2e2824; border-radius: 14px;
+      padding: 16px 18px; font: 400 18px var(--mono); color: var(--snow); width: 100%;
+    }
+    .seg { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 18px; }
+    .seg button {
+      background: #211c19; border: 0; color: var(--stone); border-radius: 999px;
+      padding: 10px 14px; font: 600 14px var(--ui); cursor: pointer;
+    }
+    .seg button.on { background: var(--lamp); color: var(--ink); }
+
+    .set { flex: 1; overflow: hidden; }
+    .grp {
+      margin: 8px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute);
+    }
+    .grp:first-child { margin-top: 0; }
+    .srow {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 12px; border-radius: 12px; margin-bottom: 2px;
+      background: transparent; border: 0; width: 100%; color: var(--snow);
+      font: 500 15px var(--ui); cursor: pointer; text-align: left;
+    }
+    .srow .s { color: var(--mute); font-size: 13px; font-weight: 400; margin-top: 2px; }
+    .toggle {
+      width: 42px; height: 24px; border-radius: 12px; background: #3a332e; position: relative; flex-shrink: 0;
+    }
+    .toggle i {
+      position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #d8cfc4;
+    }
+    .toggle.on { background: var(--lamp); }
+    .toggle.on i { left: 21px; background: var(--ink); }
+    .links { display: flex; gap: 18px; margin-top: 8px; }
+    .links button {
+      background: none; border: 0; color: var(--mute); font: 500 14px var(--ui); cursor: pointer;
+    }
+
+    .log {
+      flex: 1; background: #211c19; border-radius: 12px; padding: 14px 16px;
+      font: 400 13px var(--mono); color: var(--stone); overflow: hidden;
+      line-height: 1.55;
+    }
+    .about { text-align: center; padding-top: 24px; }
+    .about .mark { width: 80px; height: 80px; margin: 0 auto 10px; }
+    .about h1 { margin: 0; font-size: 28px; }
+    .about .ver { color: var(--mute); margin-top: 6px; }
+    .about p { color: var(--stone); max-width: 420px; margin: 16px auto; line-height: 1.45; }
+
+    .files { display: grid; gap: 8px; }
+    .files button {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #211c19; border: 1px solid #2e2824; border-radius: 12px;
+      padding: 14px 16px; color: var(--snow); font: 500 16px var(--ui); cursor: pointer;
+    }
+    .files .s { color: var(--mute); font-size: 13px; }
+
+    .ghome { padding: 28px 36px; height: 100%; background: #0d0d0d; color: #eee; }
+    .ghome .bar { display: flex; gap: 22px; color: #9aa0a6; font-size: 14px; margin-bottom: 28px; }
+    .ghome .bar .on { color: #fff; }
+    .ghome h3 { margin: 0 0 12px; font-size: 16px; font-weight: 500; color: #c4c7c5; }
+    .grows { display: flex; gap: 12px; }
+    .appc {
+      width: 160px; height: 90px; border-radius: 12px; background: #2a2a2a;
+      display: grid; place-items: center; color: #9aa0a6; font-size: 13px;
+    }
+    .appc.loft {
+      background: #181512; color: var(--snow);
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .appc.loft svg { width: 36px; height: 36px; }
+    .appc.loft .nm { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; }
+    .appc.loft.is-f { outline: 3px solid var(--lamp); outline-offset: 4px; }
+
+    .dlg-scrim {
+      position: absolute; inset: 0; background: rgba(0,0,0,.55);
+      display: grid; place-items: center;
+    }
+    .dlg {
+      width: 420px; background: #2d2d2d; color: #e8e8e8; border-radius: 16px; padding: 24px 24px 16px;
+    }
+    .dlg h3 { margin: 0 0 10px; font-size: 20px; }
+    .dlg p { margin: 0 0 18px; color: #c4c7c5; font-size: 14px; line-height: 1.45; }
+    .dlg .acts { justify-content: flex-end; }
+    .dlg .acts button {
+      background: none; border: 0; color: var(--a-blue); font: 600 14px var(--ui);
+      padding: 10px 12px; cursor: pointer; border-radius: 8px;
+    }
+
+    .sysvpn { padding: 40px 56px; }
+    .sysvpn h2 { margin: 0 0 8px; font-size: 28px; font-weight: 400; }
+    .sysvpn .cap { color: var(--a-mute); font-size: 14px; margin: 0 0 18px; }
+    .a-row {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--a-card); padding: 16px 18px; border-radius: 12px; margin-bottom: 8px;
+    }
+    .a-row .l { font-size: 16px; }
+    .a-status { color: #81c995; font-size: 13px; margin-top: 4px; }
+    .a-sw { width: 40px; height: 22px; border-radius: 11px; background: #8ab4f8; position: relative; }
+    .a-sw i { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+        <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+        <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+      </svg>
+      loft TV
+    </div>
+    <p data-i="navCap">Макет Android TV. Пульт: стрелки, Enter, Escape. Туннель — системный VpnService.</p>
+    <a class="phone" href="../index.html" data-i="toPhone">Макет телефона →</a>
+    <div class="lang">
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
+      <button type="button" id="lang-zh" onclick="setLang('zh')">中文</button>
+    </div>
+    <h4 data-i="hApp">Приложение</h4>
+    <button type="button" class="on" data-go="home" data-mode="on" data-i="nOn">Дом · в сети</button>
+    <button type="button" data-go="home" data-mode="off" data-i="nOff">Дом · выкл</button>
+    <button type="button" data-go="home" data-mode="connecting" data-i="nWait">Дом · подключение</button>
+    <button type="button" data-go="home" data-mode="empty" data-i="nEmpty">Дом · пусто</button>
+    <button type="button" data-go="list" data-i="nList">Подключения</button>
+    <button type="button" data-go="add" data-i="nAdd">Добавить</button>
+    <button type="button" data-go="pair" data-i="nPair">QR на телевизоре</button>
+    <button type="button" data-go="share" data-i="nShare">Поделиться QR</button>
+    <button type="button" data-go="file" data-i="nFile">Файл / флешка</button>
+    <button type="button" data-go="paste" data-i="nPaste">Набрать ссылку</button>
+    <button type="button" data-go="edit" data-i="nEdit">Правка</button>
+    <button type="button" data-go="settings" data-i="nSet">Настройки</button>
+    <button type="button" data-go="settings" data-set="route" data-i="nSetR">Настройки · маршрут</button>
+    <button type="button" data-go="journal" data-i="nLog">Журнал</button>
+    <button type="button" data-go="about" data-i="nAbout">О программе</button>
+    <h4>Android TV</h4>
+    <button type="button" data-go="consent" data-i="nConsent">Запрос подключения</button>
+    <button type="button" data-go="sysvpn" data-i="nSys">Настройки → VPN</button>
+    <button type="button" data-go="banner" data-i="nBanner">Ряд Google TV</button>
+  </nav>
+
+  <div class="stage-wrap">
+    <div class="bezel">
+      <div class="tv" id="tv">
+
+        <div class="screen" id="home">
+          <div class="rail" data-rail="home"></div>
+          <div class="pane">
+            <div class="hero">
+              <svg class="mark" id="homeMark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+                <path id="homeBody" fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+                <path id="homeWin" fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+              </svg>
+              <div>
+                <h1>loft</h1>
+                <div class="status on" id="homeSt"><i></i><span id="homeStT"></span></div>
+              </div>
+            </div>
+            <div class="home-grid" id="homeLive">
+              <div>
+                <button type="button" class="cta off f" id="homeAct" data-focus></button>
+                <p class="hint" id="homeHint"></p>
+              </div>
+              <div class="profile">
+                <div class="n">Home</div>
+                <div class="m">cdn.example.com</div>
+                <div class="k" id="homeKind">loft · GET</div>
+                <div class="chip" id="homeNet">Ethernet</div>
+                <div class="stats" id="homeIps">
+                  <div class="r"><span class="k" data-i="overlay">Overlay IP</span><span class="v">10.8.0.4</span></div>
+                  <div class="r"><span class="k" data-i="ext">Public IP</span><span class="v">198.51.100.12</span></div>
+                </div>
+                <div class="rates" id="homeRates">
+                  <span class="dn">↓ 12.4 Mbit/s</span>
+                  <span class="up">↑ 1.1 Mbit/s</span>
+                </div>
+              </div>
+            </div>
+            <div class="tiles hidden" id="homeEmpty"></div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="list">
+          <div class="rail" data-rail="list"></div>
+          <div class="pane">
+            <h2 class="title" data-i="conns">Подключения</h2>
+            <p class="sub" data-i="connsSub">Каждое — свой ключ и адрес. Активное одно.</p>
+            <div class="row-cards">
+              <button type="button" class="pcard live f" data-go="home" data-mode="on" data-focus>
+                <div class="n">Home</div>
+                <div class="m">cdn.example.com</div>
+                <div class="k">loft · get</div>
+              </button>
+              <button type="button" class="pcard f" data-go="home" data-mode="off">
+                <div class="n">Lab</div>
+                <div class="m">us.iqos.help</div>
+                <div class="k">loft · l3</div>
+              </button>
+              <button type="button" class="pcard f">
+                <div class="n">Office</div>
+                <div class="m">vpn.example.net</div>
+                <div class="k">sstp</div>
+              </button>
+              <button type="button" class="pcard add f" data-go="add">+</button>
+            </div>
+            <div class="acts">
+              <button type="button" class="f" data-go="edit" data-i="edit">Править</button>
+              <button type="button" class="f" data-go="share" data-i="share">Поделиться QR</button>
+              <button type="button" class="f danger" data-i="delete">Удалить</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="add">
+          <div class="rail" data-rail="list"></div>
+          <div class="pane">
+            <h2 class="title" data-i="addT">Новое подключение</h2>
+            <p class="sub" data-i="addSub">На телевизоре нет камеры. QR показывает этот экран.</p>
+            <div class="tiles" id="addTiles"></div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="pair">
+          <div class="rail" data-rail="list"></div>
+          <div class="pane">
+            <h2 class="title" data-i="pairT">На телевизор</h2>
+            <div class="pair">
+              <div class="qr" id="qrPair"></div>
+              <div>
+                <p class="sub" data-i="pairHint">На телефоне: loft → На телевизор. Наведите камеру или введите код.</p>
+                <div class="code">K7M2P4</div>
+                <p class="hint" data-i="pairLan">Слушатель в LAN, пока этот экран открыт. Назад — закрыть.</p>
+                <div class="acts">
+                  <button type="button" class="cta ghost f" data-go="list" data-i="cancel" data-focus>Отмена</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="share">
+          <div class="rail" data-rail="list"></div>
+          <div class="pane">
+            <h2 class="title" data-i="shareT">Поделиться Home</h2>
+            <div class="pair">
+              <div class="qr" id="qrShare"></div>
+              <div>
+                <p class="sub" data-i="shareHint">Наведите камеру телефона на этот экран. В ссылке есть ключ доступа.</p>
+                <div class="code" style="font-size:16px;letter-spacing:0;color:var(--stone);word-break:break-all">loft://cdn.example.com/?k=lt_…</div>
+                <div class="acts">
+                  <button type="button" class="cta ghost f" data-go="list" data-i="close" data-focus>Закрыть</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="file">
+          <div class="rail" data-rail="list"></div>
+          <div class="pane">
+            <h2 class="title" data-i="fileT">С флешки или из Загрузок</h2>
+            <p class="sub" data-i="fileSub">USB OTG и папка Downloads. Подтверждение скрывает ключ.</p>
+            <div class="files">
+              <button type="button" class="f" data-go="home" data-mode="off" data-focus>
+                <span>Home.loft</span><span class="s">USB · loft · get</span>
+              </button>
+              <button type="button" class="f">
+                <span>Family.loft</span><span class="s" data-i="fileAll">Загрузки · три подключения</span>
+              </button>
+              <button type="button" class="f" data-go="list" data-i="cancel">Отмена</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="paste">
+          <div class="rail" data-rail="list"></div>
+          <div class="pane">
+            <h2 class="title" data-i="pasteT">Набрать ссылку</h2>
+            <p class="sub" data-i="pasteSub">IME пульта или вставка с Bluetooth-клавиатуры.</p>
+            <input class="ime f" data-focus value="loft://" />
+            <div class="acts">
+              <button type="button" class="cta go f" data-go="home" data-mode="off" data-i="add">Добавить</button>
+              <button type="button" class="cta ghost f" data-go="add" data-i="cancel">Отмена</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="edit">
+          <div class="rail" data-rail="list"></div>
+          <div class="pane">
+            <h2 class="title" data-i="editT">Home</h2>
+            <p class="sub" data-i="editSub">Полные поля — на телефоне. Здесь имя и способ.</p>
+            <label class="sub" style="display:block;margin-bottom:6px" data-i="name">Имя</label>
+            <input class="ime f" data-focus value="Home" />
+            <p class="sub" style="margin:16px 0 6px" data-i="method">Способ</p>
+            <div class="seg" id="methods">
+              <button type="button" class="f">Auto</button>
+              <button type="button" class="f on">GET</button>
+              <button type="button" class="f">WS</button>
+              <button type="button" class="f">H2</button>
+              <button type="button" class="f">QUIC</button>
+              <button type="button" class="f">H3</button>
+              <button type="button" class="f">L3</button>
+            </div>
+            <div class="acts">
+              <button type="button" class="cta go f" data-go="list" data-i="save">Сохранить</button>
+              <button type="button" class="cta ghost f" data-go="list" data-i="cancel">Отмена</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="settings">
+          <div class="rail" data-rail="settings"></div>
+          <div class="pane">
+            <h2 class="title" data-i="settings">Настройки</h2>
+            <div class="set" id="setBody"></div>
+            <div class="links">
+              <button type="button" class="f" data-go="journal" data-i="log">Журнал</button>
+              <button type="button" class="f" data-go="about" data-i="about">О программе</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="journal">
+          <div class="rail" data-rail="settings"></div>
+          <div class="pane">
+            <h2 class="title" data-i="log">Журнал</h2>
+            <div class="log">
+              12:01:02  path ethernet → hold<br/>
+              12:01:03  hello cap=l3 front=get<br/>
+              12:01:03  overlay 10.8.0.4/32<br/>
+              12:04:11  path wifi NotifyPathChange instance=a1c3
+            </div>
+            <div class="acts">
+              <button type="button" class="f danger" data-i="clear">Очистить</button>
+              <button type="button" class="f" data-go="settings" data-i="close" data-focus>Закрыть</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen hidden" id="about">
+          <div class="rail" data-rail="settings"></div>
+          <div class="pane about">
+            <svg class="mark" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+              <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+              <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+            </svg>
+            <h1>loft</h1>
+            <div class="ver">1.0.24 · Android TV</div>
+            <p data-i="aboutBlurb">Снаружи обычный HTTPS. Внутри — своя сеть.</p>
+            <p>loft/1.0 · SSTP · VLESS · Trojan<br/>get · ws · h2 · quic · h3 · l3 · mask</p>
+            <p>Made with love by A³</p>
+            <div class="acts" style="justify-content:center">
+              <button type="button" class="cta ghost f" data-go="settings" data-i="close" data-focus>Закрыть</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen full hidden" id="consent">
+          <div class="dlg-scrim">
+            <div class="dlg">
+              <h3 data-i="cTitle">Запрос подключения</h3>
+              <p data-i="cBody">Приложение loft запрашивает разрешение на настройку VPN-подключения. Подключение может отслеживать сетевой трафик устройства, в том числе приложения и сайты.</p>
+              <div class="acts">
+                <button type="button" class="f" data-go="home" data-mode="off" data-i="cancel">Отмена</button>
+                <button type="button" class="f" data-go="home" data-mode="connecting" data-i="cOk" data-focus>OK</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen full hidden" id="sysvpn">
+          <div class="sysvpn">
+            <h2>VPN</h2>
+            <p class="cap" data-i="sysCap">Системный список VPN. Тумблер — туннель loft, не второй выключатель в приложении.</p>
+            <div class="a-row f" data-focus>
+              <div>
+                <div class="l">loft</div>
+                <div class="a-status" data-i="sysOn">Подключено</div>
+              </div>
+            </div>
+            <p class="cap" style="margin-top:18px" data-i="sysHold">Удержание на Android — эти два системных переключателя.</p>
+            <div class="a-row">
+              <span class="l" data-i="always">VPN всегда включён</span>
+              <div class="a-sw"><i></i></div>
+            </div>
+            <div class="a-row">
+              <span class="l" data-i="block">Блокировать подключения без VPN</span>
+              <div class="a-sw"><i></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen full hidden" id="banner">
+          <div class="ghome">
+            <div class="bar"><span data-i="gApps">Приложения</span><span class="on">loft</span><span>YouTube</span><span>Netflix</span></div>
+            <h3 data-i="gRow">Ваши приложения</h3>
+            <div class="grows">
+              <div class="appc loft f is-f" data-focus>
+                <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+                  <path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/>
+                  <path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/>
+                </svg>
+                <span class="nm">loft</span>
+              </div>
+              <div class="appc">YouTube</div>
+              <div class="appc">Netflix</div>
+              <div class="appc">Play Store</div>
+            </div>
+            <p class="hint" style="margin-top:22px;color:#9aa0a6" data-i="bannerHint">Баннер 320×180. Лампа горит, пока сессия жива.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MARK_PATHS = `<path fill="currentColor" d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/>`;
+    const RAIL = [
+      { id: "home", go: "home", svg: '<path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/>' },
+      { id: "list", go: "list", svg: '<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/>' },
+      { id: "settings", go: "settings", svg: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>' }
+    ];
+    const I = {
+      ru: {
+        navCap: "Макет Android TV. Пульт: стрелки, Enter, Escape. Туннель — системный VpnService.",
+        toPhone: "Макет телефона →",
+        hApp: "Приложение",
+        nOn: "Дом · в сети", nOff: "Дом · выкл", nWait: "Дом · подключение", nEmpty: "Дом · пусто",
+        nList: "Подключения", nAdd: "Добавить", nPair: "QR на телевизоре", nShare: "Поделиться QR",
+        nFile: "Файл / флешка", nPaste: "Набрать ссылку", nEdit: "Правка", nSet: "Настройки",
+        nSetR: "Настройки · маршрут", nLog: "Журнал", nAbout: "О программе",
+        nConsent: "Запрос подключения", nSys: "Настройки → VPN", nBanner: "Ряд Google TV",
+        pillOn: "Подключено · Home  0:12", pillOff: "Не подключено · Home", pillWait: "Подключение: Home…",
+        pillEmpty: "Нет подключений",
+        connect: "Подключить", disconnect: "Отключить", cancel: "Отмена", close: "Закрыть",
+        save: "Сохранить", add: "Добавить", edit: "Править", delete: "Удалить", share: "Поделиться QR",
+        remoteOn: "OK — отключить · Назад — выход",
+        remoteOff: "OK — подключить · Назад — выход",
+        remoteWait: "OK — отмена",
+        overlay: "Overlay IP", ext: "Внешний IP",
+        conns: "Подключения", connsSub: "Каждое — свой ключ и адрес. Активное одно.",
+        addT: "Новое подключение", addSub: "На телевизоре нет камеры. QR показывает этот экран.",
+        addQr: "QR на телевизоре", addQrS: "Телефон сканирует этот экран",
+        addUsb: "С флешки или из Загрузок", addUsbS: "Файл .loft",
+        addType: "Набрать ссылку", addTypeS: "loft:// с пульта",
+        pairT: "На телевизор", pairHint: "На телефоне: loft → На телевизор. Наведите камеру или введите код.",
+        pairLan: "Слушатель в LAN, пока этот экран открыт. Назад — закрыть.",
+        shareT: "Поделиться Home", shareHint: "Наведите камеру телефона на этот экран. В ссылке есть ключ доступа.",
+        fileT: "С флешки или из Загрузок", fileSub: "USB OTG и папка Downloads. Подтверждение скрывает ключ.",
+        fileAll: "Загрузки · три подключения",
+        pasteT: "Набрать ссылку", pasteSub: "IME пульта или вставка с Bluetooth-клавиатуры.",
+        editT: "Home", editSub: "Полные поля — на телефоне. Здесь имя и способ.",
+        name: "Имя", method: "Способ",
+        settings: "Настройки", general: "Общие", route: "Маршрут", conn: "Подключение",
+        lang: "Язык", logExt: "Расширенный журнал",
+        defRoute: "Маршрут по умолчанию", defRouteS: "Весь интернет через loft. Выкл — только сеть loft.",
+        lan: "Обход LAN", lanS: "RFC1918 остаётся на Ethernet / Wi-Fi.",
+        hold: "Без VPN — без интернета", holdS: "Системные тумблеры. Приложение их не показывает.",
+        openSys: "Открыть настройки VPN",
+        auto: "Подключаться при запуске", recon: "Переподключаться при обрыве",
+        log: "Журнал", about: "О программе", clear: "Очистить",
+        aboutBlurb: "Снаружи обычный HTTPS. Внутри — своя сеть.",
+        cTitle: "Запрос подключения",
+        cBody: "Приложение loft запрашивает разрешение на настройку VPN-подключения. Подключение может отслеживать сетевой трафик устройства, в том числе приложения и сайты.",
+        cOk: "OK",
+        sysCap: "Системный список VPN. Тумблер — туннель loft, не второй выключатель в приложении.",
+        sysOn: "Подключено",
+        sysHold: "Удержание на Android — эти два системных переключателя.",
+        always: "VPN всегда включён",
+        block: "Блокировать подключения без VPN",
+        gApps: "Приложения", gRow: "Ваши приложения",
+        bannerHint: "Баннер 320×180. Лампа горит, пока сессия жива."
+      },
+      en: {
+        navCap: "Android TV mock. Remote: arrows, Enter, Escape. The tunnel is the system VpnService.",
+        toPhone: "Phone mock →",
+        hApp: "App",
+        nOn: "Home · on", nOff: "Home · off", nWait: "Home · connecting", nEmpty: "Home · empty",
+        nList: "Connections", nAdd: "Add", nPair: "QR on this TV", nShare: "Share QR",
+        nFile: "USB / Downloads", nPaste: "Type the link", nEdit: "Edit", nSet: "Settings",
+        nSetR: "Settings · route", nLog: "Log", nAbout: "About",
+        nConsent: "Connection request", nSys: "Settings → VPN", nBanner: "Google TV row",
+        pillOn: "Connected · Home  0:12", pillOff: "Not connected · Home", pillWait: "Connecting: Home…",
+        pillEmpty: "No connections yet",
+        connect: "Connect", disconnect: "Disconnect", cancel: "Cancel", close: "Close",
+        save: "Save", add: "Add", edit: "Edit", delete: "Delete", share: "Share QR",
+        remoteOn: "OK — disconnect · Back — leave",
+        remoteOff: "OK — connect · Back — leave",
+        remoteWait: "OK — cancel",
+        overlay: "Overlay IP", ext: "Public IP",
+        conns: "Connections", connsSub: "Each has its own key and address. One is active.",
+        addT: "New connection", addSub: "The TV has no camera. This screen is the QR.",
+        addQr: "Show QR on this TV", addQrS: "The phone scans this screen",
+        addUsb: "From USB or Downloads", addUsbS: ".loft file",
+        addType: "Type the link", addTypeS: "loft:// on the remote",
+        pairT: "Send to TV", pairHint: "On the phone: loft → Send to TV. Scan this or type the code.",
+        pairLan: "LAN listener while this screen is open. Back closes it.",
+        shareT: "Share Home", shareHint: "Point the phone camera at this screen. The link holds the access key.",
+        fileT: "USB or Downloads", fileSub: "USB OTG and the Downloads folder. Confirm hides the key.",
+        fileAll: "Downloads · three connections",
+        pasteT: "Type the link", pasteSub: "Leanback IME or a paste from a Bluetooth keyboard.",
+        editT: "Home", editSub: "Full forms live on the phone. Here: name and method.",
+        name: "Name", method: "Method",
+        settings: "Settings", general: "General", route: "Route", conn: "Connection",
+        lang: "Language", logExt: "Extended log",
+        defRoute: "Default route", defRouteS: "Send all Internet through loft. Off — overlay net only.",
+        lan: "LAN bypass", lanS: "RFC1918 stays on Ethernet / Wi-Fi.",
+        hold: "No Internet without VPN", holdS: "System switches. The app does not show them.",
+        openSys: "Open VPN settings",
+        auto: "Connect at launch", recon: "Reconnect on disconnect",
+        log: "Log", about: "About", clear: "Clear",
+        aboutBlurb: "Ordinary HTTPS on the outside. Inside, a network of your own.",
+        cTitle: "Connection request",
+        cBody: "loft wants to set up a VPN connection. A VPN can monitor device network traffic, including apps and websites.",
+        cOk: "OK",
+        sysCap: "The system VPN list. The switch is the loft tunnel, not a second toggle in the app.",
+        sysOn: "Connected",
+        sysHold: "Hold on Android is these two system switches.",
+        always: "Always-on VPN",
+        block: "Block connections without VPN",
+        gApps: "Apps", gRow: "Your apps",
+        bannerHint: "Banner 320×180. The lamp is lit while the session is up."
+      },
+      zh: {
+        navCap: "Android TV 模型。遥控器：方向键、Enter、Escape。隧道是系统 VpnService。",
+        toPhone: "手机模型 →",
+        hApp: "应用",
+        nOn: "主页 · 在线", nOff: "主页 · 关闭", nWait: "主页 · 连接中", nEmpty: "主页 · 空",
+        nList: "连接", nAdd: "添加", nPair: "电视上的二维码", nShare: "分享二维码",
+        nFile: "U 盘 / 下载", nPaste: "输入链接", nEdit: "编辑", nSet: "设置",
+        nSetR: "设置 · 路由", nLog: "日志", nAbout: "关于",
+        nConsent: "连接请求", nSys: "设置 → VPN", nBanner: "Google TV 一行",
+        pillOn: "已连接 · Home  0:12", pillOff: "未连接 · Home", pillWait: "正在连接: Home…",
+        pillEmpty: "还没有连接",
+        connect: "连接", disconnect: "断开", cancel: "取消", close: "关闭",
+        save: "保存", add: "添加", edit: "编辑", delete: "删除", share: "分享二维码",
+        remoteOn: "OK — 断开 · 返回 — 退出",
+        remoteOff: "OK — 连接 · 返回 — 退出",
+        remoteWait: "OK — 取消",
+        overlay: "Overlay IP", ext: "公网 IP",
+        conns: "连接", connsSub: "每条有自己的密钥和地址。当前只有一条。",
+        addT: "新连接", addSub: "电视没有摄像头。这个屏幕就是二维码。",
+        addQr: "在这台电视上显示二维码", addQrS: "手机扫描这个屏幕",
+        addUsb: "U 盘或下载", addUsbS: ".loft 文件",
+        addType: "输入链接", addTypeS: "遥控器上的 loft://",
+        pairT: "发到电视", pairHint: "手机：loft → 发到电视。扫这个或输入码。",
+        pairLan: "这个屏幕开着时局域网在听。返回就关掉。",
+        shareT: "分享 Home", shareHint: "把手机摄像头对准这个屏幕。链接里有访问密钥。",
+        fileT: "U 盘或下载", fileSub: "USB OTG 和下载文件夹。确认时密钥是藏着的。",
+        fileAll: "下载 · 三条连接",
+        pasteT: "输入链接", pasteSub: "Leanback 输入法，或从蓝牙键盘粘贴。",
+        editT: "Home", editSub: "完整表单在手机上。这里只有名称和方式。",
+        name: "名称", method: "方式",
+        settings: "设置", general: "常规", route: "路由", conn: "连接",
+        lang: "语言", logExt: "详细日志",
+        defRoute: "默认路由", defRouteS: "全部互联网走 loft。关 — 只走 overlay 网。",
+        lan: "绕过局域网", lanS: "RFC1918 留在以太网 / Wi-Fi。",
+        hold: "无 VPN 则无网络", holdS: "系统开关。应用不画它们。",
+        openSys: "打开 VPN 设置",
+        auto: "启动时连接", recon: "断开后重连",
+        log: "日志", about: "关于", clear: "清除",
+        aboutBlurb: "外面是普通 HTTPS。里面是自己的网络。",
+        cTitle: "连接请求",
+        cBody: "应用 loft 请求设置 VPN 连接。VPN 可以监视设备的网络流量，包括应用和网站。",
+        cOk: "确定",
+        sysCap: "系统 VPN 列表。开关是 loft 隧道，不是应用里的第二个开关。",
+        sysOn: "已连接",
+        sysHold: "Android 上的保持是这两个系统开关。",
+        always: "始终开启的 VPN",
+        block: "阻止不使用 VPN 的连接",
+        gApps: "应用", gRow: "你的应用",
+        bannerHint: "横幅 320×180。会话活着时灯亮。"
+      }
+    };
+
+    let lang = "ru";
+    let cur = "home";
+    let mode = "on";
+    let setTab = "";
+    const T = (k) => (I[lang][k] != null ? I[lang][k] : I.en[k] != null ? I.en[k] : k);
+
+    function qrSvg(seed) {
+      const n = 21;
+      let cells = "";
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          const finder = (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13);
+          const ring = finder && (x === 0 || y === 0 || x === 6 || y === 6 || x === 14 || x === 20 || y === 14 || y === 20);
+          const core = (x >= 2 && x <= 4 && y >= 2 && y <= 4) ||
+            (x >= 16 && x <= 18 && y >= 2 && y <= 4) ||
+            (x >= 2 && x <= 4 && y >= 16 && y <= 18);
+          const data = ((x * 7 + y * 13 + seed) % 5) > 1;
+          if (ring || core || (!finder && data)) {
+            cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+          }
+        }
+      }
+      return `<svg viewBox="0 0 21 21" shape-rendering="crispEdges" fill="#1A1714">${cells}</svg>`;
+    }
+
+    function railHtml(active) {
+      return RAIL.map((r) => `<button type="button" class="f ${r.id === active ? "cur" : ""}" data-go="${r.go}" title="${r.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">${r.svg}</svg>
+      </button>`).join("");
+    }
+
+    const TILE_ICONS = {
+      qr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/></svg>',
+      usb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M7 8h10v12H7zM9 8V5h6v3M10 12h4M10 16h4"/></svg>',
+      type: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 15h10M8 10h.01M12 10h.01M16 10h.01"/></svg>'
+    };
+    function tilesHtml(firstFocus) {
+      const items = [
+        { go: "pair", ic: "qr", n: "addQr", s: "addQrS", focus: firstFocus },
+        { go: "file", ic: "usb", n: "addUsb", s: "addUsbS" },
+        { go: "paste", ic: "type", n: "addType", s: "addTypeS" }
+      ];
+      return items.map((t) => `<button type="button" class="tile f" data-go="${t.go}" ${t.focus ? "data-focus" : ""}>
+        <div class="ic">${TILE_ICONS[t.ic]}</div>
+        <div class="n">${T(t.n)}</div>
+        <div class="s">${T(t.s)}</div>
+      </button>`).join("");
+    }
+    function paintSettings() {
+      const row = (k, s, tog, extra) =>
+        `<button type="button" class="srow f" ${extra || ""}><div><div>${T(k)}</div>${s ? `<div class="s">${T(s)}</div>` : ""}</div>${tog != null ? `<div class="toggle ${tog ? "on" : ""}"><i></i></div>` : ""}</button>`;
+      document.getElementById("setBody").innerHTML =
+        `<div class="grp">${T("general")}</div>` +
+        row("lang", null, null) +
+        row("logExt", null, false) +
+        `<div class="grp">${T("route")}</div>` +
+        row("defRoute", "defRouteS", true) +
+        row("lan", "lanS", true) +
+        row("hold", "holdS", null, `data-go="sysvpn"`) +
+        `<div class="grp">${T("conn")}</div>` +
+        row("auto", null, true) +
+        row("recon", null, true);
+    }
+
+    function applyI18n() {
+      document.querySelectorAll("[data-i]").forEach((el) => {
+        const k = el.getAttribute("data-i");
+        if (I[lang][k] != null || I.en[k] != null) el.textContent = T(k);
+      });
+      document.getElementById("lang-en").classList.toggle("on", lang === "en");
+      document.getElementById("lang-ru").classList.toggle("on", lang === "ru");
+      document.getElementById("lang-zh").classList.toggle("on", lang === "zh");
+      paintSettings();
+      paintHome();
+      const addTiles = document.getElementById("addTiles");
+      const homeEmpty = document.getElementById("homeEmpty");
+      if (addTiles) addTiles.innerHTML = tilesHtml(true);
+      if (homeEmpty) homeEmpty.innerHTML = tilesHtml(true);
+    }
+
+    function paintHome() {
+      const st = document.getElementById("homeSt");
+      const act = document.getElementById("homeAct");
+      const hint = document.getElementById("homeHint");
+      const live = document.getElementById("homeLive");
+      const empty = document.getElementById("homeEmpty");
+      const ips = document.getElementById("homeIps");
+      const rates = document.getElementById("homeRates");
+      const win = document.getElementById("homeWin");
+      st.classList.toggle("on", mode === "on");
+      st.classList.toggle("wait", mode === "connecting");
+      document.getElementById("homeStT").textContent =
+        mode === "empty" ? T("pillEmpty") : mode === "on" ? T("pillOn") : mode === "connecting" ? T("pillWait") : T("pillOff");
+      win.setAttribute("fill", mode === "on" ? "#E8B84A" : mode === "connecting" ? "#F3D27A" : "#8A7E72");
+      const isEmpty = mode === "empty";
+      live.classList.toggle("hidden", isEmpty);
+      empty.classList.toggle("hidden", !isEmpty);
+      if (!isEmpty) {
+        act.className = "cta f " + (mode === "on" ? "off" : mode === "connecting" ? "ghost" : "go");
+        act.setAttribute("data-focus", "");
+        act.textContent = mode === "on" ? T("disconnect") : mode === "connecting" ? T("cancel") : T("connect");
+        hint.textContent = mode === "on" ? T("remoteOn") : mode === "connecting" ? T("remoteWait") : T("remoteOff");
+        ips.style.display = mode === "on" ? "" : "none";
+        rates.style.display = mode === "on" ? "" : "none";
+        act.onclick = () => {
+          if (mode === "off") show("consent");
+          else if (mode === "connecting") show("home", { mode: "off" });
+          else show("home", { mode: "off" });
+        };
+      }
+    }
+
+    function slugOf(id, extra) {
+      extra = extra || {};
+      const p = [id];
+      if (id === "home" && extra.mode && extra.mode !== "on") p.push(extra.mode);
+      if (id === "settings" && extra.set) p.push(extra.set);
+      return p.join("-");
+    }
+
+    function show(id, extra) {
+      extra = extra || {};
+      cur = id;
+      if (extra.mode) mode = extra.mode;
+      if (id === "home" && extra.mode == null && !extra.fromHash) {
+        /* keep */
+      }
+      if (extra.set != null) setTab = extra.set;
+      if (!extra.fromHash) history.replaceState(null, "", location.pathname + location.search + "#" + slugOf(id, { mode, set: setTab }));
+      const SYS = ["consent", "sysvpn", "banner"];
+      document.getElementById("tv").classList.toggle("sys-mode", SYS.includes(id));
+      document.querySelectorAll("#tv > .screen").forEach((s) => s.classList.toggle("hidden", s.id !== id));
+      document.querySelectorAll("[data-rail]").forEach((el) => {
+        el.innerHTML = railHtml(el.getAttribute("data-rail"));
+      });
+      document.querySelectorAll("nav button[data-go]").forEach((b) => {
+        const same = b.getAttribute("data-go") === id &&
+          (b.getAttribute("data-mode") || "") === (id === "home" ? (mode === "on" ? "" : mode) : "") &&
+          (b.getAttribute("data-set") || "") === (id === "settings" ? (setTab || "") : "");
+        const homeBtn = id === "home" && b.getAttribute("data-go") === "home" && (b.getAttribute("data-mode") || "on") === mode;
+        const setBtn = id === "settings" && b.getAttribute("data-go") === "settings" && (b.getAttribute("data-set") || "") === (setTab || "");
+        const other = id !== "home" && id !== "settings" && b.getAttribute("data-go") === id;
+        b.classList.toggle("on", homeBtn || setBtn || other);
+      });
+      if (id === "home") paintHome();
+      if (id === "settings") paintSettings();
+      const pane = document.getElementById(id);
+      const vis = (sel) => [...pane.querySelectorAll(sel)].find((el) => el.offsetParent !== null);
+      const focus = vis("[data-focus]") || vis(".f");
+      if (focus) focus.focus();
+    }
+
+    function setLang(next) {
+      lang = next;
+      document.documentElement.lang = next;
+      applyI18n();
+    }
+
+    document.querySelectorAll("nav button[data-go]").forEach((b) => {
+      b.addEventListener("click", () => show(b.getAttribute("data-go"), {
+        mode: b.getAttribute("data-mode") || undefined,
+        set: b.getAttribute("data-set") || undefined
+      }));
+    });
+    document.getElementById("tv").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-go]");
+      if (!b || b.closest("nav")) return;
+      show(b.getAttribute("data-go"), { mode: b.getAttribute("data-mode") || undefined });
+    });
+    document.getElementById("methods").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      document.querySelectorAll("#methods button").forEach((x) => x.classList.toggle("on", x === b));
+    });
+
+    document.addEventListener("keydown", (e) => {
+      const keys = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Enter: "ok", Escape: "back", Backspace: "back" };
+      const k = keys[e.key];
+      if (!k) return;
+      if (e.target.matches("input") && (k === "left" || k === "right" || k === "ok")) return;
+      e.preventDefault();
+      if (k === "back") {
+        const back = { pair: "add", share: "list", file: "add", paste: "add", edit: "list", journal: "settings", about: "settings", add: "list", consent: "home", sysvpn: "settings", banner: "home", list: "home", settings: "home" };
+        if (cur === "home") return;
+        show(back[cur] || "home", cur === "consent" ? { mode: "off" } : {});
+        return;
+      }
+      const pane = document.getElementById(cur);
+      const items = [...pane.querySelectorAll(".f")].filter((el) => el.offsetParent !== null);
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement);
+      if (k === "ok") {
+        const el = document.activeElement;
+        if (el && el.matches(".f")) el.click();
+        return;
+      }
+      let next = i < 0 ? 0 : i;
+      if (k === "right" || k === "down") next = Math.min(items.length - 1, (i < 0 ? 0 : i + 1));
+      if (k === "left" || k === "up") next = Math.max(0, (i < 0 ? 0 : i - 1));
+      items[next].focus();
+    });
+
+    function fromHash() {
+      const h = decodeURIComponent(location.hash.slice(1));
+      if (!h) return false;
+      const parts = h.split("-");
+      const id = parts[0];
+      if (!document.getElementById(id)) return false;
+      const extra = { fromHash: true };
+      if (id === "home" && parts[1]) extra.mode = parts[1];
+      if (id === "settings" && parts[1]) extra.set = parts[1];
+      show(id, extra);
+      return true;
+    }
+    window.addEventListener("hashchange", fromHash);
+
+    document.getElementById("qrPair").innerHTML = qrSvg(3);
+    document.getElementById("qrShare").innerHTML = qrSvg(11);
+    applyI18n();
+    if (!fromHash()) show("home", { mode: "on", fromHash: true });
+  </script>
+</body>
+</html>

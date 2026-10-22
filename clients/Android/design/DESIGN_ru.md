@@ -4,7 +4,7 @@
 
 Приложение и `VpnService`. Марка, палитра и Avenir Next: [`brand/`](../../../docs/brand/). Интерактивный макет: [`index.html`](index.html); у каждого состояния своя ссылка, например `index.html#edit-sstp`, `#settings-route`, `#home-off` (адрес меняется по мере кликов). Протокол: [docs/protocol_ru.md](../../../docs/protocol_ru.md). URI импорта: [docs/share_ru.md](../../../docs/share_ru.md).
 
-Контейнер Java в [`../app/`](../app/). Живая сессия — Go внутри `LoftVpnService`, не `loft-front`. Тонкий хост уже вставляет YAML; этот макет — GUI, который заменит экран вставки.
+Контейнер Java в [`../app/`](../app/). Живая сессия — Go внутри `LoftVpnService`, не `loft-front`. Приложение реализует этот макет: Главная / Подключения / Правка / Скан / Настройки.
 
 ---
 
@@ -22,7 +22,7 @@ v1: именные подключения на диске, импорт/эксп
 
 Язык адаптера — **Java 17**. gomobile уже отдаёт Java; Kotlin runtime в этот процесс не грузим. Макет — HTML; живой GUI позже на Views (без Compose).
 
-Android TV / Google TV — тот же `VpnService` и AAR, flavor Leanback. Не этот макет; [план](../PLAN.md) фаза 4. VIDAA / Tizen / webOS вне рамок.
+Android TV / Google TV — тот же `VpnService` и AAR, flavor Leanback. Макет с дивана: [`tv/`](tv/). [План](../PLAN.md) фаза 4. VIDAA / Tizen / webOS вне рамок.
 
 ## 2. Экраны
 
