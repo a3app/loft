@@ -206,6 +206,45 @@ func TestMemberGet(t *testing.T) {
 	}
 }
 
+// TestMemberKeyReissueKeepsOldUntilApply is the us.iqos.help failure:
+// POST /api/members/key rewrote members.keys, a restart Filter'd by the
+// still-applied key_sha256, and the ring went to 0. The old token must
+// stay until apply prunes it.
+func TestMemberKeyReissueKeepsOldUntilApply(t *testing.T) {
+	o, _, sa, _ := setup(t)
+	old, err := o.MemberGet(admproto.MemberKey{ID: "alice-phone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := o.MemberKey(admproto.MemberKey{ID: "alice-phone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Key == old.Key {
+		t.Fatal("reissue returned the old key")
+	}
+	r, err := identity.Load(filepath.Join(o.Dir, "members.keys"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Len() != 2 || r.IDFor([]byte(old.Key)) != "alice-phone" || r.IDFor([]byte(k.Key)) != "alice-phone" {
+		t.Fatalf("disk lost the live key: len=%d old=%q new=%q", r.Len(), r.IDFor([]byte(old.Key)), r.IDFor([]byte(k.Key)))
+	}
+	r.Filter(map[string]string{"alice-phone": sa, "bob": identity.Sum(string(r.TokenFor("bob")))})
+	if r.Len() != 2 || r.IDFor([]byte(old.Key)) != "alice-phone" || r.IDFor([]byte(k.Key)) != "" {
+		t.Fatalf("reload before apply dropped alice: len=%d", r.Len())
+	}
+	cur, _ := o.NetworkGet()
+	next := strings.Replace(cur.Text, "key_sha256 "+sa, "key_sha256 "+k.KeySHA256, 1)
+	if _, err := o.NetworkApply(context.Background(), admproto.NetworkApply{Text: next, Expect: cur.SHA256}); err != nil {
+		t.Fatal(err)
+	}
+	r, _ = identity.Load(filepath.Join(o.Dir, "members.keys"))
+	if r.Len() != 2 || r.IDFor([]byte(k.Key)) != "alice-phone" || r.IDFor([]byte(old.Key)) != "" {
+		t.Fatalf("apply did not prune old: len=%d new=%q old=%q", r.Len(), r.IDFor([]byte(k.Key)), r.IDFor([]byte(old.Key)))
+	}
+}
+
 func TestNetworkFirstAndLegacy(t *testing.T) {
 	dir := t.TempDir()
 	fn := &fakeNode{active: func() string { return "active" }}

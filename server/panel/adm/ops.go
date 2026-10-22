@@ -203,8 +203,9 @@ func (o *Ops) restore(hadConf bool, conf []byte, hadKeys bool, keys []byte) erro
 	return err
 }
 
-// pruneKeys keeps members.keys entries whose member is still in n with the
-// same key_sha256. Keys of new members were added by MemberKey already.
+// pruneKeys keeps members.keys tokens whose member is still in n with the
+// same key_sha256. A reissue's old token is dropped here; a new member's
+// key was added by MemberKey already.
 func (o *Ops) pruneKeys(n *netconf.Network) error {
 	r, err := identity.Load(o.keys())
 	if err != nil {
@@ -216,9 +217,9 @@ func (o *Ops) pruneKeys(n *netconf.Network) error {
 			want[m.ID] = m.KeySHA256
 		}
 	}
-	before := r.Len()
+	beforeIDs, beforeToks := r.Len(), len(r.Tokens())
 	r.Filter(want)
-	if r.Len() == before {
+	if r.Len() == beforeIDs && len(r.Tokens()) == beforeToks {
 		return nil
 	}
 	return o.saveRing(r)
@@ -226,7 +227,9 @@ func (o *Ops) pruneKeys(n *netconf.Network) error {
 
 var memberID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
-// MemberKey creates or replaces the key of member id in members.keys.
+// MemberKey appends a fresh key for member id in members.keys. A previous
+// token for the same id stays until NetworkApply pruneKeys, so a reload
+// before apply still matches the live key_sha256.
 // network.conf is untouched until the panel applies the new key_sha256.
 func (o *Ops) MemberKey(req admproto.MemberKey) (admproto.IssuedKey, error) {
 	if !memberID.MatchString(req.ID) {

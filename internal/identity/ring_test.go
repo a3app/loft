@@ -5,6 +5,7 @@ package identity
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +56,57 @@ func TestRingMissingFile(t *testing.T) {
 	r, err := Load(filepath.Join(t.TempDir(), "nope"))
 	if err != nil || r.Len() != 0 {
 		t.Fatalf("%v len=%d", err, r.Len())
+	}
+}
+
+// TestRingReissueKeepsOldUntilFilterMatch: Put of a second token does not
+// drop the first; Filter by the old SHA keeps the member; Filter by the new
+// SHA keeps only the new token.
+func TestRingReissueKeepsOldUntilFilterMatch(t *testing.T) {
+	old, oldSHA, err := NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, freshSHA, err := NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRing()
+	r.Put("alice", old)
+	r.Put("alice", fresh)
+	if r.Len() != 1 || r.IDFor([]byte(old)) != "alice" || r.IDFor([]byte(fresh)) != "alice" {
+		t.Fatalf("both tokens for one id: len=%d old=%q new=%q", r.Len(), r.IDFor([]byte(old)), r.IDFor([]byte(fresh)))
+	}
+	if string(r.TokenFor("alice")) != fresh {
+		t.Fatalf("TokenFor want latest")
+	}
+	dir := t.TempDir()
+	p := filepath.Join(dir, "members.keys")
+	if err := r.Save(p); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(p)
+	got := string(raw)
+	if !strings.Contains(got, "alice:") || !strings.Contains(got, "- "+old) || !strings.Contains(got, "- "+fresh) {
+		t.Fatalf("save list:\n%s", raw)
+	}
+	again, err := Load(p)
+	if err != nil || again.Len() != 1 || again.IDFor([]byte(old)) != "alice" || again.IDFor([]byte(fresh)) != "alice" {
+		t.Fatalf("reload list %v len=%d", err, again.Len())
+	}
+	again.Filter(map[string]string{"alice": oldSHA})
+	if again.Len() != 1 || again.IDFor([]byte(old)) != "alice" || again.IDFor([]byte(fresh)) != "" {
+		t.Fatalf("filter old sha dropped the live key: len=%d", again.Len())
+	}
+	r.Filter(map[string]string{"alice": freshSHA})
+	if r.Len() != 1 || r.IDFor([]byte(fresh)) != "alice" || r.IDFor([]byte(old)) != "" {
+		t.Fatalf("filter new sha kept old: len=%d", r.Len())
+	}
+	if err := r.Save(p); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = os.ReadFile(p)
+	if string(raw) != "alice: "+fresh+"\n" {
+		t.Fatalf("save scalar after prune:\n%s", raw)
 	}
 }
