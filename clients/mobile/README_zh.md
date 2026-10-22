@@ -30,8 +30,9 @@ InjectPacket([]byte) error  // IP 从系统来
 PullPacket() []byte         // IP 回系统；空则 nil
 SetSink(PacketSink)         // 和 PullPacket 互斥
 NotifyPathChange()          // 系统通知 Wi-Fi ↔ LTE
-Snapshot() *Snapshot        // 也有 Status()
+Snapshot() *Snapshot        // 也有 Status()；IP/IP6、Prefix/Prefix6、Routes、FrontIPs
 ParseShare(s) (yaml, error) // loft://, sstp://, vless://, trojan://, YAML, .loft, .vpn
+ParseShareAll(s) (yaml, error) // 同样，每条连接用 --- 拼接
 ```
 
 整条隧道里不要跑 `WatchPath`（出口会变成覆盖网）。系统适配器调用 `NotifyPathChange`。loft 换路用新的 `0x02` 和同一个 `instance_id`。SSTP/VLESS/Trojan 重拨；IPCP 可能发新 IP，适配器再套一遍隧道设置。

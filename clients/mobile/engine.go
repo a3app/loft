@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,14 +24,19 @@ const (
 	loftMTU   = 1280
 )
 
-// Snapshot is gomobile-friendly session state. DNS and FrontIPs are comma-separated.
+// Snapshot is gomobile-friendly session state. DNS, FrontIPs, and Routes are comma-separated.
 type Snapshot struct {
 	Kind       string
 	IP         string
 	Gateway    string
+	IP6        string
+	Gateway6   string
+	Prefix     int
+	Prefix6    int
 	MTU        int
 	DNS        string
 	FrontIPs   string
+	Routes     string
 	BytesUp    int64
 	BytesDown  int64
 	State      string
@@ -254,8 +260,10 @@ func (e *Engine) Snapshot() *Snapshot {
 	tc := e.trojan
 	kind := e.kind
 	e.mu.Unlock()
-	s.IP = transport.OverlayIP()
+	s.IP, s.Prefix = splitPrefix(transport.OverlayIP(), 24)
 	s.Gateway = transport.OverlayGateway()
+	s.IP6, s.Prefix6 = splitPrefix(transport.OverlayIPv6(), 64)
+	s.Routes = joinComma(transport.OverlayRoutes())
 	if dns := transport.OverlayDNS(); len(dns) > 0 {
 		s.DNS = joinComma(dns)
 	}
@@ -382,6 +390,7 @@ func (e *Engine) runLoft(ctx context.Context, cfg *config.ClientConfig, pipe *pa
 		e.err = ""
 		e.mu.Unlock()
 	})
+	e.endRun(ctx, err)
 	signal(err)
 }
 
@@ -414,6 +423,7 @@ func (e *Engine) runSSTP(ctx context.Context, cfg *config.ClientConfig, extra fi
 		if delay > 0 {
 			select {
 			case <-ctx.Done():
+				e.endRun(ctx, ctx.Err())
 				signal(ctx.Err())
 				return
 			case <-path:
@@ -467,6 +477,7 @@ func (e *Engine) runSSTP(ctx context.Context, cfg *config.ClientConfig, extra fi
 		}
 		e.mu.Unlock()
 		if ctx.Err() != nil {
+			e.endRun(ctx, ctx.Err())
 			return
 		}
 		delay = 200 * time.Millisecond
@@ -591,6 +602,7 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 		select {
 		case <-ctx.Done():
 			_ = cli.Close()
+			e.endRun(ctx, ctx.Err())
 			return
 		case <-path:
 			_ = cli.Close()
@@ -605,6 +617,7 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 		}
 		e.mu.Unlock()
 		if ctx.Err() != nil {
+			e.endRun(ctx, ctx.Err())
 			return
 		}
 		delay = 200 * time.Millisecond
@@ -685,6 +698,7 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 		select {
 		case <-ctx.Done():
 			_ = cli.Close()
+			e.endRun(ctx, ctx.Err())
 			return
 		case <-path:
 			_ = cli.Close()
@@ -699,6 +713,7 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 		}
 		e.mu.Unlock()
 		if ctx.Err() != nil {
+			e.endRun(ctx, ctx.Err())
 			return
 		}
 		delay = 200 * time.Millisecond
@@ -716,4 +731,35 @@ func firstOutbound(cfg *config.ClientConfig, typ string) (config.Outbound, bool)
 		}
 	}
 	return config.Outbound{}, false
+}
+
+func (e *Engine) endRun(ctx context.Context, err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.state == "idle" || e.state == "stopped" {
+		return
+	}
+	if ctx != nil && ctx.Err() != nil {
+		e.state = "stopped"
+		return
+	}
+	e.state = "error"
+	if err != nil {
+		e.err = err.Error()
+	}
+}
+
+func splitPrefix(raw string, def int) (string, int) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return "", def
+	}
+	if ip, n, err := net.ParseCIDR(s); err == nil {
+		ones, _ := n.Mask.Size()
+		if ones <= 0 {
+			ones = def
+		}
+		return ip.String(), ones
+	}
+	return s, def
 }

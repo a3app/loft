@@ -30,8 +30,9 @@ InjectPacket([]byte) error  // IP от OS
 PullPacket() []byte         // IP в OS; nil если пусто
 SetSink(PacketSink)         // вместо PullPacket
 NotifyPathChange()          // Wi-Fi ↔ LTE от OS
-Snapshot() *Snapshot        // также Status()
+Snapshot() *Snapshot        // также Status(); IP/IP6, Prefix/Prefix6, Routes, FrontIPs
 ParseShare(s) (yaml, error) // loft://, sstp://, vless://, trojan://, YAML, .loft, .vpn
+ParseShareAll(s) (yaml, error) // то же, каждое подключение через ---
 ```
 
 `WatchPath` внутри полного туннеля не запускать (egress стал бы оверлеем). Адаптер OS вызывает `NotifyPathChange`. Смена пути loft — свежий `0x02` и тот же `instance_id`. SSTP/VLESS/Trojan — повторный набор; IPCP может выдать новый IP, адаптер OS заново ставит настройки туннеля.

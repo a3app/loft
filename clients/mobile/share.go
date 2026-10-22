@@ -22,16 +22,38 @@ var loftTypes = map[string]bool{
 }
 
 // ParseShare turns a QR / paste / file body into client YAML (docs/share.md).
+// A .loft with several connections yields the first; use ParseShareAll for every one.
 func ParseShare(raw string) (string, error) {
+	docs, err := parseAll(raw)
+	if err != nil {
+		return "", err
+	}
+	return docs[0], nil
+}
+
+// ParseShareAll returns every connection as YAML documents joined by "\n---\n".
+func ParseShareAll(raw string) (string, error) {
+	docs, err := parseAll(raw)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(docs, "\n---\n"), nil
+}
+
+func parseAll(raw string) ([]string, error) {
 	s := strings.TrimSpace(strings.TrimPrefix(raw, "\ufeff"))
 	if s == "" {
-		return "", fmt.Errorf("empty")
+		return nil, fmt.Errorf("empty")
+	}
+	if docs := yamlConnections(s); len(docs) > 0 {
+		return docs, nil
 	}
 	if y, err := parseOne(s); err == nil {
-		return y, nil
+		return []string{y}, nil
 	}
 	lines := strings.Split(s, "\n")
 	if len(lines) > 1 {
+		var out []string
 		var last error
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
@@ -39,19 +61,46 @@ func ParseShare(raw string) (string, error) {
 				continue
 			}
 			y, err := parseOne(line)
-			if err == nil {
-				return y, nil
+			if err != nil {
+				last = err
+				continue
 			}
-			last = err
+			out = append(out, y)
+		}
+		if len(out) > 0 {
+			return out, nil
 		}
 		if last != nil {
-			return "", last
+			return nil, last
 		}
 	}
 	if decoded := unwrapBase64(s); decoded != "" {
-		return ParseShare(decoded)
+		return parseAll(decoded)
 	}
-	return "", fmt.Errorf("unknown share")
+	return nil, fmt.Errorf("unknown share")
+}
+
+func yamlConnections(s string) []string {
+	var f fileYAML
+	if err := yaml.Unmarshal([]byte(s), &f); err != nil {
+		return nil
+	}
+	if len(f.Connections) == 0 {
+		return nil
+	}
+	var out []string
+	for i := range f.Connections {
+		b, err := yaml.Marshal(&f.Connections[i])
+		if err != nil {
+			return nil
+		}
+		y, err := yamlFile(string(b))
+		if err != nil {
+			return nil
+		}
+		out = append(out, y)
+	}
+	return out
 }
 
 func parseOne(s string) (string, error) {

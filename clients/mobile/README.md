@@ -30,8 +30,9 @@ InjectPacket([]byte) error  // IP from the OS
 PullPacket() []byte         // IP to the OS; nil if empty
 SetSink(PacketSink)         // exclusive with PullPacket
 NotifyPathChange()          // Wi-Fi ↔ LTE from the OS
-Snapshot() *Snapshot        // also Status()
+Snapshot() *Snapshot        // also Status(); IP/IP6, Prefix/Prefix6, Routes, FrontIPs
 ParseShare(s) (yaml, error) // loft://, sstp://, vless://, trojan://, YAML, .loft, .vpn
+ParseShareAll(s) (yaml, error) // same, every connection joined by ---
 ```
 
 `WatchPath` is not used inside a full tunnel (egress would be the overlay). The OS adapter calls `NotifyPathChange`. loft path change uses a fresh `0x02` and the same `instance_id`. SSTP/VLESS/Trojan redial; IPCP may issue a new IP and the OS adapter reapplies tunnel settings.

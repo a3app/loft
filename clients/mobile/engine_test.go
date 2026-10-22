@@ -23,6 +23,25 @@ func TestStartInvalidYAML(t *testing.T) {
 	}
 }
 
+func TestSnapshotPrefixDefaults(t *testing.T) {
+	e := NewEngine()
+	s := e.Snapshot()
+	if s.Prefix != 24 || s.Prefix6 != 64 {
+		t.Fatalf("prefix %d %d", s.Prefix, s.Prefix6)
+	}
+	if s.IP != "" || s.IP6 != "" {
+		t.Fatalf("ips %q %q", s.IP, s.IP6)
+	}
+	addr, p := splitPrefix("10.8.0.2/16", 24)
+	if addr != "10.8.0.2" || p != 16 {
+		t.Fatalf("%s %d", addr, p)
+	}
+	addr, p = splitPrefix("2001:db8::1", 64)
+	if addr != "2001:db8::1" || p != 64 {
+		t.Fatalf("%s %d", addr, p)
+	}
+}
+
 func TestStopNeverStarted(t *testing.T) {
 	e := NewEngine()
 	e.Stop()

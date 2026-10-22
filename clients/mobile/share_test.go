@@ -198,6 +198,49 @@ func TestParseShareBundle(t *testing.T) {
 	}
 }
 
+func TestParseShareAllBundle(t *testing.T) {
+	raw := `connections:
+  - name: Home
+    kind: loft
+    token: lt_home
+    outbounds:
+      - name: cdn
+        type: get
+        url: https://cdn.example.com
+        path: /static/v3/build
+  - name: Office
+    kind: sstp
+    username: alice
+    password: secret
+    outbounds:
+      - name: Office
+        type: sstp
+        url: https://vpn.example.com
+  - name: Lab
+    kind: loft
+    token: lt_lab
+    outbounds:
+      - name: l3
+        type: l3
+        url: https://edge.example.com
+`
+	all, err := ParseShareAll(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs := strings.Split(all, "\n---\n")
+	if len(docs) != 3 {
+		t.Fatalf("docs %d\n%s", len(docs), all)
+	}
+	cfg, _, err := decodeFile([]byte(docs[2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Token != "lt_lab" || primaryType(cfg) != "l3" {
+		t.Fatalf("token=%q kind=%q", cfg.Token, primaryType(cfg))
+	}
+}
+
 func TestParseShareYAML(t *testing.T) {
 	raw := "token: lt_x\nselect: auto\noutbounds:\n  - name: a\n    type: ws\n    url: wss://edge.example.com/ws\n"
 	y, err := ParseShare(raw)
