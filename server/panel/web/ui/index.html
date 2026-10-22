@@ -42,6 +42,10 @@ button{font:inherit}
 .hdr-ic{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--lamp);cursor:pointer}
 .hdr-ic:hover{background:var(--menu-hover)}
 .hdr-pill{min-height:36px;padding:0 12px;border:1px solid #3A332C;border-radius:4px;background:transparent;color:var(--snow);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+.hdr-ctl{position:relative}
+.umenu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:200px;padding:6px 0;background:var(--menu);border:1px solid #3A332C;border-radius:6px;box-shadow:0 12px 28px rgba(0,0,0,.35)}
+.umenu a,.umenu button{display:block;width:100%;padding:10px 16px;border:0;background:none;color:var(--snow);font:inherit;font-size:14px;text-align:left;text-decoration:none;cursor:pointer}
+.umenu a:hover,.umenu button:hover{background:var(--menu-hover)}
 select.hdr-pill{color-scheme:dark;padding-right:8px}
 
 .body{flex:1 1 auto;min-height:0;display:flex;position:relative}
@@ -429,6 +433,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
   <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></symbol><symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17.4 17.4 0 0 1-2.9 3.9M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></symbol>
   <symbol id="i-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></symbol>
 </svg>
 
@@ -443,7 +448,8 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
       <button class="hdr-ic" type="button" aria-label="Поиск по панели"><svg width="22" height="22"><use href="#i-search"/></svg></button>
       <label for="hLang" style="position:absolute;left:-9999px">Язык</label>
       <select class="hdr-pill" id="hLang"><option value="en">EN</option><option value="ru">RU</option><option value="zh">中文</option></select>
-      <button class="hdr-pill" type="button" title="Выйти" onclick="go('login')">admin · владелец</button>
+      <button class="hdr-pill" id="userBtn" type="button" aria-haspopup="menu" aria-expanded="false" onclick="userMenu()">admin · владелец</button>
+      <div class="umenu" id="umenu" role="menu" hidden><a role="menuitem" href="#me" onclick="userMenu(false)">Личный кабинет</a><button role="menuitem" type="button" onclick="goOut()">Выйти</button></div>
     </div>
   </header>
   <div class="body">
@@ -457,7 +463,8 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
           <select id="mLang"><option value="en">English</option><option value="ru">Русский</option><option value="zh">中文</option></select>
           <span style="margin-left:auto"></span>
           <button class="hdr-ic" type="button" aria-label="Помощь"><svg width="20" height="20"><use href="#i-help"/></svg></button>
-          <button class="hdr-ic" type="button" aria-label="Выйти" onclick="go('login')"><svg width="20" height="20"><use href="#i-out"/></svg></button>
+          <button class="hdr-ic" type="button" aria-label="Личный кабинет" onclick="go('me')"><svg width="20" height="20"><use href="#i-user"/></svg></button>
+          <button class="hdr-ic" type="button" aria-label="Выйти" onclick="goOut()"><svg width="20" height="20"><use href="#i-out"/></svg></button>
         </div>
       </div>
     </nav>
@@ -1798,6 +1805,22 @@ function renderFoot(){
   $('#foot').innerHTML=`<div class="foot-copy"><button class="foot-about" type="button" title="О loft panel" onclick="go('about')">Работает на loft-panel ${S.ver||'dev'}</button><div class="madeby" translate="no">Made with love ${HEART} by A<sup>3</sup></div></div>`;
 }
 const OSS=[['Go','язык и среда выполнения'],['nginx','веб-сервер за нодой'],['Xray-core','серверы и клиенты VLESS, Trojan, Shadowsocks'],['WireGuard · AmneziaWG','каналы WireGuard'],['OpenVPN','каналы по файлу .ovpn'],['ZeroTier','подключение к сетям ZeroTier'],['quic-go','QUIC и HTTP/3'],['uTLS','отпечаток TLS как у браузера'],['gVisor','сетевой стек в пространстве пользователя'],['Postfix · Dovecot · OpenDKIM','почта: отправка, приём, подпись'],['Rspamd','фильтр спама'],['Roundcube','веб-почта в браузере'],['nftables · fail2ban','защита от сканеров и перебора паролей'],['Let’s Encrypt','бесплатные сертификаты TLS']];
+function userMenu(v){const m=$('#umenu'),on=v===undefined?m.hidden:v;m.hidden=!on;$('#userBtn').setAttribute('aria-expanded',on)}
+document.addEventListener('click',e=>{if(!e.target.closest('#userBtn,#umenu'))userMenu(false)});
+function goOut(){go('login')}
+const RIGHT=['нет','смотрит','меняет'];
+/* #me: the signed-in user's own sign-in */
+V.me=()=>pageHead('Личный кабинет','Ваш вход в панель: права роли, пароль, API-токен и сессии.')+
+ blk('Профиль','',`<dl class="kv"><div><dt>Логин</dt><dd class="mono">admin</dd></div><div><dt>Роль</dt><dd>Владелец</dd></div><div><dt>Последний вход</dt><dd>сейчас</dd></div></dl>
+  <details class="adv" style="margin-top:12px"><summary>Права роли</summary>${table(['Раздел','Доступ'],MENU.flatMap(g=>g.items).map(([k,t])=>`<tr><td>${t}</td><td>${RIGHT[2]}</td></tr>`).join(''))}</details>`)+
+ blk('Пароль','После смены остальные ваши сессии завершатся.',`<button class="btn" type="button" onclick="openMyPw()">Сменить пароль</button>`)+
+ blk('API-токен','Для скриптов и интеграций: заголовок Authorization: Bearer …. Права — как у вашей роли.',`<div class="uri" style="margin-bottom:16px">lpt_…a91c · выпущен 12.10.2026 · последний раз 2 ч назад</div><div class="acts"><button class="btn" type="button" onclick="toast('Токен выпущен')">Перевыпустить</button><button class="btn danger" type="button" onclick="toast('Токен отозван')">Отозвать</button></div>`)+
+ blk('Сессии','Где вы сейчас вошли в панель.',`<div class="acts"><button class="btn" type="button" onclick="toast('Остальные сессии завершены')">Завершить остальные</button><button class="btn" type="button" onclick="goOut()">${ic('i-out',18)}Выйти</button></div>`+
+  table(['Устройство','IP','Вход','Активность',{t:'',r:1}],[['Chrome · macOS','198.51.100.20','12.10 09:14','сейчас',1],['Safari · iPhone','198.51.100.31','11.10 21:02','3 ч назад',0]].map(r=>`<tr><td>${r[0]}${r[4]?' <span class="mute">(это устройство)</span>':''}</td><td class="mono">${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td class="r">${r[4]?'':`<button class="btn sm" type="button" onclick="toast('Сессия завершена')">Завершить</button>`}</td></tr>`).join('')));
+function openMyPw(){dialog('Сменить пароль','Остальные ваши сессии завершатся.',`
+  <div class="fld"><label for="me1">Текущий пароль</label><input id="me1" type="password" autocomplete="current-password"></div>
+  <div><div class="fld"><label for="me2">Новый пароль</label><input id="me2" type="password" autocomplete="new-password" data-pw-min="9"></div><div class="hint" data-pw-hint>Не короче 9 знаков.</div></div>`,
+  `<button class="btn pri" type="button" onclick="if(pwCheck($('#dlgRoot'),true)){closeDlg();toast('Пароль изменён')}else toast('Проверьте пароль')">Сменить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 V.about=()=>pageHead('О loft panel','')+`<div class="card"><div class="about">
   <p>loft panel ведёт сервер loft: ставит и запускает ноду и нужные пакеты, держит сеть loft и её участников, внешние каналы и правила выхода, домены, сертификаты и почту, пользователей панели и резервные копии.</p>
   <h3>Разработчик</h3>
@@ -1815,7 +1838,7 @@ function render(){
   renderFoot();
   const pd=$('#pd'),mb=$('.more');if(pd&&mb)mb.classList.toggle('need',pd.scrollHeight>pd.clientHeight+1);
   const title=MENU.flatMap(g=>g.items).find(i=>i[0]===S.route);
-  document.title=(title?title[1]+' · ':S.route==='about'?'О loft panel · ':'')+'loft-panel';
+  document.title=(title?title[1]+' · ':S.route==='about'?'О loft panel · ':S.route==='me'?'Личный кабинет · ':'')+'loft-panel';
   pwEnhance($('#page'));
 }
 function go(r){location.hash=r}
@@ -1824,7 +1847,7 @@ function setRoute(){const [r,...a]=location.hash.slice(1).split('/');S.route=r||
 window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();render();$('#main').scrollTop=0});
 $('#menuBtn').onclick=()=>setOpen(!S.open);
 $('#foldBtn').onclick=()=>{S.rail=!S.rail;try{localStorage.setItem('lp-rail',S.rail?'1':'0')}catch(e){}renderMenu()};
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){userMenu(false);if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
 setRoute();
 render();
 </script>

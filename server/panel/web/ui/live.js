@@ -153,6 +153,7 @@
     [/^sign in$/, () => 'Войдите снова'],
     [/^the provider refused the token$/, () => 'Провайдер не принял токен'],
     [/^the provider answered HTTP (\d+): (.*)$/, m => `Провайдер ответил HTTP ${m[1]}: ${m[2]}`],
+    [/^the current password is wrong$/, () => 'Текущий пароль неверен'],
     [/^access check failed: (.*)$/, m => `Доступ не проверен: ${ru(m[1])}`],
     [/^Namecheap: the API user and key do not match, or API access is off .*$/, () => 'Namecheap: пользователь API и ключ не подходят друг к другу или API выключен (Profile → Tools → API Access). Пользователь — имя аккаунта, не e-mail'],
     [/^zone (\S+) is not in this Cloudflare account$/, m => `Зоны ${m[1]} нет в этом аккаунте Cloudflare`],
@@ -267,6 +268,7 @@
     window.renderMenu = renderMenuLive;
     V.mail = mailView;
     V.system = systemView;
+    V.me = meView;
     window.pkgOn = n => !!(L.pk && L.pk.packages.some(p => PT[p.key] === n && p.installed));
     window.openPicker = () => { if (L.pk) { L.P.pick = null; L.P.q = ''; picker(); } };
     for (const k of Object.keys(EXTRA)) delete EXTRA[k];
@@ -325,7 +327,7 @@
   async function signedIn(me, st) {
     L.me = me; L.csrf = me.csrf; L.pk = null;
     loadPackages().then(() => { if (S.route !== 'packages') render(); }); // the menu shows Mail only with the mail server
-    $('.hdr-ctl .hdr-pill:last-child').textContent = me.login + ' · ' + ({ owner: 'владелец', operator: 'оператор', viewer: 'наблюдатель' }[me.role] || me.role_name || me.role);
+    $('#userBtn').textContent = me.login + ' · ' + ({ owner: 'владелец', operator: 'оператор', viewer: 'наблюдатель' }[me.role] || me.role_name || me.role);
     await loadData();
     if (me.role === 'owner' && (st ? st.wizard : !(L.wz && L.wz.done))) {
       // Resume at the first step not done yet (names, certificate, member).
@@ -344,6 +346,7 @@
     try { await api('POST', '/api/logout', {}); } catch (e) { /* already out */ }
     location.replace('#login'); location.reload();
   };
+  window.goOut = window.goLogout;
   document.querySelectorAll('[onclick="go(\'login\')"]').forEach(b => b.setAttribute('onclick', 'goLogout()'));
 
   /* ── data ── */
@@ -482,6 +485,7 @@
     if (['#members', '#segments', '#main', ''].includes(location.hash) && L.me) loadPresence().then(() => render());
     if (location.hash === '#system' && L.me && L.sy) loadSystem().then(() => { if (S.route === 'system') render(); });
     if (location.hash === '#mail' && L.me && L.ml) loadMail().then(() => Promise.all([loadMailDNS(), loadMailStats()])).then(() => { if (S.route === 'mail') render(); });
+    if (S.route === 'me' && L.me) { L.my = null; render(); }
     if (location.hash === '#users' && L.me) { L.sess = L.log = null; loadUsers().then(() => { if (S.route === 'users') render(); }); }
     if (location.hash === '#settings' && L.me && L.can('settings', 1)) loadSettings().then(() => { if (S.route === 'settings') render(); });
   });
@@ -1299,6 +1303,43 @@
   };
   const opText = x => (OPS[x.op] || x.op) + (x.target ? ' ' + x.target : '');
 
+  /* ── #me: own profile, password, API token, sessions ── */
+  L.my = null;
+  const RIGHT = ['нет', 'смотрит', 'меняет'];
+  function meView() {
+    if (!L.my) { api('GET', '/api/me').then(r => { L.my = r; if (S.route === 'me') render(); }, e => toast(e.message)); return pageHead('Личный кабинет', '') + '<p class="mute">Загружаю…</p>'; }
+    const M = L.my, me = M.me, tk = M.token;
+    return pageHead('Личный кабинет', 'Ваш вход в панель: права роли, пароль, API-токен и сессии.') +
+      blk('Профиль', '', `<dl class="kv"><div><dt>Логин</dt><dd class="mono">${esc(me.login)}</dd></div>${me.name ? `<div><dt>Имя</dt><dd>${esc(me.name)}</dd></div>` : ''}<div><dt>Роль</dt><dd>${esc(ROLE_RU[me.role] || me.role_name || me.role)}</dd></div><div><dt>Последний вход</dt><dd>${agoT(M.seen)}</dd></div></dl>
+        <details class="adv" style="margin-top:12px"><summary>Права роли</summary>${table(['Раздел', 'Доступ'], Object.keys(AREA_RU).map(a => `<tr><td>${AREA_RU[a]}</td><td>${RIGHT[me.perms[a] || 0]}</td></tr>`).join(''))}</details>`) +
+      blk('Пароль', 'После смены остальные ваши сессии завершатся.', `<button class="btn" type="button" onclick="LIVE.openMyPw()">Сменить пароль</button>`) +
+      blk('API-токен', 'Для скриптов и интеграций: заголовок Authorization: Bearer …. Права — как у вашей роли.', tk
+        ? `<div class="uri" style="margin-bottom:16px">lpt_…${esc(tk.tail)} · выпущен ${when2(tk.issued)} · последний раз ${agoT(tk.used)}</div><div class="acts"><button class="btn" type="button" onclick="LIVE.myTok(false)">Перевыпустить</button><button class="btn danger" type="button" onclick="LIVE.myTok(true)">Отозвать</button></div>`
+        : `<p class="hint" style="margin:0 0 16px">Токена нет.</p><button class="btn" type="button" onclick="LIVE.myTok(false)">Выпустить токен</button>`) +
+      blk('Сессии', 'Где вы сейчас вошли в панель.', `<div class="acts">${M.sessions.length > 1 ? `<button class="btn" type="button" onclick="LIVE.myEnd('')">Завершить остальные</button>` : ''}<button class="btn" type="button" onclick="goOut()">${ic('i-out', 18)}Выйти</button></div>` +
+        table(['Устройство', 'IP', 'Вход', 'Активность', { t: '', r: 1 }], M.sessions.sort((a, b) => new Date(b.seen) - new Date(a.seen)).map(x => `<tr><td>${esc(device(x.agent))}${x.me ? ' <span class="mute">(это устройство)</span>' : ''}</td><td class="mono">${esc(x.ip)}</td><td>${when2(x.created)}</td><td>${agoT(x.seen)}</td><td class="r">${x.me ? '' : `<button class="btn sm" type="button" onclick="LIVE.myEnd('${esc(x.key)}')">Завершить</button>`}</td></tr>`).join('') || `<tr><td colspan="5" class="mute">Вход по API-токену: сессий нет.</td></tr>`));
+  }
+  const reMe = async () => { try { L.my = await api('GET', '/api/me'); } catch (e) { /* 401 goes to sign-in */ } render(); };
+  L.openMyPw = () => dialog('Сменить пароль', 'Остальные ваши сессии завершатся.', `
+      <div class="fld"><label for="me1">Текущий пароль</label><input id="me1" type="password" autocomplete="current-password"></div>
+      <div><div class="fld"><label for="me2">Новый пароль</label><input id="me2" type="password" autocomplete="new-password" data-pw-min="9"></div><div class="hint" data-pw-hint>Не короче 9 знаков.</div></div>`,
+    `<button class="btn pri" type="button" onclick="LIVE.myPw()">Сменить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  L.myPw = once(async () => {
+    if (!pwCheck($('#dlgRoot'), true)) { toast('Проверьте пароль'); return; }
+    try { await api('POST', '/api/me/password', { current: $('#me1').value, password: $('#me2').value }); closeDlg(); toast('Пароль изменён'); await reMe(); } catch (e) { toast(e.message); }
+  });
+  L.myTok = once(async revoke => {
+    try {
+      const r = await api('POST', '/api/me/token', { revoke });
+      await reMe();
+      if (revoke) toast('Токен отозван');
+      else dialog('Ваш API-токен', 'Показан один раз. Передавайте в заголовке Authorization: Bearer ….', `<div class="uri" id="tokv">${esc(r.token)}</div><div class="acts" style="margin:0"><button class="btn sm pri" type="button" onclick="LIVE.copy('#tokv')">Копировать токен</button></div>`, `<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`);
+    } catch (e) { toast(e.message); }
+  });
+  L.myEnd = once(async key => {
+    try { await api('POST', '/api/me/sessions/end', key ? { key } : { others: true }); toast(key ? 'Сессия завершена' : 'Остальные сессии завершены'); } catch (e) { toast(e.message); }
+    await reMe();
+  });
   L.openUser = login => {
     const nw = !login, u = nw ? { login: '', name: '', role: 'viewer' } : L.us.users.find(x => x.login === login), own = L.can('users');
     const owners = L.us.users.filter(x => x.role === 'owner' && !x.disabled).length, lastOwner = u.role === 'owner' && owners < 2;
@@ -2335,7 +2376,7 @@
         const me = await api('POST', '/api/setup', owner)
           ;
         L.me = me; L.csrf = me.csrf;
-        $('.hdr-ctl .hdr-pill:last-child').textContent = me.login + ' · владелец';
+        $('#userBtn').textContent = me.login + ' · владелец';
         try { await api('POST', '/api/settings/panel', { session_idle: '30m', session_max: '7d', lang }); } catch (e) { /* language stays in this browser */ }
         await loadData();
         S.wz.step = 2;
