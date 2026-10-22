@@ -11,12 +11,14 @@ import android.net.ConnectivityManager;
 import android.net.IpPrefix;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.net.InetAddress;
@@ -87,12 +89,18 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
 
     @Override
     public void onDestroy() {
+        String err = Live.err;
+        boolean keep = "error".equals(Live.state) || fatalErr(err);
         stopping.set(true);
         unwatchPath();
         stopSession();
         go.shutdownNow();
         running = false;
         Live.reset();
+        if (keep && err != null && !err.isEmpty()) {
+            Live.state = "error";
+            Live.err = err;
+        }
         Bus.post();
         super.onDestroy();
     }
@@ -116,13 +124,20 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         Live.name = p.name;
         Live.kind = p.kind;
         Live.state = "connecting";
+        Live.err = "";
         running = true;
         Bus.post();
-        Journal.add("front " + p.side() + " " + p.host());
+        String path = p.path == null ? "" : p.path.trim();
+        if (p.isLoft() && "get".equalsIgnoreCase(p.kind) && path.isEmpty()) {
+            path = "(default)";
+        }
+        Journal.add("front " + p.side() + " " + p.host() + (path.isEmpty() ? "" : " " + path));
+        watchPath();
         try {
             Engine eng = new Engine();
             eng.setProtector(this);
             eng.setSink(this);
+            eng.setInstanceFile(new File(getFilesDir(), "instance").getAbsolutePath());
             eng.start(yaml);
             engine = eng;
             Snapshot snap = eng.snapshot();
@@ -131,7 +146,6 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 fail("no overlay address");
                 return;
             }
-            watchPath();
             tick();
             retries = 0;
             Journal.add("up " + Live.ip + (Live.ip6.isEmpty() ? "" : " " + Live.ip6));
@@ -146,7 +160,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         Journal.add("error " + Live.err);
         Bus.post();
         updateNote();
-        if (!stopping.get() && Prefs.reconnect(this) && retries < 8) {
+        if (!stopping.get() && Prefs.reconnect(this) && retries < 8 && !fatalErr(Live.err)) {
             retries++;
             main.postDelayed(() -> {
                 if (!stopping.get()) {
@@ -191,8 +205,6 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             if (Build.VERSION.SDK_INT >= 33) {
                 b.allowFamily(android.system.OsConstants.AF_INET6);
             }
-        } else if (Prefs.defaultRoute(this) && Build.VERSION.SDK_INT >= 33) {
-            b.allowFamily(android.system.OsConstants.AF_INET6);
         }
         if (snap.getDNS() != null) {
             for (String s : snap.getDNS().split(",")) {
@@ -343,6 +355,9 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         pathCb = new ConnectivityManager.NetworkCallback() {
             @Override
             public void onAvailable(Network network) {
+                if (isVPN(cm, network)) {
+                    return;
+                }
                 underlying = network;
                 Live.underlying = label(cm, network);
                 try {
@@ -383,9 +398,24 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             }
         };
         try {
-            cm.registerDefaultNetworkCallback(pathCb);
+            // Default network after establish() is the VPN itself. Asking
+            // for NOT_VPN keeps GET sockets on Wi-Fi / LTE / Ethernet.
+            NetworkRequest req = new NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                    .build();
+            cm.registerNetworkCallback(req, pathCb);
         } catch (Exception e) {
             Journal.add("path watch " + e.getMessage());
+        }
+    }
+
+    private static boolean isVPN(ConnectivityManager cm, Network n) {
+        try {
+            NetworkCapabilities c = cm.getNetworkCapabilities(n);
+            return c != null && c.hasTransport(NetworkCapabilities.TRANSPORT_VPN);
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -438,7 +468,18 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
 
     @Override
     public boolean protect(long fd) {
-        return protect((int) fd);
+        boolean ok = protect((int) fd);
+        if (ok) {
+            return true;
+        }
+        // Handshake runs before Builder.establish(). A false here would
+        // fail every dial and surface as Engine "timeout".
+        if (tun == null) {
+            Journal.add("protect skipped fd=" + fd);
+            return true;
+        }
+        Journal.add("protect failed fd=" + fd);
+        return false;
     }
 
     private void stopSession() {
@@ -538,6 +579,17 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 .setOngoing(true)
                 .addAction(0, getString(R.string.disconnect), stop)
                 .build();
+    }
+
+    private static boolean fatalErr(String msg) {
+        if (msg == null || msg.isEmpty()) {
+            return false;
+        }
+        String s = msg.toLowerCase();
+        return s.contains("auth_bad_key") || s.contains("auth_revoked")
+                || s.contains("auth_expired") || s.contains("auth_not_authorized")
+                || s.contains("auth_clock") || s.contains("auth_instance")
+                || s.contains("net_disabled");
     }
 
     private static String nz(String s) {

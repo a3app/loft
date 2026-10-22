@@ -20,10 +20,14 @@
         android:textSize="12sp" />
 
     <LinearLayout
+        android:id="@+id/body"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginLeft="12dp"
         android:layout_weight="1"
+        android:background="?android:attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
         android:orientation="vertical">
 
         <TextView

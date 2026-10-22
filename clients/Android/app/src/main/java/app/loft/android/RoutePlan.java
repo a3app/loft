@@ -37,10 +37,16 @@ final class RoutePlan {
         List<Cidr> v6 = new ArrayList<>();
         if (def) {
             v4.add(Cidr.parse("0.0.0.0/0"));
-            v6.add(Cidr.parse("::/0"));
             if (lan) {
                 v4 = Cidr.subtractAll(v4, Cidr.rfc1918());
-                v6 = Cidr.subtractAll(v6, Cidr.rfc4193());
+            }
+            // gVisor inbound is IPv4-only. ::/0 without overlay6 blackholes
+            // Happy Eyeballs in the browser.
+            if (p.overlay6 != null) {
+                v6.add(Cidr.parse("::/0"));
+                if (lan) {
+                    v6 = Cidr.subtractAll(v6, Cidr.rfc4193());
+                }
             }
         }
         if (p.overlay4 != null) {

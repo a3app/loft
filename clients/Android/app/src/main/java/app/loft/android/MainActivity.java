@@ -85,39 +85,7 @@ public final class MainActivity extends AppCompatActivity implements Bus.Listene
             }
         });
         list.setOnItemLongClickListener((p, v, pos, id) -> {
-            Profile pr = adapter.getItem(pos);
-            if (pr == null) {
-                return true;
-            }
-            new AlertDialog.Builder(this)
-                    .setItems(new CharSequence[]{
-                            getString(R.string.edit),
-                            getString(R.string.share),
-                            getString(R.string.export),
-                            getString(R.string.delete)
-                    }, (d, w) -> {
-                        if (w == 0) {
-                            startActivity(new Intent(this, EditActivity.class).putExtra("id", pr.id));
-                        } else if (w == 1) {
-                            startActivity(new Intent(this, ShareQrActivity.class).putExtra("id", pr.id));
-                        } else if (w == 2) {
-                            Intent i = new Intent(Intent.ACTION_SEND);
-                            i.setType("text/plain");
-                            i.putExtra(Intent.EXTRA_TEXT, pr.sessionYaml());
-                            i.putExtra(Intent.EXTRA_SUBJECT, pr.name + ".loft");
-                            startActivity(Intent.createChooser(i, getString(R.string.export)));
-                        } else {
-                            new AlertDialog.Builder(this)
-                                    .setMessage(R.string.confirm_delete)
-                                    .setPositiveButton(R.string.delete, (a, b) -> {
-                                        LoftApp.of(this).profiles().delete(pr.id);
-                                        adapter.reload();
-                                    })
-                                    .setNegativeButton(R.string.cancel, null)
-                                    .show();
-                        }
-                    })
-                    .show();
+            showConnMenu(adapter.getItem(pos));
             return true;
         });
         FloatingActionButton fab = conns.findViewById(R.id.fab);
@@ -183,6 +151,9 @@ public final class MainActivity extends AppCompatActivity implements Bus.Listene
             String h = Live.holding ? getString(R.string.hold) + " · " : "";
             pill.setText(h + getString(R.string.connected) + (name.isEmpty() ? "" : " · " + name));
             go.setText(R.string.disconnect);
+        } else if (!Live.err.isEmpty()) {
+            pill.setText(Live.err);
+            go.setText(R.string.connect);
         } else {
             pill.setText(getString(R.string.pill_off) + (name.isEmpty() ? "" : " · " + name));
             go.setText(R.string.connect);
@@ -251,6 +222,41 @@ public final class MainActivity extends AppCompatActivity implements Bus.Listene
         if (requestCode == REQ_VPN && resultCode == Activity.RESULT_OK) {
             LoftVpnService.requestStart(this);
         }
+    }
+
+    private void showConnMenu(Profile pr) {
+        if (pr == null) {
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setItems(new CharSequence[]{
+                        getString(R.string.edit),
+                        getString(R.string.share),
+                        getString(R.string.export),
+                        getString(R.string.delete)
+                }, (d, w) -> {
+                    if (w == 0) {
+                        startActivity(new Intent(this, EditActivity.class).putExtra("id", pr.id));
+                    } else if (w == 1) {
+                        startActivity(new Intent(this, ShareQrActivity.class).putExtra("id", pr.id));
+                    } else if (w == 2) {
+                        Intent i = new Intent(Intent.ACTION_SEND);
+                        i.setType("text/plain");
+                        i.putExtra(Intent.EXTRA_TEXT, pr.sessionYaml());
+                        i.putExtra(Intent.EXTRA_SUBJECT, pr.name + ".loft");
+                        startActivity(Intent.createChooser(i, getString(R.string.export)));
+                    } else {
+                        new AlertDialog.Builder(this)
+                                .setMessage(R.string.confirm_delete)
+                                .setPositiveButton(R.string.delete, (a, b) -> {
+                                    LoftApp.of(this).profiles().delete(pr.id);
+                                    adapter.reload();
+                                })
+                                .setNegativeButton(R.string.cancel, null)
+                                .show();
+                    }
+                })
+                .show();
     }
 
     private void addSheet() {
@@ -443,6 +449,13 @@ public final class MainActivity extends AppCompatActivity implements Bus.Listene
                     }
                     connect();
                 }
+            });
+            View body = v.findViewById(R.id.body);
+            body.setOnClickListener(x ->
+                    startActivity(new Intent(MainActivity.this, EditActivity.class).putExtra("id", p.id)));
+            body.setOnLongClickListener(x -> {
+                showConnMenu(p);
+                return true;
             });
             return v;
         }
