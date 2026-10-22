@@ -1,4 +1,6 @@
 # 10.13 is the floor. Go cannot ship in-process (Go 1.20 was last for 10.13).
+# loft-front is a separate helper: -macos=10.13 plus gooverlay/ so dyld does
+# not bind SecTrustEvaluateWithError (10.14) / SecTrustCopyCertificateChain (12.0).
 export MACOSX_DEPLOYMENT_TARGET := 10.13
 MIN := 10.13
 HOSTARCH := $(shell uname -m)
@@ -100,12 +102,31 @@ $(MACOS)/loft-priv: $(OBJ)/target-arch Sources/TUN/loft-priv.c $(OBJ)/utun.o
 		$(CARCH) -I Sources/TUN
 
 FRONT_GO := $(shell find $(ROOT)/clients/go $(ROOT)/internal -name '*.go' 2>/dev/null)
+OVERLAY_DIR := $(abspath gooverlay)
+GOROOT_GO := $(shell go env GOROOT)
+OVERLAY_JSON := $(OBJ)/overlay.json
+OVERLAY_SRC := gooverlay/root_darwin.go gooverlay/security.go gooverlay/security.s
 
-$(MACOS)/loft-front: $(OBJ)/target-arch $(ROOT)/go.mod $(FRONT_GO)
+$(OVERLAY_JSON): $(OVERLAY_SRC)
+	mkdir -p $(OBJ)
+	printf '%s\n' \
+	  '{' \
+	  '  "Replace": {' \
+	  '    "$(GOROOT_GO)/src/crypto/x509/root_darwin.go": "$(OVERLAY_DIR)/root_darwin.go",' \
+	  '    "$(GOROOT_GO)/src/crypto/x509/internal/macos/security.go": "$(OVERLAY_DIR)/security.go",' \
+	  '    "$(GOROOT_GO)/src/crypto/x509/internal/macos/security.s": "$(OVERLAY_DIR)/security.s"' \
+	  '  }' \
+	  '}' > $@
+
+$(MACOS)/loft-front: $(OBJ)/target-arch $(OVERLAY_JSON) $(OVERLAY_SRC) $(ROOT)/go.mod $(FRONT_GO)
 	mkdir -p $(MACOS)
 	cd $(ROOT) && CGO_ENABLED=0 GOOS=darwin GOARCH=$(GOARCH_FRONT) go build -trimpath \
-		-ldflags="-s -w -X github.com/a3app/loft/internal/version.Version=$(ROOTVER)" \
+		-overlay $(OVERLAY_JSON) \
+		-ldflags="-s -w -macos=$(MIN) -X github.com/a3app/loft/internal/version.Version=$(ROOTVER)" \
 		-o dist/clients/macOS/loft.app/Contents/MacOS/loft-front ./clients/go/cmd/loft-front
+	@if nm -u $(MACOS)/loft-front | grep -E 'SecTrustCopyCertificateChain|SecTrustEvaluateWithError'; then \
+		echo 'loft-front: still binds 10.14+/12.0 Security APIs' >&2; exit 1; \
+	fi
 
 $(APP)/Contents/MacOS/loft: $(OBJ)/target-arch $(SWIFT_SRC) $(LANG_SRC) $(LIST_CATALOG) $(C_OBJ) $(MACOS)/loft-priv $(MACOS)/loft-front
 	mkdir -p $(MACOS) $(RES) $(RES)/lang $(RES)/lists $(FW)
