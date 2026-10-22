@@ -335,10 +335,10 @@
       go('setup'); render(); return;
     }
     // The section asked for in the address, once signed in.
-    const want = L.want && V[L.want] && !FULL[L.want] ? L.want : 'main';
+    const w0 = (L.want || '').split('/')[0], want = w0 && V[w0] && !FULL[w0] ? L.want : 'main';
     L.want = '';
     go(want);
-    if (S.route === want) render();
+    if (location.hash.slice(1) === want) render();
   }
   window.goLogout = async () => {
     try { await api('POST', '/api/logout', {}); } catch (e) { /* already out */ }
@@ -477,7 +477,7 @@
     if (location.hash === '#packages' && L.me) loadPackages().then(() => { if (S.route === 'packages') render(); });
     if (location.hash === '#network' && L.me) Promise.all([loadNet(), loadChannels()]).then(() => { if (S.route === 'network') render(); });
     if (location.hash === '#prio' && L.me) loadChannels().then(() => { if (S.route === 'prio') render(); });
-    if (location.hash === '#domains' && L.me) loadDomains().then(() => { if (S.route === 'domains') render(); });
+    if (S.route === 'domains' && L.me) loadDomains().then(() => { if (S.route === 'domains') render(); });
     if (location.hash === '#node' && L.me) loadNode().then(() => { if (S.route === 'node') render(); });
     if (['#members', '#segments', '#main', ''].includes(location.hash) && L.me) loadPresence().then(() => render());
     if (location.hash === '#system' && L.me && L.sy) loadSystem().then(() => { if (S.route === 'system') render(); });
@@ -2022,23 +2022,40 @@
   const provName = id => { if (id === 'manual') return 'Вручную'; const p = (L.dm.providers || []).find(x => x.id === id); return p ? DNSK[p.kind][0] : '—'; };
   const dayLeft = t => Math.round((new Date(t) - Date.now()) / 86400e3);
   const untilCell = t => { if (!t) return '—'; const d = dayLeft(t); return d < 30 ? pill(d < 0 ? 'истёк' : 'через ' + d + ' дн.', 'warn') : new Date(t).toLocaleDateString(LOC()); };
+  const certIn = (c, z) => c.names.some(n => { n = n.replace(/^\*\./, ''); return n === z || n.endsWith('.' + z); });
+  const certRows = l => l.map(c => `<tr class="click" onclick="LIVE.openCert('${c.id}')"><td class="mono" style="white-space:normal">${esc(c.names.join(', '))}</td><td>${esc(c.issuer || '—')}</td><td>${c.method === 'upload' ? 'загружен' : c.method.toUpperCase()}</td><td>${untilCell(c.until)}</td><td>${USE[c.use] || esc(c.use)}</td></tr>`).join('');
+  const CERT_H = ['Имена', 'Издатель', 'Проверка', 'Действует до', 'Где используется'];
+  // #domains lists zones and certificates; #domains/<zone> is the zone's own page.
   function domainsView() {
     if (!L.can('domains', 1)) return pageHead('Домены', '') + `<div class="empty"><div class="empty-ic">${ic('i-gear', 28)}</div><b>Нет доступа</b><p>Вашей роли этот раздел не виден.</p></div>`;
-    if (!L.dm) { loadDomains().then(() => loadRecords()).then(() => { if (S.route === 'domains') render(); }); return pageHead('Домены', '') + '<p class="mute">Загружаю…</p>'; }
-    if (L.dz && !L.dzRecs) { loadRecords().then(() => { if (S.route === 'domains') render(); }); }
-    const own = L.can('domains'), Z = L.dm.zones.find(z => z.name === L.dz), manual = Z && Z.provider === 'manual';
-    const recs = L.dzRecs || [];
-    let h = pageHead('Домены', 'Зоны, DNS-записи и сертификаты. Записи, созданные панелью, она сама обновляет при смене IP.') +
+    if (!L.dm) { loadDomains().then(() => { if (S.route === 'domains') render(); }); return pageHead('Домены', '') + '<p class="mute">Загружаю…</p>'; }
+    const own = L.can('domains');
+    if (S.arg) return zoneView(own);
+    return pageHead('Домены', 'Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.') +
       blk('Зоны', '', (own ? `<div class="acts"><button class="btn pri" type="button" onclick="LIVE.openZone('')">${ic('i-plus')}Добавить домен</button><button class="btn" type="button" onclick="LIVE.openProviders()">DNS-провайдеры</button></div>` : '') +
-        table(['Зона', 'DNS', 'Записей', 'Регистрация до'], L.dm.zones.map(z => `<tr class="click" onclick="LIVE.pickZone('${esc(z.name)}')" ${z.name === L.dz ? 'style="font-weight:600"' : ''}><td class="mono"><b>${esc(z.name)}</b></td><td>${esc(provName(z.provider))}${z.provider === 'manual' ? '' : ' <span class="mute">· API</span>'}</td><td class="num">${z.name === L.dz && L.dzRecs ? L.dzRecs.length : z.records >= 0 ? z.records : '—'}</td><td class="num">${untilCell(z.reg_until)}</td></tr>`).join('') || `<tr><td colspan="4" class="mute">Зон нет. Добавьте домен, чтобы панель вела его записи.</td></tr>`));
-    if (Z) h += blk('Записи ' + esc(Z.name), manual ? 'Зона ведётся вручную: панель покажет, какие записи внести у регистратора, и проверит их.' : '<span class="dot on"></span>создано панелью — обновится при смене IP',
-      `<div class="acts">${own ? `<button class="btn" type="button" onclick="LIVE.openRec(-1)">${ic('i-plus')}Добавить запись</button>` : ''}${manual ? `<button class="btn" type="button" onclick="LIVE.checkRecs()">Проверить записи</button>` : ''}${own ? `<button class="btn" type="button" onclick="LIVE.openZone('${esc(Z.name)}')">Настройки зоны</button>` : ''}</div>` +
-      (L.dzRecs ? table(['Имя', 'Тип', 'Значение', 'TTL'].concat(manual ? ['Проверка'] : []), recs.map((r, i) => `<tr class="click" onclick="LIVE.openRec(${i})"><td class="mono">${r.ours ? '<span class="dot on"></span>' : '<span class="dot" style="visibility:hidden"></span>'}${esc(r.name)}</td><td class="mono">${esc(r.type)}</td><td class="mono" style="white-space:normal;overflow-wrap:anywhere;min-width:220px">${r.priority && ['MX', 'SRV'].includes(r.type) ? r.priority + ' ' : ''}${esc(r.value)}</td><td class="mute">${r.auto ? 'авто' : esc((TTLS.find(x => x[0] === (r.ttl || 0)) || [0, (r.ttl || 0) + ' с'])[1])}</td>${manual ? `<td>${r.check === 'ok' ? pill('есть', 'ok') : r.check === 'missing' ? pill('нет', 'warn') : r.check === 'differs' ? pill('другое значение', 'warn') : '<span class="mute">—</span>'}</td>` : ''}</tr>`).join('') || `<tr><td colspan="5" class="mute">Записей нет.</td></tr>`) : '<p class="mute">Загружаю записи…</p>'));
-    h += blk('Сертификаты', 'Выпуск и продление через Let’s Encrypt. Продление — за 30 дней до конца срока, само.', (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openCert('')">${ic('i-plus')}Выпустить сертификат</button><button class="btn" type="button" onclick="LIVE.openPem()">Загрузить PEM</button></div>` : '') +
-      table(['Имена', 'Издатель', 'Проверка', 'Действует до', 'Где используется'], L.dm.certs.map(c => `<tr class="click" onclick="LIVE.openCert('${c.id}')"><td class="mono" style="white-space:normal">${esc(c.names.join(', '))}</td><td>${esc(c.issuer || '—')}</td><td>${c.method === 'upload' ? 'загружен' : c.method.toUpperCase()}</td><td>${untilCell(c.until)}</td><td>${USE[c.use] || esc(c.use)}</td></tr>`).join('') || `<tr><td colspan="5" class="mute">Сертификатов нет. Сертификат ноды выпускается в мастере установки.</td></tr>`));
-    return h;
+        table(['Зона', 'DNS', 'Записей', 'Регистрация до', { t: '', r: 1 }], L.dm.zones.map(z => `<tr class="click" onclick="go('domains/${esc(z.name)}')"><td class="mono"><b>${esc(z.name)}</b></td><td>${esc(provName(z.provider))}${z.provider === 'manual' ? '' : ' <span class="mute">· API</span>'}</td><td class="num">${z.records >= 0 ? z.records : '—'}</td><td class="num">${untilCell(z.reg_until)}</td><td class="r mute">${ic('i-next', 18)}</td></tr>`).join('') || `<tr><td colspan="5" class="mute">Зон нет. Добавьте домен, чтобы панель вела его записи.</td></tr>`)) +
+      blk('Сертификаты', 'Выпуск и продление через Let’s Encrypt. Продление — за 30 дней до конца срока, само.', (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openCert('')">${ic('i-plus')}Выпустить сертификат</button><button class="btn" type="button" onclick="LIVE.openPem()">Загрузить PEM</button></div>` : '') +
+        table(CERT_H, certRows(L.dm.certs) || `<tr><td colspan="5" class="mute">Сертификатов нет. Сертификат ноды выпускается в мастере установки.</td></tr>`));
   }
-  L.pickZone = z => { L.dz = z; L.dzRecs = null; render(); };
+  function zoneView(own) {
+    const Z = L.dm.zones.find(z => z.name === S.arg), back = `<a class="crumb" href="#domains">${ic('i-back', 18)}Домены</a>`;
+    if (!Z) return back + pageHead(esc(S.arg), '') + `<div class="empty"><b>Такой зоны нет</b><p>Её удалили или адрес набран с ошибкой.</p></div>`;
+    if (L.dz !== Z.name) { L.dz = Z.name; L.dzRecs = null; }
+    if (!L.dzRecs) loadRecords().then(() => { if (S.route === 'domains' && S.arg === Z.name) render(); });
+    const manual = Z.provider === 'manual', recs = L.dzRecs || [], types = [...new Set(recs.map(r => r.type))].sort();
+    const zc = L.dm.certs.filter(c => certIn(c, Z.name));
+    return back + pageHead(`<span class="mono">${esc(Z.name)}</span>`, (manual ? 'DNS ведётся у регистратора вручную: панель покажет, какие записи внести, и проверит их.' : `DNS через ${esc(provName(Z.provider))}: панель сама создаёт и меняет записи.`) + (Z.reg_until ? ` Регистрация до ${new Date(Z.reg_until).toLocaleDateString(LOC())}.` : '')) +
+      blk('Записи', manual ? '' : '<span class="dot on"></span>создано панелью — обновится при смене IP',
+        `<div class="acts">${own ? `<button class="btn pri" type="button" onclick="LIVE.openRec(-1)">${ic('i-plus')}Добавить запись</button>` : ''}${manual ? `<button class="btn" type="button" onclick="LIVE.checkRecs()">Проверить записи</button>` : ''}${own ? `<button class="btn" type="button" onclick="LIVE.openZone('${esc(Z.name)}')">Настройки зоны</button>` : ''}</div>` +
+        (L.dzRecs ? (recs.length > 8 ? `<div class="netbar"><div class="fld" style="margin:0;flex:1;min-width:200px"><label for="rq">Поиск</label><input id="rq" placeholder="имя или значение" oninput="LIVE.recFilter()"></div><div class="fld" style="margin:0;min-width:140px"><label for="rt">Тип</label><select id="rt" onchange="LIVE.recFilter()"><option value="">все</option>${types.map(t => `<option>${esc(t)}</option>`).join('')}</select></div></div>` : '') +
+          table(['Имя', 'Тип', 'Значение', 'TTL'].concat(manual ? ['Проверка'] : []), recs.map((r, i) => `<tr class="click" data-t="${esc(r.type)}" data-q="${esc((r.name + ' ' + r.value).toLowerCase())}" onclick="LIVE.openRec(${i})"><td class="mono">${r.ours ? '<span class="dot on"></span>' : '<span class="dot" style="visibility:hidden"></span>'}${esc(r.name)}</td><td class="mono">${esc(r.type)}</td><td class="mono" style="white-space:normal;overflow-wrap:anywhere;min-width:220px">${r.priority && ['MX', 'SRV'].includes(r.type) ? r.priority + ' ' : ''}${esc(r.value)}</td><td class="mute">${r.auto ? 'авто' : esc((TTLS.find(x => x[0] === (r.ttl || 0)) || [0, (r.ttl || 0) + ' с'])[1])}</td>${manual ? `<td>${r.check === 'ok' ? pill('есть', 'ok') : r.check === 'missing' ? pill('нет', 'warn') : r.check === 'differs' ? pill('другое значение', 'warn') : '<span class="mute">—</span>'}</td>` : ''}</tr>`).join('') || `<tr><td colspan="5" class="mute">Записей нет.</td></tr>`) : '<p class="mute">Загружаю записи…</p>')) +
+      blk('Сертификаты зоны', '', (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openCert('', ['${esc(Z.name)}'])">${ic('i-plus')}Выпустить сертификат</button></div>` : '') +
+        table(CERT_H, certRows(zc) || `<tr><td colspan="5" class="mute">Для имён этой зоны сертификатов нет.</td></tr>`));
+  }
+  L.recFilter = () => {
+    const q = $('#rq').value.trim().toLowerCase(), t = $('#rt').value;
+    document.querySelectorAll('tr[data-q]').forEach(tr => { tr.hidden = (q && !tr.dataset.q.includes(q)) || (t && tr.dataset.t !== t); });
+  };
   L.checkRecs = async () => { toast('Проверяю записи в DNS…'); await loadRecords(true); render(); };
   L.openZone = name => {
     const nw = !name, Z = nw ? { name: '', provider: (L.dm.providers[0] || {}).id || 'manual' } : L.dm.zones.find(z => z.name === name);
@@ -2060,10 +2077,10 @@
     const name = $('#zz1').value.trim();
     toast('Сохраняю зону…');
     try { await api('POST', '/api/domains/zone', { name, provider: $('#zz2').value, create }); closeDlg(); toast('Зона сохранена'); } catch (e) { toast(e.message); }
-    L.dz = name.toLowerCase(); await loadDomains(); await loadRecords(); render();
+    await loadDomains(); L.dzRecs = null; if (nw) go('domains/' + name.toLowerCase()); else render();
   });
   L.zoneDel = name => dialog(`Удалить зону «${esc(name)}» из панели?`, 'Записи у провайдера останутся; панель просто перестанет вести эту зону.', '', `<button class="btn danger" type="button" onclick="LIVE.zoneDelGo('${esc(name)}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
-  L.zoneDelGo = async name => { closeDlg(); try { await api('POST', '/api/domains/zone', { name, delete: true }); toast('Зона удалена из панели'); } catch (e) { toast(e.message); } L.dz = null; await loadDomains(); await loadRecords(); render(); };
+  L.zoneDelGo = async name => { closeDlg(); try { await api('POST', '/api/domains/zone', { name, delete: true }); toast('Зона удалена из панели'); } catch (e) { toast(e.message); } L.dz = null; await loadDomains(); go('domains'); };
   L.openRec = i => {
     const nw = i < 0, r = nw ? { type: 'A', name: '', value: '', priority: 10, ttl: 0 } : L.dzRecs[i], own = L.can('domains');
     dialog(nw ? 'Новая запись' : 'Запись ' + esc(r.name) + ' ' + esc(r.type), esc(L.dz) + (r.ours ? ' · создана панелью' : ''), `
@@ -2082,8 +2099,8 @@
     await loadRecords(); render();
   });
   L.recDel = async i => { closeDlg(); try { await api('POST', '/api/domains/record', { zone: L.dz, record: { id: L.dzRecs[i].id }, delete: true }); toast('Запись удалена'); } catch (e) { toast(e.message); } await loadRecords(); render(); };
-  L.openCert = id => {
-    const nw = !id, c = nw ? { names: [], method: 'http-01', use: 'node' } : L.dm.certs.find(x => x.id === id), own = L.can('domains');
+  L.openCert = (id, pre) => {
+    const nw = !id, c = nw ? { names: pre || [], method: 'http-01', use: 'node' } : L.dm.certs.find(x => x.id === id), own = L.can('domains');
     const mailOn = pkgOn('Почтовый сервер');
     dialog(nw ? 'Новый сертификат' : 'Сертификат ' + esc(c.names[0]), nw ? 'Let’s Encrypt. Проверка DNS-01 нужна для имён, которые не смотрят на этот сервер, и для *.' : '', `
       <div><div class="fld"><label for="ce1">Имена</label><input id="ce1" class="mono" value="${esc(c.names.join(', '))}" placeholder="vpn.example.net, mail.example.net"></div><div class="hint">Через запятую. *.example.net — только с проверкой DNS-01.${nw ? '' : ' Сертификат ноды должен включать её имя, панели — имя панели.'}</div></div>
@@ -2392,7 +2409,7 @@
   // the wizard): load it fresh.
   window.addEventListener('pageshow', e => { if (e.persisted) location.reload(); });
   // #setup / #login left in history or a bookmark must not pin a screen.
-  const settle = r => { if (location.hash.slice(1) !== r) history.replaceState(null, '', '#' + r); S.route = r; };
+  const settle = r => { if (location.hash.slice(1) !== r) history.replaceState(null, '', '#' + r); S.route = r; S.arg = ''; };
 
   /* boot: only when served by loft-panel */
   // The built page starts hidden (style#lp-boot): nothing of the mock's
@@ -2403,7 +2420,7 @@
   }
   async function boot0() {
     let st;
-    L.want = location.hash.slice(1).split('/')[0];
+    L.want = location.hash.slice(1);
     try { st = await api('GET', '/api/state'); } catch (e) {
       if (location.protocol === 'file:') return; // the mock opened from disk
       wrapViews(); settle('login'); render(); toast(e.message); return;

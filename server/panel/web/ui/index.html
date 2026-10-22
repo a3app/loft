@@ -89,6 +89,8 @@ select.hdr-pill{color-scheme:dark;padding-right:8px}
 .page-h{display:flex;align-items:center;gap:8px;padding-top:32px;margin-bottom:8px}
 .page-h h1{margin:0;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-.02em;text-wrap:balance}
 .help{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--mute);cursor:pointer;padding:0}
+.crumb{display:inline-flex;align-items:center;gap:6px;min-height:32px;margin-top:24px;color:var(--link);text-decoration:none;font-weight:500}
+.crumb+.page-h{padding-top:4px}
 .page-d{margin:0 0 24px;max-width:860px;color:var(--text-2)}
 .more{display:none;border:0;background:transparent;color:var(--link);padding:0;cursor:pointer;margin:-20px 0 20px;min-height:28px}
 
@@ -388,6 +390,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
   .side-mob .hdr-ic{border-color:#3A332C}
   .page{padding:0 16px 56px}
   .page-h{padding-top:20px}
+  .crumb{margin-top:12px}
   .page-h h1{font-size:20px;line-height:28px}
   .page-d.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:24px}
   .more.need{display:inline-block}
@@ -416,6 +419,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
   <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
   <symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
@@ -697,18 +701,30 @@ const CERTS=[['vpn.example.net','Let’s Encrypt','DNS-01','10.01.2027','нод�
 const USES=['нода loft','панель','почта (SMTP, IMAP)'];
 const TTLS=['авто','5 минут','1 час','1 день'];
 const CHECK={ok:['есть','ok'],missing:['нет','warn'],differs:['другое значение','warn']};
-S.zone='example.net';
+const certRow=(r,i)=>`<tr class="click" onclick="openCert(${i})"><td class="mono" style="white-space:normal">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]==='22.10.2026'?pill('через 2 дн.','warn'):r[3]}</td><td>${r[4]}</td></tr>`;
+const CERT_H=['Имена','Издатель','Проверка','Действует до','Где используется'];
+// #domains lists zones and certificates; #domains/<zone> is the zone's own page.
 V.domains=()=>{
- const Z=ZONES.find(x=>x.z===S.zone)||ZONES[0],man=Z.dns==='manual';
- return pageHead('Домены','Зоны, DNS-записи и сертификаты. Записи, созданные панелью, она сама обновляет при смене IP.')+
+ if(S.arg)return zonePage(S.arg);
+ return pageHead('Домены','Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.')+
  blk('Зоны','',`<div class="acts"><button class="btn pri" type="button" onclick="openZone('new')">${ic('i-plus')}Добавить домен</button><button class="btn" type="button" onclick="openProviders()">DNS-провайдеры</button></div>`+
-  table(['Зона','DNS','Записей','Регистрация до'],ZONES.map(x=>`<tr class="click" onclick="S.zone='${x.z}';render()" ${x.z===Z.z?'style="font-weight:600"':''}><td class="mono"><b>${x.z}</b></td><td>${DNSP[x.dns][0]}${x.dns==='manual'?'':' <span class="mute">· API</span>'}</td><td class="num">${x.recs.length}</td><td class="num">${x.reg==='02.11.2026'?pill('через 13 дн.','warn'):x.reg}</td></tr>`).join('')))+
- blk('Записи '+Z.z,man?'Зона ведётся вручную: панель покажет, какие записи внести у регистратора, и проверит их.':'<span class="dot on"></span>создано панелью — обновится при смене IP',
-  `<div class="acts"><button class="btn" type="button" onclick="openRec(-1)">${ic('i-plus')}Добавить запись</button>${man?'<button class="btn" type="button" onclick="toast(\'Проверяю записи в DNS…\')">Проверить записи</button>':''}<button class="btn" type="button" onclick="openZone('${Z.z}')">Настройки зоны</button></div>`+
-  table(['Имя','Тип','Значение','TTL'].concat(man?['Проверка']:[]),Z.recs.map((r,i)=>`<tr class="click" onclick="openRec(${i})"><td class="mono">${r[4]?'<span class="dot on"></span>':'<span class="dot" style="visibility:hidden"></span>'}${r[0]}</td><td class="mono">${r[1]}</td><td class="mono" style="white-space:normal;overflow-wrap:anywhere;min-width:220px">${r[3]?r[3]+' ':''}${esc(r[2])}</td><td class="mute">${r[4]?'авто':'1 час'}</td>${man?`<td>${r[5]?pill(...CHECK[r[5]]):'<span class="mute">—</span>'}</td>`:''}</tr>`).join('')))+
+  table(['Зона','DNS','Записей','Регистрация до',{t:'',r:1}],ZONES.map(x=>`<tr class="click" onclick="go('domains/${x.z}')"><td class="mono"><b>${x.z}</b></td><td>${DNSP[x.dns][0]}${x.dns==='manual'?'':' <span class="mute">· API</span>'}</td><td class="num">${x.recs.length}</td><td class="num">${x.reg==='02.11.2026'?pill('через 13 дн.','warn'):x.reg}</td><td class="r mute">${ic('i-next',18)}</td></tr>`).join('')))+
  blk('Сертификаты','Выпуск и продление через Let’s Encrypt. Продление — за 30 дней до конца срока, само.',`<div class="acts"><button class="btn" type="button" onclick="openCert(-1)">${ic('i-plus')}Выпустить сертификат</button><button class="btn" type="button" onclick="openCert(-2)">Загрузить PEM</button></div>`+
-  table(['Имена','Издатель','Проверка','Действует до','Где используется'],CERTS.map((r,i)=>`<tr class="click" onclick="openCert(${i})"><td class="mono" style="white-space:normal">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]==='22.10.2026'?pill('через 2 дн.','warn'):r[3]}</td><td>${r[4]}</td></tr>`).join('')));
+  table(CERT_H,CERTS.map(certRow).join('')));
 };
+function zonePage(z){
+ const Z=ZONES.find(x=>x.z===z),back=`<a class="crumb" href="#domains">${ic('i-back',18)}Домены</a>`;
+ if(!Z)return back+pageHead(esc(z),'')+`<div class="empty"><b>Такой зоны нет</b><p>Её удалили или адрес набран с ошибкой.</p></div>`;
+ const man=Z.dns==='manual',types=[...new Set(Z.recs.map(r=>r[1]))].sort();
+ return back+pageHead(`<span class="mono">${Z.z}</span>`,(man?'DNS ведётся у регистратора вручную: панель покажет, какие записи внести, и проверит их.':`DNS через ${DNSP[Z.dns][0]}: панель сама создаёт и меняет записи.`)+` Регистрация до ${Z.reg}.`)+
+ blk('Записи',man?'':'<span class="dot on"></span>создано панелью — обновится при смене IP',
+  `<div class="acts"><button class="btn pri" type="button" onclick="openRec(-1)">${ic('i-plus')}Добавить запись</button>${man?'<button class="btn" type="button" onclick="toast(\'Проверяю записи в DNS…\')">Проверить записи</button>':''}<button class="btn" type="button" onclick="openZone('${Z.z}')">Настройки зоны</button></div>`+
+  (Z.recs.length>8?`<div class="netbar"><div class="fld" style="margin:0;flex:1;min-width:200px"><label for="rq">Поиск</label><input id="rq" placeholder="имя или значение" oninput="recFilter()"></div><div class="fld" style="margin:0;min-width:140px"><label for="rt">Тип</label><select id="rt" onchange="recFilter()"><option value="">все</option>${types.map(t=>`<option>${t}</option>`).join('')}</select></div></div>`:'')+
+  table(['Имя','Тип','Значение','TTL'].concat(man?['Проверка']:[]),Z.recs.map((r,i)=>`<tr class="click" data-t="${r[1]}" data-q="${esc((r[0]+' '+r[2]).toLowerCase())}" onclick="openRec(${i})"><td class="mono">${r[4]?'<span class="dot on"></span>':'<span class="dot" style="visibility:hidden"></span>'}${r[0]}</td><td class="mono">${r[1]}</td><td class="mono" style="white-space:normal;overflow-wrap:anywhere;min-width:220px">${r[3]?r[3]+' ':''}${esc(r[2])}</td><td class="mute">${r[4]?'авто':'1 час'}</td>${man?`<td>${r[5]?pill(...CHECK[r[5]]):'<span class="mute">—</span>'}</td>`:''}</tr>`).join('')))+
+ blk('Сертификаты зоны','',`<div class="acts"><button class="btn" type="button" onclick="openCert(-1)">${ic('i-plus')}Выпустить сертификат</button></div>`+
+  table(CERT_H,CERTS.map((r,i)=>r[0].endsWith(Z.z)?certRow(r,i):'').join('')||`<tr><td colspan="5" class="mute">Для имён этой зоны сертификатов нет.</td></tr>`));
+}
+function recFilter(){const q=$('#rq').value.trim().toLowerCase(),t=$('#rt').value;document.querySelectorAll('tr[data-q]').forEach(tr=>{tr.hidden=(q&&!tr.dataset.q.includes(q))||(t&&tr.dataset.t!==t)})}
 // Where DNS is managed: the accesses added in DNS providers, or by hand.
 const provSel=(id,cur)=>`<select id="${id}">${PROVS.map(p=>`<option value="${p[0]}" ${p[0]===cur?'selected':''}>${DNSP[p[0]][0]} · ${p[1]}</option>`).join('')}<option value="manual" ${cur==='manual'?'selected':''}>Вручную</option></select>`;
 function openZone(z){
@@ -722,7 +738,7 @@ function openZone(z){
 function zoneDel(z){dialog(`Удалить зону «${z}» из панели?`,'Записи у провайдера останутся; панель просто перестанет вести эту зону.','',`<button class="btn danger" type="button" onclick="closeDlg()">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 const REC_PH={A:'203.0.113.10',AAAA:'2001:db8::10',MX:'mail.example.net',CAA:'0 issue &quot;letsencrypt.org&quot;',SRV:'5 443 vpn.example.net'};
 function openRec(i){
- const Z=ZONES.find(x=>x.z===S.zone)||ZONES[0],r=Z.recs[i]||['','A','','',0],nw=i<0,addr=['A','AAAA'].includes(r[1]);
+ const Z=ZONES.find(x=>x.z===S.arg)||ZONES[0],r=Z.recs[i]||['','A','','',0],nw=i<0,addr=['A','AAAA'].includes(r[1]);
  dialog(nw?'Новая запись':'Запись '+r[0]+' '+r[1],Z.z+(r[4]?' · создана панелью':''),`
   <div class="fld"><label for="rr1">Тип</label><select id="rr1" ${nw?'':'disabled'} onchange="$('#rrP').hidden=!['MX','SRV'].includes(this.value);$('#rrA').hidden=!['A','AAAA'].includes(this.value)">${['A','AAAA','CNAME','MX','TXT','CAA','SRV','NS'].map(t=>`<option ${t===r[1]?'selected':''}>${t}</option>`).join('')}</select></div>
   <div><div class="fld"><label for="rr2">Имя</label><input id="rr2" class="mono" value="${r[0]}" placeholder="@" ${nw?'':'readonly'}></div><div class="hint">@ — сама зона ${Z.z}.</div></div>
@@ -1804,11 +1820,12 @@ function render(){
 }
 function go(r){location.hash=r}
 function setOpen(v){S.open=v;$('#app').classList.toggle('menu-open',v);$('#menuBtn').setAttribute('aria-expanded',v);$('#menuBtn').setAttribute('aria-label',v?'Закрыть меню':'Открыть меню');$('#menuBtn').innerHTML=ic(v?'i-x':'i-menu',24)}
-window.addEventListener('hashchange',()=>{S.route=location.hash.slice(1)||'main';setOpen(false);closeDlg();render();$('#main').scrollTop=0});
+function setRoute(){const [r,...a]=location.hash.slice(1).split('/');S.route=r||'main';S.arg=decodeURIComponent(a.join('/'))}
+window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();render();$('#main').scrollTop=0});
 $('#menuBtn').onclick=()=>setOpen(!S.open);
 $('#foldBtn').onclick=()=>{S.rail=!S.rail;try{localStorage.setItem('lp-rail',S.rail?'1':'0')}catch(e){}renderMenu()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
-S.route=location.hash.slice(1)||'main';
+setRoute();
 render();
 </script>
 <script src="en.js"></script>
