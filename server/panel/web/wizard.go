@@ -237,6 +237,7 @@ func (s *Server) Renew(ctx context.Context) {
 			defer cancel()
 			if _, err := s.issueCert(cctx, "renewal", names, firstOf(method, "http-01"), target, st.ACMEEmail, ""); err != nil {
 				s.logf("certificate renewal for %s failed: %v", strings.Join(names, ", "), err)
+				s.sysEvent("cert-failed", strings.Join(names, ", "))
 			}
 		}
 		if err == nil && st.Domain != "" && due(st.CertUntil) {

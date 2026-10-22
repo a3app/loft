@@ -198,6 +198,7 @@ func (s *Server) FollowReleases(ctx context.Context) {
 					s.logf("auto update to %s: %v", u.Latest, err)
 				} else {
 					s.logf("auto update to %s started (job %s)", u.Latest, j.ID)
+					s.sysEvent("update", u.Latest)
 				}
 			}
 		}

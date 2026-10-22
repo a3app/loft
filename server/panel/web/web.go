@@ -418,6 +418,13 @@ type auditMark struct {
 	skip   bool
 }
 
+// sysEvent puts what the panel did by itself into the audit log, as "system".
+func (s *Server) sysEvent(op, target string) {
+	if s.Audit != nil {
+		s.Audit.Add(store.Entry{User: "system", Op: "system " + op, Target: target})
+	}
+}
+
 // auditTarget names what a change was about in the audit log.
 func auditTarget(r *http.Request, t string) {
 	if m, ok := r.Context().Value(markKey{}).(*auditMark); ok {
@@ -583,6 +590,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			s.logf("login failed from %s", ip)
 			if s.Limit.Fail(ip) {
 				s.logf("login: %s blocked after failed attempts", ip)
+				s.sysEvent("login-block", ip)
 			}
 			s.sleep(s.Limit.Delay)
 		} else {

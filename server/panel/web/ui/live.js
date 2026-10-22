@@ -312,7 +312,7 @@
           <dl class="kv">${kv('CPU', sv.mem_total ? Math.round(sv.cpu) + '%' : '—', 'num')}${kv('Память', sv.mem_total ? gb(sv.mem_used) + ' / ' + gb(sv.mem_total) + ' ГБ' : '—', 'num')}${kv('Диск', sv.disk_size ? gb(sv.disk_used) + ' / ' + gb(sv.disk_size) + ' ГБ' : '—', 'num')}
           ${kv(sv.hours >= 23.5 ? 'Трафик за сутки' : 'Трафик за ' + Math.max(1, Math.round(sv.hours || 0)) + ' ч', sv.hours ? '↓ ' + gb(sv.rx) + ' ГБ · ↑ ' + gb(sv.tx) + ' ГБ' : '—', 'num')}</dl></section>
         ${L.can('users', 1) ? `<section class="card"><div class="card-h"><h2>События</h2><a href="#users" style="margin-left:auto" onclick="S.tab.users='log'">Журнал</a></div>
-          ${ev.slice(0, 5).map(x => `<div class="ev"><time>${when2(x.at || x.time)}</time><span><b>${esc(x.user)}</b> ${esc(opText(x))}</span></div>`).join('') || '<p class="mute" style="margin:0">Событий пока нет.</p>'}</section>` : ''}
+          ${ev.slice(0, 5).map(x => `<div class="ev"><time>${when2(x.at || x.time)}</time><span><b>${esc(whoText(x.user))}</b> ${esc(opText(x))}</span></div>`).join('') || '<p class="mute" style="margin:0">Событий пока нет.</p>'}</section>` : ''}
       </div>`;
     };
     const segments = V.segments;
@@ -1299,8 +1299,8 @@
     } else if (t === 'log') {
       const who = L.logWho || '';
       const list = L.log.filter(x => !who || x.user === who);
-      body = blk('Журнал', 'Все изменения, сделанные через панель и API.', `<div class="acts"><div class="fld" style="margin:0;min-width:min(240px,100%)"><label for="lg1">Кто</label><select id="lg1" onchange="LIVE.logWho=this.value;render()"><option value="">Все</option>${[...new Set(L.log.map(x => x.user))].map(u => `<option ${u === who ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></div></div>` +
-        table(['Когда', 'Кто', 'Действие', 'Откуда'], list.map(x => `<tr><td class="num">${when2(x.at)}</td><td><b>${esc(x.user)}</b></td><td>${esc(opText(x))}</td><td class="mono mute">${x.from === 'token' ? 'API-токен' : esc(x.from || '—')}</td></tr>`).join('') || `<tr><td colspan="4" class="mute">Записей нет.</td></tr>`));
+      body = blk('Журнал', 'Все изменения, сделанные через панель и API.', `<div class="acts"><div class="fld" style="margin:0;min-width:min(240px,100%)"><label for="lg1">Кто</label><select id="lg1" onchange="LIVE.logWho=this.value;render()"><option value="">Все</option>${[...new Set(L.log.map(x => x.user))].map(u => `<option value="${esc(u)}" ${u === who ? 'selected' : ''}>${esc(whoText(u))}</option>`).join('')}</select></div></div>` +
+        table(['Когда', 'Кто', 'Действие', 'Откуда'], list.map(x => `<tr><td class="num">${when2(x.at)}</td><td><b>${esc(whoText(x.user))}</b></td><td>${esc(opText(x))}</td><td class="mono mute">${x.from === 'token' ? 'API-токен' : esc(x.from || '—')}</td></tr>`).join('') || `<tr><td colspan="4" class="mute">Записей нет.</td></tr>`));
     } else {
       const st = u => u.invited ? pill('приглашён · до ' + when2(u.invite_until), 'busy') : u.disabled ? pill('выключен') : pill('может входить', 'ok');
       body = blk('Пользователи', '', (own ? `<div class="acts"><button class="btn pri" type="button" onclick="LIVE.openUser('')">${ic('i-plus')}Добавить пользователя</button></div>` : '') +
@@ -1318,9 +1318,18 @@
     'POST /api/net/change': 'Изменил адрес или маршрут', 'POST /api/net/confirm': 'Подтвердил изменение сети', 'POST /api/net/revert': 'Откатил изменение сети',
     'POST /api/channels/save': 'Сохранил канал', 'POST /api/channels/delete': 'Удалил канал', 'POST /api/channels/switch': 'Включил или выключил канал', 'POST /api/channels/rules': 'Изменил правила выхода', 'POST /api/channels/wgkey': 'Создал пару ключей WireGuard',
     'POST /api/settings/panel': 'Изменил настройки панели', 'POST /api/settings/timezone': 'Сменил часовой пояс сервера', 'POST /api/settings/notify': 'Изменил уведомления', 'POST /api/settings/notify/test': 'Отправил пробное письмо',
+    'POST /api/channels/prio': 'Сохранил список приоритетов', 'POST /api/channels/prio/delete': 'Удалил список приоритетов',
+    'POST /api/domains/zone': 'Изменил зону', 'POST /api/domains/record': 'Изменил DNS-запись', 'POST /api/domains/provider': 'Изменил DNS-провайдера', 'POST /api/domains/cert': 'Выпустил сертификат', 'POST /api/domains/cert/upload': 'Загрузил сертификат', 'POST /api/domains/cert/delete': 'Удалил сертификат',
+    'POST /api/mail/domain': 'Изменил почтовый домен', 'POST /api/mail/box': 'Изменил ящик', 'POST /api/mail/alias': 'Изменил псевдоним', 'POST /api/mail/apply': 'Применил настройки почты', 'POST /api/mail/dns': 'Создал записи почты в DNS', 'POST /api/mail/cert': 'Выпустил сертификат почты',
+    'POST /api/nodecfg': 'Изменил настройки ноды', 'POST /api/nodecfg/lists': 'Изменил списки ноды', 'POST /api/nodecfg/token': 'Сменил токен ноды', 'POST /api/packages/mtproto': 'Изменил MTProto-прокси',
+    'POST /api/system/guard': 'Изменил защиту', 'POST /api/system/guard/ban': 'Заблокировал адрес', 'POST /api/system/guard/unban': 'Разблокировал адрес', 'POST /api/system/user': 'Изменил учётную запись Linux', 'POST /api/system/user/delete': 'Удалил учётную запись Linux',
+    'POST /api/system/backup/run': 'Сделал резервную копию', 'POST /api/system/backup/settings': 'Изменил расписание копий', 'POST /api/system/backup/store': 'Изменил хранилище копий', 'POST /api/system/backup/phrase': 'Создал фразу восстановления', 'POST /api/system/backup/restore': 'Восстановил из копии', 'POST /api/system/backup/fetch': 'Скачал копию из хранилища', 'POST /api/system/backup/upload': 'Загрузил копию',
+    'POST /api/me/password': 'Сменил свой пароль', 'POST /api/me/token': 'Выпустил или отозвал свой API-токен', 'POST /api/me/sessions/end': 'Завершил свою сессию',
+    'system cert': 'Продлил сертификат', 'system cert-failed': 'Не смог продлить сертификат', 'system dns-ips': 'Обновил DNS-записи на новые адреса сервера', 'system backup': 'Начал резервную копию по расписанию', 'system update': 'Начал автообновление до', 'system login-block': 'Заблокировал вход после неудачных попыток с',
     'POST /api/users/save': 'Сохранил пользователя', 'POST /api/users/delete': 'Удалил пользователя', 'POST /api/users/token': 'Выпустил или отозвал API-токен', 'POST /api/roles/save': 'Сохранил роль', 'POST /api/roles/delete': 'Удалил роль', 'POST /api/sessions/end': 'Завершил сессию',
   };
   const opText = x => (OPS[x.op] || x.op) + (x.target ? ' ' + x.target : '');
+  const whoText = u => u === 'system' ? 'система' : u;
 
   /* ── #me: own profile, password, API token, sessions ── */
   L.my = null;

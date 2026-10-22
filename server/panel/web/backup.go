@@ -545,6 +545,8 @@ func (s *Server) watchBackups(ctx context.Context) {
 	}
 	if _, err := s.startBackup(ctx, "schedule", false); err != nil {
 		s.logf("scheduled backup: %v", err) // a job may be running: the next minute tries again
+	} else {
+		s.sysEvent("backup", "")
 	}
 }
 

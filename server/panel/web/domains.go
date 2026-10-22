@@ -712,6 +712,7 @@ func (s *Server) followIPs(ctx context.Context) {
 		return
 	}
 	s.logf("server addresses changed %v → %v: updating the panel's DNS records", s.dom.f.IPs, ips)
+	s.sysEvent("dns-ips", strings.Join(ips, ", "))
 	for i := range s.dom.f.Zones {
 		z := &s.dom.f.Zones[i]
 		p := s.dom.prov(z.Provider)
@@ -816,6 +817,7 @@ func (s *Server) watchDomains(ctx context.Context) {
 	for _, c := range due {
 		if _, err := s.issueCert(ctx, "renewal", c.Names, c.Method, c.Use, st.ACMEEmail, c.ID); err != nil {
 			s.logf("certificate renewal for %s failed: %v", strings.Join(c.Names, ", "), err)
+			s.sysEvent("cert-failed", strings.Join(c.Names, ", "))
 		}
 	}
 }
@@ -922,6 +924,9 @@ func (s *Server) useCert(ctx context.Context, by string, names []string, method,
 		return fmt.Errorf("unknown use %q", use)
 	}
 	s.logf("certificate for %s (%s) until %s", strings.Join(names, ", "), use, until.Format(time.DateOnly))
+	if by == "renewal" {
+		s.sysEvent("cert", strings.Join(names, ", "))
+	}
 	return nil
 }
 
