@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Loft" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:statusBarColor">@color/ink</item>
+        <item name="android:navigationBarColor">@color/ink</item>
+        <item name="android:windowBackground">@color/ink</item>
+        <item name="android:colorBackground">@color/ink</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="android:textColorPrimary">@color/snow</item>
+        <item name="android:textColorSecondary">@color/mute</item>
+        <item name="colorPrimary">@color/lamp</item>
+        <item name="colorOnPrimary">@color/ink</item>
+        <item name="colorSecondary">@color/copper</item>
+        <item name="colorSurface">@color/ink2</item>
+        <item name="colorOnSurface">@color/snow</item>
+        <item name="colorError">@color/err</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

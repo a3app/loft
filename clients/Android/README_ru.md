@@ -2,19 +2,24 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-Тонкий хост + `VpnService`. Сессия — Go [`clients/mobile`](../mobile/). **Java**, не Kotlin: gomobile уже отдаёт Java; Kotlin runtime в этот процесс не грузим.
+Приложение телефона + `VpnService`. Сессия — Go [`clients/mobile`](../mobile/). **Java 17**, не Kotlin: gomobile уже отдаёт Java.
 
-Протокол: [docs/protocol.md](../../docs/protocol.md). Интеграция: [docs/android.md](../../docs/android.md). URI импорта: [docs/share.md](../../docs/share.md). План: [PLAN.md](PLAN.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
+Протокол: [docs/protocol.md](../../docs/protocol.md). Интеграция: [docs/android.md](../../docs/android.md). URI импорта: [docs/share.md](../../docs/share.md). План: [PLAN.md](PLAN.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет телефона: [design/index.html](design/index.html). Макет TV: [design/tv/](design/tv/).
+
+Overlay — обычная сеть Android: одна системная строка VPN, `protect(fd)` на каждом сокете фронта, `NetworkCallback` → `NotifyPathChange` (свежий `0x02`, тот же `instance_id`). Dual-stack из Snapshot. Фронты: get, ws, h2, quic, h3, l3. `connect` — только на ноде.
 
 ## Дерево
 
 ```
 clients/Android/
-  PLAN.md                  телефон, затем Android TV / Google TV
-  design/                  спецификация UX и HTML-макет
+  PLAN.md                  телефон готов; макет TV в design/tv; Leanback позже
+  design/                  спецификация UX и HTML-макет телефона
+  design/tv/               макет с дивана
   app/src/main/java/app/loft/android/
-    MainActivity.java      YAML / URI, Connect / Disconnect
-    LoftVpnService.java    tun fd ↔ Engine, protect(fd)
+    LoftVpnService.java    tun ↔ Engine, путь, dual-stack, protect
+    MainActivity.java      Главная / Подключения / Настройки
+    EditActivity.java      loft / SSTP / VLESS / Trojan
+    ScanActivity.java      QR с камеры, вставка, файл
   ../mobile/               общий движок Go
 ```
 

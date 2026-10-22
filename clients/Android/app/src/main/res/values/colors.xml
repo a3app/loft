@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink">#1A1714</color>
+    <color name="ink2">#241F1B</color>
+    <color name="slate">#3A332E</color>
+    <color name="stone">#B7A99A</color>
+    <color name="copper">#C67B3A</color>
+    <color name="lamp">#E8B84A</color>
+    <color name="lamp_hi">#F3D27A</color>
+    <color name="snow">#F3EDE4</color>
+    <color name="paper">#E8DFD2</color>
+    <color name="mute">#8A7E72</color>
+    <color name="ok">#7DBA6A</color>
+    <color name="err">#E24B4B</color>
+    <color name="line">#26F3EDE4</color>
+</resources>

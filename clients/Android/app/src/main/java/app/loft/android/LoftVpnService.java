@@ -3,10 +3,17 @@ package app.loft.android;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
 import android.net.IpPrefix;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.VpnService;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 
 import java.io.FileInputStream;
@@ -14,131 +21,412 @@ import java.io.FileOutputStream;
 import java.net.InetAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import app.loft.engine.Engine;
-import app.loft.engine.Mobile;
 import app.loft.engine.PacketSink;
 import app.loft.engine.Snapshot;
 import app.loft.engine.SocketProtector;
 
 /**
- * Thin VpnService: pumps IP, installs routes/DNS from Snapshot.
- * Session is Go (clients/mobile). Java on purpose: gomobile already
- * emits Java; no Kotlin runtime in this process.
+ * Overlay as a first-class Android network: VpnService TUN, protect on every
+ * front socket, NetworkCallback → NotifyPathChange, dual-stack from Snapshot.
  */
 public final class LoftVpnService extends VpnService implements PacketSink, SocketProtector {
+    static final String ACTION_STOP = "app.loft.android.STOP";
+    static final String ACTION_START = "app.loft.android.START";
     private static final String CH = "loft.vpn";
-    private final ExecutorService go = Executors.newSingleThreadExecutor();
+    private static final int NOTE = 1;
+
+    private final ExecutorService go = Executors.newCachedThreadPool();
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final Object io = new Object();
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
+
     private Engine engine;
     private ParcelFileDescriptor tun;
     private FileOutputStream out;
+    private RoutePlan plan;
+    private ConnectivityManager.NetworkCallback pathCb;
+    private Network underlying;
+    private boolean seenPath;
+    private String lastAddr = "";
+    private Thread reader;
+    private int retries;
+    private final Runnable ticker = this::tickOnce;
+
+    static boolean running;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startForeground(1, notice());
-        String body = SessionStore.yaml(this);
-        go.execute(() -> startSession(body));
+        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            stopping.set(true);
+            stopSession();
+            stopForeground(true);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        stopping.set(false);
+        startForeground(NOTE, notice(getString(R.string.connecting)));
+        go.execute(this::startSession);
         return START_STICKY;
     }
 
     @Override
+    public void onRevoke() {
+        stopping.set(true);
+        stopSession();
+        super.onRevoke();
+    }
+
+    @Override
     public void onDestroy() {
-        go.execute(() -> {
-            if (engine != null) {
-                engine.stop();
-            }
-            closeTun();
-        });
-        go.shutdown();
+        stopping.set(true);
+        unwatchPath();
+        stopSession();
+        go.shutdownNow();
+        running = false;
+        Live.reset();
+        Bus.post();
         super.onDestroy();
     }
 
-    private void startSession(String body) {
+    private void startSession() {
+        if (stopping.get()) {
+            return;
+        }
+        Profile p = LoftApp.of(this).profiles().active();
+        if (p == null) {
+            Journal.add("no connection");
+            stopSelf();
+            return;
+        }
+        String yaml = p.sessionYaml();
+        if (yaml == null || yaml.trim().isEmpty()) {
+            Journal.add("empty yaml");
+            stopSelf();
+            return;
+        }
+        Live.name = p.name;
+        Live.kind = p.kind;
+        Live.state = "connecting";
+        running = true;
+        Bus.post();
+        Journal.add("front " + p.side() + " " + p.host());
         try {
-            String yaml = body == null ? "" : body.trim();
-            if (yaml.isEmpty()) {
-                stopSelf();
-                return;
-            }
-            if (!yaml.contains("\n") && yaml.toLowerCase().contains("://")) {
-                yaml = Mobile.parseShare(yaml);
-            }
             Engine eng = new Engine();
             eng.setProtector(this);
             eng.setSink(this);
             eng.start(yaml);
             engine = eng;
             Snapshot snap = eng.snapshot();
-            tun = buildTun(snap);
-            if (tun == null) {
+            if (!applyTun(snap)) {
                 eng.stop();
-                stopSelf();
+                fail("no overlay address");
                 return;
             }
-            out = new FileOutputStream(tun.getFileDescriptor());
-            pumpReads(tun);
+            watchPath();
+            tick();
+            retries = 0;
+            Journal.add("up " + Live.ip + (Live.ip6.isEmpty() ? "" : " " + Live.ip6));
         } catch (Exception e) {
-            stopSelf();
+            fail(e.getMessage());
         }
     }
 
-    private ParcelFileDescriptor buildTun(Snapshot snap) throws Exception {
-        if (snap == null || snap.getIP() == null || snap.getIP().isEmpty()) {
-            return null;
-        }
-        Builder b = new Builder()
-                .setSession("loft")
-                .setMtu(snap.getMTU() > 0 ? snap.getMTU() : 1280)
-                .addAddress(snap.getIP(), 24)
-                .addRoute("0.0.0.0", 0);
-        String dns = snap.getDNS();
-        if (dns != null && !dns.isEmpty()) {
-            for (String s : dns.split(",")) {
-                String ip = s.trim();
-                if (!ip.isEmpty()) {
-                    b.addDnsServer(ip);
+    private void fail(String msg) {
+        Live.state = "error";
+        Live.err = msg == null ? "" : msg;
+        Journal.add("error " + Live.err);
+        Bus.post();
+        updateNote();
+        if (!stopping.get() && Prefs.reconnect(this) && retries < 8) {
+            retries++;
+            main.postDelayed(() -> {
+                if (!stopping.get()) {
+                    go.execute(this::startSession);
                 }
+            }, Math.min(8000, 200 * (1 << retries)));
+            return;
+        }
+        stopSelf();
+    }
+
+    private boolean applyTun(Snapshot snap) throws Exception {
+        if (snap == null) {
+            return false;
+        }
+        String ip = nz(snap.getIP());
+        String ip6 = nz(snap.getIP6());
+        if (ip.isEmpty() && ip6.isEmpty()) {
+            return false;
+        }
+        String key = ip + "|" + ip6 + "|" + snap.getDNS() + "|" + snap.getFrontIPs() + "|" + snap.getMTU();
+        if (key.equals(lastAddr) && tun != null) {
+            paint(snap);
+            return true;
+        }
+        RoutePlan rp = RoutePlan.of(this, snap);
+        Builder b = new Builder()
+                .setSession(Live.name.isEmpty() ? "loft" : Live.name)
+                .setMtu(snap.getMTU() > 0 ? snap.getMTU() : 1280)
+                .setBlocking(true);
+        if (Build.VERSION.SDK_INT >= 29) {
+            b.setMetered(false);
+        }
+        if (rp.overlay4 != null) {
+            b.addAddress(rp.overlay4.address(), rp.overlay4.bits);
+            if (Build.VERSION.SDK_INT >= 33) {
+                b.allowFamily(android.system.OsConstants.AF_INET);
             }
         }
-        String fronts = snap.getFrontIPs();
-        if (fronts != null && !fronts.isEmpty() && Build.VERSION.SDK_INT >= 33) {
-            for (String s : fronts.split(",")) {
-                String ip = s.trim();
-                if (ip.isEmpty() || !ip.contains(".")) {
+        if (rp.overlay6 != null) {
+            b.addAddress(rp.overlay6.address(), rp.overlay6.bits);
+            if (Build.VERSION.SDK_INT >= 33) {
+                b.allowFamily(android.system.OsConstants.AF_INET6);
+            }
+        } else if (Prefs.defaultRoute(this) && Build.VERSION.SDK_INT >= 33) {
+            b.allowFamily(android.system.OsConstants.AF_INET6);
+        }
+        if (snap.getDNS() != null) {
+            for (String s : snap.getDNS().split(",")) {
+                String d = s.trim();
+                if (d.isEmpty()) {
                     continue;
                 }
-                b.excludeRoute(new IpPrefix(InetAddress.getByName(ip), 32));
+                InetAddress a = Cidr.numeric(d);
+                if (a != null) {
+                    b.addDnsServer(a);
+                }
             }
         }
-        b.setBlocking(true);
-        return b.establish();
+        for (Cidr c : rp.include) {
+            try {
+                b.addRoute(c.address(), c.bits);
+            } catch (Exception ignored) {
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            for (Cidr c : rp.exclude) {
+                try {
+                    b.excludeRoute(new IpPrefix(InetAddress.getByAddress(c.addr), c.bits));
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        if (underlying != null && Build.VERSION.SDK_INT >= 22) {
+            b.setUnderlyingNetworks(new Network[]{underlying});
+        }
+        ParcelFileDescriptor pfd = b.establish();
+        if (pfd == null) {
+            return false;
+        }
+        Thread old = reader;
+        reader = null;
+        if (old != null) {
+            old.interrupt();
+        }
+        synchronized (io) {
+            closeTunLocked();
+            tun = pfd;
+            out = new FileOutputStream(pfd.getFileDescriptor());
+            plan = rp;
+            lastAddr = key;
+        }
+        pumpReads();
+        paint(snap);
+        return true;
     }
 
-    private void pumpReads(ParcelFileDescriptor pfd) {
-        go.execute(() -> {
+    private void paint(Snapshot snap) {
+        Live.state = nz(snap.getState()).isEmpty() ? "on" : snap.getState();
+        Live.err = nz(snap.getErr());
+        Live.ip = nz(snap.getIP());
+        Live.ip6 = nz(snap.getIP6());
+        Live.gateway = nz(snap.getGateway());
+        Live.kind = nz(snap.getKind());
+        Live.dns = nz(snap.getDNS());
+        Live.instance = nz(snap.getInstanceID());
+        Live.mtu = snap.getMTU() > 0 ? snap.getMTU() : 1280;
+        Live.rates(snap.getBytesUp(), snap.getBytesDown());
+        if ("on".equals(Live.state)) {
+            Live.holding = false;
+        }
+        updateNote();
+        Bus.post();
+    }
+
+    private void pumpReads() {
+        final ParcelFileDescriptor pfd;
+        synchronized (io) {
+            pfd = tun;
+        }
+        if (pfd == null) {
+            return;
+        }
+        reader = new Thread(() -> {
             byte[] buf = new byte[2048];
             try (FileInputStream in = new FileInputStream(pfd.getFileDescriptor())) {
                 int n;
-                while ((n = in.read(buf)) > 0) {
+                while (!stopping.get() && (n = in.read(buf)) > 0) {
+                    Engine eng = engine;
+                    RoutePlan rp = plan;
+                    if (eng == null) {
+                        continue;
+                    }
                     byte[] pkt = new byte[n];
                     System.arraycopy(buf, 0, pkt, 0, n);
-                    if (engine != null) {
-                        engine.injectPacket(pkt);
+                    if (rp != null && rp.destDropped(pkt)) {
+                        continue;
+                    }
+                    try {
+                        eng.injectPacket(pkt);
+                    } catch (Exception ignored) {
                     }
                 }
             } catch (Exception ignored) {
             }
-        });
+        }, "loft-tun");
+        reader.setDaemon(true);
+        reader.start();
+    }
+
+    private void tick() {
+        main.removeCallbacks(ticker);
+        main.postDelayed(ticker, 1000);
+    }
+
+    private void tickOnce() {
+        if (stopping.get() || engine == null) {
+            return;
+        }
+        Snapshot snap = engine.snapshot();
+        if (snap == null) {
+            tick();
+            return;
+        }
+        String st = nz(snap.getState());
+        try {
+            if ("on".equals(st) || "connecting".equals(st)) {
+                applyTun(snap);
+            }
+        } catch (Exception e) {
+            Journal.add("tun " + e.getMessage());
+        }
+        paint(snap);
+        if ("error".equals(st) && !stopping.get()) {
+            Journal.add("session " + snap.getErr());
+            if (Prefs.reconnect(this)) {
+                go.execute(() -> {
+                    stopEngine();
+                    startSession();
+                });
+                return;
+            }
+        }
+        tick();
+    }
+
+    private void watchPath() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            return;
+        }
+        unwatchPath();
+        seenPath = false;
+        pathCb = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(Network network) {
+                underlying = network;
+                Live.underlying = label(cm, network);
+                try {
+                    setUnderlyingNetworks(new Network[]{network});
+                } catch (Exception ignored) {
+                }
+                if (seenPath) {
+                    Live.holding = true;
+                    Journal.add("path " + Live.underlying);
+                    Engine eng = engine;
+                    if (eng != null) {
+                        eng.notifyPathChange();
+                    }
+                    Bus.post();
+                }
+                seenPath = true;
+            }
+
+            @Override
+            public void onLost(Network network) {
+                if (network.equals(underlying)) {
+                    Live.holding = true;
+                    Live.underlying = "";
+                    Engine eng = engine;
+                    if (eng != null) {
+                        eng.notifyPathChange();
+                    }
+                    Bus.post();
+                }
+            }
+
+            @Override
+            public void onCapabilitiesChanged(Network network, NetworkCapabilities cap) {
+                if (!network.equals(underlying) || cap == null) {
+                    return;
+                }
+                Live.underlying = label(cm, network);
+            }
+        };
+        try {
+            cm.registerDefaultNetworkCallback(pathCb);
+        } catch (Exception e) {
+            Journal.add("path watch " + e.getMessage());
+        }
+    }
+
+    private void unwatchPath() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm != null && pathCb != null) {
+            try {
+                cm.unregisterNetworkCallback(pathCb);
+            } catch (Exception ignored) {
+            }
+        }
+        pathCb = null;
+    }
+
+    private static String label(ConnectivityManager cm, Network n) {
+        try {
+            NetworkCapabilities c = cm.getNetworkCapabilities(n);
+            if (c == null) {
+                return "";
+            }
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                return "Wi-Fi";
+            }
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                return "LTE";
+            }
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                return "Ethernet";
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
     }
 
     @Override
     public void onPacket(byte[] pkt) {
-        if (pkt == null || out == null) {
+        if (pkt == null) {
             return;
         }
-        try {
-            out.write(pkt);
-        } catch (Exception ignored) {
+        synchronized (io) {
+            if (out == null) {
+                return;
+            }
+            try {
+                out.write(pkt);
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -147,25 +435,35 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         return protect((int) fd);
     }
 
-    private Notification notice() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel ch = new NotificationChannel(CH, "loft", NotificationManager.IMPORTANCE_LOW);
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) {
-                nm.createNotificationChannel(ch);
-            }
+    private void stopSession() {
+        main.removeCallbacks(ticker);
+        unwatchPath();
+        stopEngine();
+        synchronized (io) {
+            closeTunLocked();
         }
-        Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                ? new Notification.Builder(this, CH)
-                : new Notification.Builder(this);
-        return b.setContentTitle("loft")
-                .setContentText("Connected")
-                .setSmallIcon(android.R.drawable.ic_lock_lock)
-                .setOngoing(true)
-                .build();
+        running = false;
+        Live.reset();
+        Bus.post();
     }
 
-    private void closeTun() {
+    private void stopEngine() {
+        Engine eng = engine;
+        engine = null;
+        if (eng != null) {
+            try {
+                eng.stop();
+            } catch (Exception ignored) {
+            }
+        }
+        Thread r = reader;
+        reader = null;
+        if (r != null) {
+            r.interrupt();
+        }
+    }
+
+    private void closeTunLocked() {
         try {
             if (out != null) {
                 out.close();
@@ -180,6 +478,76 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         } catch (Exception ignored) {
         }
         tun = null;
-        engine = null;
+        lastAddr = "";
+    }
+
+    private void updateNote() {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm != null) {
+            nm.notify(NOTE, notice(noteText()));
+        }
+    }
+
+    private String noteText() {
+        StringBuilder b = new StringBuilder();
+        if (Live.holding) {
+            b.append(getString(R.string.hold)).append(" · ");
+        }
+        if (!Live.name.isEmpty()) {
+            b.append(Live.name);
+        }
+        if (!Live.kind.isEmpty()) {
+            if (b.length() > 0) {
+                b.append(" · ");
+            }
+            b.append(Live.kind);
+        }
+        if (!Live.ip.isEmpty()) {
+            b.append(' ').append(Live.ip);
+        }
+        return b.length() == 0 ? getString(R.string.connected) : b.toString();
+    }
+
+    private Notification notice(String text) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel ch = new NotificationChannel(CH, "loft", NotificationManager.IMPORTANCE_LOW);
+            ch.setShowBadge(false);
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) {
+                nm.createNotificationChannel(ch);
+            }
+        }
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent open = PendingIntent.getActivity(this, 0,
+                new Intent(this, MainActivity.class), flags);
+        PendingIntent stop = PendingIntent.getService(this, 1,
+                new Intent(this, LoftVpnService.class).setAction(ACTION_STOP), flags);
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, CH)
+                : new Notification.Builder(this);
+        return b.setContentTitle("loft")
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_loft)
+                .setContentIntent(open)
+                .setOngoing(true)
+                .addAction(0, getString(R.string.disconnect), stop)
+                .build();
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    static void requestStart(Context c) {
+        Intent i = new Intent(c, LoftVpnService.class).setAction(ACTION_START);
+        if (Build.VERSION.SDK_INT >= 26) {
+            c.startForegroundService(i);
+        } else {
+            c.startService(i);
+        }
+    }
+
+    static void requestStop(Context c) {
+        c.startService(new Intent(c, LoftVpnService.class).setAction(ACTION_STOP));
     }
 }

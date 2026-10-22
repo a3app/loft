@@ -1,0 +1,85 @@
+package app.loft.android;
+
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
+
+import java.security.KeyStore;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+
+/** AES-GCM in AndroidKeyStore. Falls back to plaintext if the store is missing. */
+final class Box {
+    private static final String ALIAS = "app.loft.profiles";
+    private static final String KS = "AndroidKeyStore";
+    private static final String TF = "AES/GCM/NoPadding";
+    private static final int IV = 12;
+    private static final int TAG = 128;
+
+    static String seal(String plain) {
+        if (plain == null) {
+            plain = "";
+        }
+        try {
+            SecretKey key = key();
+            Cipher c = Cipher.getInstance(TF);
+            c.init(Cipher.ENCRYPT_MODE, key);
+            byte[] iv = c.getIV();
+            byte[] ct = c.doFinal(plain.getBytes("UTF-8"));
+            byte[] out = new byte[iv.length + ct.length];
+            System.arraycopy(iv, 0, out, 0, iv.length);
+            System.arraycopy(ct, 0, out, iv.length, ct.length);
+            return "v1:" + Base64.encodeToString(out, Base64.NO_WRAP);
+        } catch (Exception e) {
+            return "p:" + plain;
+        }
+    }
+
+    static String open(String blob) {
+        if (blob == null || blob.isEmpty()) {
+            return "";
+        }
+        if (blob.startsWith("p:")) {
+            return blob.substring(2);
+        }
+        if (!blob.startsWith("v1:")) {
+            return blob;
+        }
+        try {
+            byte[] raw = Base64.decode(blob.substring(3), Base64.NO_WRAP);
+            if (raw.length <= IV) {
+                return "";
+            }
+            SecretKey key = key();
+            Cipher c = Cipher.getInstance(TF);
+            GCMParameterSpec spec = new GCMParameterSpec(TAG, raw, 0, IV);
+            c.init(Cipher.DECRYPT_MODE, key, spec);
+            byte[] pt = c.doFinal(raw, IV, raw.length - IV);
+            return new String(pt, "UTF-8");
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static SecretKey key() throws Exception {
+        KeyStore ks = KeyStore.getInstance(KS);
+        ks.load(null);
+        if (ks.containsAlias(ALIAS)) {
+            KeyStore.SecretKeyEntry e = (KeyStore.SecretKeyEntry) ks.getEntry(ALIAS, null);
+            if (e != null) {
+                return e.getSecretKey();
+            }
+        }
+        KeyGenerator g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KS);
+        g.init(new KeyGenParameterSpec.Builder(ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build());
+        return g.generateKey();
+    }
+}
