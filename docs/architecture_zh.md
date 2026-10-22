@@ -63,7 +63,7 @@ clients/
 ```
 client.Holder
     Supervise(cfg)                 轮换出站和前置
-        Open(target)               get | ws | h2 | quic | h3
+        Open(target)               get | ws | h2 | quic | h3 | l3
             TLS 1.3 (uTLS)
             auth 0x02 (nonce || eph_c || HMAC)
             Hello MemberCaps（没有 CapRelay；loft-node 中继上有 ExtraCaps）
@@ -71,7 +71,7 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`select: auto` 时，`Supervise` 按列表顺序试配置好的出站。第一次 Status 之后只留前置的交集。失败就换下一条还在的前置，再试未签名的 `replicas`，再试签过的名册。节点省略 `fronts` 只宣告 GET；`ws`、`h2`、`quic`、`h3` 要显式列出。
+`select: auto` 时，`Supervise` 按列表顺序试配置好的出站。第一次 Status 之后只留前置的交集。失败就换下一条还在的前置，再试未签名的 `replicas`，再试签过的名册。节点省略 `fronts` 只宣告 GET；`ws`、`h2`、`quic`、`h3`、`l3` 要显式列出。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报（无 mux）；TUN 直接拷包，不走用户态 TCP 栈。
 
 `WatchPath` 大约一秒采四次默认 IPv4 出口。GET 上 Wi-Fi / LTE / VPN 地址一变就换 HTTP/2 套接字；sid、mux、seq 留下（不做 `0x02`）。`ws`、`h2`、`quic`、`h3` 丢掉前置；Supervise 做 Park，再用新的 `0x02` 和同一个 `instance_id` 续上。SOCKS5 和 TUN 还绑着（`Holder`）；覆盖网 IP 不变。有 cap `hold` 时，Park 让 mux 流在 `gap_hold_ms`（默认 8 秒）里还在，里面的 TCP 不 RST。Park 之后的 GET 握手按 `instance_id` 捡起这条 mux（新的 HTTP sid，同一条 mux）。`loft` 和 `loft-front` 都跑这个循环。
 

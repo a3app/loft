@@ -157,7 +157,7 @@ export LOFT_TOKEN='long-secret'
 | `token` | 节点密钥（`LOFT_TOKEN`）：伪装、控制器 seed。成员密钥在 `members.keys`。 |
 | `get_path` `ws_path` `h2_path` `h3_path` | 前置路径 |
 | `get_h2` | GET 的 HTTP/2 连接数，1–4（默认 1）。inflight 总数共用。 |
-| `fronts` | 空 = `get`。要 `ws`、`h2`、`quic`、`h3` 就列入。`connect` 是 mux-off 的 HTTP CONNECT 拼接；未列入则关 |
+| `fronts` | 空 = `get`。要 `ws`、`h2`、`quic`、`h3` 就列入。`connect` 是 mux-off 的 HTTP CONNECT 拼接；未列入则关。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报；未列入则关 |
 | `decoy` | `host:port` 列表。第一条是节点身份。空 = 关 |
 | `decoy_proxy` | `enable`：每个 TCP 拼接先发一行带客户端地址的 PROXY v1。只用于自己的网页服务器（nginx `listen … proxy_protocol`）；公共网站会出错。默认关。不影响 UDP |
 | `mask` | 给 loft 客户端 dest 形状的 ECDSA 握手；探测照样拼接 |

@@ -157,7 +157,7 @@ export LOFT_TOKEN='long-secret'
 | `token` | Секрет ноды (`LOFT_TOKEN`): mask, seed контроллера. Ключи участников — `members.keys`. |
 | `get_path` `ws_path` `h2_path` `h3_path` | Пути фронтов |
 | `get_h2` | Число HTTP/2-соединений GET, 1–4 (по умолчанию 1). Inflight общий на все. |
-| `fronts` | Пусто = `get`. `ws`, `h2`, `quic`, `h3` — явно. `connect` — стыковка HTTP CONNECT без mux; выключена, пока не указана |
+| `fronts` | Пусто = `get`. `ws`, `h2`, `quic`, `h3` — явно. `connect` — стыковка HTTP CONNECT без mux; выключена, пока не указана. `l3` — HTTP/2 CONNECT, затем IP-дейтаграммы; выключен, пока не указан |
 | `decoy` | список `host:port`. Первая запись — личность ноды. Пусто = выкл |
 | `decoy_proxy` | `enable`: каждая TCP-стыковка начинается строкой PROXY v1 с адресом клиента. Только для своего веб-сервера (nginx `listen … proxy_protocol`); чужой сайт сломается. По умолчанию выкл. UDP не затрагивает |
 | `mask` | Рукопожатие ECDSA формы dest для клиентов loft; зонды по-прежнему стыкуются |

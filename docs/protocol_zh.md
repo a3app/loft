@@ -14,7 +14,7 @@
 
 loft 是私有覆盖网，其外部路径为端口 443 上的 TLS 1.3，ClientHello 呈浏览器形态，应用数据为 HTTPS。CDN、反向代理或 TLS 终结器可以终结该 TLS 会话。内部流经多路复用并以 ChaCha20-Poly1305 封装，因此 TLS 终结器得不到 mux 明文。
 
-内部协议只有一套。外部传输——GET、WebSocket、HTTP/2 CONNECT、QUIC 或 HTTP/3 CONNECT——按部署选择，可以变更而不提高协议版本。节点可以向没有成员密钥的对端出示已配置的 HTTPS 源站，使扫描器与健康检查观察到网站。成员密钥、地址租约与存活前置名单由控制器持有。中继是可替换的 TLS 边缘。客户端获取经签名的前置名册与具名地址列表，并将这些列表映射到本机路由。同一网络的成员可以在枢纽上隔离、经节点做 mesh，或允许直接尝试 TCP。
+内部协议只有一套。外部传输——GET、WebSocket、HTTP/2 CONNECT、QUIC、HTTP/3 CONNECT 或可选的 L3 CONNECT——按部署选择，可以变更而不提高协议版本。节点可以向没有成员密钥的对端出示已配置的 HTTPS 源站，使扫描器与健康检查观察到网站。成员密钥、地址租约与存活前置名单由控制器持有。中继是可替换的 TLS 边缘。客户端获取经签名的前置名册与具名地址列表，并将这些列表映射到本机路由。同一网络的成员可以在枢纽上隔离、经节点做 mesh，或允许直接尝试 TCP。
 
 典型部署：从外部进入实验室局域网、管理机群、站点互联。
 
@@ -67,7 +67,7 @@ loft 占据与 HTTPS 相同的外部位置，因此可以像站点一样部署�
 | **节点** | 覆盖网服务器（`loft-node`）：认证成员并转发 mux。 |
 | **成员** | 成员密钥的持有者。密钥为 `lt_` 加 48 个小写十六进制字符（24 字节）。节点存储整串的 SHA-256。 |
 | **实例** | 客户端生成并本地保存的标识。与成员一起命名一份租约。 |
-| **前置** | 承载 mux 的外部 HTTPS 传输：`get`、`ws`、`h2`、`quic`、`h3`。可选的 `connect` 拼接 TCP，不经内部 mux Open。 |
+| **前置** | 承载 mux 的外部 HTTPS 传输：`get`、`ws`、`h2`、`quic`、`h3`。可选的 `connect` 拼接 TCP，不经内部 mux Open。可选的 `l3` 与 `h2` 同为 HTTP/2 CONNECT，其后为 IP 数据报而非 mux。 |
 | **源站** | 已配置的 HTTPS 站点。没有有效成员标记的对端拼接到该站点（诱饵拼接）。 |
 | **Mux** | AEAD 之下的内部流与数据报协议。 |
 | **名册** | 经 Ed25519 签名的存活前置列表。 |
@@ -87,14 +87,14 @@ loft 占据与 HTTPS 相同的外部位置，因此可以像站点一样部署�
 application   TCP / UDP          （SOCKS 与 TUN 为本机）
     mux       Open Data Close Reset Ping Pong Pad Dgram Leave
       AEAD    ChaCha20-Poly1305
-        front get | ws | h2 | quic | h3
+        front get | ws | h2 | quic | h3 | l3
           TLS 1.3
             TCP/443 or UDP/443
 ```
 
 1. **TLS。** 外部。CDN、负载均衡或源站可以终结它。
 2. **认证与 AEAD。** 内部。持有成员密钥即证明成员身份。ChaCha20-Poly1305 对 TLS 终结器隐藏 mux。
-3. **Mux。** 客户端与节点之间、以及经节点到互联网或其他成员的流与数据报。
+3. **Mux。** 客户端与节点之间、以及经节点到互联网或其他成员的流与数据报。前置 `l3` 在此承载 IP 数据报，而非 mux。
 
 TLS ClientHello 应该做成当下浏览器那样（密码套件、扩展、JA3/JA4）。CDN 厂商名是部署配置。它们不得作为协议能力出现。
 
@@ -119,7 +119,7 @@ stateDiagram-v2
 
 节点在 Status `caps` 中宣告已开启的前置。客户端在 Hello `caps` 中宣告将使用的前置。第一次 Status 之后，客户端必须只用交集，按其配置顺序，当前前置失败时必须切到剩下的下一条前置。
 
-节点省略 `fronts` 时只开启 `get`。`ws`、`h2`、`quic`、`h3` 与 `connect` 未列入则关闭。双方都列出全部传输前置时，尝试顺序为 `get`、`ws`、`h2`、`quic`、`h3`。
+节点省略 `fronts` 时只开启 `get`。`ws`、`h2`、`quic`、`h3`、`connect` 与 `l3` 未列入则关闭。双方都列出全部传输前置时，尝试顺序为 `get`、`ws`、`h2`、`quic`、`h3`。`l3` 不在该尝试列表中。
 
 ### 3.1 诱饵拼接
 
@@ -213,6 +213,19 @@ Status 可以置 `canary_flags`：bit 0 为填充（“胖”）ClientHello，bi
 ### 3.9 CONNECT 拼接 (`connect`)
 
 GET mux 是请求/响应上的流协议。节点可以在 `fronts` 列出 `connect` 时于 Status 置能力 `connect`（默认关）。GET 或 WebSocket 握手（租约、覆盖网 IP）之后，客户端可以用 HTTP/2 `CONNECT` `:authority` `host:port` 打开 TCP，而不用 mux `CmdOpen`。CONNECT 走与 GET 同一份存活的 HTTP/2 池（可选 `h2_max_age_ms`）。该 CONNECT 必须携带与 GET 握手相同的 0x02 Cookie（`Cookie: session=` base64url）。证明失败为 HTTP 404。节点拨打目标并拼接字节。它必须拒绝 loopback、link-local（含 `169.254.169.254`）、multicast、unspecified 与 `localhost`。覆盖网成员 IP、UDP 与 ICMP 仍走 mux。没有 `connect` 的节点，每条 TCP 都走 mux。未开此前置的 HTTP CONNECT 必须为 404。
+
+### 3.10 L3 (`l3`)
+
+节点可以在 `fronts` 列出 `l3` 时于 Status 置能力 `l3`（默认关）。外部传输与 `h2` 相同（§3.5）：ALPN `h2`，CONNECT 到节点本地路径（默认 `/api/v1/tunnel`），`:protocol` `loft`。认证与 AEAD(Status) 仍是带长度前缀的同一套报文。Status 之后内部明文不是 mux。每段 AEAD 明文为：
+
+```
+u8    type
+bytes payload
+```
+
+类型 `0x00` 为一份 IPv4 或 IPv6 数据报（载荷首字节的版本半字节选择族）。类型 `0x01` 为批：重复 `u16be n || 数据报`（n 为数据报长度）。发送方宜把数据报攒进一段 AEAD 明文，最多 16 KiB 或 2 ms，使 Seal 不按每个 MSS 执行。ICMP 与 TCP SYN、FIN、RST 宜立即刷出。接收方必须同时接受 `0x00` 与 `0x01`。未知类型忽略。
+
+节点按覆盖网目的转发：覆盖网网关应答 ICMP echo；另一名带 `l3` 会话的成员收到该数据报；覆盖网 CIDR 之外的目的由节点发出。Hello 必须为此内部置能力 `l3`；未置该位的 CONNECT Hello 在开启 `h2` 时仍走 mux。关闭 CONNECT 流即结束该前置。覆盖网 IP 跟随 `instance_id` 与 `lease_hold`，与其他前置相同。带同一 `instance_id` 的新 CONNECT 可以保留 NAT 流：回程按覆盖网 IP 查找当前 L3 槽。没有 mux hold。SOCKS、TUN 与操作系统路由仍属客户端本地。
 
 ---
 
@@ -344,6 +357,7 @@ u8    software_len || software
 | 26 | hold | mux 流在短暂丢失前置后仍在；以 `0x02` 与同一成员加 `instance_id` 续上 |
 | 27 | quic_mark | 诱饵节点上的 quic：Initial 必须携带 loft 标记（§11.3） |
 | 28 | h3_mark | 诱饵节点上的 h3：Initial 必须携带 loft 标记（§11.3） |
+| 29 | l3 | HTTP/2 CONNECT 承载 IP 数据报（无 mux） |
 
 节点关闭某前置必须清该位。客户端不使用某前置必须清该位。SOCKS、TUN、CDN 厂商、操作系统、git 与源站主机名不是能力。
 

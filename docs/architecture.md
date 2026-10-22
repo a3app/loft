@@ -63,7 +63,7 @@ A member session is established by a dial, an auth blob, and a Status; mux follo
 ```
 client.Holder
     Supervise(cfg)                 rotate outbounds and fronts
-        Open(target)               get | ws | h2 | quic | h3
+        Open(target)               get | ws | h2 | quic | h3 | l3
             TLS 1.3 (uTLS)
             auth 0x02 (nonce || eph_c || HMAC)
             Hello MemberCaps (no CapRelay; ExtraCaps on loft-node relay)
@@ -71,7 +71,7 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`Supervise` tries configured outbounds in list order when `select: auto`. After the first Status it keeps only the intersection of fronts. On failure it moves to the next remaining front, then unsigned `replicas`, then the signed roster. A node that omits `fronts` advertises GET only; `ws`, `h2`, `quic`, and `h3` are listed explicitly.
+`Supervise` tries configured outbounds in list order when `select: auto`. After the first Status it keeps only the intersection of fronts. On failure it moves to the next remaining front, then unsigned `replicas`, then the signed roster. A node that omits `fronts` advertises GET only; `ws`, `h2`, `quic`, `h3`, and `l3` are listed explicitly. `l3` is HTTP/2 CONNECT then IP datagrams (no mux); TUN copies packets and skips the userspace TCP stack.
 
 `WatchPath` samples the default IPv4 egress about four times a second. On GET, a Wi-Fi / LTE / VPN address change replaces HTTP/2 sockets; sid, mux, and seq stay (no `0x02`). `ws`, `h2`, `quic`, and `h3` drop the front; Supervise Parks and resumes with a fresh `0x02` and the same `instance_id`. SOCKS5 and TUN stay bound (`Holder`); the overlay IP does not change. With cap `hold`, Park keeps mux streams for `gap_hold_ms` (default 8 s) and inner TCP does not RST. A GET handshake after Park adopts that mux by `instance_id` (new HTTP sid, same mux). `loft` and `loft-front` both run this loop.
 

@@ -14,7 +14,7 @@ Operation of the reference node: [guide.md](guide.md). Source layout: [architect
 
 loft is a private overlay whose external path is TLS 1.3 on port 443 with a browser-shaped ClientHello and HTTPS application data. A CDN, reverse proxy, or TLS terminator MAY terminate that TLS session. Inner streams are multiplexed and sealed with ChaCha20-Poly1305, so a terminator of TLS does not obtain mux plaintext.
 
-The inner protocol is one. The outer transfer — GET, WebSocket, HTTP/2 CONNECT, QUIC, or HTTP/3 CONNECT — is selected per deployment and MAY change without a protocol-version increase. A node MAY present a configured HTTPS origin to peers that lack a member key, so a scanner or health check observes a website. Member keys, address leases, and the list of live fronts are held on a controller. Relays are replaceable TLS edges. Clients fetch a signed roster of fronts and named address lists and map those lists to local routing. Members of one network MAY be isolated at a hub, meshed through the node, or permitted a direct TCP attempt.
+The inner protocol is one. The outer transfer — GET, WebSocket, HTTP/2 CONNECT, QUIC, HTTP/3 CONNECT, or optional L3 CONNECT — is selected per deployment and MAY change without a protocol-version increase. A node MAY present a configured HTTPS origin to peers that lack a member key, so a scanner or health check observes a website. Member keys, address leases, and the list of live fronts are held on a controller. Relays are replaceable TLS edges. Clients fetch a signed roster of fronts and named address lists and map those lists to local routing. Members of one network MAY be isolated at a hub, meshed through the node, or permitted a direct TCP attempt.
 
 Typical deployments: laboratory LAN access from outside, a server fleet, site-to-site.
 
@@ -67,7 +67,7 @@ Integers are big-endian. String fields on Hello, Status, and most fleet records 
 | **Node** | Overlay server (`loft-node`) that authenticates members and forwards mux. |
 | **Member** | Holder of a member key. The key is `lt_` and 48 lowercase hex characters (24 bytes). The node stores SHA-256 of the whole string. |
 | **Instance** | Client-generated identifier stored locally. Together with the member it names a lease. |
-| **Front** | External HTTPS transfer that carries mux: `get`, `ws`, `h2`, `quic`, `h3`. Optional `connect` splices TCP without inner mux Open. |
+| **Front** | External HTTPS transfer that carries mux: `get`, `ws`, `h2`, `quic`, `h3`. Optional `connect` splices TCP without inner mux Open. Optional `l3` is the same HTTP/2 CONNECT as `h2`, then IP datagrams instead of mux. |
 | **Origin** | Configured HTTPS site. A peer without a valid member mark is spliced to this site (decoy splice). |
 | **Mux** | Inner stream and datagram protocol under AEAD. |
 | **Roster** | Ed25519-signed list of live fronts. |
@@ -87,14 +87,14 @@ Integers are big-endian. String fields on Hello, Status, and most fleet records 
 application   TCP / UDP          (SOCKS and TUN are local)
     mux       Open Data Close Reset Ping Pong Pad Dgram Leave
       AEAD    ChaCha20-Poly1305
-        front get | ws | h2 | quic | h3
+        front get | ws | h2 | quic | h3 | l3
           TLS 1.3
             TCP/443 or UDP/443
 ```
 
 1. **TLS.** External. A CDN, load balancer, or origin MAY terminate it.
 2. **Authentication and AEAD.** Inner. Possession of the member key proves membership. ChaCha20-Poly1305 hides mux from the terminator of TLS.
-3. **Mux.** Streams and datagrams between client and node, and through the node to the Internet or other members.
+3. **Mux.** Streams and datagrams between client and node, and through the node to the Internet or other members. Front `l3` carries IP datagrams here instead of mux.
 
 The TLS ClientHello SHOULD match a current browser (cipher list, extensions, JA3/JA4). CDN vendor names are deployment profiles. They MUST NOT appear as protocol capabilities.
 
@@ -119,7 +119,7 @@ stateDiagram-v2
 
 A node advertises enabled fronts in Status `caps`. A client advertises the fronts it will use in Hello `caps`. After the first Status the client MUST use only the intersection, in its configured order, and MUST move to the next remaining front when the current one fails.
 
-If a node omits `fronts`, only `get` is enabled. `ws`, `h2`, `quic`, `h3`, and `connect` are off until listed. When both sides list every transport front, the try order is `get`, `ws`, `h2`, `quic`, `h3`.
+If a node omits `fronts`, only `get` is enabled. `ws`, `h2`, `quic`, `h3`, `connect`, and `l3` are off until listed. When both sides list every transport front, the try order is `get`, `ws`, `h2`, `quic`, `h3`. `l3` is not in that try list.
 
 ### 3.1 Decoy splice
 
@@ -213,6 +213,19 @@ Status MAY set `canary_flags`: bit 0 padded (“fat”) ClientHello, bit 1 Clien
 ### 3.9 CONNECT splice (`connect`)
 
 GET mux is a stream protocol over request/response. A node MAY set Status cap `connect` when `fronts` lists `connect` (off by default). After the GET or WebSocket handshake (lease, overlay IP), a client MAY open TCP with HTTP/2 `CONNECT` `:authority` `host:port` instead of mux `CmdOpen`. CONNECT uses the same live GET HTTP/2 pool (optional `h2_max_age_ms`). That CONNECT MUST carry the same 0x02 Cookie as the GET handshake (`Cookie: session=` base64url). Failed proof is HTTP 404. The node dials the target and splices bytes. It MUST refuse loopback, link-local (including `169.254.169.254`), multicast, unspecified, and `localhost`. Overlay member IPs, UDP, and ICMP stay on mux. A node without `connect` keeps mux for every TCP. HTTP CONNECT without this front MUST be 404.
+
+### 3.10 L3 (`l3`)
+
+A node MAY set Status cap `l3` when `fronts` lists `l3` (off by default). The outer transfer is the same HTTP/2 CONNECT as `h2` (§3.5): ALPN `h2`, CONNECT to the node-local path (default `/api/v1/tunnel`), `:protocol` `loft`. Authentication and AEAD(Status) are the same length-prefixed messages. After Status the inner plaintext is not mux. Each AEAD plaintext is:
+
+```
+u8    type
+bytes payload
+```
+
+Type `0x00` is one IPv4 or IPv6 datagram (the version nibble of the first payload byte). Type `0x01` is a batch of `u16be n || datagram` (n is the datagram length). A sender SHOULD cork datagrams into one AEAD plaintext, at most 16 KiB or 2 ms, so Seal is not per MSS. ICMP and TCP SYN, FIN, and RST SHOULD flush at once. A receiver MUST accept both `0x00` and `0x01`. Unknown types are ignored.
+
+The node forwards by overlay destination: the overlay gateway answers ICMP echo; another member with an `l3` session receives the datagram; a destination outside the overlay CIDR is emitted from the node. Hello MUST set cap `l3` for this inner; a CONNECT Hello without that bit stays mux when `h2` is enabled. Closing the CONNECT stream ends that front. Overlay IP follows `instance_id` and `lease_hold` as on other fronts. A new CONNECT with the same `instance_id` MAY keep NAT flows: replies look up the live L3 sink by overlay IP. There is no mux hold. SOCKS, TUN, and operating-system routing remain local to the client.
 
 ---
 
@@ -344,6 +357,7 @@ Selected protocol is the maximum of the intersection of the two ranges. Empty in
 | 26 | hold | mux streams survive a brief front drop; resume with `0x02` and the same member plus `instance_id` |
 | 27 | quic_mark | quic on a decoy node: the Initial MUST carry the loft mark (§11.3) |
 | 28 | h3_mark | h3 on a decoy node: the Initial MUST carry the loft mark (§11.3) |
+| 29 | l3 | HTTP/2 CONNECT carrying IP datagrams (no mux) |
 
 A node that disables a front MUST clear that bit. A client that will not use a front MUST clear it. SOCKS, TUN, CDN vendor, OS, git, and origin hostnames are not capabilities.
 

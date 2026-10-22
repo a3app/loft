@@ -157,7 +157,7 @@ export LOFT_TOKEN='long-secret'
 | `token` | Node secret (`LOFT_TOKEN`): mask, controller seed. Member keys are `members.keys`. |
 | `get_path` `ws_path` `h2_path` `h3_path` | Front paths |
 | `get_h2` | GET HTTP/2 connections, 1–4 (default 1). Total inflight is shared across them. |
-| `fronts` | Empty = `get`. List `ws`, `h2`, `quic`, `h3` to opt in. `connect` is mux-off HTTP CONNECT splice; off unless listed |
+| `fronts` | Empty = `get`. List `ws`, `h2`, `quic`, `h3` to opt in. `connect` is mux-off HTTP CONNECT splice; off unless listed. `l3` is HTTP/2 CONNECT then IP datagrams; off unless listed |
 | `decoy` | `host:port` list. First entry is the node identity. Empty = off |
 | `decoy_proxy` | `enable`: each TCP splice starts with a PROXY v1 line carrying the client address. Only for your own web server (nginx `listen … proxy_protocol`); a public site would break. Default off. UDP is not affected |
 | `mask` | Dest-shaped ECDSA handshake for loft clients; probes still splice |

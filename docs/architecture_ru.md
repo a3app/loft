@@ -63,7 +63,7 @@ clients/
 ```
 client.Holder
     Supervise(cfg)                 перебирает исходящие и фронты
-        Open(target)               get | ws | h2 | quic | h3
+        Open(target)               get | ws | h2 | quic | h3 | l3
             TLS 1.3 (uTLS)
             auth 0x02 (nonce || eph_c || HMAC)
             Hello MemberCaps (без CapRelay; ExtraCaps у loft-node relay)
@@ -71,7 +71,7 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`Supervise` при `select: auto` пробует настроенные исходящие по порядку списка. После первого Status оставляет только пересечение фронтов. При отказе идёт к следующему оставшемуся фронту, затем к неподписанным `replicas`, затем к подписанному roster. Нода без `fronts` рекламирует только GET; `ws`, `h2`, `quic` и `h3` перечисляют явно.
+`Supervise` при `select: auto` пробует настроенные исходящие по порядку списка. После первого Status оставляет только пересечение фронтов. При отказе идёт к следующему оставшемуся фронту, затем к неподписанным `replicas`, затем к подписанному roster. Нода без `fronts` рекламирует только GET; `ws`, `h2`, `quic`, `h3` и `l3` перечисляют явно. `l3` — HTTP/2 CONNECT, затем IP-дейтаграммы (без mux); TUN копирует пакеты и не поднимает пользовательский TCP-стек.
 
 `WatchPath` снимает исходящий IPv4 по умолчанию примерно четыре раза в секунду. На GET смена адреса Wi-Fi / LTE / VPN меняет сокеты HTTP/2; sid, mux и seq остаются (без `0x02`). `ws`, `h2`, `quic` и `h3` бросают фронт; Supervise делает Park и возобновляет свежим `0x02` и тем же `instance_id`. SOCKS5 и TUN остаются привязаны (`Holder`); IP оверлея не меняется. При возможности `hold` Park держит mux-потоки `gap_hold_ms` (по умолчанию 8 с), внутренний TCP не получает RST. GET-рукопожатие после Park подхватывает этот mux по `instance_id` (новый HTTP sid, тот же mux). Этот цикл крутят и `loft`, и `loft-front`.
 
