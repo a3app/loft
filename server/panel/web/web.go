@@ -127,6 +127,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("POST /api/channels/prio/delete", s.need(area("network", store.Change), channelOp[admproto.ChannelName](s, admproto.OpChannelPrioDelete)))
 	mux.HandleFunc("POST /api/channels/wgkey", s.need(area("network", store.Change), s.wgKey))
 	mux.HandleFunc("POST /api/channels/xray", s.need(area("network", store.Change), s.xrayParse))
+	mux.HandleFunc("GET /api/overview", s.need(area("main", store.View), s.overview))
 	mux.HandleFunc("GET /api/me", s.need(anyone, s.meGet))
 	mux.HandleFunc("POST /api/me/password", s.need(anyone, s.mePassword))
 	mux.HandleFunc("POST /api/me/token", s.need(anyone, s.meToken))

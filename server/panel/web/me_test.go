@@ -51,3 +51,18 @@ func TestMeSelfService(t *testing.T) {
 		t.Fatalf("new password %d", r.code)
 	}
 }
+
+func TestOverviewShape(t *testing.T) {
+	e := newEnv(t)
+	c, _ := e.owner()
+	r := e.do("GET", "/api/overview", nil, c, "")
+	if r.code != 200 {
+		t.Fatalf("overview %d %v", r.code, r.body)
+	}
+	if _, ok := r.body["addrs"].([]any); !ok {
+		t.Fatalf("addrs %T", r.body["addrs"])
+	}
+	if sv, ok := r.body["server"].(map[string]any); !ok || sv["arch"] == "" {
+		t.Fatalf("server %v", r.body["server"])
+	}
+}
