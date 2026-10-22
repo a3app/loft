@@ -1,4 +1,4 @@
-# loft 1.0.25
+# loft 1.0.26
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -29,6 +29,28 @@ Not in Dist: iOS / Android / Sailfish / Keenetic / MikroTik clients (catalog and
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.26
+
+Protocol stays **loft/1.0**.
+
+Android phone (GET overlay):
+
+- Overlay DNS on gateway:53 is answered off-TUN so the browser resolves while GET hold is 80ms. AAAA is NODATA until overlay IPv6 exists.
+- PreferGo resolver bypasses overlay/private nameservers on protected sockets.
+- RoutePlan omits `::/0` without overlay IPv6 (gVisor is IPv4-only).
+- `instance_id` persists across process kill. Path watch uses NOT_VPN. Protect before TUN is skipped. Fatal auth is not retried.
+- systemExempted foreground service; emulator `loft.app`.
+
+Front / macOS:
+
+- Overlay sockets pin to the physical uplink. `auth_bad_key` surfaces on the Home pill.
+- Through-loft no longer blackholes the default when tun-up misses.
+
+Identity / panel:
+
+- Old member tokens stay until network apply.
+- Member and node edits apply without a Save button.
 
 ## 1.0.25
 
@@ -94,7 +116,7 @@ macOS:
 
 В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Sailfish, Keenetic, MikroTik в этот Dist не входят.
 
-1.0.25: loft-front на 10.13 (не символы Security из macOS 12); маршруты through-loft на utun; фронт l3 (HTTP/2 CONNECT, IP внутри, по желанию); GET-only нода без UDP listen; панель: обзор, свой аккаунт, зона, поиск, справка, журнал, приоритеты каналов. Протокол loft/1.0.
+1.0.26: Android GET — stub DNS у шлюза overlay, PreferGo без hairpin, без `::/0` пока нет overlay IPv6, instance_id на диске, path watch NOT_VPN; фронт на физическом uplink; панель применяет правки без Save. Протокол loft/1.0.
 
 ---
 
@@ -104,4 +126,4 @@ loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流
 
 本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Sailfish / Keenetic / MikroTik 不在这次包里。
 
-1.0.25：loft-front 在 10.13 上能起来（不用 macOS 12 的 Security 符号）；through-loft 路由留在 utun；可选前置 l3（HTTP/2 CONNECT，里面是 IP）；只开 GET 的节点不再听 UDP；面板：总览、我的账户、区域页、搜索、帮助、日志、通道优先级。协议仍是 loft/1.0。
+1.0.26：Android GET 在网关 53 上本地解析、PreferGo 避开 overlay DNS、无 overlay IPv6 时不加 ::/0、instance_id 落盘、path watch NOT_VPN；前置钉在物理上行；面板改成员/节点无需 Save。协议仍是 loft/1.0。
