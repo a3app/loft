@@ -1576,7 +1576,7 @@ function delMember(id){const [n,m]=findMember(id);n.members.splice(n.members.ind
 /* изменения ноды применяются только перезапуском: нода читает настройки при старте */
 const pend=()=>`<div class="note" role="status"><span><b>2 изменения ждут перезапуска ноды.</b> <span class="mute">Подключения членов прервутся на 2–3 секунды и восстановятся сами.</span></span><span class="note-acts"><button class="btn sm" type="button">Что изменено</button><button class="btn sm pri" type="button">Перезапустить</button></span></div>`;
 const FRONTS=[['get','HTTP GET','Публичный путь по умолчанию. Обычный HTTPS GET, в том числе через CDN.',1,0],['ws','WebSocket','Опция. Один WebSocket на путь API. Прямой origin, не CDN.',0],['h2','HTTP/2 CONNECT','Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.',0],
- ['quic','QUIC','Опция. Своё QUIC по UDP/443.',0],['h3','HTTP/3','Опция. HTTP/3 CONNECT поверх QUIC.',0]];
+ ['quic','QUIC','Опция. Своё QUIC по UDP/443.',0],['h3','HTTP/3','Опция. HTTP/3 CONNECT поверх QUIC.',0],['l3','L3','Опция. HTTP/2 CONNECT на прямом origin, внутри — IP-пакеты без mux.',0]];
 const RELAYS=[['de-1','de1.example.net:443','get','100','в сети','34','12 с назад'],['fi-1','fi1.example.net:443','get','100','выведен','0','—'],['nl-1','nl1.example.net:443','get','100','не в сети','—','—']];
 const LISTS=[['blocked-ru','2 140','.example.ru, 198.51.100.0/24, …'],['local','14','.lan, 192.168.0.0/16, …'],['ads','38 512','ads.example.com, .tracker.example, …']];
 V.node=()=>{

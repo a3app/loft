@@ -1345,6 +1345,7 @@ window.LOFT_EN = {
   "Транспорт": "Transport",
   "Трафик за сутки": "Traffic in 24 h",
   "Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.": "Optional. HTTP/2 CONNECT on a direct origin. More bulk than GET.",
+  "Опция. HTTP/2 CONNECT на прямом origin, внутри — IP-пакеты без mux.": "Optional. HTTP/2 CONNECT on a direct origin; inside, IP datagrams without mux.",
   "Туннель внутри HTTP/2. Быстрее GET при хорошем канале.": "A tunnel inside HTTP/2. Faster than GET on a good link.",
   "У $": "$ has",
   "У root здесь меняются только SSH-ключи": "Only root's SSH keys change here",

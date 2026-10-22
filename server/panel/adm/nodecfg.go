@@ -87,7 +87,7 @@ func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 
 var pathRe = regexp.MustCompile(`^/[A-Za-z0-9._~/-]{1,80}$`)
 
-var knownFronts = []string{"get", "ws", "h2", "quic", "h3"}
+var knownFronts = []string{"get", "ws", "h2", "quic", "h3", "l3"}
 
 // NodeSave writes the panel's commands into node.conf. A change of relays
 // or enrol only reloads the node; anything else restarts it, and a node

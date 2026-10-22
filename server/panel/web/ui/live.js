@@ -1390,7 +1390,7 @@
 
   /* ── the loft node: node.conf, lists, relays, access ── */
   L.nd = null; L.ndDraft = null; L.pres = null;
-  const FR = [['get', 'HTTP GET', 'Публичный путь по умолчанию. Обычный HTTPS GET, в том числе через CDN.'], ['ws', 'WebSocket', 'Опция. Один WebSocket на путь API. Прямой origin, не CDN.'], ['h2', 'HTTP/2 CONNECT', 'Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.'], ['quic', 'QUIC', 'Опция. Своё QUIC по UDP/443.'], ['h3', 'HTTP/3', 'Опция. HTTP/3 CONNECT поверх QUIC.']];
+  const FR = [['get', 'HTTP GET', 'Публичный путь по умолчанию. Обычный HTTPS GET, в том числе через CDN.'], ['ws', 'WebSocket', 'Опция. Один WebSocket на путь API. Прямой origin, не CDN.'], ['h2', 'HTTP/2 CONNECT', 'Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.'], ['quic', 'QUIC', 'Опция. Своё QUIC по UDP/443.'], ['h3', 'HTTP/3', 'Опция. HTTP/3 CONNECT поверх QUIC.'], ['l3', 'L3', 'Опция. HTTP/2 CONNECT на прямом origin, внутри — IP-пакеты без mux.']];
   async function loadNode() {
     const [c, p] = await Promise.allSettled([api('GET', '/api/nodecfg'), api('GET', '/api/presence')]);
     if (c.status === 'fulfilled') { L.nd = c.value; L.ndDraft = JSON.parse(JSON.stringify(c.value)); } else toast('Настройки ноды не прочитаны: ' + c.reason.message);
