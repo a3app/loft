@@ -19,7 +19,7 @@
               → protect(fd) на сокетах фронта
 ```
 
-Процесса `loft-front` нет. Служба *и есть* сессия.
+Процесса `loft-front` нет. Служба *и есть* сессия. Стартует как foreground service типа `systemExempted` (VpnService на API 34+).
 
 ## 2. Bind
 
@@ -41,3 +41,7 @@ Java-пакет `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketPr
 | Приложение телефона | API **26**, target **36** |
 | Язык | Java 17 |
 | Android TV / Google TV | тот же AAR; макет [`design/tv/`](../clients/Android/design/tv/); Leanback flavor позже ([план](../clients/Android/PLAN.md) фаза 4) |
+
+## 5. Эмулятор
+
+`make android` пишет `loft.app` рядом с `app-debug.apk` в [`dist/clients/Android/`](../dist/clients/Android/). Промежуточное Gradle — там же в `gradle/`, не в `clients/Android/`. На macOS двойной щелчок: поднять AVD `loft-phone`, `adb install -r` этот APK, положить loft и Browser (AOSP WebView Shell) на домашний экран, запустить `app.loft.android/.MainActivity`. Содержимое — [`clients/Android/emulator/`](../clients/Android/emulator/). SDK: `ANDROID_HOME` или `/usr/local/share/android-commandlinetools`. Журнал: `~/Library/Logs/loft-emulator.log`. На Intel Mac с AMD GPU окно остаётся чёрным при `-gpu auto` (gfxstream/host GLES); `loft.app` поднимает AVD с `-gpu swiftshader_indirect`.

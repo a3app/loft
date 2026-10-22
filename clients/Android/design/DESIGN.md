@@ -70,7 +70,7 @@ Intent filter `loft`: tapping `loft://…` offers import. `.loft` files open thr
 | Long-press | Menu: Edit; Export `.loft` when the row is selected; Delete. |
 | Export | Sheet: this connection as `Name.loft`; QR `loft://` of the live front; all connections as `Family.loft`. |
 
-A live session is a **foreground service** (type `connectedDevice`). The shade shows the name, kind · transport · overlay IP, Disconnect. On API 33+ there is also the notification permission sheet, once.
+A live session is a **foreground service** (type `systemExempted`, the VpnService case on API 34+). The shade shows the name, kind · transport · overlay IP, Disconnect. On API 33+ there is also the notification permission sheet, once.
 
 **No Internet without VPN** on Android is the system **Always-on VPN** and **Block connections without VPN**. The app opens that Settings page; the user flips the switches.
 

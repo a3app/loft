@@ -70,7 +70,7 @@ intent 过滤 `loft`：点 `loft://…` 提示导入。`.loft` 文件走同一�
 | 长按 | 菜单：编辑；选中的行有导出 `.loft`；删除。 |
 | 导出 | 弹出页：这条连接 `Name.loft`；当前前置的二维码 `loft://`；全部连接 `Family.loft`。 |
 
-活着的会话是 **前台服务**（类型 `connectedDevice`）。通知栏里：名称、类型 · 传输 · overlay IP、断开。API 33+ 还有一次通知权限页。
+活着的会话是 **前台服务**（类型 `systemExempted`，API 34+ 上的 VpnService 情形）。通知栏里：名称、类型 · 传输 · overlay IP、断开。API 33+ 还有一次通知权限页。
 
 Android 上的 **无 VPN 时禁止联网** 就是系统的 **始终开启的 VPN** 和 **阻止不使用 VPN 的连接**。应用打开那页设置；开关由用户自己拨。
 

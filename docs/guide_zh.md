@@ -20,6 +20,7 @@ make probe     # dist/clients/go/loft-probe
 make macos     # dist/clients/macOS/loft.app
 make macos-dmg # dist/clients/macOS/loft-*-macos-<arch>.dmg  （Applications 符号链接）
 make macos-dmgs # arm64 和 x86_64 两份 DMG（CI）
+make android   # dist/clients/Android/loft.app + app-debug.apk
 make dist      # 节点 tarball/.deb + CLI 归档
 ```
 

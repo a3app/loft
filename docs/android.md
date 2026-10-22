@@ -19,7 +19,7 @@ apps
               → protect(fd) on front sockets
 ```
 
-There is no `loft-front`. The service *is* the session.
+There is no `loft-front`. The service *is* the session. It starts as a foreground service of type `systemExempted` (VpnService on API 34+).
 
 ## 2. Bind
 
@@ -41,3 +41,7 @@ Path change: `ConnectivityManager.NetworkCallback` on the default network. The s
 | Phone app | API **26**, target **36** |
 | Language | Java 17 |
 | Android TV / Google TV | same AAR; 10-foot mock [`design/tv/`](../clients/Android/design/tv/); Leanback flavor later ([PLAN](../clients/Android/PLAN.md) phase 4) |
+
+## 5. Emulator
+
+`make android` writes `loft.app` next to `app-debug.apk` in [`dist/clients/Android/`](../dist/clients/Android/). Gradle intermediates stay there under `gradle/`, not in `clients/Android/`. Double-click `loft.app` on macOS: boot AVD `loft-phone`, `adb install -r` that APK, pin loft and Browser (AOSP WebView Shell) on the home screen, start `app.loft.android/.MainActivity`. Payload lives in [`clients/Android/emulator/`](../clients/Android/emulator/). SDK: `ANDROID_HOME` or `/usr/local/share/android-commandlinetools`. Log: `~/Library/Logs/loft-emulator.log`. On Intel Mac with an AMD GPU the window stays black with `-gpu auto` (gfxstream/host GLES); `loft.app` starts the AVD with `-gpu swiftshader_indirect`.

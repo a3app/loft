@@ -117,6 +117,7 @@ make client     # dist/clients/go/loft
 make macos      # dist/clients/macOS/loft.app
 make macos-dmg  # dist/clients/macOS/loft-*-macos-<arch>.dmg
 make macos-dmgs # оба DMG, arm64 и x86_64 (CI)
+make android    # dist/clients/Android/loft.app + app-debug.apk
 make dist       # tarball/.deb ноды + архивы CLI
 ```
 

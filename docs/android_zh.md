@@ -19,7 +19,7 @@ loft 在手机上怎么跑，然后是 Android TV / Google TV。目录：[client
               → 前置套接字上 protect(fd)
 ```
 
-没有 `loft-front`。服务*就是*会话。
+没有 `loft-front`。服务*就是*会话。以 `systemExempted` 前台服务类型启动（API 34+ 上的 VpnService）。
 
 ## 2. Bind
 
@@ -41,3 +41,7 @@ Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProte
 | 手机应用 | API **26**，target **36** |
 | 语言 | Java 17 |
 | Android TV / Google TV | 同一个 AAR；十英尺模型 [`design/tv/`](../clients/Android/design/tv/)；Leanback flavor 以后再说（[计划](../clients/Android/PLAN.md) 第 4 阶段） |
+
+## 5. 模拟器
+
+`make android` 把 `loft.app` 和 `app-debug.apk` 写到 [`dist/clients/Android/`](../dist/clients/Android/)。Gradle 中间文件在那里的 `gradle/`，不进 `clients/Android/`。在 macOS 上双击 `loft.app`：启动 AVD `loft-phone`，`adb install -r` 这份 APK，把 loft 和 Browser（AOSP WebView Shell）钉到主屏，打开 `app.loft.android/.MainActivity`。内容在 [`clients/Android/emulator/`](../clients/Android/emulator/)。SDK：`ANDROID_HOME` 或 `/usr/local/share/android-commandlinetools`。日志：`~/Library/Logs/loft-emulator.log`。Intel Mac 配 AMD GPU 时 `-gpu auto`（gfxstream/host GLES）会黑屏；`loft.app` 用 `-gpu swiftshader_indirect` 启动 AVD。

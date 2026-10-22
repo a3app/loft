@@ -15,6 +15,7 @@ clients/Android/
   PLAN.md                  phone done; Android TV mock in design/tv; Leanback flavor later
   design/                  phone UX spec and HTML mock
   design/tv/               10-foot UX spec and HTML mock
+  emulator/                macOS loft.app payload (copied into dist)
   app/src/main/java/app/loft/android/
     LoftVpnService.java    tun ↔ Engine, path, dual-stack, protect
     MainActivity.java      Home / Connections / Settings
@@ -28,9 +29,10 @@ minSdk **26** (GUI / notification channel). Engine AAR is built for API **24**. 
 ## Build
 
 ```bash
-make -C ../mobile android    # needs Android NDK; writes ../mobile/build/engine.aar
-# Android Studio → open clients/Android
-# or: gradle :app:assembleDebug
+make android                 # from repo root; needs Android NDK
+# or: make -C clients/Android
 ```
+
+Writes `dist/clients/Android/app-debug.apk` and `loft.app`. Intermediates stay under `dist/clients/Android/gradle/`, not in `clients/Android/`. Double-click `loft.app` to boot AVD `loft-phone`, install that APK, pin loft and Browser on the home screen, and start loft. AOSP has no Chrome; Browser is WebView Shell. Intel Mac + AMD GPU uses SwiftShader (`-gpu swiftshader_indirect`); host GLES leaves a black window.
 
 Ids: `app.loft.android`. VPN type: `VpnService`. One system VPN row.

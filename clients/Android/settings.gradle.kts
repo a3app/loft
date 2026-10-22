@@ -1,3 +1,7 @@
+val androidDist = settingsDir.resolve("../../dist/clients/Android").canonicalFile
+androidDist.mkdirs()
+gradle.startParameter.projectCacheDir = androidDist.resolve(".gradle")
+
 pluginManagement {
     repositories {
         google()

@@ -4,7 +4,16 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- sliders, same as the Android mock tabbar -->
     <path
-        android:fillColor="@color/snow"
-        android:pathData="M12,8a4,4 0,1 1,0 8a4,4 0,1 1,0 -8zM12,2l1.5,3 3.2,-0.8 1.6,3 -2.4,2.4 2.4,2.4 -1.6,3 -3.2,-0.8L12,22l-1.5,-3 -3.2,0.8 -1.6,-3 2.4,-2.4 -2.4,-2.4 1.6,-3 3.2,0.8z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M4,7h10M18,7h2M4,17h2M10,17h10"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M16,7m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0M8,17m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF" />
 </vector>

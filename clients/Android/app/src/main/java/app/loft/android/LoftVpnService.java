@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.net.ConnectivityManager;
 import android.net.IpPrefix;
 import android.net.Network;
@@ -67,7 +68,12 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             return START_NOT_STICKY;
         }
         stopping.set(false);
-        startForeground(NOTE, notice(getString(R.string.connecting)));
+        Notification n = notice(getString(R.string.connecting));
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(NOTE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED);
+        } else {
+            startForeground(NOTE, n);
+        }
         go.execute(this::startSession);
         return START_STICKY;
     }

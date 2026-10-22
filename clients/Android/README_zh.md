@@ -15,6 +15,7 @@ clients/Android/
   PLAN.md                  手机已完成；电视模型在 design/tv；Leanback flavor 以后
   design/                  手机 UX 说明和 HTML 模型
   design/tv/               十英尺 UX 说明和 HTML 模型
+  emulator/                macOS loft.app 内容（复制进 dist）
   app/src/main/java/app/loft/android/
     LoftVpnService.java    tun ↔ Engine，路径，双栈，protect
     MainActivity.java      主页 / 连接 / 设置
@@ -28,9 +29,10 @@ minSdk **26**（GUI / 通知渠道）。引擎 AAR 按 API **24** 编。targetSd
 ## 编译
 
 ```bash
-make -C ../mobile android    # 需要 Android NDK；写出 ../mobile/build/engine.aar
-# 然后 Android Studio → open clients/Android
-# 或：gradle :app:assembleDebug
+make android                 # 在仓库根目录；需要 Android NDK
+# 或：make -C clients/Android
 ```
+
+写出 `dist/clients/Android/app-debug.apk` 和 `loft.app`。中间文件在 `dist/clients/Android/gradle/`，不进 `clients/Android/`。双击 `loft.app` 会启动 AVD `loft-phone`、安装这份 APK、把 loft 和 Browser 钉到主屏并打开 loft。AOSP 没有 Chrome；Browser 是 WebView Shell。Intel Mac + AMD GPU 走 SwiftShader（`-gpu swiftshader_indirect`）；host GLES 会黑屏。
 
 Id：`app.loft.android`。VPN 类型：`VpnService`。系统里一条 VPN。

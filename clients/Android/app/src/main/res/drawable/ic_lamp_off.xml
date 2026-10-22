@@ -2,12 +2,13 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="72dp"
     android:height="72dp"
-    android:viewportWidth="72"
-    android:viewportHeight="72">
-    <path
-        android:fillColor="@color/slate"
-        android:pathData="M16,12h18v6H22v36h30v6H16z" />
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- same L-roof; window off = mute body, slate pane -->
     <path
         android:fillColor="@color/mute"
-        android:pathData="M40,18h16v14H40z" />
+        android:pathData="M37.764,6.7191 A0.96,0.96 0,0 1,39.0071 6.7437 L57.6,29.52 L57.6,63.76 A4.4,4.4 0,0 0,62 68.16 L84.8,68.16 A3.2,3.2 0,0 1,88 71.36 L88,86.16 A3.84,3.84 0,0 1,84.16 90 L21.44,90 A3.84,3.84 0,0 1,17.6 86.16 L17.6,29.52 Z" />
+    <path
+        android:fillColor="@color/slate"
+        android:pathData="M31.36,36.24 H43.84 A2.56,2.56 0,0 1,46.4 38.8 V55.52 A2.56,2.56 0,0 1,43.84 58.08 H31.36 A2.56,2.56 0,0 1,28.8 55.52 V38.8 A2.56,2.56 0,0 1,31.36 36.24 Z" />
 </vector>

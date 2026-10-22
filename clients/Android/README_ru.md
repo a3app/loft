@@ -15,6 +15,7 @@ clients/Android/
   PLAN.md                  телефон готов; макет TV в design/tv; Leanback позже
   design/                  спецификация UX и HTML-макет телефона
   design/tv/               макет с дивана
+  emulator/                содержимое macOS loft.app (копируется в dist)
   app/src/main/java/app/loft/android/
     LoftVpnService.java    tun ↔ Engine, путь, dual-stack, protect
     MainActivity.java      Главная / Подключения / Настройки
@@ -28,9 +29,10 @@ minSdk **26** (GUI / канал уведомлений). AAR движка соб
 ## Сборка
 
 ```bash
-make -C ../mobile android    # нужен Android NDK; пишет ../mobile/build/engine.aar
-# Android Studio → open clients/Android
-# или: gradle :app:assembleDebug
+make android                 # из корня репозитория; нужен Android NDK
+# или: make -C clients/Android
 ```
+
+Пишет `dist/clients/Android/app-debug.apk` и `loft.app`. Промежуточное — в `dist/clients/Android/gradle/`, не в `clients/Android/`. Двойной щелчок по `loft.app` поднимает AVD `loft-phone`, ставит этот APK, кладёт loft и Browser на домашний экран и открывает loft. В AOSP нет Chrome; Browser — WebView Shell. Intel Mac + AMD GPU — SwiftShader (`-gpu swiftshader_indirect`); host GLES даёт чёрное окно.
 
 Id: `app.loft.android`. Тип VPN: `VpnService`. Одна системная строка VPN.
