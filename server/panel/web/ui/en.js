@@ -979,7 +979,7 @@ window.LOFT_EN = {
   "DNS через $": "DNS via $",
   "панель сама создаёт и меняет записи.": "the panel creates and changes the records itself.",
   "Регистрация до $": "Registered until $",
-  "имя или значение": "name or value",
+  "имя, тип или значение": "name, type or value",
   "Сертификаты зоны": "Zone certificates",
   "Для имён этой зоны сертификатов нет.": "No certificates for names in this zone.",
   "API-ключ": "API key",
