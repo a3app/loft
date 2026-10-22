@@ -25,7 +25,7 @@ func TestNegotiate(t *testing.T) {
 
 // TestCapNames checks NodeCaps bits and Names order.
 func TestCapNames(t *testing.T) {
-	if !NodeCaps.Has(CapGET) || !NodeCaps.Has(CapP2P) || !NodeCaps.Has(CapDNS) || !NodeCaps.Has(CapConnect) || !NodeCaps.Has(CapResin) || !NodeCaps.Has(CapHold) || NodeCaps.Has(1<<28) {
+	if !NodeCaps.Has(CapGET) || !NodeCaps.Has(CapP2P) || !NodeCaps.Has(CapDNS) || !NodeCaps.Has(CapConnect) || !NodeCaps.Has(CapResin) || !NodeCaps.Has(CapHold) || !NodeCaps.Has(CapL3) || NodeCaps.Has(1<<28) {
 		t.Fatalf("%v", NodeCaps.Names())
 	}
 	// Status still advertises trunks; default Hello does not (audit CapRelay).

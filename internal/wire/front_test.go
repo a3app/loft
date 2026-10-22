@@ -55,4 +55,34 @@ func TestParseFrontConnect(t *testing.T) {
 	if !c.Has(CapGET) || !c.Has(CapConnect) || c.Has(CapWS) {
 		t.Fatalf("%v", c.Names())
 	}
+	if f := c.Fronts(); len(f) != 2 || f[0] != FrontGET || f[1] != FrontConnect {
+		t.Fatalf("advertise %v", f)
+	}
+}
+
+// TestParseFrontL3 is the IP front; it is not in FrontOrder, and Status still lists it.
+func TestParseFrontL3(t *testing.T) {
+	got, err := ParseFronts([]string{"h2", "l3"})
+	if err != nil || len(got) != 2 || got[1] != FrontL3 {
+		t.Fatalf("%v %v", got, err)
+	}
+	for _, f := range FrontOrder {
+		if f == FrontL3 {
+			t.Fatal("l3 is not a mux try-list front")
+		}
+	}
+	c := CapsWithFronts(NodeCaps, got)
+	if !c.Has(CapH2) || !c.Has(CapL3) || c.Has(CapWS) {
+		t.Fatalf("%v", c.Names())
+	}
+	if f := c.Fronts(); len(f) != 2 || f[0] != FrontH2 || f[1] != FrontL3 {
+		t.Fatalf("advertise %v", f)
+	}
+	only, err := ParseFronts([]string{"l3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := CapsWithFronts(NodeCaps, only).Fronts(); len(f) != 1 || f[0] != FrontL3 {
+		t.Fatalf("l3-only %v", f)
+	}
 }

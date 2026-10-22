@@ -6,6 +6,7 @@ import "fmt"
 
 // Front names on the wire and in config. get/ws/quic stay; h2 and h3 are extra.
 // connect is HTTP CONNECT splice (mux-off TCP); it is not in FrontOrder.
+// l3 is HTTP/2 CONNECT carrying IP datagrams; it is not in FrontOrder.
 const (
 	FrontGET     = "get"
 	FrontWS      = "ws"
@@ -13,17 +14,18 @@ const (
 	FrontH2      = "h2"
 	FrontH3      = "h3"
 	FrontConnect = "connect"
+	FrontL3      = "l3"
 )
 
 // FrontOrder is the try-list when both sides list every transport front.
 var FrontOrder = []string{FrontGET, FrontWS, FrontH2, FrontQUIC, FrontH3}
 
 // DefaultFronts is the public path when config omits fronts: GET only.
-// ws, h2, quic, h3, and connect stay off until listed.
+// ws, h2, quic, h3, connect, and l3 stay off until listed.
 func DefaultFronts() []string { return []string{FrontGET} }
 
 // FrontBits is the cap mask of transport fronts (not other features).
-const FrontBits = CapGET | CapWS | CapQUIC | CapH2 | CapH3 | CapConnect
+const FrontBits = CapGET | CapWS | CapQUIC | CapH2 | CapH3 | CapConnect | CapL3
 
 // CapForFront maps a front name to its capability bit. Unknown names are 0.
 func CapForFront(f string) Cap {
@@ -40,14 +42,18 @@ func CapForFront(f string) Cap {
 		return CapH3
 	case FrontConnect:
 		return CapConnect
+	case FrontL3:
+		return CapL3
 	default:
 		return 0
 	}
 }
 
-// Fronts lists enabled transport fronts in FrontOrder. A decoy node sends
-// quic and h3 as quic_mark and h3_mark so a client that cannot mark its
-// QUIC Initial does not try them.
+// Fronts lists enabled transport fronts in FrontOrder, then connect and l3
+// when those bits are set. connect and l3 are not in the mux try-list; they
+// still have to appear here so a reconnect keeps an advertised extra front.
+// A decoy node sends quic and h3 as quic_mark and h3_mark so a client that
+// cannot mark its QUIC Initial does not try them.
 func (c Cap) Fronts() []string {
 	var out []string
 	for _, f := range FrontOrder {
@@ -55,18 +61,23 @@ func (c Cap) Fronts() []string {
 			out = append(out, f)
 		}
 	}
+	for _, f := range []string{FrontConnect, FrontL3} {
+		if c.Has(CapForFront(f)) {
+			out = append(out, f)
+		}
+	}
 	return out
 }
 
-// ParseFront accepts get/ws/h2/quic/h3/connect. Empty is get. Vendor names are rejected.
+// ParseFront accepts get/ws/h2/quic/h3/connect/l3. Empty is get. Vendor names are rejected.
 func ParseFront(s string) (string, error) {
 	switch s {
 	case "", FrontGET:
 		return FrontGET, nil
-	case FrontWS, FrontQUIC, FrontH2, FrontH3, FrontConnect:
+	case FrontWS, FrontQUIC, FrontH2, FrontH3, FrontConnect, FrontL3:
 		return s, nil
 	default:
-		return "", fmt.Errorf("unknown front %q (want get, ws, h2, quic, h3 or connect)", s)
+		return "", fmt.Errorf("unknown front %q (want get, ws, h2, quic, h3, connect or l3)", s)
 	}
 }
 

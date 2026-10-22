@@ -53,6 +53,7 @@ const (
 	CapHold                      // mux streams survive a brief front drop
 	CapQUICMark                  // quic front on a decoy node: the Initial must carry the loft mark
 	CapH3Mark                    // h3 front on a decoy node: the Initial must carry the loft mark
+	CapL3                        // HTTP/2 CONNECT carrying AEAD IP datagrams (no mux)
 	capSentinel
 )
 
@@ -63,7 +64,7 @@ const NodeCaps = CapMulti | CapResume | CapStickyIP | CapVLAN | CapRules |
 	CapGET | CapWS | CapStatus | CapTimers | CapHelloCaps | CapReset |
 	CapQUIC | CapDgram | CapClockless | CapTicket | CapDecoy |
 	CapH2 | CapH3 | CapMask | CapRelay | CapRoster | CapLists | CapP2P | CapDNS |
-	CapConnect | CapResin | CapHold
+	CapConnect | CapResin | CapHold | CapL3
 
 // MemberCaps is the default Hello offer for loft-front / Supervise.
 // CapRelay is omitted: a member must not self-assert a trunk (hub:* / ctl:1).
@@ -77,7 +78,7 @@ var capName = [...]string{
 	"get", "ws", "status", "timers", "hello_caps", "reset",
 	"quic", "dgram", "clockless", "ticket", "decoy",
 	"h2", "h3", "mask", "relay", "roster", "lists", "p2p", "dns",
-	"connect", "resin", "hold", "quic_mark", "h3_mark",
+	"connect", "resin", "hold", "quic_mark", "h3_mark", "l3",
 }
 
 // Has reports whether all bits in x are set.
