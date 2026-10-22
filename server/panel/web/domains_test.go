@@ -70,6 +70,12 @@ func TestDomainsZonesRecords(t *testing.T) {
 	e.srv.dom.provider = func(dnsProv) DNSProvider { return fd }
 	c, csrf := e.owner()
 	e.srv.Settings.Update(func(st *store.Settings) { st.Domain = "vpn.example.net" })
+	// the page filters it as a list, so even no addresses is []
+	if v := e.do("GET", "/api/domains", nil, c, ""); v.code != 200 {
+		t.Fatalf("domains %d", v.code)
+	} else if _, ok := v.body["server_ips"].([]any); !ok {
+		t.Fatalf("server_ips is %T, want a list", v.body["server_ips"])
+	}
 	p := e.do("POST", "/api/domains/provider", map[string]string{"kind": "cloudflare", "token": "tok-1234567890"}, c, csrf)
 	if p.code != 200 {
 		t.Fatalf("provider %d %v", p.code, p.body)

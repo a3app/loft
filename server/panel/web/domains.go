@@ -246,7 +246,7 @@ func (s *Server) domainsView(ctx context.Context) map[string]any {
 		until, issuer, key, _ := certInfo(c.Fullchain)
 		certs = append(certs, certView{ID: c.ID, Names: c.Names, Method: c.Method, Use: c.Use, Until: until, Issuer: issuer, Key: key})
 	}
-	return map[string]any{"providers": provs, "zones": zones, "certs": certs, "server_ips": ipList(ServerIPs()), "node": st.Domain, "panel": firstOf(st.PanelDomain, st.Domain)}
+	return map[string]any{"providers": provs, "zones": zones, "certs": certs, "server_ips": append([]string{}, ipList2(ServerIPs())...), "node": st.Domain, "panel": firstOf(st.PanelDomain, st.Domain)}
 }
 
 func firstNames(names []string, d string) []string {
