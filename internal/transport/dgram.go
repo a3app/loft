@@ -3,7 +3,8 @@ package transport
 // CmdDgram path: dest:1 inside the overlay CIDR is switched ICMP
 // (FilterDgram, sync DeliverICMP so GET can return the echo-reply in the
 // same request). dest:1 elsewhere is internet ICMP (async). gateway:53 is
-// DNS. Remaining datagrams are internet UDP.
+// DNS (FilterDgram starts DeliverDNS so GET does not wait on ReadDgram).
+// Remaining datagrams are internet UDP.
 
 import (
 	"github.com/a3app/loft/internal/egress"
@@ -24,15 +25,26 @@ func hookServerDgrams(ms *mux.Session) {
 	}
 	ms.FilterDgram(func(addr string, data []byte) bool {
 		host, port, err := net.SplitHostPort(addr)
-		if err != nil || port != overlayICMPPort {
+		if err != nil {
 			return false
 		}
-		if o := NetSwitch(); o != nil && (o.Contains(host) || o.Routed(host) != "") {
-			o.DeliverICMP(ms, data)
+		if port == overlayICMPPort {
+			if o := NetSwitch(); o != nil && (o.Contains(host) || o.Routed(host) != "") {
+				o.DeliverICMP(ms, data)
+				return true
+			}
+			DeliverInternetICMP(ms, data)
 			return true
 		}
-		DeliverInternetICMP(ms, data)
-		return true
+		// GET pullHold is 80ms; DoH is slower. Start resolve at Push so the
+		// next pad can carry the reply. Phone TUN also stubs gateway:53.
+		if port == dnsPort {
+			if o := NetSwitch(); o != nil && o.IsDNS(host) {
+				go o.DeliverDNS(ms, addr, data)
+				return true
+			}
+		}
+		return false
 	})
 }
 
