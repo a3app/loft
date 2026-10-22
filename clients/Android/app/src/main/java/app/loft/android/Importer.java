@@ -3,7 +3,7 @@ package app.loft.android;
 import java.util.ArrayList;
 import java.util.List;
 
-import app.loft.engine.Mobile;
+import app.loft.engine.mobile.Mobile;
 
 /** Paste / QR / file → profiles. Engine ParseShareAll is the detector. */
 final class Importer {

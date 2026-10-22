@@ -5,7 +5,7 @@ import android.content.Context;
 import java.util.ArrayList;
 import java.util.List;
 
-import app.loft.engine.Snapshot;
+import app.loft.engine.mobile.Snapshot;
 
 /** Positive TUN routes plus FrontIP excludes. */
 final class RoutePlan {
@@ -20,12 +20,12 @@ final class RoutePlan {
         if (snap != null) {
             String ip = snap.getIP();
             if (ip != null && !ip.isEmpty()) {
-                int n = snap.getPrefix() > 0 ? snap.getPrefix() : 24;
+                int n = snap.getPrefix() > 0 ? (int) snap.getPrefix() : 24;
                 p.overlay4 = Cidr.parse(ip + "/" + n);
             }
             String ip6 = snap.getIP6();
             if (ip6 != null && !ip6.isEmpty()) {
-                int n = snap.getPrefix6() > 0 ? snap.getPrefix6() : 64;
+                int n = snap.getPrefix6() > 0 ? (int) snap.getPrefix6() : 64;
                 p.overlay6 = Cidr.parse(ip6 + "/" + n);
             }
             p.addFronts(snap.getFrontIPs());

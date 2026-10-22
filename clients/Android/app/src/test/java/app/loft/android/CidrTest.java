@@ -35,7 +35,7 @@ public final class CidrTest {
         assertEquals(32, rest.size());
         boolean covered = false;
         for (Cidr r : rest) {
-            assertFalse(r.contains(one));
+            assertFalse(r.display(), r.contains(one));
             covered = true;
         }
         assertTrue(covered);
@@ -52,7 +52,7 @@ public final class CidrTest {
             if (c.contains(Cidr.parse("10.8.0.2/32"))) {
                 found = true;
             }
-            assertFalse(c.contains(Cidr.parse("192.168.1.1/32")));
+            assertFalse(c.display(), c.contains(Cidr.parse("192.168.1.1/32")));
         }
         assertTrue(found);
     }

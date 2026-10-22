@@ -149,27 +149,16 @@ final class Cidr {
             return out;
         }
         byte[] cur = a.addr.clone();
-        for (int bit = a.bits; bit < b.bits; bit++) {
-            Cidr sibling = flip(cur, bit, a.v6);
-            if (sibling != null) {
-                out.add(sibling);
-            }
-            setBit(cur, bit, bitValue(b.addr, bit));
+        int max = a.v6 ? 128 : 32;
+        for (int bit = a.bits; bit < b.bits && bit < max; bit++) {
+            int v = bitValue(b.addr, bit);
+            byte[] n = cur.clone();
+            setBit(n, bit, 1 - v);
+            zeroAfter(n, bit + 1);
+            out.add(new Cidr(n, bit + 1, a.v6));
+            setBit(cur, bit, v);
         }
         return out;
-    }
-
-    private static Cidr flip(byte[] addr, int bit, boolean v6) {
-        byte[] n = addr.clone();
-        int max = v6 ? 128 : 32;
-        if (bit < 0 || bit >= max) {
-            return null;
-        }
-        int i = bit / 8;
-        int m = 1 << (7 - (bit % 8));
-        n[i] = (byte) (n[i] ^ m);
-        zeroAfter(n, bit + 1);
-        return new Cidr(n, bit + 1, v6);
     }
 
     private static void setBit(byte[] addr, int bit, int v) {
@@ -208,7 +197,7 @@ final class Cidr {
         if (rem == 0) {
             return true;
         }
-        int m = 0xff << (8 - rem);
+        int m = (0xff << (8 - rem)) & 0xff;
         return (a[full] & m) == (b[full] & m);
     }
 

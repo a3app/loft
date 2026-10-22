@@ -23,10 +23,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import app.loft.engine.Engine;
-import app.loft.engine.PacketSink;
-import app.loft.engine.Snapshot;
-import app.loft.engine.SocketProtector;
+import app.loft.engine.mobile.Engine;
+import app.loft.engine.mobile.PacketSink;
+import app.loft.engine.mobile.Snapshot;
+import app.loft.engine.mobile.SocketProtector;
 
 /**
  * Overlay as a first-class Android network: VpnService TUN, protect on every
@@ -169,7 +169,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         RoutePlan rp = RoutePlan.of(this, snap);
         Builder b = new Builder()
                 .setSession(Live.name.isEmpty() ? "loft" : Live.name)
-                .setMtu(snap.getMTU() > 0 ? snap.getMTU() : 1280)
+                .setMtu(snap.getMTU() > 0 ? (int) snap.getMTU() : 1280)
                 .setBlocking(true);
         if (Build.VERSION.SDK_INT >= 29) {
             b.setMetered(false);
@@ -247,7 +247,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         Live.kind = nz(snap.getKind());
         Live.dns = nz(snap.getDNS());
         Live.instance = nz(snap.getInstanceID());
-        Live.mtu = snap.getMTU() > 0 ? snap.getMTU() : 1280;
+        Live.mtu = snap.getMTU() > 0 ? (int) snap.getMTU() : 1280;
         Live.rates(snap.getBytesUp(), snap.getBytesDown());
         if ("on".equals(Live.state)) {
             Live.holding = false;
