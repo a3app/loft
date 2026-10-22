@@ -1,4 +1,4 @@
-# loft 1.0.24
+# loft 1.0.25
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -29,6 +29,26 @@ Not in Dist: iOS / Android / Sailfish / Keenetic / MikroTik clients (catalog and
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.25
+
+Protocol stays **loft/1.0**.
+
+macOS:
+
+- loft-front loads on 10.13. Go 1.22+ bound `SecTrustCopyCertificateChain` (macOS 12); dyld aborted before `main`. The helper is linked `-macos=10.13` with a stdlib overlay that uses `SecTrustEvaluate`.
+- Through-loft routes stay on utun when 0/1 owns default.
+
+Fronts:
+
+- Opt-in front `l3`: HTTP/2 CONNECT carrying corked AEAD IP datagrams. Not in FrontOrder. GET stays the default.
+- A GET-only node no longer starts a UDP listen.
+
+Panel:
+
+- Overview, My account, zone page, search, help, and the system log are live.
+- Connection priorities: multipath lists, per-channel speed limits, link checks.
+- Node fronts list `l3`.
 
 ## 1.0.24
 
@@ -74,7 +94,7 @@ macOS:
 
 В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Sailfish, Keenetic, MikroTik в этот Dist не входят.
 
-1.0.24: хранение ключей членов — по желанию, ссылку можно показать снова; мастер «Домен и DNS» создаёт провайдера, зону, A/AAAA и CAA; страница доменов живая (Cloudflare, DigitalOcean, Namecheap, вручную; HTTP-01 и DNS-01). Протокол loft/1.0.
+1.0.25: loft-front на 10.13 (не символы Security из macOS 12); маршруты through-loft на utun; фронт l3 (HTTP/2 CONNECT, IP внутри, по желанию); GET-only нода без UDP listen; панель: обзор, свой аккаунт, зона, поиск, справка, журнал, приоритеты каналов. Протокол loft/1.0.
 
 ---
 
@@ -84,4 +104,4 @@ loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流
 
 本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Sailfish / Keenetic / MikroTik 不在这次包里。
 
-1.0.24：可选保存成员密钥，链接可再次查看；向导「域名和 DNS」会创建提供商、区域、A/AAAA 和 CAA；域名页可用（Cloudflare、DigitalOcean、Namecheap、手动；HTTP-01 和 DNS-01）。协议仍是 loft/1.0。
+1.0.25：loft-front 在 10.13 上能起来（不用 macOS 12 的 Security 符号）；through-loft 路由留在 utun；可选前置 l3（HTTP/2 CONNECT，里面是 IP）；只开 GET 的节点不再听 UDP；面板：总览、我的账户、区域页、搜索、帮助、日志、通道优先级。协议仍是 loft/1.0。

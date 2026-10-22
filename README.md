@@ -9,7 +9,7 @@ A private overlay is described which is carried inside TLS 1.3. Application stre
 
 The protocol is **loft/1.0**. Connections are shared as **`loft://`**. YAML `kind: loft`.
 
-This repository is the specification together with a reference node, a web panel, and clients (a macOS application and CLI tools for Linux and macOS). Software `1.0.24`. A third party may implement loft from [docs/protocol.md](docs/protocol.md).
+This repository is the specification together with a reference node, a web panel, and clients (a macOS application and CLI tools for Linux and macOS). Software `1.0.25`. A third party may implement loft from [docs/protocol.md](docs/protocol.md).
 
 ## Contents
 
