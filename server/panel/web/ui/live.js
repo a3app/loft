@@ -310,7 +310,7 @@
         ${L.can('domains', 1) ? `<section class="card"><div class="card-h"><h2>Домены</h2><a href="#domains" style="margin-left:auto">Все</a></div>${domBody}</section>` : ''}
         <section class="card"><div class="card-h"><h2>Сервер</h2><span class="mute" style="margin-left:auto">${esc([sv.os, sv.arch].filter(Boolean).join(' · '))}</span></div>
           <dl class="kv">${kv('CPU', sv.mem_total ? Math.round(sv.cpu) + '%' : '—', 'num')}${kv('Память', sv.mem_total ? gb(sv.mem_used) + ' / ' + gb(sv.mem_total) + ' ГБ' : '—', 'num')}${kv('Диск', sv.disk_size ? gb(sv.disk_used) + ' / ' + gb(sv.disk_size) + ' ГБ' : '—', 'num')}
-          ${kv(sv.hours >= 23.5 ? 'Трафик за сутки' : 'Трафик за ' + Math.max(1, Math.round(sv.hours || 0)) + ' ч', sv.hours ? '↓ ' + gb(sv.rx) + ' ГБ · ↑ ' + gb(sv.tx) + ' ГБ' : '—', 'num')}</dl></section>
+          ${kv(!sv.hours || sv.hours >= 23.5 ? 'Трафик за сутки' : 'Трафик за ' + Math.max(1, Math.round(sv.hours || 0)) + ' ч', sv.hours ? '↓ ' + gb(sv.rx) + ' ГБ · ↑ ' + gb(sv.tx) + ' ГБ' : '—', 'num')}</dl></section>
         ${L.can('users', 1) ? `<section class="card"><div class="card-h"><h2>События</h2><a href="#users" style="margin-left:auto" onclick="S.tab.users='log'">Журнал</a></div>
           ${ev.slice(0, 5).map(x => `<div class="ev"><time>${when2(x.at || x.time)}</time><span><b>${esc(whoText(x.user))}</b> ${esc(opText(x))}</span></div>`).join('') || '<p class="mute" style="margin:0">Событий пока нет.</p>'}</section>` : ''}
       </div>`;
