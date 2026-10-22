@@ -12,7 +12,7 @@
 
 | На телефоне | Роль |
 |-------------|------|
-| loft (get / ws / h2 / quic / h3) | оверлей loft. Один `NEPacketTunnelProvider`. |
+| loft (get / ws / h2 / quic / h3 / l3) | оверлей loft. Один `NEPacketTunnelProvider`. |
 | SSTP | Тот же туннель. TLS + PPP, IP из IPCP. Go `internal/sstp`. Импорт YAML `type: sstp` или `sstp://`. |
 | VLESS | Тот же туннель, когда loft режут. Импорт — QR `vless://` (камера или файл). |
 | SOCKS5 как вход продукта | На iOS нет. Чужие приложения не ходят в локальный SOCKS. Вход — системный VPN. |

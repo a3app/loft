@@ -14,7 +14,7 @@ Aurora OS 是这棵树的 OMP 打包：[`aurora/`](aurora/)（`app.loft.aurora`�
 
 | 手机上 | 角色 |
 |--------------|------|
-| loft（get / ws / h2 / quic / h3） | loft 覆盖网。一条 ConnMan。 |
+| loft（get / ws / h2 / quic / h3 / l3） | loft 覆盖网。一条 ConnMan。 |
 | SSTP | 接上以后同一条。TLS + PPP，IP 来自 IPCP。Go `internal/sstp`。 |
 | VLESS | loft 被滤时走同一条。导入是二维码 `vless://`。 |
 | Trojan | loft 被滤时走同一条。导入是二维码 `trojan://`。Go `internal/trojan`。 |

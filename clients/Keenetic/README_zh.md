@@ -12,7 +12,7 @@ Entware 客户端：一个 **OpkgTun** 接口，KeeneticOS 拿它进连接优先
 
 | 路由器上 | 角色 |
 |---------------|------|
-| loft（get / ws / h2 / quic / h3） | loft 覆盖网。一个 OpkgTun。 |
+| loft（get / ws / h2 / quic / h3 / l3） | loft 覆盖网。一个 OpkgTun。 |
 | VLESS | 以后。loft 被滤时的第二条 loft 出站。 |
 | SSTP、WireGuard、OpenVPN、IPsec、OpenConnect | 系统自带 KeeneticOS。不是这个包。 |
 

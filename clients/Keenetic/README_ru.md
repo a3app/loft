@@ -12,7 +12,7 @@
 
 | На роутере | Роль |
 |------------|------|
-| loft (get / ws / h2 / quic / h3) | оверлей loft. Один OpkgTun. |
+| loft (get / ws / h2 / quic / h3 / l3) | оверлей loft. Один OpkgTun. |
 | VLESS | Позже. Второй исходящий loft, если loft режут. |
 | SSTP, WireGuard, OpenVPN, IPsec, OpenConnect | Штатный KeeneticOS. Не этот пакет. |
 

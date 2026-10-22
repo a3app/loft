@@ -28,7 +28,7 @@ No second password. No SSTP form.
 | Gate | Checking Keenetic session. 401 → stock `/` with `return=`. |
 | Status | Lamp, overlay IP / gateway / MTU, live front, up/down bytes, Start/Stop. Link: “Open in Keenetic priorities”. |
 | Connection | Name, `lt_…` key (hidden after save), URL, type, path, optional CDN profile and uTLS fingerprint. |
-| Fronts | Checkboxes get / ws / h2 / quic / h3. Order = try order. Intersection with Status `caps` after handshake. |
+| Fronts | Checkboxes get / ws / h2 / quic / h3 / l3. Order = try order. Intersection with Status `caps` after handshake. |
 | VLESS | Disabled block. Copy: “Same tunnel, later.” |
 | Log | Last 80 lines from the daemon. No key material. |
 

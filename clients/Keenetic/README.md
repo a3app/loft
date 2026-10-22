@@ -12,7 +12,7 @@ This directory is the catalog. No binary yet.
 
 | On the router | Role |
 |---------------|------|
-| loft (get / ws / h2 / quic / h3) | loft overlay. One OpkgTun. |
+| loft (get / ws / h2 / quic / h3 / l3) | loft overlay. One OpkgTun. |
 | VLESS | Later. Second loft outbound when loft is filtered. |
 | SSTP, WireGuard, OpenVPN, IPsec, OpenConnect | Stock KeeneticOS. Not this package. |
 

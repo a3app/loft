@@ -12,7 +12,7 @@ iOS 客户端：一条 **Packet Tunnel**，系统当成 Personal VPN。容器应
 
 | 手机上 | 角色 |
 |--------------|------|
-| loft（get / ws / h2 / quic / h3） | loft 覆盖网。一个 `NEPacketTunnelProvider`。 |
+| loft（get / ws / h2 / quic / h3 / l3） | loft 覆盖网。一个 `NEPacketTunnelProvider`。 |
 | SSTP | 同一条隧道。TLS + PPP，IP 来自 IPCP。Go `internal/sstp`。导入 YAML `type: sstp` 或 `sstp://`。 |
 | VLESS | loft 被滤时走同一条隧道。导入是二维码 `vless://`（相机或文件）。 |
 | SOCKS5 当产品入站 | iOS 没有。别的应用不会去连本机 SOCKS。入站是系统 VPN。 |

@@ -837,6 +837,7 @@
                 <button type="button">H2</button>
                 <button type="button">QUIC</button>
                 <button type="button">H3</button>
+                <button type="button">L3</button>
               </div>
               <label class="field"><span data-i="ePath">Путь</span>
                 <input class="mono" value="/static/v3/build" />
@@ -1199,11 +1200,12 @@
                 <button type="button">H2</button>
                 <button type="button">QUIC</button>
                 <button type="button">H3</button>
+                <button type="button">L3</button>
               </div>
               <label class="field"><span data-i="path">Путь (если давали)</span>
                 <input class="mono" placeholder="/static/v3/build" />
               </label>
-              <p class="hint" data-i="urlHint">HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.</p>
+              <p class="hint" data-i="urlHint">HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP, L3 — IP поверх CONNECT.</p>
             </div>
             <div class="btns">
               <button type="button" class="go" data-i="urlGo">Подключить</button>
@@ -1309,7 +1311,7 @@ hold  armed</pre>
           <div class="ver">1.0.22</div>
           <div class="kick" data-i="protos">протоколы</div>
           <div class="protos">
-            <div class="proto"><span class="k">loft/1.0</span><span class="v">get · ws · h2 · quic · h3 · mask</span></div>
+            <div class="proto"><span class="k">loft/1.0</span><span class="v">get · ws · h2 · quic · h3 · l3 · mask</span></div>
             <div class="proto"><span class="k">SSTP</span><span class="v">ppp · mschapv2 · pap</span></div>
             <div class="proto"><span class="k">Trojan</span><span class="v">tcp · tls · reality · xhttp</span></div>
             <div class="proto"><span class="k">VLESS</span><span class="v">tcp · tls</span></div>
@@ -1744,7 +1746,7 @@ hold  armed</pre>
         url: "URL",
         urlType: "Способ",
         path: "Путь (если давали)",
-        urlHint: "HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP.",
+        urlHint: "HTTPS. GET — файл, WS — канал, H2/H3 — CONNECT, QUIC — UDP, L3 — IP поверх CONNECT.",
         urlGo: "Подключить",
         onbVpn: "Если Аврора спросит разрешение на VPN — нажмите «Разрешить». Это один раз.",
         scanT: "Сканер QR-кода",
@@ -2065,7 +2067,7 @@ hold  armed</pre>
         url: "URL",
         urlType: "Method",
         path: "Path (if you were given one)",
-        urlHint: "HTTPS. GET is a file, WS a channel, H2/H3 CONNECT, QUIC UDP.",
+        urlHint: "HTTPS. GET is a file, WS a channel, H2/H3 CONNECT, QUIC UDP, L3 IP over CONNECT.",
         urlGo: "Connect",
         onbVpn: "If Aurora asks to allow the VPN, tap Allow. Only once.",
         scanT: "Scan QR Code",
@@ -2386,7 +2388,7 @@ hold  armed</pre>
         url: "URL",
         urlType: "方式",
         path: "路径（如果给了）",
-        urlHint: "HTTPS。GET 是文件，WS 是通道，H2/H3 是 CONNECT，QUIC 是 UDP。",
+        urlHint: "HTTPS。GET 是文件，WS 是通道，H2/H3 是 CONNECT，QUIC 是 UDP，L3 是 CONNECT 上的 IP。",
         urlGo: "连接",
         onbVpn: "如果 Aurora 请求允许 VPN，点「允许」。只问一次。",
         scanT: "扫描二维码",

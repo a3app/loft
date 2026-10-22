@@ -14,7 +14,7 @@
 
 | На телефоне | Роль |
 |-------------|------|
-| loft (get / ws / h2 / quic / h3) | оверлей loft. Одна строка ConnMan. |
+| loft (get / ws / h2 / quic / h3 / l3) | оверлей loft. Одна строка ConnMan. |
 | SSTP | Та же строка, когда подключим. TLS + PPP, IP из IPCP. Go `internal/sstp`. |
 | VLESS | Та же строка, когда loft фильтруют. Импорт — QR `vless://`. |
 | Trojan | Та же строка, когда loft фильтруют. Импорт — QR `trojan://`. Go `internal/trojan`. |

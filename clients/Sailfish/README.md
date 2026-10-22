@@ -14,7 +14,7 @@ Thin QML host is in this tree. Cross the helper: `make front`.
 
 | On the phone | Role |
 |--------------|------|
-| loft (get / ws / h2 / quic / h3) | loft overlay. One ConnMan row. |
+| loft (get / ws / h2 / quic / h3 / l3) | loft overlay. One ConnMan row. |
 | SSTP | Same row when wired. TLS + PPP, IP from IPCP. Go `internal/sstp`. |
 | VLESS | Same row when loft is filtered. QR `vless://` is the import. |
 | Trojan | Same row when loft is filtered. QR `trojan://` is the import. Go `internal/trojan`. |

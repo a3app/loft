@@ -12,7 +12,7 @@ Thin host + Packet Tunnel are in this tree. Bind the Go engine first: `make -C .
 
 | On the phone | Role |
 |--------------|------|
-| loft (get / ws / h2 / quic / h3) | loft overlay. One `NEPacketTunnelProvider`. |
+| loft (get / ws / h2 / quic / h3 / l3) | loft overlay. One `NEPacketTunnelProvider`. |
 | SSTP | Same tunnel. TLS + PPP, IP from IPCP. Go `internal/sstp`. Import YAML `type: sstp` or `sstp://`. |
 | VLESS | Same tunnel when loft is filtered. QR `vless://` (camera or file) is the import. |
 | SOCKS5 as the product inbound | Not on iOS. Other apps do not use a local SOCKS. The system VPN is the inbound. |
