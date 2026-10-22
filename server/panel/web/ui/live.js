@@ -430,26 +430,79 @@
     render();
   }
 
+  // Writes the draft network.conf and reloads the node. True when the node
+  // took it. Switches and dialogs have no Save: they look stored, so they
+  // must hit the node (draft-only vanished on the next sign-in).
+  // One apply at a time; a mutation during the job is applied after it.
+  async function applyNow() {
+    if (!NETS[0]) return false;
+    let ok = false, sent = '';
+    const run = async () => {
+      const n = NETS[0];
+      if (!n || !changed().length) { ok = true; return; }
+      sent = renderConf(n);
+      try {
+        const r = await job('/api/network/apply', { text: sent, expect: L.sha });
+        L.sha = r.sha256; APPLIED[n.id] = r.text;
+        Object.keys(CFG).forEach(k => delete CFG[k]);
+        api('GET', '/api/node').then(s => { L.node = s; }).catch(() => {});
+        ok = true;
+      } catch (e) { toast(e.message); ok = false; }
+    };
+    const p = (L._netQ || Promise.resolve()).then(run, run);
+    L._netQ = p.then(() => {}, () => {});
+    await p;
+    if (ok && sent && NETS[0] && renderConf(NETS[0]) !== sent) return applyNow();
+    return ok;
+  }
+  async function commitNet(okMsg) {
+    if (!NETS[0] || !changed().length) return true;
+    const ok = await applyNow();
+    if (ok && okMsg) toast(okMsg);
+    render();
+    return ok;
+  }
+  // Mock mutators only touch NETS. After each one, push the draft to the node.
+  function afterNet(name, msg) {
+    const fn = window[name];
+    if (typeof fn !== 'function') return;
+    window[name] = function (...a) {
+      const n = NETS[0];
+      const before = n ? renderConf(n) : '';
+      const ret = fn.apply(this, a);
+      const n2 = NETS[0];
+      if (n2 && renderConf(n2) !== before && renderConf(n2) !== APPLIED[n2.id]) commitNet(msg);
+      return ret;
+    };
+  }
+  afterNet('delMember', 'Член удалён');
+  afterNet('saveNet');
+  afterNet('saveVlan');
+  afterNet('delVlan');
+  afterNet('saveRule');
+  afterNet('mvRule');
+  afterNet('dropRule');
+  afterNet('bulkAuth');
+  afterNet('bulkVlan');
+  afterNet('cellVlan');
+  afterNet('setMemberAuth');
   window.applyAll = async () => {
-    const n = NETS[0];
-    if (!n) return;
     closeDlg();
     toast('Применяю…');
-    try {
-      const r = await job('/api/network/apply', { text: renderConf(n), expect: L.sha });
-      L.sha = r.sha256; APPLIED[n.id] = r.text;
-      Object.keys(CFG).forEach(k => delete CFG[k]);
-      api('GET', '/api/node').then(s => { L.node = s; }).catch(() => {});
-      toast('Применено: нода перечитала сеть, переподключились только затронутые члены');
-    } catch (e) { toast(e.message); }
+    if (await applyNow()) toast('Применено: нода перечитала сеть, переподключились только затронутые члены');
     render();
   };
   window.revertAll = () => loadData().then(() => toast('Черновик сброшен к тому, что работает'));
 
-  /* a new member from the Members screen: real key; kept in the panel when the setting is on */
+  /* a new member from the Members screen: real key, then apply so the node
+     and the next page load both keep the row (draft-only vanished on sign-in). */
   const saveMember0 = window.saveMember;
   window.saveMember = async (id) => {
-    if (id) return saveMember0(id);
+    if (id) {
+      saveMember0(id);
+      await commitNet();
+      return;
+    }
     const nid = $('#m2').value.trim();
     if (findMember(nid)[1]) { toast('Такой член уже есть'); return; }
     let k;
@@ -458,8 +511,12 @@
     const [, m] = findMember(nid);
     if (!m) return;
     m.key_sha256 = k.key_sha256;
+    toast('Применяю…');
+    const ok = await applyNow();
     render();
-    showKey(nid, k, L.keepKeys ? 'Ключ хранится в панели — его можно показать снова. После «Применить» нода начнёт пускать этот ключ.' : 'После «Применить» нода начнёт пускать этот ключ.');
+    showKey(nid, k, ok
+      ? (L.keepKeys ? 'Ключ хранится в панели — его можно показать снова. Нода уже пускает этот ключ.' : 'Нода уже пускает этот ключ.')
+      : (L.keepKeys ? 'Ключ хранится в панели. После «Применить» нода начнёт пускать этот ключ.' : 'После «Применить» нода начнёт пускать этот ключ.'));
   };
   // The key with its link, QR code (drawn by the panel) and .loft file.
   function showKey(id, k, note) {
@@ -482,7 +539,7 @@
   window.reissueKey = id => L.reissue(id);
   L.reissue = id => {
     if (L.keepKeys) {
-      dialog('Перевыпустить ключ?', 'Новый ключ заменит сохранённый. Старый перестанет действовать после «Применить».', '',
+      dialog('Перевыпустить ключ?', 'Новый ключ заменит сохранённый и сразу применится на ноде. Старый перестанет действовать.', '',
         `<button class="btn danger" type="button" onclick="LIVE.reissueGo('${esc(id)}')">Перевыпустить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
       return;
     }
@@ -494,8 +551,12 @@
     try { k = await api('POST', '/api/members/key', { id }); } catch (e) { toast(e.message); return; }
     const [, m] = findMember(id);
     if (m) m.key_sha256 = k.key_sha256;
+    toast('Применяю…');
+    const ok = await applyNow();
     render();
-    showKey(id, k, L.keepKeys ? 'Новый ключ сохранён в панели. После «Применить» нода начнёт пускать его, старый перестанет действовать.' : 'После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.');
+    showKey(id, k, ok
+      ? (L.keepKeys ? 'Новый ключ сохранён в панели. Нода уже пускает его, старый больше не действует.' : 'Нода уже пускает новый ключ, старый больше не действует.')
+      : (L.keepKeys ? 'Новый ключ сохранён в панели. После «Применить» нода начнёт пускать его, старый перестанет действовать.' : 'После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.'));
   };
   // The page is served by the panel itself, so a blob link downloads normally.
   L.download = (name, text) => {
@@ -1513,18 +1574,28 @@
   }
   const ndKeys = ['listen', 'fronts', 'get_h2', 'decoy', 'mask', 'cover_dir', 'get_path', 'ws_path', 'h2_path', 'roster_path', 'lists_path', 'enrol', 'auth_shared', 'trace', 'relays', 'cdn_peers'];
   const ndChanged = () => L.nd && ndKeys.filter(k => JSON.stringify(L.nd[k]) !== JSON.stringify(L.ndDraft[k]));
-  L.ndSet = (k, v) => { L.ndDraft[k] = v; render(); };
-  L.ndFront = (f, on) => { const s = new Set(L.ndDraft.fronts); on ? s.add(f) : s.delete(f); L.ndDraft.fronts = FR.map(x => x[0]).filter(x => s.has(x)); render(); };
-  L.ndRevert = () => { L.ndDraft = JSON.parse(JSON.stringify(L.nd)); render(); toast('Черновик сброшен'); };
+  L.ndSet = (k, v) => { L.ndDraft[k] = v; render(); scheduleNdApply(); };
+  L.ndFront = (f, on) => { const s = new Set(L.ndDraft.fronts); on ? s.add(f) : s.delete(f); L.ndDraft.fronts = FR.map(x => x[0]).filter(x => s.has(x)); render(); scheduleNdApply(); };
+  L.ndRevert = () => { clearTimeout(L._ndT); L.ndDraft = JSON.parse(JSON.stringify(L.nd)); render(); toast('Черновик сброшен'); };
+  const scheduleNdApply = () => {
+    clearTimeout(L._ndT);
+    if (!ndChanged().length) return;
+    L._ndT = setTimeout(() => { if (ndChanged().length) L.ndApply(); }, 500);
+  };
   L.ndApply = once(async () => {
-    const onlyFleet = ndChanged().every(k => k === 'relays' || k === 'enrol');
+    const sent = JSON.parse(JSON.stringify(L.ndDraft));
+    const onlyFleet = ndKeys.filter(k => JSON.stringify(L.nd[k]) !== JSON.stringify(sent[k])).every(k => k === 'relays' || k === 'enrol');
     toast(onlyFleet ? 'Применяю…' : 'Применяю: нода перезапускается…');
     try {
-      const v = await job('/api/nodecfg', L.ndDraft);
-      L.nd = v; L.ndDraft = JSON.parse(JSON.stringify(v));
+      const v = await job('/api/nodecfg', sent);
+      const keep = {};
+      ndKeys.forEach(k => { if (JSON.stringify(L.ndDraft[k]) !== JSON.stringify(sent[k])) keep[k] = L.ndDraft[k]; });
+      L.nd = v;
+      L.ndDraft = Object.assign(JSON.parse(JSON.stringify(v)), keep);
       toast(onlyFleet ? 'Применено: нода перечитала ретрансляторы' : 'Применено: нода перезапущена');
     } catch (e) { toast(e.message); }
     render();
+    if (ndChanged().length) scheduleNdApply();
   });
   function ndBar() {
     const ch = ndChanged();
@@ -1584,7 +1655,7 @@
   }
   L.ndCDN = async on => {
     if (!on) { L.ndSet('cdn_peers', []); return; }
-    try { const r = await api('POST', '/api/nodecfg/cdn', {}); L.ndSet('cdn_peers', r.ranges); toast('Диапазоны Cloudflare получены — примените'); } catch (e) { toast(e.message); render(); }
+    try { const r = await api('POST', '/api/nodecfg/cdn', {}); L.ndSet('cdn_peers', r.ranges); toast('Диапазоны Cloudflare получены'); } catch (e) { toast(e.message); render(); }
   };
   L.openRelay = i => {
     const nw = i < 0, r = nw ? { id: '', url: '', fronts: ['get'], weight: 100, drain: false } : L.ndDraft.relays[i], own = L.can('node');
