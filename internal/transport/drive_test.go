@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/testcfg"
 )
 
@@ -86,4 +88,47 @@ func TestDriveMs(t *testing.T) {
 	if driveMs(1500*time.Millisecond) != "1500ms" {
 		t.Fatal(driveMs(1500 * time.Millisecond))
 	}
+}
+
+func TestWatchStallNilDriveFiresOnClosedMux(t *testing.T) {
+	old := stallTick
+	stallTick = 15 * time.Millisecond
+	t.Cleanup(func() { stallTick = old })
+
+	ms := mux.NewClient()
+	ms.Close()
+	h := &Holder{}
+	h.Set(&sessDialer{sess: ms, done: make(chan struct{})})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ch := WatchStall(ctx, h, nil)
+	select {
+	case <-ch:
+	case <-ctx.Done():
+		t.Fatal("no mux stall")
+	}
+}
+
+type sessDialer struct {
+	sess *mux.Session
+	done chan struct{}
+	park int
+	cls  int
+}
+
+func (s *sessDialer) Open(string) (net.Conn, error) { return nil, net.ErrClosed }
+func (s *sessDialer) Session() *mux.Session         { return s.sess }
+func (s *sessDialer) Done() <-chan struct{}         { return s.done }
+func (s *sessDialer) Park() error                   { s.park++; return nil }
+func (s *sessDialer) Close() error {
+	s.cls++
+	if s.sess != nil {
+		s.sess.Close()
+	}
+	select {
+	case <-s.done:
+	default:
+		close(s.done)
+	}
+	return nil
 }

@@ -9,6 +9,36 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+func TestParkOrCloseDeadMuxCloses(t *testing.T) {
+	ms := mux.NewClient()
+	ms.Close()
+	d := &sessDialer{sess: ms, done: make(chan struct{})}
+	if err := parkOrClose(d); err != nil {
+		t.Fatal(err)
+	}
+	if d.park != 0 || d.cls != 1 {
+		t.Fatalf("park=%d close=%d", d.park, d.cls)
+	}
+}
+
+func TestParkOrCloseLiveParks(t *testing.T) {
+	t.Cleanup(func() {
+		visCaps = 0
+		visGapMS = 0
+	})
+	visCaps = wire.CapHold
+	ms := mux.NewClient()
+	ms.SetHold(true)
+	d := &sessDialer{sess: ms, done: make(chan struct{})}
+	if err := parkOrClose(d); err != nil {
+		t.Fatal(err)
+	}
+	if d.park != 1 || d.cls != 0 {
+		t.Fatalf("park=%d close=%d", d.park, d.cls)
+	}
+	ms.Close()
+}
+
 func TestParkTakeSameMux(t *testing.T) {
 	t.Cleanup(func() { gapHoldFn = defaultGapHold })
 	gapHoldFn = func() time.Duration { return time.Second }

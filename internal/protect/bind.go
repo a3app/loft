@@ -10,10 +10,11 @@ import (
 )
 
 var (
-	bindMu  sync.Mutex
-	bindIdx int
-	bindIP  net.IP
-	bindDev string
+	bindMu   sync.Mutex
+	bindIdx  int
+	bindIP   net.IP
+	bindDev  string
+	bindAuto bool
 )
 
 // Bind pins later Timeout/NetDialer/ListenUDP4 sockets to spec.
@@ -23,7 +24,7 @@ func Bind(spec string) error {
 	spec = strings.TrimSpace(spec)
 	if spec == "" {
 		bindMu.Lock()
-		bindIdx, bindIP, bindDev = 0, nil, ""
+		bindIdx, bindIP, bindDev, bindAuto = 0, nil, "", false
 		bindMu.Unlock()
 		return nil
 	}
@@ -32,7 +33,27 @@ func Bind(spec string) error {
 		return err
 	}
 	bindMu.Lock()
-	bindIdx, bindIP, bindDev = idx, ip, name
+	bindIdx, bindIP, bindDev, bindAuto = idx, ip, name, false
+	bindMu.Unlock()
+	return nil
+}
+
+// BindUplink pins spec. Empty spec pins the physical default (skip TUN/VPN).
+// Auto-pin failure is ignored so a missing uplink does not abort start.
+func BindUplink(spec string) error {
+	spec = strings.TrimSpace(spec)
+	if spec != "" {
+		return Bind(spec)
+	}
+	name := PhysicalName()
+	if name == "" {
+		return Bind("")
+	}
+	if err := Bind(name); err != nil {
+		return nil
+	}
+	bindMu.Lock()
+	bindAuto = true
 	bindMu.Unlock()
 	return nil
 }
@@ -63,10 +84,16 @@ func BoundIP() net.IP {
 }
 
 // RefreshBound re-reads the -if address after DHCP / hotspot reconnect.
+// Auto-pin re-picks the physical iface when the user hops Wi-Fi / LTE.
 func RefreshBound() {
 	bindMu.Lock()
+	auto := bindAuto
 	name := bindDev
 	bindMu.Unlock()
+	if auto {
+		_ = BindUplink("")
+		return
+	}
 	if name == "" {
 		return
 	}

@@ -46,7 +46,7 @@ func main() {
 		}
 		return
 	}
-	if err := protect.Bind(*ifName); err != nil {
+	if err := protect.BindUplink(*ifName); err != nil {
 		fmt.Fprintf(os.Stderr, "loft-bench: -if: %v\n", err)
 		os.Exit(2)
 	}

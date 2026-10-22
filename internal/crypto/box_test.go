@@ -82,6 +82,42 @@ func TestAuthClocklessAndReplay(t *testing.T) {
 	}
 }
 
+func TestRejectAuthOpensAndDoesNotBurn(t *testing.T) {
+	token := []byte("token-secret")
+	blob, nonce, sk, err := MakeAuth([]byte("revoked"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := RejectAuth(blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := Seal(a.Key, []byte("no"), []byte("sid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hello := WrapHello(a.EphN, sealed)
+	_, plain, err := OpenHello(sk, nonce, hello, []byte("sid"))
+	if err != nil || !bytes.Equal(plain, []byte("no")) {
+		t.Fatalf("%q %v", plain, err)
+	}
+	seen := NewNonces()
+	good, _, _, err := MakeAuth(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RejectAuth(good); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FinishAuth([][]byte{token}, good, seen); err != nil {
+		t.Fatal("burned")
+	}
+	key, err := SessionKey(sk, a.EphN, nonce)
+	if err != nil || !bytes.Equal(key, a.Key) {
+		t.Fatalf("client key %v", err)
+	}
+}
+
 // TestCheckAuthAnyPicksMatchingKey matches one token in a ring without burning others.
 func TestCheckAuthAnyPicksMatchingKey(t *testing.T) {
 	alice := []byte("alice-secret")

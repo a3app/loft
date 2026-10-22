@@ -183,6 +183,9 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 		}
 		d, o, err := StartSelected(ctx, cfg)
 		if err != nil {
+			if fatalFront(err) {
+				return err
+			}
 			rotateN.Add(1)
 			if delay < 8*time.Second {
 				if delay == 0 {
@@ -243,6 +246,22 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 		if ttlTimer != nil {
 			ttlTimer.Stop()
 		}
+	}
+}
+
+// fatalFront is a node Status the radio cannot fix: stop Supervise retries
+// so the GUI can show the credentials / policy error.
+func fatalFront(err error) bool {
+	var we wire.Error
+	if !errors.As(err, &we) {
+		return false
+	}
+	switch we.Code {
+	case wire.AuthBadKey, wire.AuthRevoked, wire.AuthExpired, wire.AuthNotAuthorized,
+		wire.AuthClock, wire.AuthInstance, wire.NetDisabled:
+		return true
+	default:
+		return false
 	}
 }
 

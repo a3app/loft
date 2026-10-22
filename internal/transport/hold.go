@@ -218,6 +218,9 @@ func parkOrClose(d Dialer) error {
 	if d == nil {
 		return nil
 	}
+	if s := d.Session(); s == nil || s.Closed() {
+		return d.Close()
+	}
 	if p, ok := d.(parker); ok && clientHolds() {
 		return p.Park()
 	}

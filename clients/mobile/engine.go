@@ -348,6 +348,7 @@ func (e *Engine) runLoft(ctx context.Context, cfg *config.ClientConfig, pipe *pa
 	only := loftOnly(cfg)
 	var once sync.Once
 	signal := func(err error) { once.Do(func() { ready <- err }) }
+	path = transport.MergePath(ctx, path, transport.WatchStall(ctx, h, nil))
 	err := transport.SuperviseOn(ctx, only, path, func(d transport.Dialer, o config.Outbound) {
 		if live, ok := h.Live().(*inbound.L3Net); ok {
 			if p, ok := d.(transport.IPPump); ok {

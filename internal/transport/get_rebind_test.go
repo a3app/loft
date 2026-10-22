@@ -4,6 +4,8 @@ package transport
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/a3app/loft/internal/config"
 	"github.com/a3app/loft/internal/mux"
+	"github.com/a3app/loft/internal/wire"
 )
 
 func TestGenericTripTimeout(t *testing.T) {
@@ -238,6 +241,115 @@ func TestSupervisePathRebindsGET(t *testing.T) {
 	}
 	if string(buf) != "rebind" {
 		t.Fatalf("echo %q", buf)
+	}
+}
+
+func TestGETDiesWhenMuxCloses(t *testing.T) {
+	const token = "test-token-please-change"
+	gs := NewGETServer(token, "/static/v3/build")
+	ts := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
+	t.Cleanup(ts.Close)
+	g, err := NewGET(token, config.Outbound{
+		Type: "get", URL: ts.URL, Path: "/static/v3/build",
+		Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := g.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	g.sess.Close()
+	select {
+	case <-g.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("zombie GET after mux close")
+	}
+}
+
+func TestFatalFront(t *testing.T) {
+	if !fatalFront(wire.Fail(wire.AuthBadKey, "")) {
+		t.Fatal("bad key")
+	}
+	if !fatalFront(fmt.Errorf("loft: %w", wire.Fail(wire.AuthRevoked, ""))) {
+		t.Fatal("wrapped")
+	}
+	if fatalFront(fmt.Errorf("GET front: status 404")) {
+		t.Fatal("404")
+	}
+	if fatalFront(wire.Fail(wire.AuthLimit, "")) {
+		t.Fatal("limit retries")
+	}
+}
+
+func TestGETWrongTokenIsAuthBadKey(t *testing.T) {
+	gs := NewGETServer("test-token-please-change", "/static/v3/build")
+	ts := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
+	t.Cleanup(ts.Close)
+	g, err := NewGET("revoked-key", config.Outbound{
+		Type: "get", URL: ts.URL, Path: "/static/v3/build",
+		Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = g.Start(ctx)
+	var we wire.Error
+	if !errors.As(err, &we) || we.Code != wire.AuthBadKey {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGETHandshake404IsAuthBadKey(t *testing.T) {
+	ts := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(ts.Close)
+	g, err := NewGET("revoked-key", config.Outbound{
+		Type: "get", URL: ts.URL, Path: "/static/v3/build",
+		Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = g.Start(ctx)
+	var we wire.Error
+	if !errors.As(err, &we) || we.Code != wire.AuthBadKey {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestSuperviseAuthBadKeyStops(t *testing.T) {
+	gs := NewGETServer("test-token-please-change", "/static/v3/build")
+	ts := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
+	t.Cleanup(ts.Close)
+	off := false
+	cfg := &config.ClientConfig{
+		Token:  "revoked-key",
+		Select: "auto",
+		P2P:    &off,
+		Outbounds: []config.Outbound{{
+			Name: "n", Type: "get", URL: ts.URL, Path: "/static/v3/build",
+			Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true,
+		}},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	t0 := time.Now()
+	err := SuperviseOn(ctx, cfg, nil, func(Dialer, config.Outbound) {
+		t.Error("live")
+	})
+	if time.Since(t0) > time.Second {
+		t.Fatal("retried")
+	}
+	var we wire.Error
+	if !errors.As(err, &we) || we.Code != wire.AuthBadKey {
+		t.Fatalf("%v", err)
 	}
 }
 

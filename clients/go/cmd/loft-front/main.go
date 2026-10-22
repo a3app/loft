@@ -62,7 +62,7 @@ func main() {
 	if *h2MaxAge > 0 {
 		frontH2MaxAgeMS = int(h2MaxAge.Milliseconds())
 	}
-	if err := protect.Bind(*ifName); err != nil {
+	if err := protect.BindUplink(*ifName); err != nil {
 		fmt.Fprintf(os.Stderr, "loft-front: -if: %v\n", err)
 		os.Exit(2)
 	}
@@ -228,12 +228,9 @@ func main() {
 	cfg := frontConfig(*token, *rawURL, *kind, *path, *muxOn, *cdnName)
 	first := make(chan struct{})
 	var once sync.Once
-	pathCh := transport.WatchPath(ctx)
-	if drv != nil {
-		pathCh = transport.MergePath(ctx, pathCh, transport.WatchStall(ctx, h, drv))
-	}
+	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
 	go func() {
-		_ = transport.SuperviseOn(ctx, cfg, pathCh, func(d transport.Dialer, o config.Outbound) {
+		err := transport.SuperviseOn(ctx, cfg, pathCh, func(d transport.Dialer, o config.Outbound) {
 			if live, ok := h.Live().(*inbound.L3Net); ok {
 				if p, ok := d.(transport.IPPump); ok {
 					live.Swap(d, p)
@@ -262,6 +259,10 @@ func main() {
 			status("on", "", ip, tunLive.Load())
 			once.Do(func() { close(first) })
 		})
+		if err != nil && ctx.Err() == nil {
+			status("error", err.Error(), "", false)
+			stop()
+		}
 	}()
 	select {
 	case <-first:

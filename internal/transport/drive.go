@@ -171,21 +171,28 @@ func frontHostPort(raw string) string {
 const (
 	stallNeed   = 3
 	stallCool   = 8 * time.Second
-	stallQuiet  = 12 * time.Second
+	stallQuiet  = 4 * time.Second
 	nodeProbeTO = 2500 * time.Millisecond
 	muxPingTO   = 2500 * time.Millisecond
 )
 
+// stallTick is WatchStall's sample period. Tests shorten it.
+var stallTick = time.Second
+
 // WatchStall samples path/radio/overlay ping once a second. A brief cell
 // hole keeps mux. Persistent mux ping-dead while the node SYN still works
 // is GET HOL: fire a path event so Supervise rebinds GET (or Parks others).
+// d may be nil: stall still fires, TICK lines stay off.
 func WatchStall(ctx context.Context, h *Holder, d *Drive) <-chan struct{} {
 	ch := make(chan struct{}, 1)
-	if h == nil || d == nil {
+	if h == nil {
 		return ch
 	}
+	if d == nil {
+		d = NewDrive(io.Discard)
+	}
 	go func() {
-		t := time.NewTicker(time.Second)
+		t := time.NewTicker(stallTick)
 		defer t.Stop()
 		d.last = SamplePath()
 		d.Event("PATH", pathKV(d.last)...)
@@ -235,7 +242,11 @@ func (d *Drive) tick(ctx context.Context, h *Holder, fire chan<- struct{}) {
 		}()
 	}
 	wg.Wait()
-	up, down := h.Bytes()
+	// Mux payload only. GET pad HTTP would look like live overlay and hide HOL.
+	var up, down uint64
+	if sess != nil {
+		up, down = sess.Bytes()
+	}
 	var ru, rd uint64
 	if d.prime {
 		if up >= d.prevUp {
@@ -265,8 +276,14 @@ func (d *Drive) tick(ctx context.Context, h *Holder, fire chan<- struct{}) {
 		}
 	}
 
-	if sess == nil || sess.Closed() {
+	if sess == nil {
 		d.fails = 0
+		return
+	}
+	if sess.Closed() {
+		if d.fired.IsZero() || time.Since(d.fired) >= stallCool {
+			d.fireStall(p, fire, "mux")
+		}
 		return
 	}
 	radioDead := radioErr != nil
@@ -282,13 +299,24 @@ func (d *Drive) tick(ctx context.Context, h *Holder, fire chan<- struct{}) {
 	if stall {
 		d.Event("STALL", "reason="+stallWhy(radioDead, pingDead, nodeDead), "radio="+probeKV(radioMs, radioErr), "ping="+pingKV(sess, pingMs, pingErr), "node="+probeKV(nodeMs, nodeErr))
 	}
-	if d.noteStall(stall) && fire != nil {
+	if d.noteStall(stall) {
+		d.fireStall(p, fire, "stall")
+	}
+}
+
+func (d *Drive) fireStall(p PathInfo, fire chan<- struct{}, why string) {
+	if d == nil {
+		return
+	}
+	d.fired = time.Now()
+	d.fails = 0
+	if fire != nil {
 		select {
 		case fire <- struct{}{}:
 		default:
 		}
-		d.Event("PATH", append(pathKV(p), "why=stall")...)
 	}
+	d.Event("PATH", append(pathKV(p), "why="+why)...)
 }
 
 // overlayStall is persistent HOL: mux ping-dead and no overlay bytes for

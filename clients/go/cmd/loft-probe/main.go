@@ -41,7 +41,7 @@ func main() {
 	ifName := flag.String("if", "", "outbound interface or local IP")
 	flag.Usage = usage
 	flag.Parse()
-	if err := protect.Bind(*ifName); err != nil {
+	if err := protect.BindUplink(*ifName); err != nil {
 		fmt.Fprintf(os.Stderr, "loft-probe: -if: %v\n", err)
 		os.Exit(2)
 	}

@@ -325,6 +325,11 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := frontAuth(s.Token, auth, s.Seen)
 	if err != nil || a.Replay {
+		if err != nil {
+			if hello, e2 := sealAuthReject(auth, nil); e2 == nil {
+				_ = c.Write(ctx, websocket.MessageBinary, hello)
+			}
+		}
 		c.Close(websocket.StatusPolicyViolation, "no")
 		return
 	}

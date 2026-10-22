@@ -38,6 +38,21 @@ func frontAuth(fallback, blob []byte, seen *ecrypto.Nonces) (ecrypto.Auth, error
 	return ecrypto.FinishAuth(clientTokens(fallback), blob, seen)
 }
 
+// sealAuthReject is a 0x02 Cookie with a wrong/revoked key: sealed AuthBadKey
+// the client can OpenHello. Random GETs without 0x02 stay 404.
+func sealAuthReject(blob, aad []byte) ([]byte, error) {
+	a, err := ecrypto.RejectAuth(blob)
+	if err != nil {
+		return nil, err
+	}
+	st := wire.Status{Code: wire.AuthBadKey}
+	sealed, err := ecrypto.Seal(a.Key, st.Encode(), aad)
+	if err != nil {
+		return nil, err
+	}
+	return ecrypto.WrapHello(a.EphN, sealed), nil
+}
+
 // verifyAny reports whether hello.SessionID is loft: sid v3 under the node
 // X25519 (fallback is LOFT_TOKEN), then sid v2 under a member key.
 func verifyAny(fallback []byte, h clientHello) bool {

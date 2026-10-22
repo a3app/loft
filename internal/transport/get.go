@@ -243,6 +243,9 @@ func (g *GET) Start(ctx context.Context) error {
 	g.sid = ecrypto.RandomID()
 	body, _, err := g.roundTrip(ctx, auth, nil)
 	if err != nil {
+		if status404(err) {
+			return wire.Fail(wire.AuthBadKey, "")
+		}
 		return fmt.Errorf("get handshake: %w", err)
 	}
 	if g.sid == "" || g.sid == "new" {
@@ -470,6 +473,10 @@ func (g *GET) pump(ctx context.Context, inflight int) {
 		if ctx.Err() != nil {
 			return
 		}
+		if g.sess.Closed() {
+			g.die()
+			return
+		}
 		wait := g.pace()
 		pullWait := wait
 		queued := g.sess.OutQueued() > 0
@@ -504,6 +511,10 @@ func (g *GET) pump(ctx context.Context, inflight int) {
 			up = g.sess.PullPri(g.uplinkBudget(), pullWait)
 		} else {
 			up = g.sess.Pull(g.uplinkBudget(), pullWait)
+		}
+		if g.sess.Closed() {
+			g.die()
+			return
 		}
 		note := g.takeNoteFrame()
 		if len(note) > 0 {
@@ -1572,6 +1583,24 @@ func (s *GETServer) Match(p string) bool {
 	return strings.HasPrefix(p, s.Path+"/")
 }
 
+// replyGETAuthReject writes a 200 woff2 AuthBadKey Status the client can open.
+func replyGETAuthReject(w http.ResponseWriter, r *http.Request, blob []byte, sid, ct string) bool {
+	hello, err := sealAuthReject(blob, []byte(sid))
+	if err != nil {
+		return false
+	}
+	if ct == "" {
+		ct = "font/woff2"
+	}
+	w.Header().Set("X-Session", sid)
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Length", strconv.Itoa(len(hello)))
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(hello)
+	}
+	return true
+}
+
 // ServeHTTP handles the first GET (auth) and later GETs (header uplink, exclusive Puller).
 func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -1591,6 +1620,10 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			ss = s.get(sid)
 			if ss == nil {
+				if replyGETAuthReject(w, r, blob, sid, s.contentType()) {
+					traceMISS(sid, seq, "auth", r)
+					return
+				}
 				http.NotFound(w, r)
 				traceMISS(sid, seq, "auth", r)
 				return

@@ -115,14 +115,17 @@ final class FrontHelper {
         let kind = profile.kind.isEmpty ? "auto" : profile.kind
         let path = FrontHelper.cliPath(kind: kind, path: profile.path)
         let socks = socksBind
+        _ = Priv.physicalGateway()
+        let iff = Priv.cachedIface()
+        let ifLog = iff.isEmpty ? "auto" : iff
         if profile.isSSTP {
-            LoftLog.shared.add("front", "spawn sstp \(profile.url) user=\(profile.user) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0)")
+            LoftLog.shared.add("front", "spawn sstp \(profile.url) user=\(profile.user) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) if=\(ifLog)")
         } else if profile.isVLESS {
-            LoftLog.shared.add("front", "spawn vless \(profile.url) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0)")
+            LoftLog.shared.add("front", "spawn vless \(profile.url) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) if=\(ifLog)")
         } else if profile.isTrojan {
-            LoftLog.shared.add("front", "spawn trojan \(profile.url) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0)")
+            LoftLog.shared.add("front", "spawn trojan \(profile.url) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) if=\(ifLog)")
         } else {
-            LoftLog.shared.add("front", "spawn \(kind) \(profile.url) path=\(path ?? "") socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) mux=\(profile.mux ? 1 : 0)")
+            LoftLog.shared.add("front", "spawn \(kind) \(profile.url) path=\(path ?? "") socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) mux=\(profile.mux ? 1 : 0) if=\(ifLog)")
         }
         let p = Process()
         var args = [
@@ -131,6 +134,9 @@ final class FrontHelper {
             "-type", kind,
             "-socks", socks.isEmpty ? "off" : socks,
         ]
+        if !iff.isEmpty {
+            args += ["-if", iff]
+        }
         if let path = path, !path.isEmpty {
             args += ["-path", path]
         }
@@ -587,6 +593,7 @@ enum FrontExplain {
         if low.contains("auth_bad_key") || low.contains("auth_revoked") { return L10n.t("err_auth_key") }
         if low.contains("auth_not_authorized") { return L10n.t("err_auth_denied") }
         if low.contains("auth_expired") { return L10n.t("err_auth_expired") }
+        if low.contains("get handshake") && low.contains("404") { return L10n.t("err_auth_key") }
         if low.contains("header too large") || low.contains("status 413") { return L10n.t("err_get_413") }
         if low.contains("method not allowed") || low.contains("status 405") { return L10n.t("err_get_405") }
         if low.contains("requires mux") { return L10n.t("err_need_mux") }

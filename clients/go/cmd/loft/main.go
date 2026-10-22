@@ -50,7 +50,7 @@ func main() {
 	if *ifName == "" {
 		*ifName = cfg.Listen.Bind
 	}
-	if err := protect.Bind(*ifName); err != nil {
+	if err := protect.BindUplink(*ifName); err != nil {
 		log.Fatalf("-if: %v", err)
 	}
 	if s := protect.Bound(); s != "" {
@@ -116,10 +116,7 @@ func main() {
 		tunDev = c
 		log.Printf("tun up overlay=%s kill_switch=%v", cidr, cfg.Listen.KillSwitch)
 	}
-	pathCh := transport.WatchPath(ctx)
-	if drv != nil {
-		pathCh = transport.MergePath(ctx, pathCh, transport.WatchStall(ctx, h, drv))
-	}
+	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
 
 	sess := &session{parent: ctx, pathCh: pathCh, h: h, bringTUN: bringTUN, drv: drv}
 	sess.start(cfg)
@@ -175,7 +172,7 @@ func (s *session) start(cfg *config.ClientConfig) {
 	s.cancel = cancel
 	s.mu.Unlock()
 	go func() {
-		_ = transport.SuperviseOn(ctx, cfg, s.pathCh, func(d transport.Dialer, o config.Outbound) {
+		err := transport.SuperviseOn(ctx, cfg, s.pathCh, func(d transport.Dialer, o config.Outbound) {
 			if live, ok := s.h.Live().(*inbound.L3Net); ok {
 				if p, ok := d.(transport.IPPump); ok {
 					live.Swap(d, p)
@@ -199,6 +196,9 @@ func (s *session) start(cfg *config.ClientConfig) {
 			}
 			s.bringTUN()
 		})
+		if err != nil && ctx.Err() == nil {
+			log.Printf("front: %v", err)
+		}
 	}()
 }
 
