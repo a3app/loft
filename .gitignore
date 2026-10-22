@@ -11,6 +11,7 @@ clients/mobile/build/
 clients/Android/.gradle/
 clients/Android/app/build/
 clients/Android/build/
+clients/Android/local.properties
 clients/Sailfish/bin/
 clients/Sailfish/build/
 clients/MikroTik/pack/loft
