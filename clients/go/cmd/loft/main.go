@@ -176,7 +176,20 @@ func (s *session) start(cfg *config.ClientConfig) {
 	s.mu.Unlock()
 	go func() {
 		_ = transport.SuperviseOn(ctx, cfg, s.pathCh, func(d transport.Dialer, o config.Outbound) {
-			s.h.Set(d)
+			if live, ok := s.h.Live().(*inbound.L3Net); ok {
+				if p, ok := d.(transport.IPPump); ok {
+					live.Swap(d, p)
+				} else {
+					s.h.Set(d)
+				}
+			} else {
+				if w, err := inbound.WrapL3(d); err != nil {
+					log.Printf("l3 net: %v", err)
+				} else {
+					d = w
+				}
+				s.h.Set(d)
+			}
 			s.mu.Lock()
 			s.front, s.name = o.Type, o.Name
 			s.mu.Unlock()

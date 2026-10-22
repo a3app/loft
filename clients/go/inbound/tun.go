@@ -18,16 +18,45 @@ import (
 // Device is a live TUN. Attach hooks ICMP on each new mux session (metro).
 type Device struct {
 	ts   *tunStack
+	l3   *l3Pump
 	ifc  tunIO
 	undo func()
 }
 
-// Attach hooks ICMP/UDP datagrams on the current mux session.
+// Attach hooks ICMP/UDP datagrams on the current mux session, or an L3 IP pump.
 func (d *Device) Attach(dial transport.Dialer) {
-	if d == nil || d.ts == nil {
+	if d == nil {
 		return
 	}
-	d.ts.Attach(dial)
+	if l, ok := dial.(interface{ Live() transport.Dialer }); ok {
+		if inner := l.Live(); inner != nil {
+			dial = inner
+		}
+	}
+	if n, ok := dial.(*L3Net); ok && d.ifc != nil {
+		n.AttachTUN(d.ifc)
+		return
+	}
+	if p, ok := ipPumpOf(dial); ok {
+		d.attachL3(p)
+		return
+	}
+	if d.ts != nil {
+		d.ts.Attach(dial)
+	}
+}
+
+func ipPumpOf(d transport.Dialer) (transport.IPPump, bool) {
+	if p, ok := d.(transport.IPPump); ok {
+		return p, true
+	}
+	type hasPump interface {
+		IPPump() (transport.IPPump, bool)
+	}
+	if h, ok := d.(hasPump); ok {
+		return h.IPPump()
+	}
+	return nil, false
 }
 
 // Close undoes DNS/routes, stops the stack, and closes the TUN.
@@ -38,6 +67,10 @@ func (d *Device) Close() error {
 	if d.undo != nil {
 		d.undo()
 		d.undo = nil
+	}
+	if d.l3 != nil {
+		d.l3.Stop()
+		d.l3 = nil
 	}
 	if d.ts != nil {
 		d.ts.Close()
@@ -111,6 +144,28 @@ func openTUN(device, cidr string, killSwitch bool, d transport.Dialer, exclude [
 		}
 		extraUndo = addExtraCIDRs(ifc.Name(), ipnet, transport.OverlayRoutes())
 	}
+	live := d
+	if l, ok := d.(interface{ Live() transport.Dialer }); ok {
+		if inner := l.Live(); inner != nil {
+			live = inner
+		}
+	}
+	if _, ok := live.(*L3Net); ok {
+		dev, err := openDevice(ifc, nil, extraUndo, killSwitch, exclude, noExec)
+		if err != nil {
+			return nil, err
+		}
+		dev.Attach(d)
+		return dev, nil
+	}
+	if _, ok := ipPumpOf(d); ok {
+		dev, err := openDevice(ifc, nil, extraUndo, killSwitch, exclude, noExec)
+		if err != nil {
+			return nil, err
+		}
+		dev.Attach(d)
+		return dev, nil
+	}
 	st, err := newStack(ifc, d, ip, ipnet)
 	if err != nil {
 		if extraUndo != nil {
@@ -119,17 +174,24 @@ func openTUN(device, cidr string, killSwitch bool, d transport.Dialer, exclude [
 		ifc.Close()
 		return nil, err
 	}
+	return openDevice(ifc, st, extraUndo, killSwitch, exclude, noExec)
+}
+
+func openDevice(ifc tunIO, st *tunStack, extraUndo func(), killSwitch bool, exclude []string, noExec bool) (*Device, error) {
 	if noExec {
 		return &Device{ts: st, ifc: ifc}, nil
 	}
 	var undo func()
+	var err error
 	if killSwitch {
 		undo, err = enableKillSwitch(ifc.Name(), exclude)
 		if err != nil {
 			if extraUndo != nil {
 				extraUndo()
 			}
-			st.Close()
+			if st != nil {
+				st.Close()
+			}
 			ifc.Close()
 			return nil, fmt.Errorf("kill-switch: %w", err)
 		}

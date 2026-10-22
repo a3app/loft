@@ -44,7 +44,7 @@ func TestOutboundForH2MaxAge(t *testing.T) {
 }
 
 func TestOutboundForH2IgnoresGETCoverPath(t *testing.T) {
-	for _, kind := range []string{"h2", "h3"} {
+	for _, kind := range []string{"h2", "h3", "l3"} {
 		for _, path := range []string{"", "/static/js", "/static/v3/build", "app.js"} {
 			o := outboundFor("https://loft.example:444", kind, path, "")
 			if o.Path != "/api/v1/tunnel" {

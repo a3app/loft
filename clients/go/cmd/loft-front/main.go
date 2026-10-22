@@ -1,4 +1,4 @@
-// Command loft-front is the GUI helper: GET/WS/H2/QUIC/H3 front, SOCKS5, and
+// Command loft-front is the GUI helper: GET/WS/H2/QUIC/H3/L3 front, SOCKS5, and
 // in-process or loft-priv TUN. It prints STATUS lines on stdout.
 package main
 
@@ -35,7 +35,7 @@ var frontH2MaxAgeMS int
 func main() {
 	token := flag.String("token", "", "member key")
 	rawURL := flag.String("url", "", "front URL")
-	kind := flag.String("type", "auto", "get | ws | h2 | quic | h3 | sstp | vless | trojan | auto")
+	kind := flag.String("type", "auto", "get | ws | h2 | quic | h3 | l3 | sstp | vless | trojan | auto")
 	path := flag.String("path", "", "GET path; empty get is "+config.DefaultGETPath)
 	user := flag.String("user", "", "SSTP username")
 	insecure := flag.Bool("insecure", false, "SSTP: skip TLS verify")
@@ -234,7 +234,20 @@ func main() {
 	}
 	go func() {
 		_ = transport.SuperviseOn(ctx, cfg, pathCh, func(d transport.Dialer, o config.Outbound) {
-			h.Set(d)
+			if live, ok := h.Live().(*inbound.L3Net); ok {
+				if p, ok := d.(transport.IPPump); ok {
+					live.Swap(d, p)
+				} else {
+					h.Set(d)
+				}
+			} else {
+				if w, err := inbound.WrapL3(d); err != nil {
+					fmt.Fprintf(os.Stderr, "l3 net: %v\n", err)
+				} else {
+					d = w
+				}
+				h.Set(d)
+			}
 			ip := transport.OverlayIP()
 			bringTUN()
 			n := resumes.Add(1)
@@ -277,7 +290,7 @@ func frontOrder(kind, raw string, muxOn, fallback bool) []string {
 			return []string{"ws", "get"}
 		}
 		return []string{"ws"}
-	case "h2", "quic", "h3":
+	case "h2", "quic", "h3", "l3":
 		return []string{kind}
 	case "":
 		if strings.HasPrefix(raw, "ws://") || strings.HasPrefix(raw, "wss://") {
@@ -362,7 +375,7 @@ func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 		}
 	case "ws":
 		o.URL = withWSPath(wsURL(raw), "/api/v1/sync")
-	case "h2", "h3":
+	case "h2", "h3", "l3":
 		o.URL = httpOrigin(raw)
 		// GUI used to pass the GET cover (/static/js) for every loft kind.
 		// CONNECT Match is /api/v1/tunnel; a leftover GET path is 404.
