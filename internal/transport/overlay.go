@@ -30,12 +30,18 @@ func SetNetSwitch(o *Overlay) {
 
 // Overlay is the node's member fabric: overlay CIDR, leases, and live sessions.
 type Overlay struct {
-	cur atomic.Pointer[netconf.Network] // swapped by Reload; read with N()
-	Reg *netconf.Registry
-	dns atomic.Pointer[dnsResolver]
-	mu  sync.Mutex
-	tab map[string]*ovPeer // overlay IP
-	byS map[*mux.Session]*ovPeer
+	cur  atomic.Pointer[netconf.Network] // swapped by Reload; read with N()
+	Reg  *netconf.Registry
+	dns  atomic.Pointer[dnsResolver]
+	mu   sync.Mutex
+	tab  map[string]*ovPeer // overlay IP
+	byS  map[*mux.Session]*ovPeer
+	byL3 map[l3Sink]*ovPeer
+}
+
+// l3Sink is an attached L3 session that can emit an IP datagram.
+type l3Sink interface {
+	WriteIP([]byte) error
 }
 
 // ovPeer is one attached session: overlay IP, member, instance, VLAN, P2P listen.
@@ -45,6 +51,7 @@ type ovPeer struct {
 	inst   string
 	vlan   int
 	sess   *mux.Session
+	l3     l3Sink
 	seen   string
 	listen uint16
 	p2pPub []byte
@@ -59,7 +66,7 @@ func NewOverlay(n *netconf.Network) *Overlay {
 	}
 	o := &Overlay{
 		Reg: netconf.NewRegistry(n),
-		tab: map[string]*ovPeer{}, byS: map[*mux.Session]*ovPeer{},
+		tab: map[string]*ovPeer{}, byS: map[*mux.Session]*ovPeer{}, byL3: map[l3Sink]*ovPeer{},
 	}
 	o.cur.Store(n)
 	o.dns.Store(newDNSResolver(n.DNSUpstream()))
@@ -141,7 +148,7 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 			st.Gateway = o.N().Gateway
 			st.MTU = wire.U16(o.N().MTU)
 			st.DNS = o.N().DNSServers()
-			o.attach(ip, 0, sess, remote, "", inst2)
+			o.attachTo(ip, 0, sess, nil, remote, "", inst2)
 			st.PeerHints = o.hints(ip)
 			o.stampRoutes(st)
 			o.stampPolicy(st, "")
@@ -167,7 +174,7 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 		st.MTU = wire.U16(o.N().MTU)
 	}
 	st.DNS = o.N().DNSServers()
-	o.attach(ip, vlan, sess, remote, member, inst2)
+	o.attachTo(ip, vlan, sess, nil, remote, member, inst2)
 	st.PeerHints = o.hints(ip)
 	o.stampRoutes(st)
 	o.stampPolicy(st, member)
@@ -175,6 +182,73 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 	o.armTTL(sess, member)
 	o.stampRate(st, member)
 	o.armRate(sess, member)
+}
+
+// BindL3 is Bind for an L3 IP pump instead of a mux session.
+func (o *Overlay) BindL3(st *wire.Status, hello wire.Hello, sink l3Sink, remote net.Addr) {
+	if o == nil {
+		return
+	}
+	st.Peers = o.N().PeersMode()
+	if o.N().P2PEnabled() {
+		st.P2P = 1
+	}
+	member := hello.MemberID
+	inst := hello.InstanceID
+	ip, inst2, code := o.Reg.Admit(member, inst)
+	if code != wire.OK && code != wire.OKResumed {
+		if (member == "" || o.N().MemberByID(member) == nil) && (AuthKeys == nil || AuthKeys.Len() == 0) {
+			used := map[string]bool{}
+			o.mu.Lock()
+			for x := range o.tab {
+				used[x] = true
+			}
+			o.mu.Unlock()
+			ip, err := o.N().AllocateIP(used)
+			if err != nil {
+				st.Code = wire.IPPool
+				return
+			}
+			inst2 = inst
+			if inst2 == "" {
+				inst2 = "x"
+			}
+			st.Code = wire.OK
+			st.IP = ip
+			st.InstanceID = inst2
+			st.Gateway = o.N().Gateway
+			st.MTU = wire.U16(o.N().MTU)
+			st.DNS = o.N().DNSServers()
+			o.attachTo(ip, 0, nil, sink, remote, "", inst2)
+			st.PeerHints = o.hints(ip)
+			o.stampRoutes(st)
+			o.stampPolicy(st, "")
+			o.stampTTL(st, "")
+			o.stampRate(st, "")
+			return
+		}
+		st.Code = code
+		return
+	}
+	vlan := 0
+	if m := o.N().MemberByID(member); m != nil {
+		vlan = m.VLAN
+		st.VLAN = wire.U16(vlan)
+	}
+	st.Code = code
+	st.IP = ip
+	st.InstanceID = inst2
+	st.Gateway = o.N().Gateway
+	if o.N().MTU > 0 {
+		st.MTU = wire.U16(o.N().MTU)
+	}
+	st.DNS = o.N().DNSServers()
+	o.attachTo(ip, vlan, nil, sink, remote, member, inst2)
+	st.PeerHints = o.hints(ip)
+	o.stampRoutes(st)
+	o.stampPolicy(st, member)
+	o.stampTTL(st, member)
+	o.stampRate(st, member)
 }
 
 // stampRoutes copies managed CIDRs onto Status, skipping routes this member owns.
@@ -418,7 +492,12 @@ func (o *Overlay) Routed(host string) string {
 
 // attach records sess under overlay ip (replacing any previous row for this session).
 func (o *Overlay) attach(ip string, vlan int, sess *mux.Session, remote net.Addr, member, inst string) {
-	if sess == nil || ip == "" {
+	o.attachTo(ip, vlan, sess, nil, remote, member, inst)
+}
+
+// attachTo records a mux session and/or L3 sink under overlay ip.
+func (o *Overlay) attachTo(ip string, vlan int, sess *mux.Session, sink l3Sink, remote net.Addr, member, inst string) {
+	if ip == "" || (sess == nil && sink == nil) {
 		return
 	}
 	host := ""
@@ -430,23 +509,45 @@ func (o *Overlay) attach(ip string, vlan int, sess *mux.Session, remote net.Addr
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if old := o.byS[sess]; old != nil {
-		if old.ttl != nil {
-			old.ttl.Stop()
-		}
-		if o.tab[old.ip] == old {
-			delete(o.tab, old.ip)
+	if sess != nil {
+		if old := o.byS[sess]; old != nil {
+			if old.ttl != nil {
+				old.ttl.Stop()
+			}
+			if o.tab[old.ip] == old {
+				delete(o.tab, old.ip)
+			}
 		}
 	}
-	if cur := o.tab[ip]; cur != nil && cur.sess != sess {
+	if sink != nil {
+		if old := o.byL3[sink]; old != nil {
+			if old.ttl != nil {
+				old.ttl.Stop()
+			}
+			if o.tab[old.ip] == old {
+				delete(o.tab, old.ip)
+			}
+		}
+	}
+	if cur := o.tab[ip]; cur != nil && cur.sess != sess && cur.l3 != sink {
 		if cur.ttl != nil {
 			cur.ttl.Stop()
 		}
-		delete(o.byS, cur.sess)
+		if cur.sess != nil {
+			delete(o.byS, cur.sess)
+		}
+		if cur.l3 != nil {
+			delete(o.byL3, cur.l3)
+		}
 	}
-	p := &ovPeer{ip: ip, member: member, inst: inst, vlan: vlan, sess: sess, seen: host, at: time.Now()}
+	p := &ovPeer{ip: ip, member: member, inst: inst, vlan: vlan, sess: sess, l3: sink, seen: host, at: time.Now()}
 	o.tab[ip] = p
-	o.byS[sess] = p
+	if sess != nil {
+		o.byS[sess] = p
+	}
+	if sink != nil {
+		o.byL3[sink] = p
+	}
 }
 
 // SessionIP is the overlay IPv4 leased to sess, or empty if unbound.
@@ -486,6 +587,46 @@ func (o *Overlay) Detach(sess *mux.Session) {
 	if release && o.Reg != nil {
 		o.Reg.Release(p.member, p.inst)
 	}
+}
+
+// DetachL3 drops an L3 sink from the table and Releases the lease.
+func (o *Overlay) DetachL3(sink l3Sink) {
+	if o == nil || sink == nil {
+		return
+	}
+	o.mu.Lock()
+	p := o.byL3[sink]
+	release := false
+	if p != nil {
+		if p.ttl != nil {
+			p.ttl.Stop()
+			p.ttl = nil
+		}
+		delete(o.byL3, sink)
+		if o.tab[p.ip] == p {
+			delete(o.tab, p.ip)
+			release = true
+		}
+	}
+	o.mu.Unlock()
+	if release && o.Reg != nil {
+		o.Reg.Release(p.member, p.inst)
+	}
+}
+
+// WriteL3 emits pkt to the live L3 sink leased at overlay ip.
+// NAT replies look up the sink so a replaced CONNECT keeps the flow.
+func (o *Overlay) WriteL3(ip string, pkt []byte) error {
+	if o == nil || ip == "" || len(pkt) < 20 {
+		return io.ErrClosedPipe
+	}
+	o.mu.Lock()
+	p := o.tab[ip]
+	o.mu.Unlock()
+	if p == nil || p.l3 == nil {
+		return io.ErrClosedPipe
+	}
+	return p.l3.WriteIP(pkt)
 }
 
 // SetListen records the P2P listen port and optional X25519 pub from loft.peer.

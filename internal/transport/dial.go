@@ -35,6 +35,13 @@ type Dialer interface {
 	Close() error
 }
 
+// IPPump is a front that carries raw IP datagrams after Status (l3).
+// TUN skips the userspace TCP stack and copies packets.
+type IPPump interface {
+	WriteIP([]byte) error
+	ReadIP() ([]byte, error)
+}
+
 // rebindable replaces front sockets after an egress change without Park.
 // GET does this (HTTP sid is not the client 4-tuple). ws/h2/quic/h3 do not.
 type rebindable interface {
@@ -77,7 +84,7 @@ func startWithOffer(ctx context.Context, token string, o config.Outbound, offer 
 	return d, nil
 }
 
-// startFront constructs get, ws, quic, h2, or h3 and runs Start.
+// startFront constructs get, ws, quic, h2, h3, or l3 and runs Start.
 func startFront(ctx context.Context, token string, o config.Outbound, offer wire.Cap) (Dialer, error) {
 	if o.CDN != "" {
 		if p, err := cdn.Lookup(o.CDN); err == nil && o.Type == "" {
@@ -87,6 +94,11 @@ func startFront(ctx context.Context, token string, o config.Outbound, offer wire
 	front, err := normalizeType(o.Type)
 	if err != nil {
 		return nil, err
+	}
+	if front == wire.FrontL3 {
+		offer |= wire.CapL3
+	} else {
+		offer &^= wire.CapL3
 	}
 	switch front {
 	case "get":
@@ -125,8 +137,14 @@ func startFront(ctx context.Context, token string, o config.Outbound, offer wire
 			return nil, err
 		}
 		return h, nil
+	case "l3":
+		l := NewL3(token, o, offer)
+		if err := l.Start(ctx); err != nil {
+			return nil, err
+		}
+		return l, nil
 	default:
-		return nil, fmt.Errorf("unknown outbound type %q (want get, ws, h2, quic or h3)", o.Type)
+		return nil, fmt.Errorf("unknown outbound type %q (want get, ws, h2, quic, h3 or l3)", o.Type)
 	}
 }
 
@@ -350,5 +368,5 @@ func replaceURLHost(raw, hostport string) string {
 	return u.String()
 }
 
-// normalizeType maps a front name to the wire token (get, ws, h2, quic, h3).
+// normalizeType maps a front name to the wire token (get, ws, h2, quic, h3, l3).
 func normalizeType(t string) (string, error) { return netconf.NormalizeFront(t) }

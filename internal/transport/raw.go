@@ -196,6 +196,14 @@ func serveRaw(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces) {
 	if err != nil || a.Replay {
 		return
 	}
+	h, _ := wire.DecodeHello(a.Rest)
+	if h.Caps.Has(wire.CapL3) && info.Caps.Has(wire.CapL3) {
+		serveL3(conn, info, a)
+		return
+	}
+	if !info.Caps.Has(wire.CapH2) && !info.Caps.Has(wire.CapH3) {
+		return
+	}
 	ms, reused := adoptServerMux(a.Rest, a.Token)
 	st := info.Status("h2")
 	finishStatus(&st, a.Token, "h2", a.Rest, ms, conn.RemoteAddr())

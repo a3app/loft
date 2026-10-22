@@ -39,6 +39,16 @@ func (h *Holder) get() Dialer {
 	return h.d
 }
 
+// Live is the current dialer (L3Net, GET, …).
+func (h *Holder) Live() Dialer { return h.get() }
+
+// IPPump is the live dialer when it carries raw IP (l3).
+func (h *Holder) IPPump() (IPPump, bool) {
+	d := h.get()
+	p, ok := d.(IPPump)
+	return p, ok
+}
+
 // holdRetry is a dead front (path change / Leave), not a refused target.
 func holdRetry(err error) bool {
 	return errors.Is(err, mux.ErrClosed) || errors.Is(err, net.ErrClosed)
@@ -75,6 +85,30 @@ func (h *Holder) Open(target string) (net.Conn, error) {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
+}
+
+// ListenUDP is the live front's unconnected UDP (L3/SSTP SOCKS ASSOCIATE).
+func (h *Holder) ListenUDP() (net.PacketConn, error) {
+	d := h.get()
+	ud, ok := d.(interface {
+		ListenUDP() (net.PacketConn, error)
+	})
+	if !ok || d == nil {
+		return nil, errors.New("no udp")
+	}
+	return ud.ListenUDP()
+}
+
+// LookupIP4 is the live front's IPv4 resolver when it has one.
+func (h *Holder) LookupIP4(host string) (net.IP, error) {
+	d := h.get()
+	r, ok := d.(interface {
+		LookupIP4(string) (net.IP, error)
+	})
+	if !ok || d == nil {
+		return nil, errors.New("no dns")
+	}
+	return r.LookupIP4(host)
 }
 
 // TripSummary is GET pad/bulk/up timing when the live dialer is a GET front.

@@ -108,44 +108,46 @@ func (h *H2) Close() error {
 
 // Start dials TLS (or mask) and issues HTTP/2 CONNECT.
 func (h *H2) Start(ctx context.Context) error {
-	addr, sni, insecure, err := resolveTLS(h.cfg)
+	c, stream, addr, sni, err := dialH2CONNECT(ctx, h.cfg, h.token)
 	if err != nil {
 		return err
-	}
-	path := h.cfg.Path
-	if path == "" {
-		path = "/api/v1/tunnel"
-	}
-	tok := h.token
-	if pub := CachedMaskPub(addr); len(pub) == 32 {
-		c, err := DialMask(addr, sni, h.cfg.Fingerprint, tok, pub)
-		if err != nil {
-			return err
-		}
-		return h.connectH2(ctx, c, sni, path, addr)
-	}
-	c, err := dialTLS(addr, sni, h.cfg.Fingerprint, insecure, tok)
-	if err != nil {
-		return err
-	}
-	return h.connectH2(ctx, c, sni, path, addr)
-}
-
-// connectH2 issues RFC 8441 CONNECT on c and starts raw mux on the 200 body.
-func (h *H2) connectH2(ctx context.Context, c net.Conn, sni, path, addr string) error {
-	stream, err := h2ExtendedConnect(ctx, c, sni, path)
-	if err != nil {
-		c.Close()
-		return fmt.Errorf("h2 connect: %w", err)
 	}
 	inner, err := startRaw(ctx, stream, h.token, h.offer, addr, sni)
 	if err != nil {
 		_ = stream.Close()
+		_ = c.Close()
 		return err
 	}
 	h.conn = c
 	h.inner = inner
 	return nil
+}
+
+// dialH2CONNECT opens TLS (or mask) and RFC 8441 CONNECT on cfg's path.
+func dialH2CONNECT(ctx context.Context, cfg config.Outbound, token []byte) (parent, stream net.Conn, addr, sni string, err error) {
+	addr, sni, insecure, err := resolveTLS(cfg)
+	if err != nil {
+		return nil, nil, "", "", err
+	}
+	path := cfg.Path
+	if path == "" {
+		path = "/api/v1/tunnel"
+	}
+	var c net.Conn
+	if pub := CachedMaskPub(addr); len(pub) == 32 {
+		c, err = DialMask(addr, sni, cfg.Fingerprint, token, pub)
+	} else {
+		c, err = dialTLS(addr, sni, cfg.Fingerprint, insecure, token)
+	}
+	if err != nil {
+		return nil, nil, "", "", err
+	}
+	stream, err = h2ExtendedConnect(ctx, c, sni, path)
+	if err != nil {
+		_ = c.Close()
+		return nil, nil, "", "", fmt.Errorf("h2 connect: %w", err)
+	}
+	return c, stream, addr, sni, nil
 }
 
 // pipeConn is a net.Conn over an HTTP CONNECT request body and response body.

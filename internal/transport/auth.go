@@ -70,6 +70,38 @@ func stampOverlayAuth(st *wire.Status, rest []byte, sess *mux.Session, remote ne
 	ov.Bind(st, h, sess, remote)
 }
 
+// stampOverlayAuthL3 binds an L3 IP pump the same way Bind binds a mux session.
+func stampOverlayAuthL3(st *wire.Status, rest []byte, sink l3Sink, remote net.Addr, token []byte) {
+	ov := NetSwitch()
+	if ov == nil || st == nil {
+		return
+	}
+	h, _ := wire.DecodeHello(rest)
+	if AuthKeys != nil && AuthKeys.Len() > 0 {
+		id := AuthKeys.IDFor(token)
+		if id == "" {
+			st.Code = wire.AuthBadKey
+			return
+		}
+		h.MemberID = id
+	}
+	ov.BindL3(st, h, sink, remote)
+}
+
+// finishStatusL3 stamps overlay identity onto st for an L3 session.
+func finishStatusL3(st *wire.Status, token []byte, rest []byte, sink l3Sink, remote net.Addr) {
+	if st == nil {
+		return
+	}
+	stampOverlayAuthL3(st, rest, sink, remote, token)
+	if st.Code.OK() && st.IP == "" {
+		st.IP = netconf.FallbackClientIP
+	}
+	if st.Code.OK() && st.Gateway == "" {
+		st.Gateway = netconf.FallbackGateway
+	}
+}
+
 // finishStatus stamps overlay identity onto st.
 func finishStatus(st *wire.Status, token []byte, sid string, rest []byte, sess *mux.Session, remote net.Addr) {
 	if st == nil {
