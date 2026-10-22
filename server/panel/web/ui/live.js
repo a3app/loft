@@ -275,10 +275,11 @@
     Object.setPrototypeOf(EXTRA, new Proxy({}, { get: () => ['loft', '0 / 0', 'никогда', 0] }));
 
     V.main = () => {
-      const st = L.node && L.node.active, info = L.info || {}, w = L.wz || {};
+      const st = L.node && L.node.active, ov = L.ov || {}, nd = ov.node || {}, sv = ov.server || {}, w = L.wz || {};
       const all = NETS.flatMap(n => n.members);
-      const cert = w.cert_until ? pill('до ' + new Date(w.cert_until).toLocaleDateString(LOC()), 'ok') : pill('самоподписанный', 'warn');
       const dm = L.dm || { zones: [], certs: [], providers: [] };
+      const nc = (dm.certs || []).find(c => c.id === 'node'), until = w.cert_until || (nc && nc.until);
+      const cert = until ? untilCell(until) : pill('самоподписанный', 'warn');
       const dnsNames = [];
       for (const p of dm.providers || []) {
         const n = (DNSK[p.kind] || [])[0] || p.kind;
@@ -290,16 +291,28 @@
       const domBody = emptyDom
         ? `<p class="hint" style="margin:0 0 16px">Зон нет. Добавьте домен, чтобы панель вела его записи.</p>${L.can('domains') ? `<button class="btn" type="button" onclick="go('domains')">${ic('i-plus')}Добавить домен</button>` : ''}`
         : `<dl class="kv">${certRows}${dnsNames.length ? `<div><dt>DNS</dt><dd>${esc(dnsNames.join(', '))}</dd></div>` : (dm.zones || []).length ? `<div><dt>Зоны</dt><dd class="num">${dm.zones.length}</dd></div>` : ''}</dl>`;
-      return pageHead('Обзор', 'Состояние ноды и сети loft на этом сервере.') + `<div class="cards">
-        <section class="card"><div class="card-h"><h2>Нода loft</h2>${!st ? pill('нет данных') : st === 'active' ? pill('работает', 'ok') : pill(st, 'warn')}</div>
-          <dl class="kv"><div><dt>Имя</dt><dd class="mono">${esc(info.host || '—')}</dd></div><div><dt>Версия</dt><dd>${esc(L.node && L.node.version || '—')}</dd></div>
-          <div><dt>Работает с</dt><dd>${esc(since(L.node && L.node.since))}</dd></div><div><dt>Сертификат</dt><dd>${cert}</dd></div>
-          <div><dt>Прочий трафик</dt><dd class="mono">${esc((info.decoy || []).join(', ') || 'не пересылается')}</dd></div></dl></section>
+      const host = (nd.advertise || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      const ips = (ov.addrs || []).map(a => ({ ...a, ip: a.addr.split('/')[0] }));
+      const v4 = ips.filter(a => !a.ip.includes(':')), v6 = ips.filter(a => a.ip.includes(':'));
+      const main4 = v4.find(a => a.primary) || v4[0], more4 = v4.filter(a => a !== main4 && !a.channel), chans = ips.filter(a => a.channel);
+      const kv = (k, v, c = '') => `<div><dt>${k}</dt><dd${c ? ` class="${c}"` : ''}>${v}</dd></div>`;
+      const gb = b => (b / 1073741824).toFixed(b < 10737418240 ? 1 : 0);
+      const ev = L.ev || [];
+      return pageHead('Обзор', 'Состояние сервера и ноды loft. Карточки ведут в разделы.') + `<div class="cards">
+        <section class="card"><div class="card-h"><h2>Нода loft</h2>${!st ? pill('нет данных') : st === 'active' ? pill('работает', 'ok') : pill(st, 'warn')}${L.can('node', 1) ? '<a href="#node" style="margin-left:auto">Подробно</a>' : ''}</div>
+          <dl class="kv">${kv('Роль', esc(nd.role || '—'))}${kv('Адрес', esc(host || '—'), 'mono')}${kv('Слушает', esc(nd.listen || '—'), 'mono')}${kv('Фронты', esc((nd.fronts || []).join(', ') || 'get'))}
+          ${kv('Прочий трафик', esc((nd.decoy || []).join(', ') || 'не пересылается'), 'mono')}${kv('Сертификат', cert)}${kv('Версия', esc(L.node && L.node.version || '—'))}${kv('Работает с', esc(since(L.node && L.node.since)))}</dl></section>
         <section class="card"><div class="card-h"><h2>Члены сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
-          <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${all.filter(m => m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${all.filter(m => !m.authorized).length}</div><div class="mute">выключено</div></div></div>
-          <p class="hint" style="margin:0 0 16px">Сейчас в сети: ${all.filter(m => (EXTRA[m.id] || [])[3]).length}.</p>
-          <button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button></section>
+          <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${all.filter(m => m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${all.filter(m => (EXTRA[m.id] || [])[3]).length}</div><div class="mute">в сети</div></div><div><div class="big num">${all.filter(m => !m.authorized).length}</div><div class="mute">выключено</div></div></div>
+          ${L.can('members') ? `<button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button>` : ''}</section>
+        <section class="card"><div class="card-h"><h2>Сеть</h2>${L.can('network', 1) ? '<a href="#network" style="margin-left:auto">Подробно</a>' : ''}</div>
+          <dl class="kv">${kv('Основной IP', esc(main4 ? main4.ip : '—'), 'mono')}${more4.length ? kv('Доп. IP', esc(more4.map(a => a.ip).join(', ')), 'mono') : ''}${v6.length ? kv('IPv6', esc(v6.filter(a => !a.channel).map(a => a.ip).join(', ') || '—'), 'mono') : ''}${chans.map(a => kv('Канал «' + esc(a.channel) + '»', esc(a.ip), 'mono')).join('')}</dl></section>
         ${L.can('domains', 1) ? `<section class="card"><div class="card-h"><h2>Домены</h2><a href="#domains" style="margin-left:auto">Все</a></div>${domBody}</section>` : ''}
+        <section class="card"><div class="card-h"><h2>Сервер</h2><span class="mute" style="margin-left:auto">${esc([sv.os, sv.arch].filter(Boolean).join(' · '))}</span></div>
+          <dl class="kv">${kv('CPU', sv.mem_total ? Math.round(sv.cpu) + '%' : '—', 'num')}${kv('Память', sv.mem_total ? gb(sv.mem_used) + ' / ' + gb(sv.mem_total) + ' ГБ' : '—', 'num')}${kv('Диск', sv.disk_size ? gb(sv.disk_used) + ' / ' + gb(sv.disk_size) + ' ГБ' : '—', 'num')}
+          ${kv(sv.hours >= 23.5 ? 'Трафик за сутки' : 'Трафик за ' + Math.max(1, Math.round(sv.hours || 0)) + ' ч', sv.hours ? '↓ ' + gb(sv.rx) + ' ГБ · ↑ ' + gb(sv.tx) + ' ГБ' : '—', 'num')}</dl></section>
+        ${L.can('users', 1) ? `<section class="card"><div class="card-h"><h2>События</h2><a href="#users" style="margin-left:auto" onclick="S.tab.users='log'">Журнал</a></div>
+          ${ev.slice(0, 5).map(x => `<div class="ev"><time>${when2(x.at || x.time)}</time><span><b>${esc(x.user)}</b> ${esc(opText(x))}</span></div>`).join('') || '<p class="mute" style="margin:0">Событий пока нет.</p>'}</section>` : ''}
       </div>`;
     };
     const segments = V.segments;
@@ -350,6 +363,11 @@
   document.querySelectorAll('[onclick="go(\'login\')"]').forEach(b => b.setAttribute('onclick', 'goLogout()'));
 
   /* ── data ── */
+  async function loadOverview() {
+    const [ov, ev] = await Promise.allSettled([api('GET', '/api/overview'), L.can('users', 1) ? api('GET', '/api/audit') : Promise.resolve([])]);
+    if (ov.status === 'fulfilled') L.ov = ov.value;
+    if (ev.status === 'fulfilled') L.ev = ev.value || [];
+  }
   async function loadData() {
     const calls = [api('GET', '/api/network'), api('GET', '/api/node')];
     if (L.me && L.me.role === 'owner') calls.push(api('GET', '/api/wizard'));
@@ -372,7 +390,7 @@
         } catch (e) { toast('network.conf на сервере не разобран панелью: ' + (e.msg || e)); }
       }
     } else toast('Сеть ноды не прочитана: ' + net.reason.message);
-    await Promise.all([loadPresence(), L.can('domains', 1) ? loadDomains() : Promise.resolve()]);
+    await Promise.all([loadPresence(), loadOverview(), L.can('domains', 1) ? loadDomains() : Promise.resolve()]);
     render();
   }
 
@@ -486,6 +504,7 @@
     if (location.hash === '#system' && L.me && L.sy) loadSystem().then(() => { if (S.route === 'system') render(); });
     if (location.hash === '#mail' && L.me && L.ml) loadMail().then(() => Promise.all([loadMailDNS(), loadMailStats()])).then(() => { if (S.route === 'mail') render(); });
     if (S.route === 'me' && L.me) { L.my = null; render(); }
+    if (S.route === 'main' && L.me) loadOverview().then(() => { if (S.route === 'main') render(); });
     if (location.hash === '#users' && L.me) { L.sess = L.log = null; loadUsers().then(() => { if (S.route === 'users') render(); }); }
     if (location.hash === '#settings' && L.me && L.can('settings', 1)) loadSettings().then(() => { if (S.route === 'settings') render(); });
   });
@@ -1421,7 +1440,13 @@
   }
 
   // the menu shows only what the role may see (and Mail only with its package)
+  // the node line at the foot of the phone menu
+  const mobSt = () => {
+    const e = $('#mobSt'), n = L.node || {};
+    if (e) e.innerHTML = `<span class="dot ${n.active === 'active' ? 'on' : ''}"></span>нода loft${n.version ? ' ' + esc(n.version) : ''} · ${!n.active ? 'нет данных' : n.active === 'active' ? 'работает' : esc(n.active)}`;
+  };
   function renderMenuLive() {
+    mobSt();
     const vis = MENU.map(g => ({ ...g, items: g.items.filter(i => (!i[2] || pkgOn(i[2])) && L.can(i[0] === 'prio' ? 'network' : i[0], 1)) })).filter(g => g.items.length);
     $('#menu').innerHTML = vis.map(g => {
       const on = g.items.some(i => i[0] === S.route);
