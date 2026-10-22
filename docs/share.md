@@ -40,7 +40,7 @@ Clients emit and accept `loft://`.
 
 RFC 3986. Percent-encode `token` and `name` (`application/x-www-form-urlencoded` is wrong for the fragment). Default port **443**. IPv6 host in brackets.
 
-The scheme **is** the connection kind (`loft`). Query `type` is the **transport** (`get` `ws` `h2` `quic` `h3`). A list row shows both: `loft · get · cdn.example.com`.
+The scheme **is** the connection kind (`loft`). Query `type` is the **transport** (`get` `ws` `h2` `quic` `h3` `l3`). A list row shows both: `loft · get · cdn.example.com`.
 
 | Part | Maps to `client.yaml` |
 |------|------------------------|
@@ -54,7 +54,7 @@ The scheme **is** the connection kind (`loft`). Query `type` is the **transport*
 
 | Key | Values | Default | YAML |
 |-----|--------|---------|------|
-| `type` | `get` `ws` `h2` `quic` `h3` | `get` | outbound `type` (transport) |
+| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | outbound `type` (transport) |
 | `cdn` | profile name (`yandex`, …) | omit | outbound `cdn` |
 | `fp` | TLS fingerprint (`chrome`, …) | `chrome` | outbound `fingerprint` |
 | `scheme` | `https` `http` `wss` `ws` | from `type` | scheme of `url` |
@@ -204,7 +204,7 @@ Two shapes. Both are valid.
 
 ### One connection
 
-Today’s `client.yaml`, plus optional `kind`. Omit `kind` and infer it from `outbounds[].type` (`get`/`ws`/`h2`/`quic`/`h3` → `loft`, `sstp` → `sstp`, `vless` → `vless`, `trojan` → `trojan`).
+Today’s `client.yaml`, plus optional `kind`. Omit `kind` and infer it from `outbounds[].type` (`get`/`ws`/`h2`/`quic`/`h3`/`l3` → `loft`, `sstp` → `sstp`, `vless` → `vless`, `trojan` → `trojan`).
 
 ```yaml
 name: Home

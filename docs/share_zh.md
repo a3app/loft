@@ -40,7 +40,7 @@ loft://<token>@<host>[:port][/path][?query][#name]
 
 RFC 3986。`token` 和 `name` 要百分号编码（fragment 不能用 `application/x-www-form-urlencoded`）。默认端口 **443**。IPv6 主机加方括号。
 
-scheme **本身就是**连接类型（`loft`）。Query 的 `type` 是**传输**（`get` `ws` `h2` `quic` `h3`）。列表行两个都显示：`loft · get · cdn.example.com`。
+scheme **本身就是**连接类型（`loft`）。Query 的 `type` 是**传输**（`get` `ws` `h2` `quic` `h3` `l3`）。列表行两个都显示：`loft · get · cdn.example.com`。
 
 | 部分 | 对应到 `client.yaml` |
 |------|----------------------|
@@ -54,7 +54,7 @@ scheme **本身就是**连接类型（`loft`）。Query 的 `type` 是**传输**
 
 | 键 | 取值 | 默认 | YAML |
 |----|------|------|------|
-| `type` | `get` `ws` `h2` `quic` `h3` | `get` | 出站 `type`（传输） |
+| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | 出站 `type`（传输） |
 | `cdn` | 配置名（`yandex`，…） | 不写 | 出站 `cdn` |
 | `fp` | TLS 指纹（`chrome`，…） | `chrome` | 出站 `fingerprint` |
 | `scheme` | `https` `http` `wss` `ws` | 随 `type` | `url` 的 scheme |
@@ -204,7 +204,7 @@ outbounds:
 
 ### 一条连接
 
-就是现在的 `client.yaml`，加上可选的 `kind`。不写 `kind` 就从 `outbounds[].type` 推断（`get`/`ws`/`h2`/`quic`/`h3` → `loft`，`sstp` → `sstp`，`vless` → `vless`，`trojan` → `trojan`）。
+就是现在的 `client.yaml`，加上可选的 `kind`。不写 `kind` 就从 `outbounds[].type` 推断（`get`/`ws`/`h2`/`quic`/`h3`/`l3` → `loft`，`sstp` → `sstp`，`vless` → `vless`，`trojan` → `trojan`）。
 
 ```yaml
 name: Home

@@ -40,7 +40,7 @@ loft://<token>@<host>[:port][/path][?query][#name]
 
 RFC 3986. `token` и `name` процентировать (`application/x-www-form-urlencoded` для фрагмента не подходит). Порт по умолчанию **443**. IPv6-хост в скобках.
 
-Схема **и есть** тип подключения (`loft`). Query `type` — **транспорт** (`get` `ws` `h2` `quic` `h3`). Строка списка показывает оба: `loft · get · cdn.example.com`.
+Схема **и есть** тип подключения (`loft`). Query `type` — **транспорт** (`get` `ws` `h2` `quic` `h3` `l3`). Строка списка показывает оба: `loft · get · cdn.example.com`.
 
 | Часть | Куда в `client.yaml` |
 |-------|----------------------|
@@ -54,7 +54,7 @@ RFC 3986. `token` и `name` процентировать (`application/x-www-for
 
 | Ключ | Значения | По умолчанию | YAML |
 |------|----------|--------------|------|
-| `type` | `get` `ws` `h2` `quic` `h3` | `get` | исходящий `type` (транспорт) |
+| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | исходящий `type` (транспорт) |
 | `cdn` | имя профиля (`yandex`, …) | нет | исходящий `cdn` |
 | `fp` | отпечаток TLS (`chrome`, …) | `chrome` | исходящий `fingerprint` |
 | `scheme` | `https` `http` `wss` `ws` | из `type` | схема `url` |
@@ -204,7 +204,7 @@ JSON `.vpn` с host / user / password принимается как это по�
 
 ### Одно подключение
 
-Сегодняшний `client.yaml` плюс необязательный `kind`. Нет `kind` — вывести из `outbounds[].type` (`get`/`ws`/`h2`/`quic`/`h3` → `loft`, `sstp` → `sstp`, `vless` → `vless`, `trojan` → `trojan`).
+Сегодняшний `client.yaml` плюс необязательный `kind`. Нет `kind` — вывести из `outbounds[].type` (`get`/`ws`/`h2`/`quic`/`h3`/`l3` → `loft`, `sstp` → `sstp`, `vless` → `vless`, `trojan` → `trojan`).
 
 ```yaml
 name: Home
