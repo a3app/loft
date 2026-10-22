@@ -71,7 +71,7 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 			serveRoster(w, r)
 		case r.Method == http.MethodGet && r.URL.Path == cfg.ListsPath:
 			serveLists(w, r)
-		case r.Method == http.MethodConnect && h2s.Match(r) && cfg.HasFront(wire.FrontH2):
+		case r.Method == http.MethodConnect && h2s.Match(r) && (cfg.HasFront(wire.FrontH2) || cfg.HasFront(wire.FrontL3)):
 			h2s.ServeHTTP(w, r)
 		case r.Method == http.MethodConnect && cfg.HasFront(wire.FrontConnect):
 			splice.ServeHTTP(w, r)

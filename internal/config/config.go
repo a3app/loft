@@ -19,7 +19,7 @@ type ClientConfig struct {
 	Token         string            `yaml:"token"`
 	MemberID      string            `yaml:"member_id,omitempty"`
 	InstanceID    string            `yaml:"instance_id,omitempty"`
-	Select        string            `yaml:"select"` // get | ws | h2 | quic | h3 | auto
+	Select        string            `yaml:"select"` // get | ws | h2 | quic | h3 | l3 | auto
 	Fronts        []string          `yaml:"fronts"` // extra filter; empty = outbound types (else GET)
 	Outbounds     []Outbound        `yaml:"outbounds"`
 	ExtraCaps     uint64            `yaml:"-"`
@@ -88,7 +88,7 @@ func WriteClient(path string, cfg *ClientConfig) error {
 // Outbound is one TLS edge the client will try.
 type Outbound struct {
 	Name         string `yaml:"name"`
-	Type         string `yaml:"type"` // get | ws | h2 | quic | h3
+	Type         string `yaml:"type"` // get | ws | h2 | quic | h3 | l3
 	CDN          string `yaml:"cdn"`  // optional edge profile: yandex | cloudflare | empty=generic
 	URL          string `yaml:"url"`
 	Path         string `yaml:"path"`

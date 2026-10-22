@@ -26,6 +26,10 @@ func TestNormalizeFront(t *testing.T) {
 	if err != nil || got != "h3" {
 		t.Fatalf("%s %v", got, err)
 	}
+	got, err = NormalizeFront("l3")
+	if err != nil || got != "l3" {
+		t.Fatalf("%s %v", got, err)
+	}
 	if _, err := NormalizeFront("yandex"); err == nil {
 		t.Fatal("vendor names are not fronts")
 	}

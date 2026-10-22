@@ -416,10 +416,10 @@ func NormalizeFront(s string) (string, error) {
 	switch s {
 	case "", "get":
 		return "get", nil
-	case "ws", "quic", "h2", "h3":
+	case "ws", "quic", "h2", "h3", "l3":
 		return s, nil
 	default:
-		return "", fmt.Errorf("unknown front %q (want get, ws, h2, quic or h3)", s)
+		return "", fmt.Errorf("unknown front %q (want get, ws, h2, quic, h3 or l3)", s)
 	}
 }
 
