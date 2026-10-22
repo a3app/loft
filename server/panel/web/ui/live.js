@@ -332,6 +332,25 @@
         const ln = line && $('#cfgLn').children[line - 1]; if (ln) ln.classList.add('e');
       }, 600);
     };
+    // search: what this role may see, from live data (loaded on first open)
+    window.searchItems = () => {
+      const o = [];
+      for (const g of MENU) for (const [k, t, pkg] of g.items) if ((!pkg || pkgOn(pkg)) && L.can(k === 'prio' ? 'network' : k, 1)) o.push({ g: 'Разделы', t, go: () => go(k) });
+      o.push({ g: 'Разделы', t: 'Личный кабинет', go: () => go('me') });
+      if (L.can('members', 1)) NETS.forEach(n => n.members.forEach(m => o.push({ g: 'Члены сети', t: m.id, s: m.name || '', go: () => goThen('members', () => openMember(m.id)) })));
+      if (L.ch) L.ch.channels.forEach(c => o.push({ g: 'Подключения', t: c.title || c.name, s: c.name, go: () => { S.tab.network = 'up'; goThen('network', () => L.openChan(c.name)); } }));
+      if (L.dm) L.dm.zones.forEach(z => o.push({ g: 'Домены', t: z.name, go: () => go('domains/' + z.name) }));
+      if (L.ml) L.ml.boxes.forEach((b, i) => o.push({ g: 'Почта', t: b.address, go: () => { L.mlDom = b.address.split('@')[1]; goThen('mail', () => L.openBox(i)); } }));
+      if (L.us) L.us.users.forEach(u => o.push({ g: 'Пользователи', t: u.login, s: u.name || '', go: () => goThen('users', () => L.openUser(u.login)) }));
+      if (L.pk) L.pk.packages.forEach(p => o.push({ g: 'Пакеты', t: PT[p.key] || p.key, s: p.installed ? 'установлен' : '', go: () => go('packages') }));
+      return o;
+    };
+    const openSearch0 = window.openSearch;
+    window.openSearch = () => {
+      openSearch0();
+      const want = [[!L.ch && L.can('network', 1), loadChannels], [!L.dm && L.can('domains', 1), loadDomains], [!L.ml && L.can('mail', 1) && pkgOn('Почтовый сервер'), loadMail], [!L.us && L.can('users', 1), loadUsers], [!L.pk && L.can('packages', 1), loadPackages]].filter(x => x[0]);
+      if (want.length) Promise.allSettled(want.map(x => x[1]())).then(() => { if ($('#sq')) searchDraw(); });
+    };
     const segments = V.segments;
     V.segments = () => segments()
       .replace(/<button type="button" class="btn" onclick="openNet\('new'\)">[^]*?<\/button>/, ''); // the node holds one network

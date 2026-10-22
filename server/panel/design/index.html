@@ -43,6 +43,11 @@ button{font:inherit}
 .hdr-ic:hover{background:var(--menu-hover)}
 .hdr-pill{min-height:36px;padding:0 12px;border:1px solid #3A332C;border-radius:4px;background:transparent;color:var(--snow);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
 .hdr-ctl{position:relative}
+.sr{display:flex;flex-direction:column;gap:2px;margin:0 -12px}
+.sr-g{padding:10px 12px 4px;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.sr-i{display:flex;align-items:baseline;gap:10px;width:100%;padding:9px 12px;border:0;border-radius:4px;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.sr-i span{color:var(--mute);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-i.on,.sr-i:hover{background:var(--th)}
 .umenu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:200px;padding:6px 0;background:var(--menu);border:1px solid #3A332C;border-radius:6px;box-shadow:0 12px 28px rgba(0,0,0,.35)}
 .umenu a,.umenu button{display:block;width:100%;padding:10px 16px;border:0;background:none;color:var(--snow);font:inherit;font-size:14px;text-align:left;text-decoration:none;cursor:pointer}
 .umenu a:hover,.umenu button:hover{background:var(--menu-hover)}
@@ -444,7 +449,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
       <b>loft</b><span class="hdr-host">vpn.example.net</span>
     </a>
     <div class="hdr-ctl">
-      <button class="hdr-ic" type="button" aria-label="Поиск по панели"><svg width="22" height="22"><use href="#i-search"/></svg></button>
+      <button class="hdr-ic" type="button" aria-label="Поиск по панели" title="Поиск (⌘K)" onclick="openSearch()"><svg width="22" height="22"><use href="#i-search"/></svg></button>
       <label for="hLang" style="position:absolute;left:-9999px">Язык</label>
       <select class="hdr-pill" id="hLang"><option value="en">EN</option><option value="ru">RU</option><option value="zh">中文</option></select>
       <button class="hdr-pill" id="userBtn" type="button" aria-haspopup="menu" aria-expanded="false" onclick="userMenu()">admin · владелец</button>
@@ -1804,6 +1809,37 @@ function renderFoot(){
   $('#foot').innerHTML=`<div class="foot-copy"><button class="foot-about" type="button" title="О loft panel" onclick="go('about')">Работает на loft-panel ${S.ver||'dev'}</button><div class="madeby" translate="no">Made with love ${HEART} by A<sup>3</sup></div></div>`;
 }
 const OSS=[['Go','язык и среда выполнения'],['nginx','веб-сервер за нодой'],['Xray-core','серверы и клиенты VLESS, Trojan, Shadowsocks'],['WireGuard · AmneziaWG','каналы WireGuard'],['OpenVPN','каналы по файлу .ovpn'],['ZeroTier','подключение к сетям ZeroTier'],['quic-go','QUIC и HTTP/3'],['uTLS','отпечаток TLS как у браузера'],['gVisor','сетевой стек в пространстве пользователя'],['Postfix · Dovecot · OpenDKIM','почта: отправка, приём, подпись'],['Rspamd','фильтр спама'],['Roundcube','веб-почта в браузере'],['nftables · fail2ban','защита от сканеров и перебора паролей'],['Let’s Encrypt','бесплатные сертификаты TLS']];
+/* ── поиск по панели: разделы и объекты, ⌘K ── */
+// goThen opens a section and then f (a dialog), after the page is drawn
+function goThen(r,f){if(location.hash.slice(1)===r){f();return}S.after=f;go(r)}
+function searchItems(){
+ const o=MENU.flatMap(g=>g.items).map(([k,t])=>({g:'Разделы',t,go:()=>go(k)}));
+ o.push({g:'Разделы',t:'Личный кабинет',go:()=>go('me')});
+ NETS.forEach(n=>n.members.forEach(m=>o.push({g:'Члены сети',t:m.id,s:m.name||'',go:()=>goThen('members',()=>openMember(m.id))})));
+ Object.entries(CH).forEach(([k,c])=>o.push({g:'Подключения',t:c.title,s:k,go:()=>{S.tab.network='up';goThen('network',()=>openChan(k))}}));
+ ZONES.forEach(z=>o.push({g:'Домены',t:z.z,go:()=>go('domains/'+z.z)}));
+ BOXES.forEach((b,i)=>o.push({g:'Почта',t:b[0],go:()=>goThen('mail',()=>openBox(i))}));
+ PUSERS.forEach((u,i)=>o.push({g:'Пользователи',t:u[0],s:u[1],go:()=>goThen('users',()=>openPUser(i))}));
+ PKG.filter(p=>p.length>1).forEach(p=>o.push({g:'Пакеты',t:p[0],go:()=>go('packages')}));
+ return o;
+}
+let SR=[],SRi=0;
+function openSearch(){
+ dialog('Поиск по панели','Разделы, члены сети, подключения, домены, ящики, пользователи и пакеты.',`<div class="fld"><label for="sq">Что найти</label><input id="sq" autocomplete="off" spellcheck="false" oninput="searchDraw()" onkeydown="searchKey(event)"></div><div class="sr" id="sr" role="listbox"></div>`,`<span class="hint" style="margin:0">↑ ↓ — выбрать, Enter — открыть, Esc — закрыть</span>`);
+ searchDraw();
+}
+function searchDraw(){
+ const q=($('#sq')||{}).value?.trim().toLowerCase()||'',all=searchItems();
+ SR=(q?all.filter(x=>(x.t+' '+(x.s||'')+' '+x.g).toLowerCase().includes(q)):all.filter(x=>x.g==='Разделы')).slice(0,40);SRi=0;
+ let g='';$('#sr').innerHTML=SR.map((x,i)=>(x.g!==g?`<div class="sr-g">${g=x.g}</div>`:'')+`<button type="button" class="sr-i ${i?'':'on'}" role="option" onclick="searchGo(${i})"><b>${esc(x.t)}</b>${x.s?`<span>${esc(x.s)}</span>`:''}</button>`).join('')||'<p class="mute" style="margin:0 12px">Ничего не нашлось.</p>';
+}
+function searchKey(e){
+ const b=$('#sr').querySelectorAll('.sr-i');if(!b.length)return;
+ if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();b[SRi].classList.remove('on');SRi=(SRi+(e.key==='ArrowDown'?1:b.length-1))%b.length;b[SRi].classList.add('on');b[SRi].scrollIntoView({block:'nearest'})}
+ else if(e.key==='Enter'){e.preventDefault();searchGo(SRi)}
+}
+function searchGo(i){const x=SR[i];if(!x)return;closeDlg();x.go()}
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'&&!FULL[S.route]){e.preventDefault();openSearch()}});
 function userMenu(v){const m=$('#umenu'),on=v===undefined?m.hidden:v;m.hidden=!on;$('#userBtn').setAttribute('aria-expanded',on)}
 document.addEventListener('click',e=>{if(!e.target.closest('#userBtn,#umenu'))userMenu(false)});
 function goOut(){go('login')}
@@ -1843,7 +1879,7 @@ function render(){
 function go(r){location.hash=r}
 function setOpen(v){S.open=v;$('#app').classList.toggle('menu-open',v);$('#menuBtn').setAttribute('aria-expanded',v);$('#menuBtn').setAttribute('aria-label',v?'Закрыть меню':'Открыть меню');$('#menuBtn').innerHTML=ic(v?'i-x':'i-menu',24)}
 function setRoute(){const [r,...a]=location.hash.slice(1).split('/');S.route=r||'main';S.arg=decodeURIComponent(a.join('/'))}
-window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();render();$('#main').scrollTop=0});
+window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();render();const f=S.after;S.after=null;if(f)f();$('#main').scrollTop=0});
 $('#menuBtn').onclick=()=>setOpen(!S.open);
 $('#foldBtn').onclick=()=>{S.rail=!S.rail;try{localStorage.setItem('lp-rail',S.rail?'1':'0')}catch(e){}renderMenu()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){userMenu(false);if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
