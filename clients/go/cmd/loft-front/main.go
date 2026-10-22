@@ -342,7 +342,7 @@ func dial(ctx context.Context, token, raw, kind, path string, muxOn bool, cdnNam
 	return nil, "", last
 }
 
-// outboundFor builds an Outbound for a get/ws/h2/quic/h3 front URL.
+// outboundFor builds an Outbound for a get/ws/h2/quic/h3/l3 front URL.
 func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 	o := config.Outbound{
 		Name:         "loft",
