@@ -43,7 +43,7 @@ func physicalFromRoutes() string {
 	switch runtime.GOOS {
 	case "darwin":
 		return darwinPhysical()
-	case "linux":
+	case "linux", "android":
 		return linuxPhysical()
 	default:
 		return ""

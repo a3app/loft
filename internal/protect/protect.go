@@ -26,8 +26,9 @@ func NetDialer(timeout time.Duration) *net.Dialer {
 	}
 	if current != nil || boundIndex() > 0 {
 		d.Control = Control
-	}
-	if boundIndex() > 0 {
+		// PreferGo: Android VpnService DNS is overlay 10.8.0.1. A GET
+		// reconnect that uses libc/getaddrinfo deadlocks (mux down → DNS
+		// down → mux stays down). Dial public DNS on a protected socket.
 		d.Resolver = &net.Resolver{PreferGo: true, Dial: resolverDial}
 	}
 	return d
@@ -43,6 +44,9 @@ func Timeout(network, addr string, timeout time.Duration) (net.Conn, error) {
 }
 
 func resolverDial(ctx context.Context, network, address string) (net.Conn, error) {
+	if current != nil {
+		address = bypassDNS(network, address)
+	}
 	d := 5 * time.Second
 	if deadline, ok := ctx.Deadline(); ok {
 		if r := time.Until(deadline); r > 0 && r < d {
@@ -50,6 +54,28 @@ func resolverDial(ctx context.Context, network, address string) (net.Conn, error
 		}
 	}
 	return Timeout(network, address, d)
+}
+
+// bypassDNS replaces overlay/private nameservers with a public resolver.
+// Public IPs (8.8.8.8, ISP) stay so a working physical DNS is reused.
+func bypassDNS(network, address string) string {
+	host, port, err := net.SplitHostPort(address)
+	if err == nil {
+		if ip := net.ParseIP(host); ip != nil && !poisonDNS(ip) {
+			return address
+		}
+	}
+	if port == "" {
+		port = "53"
+	}
+	if strings.Contains(network, "6") {
+		return net.JoinHostPort("2606:4700:4700::1111", port)
+	}
+	return net.JoinHostPort("1.1.1.1", port)
+}
+
+func poisonDNS(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
 }
 
 // Control is net.Dialer.Control: bind to -if, then protect the raw fd.
