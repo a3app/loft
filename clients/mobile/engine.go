@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -109,6 +110,9 @@ func (e *Engine) Start(yamlStr string) error {
 		return err
 	}
 
+	if runtime.GOOS == "android" {
+		_ = protect.BindUplink("")
+	}
 	fronts := joinComma(ResolveFrontIPs(FrontHosts(cfg)))
 	ctx, cancel := context.WithCancel(context.Background())
 	pipe := newPacketPipe()
@@ -138,6 +142,7 @@ func (e *Engine) Start(yamlStr string) error {
 	e.bytesDown.Store(0)
 	e.mu.Unlock()
 
+	transport.ClearDialError()
 	go e.run(ctx, cfg, extra, kind, pipe, pathCh, ready)
 
 	select {
@@ -151,6 +156,9 @@ func (e *Engine) Start(yamlStr string) error {
 	case <-time.After(startWait):
 		e.Stop()
 		err = fmt.Errorf("timeout")
+		if derr := transport.LastDialError(); derr != nil {
+			err = fmt.Errorf("timeout: %v", derr)
+		}
 		e.setErr(err)
 		return err
 	}
@@ -201,6 +209,9 @@ func (e *Engine) Stop() {
 		_ = stack.Close()
 	} else if pipe != nil {
 		_ = pipe.Close()
+	}
+	if runtime.GOOS == "android" {
+		_ = protect.Bind("")
 	}
 }
 
@@ -287,6 +298,12 @@ func (e *Engine) Status() *Snapshot { return e.Snapshot() }
 // SocketProtector is Android VpnService.protect. iOS leaves this unset.
 type SocketProtector interface {
 	Protect(fd int) bool
+}
+
+// SetInstanceFile persists overlay instance_id across process restarts.
+// Call before Start. Empty path is memory-only (auth_already_online after kill).
+func (e *Engine) SetInstanceFile(path string) {
+	transport.SetInstanceFile(path)
 }
 
 // SetProtector marks new outbound fds off the tunnel. Call before Start.

@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/a3app/loft/internal/cdn"
@@ -16,6 +18,27 @@ import (
 	"github.com/a3app/loft/internal/version"
 	"github.com/a3app/loft/internal/wire"
 )
+
+var (
+	lastDialMu sync.Mutex
+	lastDial   error
+)
+
+// LastDialError is the most recent StartSelected failure (mobile timeout).
+func LastDialError() error {
+	lastDialMu.Lock()
+	defer lastDialMu.Unlock()
+	return lastDial
+}
+
+func rememberDial(err error) {
+	lastDialMu.Lock()
+	lastDial = err
+	lastDialMu.Unlock()
+}
+
+// ClearDialError drops LastDialError. Engine.Start calls this.
+func ClearDialError() { rememberDial(nil) }
 
 // clientMemberID is stamped on Hello. Empty is shared-token mode.
 var clientMemberID string
@@ -183,6 +206,8 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 		}
 		d, o, err := StartSelected(ctx, cfg)
 		if err != nil {
+			rememberDial(err)
+			log.Printf("loft dial: %v", err)
 			if fatalFront(err) {
 				return err
 			}
