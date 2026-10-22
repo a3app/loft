@@ -117,7 +117,7 @@ final class FrontHelper {
         let socks = socksBind
         _ = Priv.physicalGateway()
         let iff = Priv.cachedIface()
-        let ifLog = iff.isEmpty ? "auto" : iff
+        let ifLog = iff.isEmpty ? "auto" : "auto \(iff)"
         if profile.isSSTP {
             LoftLog.shared.add("front", "spawn sstp \(profile.url) user=\(profile.user) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) if=\(ifLog)")
         } else if profile.isVLESS {
@@ -134,9 +134,6 @@ final class FrontHelper {
             "-type", kind,
             "-socks", socks.isEmpty ? "off" : socks,
         ]
-        if !iff.isEmpty {
-            args += ["-if", iff]
-        }
         if let path = path, !path.isEmpty {
             args += ["-path", path]
         }

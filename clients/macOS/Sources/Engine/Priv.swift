@@ -354,9 +354,52 @@ enum Priv {
         _ = sem.wait(timeout: .now() + seconds)
     }
 
-    /// Boot-time cleanup: restore routes and reap leftover holders.
+    /// Boot-time cleanup: undo loft leftovers only. Foreign 0/1 (WireGuard etc.) stays.
     static func reapStale() {
-        restoreRoutes()
+        restoreLoftLeftovers()
+    }
+
+    /// True when a leftover loft stamp or holder is on this Mac.
+    private static func loftLeftovers() -> Bool {
+        if defaultStamp() { return true }
+        if FileManager.default.fileExists(atPath: "/tmp/loft-ipv6-drop") { return true }
+        if FileManager.default.fileExists(atPath: "/var/run/loft-dns.prev") { return true }
+        if FileManager.default.fileExists(atPath: "/tmp/loft-exclude") { return true }
+        if let files = try? FileManager.default.contentsOfDirectory(atPath: "/tmp") {
+            if files.contains(where: { $0.hasPrefix("loft-hold.") }) { return true }
+        }
+        return hasHolders()
+    }
+
+    /// Drop loft's leftover 0/1, blackhole, DNS, IPv6 reject, and pins.
+    /// Does not ifconfig-down a utun that another VPN may own.
+    static func restoreLoftLeftovers() {
+        if !loftLeftovers() { return }
+        guard isSetuidRoot(installedPriv()) else { return }
+        stopHeld(key: nil)
+        refreshGateway()
+        let gw = physicalGateway()
+        var args = ["--cleanup-leftover"]
+        if !gw.isEmpty { args += ["--gw", gw] }
+        LoftLog.shared.add("loft", "tun cleanup leftover gw=\(gw.isEmpty ? "-" : gw)")
+        try? run(installedPriv(), args)
+    }
+
+    /// Drop every loft host pin. Empty `--pin` replaces the stamp with nothing.
+    static func clearPins() {
+        replacePins([])
+    }
+
+    /// Install exactly `ips` as host pins (empty clears). Sibling sessions rebuild this list.
+    static func replacePins(_ ips: [String]) {
+        guard isSetuidRoot(installedPriv()) else { return }
+        refreshGateway()
+        let gw = physicalGateway()
+        var args = ["--pin"]
+        if !ips.isEmpty { args += ["--exclude", ips.joined(separator: ",")] }
+        if !gw.isEmpty { args += ["--gw", gw] }
+        LoftLog.shared.add("loft", "tun pin n=\(ips.count) gw=\(gw.isEmpty ? "-" : gw)")
+        try? run(installedPriv(), args)
     }
 
     /// Path of the remembered overlay IP file.
@@ -878,7 +921,19 @@ enum Priv {
             || socksConnectOK(socks, dest: [1, 1, 1, 1], port: 80)
     }
 
+    /// poll(2) until `fd` is readable/writable or `deadline` passes.
+    private static func waitFD(_ fd: Int32, read: Bool, write: Bool, deadline: Date) -> Bool {
+        let ms = Int32(max(0, deadline.timeIntervalSinceNow * 1000))
+        if ms == 0 { return false }
+        var pfd = pollfd(fd: fd, events: (read ? Int16(POLLIN) : 0) | (write ? Int16(POLLOUT) : 0), revents: 0)
+        let n = poll(&pfd, 1, ms)
+        if n <= 0 { return false }
+        if (pfd.revents & Int16(POLLERR | POLLHUP | POLLNVAL)) != 0 { return false }
+        return true
+    }
+
     /// SOCKS5 CONNECT to dest:port via `socks` (`host:port`). True on a success reply.
+    /// Non-blocking connect: Darwin ignores SO_SNDTIMEO on connect(2).
     private static func socksConnectOK(_ socks: String, dest: [UInt8], port: UInt16) -> Bool {
         let parts = socks.trimmingCharacters(in: .whitespaces).split(separator: ":")
         guard parts.count == 2, let sport = UInt16(parts[1]), dest.count == 4 else { return false }
@@ -891,23 +946,34 @@ enum Priv {
         let fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         if fd < 0 { return false }
         defer { close(fd) }
-        var tv = timeval(tv_sec: 0, tv_usec: 400_000)
-        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
-        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        let fl = fcntl(fd, F_GETFL, 0)
+        if fl >= 0 { _ = fcntl(fd, F_SETFL, fl | O_NONBLOCK) }
         var nd: Int32 = 1
         setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nd, socklen_t(MemoryLayout<Int32>.size))
+        let deadline = Date().addingTimeInterval(2.0)
         let cr = withUnsafePointer(to: &addr) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
         }
-        if cr != 0 { return false }
+        if cr != 0 {
+            if errno != EINPROGRESS { return false }
+            if !waitFD(fd, read: false, write: true, deadline: deadline) { return false }
+            var soerr: Int32 = 0
+            var slen = socklen_t(MemoryLayout<Int32>.size)
+            if getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &slen) != 0 || soerr != 0 { return false }
+        }
         func sendAll(_ b: [UInt8]) -> Bool {
             var off = 0
             while off < b.count {
+                if Date() > deadline { return false }
                 let n = b.withUnsafeBytes { raw -> Int in
                     send(fd, raw.baseAddress!.advanced(by: off), b.count - off, 0)
                 }
-                if n <= 0 { return false }
-                off += n
+                if n > 0 { off += n; continue }
+                if n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    if !waitFD(fd, read: false, write: true, deadline: deadline) { return false }
+                    continue
+                }
+                return false
             }
             return true
         }
@@ -915,11 +981,16 @@ enum Priv {
             var buf = [UInt8](repeating: 0, count: n)
             var off = 0
             while off < n {
+                if Date() > deadline { return nil }
                 let k = buf.withUnsafeMutableBytes { raw -> Int in
                     recv(fd, raw.baseAddress!.advanced(by: off), n - off, 0)
                 }
-                if k <= 0 { return nil }
-                off += k
+                if k > 0 { off += k; continue }
+                if k < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    if !waitFD(fd, read: true, write: false, deadline: deadline) { return nil }
+                    continue
+                }
+                return nil
             }
             return buf
         }

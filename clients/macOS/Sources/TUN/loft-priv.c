@@ -626,7 +626,6 @@ static void on_hold_sig(int sig) {
 static void hold_cleanup(void) {
     char net[32];
     ipv6_undrop_global();
-    drop_split_default();
     if (g_ip[0]) {
         cidr24(g_ip, net, sizeof net);
         route_del_net(net);
@@ -636,8 +635,10 @@ static void hold_cleanup(void) {
     if (g_peer[0]) route_del_host(g_peer);
     route_del_host(TUN_LOCAL);
     /* --set-default is a one-shot and does not set g_did_default.
-       Only rewrite 0/0 if loft actually installed the split default. */
+       Only drop 0/1 / rewrite 0/0 if loft actually installed the split default.
+       Overlay-only cleanup must not steal WireGuard's 0/1. */
     if (g_did_default || stamped_default()) {
+        drop_split_default();
         if (g_gwbuf[0]) route_restore_default(g_gwbuf);
         unstamp_default();
     }
@@ -918,6 +919,20 @@ static void wipe_excl(void) {
     }
     unlink(EXCL_STAMP);
     scrub_stale_hosts();
+}
+
+/* unstamp_excl: drop listed pins from the stamp, keep sibling sessions' pins. */
+static void unstamp_excl(const char *exclude) {
+    char old[64][64], gone[64][64], keep[64][64];
+    int nold, ngone, nkeep = 0, i;
+    nold = load_excl_list(old, 64);
+    ngone = parse_ip_csv(exclude, gone, 64);
+    for (i = 0; i < nold; i++) {
+        if (ip_in_list(gone, ngone, old[i])) continue;
+        snprintf(keep[nkeep], 64, "%s", old[i]);
+        nkeep++;
+    }
+    rewrite_excl_stamp(keep, nkeep);
 }
 
 #define SPLIT_MAX 65536
@@ -1293,7 +1308,7 @@ int main(int argc, char **argv) {
     int i, tun, drop_bh = 0, down = 0, hold = 0, want_default = 0, set_default = 0, clear_default = 0;
     int do_kill = 0, force = 0, reap = 0, restore = 0, overlay_only = 0, rebind = 0, pin = 0, discover = 0;
     int apply_dns = 0, restore_dns_only = 0, drop_split = 0, split_ifdown = 0;
-    int apply_split = 0, clear_split = 0, keep_direct = 0;
+    int apply_split = 0, clear_split = 0, keep_direct = 0, cleanup_leftover = 0;
     pid_t kill_pid = 0;
     char name[16];
     for (i = 1; i < argc; i++) {
@@ -1326,6 +1341,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--restore-dns")) restore_dns_only = 1;
         else if (!strcmp(argv[i], "--drop-split")) drop_split = 1;
         else if (!strcmp(argv[i], "--ifdown")) split_ifdown = 1;
+        else if (!strcmp(argv[i], "--cleanup-leftover")) cleanup_leftover = 1;
         else if (!strcmp(argv[i], "--apply-split")) apply_split = 1;
         else if (!strcmp(argv[i], "--clear-split")) clear_split = 1;
         else if (!strcmp(argv[i], "--keep-direct")) keep_direct = 1;
@@ -1339,6 +1355,24 @@ int main(int argc, char **argv) {
         discover_phys_gw(buf, sizeof buf);
         if (!buf[0]) return 1;
         printf("%s\n", buf);
+        return 0;
+    }
+    if (cleanup_leftover && !sock && !down && !restore) {
+        /* Boot: undo loft leftovers. Never ifconfig-down a foreign utun.
+           0/1 is dropped only when loft stamped that it installed the split. */
+        int ours = stamped_default();
+        if (ours) {
+            drop_split_default();
+            route_restore_default(gw);
+            unstamp_default();
+        }
+        route_unhold();
+        ipv6_undrop_global();
+        dns_restore();
+        wipe_excl();
+        reap_others(SIGTERM);
+        fprintf(stderr, "loft-priv: cleanup leftover gw=%s stamp=%d\n",
+            gw ? gw : "", ours);
         return 0;
     }
     if (drop_split && !sock && !down && !restore) {
@@ -1413,7 +1447,8 @@ int main(int argc, char **argv) {
         if (peer) route_del_host(peer);
         route_del_host(TUN_LOCAL);
         each_ip(exclude, del_excl);
-        wipe_excl();
+        if (overlay_only) unstamp_excl(exclude);
+        else wipe_excl();
         split_clear(hold || overlay_only);
         dns_restore();
         if (hold) {
@@ -1480,6 +1515,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: loft-priv --sock PATH --ip A --peer B [--mtu N] [--gw G] [--exclude ip,ip] [--default]\n");
         fprintf(stderr, "       loft-priv --apply-split [--name utunN] [--gw G]\n");
         fprintf(stderr, "       loft-priv --clear-split [--keep-direct]\n");
+        fprintf(stderr, "       loft-priv --cleanup-leftover [--gw G]\n");
         return 2;
     }
     tun = loft_utun_open(name);

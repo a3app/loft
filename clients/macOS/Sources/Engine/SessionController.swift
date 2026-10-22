@@ -187,6 +187,28 @@ final class SessionController {
         Priv.applySplit(via: via, direct: direct, ifname: ifname, gw: gw)
     }
 
+    /// Host pins for live/connecting/error sessions. Empty list clears leftover /32s.
+    private func rebuildPins(except: String? = nil) {
+        var ips: [String] = []
+        var seen = Set<String>()
+        for s in lives.values {
+            if s.id == except { continue }
+            switch s.state {
+            case .on, .connecting, .error: break
+            default: continue
+            }
+            let url: String = {
+                if !s.tunURL.isEmpty { return s.tunURL }
+                return store.profiles.first(where: { $0.id == s.id })?.url ?? ""
+            }()
+            if url.isEmpty { continue }
+            for ip in Priv.excludeHosts(url: url, overlayIP: s.overlayIP) {
+                if seen.insert(ip).inserted { ips.append(ip) }
+            }
+        }
+        Priv.replacePins(ips)
+    }
+
     /// Session for `id`, creating a slot if needed.
     private func ensure(_ id: String) -> LiveSession {
         if let s = lives[id] { return s }
@@ -449,25 +471,47 @@ final class SessionController {
                         try Priv.upTUN(sock: s.helper.tunSock, ip: ip, url: p.url, defaultRoute: false, dns: dns, mtu: s.helper.overlayMTU, key: p.id)
                         s.helper.waitTun(seconds: 8)
                         if ticket != s.generation { return }
-                        s.tunLive = true
-                        s.tunArmed = true
-                        s.tunName = Priv.tunName(for: p.id)
-                        s.defaultArmed = false
-                        if takeDefault {
-                            if socksAddr.isEmpty {
-                                LoftLog.shared.add("loft", "tun default skipped: no socks to probe tcp")
-                            } else if Priv.loftCarriesTCP(socksAddr) {
-                                for o in self.lives.values where o.id != p.id { o.defaultArmed = false }
-                                Priv.setDefaultRoute(true, url: p.url, overlayIP: ip, ifname: s.tunName)
-                                s.defaultArmed = true
-                            } else {
-                                LoftLog.shared.add("loft", L10n.t("err_no_tcp"))
+                        let tunName = Priv.tunName(for: p.id)
+                        if !s.helper.tunLive || tunName.isEmpty {
+                            LoftLog.shared.add("loft", "tun: loft-front did not take fd id=\(p.id)")
+                            let others = self.lives.values.contains { $0.id != p.id && ($0.tunArmed || $0.state == .on) }
+                            Priv.downTUN(url: p.url, hold: false, ip: ip, restoreDefault: false, key: p.id, othersRemain: others)
+                            self.rebuildPins()
+                        } else {
+                            s.tunLive = true
+                            s.tunArmed = true
+                            s.tunName = tunName
+                            s.defaultArmed = false
+                            LoftLog.shared.add("loft", "tun live id=\(p.id) if=\(s.tunName)")
+                            LoftLog.shared.snapshot("live")
+                            self.syncSystemDNS()
+                            self.applySplitRoutes()
+                            if takeDefault {
+                                if socksAddr.isEmpty {
+                                    LoftLog.shared.add("loft", "tun default skipped: no socks to probe tcp")
+                                } else {
+                                    let ifname = s.tunName
+                                    Priv.netQueue.async {
+                                        let ok = Priv.loftCarriesTCP(socksAddr)
+                                        self.queue.async {
+                                            if ticket != s.generation || !s.tunArmed { return }
+                                            if ok {
+                                                for o in self.lives.values where o.id != p.id { o.defaultArmed = false }
+                                                Priv.setDefaultRoute(true, url: p.url, overlayIP: ip, ifname: ifname)
+                                                s.defaultArmed = true
+                                                LoftLog.shared.add("loft", "tun default on id=\(p.id) if=\(ifname)")
+                                                self.applySplitRoutes()
+                                            } else {
+                                                LoftLog.shared.add("loft", L10n.t("err_no_tcp"))
+                                            }
+                                            DispatchQueue.main.async {
+                                                NotificationCenter.default.post(name: .loftState, object: self)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
-                        LoftLog.shared.add("loft", "tun live id=\(p.id) if=\(s.tunName) default=\(s.defaultArmed ? 1 : 0)")
-                        LoftLog.shared.snapshot("live")
-                        self.syncSystemDNS()
-                        self.applySplitRoutes()
                     } catch {
                         LoftLog.shared.add("loft", "tun: \(error.localizedDescription)")
                     }
@@ -483,6 +527,7 @@ final class SessionController {
                 let shown = FrontExplain.display(raw)
                 LoftLog.shared.add("loft", "error \(shown)")
                 self.set(p.id, .error, err: shown, ip: "")
+                self.rebuildPins()
                 self.scheduleReconnect(s)
             }
         }
@@ -749,6 +794,10 @@ final class SessionController {
         s.generation += 1
         LoftLog.shared.add("loft", "reconnect stopped id=\(pid)")
         set(pid, .off, err: "", ip: "")
+        queue.async {
+            s.state = .off
+            self.rebuildPins(except: pid)
+        }
     }
 
     /// Cancels a pending reconnect timer for one session.
@@ -824,6 +873,8 @@ final class SessionController {
         set(id, .off, err: "", ip: "")
         queue.async {
             s.helper.stop()
+            s.state = .off
+            self.rebuildPins(except: id)
         }
     }
 
@@ -869,6 +920,7 @@ final class SessionController {
         s.tunLive = false
         s.tunName = ""
         s.socksDisplay = ""
+        rebuildPins(except: s.id)
         syncSystemDNS()
         applySplitRoutes()
         if wasCurrent, store.failover, let other = previousLive(besides: s.id) {
@@ -929,44 +981,54 @@ final class SessionController {
             self?.probeLiveSessions(pass: 1)
         }
         wakeProbe = work
-        queue.asyncAfter(deadline: .now() + 1.5, execute: work)
+        queue.asyncAfter(deadline: .now() + 3.0, execute: work)
     }
 
-    /// SOCKS CONNECT through each .on session. Pass 1 failures retry once so
-    /// Wi-Fi after lid-open is not a false death. Alive sessions stay up.
+    /// SOCKS CONNECT through each .on session. TCP runs on the net queue so a
+    /// wedged SYN cannot stall disconnect/restore. Three passes (3s / 5s / 8s)
+    /// after lid-open so DHCP/WPA is not a false death.
     private func probeLiveSessions(pass: Int) {
-        var dead: [LiveSession] = []
+        struct Target { let id: String; let gen: Int; let socks: String }
+        var targets: [Target] = []
         for s in lives.values where s.state == .on {
             let socks = !s.socksDisplay.isEmpty ? s.socksDisplay : s.probeSocks
             if socks.isEmpty { continue }
-            if Priv.loftCarriesTCP(socks) {
-                LoftLog.shared.add("loft", "wake live id=\(s.id)")
-                continue
-            }
-            LoftLog.shared.add("loft", "wake stale id=\(s.id) pass=\(pass)")
+            targets.append(Target(id: s.id, gen: s.generation, socks: socks))
+        }
+        if targets.isEmpty { return }
+        Priv.netQueue.async { [weak self] in
+            let stale = targets.filter { !Priv.loftCarriesTCP($0.socks) }
+            self?.queue.async { self?.finishWakeProbe(pass: pass, stale: stale.map { ($0.id, $0.gen) }) }
+        }
+    }
+
+    /// Apply wake TCP results on the session queue. Passes 1–2 reschedule; pass 3 drops.
+    private func finishWakeProbe(pass: Int, stale: [(String, Int)]) {
+        var dead: [LiveSession] = []
+        for (id, gen) in stale {
+            guard let s = lives[id], s.state == .on, s.generation == gen else { continue }
+            LoftLog.shared.add("loft", "wake stale id=\(id) pass=\(pass)")
             dead.append(s)
         }
+        for s in lives.values where s.state == .on && !stale.contains(where: { $0.0 == s.id }) {
+            LoftLog.shared.add("loft", "wake live id=\(s.id)")
+        }
         if dead.isEmpty { return }
-        if pass == 1 {
+        if pass < 3 {
+            let delay: TimeInterval = pass == 1 ? 5.0 : 8.0
             let work = DispatchWorkItem { [weak self] in
-                self?.probeLiveSessions(pass: 2)
+                self?.probeLiveSessions(pass: pass + 1)
             }
             wakeProbe = work
-            queue.asyncAfter(deadline: .now() + 2.0, execute: work)
+            queue.asyncAfter(deadline: .now() + delay, execute: work)
             return
         }
         for s in dead {
             guard s.state == .on else { continue }
-            let socks = !s.socksDisplay.isEmpty ? s.socksDisplay : s.probeSocks
-            if !socks.isEmpty, Priv.loftCarriesTCP(socks) {
-                LoftLog.shared.add("loft", "wake live id=\(s.id)")
-                continue
-            }
-            let shown = L10n.t("err_stale")
             LoftLog.shared.add("loft", "wake drop id=\(s.id)")
             tearDown(s, died: true)
             DispatchQueue.main.async {
-                self.set(s.id, .error, err: shown, ip: "")
+                self.set(s.id, .error, err: L10n.t("err_stale"), ip: "")
                 self.scheduleReconnect(s)
             }
         }
