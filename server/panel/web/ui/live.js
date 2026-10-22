@@ -152,6 +152,7 @@
     [/^the provider refused the token$/, () => 'Провайдер не принял токен'],
     [/^the provider answered HTTP (\d+): (.*)$/, m => `Провайдер ответил HTTP ${m[1]}: ${m[2]}`],
     [/^access check failed: (.*)$/, m => `Доступ не проверен: ${ru(m[1])}`],
+    [/^Namecheap: the API user and key do not match, or API access is off .*$/, () => 'Namecheap: пользователь API и ключ не подходят друг к другу или API выключен (Profile → Tools → API Access). Пользователь — имя аккаунта, не e-mail'],
     [/^zone (\S+) is not in this Cloudflare account$/, m => `Зоны ${m[1]} нет в этом аккаунте Cloudflare`],
     [/^the provider does not serve (\S+): (.*)$/, m => `Провайдер не обслуживает ${m[1]}: ${ru(m[2])}`],
     [/^zone: a domain like/, () => 'Зона — домен вида example.com'],
@@ -2112,9 +2113,9 @@
     dialog('DNS-провайдеры', 'Доступы, через которые панель ведёт записи зон и проходит проверку DNS-01. Хранятся только на этом сервере.',
       (L.dm.providers.length ? table(['Провайдер', 'Доступ', 'Зоны', { t: '', r: 1 }], L.dm.providers.map(p => `<tr><td><b>${DNSK[p.kind][0]}</b></td><td class="mono">${esc(p.hint)}${p.user ? ' · ' + esc(p.user) : ''}</td><td class="mono">${esc(p.zones.join(', ') || '—')}</td><td class="r"><div class="cell-acts"><button class="icb del" type="button" aria-label="Удалить доступ" onclick="LIVE.provDel('${p.id}')">${ic('i-trash')}</button></div></td></tr>`).join('')) : '<p class="mute">Доступов нет.</p>') + `
       <div class="dlg-sec">Добавить</div>
-      <div class="fld"><label for="dp1">Провайдер</label><select id="dp1" onchange="$('#dpNc').hidden=this.value!=='namecheap';$('#dpH').textContent=LIVE.dnsHint(this.value)">${['cloudflare', 'digitalocean', 'namecheap'].map(k => `<option value="${k}">${DNSK[k][0]}</option>`).join('')}</select></div>
-      <div><div class="fld"><label for="dp2">API-токен</label><input id="dp2" class="mono" type="password" autocomplete="off"></div><div class="hint" id="dpH">${DNSK.cloudflare[1]}</div></div>
-      <div id="dpNc" hidden><div class="fld"><label for="dp3">Пользователь API</label><input id="dp3" autocomplete="off"></div><div class="hint">Белый IP для API Namecheap: <span class="mono">${esc(ips || '—')}</span></div></div>`,
+      <div class="fld"><label for="dp1">Провайдер</label><select id="dp1" onchange="const nc=this.value==='namecheap';$('#dpNc').hidden=!nc;$('#dpK').textContent=nc?'API-ключ':'API-токен';$('#dpH').textContent=LIVE.dnsHint(this.value)">${['cloudflare', 'digitalocean', 'namecheap'].map(k => `<option value="${k}">${DNSK[k][0]}</option>`).join('')}</select></div>
+      <div id="dpNc" hidden><div class="fld"><label for="dp3">Пользователь API</label><input id="dp3" name="nc-api-user" autocomplete="off" spellcheck="false"></div><div class="hint">Имя аккаунта Namecheap, не e-mail. Белый IP для API Namecheap: <span class="mono">${esc(ips || '—')}</span></div></div>
+      <div><div class="fld"><label for="dp2" id="dpK">API-токен</label><input id="dp2" name="dns-api-key" class="mono" type="password" autocomplete="new-password"></div><div class="hint" id="dpH">${DNSK.cloudflare[1]}</div></div>`,
       `<button class="btn pri" type="button" onclick="LIVE.provAdd()">Проверить и добавить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
   L.dnsHint = k => DNSK[k][1];
@@ -2180,8 +2181,8 @@
         <div class="dlg-sec">Где управляется DNS зоны</div>
         <div class="opts">${['cloudflare', 'digitalocean', 'namecheap', 'manual'].map(k => `<button type="button" class="opt ${W.prov === k ? 'on' : ''}" aria-pressed="${W.prov === k}" onclick="LIVE.pickProv('${k}')"><b>${DNSK[k][0]}</b><span>${DNSK[k][1]}</span></button>`).join('')}</div>
         ${apiDNS ? (have ? `<p class="note-s">${pill('ok', 'ok')} <b>${DNSK[W.prov][0]}</b> · <span class="mono">${esc(have.hint)}</span>. Доступ уже добавлен.</p>` :
-          `<div><div class="fld"><label for="w2b">API-токен ${DNSK[W.prov][0]}</label><input id="w2b" class="mono" type="password" autocomplete="off" value="${esc(W.token || '')}" oninput="LIVE.W.token=this.value"></div><div class="hint">${DNSK[W.prov][1]}</div></div>
-           ${W.prov === 'namecheap' ? `<div><div class="fld"><label for="w2nc">Пользователь API</label><input id="w2nc" autocomplete="off" value="${esc(W.ncuser || '')}" oninput="LIVE.W.ncuser=this.value"></div><div class="hint">Белый IP для API Namecheap: <span class="mono">${esc((ips.filter(x => !x.includes(':'))[0]) || '—')}</span></div></div>` : ''}
+          `${W.prov === 'namecheap' ? `<div><div class="fld"><label for="w2nc">Пользователь API</label><input id="w2nc" name="nc-api-user" autocomplete="off" spellcheck="false" value="${esc(W.ncuser || '')}" oninput="LIVE.W.ncuser=this.value"></div><div class="hint">Имя аккаунта Namecheap, не e-mail. Белый IP для API Namecheap: <span class="mono">${esc((ips.filter(x => !x.includes(':'))[0]) || '—')}</span></div></div>` : ''}
+           <div><div class="fld"><label for="w2b">${W.prov === 'namecheap' ? 'API-ключ' : 'API-токен'} ${DNSK[W.prov][0]}</label><input id="w2b" name="dns-api-key" class="mono" type="password" autocomplete="new-password" value="${esc(W.token || '')}" oninput="LIVE.W.token=this.value"></div><div class="hint">${DNSK[W.prov][1]}</div></div>
            <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.checkProv()">Проверить</button></div>`) :
           `<p class="note-s">Внесите записи ниже у регистратора. Сертификат выпустится по HTTP-01, когда имя начнёт указывать на сервер.</p>
            <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.checkName()">Проверить DNS</button></div>

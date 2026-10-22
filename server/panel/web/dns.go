@@ -421,7 +421,8 @@ type Namecheap struct {
 type ncResponse struct {
 	Status string `xml:"Status,attr"`
 	Errors []struct {
-		Msg string `xml:",chardata"`
+		Number string `xml:"Number,attr"`
+		Msg    string `xml:",chardata"`
 	} `xml:"Errors>Error"`
 	Hosts []struct {
 		Name    string `xml:"Name,attr"`
@@ -459,6 +460,11 @@ func (n *Namecheap) call(ctx context.Context, cmd string, extra url.Values) (ncR
 		msg := "error"
 		if len(out.Errors) > 0 {
 			msg = strings.TrimSpace(out.Errors[0].Msg)
+			// the same answer for a wrong user, a wrong key and API access off;
+			// a wrong ClientIp is 1011150, apart
+			if out.Errors[0].Number == "1011102" {
+				msg = "the API user and key do not match, or API access is off (Profile → Tools → API Access); the user is the account name, not the e-mail"
+			}
 		}
 		return out, fmt.Errorf("Namecheap: %s", msg)
 	}

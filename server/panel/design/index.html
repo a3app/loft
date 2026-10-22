@@ -750,9 +750,9 @@ function openProviders(){
  dialog('DNS-провайдеры','Доступы, через которые панель ведёт записи зон и проходит проверку DNS-01. Хранятся только на этом сервере.',
   table(['Провайдер','Доступ','Зоны',{t:'',r:1}],PROVS.map(p=>`<tr><td><b>${DNSP[p[0]][0]}</b></td><td class="mono">${p[1]}</td><td class="mono">${p[2]}</td><td class="r"><div class="cell-acts"><button class="icb del" type="button" aria-label="Удалить доступ">${ic('i-trash')}</button></div></td></tr>`).join(''))+`
   <div class="dlg-sec">Добавить</div>
-  <div class="fld"><label for="dp1">Провайдер</label><select id="dp1" onchange="$('#dpNc').hidden=this.value!=='namecheap';$('#dpH').textContent=DNSP[this.value][1]">${Object.entries(DNSP).filter(([k])=>k!=='manual').map(([k,[n]])=>`<option value="${k}">${n}</option>`).join('')}</select></div>
-  <div><div class="fld"><label for="dp2">API-токен</label><input id="dp2" class="mono" type="password" autocomplete="off"></div><div class="hint" id="dpH">${DNSP.cloudflare[1]}</div></div>
-  <div id="dpNc" hidden><div class="fld"><label for="dp3">Пользователь API</label><input id="dp3" autocomplete="off"></div><div class="hint">Белый IP для API Namecheap: <span class="mono">203.0.113.10</span></div></div>`,
+  <div class="fld"><label for="dp1">Провайдер</label><select id="dp1" onchange="const nc=this.value==='namecheap';$('#dpNc').hidden=!nc;$('#dpK').textContent=nc?'API-ключ':'API-токен';$('#dpH').textContent=DNSP[this.value][1]">${Object.entries(DNSP).filter(([k])=>k!=='manual').map(([k,[n]])=>`<option value="${k}">${n}</option>`).join('')}</select></div>
+  <div id="dpNc" hidden><div class="fld"><label for="dp3">Пользователь API</label><input id="dp3" name="nc-api-user" autocomplete="off" spellcheck="false"></div><div class="hint">Имя аккаунта Namecheap, не e-mail. Белый IP для API Namecheap: <span class="mono">203.0.113.10</span></div></div>
+  <div><div class="fld"><label for="dp2" id="dpK">API-токен</label><input id="dp2" name="dns-api-key" class="mono" type="password" autocomplete="new-password"></div><div class="hint" id="dpH">${DNSP.cloudflare[1]}</div></div>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">Проверить и добавить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
 }
 
@@ -849,7 +849,7 @@ function wzBody(){
   <div><div class="fld"><label for="w2a">Имя для подключения</label><input id="w2a" class="mono" value="vpn.example.net"></div><div class="hint">Зона example.net · регистрация до 14.03.2028</div></div>
   <div class="dlg-sec">Где управляется DNS зоны</div>
   <div class="opts">${Object.entries(DNSP).map(([k,[n,h]])=>`<button type="button" class="opt ${w.prov===k?'on':''}" aria-pressed="${w.prov===k}" onclick="S.wz.prov='${k}';renderFull()"><b>${n}</b><span>${h}</span></button>`).join('')}</div>
-  ${api?`<div><div class="fld"><label for="w2b">API-токен ${DNSP[w.prov][0]}</label><input id="w2b" class="mono" type="password" autocomplete="off"></div><button class="btn sm" type="button" style="margin-top:10px">Проверить</button></div>`:
+  ${api?`<div><div class="fld"><label for="w2b">${w.prov==='namecheap'?'API-ключ':'API-токен'} ${DNSP[w.prov][0]}</label><input id="w2b" name="dns-api-key" class="mono" type="password" autocomplete="new-password"></div><button class="btn sm" type="button" style="margin-top:10px">Проверить</button></div>`:
    `<p class="note-s">Внесите записи ниже у регистратора. Сертификат выпустится по HTTP-01, когда имя начнёт указывать на сервер.</p>`}
   <div class="dlg-sec">${api?'Панель создаст записи':'Нужны записи'}</div>
   ${table(['Тип','Имя','Значение','Сейчас'],[['A','vpn','203.0.113.10'],['AAAA','vpn','2001:db8::10'],['CAA','@','0 issue "letsencrypt.org"']].map(r=>`<tr><td class="mono">${r[0]}</td><td class="mono">${r[1]}</td><td class="mono">${r[2]}</td><td class="mute">нет записи</td></tr>`).join(''))}`;}

@@ -235,3 +235,19 @@ func TestCloudflareAndDigitalOcean(t *testing.T) {
 		t.Fatalf("do id %s", id)
 	}
 }
+
+func TestNamecheapRefusalNamesTheCause(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		if r.Form.Get("ClientIp") != "203.0.113.10" || r.Form.Get("ApiUser") != "acct" {
+			t.Errorf("form %v", r.Form)
+		}
+		io.WriteString(w, `<?xml version="1.0"?><ApiResponse Status="ERROR"><Errors><Error Number="1011102">API Key is invalid or API access has not been enabled</Error></Errors></ApiResponse>`)
+	}))
+	defer ts.Close()
+	n := &Namecheap{User: "acct", Key: "k", ClientIP: "203.0.113.10", Base: ts.URL}
+	err := n.Check(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "account name, not the e-mail") {
+		t.Fatalf("err %v", err)
+	}
+}
