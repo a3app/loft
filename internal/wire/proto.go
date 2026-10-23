@@ -38,7 +38,7 @@ const (
 	CapQUIC                      // QUIC/UDP front (loss recovery, migration)
 	CapDgram                     // CmdDgram UDP
 	CapClockless                 // auth without client clock
-	CapTicket                    // Status ticket field (empty in this revision)
+	CapTicket                    // Status ticket is the GET sid for 0x04 attach
 	CapDecoy                     // Status lists this node's decoy origins
 	CapH2                        // HTTP/2 CONNECT front
 	CapH3                        // HTTP/3 (ALPN h3) front

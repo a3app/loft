@@ -184,9 +184,21 @@ func pumpMux(ms *mux.Session, conn io.Writer, key []byte, done <-chan struct{}) 
 
 // serveRaw authenticates, writes AEAD(Status), and relays mux on conn.
 func serveRaw(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces) {
+	serveRawAs(conn, info, seen, wire.FrontH2)
+}
+
+// serveRawAs is serveRaw tagged with the front that accepted conn (h2 or h3).
+func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string) {
 	defer conn.Close()
 	raw, err := readMsg(conn)
 	if err != nil {
+		return
+	}
+	if front == "" {
+		front = wire.FrontH2
+	}
+	if ecrypto.LooksLikeAttach(raw) {
+		serveAttach(conn, raw, front)
 		return
 	}
 	if seen == nil {
@@ -205,8 +217,8 @@ func serveRaw(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces) {
 		return
 	}
 	ms, reused := adoptServerMux(a.Rest, a.Token)
-	st := info.Status("h2")
-	finishStatus(&st, a.Token, "h2", a.Rest, ms, conn.RemoteAddr())
+	st := info.Status(front)
+	finishStatus(&st, a.Token, front, a.Rest, ms, conn.RemoteAddr())
 	sealed, err := ecrypto.Seal(a.Key, st.Encode(), nil)
 	if err != nil {
 		return

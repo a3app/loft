@@ -320,6 +320,19 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if ecrypto.LooksLikeAttach(auth) {
+		live := context.Background()
+		wrap := wsAttach{
+			write: func(p []byte) error { return c.Write(live, websocket.MessageBinary, p) },
+			read: func() ([]byte, error) {
+				_, b, err := c.Read(live)
+				return b, err
+			},
+			close: func() error { return c.Close(websocket.StatusNormalClosure, "") },
+		}
+		serveAttach(wrap, auth, wire.FrontWS)
+		return
+	}
 	if s.Seen == nil {
 		s.Seen = ecrypto.NewNonces()
 	}

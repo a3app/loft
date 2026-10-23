@@ -297,7 +297,7 @@ func serveH3OrQUIC(c *quic.Conn, h3s *http3.Server, seen *ecrypto.Nonces, info N
 
 // newH3Handler answers HTTP/3 CONNECT with the same H2Server path and raw mux.
 func newH3Handler(info NodeInfo) http.Handler {
-	hs := &H2Server{Info: info, Path: "/api/v1/tunnel"}
+	hs := &H2Server{Info: info, Path: "/api/v1/tunnel", Front: wire.FrontH3}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hs.Match(r) {
 			hs.ServeHTTP(w, r)

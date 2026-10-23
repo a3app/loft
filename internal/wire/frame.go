@@ -22,6 +22,7 @@ const (
 	CmdLeave  byte = 9  // end the mux session (stream_id 0, empty payload)
 	CmdTune   byte = 10 // front event (client) or budget/inflight set (node)
 	CmdReport byte = 11 // GET uplink applied-through seq; stream_id 0
+	CmdFront  byte = 12 // which attached front carries bulk mux; stream_id 0
 )
 
 // Frame header is 7 bytes; payload is at most 16 KiB.

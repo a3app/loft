@@ -245,7 +245,7 @@ Authentication does not use the client clock. A host with an incorrect clock can
 
 ### 4.2 Resume
 
-GET MAY keep the session across a local egress change without a new `0x02` (§3.4). A path change on `ws`, `h2`, `quic`, or `h3`, a failed GET rebind, or a process restart sends a fresh `0x02` with a new ephemeral key and the same Hello `instance_id`. Hold reattaches the parked mux by authenticated member plus instance. Failover to a replica uses `0x02` on the new node; overlay IP follows `lease_hold` and the instance. Status MAY still carry an empty `ticket` field (length 0).
+GET MAY keep the session across a local egress change without a new `0x02` (§3.4). A path change on `ws`, `h2`, `quic`, or `h3`, a failed GET rebind, or a process restart sends a fresh `0x02` with a new ephemeral key and the same Hello `instance_id`. Hold reattaches the parked mux by authenticated member plus instance. Failover to a replica uses `0x02` on the new node; overlay IP follows `lease_hold` and the instance. After a GET handshake Status `ticket` is that GET session identifier. An empty ticket means the node does not speak attach (§4.4).
 
 ### 4.3 Session key
 
@@ -256,7 +256,25 @@ HKDF-SHA256(ikm=ss, salt=nonce, info="loft-v1", L=32)
 
 The first node message is `eph_n[32] || Seal(Status)`. Later mux messages are Seal only. `eph_n` is the node’s ephemeral X25519 public key for this handshake. HMAC covers `eph_c`, so a stolen Cookie cannot complete a session: the AEAD key requires `sk_c`, which never left the client.
 
-Seal: `nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad)` ([RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)). The nonce MUST be unique per session key. The reference implementation uses a 32-bit random prefix plus a 64-bit counter so a parked GET session continues the counter. GET uses AAD = session identifier; other fronts use empty AAD unless a section states otherwise.
+Seal: `nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad)` ([RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)). The nonce MUST be unique per session key. The reference implementation uses a 32-bit random prefix plus a 64-bit counter so a parked GET session continues the counter. GET uses AAD = session identifier; attached fronts (§4.4) and a 0x02 handshake on `ws`/`h2`/`quic`/`h3` use empty AAD. Attach shares the GET session key, so it shares that nonce counter.
+
+### 4.4 Attach (`0x04`)
+
+A session is created by GET `0x02`. Further fronts join that session with tag `0x04`. They MUST NOT send a second `0x02`.
+
+```
+0x04 || u8 sid_len || sid || nonce[16] || u8 front_len || front || HMAC-SHA256(session_key, "lft-a4" || sid || nonce || front)[0:16]
+```
+
+`sid` is Status `ticket` (the GET session identifier, 24 hex). `front` is `ws`, `h2`, `quic`, or `h3`. HMAC uses the **session AEAD key** from §4.3, not the member token. `l3` and `connect` MUST NOT attach.
+
+The node looks up the GET session by `sid`, checks HMAC, and refuses a nonce already used on that session (10-minute cache, node clock). Success: one length-prefixed AEAD plaintext containing mux `CmdFront` with that front name (empty AAD). Failure: close the front (HTTP 404 on GET; drop the stream otherwise).
+
+GET stays in the session for keepalive, Leave, and bulk fallback. Mux bulk runs on one front at a time (`CmdFront`). When the attached front dies, bulk returns to GET: same key, same mux, same sequence, no new `0x02`. A `CmdFront` of `get` on GET uplink drops the attach.
+
+Old clients ignore a non-empty `ticket`. Old nodes leave `ticket` empty; the client MUST NOT send `0x04`. A `0x02` handshake on `ws`/`h2`/`quic`/`h3` remains valid when there is no GET session to attach to.
+
+Attach is local to the node that holds the GET session. A relay does not attach a front on the controller for a GET that terminated on the relay.
 
 AEAD covers mux. TLS covers the path to the terminator. A CDN that terminates TLS sees mux ciphertext.
 
@@ -342,7 +360,7 @@ Selected protocol is the maximum of the intersection of the two ranges. Empty in
 | 11 | quic | QUIC mux front |
 | 12 | dgram | CmdDgram |
 | 13 | clockless | authentication without client clock |
-| 14 | ticket | Status MAY carry a ticket blob (empty in this revision) |
+| 14 | ticket | Status `ticket` is the GET sid; `0x04` attach (§4.4) |
 | 15 | decoy | Status lists origins |
 | 16 | h2 | HTTP/2 CONNECT |
 | 17 | h3 | HTTP/3 CONNECT |
@@ -391,10 +409,11 @@ Client stream identifiers are odd, starting at 1. Node identifiers are even, sta
 | 9 | Leave | empty; stream_id MUST be 0 |
 | 10 | Tune | 4 bytes: `u8 event \|\| u8 inflight \|\| u16be header_budget`, optional 5th byte `h2_conns`. Client event ≠ 0 is one front break (1 `ENHANCE_YOUR_CALM`, 2 HTTP 413, 3 HTTP 404, 4 connection reset, 5 HTTP 429, 6 other GOAWAY), sent once on the next GET that already carries mux. Node event 0 sets live GET `header_budget` / `inflight` / `h2_conns` (0 in a field = leave unchanged). The node replies only when those values change. stream_id MUST be 0. |
 | 11 | Report | `u64be applied` (highest contiguous GET sequence the node has ingested). stream_id MUST be 0. Old clients ignore unknown mux commands. |
+| 12 | Front | front name (`get`, `ws`, `h2`, `quic`, `h3`). stream_id MUST be 0. Client: bulk mux on this attached front. Node: ack. `get` returns bulk to GET. |
 
 **Resin and draft.** A mux frame is resin or draft.
 
-- **Resin** is held until a Report covers its GET sequence, then retransmitted on that same sequence: Open, Ping, Pong, Leave, Tune, Report, Close, Reset, and Dgram to port 53.
+- **Resin** is held until a Report covers its GET sequence, then retransmitted on that same sequence: Open, Ping, Pong, Leave, Tune, Report, Front, Close, Reset, and Dgram to port 53.
 - **Draft** is sent once: Data, Pad, other Dgram. Inner TCP or UDP produces a new frame if the application still needs the bytes.
 
 One mux Pull becomes up to three GET sequences: control resin, draft Data, then Close/Reset. Close MUST NOT share a Cookie with Data for the same stream. After an HTTP error the client retries the same sequence with resin only (or Pad if the Cookie was draft-only) so the sequence hole fills and draft is not replayed. A first-attempt HTTP 404 on several inflight GETs is edge noise; three **retry** 404s on the same sid mean the origin lost the session. A duplicate Open for a live stream_id MUST be ignored.

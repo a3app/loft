@@ -9,7 +9,7 @@ import "encoding/binary"
 // jump queued Data in the same Cookie.
 func Resin(f Frame) bool {
 	switch f.Cmd {
-	case CmdOpen, CmdPing, CmdPong, CmdLeave, CmdTune, CmdReport, CmdClose, CmdReset:
+	case CmdOpen, CmdPing, CmdPong, CmdLeave, CmdTune, CmdReport, CmdFront, CmdClose, CmdReset:
 		return true
 	case CmdDgram:
 		return dgramPort(f.Payload) == 53

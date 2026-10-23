@@ -199,9 +199,17 @@ func (d dummyAddr) String() string { return string(d) }
 
 // H2Server is the origin for HTTP/2 CONNECT (and HTTP/3 CONNECT via the same handler).
 type H2Server struct {
-	Info NodeInfo
-	Path string
-	Seen *ecrypto.Nonces
+	Info  NodeInfo
+	Path  string
+	Seen  *ecrypto.Nonces
+	Front string // wire.FrontH2 or FrontH3; empty is h2
+}
+
+func (s *H2Server) frontName() string {
+	if s != nil && s.Front != "" {
+		return s.Front
+	}
+	return wire.FrontH2
 }
 
 // Match reports whether r is CONNECT to this server's path.
@@ -231,7 +239,7 @@ func (s *H2Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.Flush()
 	}
 	conn := newHTTPConn(w, r.Body)
-	serveRaw(conn, s.Info, s.Seen)
+	serveRawAs(conn, s.Info, s.Seen, s.frontName())
 }
 
 // corkBuf / corkWait match SSTP: coalesce DATA frames instead of Flush

@@ -284,6 +284,10 @@ func serveQUICStream(c *quic.Conn, st *quic.Stream, seen *ecrypto.Nonces, info N
 	if err != nil {
 		return
 	}
+	if ecrypto.LooksLikeAttach(raw) {
+		serveAttach(st, raw, wire.FrontQUIC)
+		return
+	}
 	a, err := frontAuth(info.Token, raw, seen)
 	if err != nil || a.Replay {
 		return

@@ -71,9 +71,11 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`Supervise` tries configured outbounds in list order when `select: auto`. After the first Status it keeps only the intersection of fronts. On failure it moves to the next remaining front, then unsigned `replicas`, then the signed roster. A node that omits `fronts` advertises GET only; `ws`, `h2`, `quic`, `h3`, and `l3` are listed explicitly. `l3` is HTTP/2 CONNECT then IP datagrams (no mux); TUN copies packets and skips the userspace TCP stack.
+`Supervise` prefers GET. After GET Status a non-empty `ticket` is the session identifier. The client MAY attach `ws` / `h2` / `quic` / `h3` with tag `0x04` (HMAC of the session key, not a second `0x02`). GET stays up. Bulk mux runs on the attached front (`CmdFront`); if that front dies, bulk returns to GET with the same key, mux, and sequence. `l3` and `connect` do not attach.
 
-`WatchPath` samples the default IPv4 egress about four times a second. On GET, a Wi-Fi / LTE / VPN address change replaces HTTP/2 sockets; sid, mux, and seq stay (no `0x02`). `ws`, `h2`, `quic`, and `h3` drop the front; Supervise Parks and resumes with a fresh `0x02` and the same `instance_id`. SOCKS5 and TUN stay bound (`Holder`); the overlay IP does not change. With cap `hold`, Park keeps mux streams for `gap_hold_ms` (default 8 s) and inner TCP does not RST. A GET handshake after Park adopts that mux by `instance_id` (new HTTP sid, same mux). `loft` and `loft-front` both run this loop.
+When there is no GET session to attach to, `Supervise` tries configured outbounds in list order (`select: auto`). After the first Status it keeps only the intersection of fronts. On failure it moves to the next remaining front, then unsigned `replicas`, then the signed roster. A node that omits `fronts` advertises GET only; `ws`, `h2`, `quic`, `h3`, and `l3` are listed explicitly. `l3` is HTTP/2 CONNECT then IP datagrams (no mux); TUN copies packets and skips the userspace TCP stack.
+
+`WatchPath` samples the default IPv4 egress about four times a second. On GET, a Wi-Fi / LTE / VPN address change replaces HTTP/2 sockets; sid, mux, and seq stay (no `0x02`). An attached extra front that drops returns bulk to GET without Park. A path change on a standalone `ws` / `h2` / `quic` / `h3` (no GET ticket) Parks and resumes with a fresh `0x02` and the same `instance_id`. SOCKS5 and TUN stay bound (`Holder`); the overlay IP does not change. With cap `hold`, Park keeps mux streams for `gap_hold_ms` (default 8 s) and inner TCP does not RST. A GET handshake after Park adopts that mux by `instance_id` (new HTTP sid, same mux). `loft` and `loft-front` both run this loop.
 
 Roster fetch needs `controller_pub`. `tofu: true` pins the first valid signer and writes `{instanceDir}/controller.pub`. Empty pub without that flag leaves the roster unused; static outbounds still dial.
 
@@ -201,10 +203,11 @@ The macOS menu-bar client is Swift 5 + AppKit under [`clients/macOS/Sources/`](.
 
 Order of attempts after a dead session:
 
-1. Remaining fronts in the intersection, same outbound.
-2. Next outbound in `select: auto` order.
-3. Unsigned `replicas` from Status.
-4. Signed roster entries, weighted, skipping drain.
+1. If GET is still up and an attached front died: bulk back on GET (same ticket, no `0x02`).
+2. Remaining fronts in the intersection, same outbound.
+3. Next outbound in `select: auto` order.
+4. Unsigned `replicas` from Status.
+5. Signed roster entries, weighted, skipping drain.
 
 Reconnect timers come from Status: `reconnect_min_ms`, `reconnect_max_ms`, `reconnect_fast_n`, `reconnect_fast_for_ms`. Fast tries first, then exponential backoff.
 

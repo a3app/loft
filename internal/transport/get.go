@@ -74,6 +74,14 @@ type GET struct {
 	liveH2       atomic.Int32  // HTTP/2 connections; node Status/Tune
 	uplinkEnc    atomic.Int32  // wire.UplinkBase64 or UplinkCookie85
 	applied      atomic.Uint64 // CmdReport applied-through GET seq
+	ticket       []byte
+	attachLive   atomic.Bool
+	attachMu     sync.Mutex
+	attach       io.Closer
+	attaching    atomic.Bool
+	attachOff    atomic.Bool
+	dropToGET    atomic.Bool
+	attachWG     sync.WaitGroup
 }
 
 // getTrips is per-GET HTTP timing: pad vs bulk body vs fat Cookie uplink.
@@ -265,6 +273,7 @@ func (g *GET) Start(ctx context.Context) error {
 	}
 	RememberVis(st)
 	g.caps = st.Caps
+	g.ticket = append([]byte(nil), st.Ticket...)
 	g.sess.SetHold(st.Caps.Has(wire.CapHold))
 	if !g.cfg.UseMux() && !st.Caps.Has(wire.CapConnect) {
 		return fmt.Errorf("node requires mux")
@@ -347,6 +356,7 @@ func (g *GET) Open(target string) (net.Conn, error) {
 // die closes Done once.
 func (g *GET) die() {
 	g.dead.Do(func() { close(g.done) })
+	g.closeAttach()
 }
 
 // dropLostSid forgets a GET HTTP sid the origin already 404'd.
@@ -447,6 +457,7 @@ func (g *GET) Close() error {
 	if g.stop != nil {
 		g.stop()
 	}
+	g.closeAttach()
 	g.sendLeave()
 	clearClientHold()
 	g.sess.Close()
@@ -532,10 +543,15 @@ func (g *GET) pump(ctx context.Context, inflight int) {
 			continue
 		}
 		var up []wire.Frame
-		if DraftPaused() {
-			up = g.sess.PullPri(g.uplinkBudget(), pullWait)
-		} else {
-			up = g.sess.Pull(g.uplinkBudget(), pullWait)
+		if !g.attachLive.Load() {
+			if DraftPaused() {
+				up = g.sess.PullPri(g.uplinkBudget(), pullWait)
+			} else {
+				up = g.sess.Pull(g.uplinkBudget(), pullWait)
+			}
+		}
+		if g.dropToGET.Swap(false) {
+			up = append([]wire.Frame{wire.FrontFrame(wire.FrontGET)}, up...)
 		}
 		if g.sess.Closed() {
 			g.die()
@@ -1573,7 +1589,12 @@ type serverSess struct {
 	replyQ     []uint64
 	lastGET    time.Time
 	dropReason string
+	bulk       string
+	att        *attachLink
+	seen       *ecrypto.Nonces
 }
+
+var ticketTab sync.Map // GET sid → *serverSess
 
 const replyCacheN = 32
 
@@ -1699,6 +1720,9 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				st = withDecoy(netconf.DefaultSession().Status(wire.OK, "", "", "", 1280, 0), s.Decoy)
 			}
 			finishStatus(&st, a.Token, ss.id, a.Rest, ss.mux, remoteAddr(r.RemoteAddr))
+			if validGETSID(ss.id) {
+				st.Ticket = []byte(ss.id)
+			}
 			if st.InstanceID == "" {
 				if h, err := wire.DecodeHello(a.Rest); err == nil {
 					st.InstanceID = h.InstanceID
@@ -1751,6 +1775,11 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			traceGET(ss, r, seq, nil, "badwire", false, 0)
 			return
 		}
+		var bulk string
+		frames, bulk = wire.SplitFront(frames)
+		if bulk == wire.FrontGET {
+			ss.closeAttach()
+		}
 	}
 	// HTTP/2 waiters sit until they are Puller. Jumping downSeq on
 	// a 200ms timeout skipped Pulls and live GET download lagged WS.
@@ -1786,6 +1815,21 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.tune.recover()
 	}
 	tPull := time.Now()
+	if ss.attachPulls() {
+		if seq == 0 {
+			if len(frames) > 0 {
+				ss.mux.Push(frames)
+			}
+		} else {
+			ss.mu.Lock()
+			ss.pushUplinkLocked(seq, frames)
+			ss.mu.Unlock()
+		}
+		down := ss.withReport(nil)
+		s.writeGET(w, r, ss, seq, down)
+		traceGET(ss, r, seq, frames, "attach", false, 0)
+		return
+	}
 	down, pulled := ss.ingestAndPull(seq, frames, turn, jump)
 	wait := time.Since(tPull)
 	down = ss.withReport(down)
@@ -1897,6 +1941,7 @@ func (s *GETServer) spawnWant(key, rest, token []byte, wantID string) *serverSes
 	}
 	s.sessions[ss.id] = ss
 	s.mu.Unlock()
+	ticketTab.Store(ss.id, ss)
 	if !reused {
 		ss.once.Do(func() {
 			go serveMux(ss.mux)
@@ -1914,18 +1959,24 @@ func (s *GETServer) takeByInstance(owner, inst string) *serverSess {
 		return nil
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	for id, ss := range s.sessions {
-		if ss == nil || ss.mux == nil {
+	var ss *serverSess
+	for id, cur := range s.sessions {
+		if cur == nil || cur.mux == nil {
 			continue
 		}
-		if ss.mux.Owner() != owner || ss.mux.Instance() != inst || ss.mux.Closed() {
+		if cur.mux.Owner() != owner || cur.mux.Instance() != inst || cur.mux.Closed() {
 			continue
 		}
 		delete(s.sessions, id)
-		return ss
+		ticketTab.Delete(id)
+		ss = cur
+		break
 	}
-	return nil
+	s.mu.Unlock()
+	if ss != nil {
+		ss.closeAttach()
+	}
+	return ss
 }
 
 // get returns the live session for id, or nil.
@@ -2292,7 +2343,9 @@ func (s *GETServer) drop(id string) {
 	ss := s.sessions[id]
 	delete(s.sessions, id)
 	s.mu.Unlock()
+	ticketTab.Delete(id)
 	if ss != nil {
+		ss.closeAttach()
 		ss.mu.Lock()
 		reason := ss.dropReason
 		last := ss.replied

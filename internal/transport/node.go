@@ -49,6 +49,9 @@ func (n NodeInfo) Status(sid string) wire.Status {
 		ser, h := n.ListsFn()
 		st.ListsSerial, st.ListsHash = ser, append([]byte(nil), h...)
 	}
+	if validGETSID(sid) {
+		st.Ticket = []byte(sid)
+	}
 	return st
 }
 

@@ -245,7 +245,7 @@ bytes payload
 
 ### 4.2 续上
 
-GET 可以在本机出口变更后保持会话、不再发新的 `0x02`（§3.4）。`ws`、`h2`、`quic` 或 `h3` 换路径、GET 换池失败、或进程重启，发送新的 `0x02`，新的临时密钥，同一个 Hello `instance_id`。Hold 按已认证成员加实例把停着的 mux 再挂上。副本故障切换是在新节点上发 `0x02`；覆盖网 IP 跟随 `lease_hold` 与实例。Status 仍可以携带空的 `ticket` 字段（长度 0）。
+GET 可以在本机出口变更后保持会话、不再发新的 `0x02`（§3.4）。`ws`、`h2`、`quic` 或 `h3` 换路径、GET 换池失败、或进程重启，发送新的 `0x02`，新的临时密钥，同一个 Hello `instance_id`。Hold 按已认证成员加实例把停着的 mux 再挂上。副本故障切换是在新节点上发 `0x02`；覆盖网 IP 跟随 `lease_hold` 与实例。GET 握手后 Status `ticket` 即该 GET 会话标识。空 ticket 表示节点不会 attach（§4.4）。
 
 ### 4.3 会话密钥
 
@@ -256,7 +256,25 @@ HKDF-SHA256(ikm=ss, salt=nonce, info="loft-v1", L=32)
 
 节点第一条消息为 `eph_n[32] || Seal(Status)`。其后 mux 消息只 Seal。`eph_n` 为节点本次握手的临时 X25519 公钥。HMAC 覆盖 `eph_c`，因此窃得的 Cookie 组不成会话：AEAD 密钥需要 `sk_c`，它从未离开客户端。
 
-Seal：`nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad)`（[RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)）。Nonce 必须对每个会话密钥唯一。参考实现使用 32 位随机前缀加 64 位计数器，使停着的 GET 会话继续计数。GET 使用 AAD = 会话标识；其他前置使用空 AAD，除非某节另有说明。
+Seal：`nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad)`（[RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)）。Nonce 必须对每个会话密钥唯一。参考实现使用 32 位随机前缀加 64 位计数器，使停着的 GET 会话继续计数。GET 使用 AAD = 会话标识；attach 的前置（§4.4）以及 `ws`/`h2`/`quic`/`h3` 上的 `0x02` 使用空 AAD。Attach 共用 GET 会话密钥，因此共用该 nonce 计数器。
+
+### 4.4 Attach（`0x04`）
+
+会话由 GET `0x02` 建立。后续前置用标签 `0x04` 加入该会话。不得再发第二个 `0x02`。
+
+```
+0x04 || u8 sid_len || sid || nonce[16] || u8 front_len || front || HMAC-SHA256(session_key, "lft-a4" || sid || nonce || front)[0:16]
+```
+
+`sid` 为 Status `ticket`（GET 会话标识，24 hex）。`front` 为 `ws`、`h2`、`quic` 或 `h3`。HMAC 使用 §4.3 的会话 AEAD 密钥，不是成员令牌。`l3` 与 `connect` 不得 attach。
+
+节点按 `sid` 查找 GET 会话、校验 HMAC，并拒绝该会话上已用过的 nonce（10 分钟缓存，节点时钟）。成功：一条带长度前缀的 AEAD 明文，内含 mux `CmdFront` 及该前置名（空 AAD）。失败：关闭该前置（GET 上为 HTTP 404）。
+
+GET 留在会话中做 keepalive、Leave 和 bulk 回退。Mux bulk 同一时刻只走一个前置（`CmdFront`）。附加前置断开后 bulk 回到 GET：同一密钥、mux、序号，不再发 `0x02`。GET 上行 `CmdFront` 为 `get` 时拆除 attach。
+
+旧客户端忽略非空 `ticket`。旧节点 `ticket` 为空；客户端不得发 `0x04`。没有可 attach 的 GET 会话时，`ws`/`h2`/`quic`/`h3` 上的 `0x02` 握手仍然有效。
+
+Attach 只发生在持有该 GET 会话的节点上。
 
 AEAD 覆盖 mux。TLS 覆盖到终结器的路径。终结 TLS 的 CDN 看到的是 mux 密文。
 
@@ -342,7 +360,7 @@ u8    software_len || software
 | 11 | quic | QUIC mux 前置 |
 | 12 | dgram | CmdDgram |
 | 13 | clockless | 无客户端时钟的认证 |
-| 14 | ticket | Status 可以携带 ticket 块（本修订为空） |
+| 14 | ticket | Status `ticket` 为 GET sid；`0x04` attach（§4.4） |
 | 15 | decoy | Status 列出源站 |
 | 16 | h2 | HTTP/2 CONNECT |
 | 17 | h3 | HTTP/3 CONNECT |
@@ -391,10 +409,11 @@ bytes payload
 | 9 | Leave | 空；stream_id 必须为 0 |
 | 10 | Tune | 4 字节：`u8 event \|\| u8 inflight \|\| u16be header_budget`，可选第 5 字节 `h2_conns`。客户端 event ≠ 0 为一次前置中断（1 `ENHANCE_YOUR_CALM`，2 HTTP 413，3 HTTP 404，4 连接复位，5 HTTP 429，6 其他 GOAWAY），在下一条已经携带 mux 的 GET 上发送一次。节点 event 0 设定存活 GET 的 `header_budget` / `inflight` / `h2_conns`（字段为 0 = 保持不变）。仅当这些值变化时节点才回复。stream_id 必须为 0。 |
 | 11 | Report | `u64be applied`（节点已连续收下的最高 GET 序号）。stream_id 必须为 0。旧客户端忽略未知 mux 命令。 |
+| 12 | Front | 前置名（`get`、`ws`、`h2`、`quic`、`h3`）。stream_id 必须为 0。客户端：bulk mux 走该 attach 前置。节点：ack。`get` 把 bulk 交回 GET。 |
 
 **Resin 与 draft。** mux 帧为 resin 或 draft。
 
-- **Resin** 持有至 Report 覆盖其 GET 序号，再在同一序号上重传：Open、Ping、Pong、Leave、Tune、Report、Close、Reset，以及发往端口 53 的 Dgram。
+- **Resin** 持有至 Report 覆盖其 GET 序号，再在同一序号上重传：Open、Ping、Pong、Leave、Tune、Report、Front、Close、Reset，以及发往端口 53 的 Dgram。
 - **Draft** 只发送一次：Data、Pad、其他 Dgram。内部 TCP 或 UDP 在应用仍需要这些字节时产生新帧。
 
 一次 mux Pull 最多变成三个 GET 序号：控制 resin、draft Data，然后 Close/Reset。Close 不得与同一流的 Data 共享 Cookie。HTTP 错误之后，客户端以仅 resin（若 Cookie 原为仅 draft 则以 Pad）重试同一序号，以填补序号空洞且不重放 draft。若干 inflight GET 上的首次 HTTP 404 为边缘噪声；同一 sid 上三次 **重试** 404 表示源站已丢失会话。对存活 stream_id 的重复 Open 必须忽略。

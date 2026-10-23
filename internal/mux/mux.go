@@ -231,7 +231,7 @@ const dgramPri = 512
 // its HTTP jumps download bulk.
 func (s *Session) priFrame(f wire.Frame) bool {
 	switch f.Cmd {
-	case wire.CmdOpen, wire.CmdPing, wire.CmdPong, wire.CmdLeave, wire.CmdTune:
+	case wire.CmdOpen, wire.CmdPing, wire.CmdPong, wire.CmdLeave, wire.CmdTune, wire.CmdFront:
 		return true
 	case wire.CmdDgram:
 		return len(f.Payload) <= dgramPri
@@ -583,7 +583,7 @@ func (s *Session) handle(f wire.Frame) {
 		}
 	case wire.CmdPong:
 		s.notePong(f.Payload)
-	case wire.CmdPad, wire.CmdTune, wire.CmdReport:
+	case wire.CmdPad, wire.CmdTune, wire.CmdReport, wire.CmdFront:
 	case wire.CmdLeave:
 		s.Close()
 	}

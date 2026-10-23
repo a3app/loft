@@ -71,9 +71,11 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`select: auto` 时，`Supervise` 按列表顺序试配置好的出站。第一次 Status 之后只留前置的交集。失败就换下一条还在的前置，再试未签名的 `replicas`，再试签过的名册。节点省略 `fronts` 只宣告 GET；`ws`、`h2`、`quic`、`h3`、`l3` 要显式列出。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报（无 mux）；TUN 直接拷包，不走用户态 TCP 栈。
+`Supervise` 优先 GET。GET 的 Status 里非空 `ticket` 就是会话标识。客户端可用 `0x04` 挂上 `ws` / `h2` / `quic` / `h3`（用会话密钥做 HMAC，不再发第二次 `0x02`）。GET 留着。Mux 大宗走挂上的前置（`CmdFront`）；那条前置死了，大宗回到 GET，同一密钥、mux、序号。`l3` 和 `connect` 不 attach。
 
-`WatchPath` 大约一秒采四次默认 IPv4 出口。GET 上 Wi-Fi / LTE / VPN 地址一变就换 HTTP/2 套接字；sid、mux、seq 留下（不做 `0x02`）。`ws`、`h2`、`quic`、`h3` 丢掉前置；Supervise 做 Park，再用新的 `0x02` 和同一个 `instance_id` 续上。SOCKS5 和 TUN 还绑着（`Holder`）；覆盖网 IP 不变。有 cap `hold` 时，Park 让 mux 流在 `gap_hold_ms`（默认 8 秒）里还在，里面的 TCP 不 RST。Park 之后的 GET 握手按 `instance_id` 捡起这条 mux（新的 HTTP sid，同一条 mux）。`loft` 和 `loft-front` 都跑这个循环。
+没有可 attach 的 GET 会话时，`select: auto` 下 `Supervise` 按列表顺序试配置好的出站。第一次 Status 之后只留前置的交集。失败就换下一条还在的前置，再试未签名的 `replicas`，再试签过的名册。节点省略 `fronts` 只宣告 GET；`ws`、`h2`、`quic`、`h3`、`l3` 要显式列出。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报（无 mux）；TUN 直接拷包，不走用户态 TCP 栈。
+
+`WatchPath` 大约一秒采四次默认 IPv4 出口。GET 上 Wi-Fi / LTE / VPN 地址一变就换 HTTP/2 套接字；sid、mux、seq 留下（不做 `0x02`）。挂上的前置掉了，大宗回到 GET，不做 Park。单独的 `ws` / `h2` / `quic` / `h3`（没有 GET ticket）换路径则 Park，再用新的 `0x02` 和同一个 `instance_id` 续上。SOCKS5 和 TUN 还绑着（`Holder`）；覆盖网 IP 不变。有 cap `hold` 时，Park 让 mux 流在 `gap_hold_ms`（默认 8 秒）里还在，里面的 TCP 不 RST。Park 之后的 GET 握手按 `instance_id` 捡起这条 mux（新的 HTTP sid，同一条 mux）。`loft` 和 `loft-front` 都跑这个循环。
 
 拉名册要 `controller_pub`。`tofu: true` 钉住第一个有效签名者，写到 `{instanceDir}/controller.pub`。公钥空着又没这个标志，名册就不用；静态出站照样拨。
 
@@ -201,10 +203,11 @@ macOS 菜单栏客户端是 Swift 5 + AppKit，在 [`clients/macOS/Sources/`](..
 
 会话死了之后试的顺序：
 
-1. 交集里剩下的前置，同一条出站。
-2. `select: auto` 顺序里下一条出站。
-3. Status 里未签名的 `replicas`。
-4. 签过的名册条目，按权重，跳过 drain。
+1. GET 还在、挂上的前置死了：大宗回到 GET（同一 ticket，不再 `0x02`）。
+2. 交集里剩下的前置，同一条出站。
+3. `select: auto` 顺序里下一条出站。
+4. Status 里未签名的 `replicas`。
+5. 签过的名册条目，按权重，跳过 drain。
 
 重连定时器来自 Status：`reconnect_min_ms`、`reconnect_max_ms`、`reconnect_fast_n`、`reconnect_fast_for_ms`。先快试，再指数退避。
 
