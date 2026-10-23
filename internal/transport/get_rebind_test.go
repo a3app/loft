@@ -244,6 +244,69 @@ func TestSupervisePathRebindsGET(t *testing.T) {
 	}
 }
 
+func TestSuperviseGET404ResumesFreshHandshake(t *testing.T) {
+	t.Cleanup(clearClientHold)
+	const token = "test-token-please-change"
+	gs := NewGETServer(token, "/static/v3/build")
+	var hs atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cookieHandshake(r) {
+			hs.Add(1)
+		}
+		gs.ServeHTTP(w, r)
+	}))
+	t.Cleanup(ts.Close)
+	off := false
+	cfg := &config.ClientConfig{
+		Token:  token,
+		Select: "auto",
+		P2P:    &off,
+		Outbounds: []config.Outbound{{
+			Name: "n", Type: "get", URL: ts.URL, Path: "/static/v3/build",
+			Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true,
+		}},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	ready := make(chan *GET, 4)
+	go func() {
+		_ = SuperviseOn(ctx, cfg, nil, func(d Dialer, _ config.Outbound) {
+			g, ok := d.(*GET)
+			if !ok {
+				t.Error("want GET")
+				return
+			}
+			select {
+			case ready <- g:
+			default:
+			}
+		})
+	}()
+	var g1 *GET
+	select {
+	case g1 = <-ready:
+	case <-ctx.Done():
+		t.Fatal("start")
+	}
+	sid := g1.sid
+	if sid == "" || hs.Load() != 1 {
+		t.Fatalf("sid=%q hs=%d", sid, hs.Load())
+	}
+	gs.drop(sid)
+	var g2 *GET
+	select {
+	case g2 = <-ready:
+	case <-ctx.Done():
+		t.Fatal("resume")
+	}
+	if hs.Load() < 2 {
+		t.Fatalf("handshakes %d, parked dead sid", hs.Load())
+	}
+	if g2.sid == "" || g2.sid == sid {
+		t.Fatalf("sid %q reused %q", g2.sid, sid)
+	}
+}
+
 func TestGETDiesWhenMuxCloses(t *testing.T) {
 	const token = "test-token-please-change"
 	gs := NewGETServer(token, "/static/v3/build")

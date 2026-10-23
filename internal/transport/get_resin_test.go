@@ -163,6 +163,62 @@ func TestGETBurst404DoesNotDie(t *testing.T) {
 	}
 }
 
+func TestGET404MissForgetsSid(t *testing.T) {
+	t.Cleanup(clearClientHold)
+	const token = "test-token-please-change"
+	gs := NewGETServer(token, "/static/v3/build")
+	var hs atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cookieHandshake(r) {
+			hs.Add(1)
+		}
+		gs.ServeHTTP(w, r)
+	}))
+	defer ts.Close()
+	g := startGET(t, ts.URL, 2)
+	sid := g.sid
+	if sid == "" {
+		t.Fatal("no sid")
+	}
+	if hs.Load() < 1 {
+		t.Fatal("no handshake")
+	}
+	gs.drop(sid)
+	select {
+	case <-g.Done():
+	case <-time.After(8 * time.Second):
+		t.Fatal("did not die on nosid 404")
+	}
+	if !g.sess.Closed() {
+		t.Fatal("mux still open")
+	}
+	if held, _, _ := clientHoldGET(); held != "" {
+		t.Fatalf("held sid %q", held)
+	}
+	if err := parkOrClose(g); err != nil {
+		t.Fatal(err)
+	}
+	g2, err := NewGET(token, config.Outbound{
+		Type: "get", URL: ts.URL, Path: "/static/v3/build",
+		Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := g2.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer g2.Close()
+	if hs.Load() < 2 {
+		t.Fatalf("handshakes %d, want fresh 0x02", hs.Load())
+	}
+	if g2.sid == "" || g2.sid == sid {
+		t.Fatalf("sid %q reused %q", g2.sid, sid)
+	}
+}
+
 func TestGETHandshakeSetsOverlayIP(t *testing.T) {
 	t.Cleanup(func() { RememberVis(wire.Status{}) })
 	gs := NewGETServer("test-token-please-change", "/static/v3/build")

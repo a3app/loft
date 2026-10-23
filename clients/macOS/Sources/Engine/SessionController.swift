@@ -40,6 +40,8 @@ final class LiveSession {
     var extIPGen = 0
     /// loft-front SOCKS bind used for echo-API and TCP probes, even when the profile hides SOCKS.
     var probeSocks = ""
+    /// Mux died while loft-front still runs; 0/1 was dropped until resume.
+    var muxDown = false
 
     init(id: String) { self.id = id }
 }
@@ -424,11 +426,20 @@ final class SessionController {
                 }
                 s.helper.onLine = { [weak self] line in
                     guard let self = self else { return }
-                    guard let tok = FrontExplain.stageToken(from: line) else { return }
-                    DispatchQueue.main.async {
-                        guard s.state == .connecting else { return }
-                        self.appendStage(s, tok)
-                        NotificationCenter.default.post(name: .loftState, object: self)
+                    if s.state == .connecting, let tok = FrontExplain.stageToken(from: line) {
+                        DispatchQueue.main.async {
+                            guard s.state == .connecting else { return }
+                            self.appendStage(s, tok)
+                            NotificationCenter.default.post(name: .loftState, object: self)
+                        }
+                        return
+                    }
+                    if s.state == .on {
+                        if FrontExplain.isMuxDown(line) {
+                            self.queue.async { self.noteMuxDown(s) }
+                        } else if FrontExplain.isMuxUp(line) {
+                            self.queue.async { self.noteMuxUp(s) }
+                        }
                     }
                 }
                 s.helper.onExit = { [weak self] code in
@@ -460,6 +471,7 @@ final class SessionController {
                 s.tunLive = false
                 s.tunArmed = false
                 s.defaultArmed = false
+                s.muxDown = false
                 s.tunURL = p.url
                 LoftLog.shared.add("loft", "on id=\(p.id) overlay=\(ip) socks=\(socksAddr)")
                 self.markFresh(s)
@@ -658,6 +670,62 @@ final class SessionController {
         }
         LoftLog.shared.add("loft", "socks live id=\(p.id) bind=\(got) show=\(s.socksDisplay.isEmpty ? "off" : s.socksDisplay)")
         updateRelay()
+    }
+
+    /// Mux died while loft-front still runs: drop 0/1 so apps use en0 until resume.
+    /// Hold keeps 0/1 (kill-switch).
+    private func noteMuxDown(_ s: LiveSession) {
+        if s.state != .on || !s.tunArmed { return }
+        if s.muxDown { return }
+        s.muxDown = true
+        if store.hold { return }
+        if !s.defaultArmed { return }
+        Priv.setDefaultRoute(false, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName)
+        s.defaultArmed = false
+        LoftLog.shared.add("loft", "tun default off mux-down id=\(s.id)")
+        applySplitRoutes()
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .loftState, object: self)
+        }
+    }
+
+    /// Supervise finished a fresh handshake: put 0/1 back after TCP works.
+    private func noteMuxUp(_ s: LiveSession) {
+        if s.state != .on || !s.tunArmed || !s.muxDown { return }
+        if store.hold || !store.defaultRoute || s.defaultArmed {
+            s.muxDown = false
+            return
+        }
+        let socks = s.probeSocks.isEmpty ? s.socksDisplay : s.probeSocks
+        if socks.isEmpty {
+            LoftLog.shared.add("loft", "tun default skipped: no socks to probe tcp")
+            s.muxDown = false
+            return
+        }
+        let ticket = s.generation
+        let ifname = s.tunName
+        let url = s.tunURL
+        let ip = s.overlayIP
+        let id = s.id
+        Priv.netQueue.async {
+            let ok = Priv.loftCarriesTCP(socks)
+            self.queue.async {
+                if ticket != s.generation || s.state != .on || !s.tunArmed { return }
+                if !ok {
+                    LoftLog.shared.add("loft", L10n.t("err_no_tcp"))
+                    return
+                }
+                s.muxDown = false
+                for o in self.lives.values where o.id != id { o.defaultArmed = false }
+                Priv.setDefaultRoute(true, url: url, overlayIP: ip, ifname: ifname)
+                s.defaultArmed = true
+                LoftLog.shared.add("loft", "tun default on mux-up id=\(id) if=\(ifname)")
+                self.applySplitRoutes()
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .loftState, object: self)
+                }
+            }
+        }
     }
 
     /// Puts or clears the machine default on a live TUN session.
@@ -917,6 +985,7 @@ final class SessionController {
         }
         s.tunArmed = false
         s.defaultArmed = false
+        s.muxDown = false
         s.tunLive = false
         s.tunName = ""
         s.socksDisplay = ""

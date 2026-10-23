@@ -198,3 +198,21 @@ func TestClientHoldMuxReusesUntilClear(t *testing.T) {
 		t.Fatal("cleared mux reused")
 	}
 }
+
+func TestForgetGETSidKeepsMux(t *testing.T) {
+	t.Cleanup(clearClientHold)
+	a := clientHoldMux()
+	parkClient(a, "sid", []byte("k"), 7)
+	forgetGETSid()
+	sid, key, seq := clientHoldGET()
+	if sid != "" || key != nil || seq != 0 {
+		t.Fatalf("held %s %q %d", sid, key, seq)
+	}
+	if a.Closed() {
+		t.Fatal("mux closed")
+	}
+	b := clientHoldMux()
+	if a != b {
+		t.Fatal("want same mux")
+	}
+}

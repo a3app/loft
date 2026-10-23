@@ -67,7 +67,7 @@ type GET struct {
 	trips        getTrips
 	lastDrop     atomic.Int64
 	budget       atomic.Int32  // live header budget; 413 halves it, floor 1024
-	miss         atomic.Int32  // consecutive same-seq retry 404s; 3 → die (sid lost)
+	miss         atomic.Int32  // consecutive same-seq retry 404s; 3 → dropLostSid+die
 	calmUntil    atomic.Int64  // unix nano; H2 ENHANCE_YOUR_CALM shared backoff
 	liveInflight atomic.Int32  // node Tune / Status; pump caps outstanding
 	note         atomic.Uint32 // packed CmdTune to send once on next GET
@@ -349,6 +349,23 @@ func (g *GET) die() {
 	g.dead.Do(func() { close(g.done) })
 }
 
+// dropLostSid forgets a GET HTTP sid the origin already 404'd.
+// Mux closes so parkOrClose takes Close (fresh 0x02) instead of Park of
+// the dead sid, which 404-loops forever while 0/1 stays on a dead utun.
+func (g *GET) dropLostSid() {
+	g.mu.Lock()
+	g.sid = ""
+	g.key = nil
+	g.mu.Unlock()
+	forgetGETSid()
+	if g.sess != nil {
+		g.sess.Close()
+	}
+	if g.stop != nil {
+		g.stop()
+	}
+}
+
 // Rebind replaces GET HTTP/2 sockets after an egress change.
 // Mux, sid, key, seq, and the pump stay. Inflight GETs finish on
 // drained clients or retry the same seq (radioGap). CONNECT splice
@@ -412,7 +429,9 @@ func (g *GET) Park() error {
 		g.stop()
 	}
 	g.dropIdleFront()
-	parkClient(g.sess, g.sid, g.key, g.seq.Load())
+	if g.sess != nil && !g.sess.Closed() && g.sid != "" && g.sid != "new" {
+		parkClient(g.sess, g.sid, g.key, g.seq.Load())
+	}
 	g.die()
 	return nil
 }
@@ -610,7 +629,8 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 					} else {
 						n404 := g.miss.Add(1)
 						if n404 >= 3 {
-							fmt.Fprintf(os.Stderr, "get front %v\n", err)
+							fmt.Fprintf(os.Stderr, "get front sid lost seq=%d\n", j.seq)
+							g.dropLostSid()
 							g.die()
 							return
 						}
@@ -1161,7 +1181,7 @@ func frontReset(err error) bool {
 
 // retryableGET is a transient front/CDN failure. 405 must not HOL-block
 // (wrong method). 413 retries after halveBudget. 404 retries; worker
-// die() only after three consecutive misses (origin lost the sid).
+// dropLostSid()+die() only after three consecutive misses (origin lost the sid).
 func retryableGET(err error) bool {
 	if err == nil {
 		return false

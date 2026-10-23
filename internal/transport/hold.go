@@ -96,6 +96,14 @@ func clientHoldGET() (sid string, key []byte, seq uint64) {
 	return clientHold.sid, append([]byte(nil), clientHold.key...), clientHold.seq
 }
 
+// forgetGETSid drops a parked GET HTTP sid the origin already 404'd.
+// Mux stays until Close; the next Start must 0x02 instead of replaying the sid.
+func forgetGETSid() {
+	clientHoldMu.Lock()
+	defer clientHoldMu.Unlock()
+	clientHold.sid, clientHold.key, clientHold.seq = "", nil, 0
+}
+
 func clearClientHold() {
 	clientHoldMu.Lock()
 	defer clientHoldMu.Unlock()

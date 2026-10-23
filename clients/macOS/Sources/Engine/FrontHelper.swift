@@ -479,6 +479,8 @@ enum FrontExplain {
         var up: Int64?
         var down: Int64?
         var routes: [String] = []
+        /// `-1` omitted, `0` mux down, `1` mux live.
+        var mux = -1
     }
 
     /// `msg` is the remainder after `msg=`, so handshake errors keep their spaces.
@@ -506,6 +508,7 @@ enum FrontExplain {
             case "gw": st.gw = v
             case "dns": st.dns = v
             case "tun": st.tun = v
+            case "mux": st.mux = Int(v) ?? -1
             case "mtu": st.mtu = Int(v) ?? 0
             case "up": st.up = Int64(v)
             case "down": st.down = Int64(v)
@@ -515,6 +518,29 @@ enum FrontExplain {
             }
         }
         return st
+    }
+
+    /// Origin forgot GET sid, or mux already closed: drop 0/1 while loft-front still runs.
+    static func isMuxDown(_ line: String) -> Bool {
+        if line.hasPrefix("STATUS ") {
+            return parseStatus(line).mux == 0
+        }
+        let low = line.lowercased()
+        if low.contains("sid lost") { return true }
+        if low.contains("mux: closed") || low.contains("mux:closed") { return true }
+        if low.contains("get front") && low.contains("status 404") && !low.contains("retry") {
+            return true
+        }
+        return false
+    }
+
+    /// Supervise finished a fresh handshake; 0/1 can go back on the live tun.
+    static func isMuxUp(_ line: String) -> Bool {
+        if line.hasPrefix("STATUS ") {
+            return parseStatus(line).mux == 1
+        }
+        let t = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return t.hasPrefix("resume ")
     }
 
     /// Connecting-stage token for the spark ticker, or nil.
