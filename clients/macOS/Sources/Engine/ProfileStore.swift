@@ -32,6 +32,11 @@ struct LoftProfile {
     var dnsSystem: Bool = false
     /// Node X25519 public (share-URI `pbk` / YAML `mask_pub`). Empty = learn from Status.
     var maskPub: String = ""
+    /// Extra mux fronts of this connection. GET path stays in `path`. Empty = off until Status.
+    var wsPath: String = ""
+    var h2Path: String = ""
+    var h3Path: String = ""
+    var quic: Bool = false
 
     /// Canonical SSTP DNS field: unique IPv4, comma-separated.
     static func normalizeDNS(_ raw: String) -> String {
@@ -528,6 +533,30 @@ final class ProfileStore {
                 url: \(yamlQ(p.url))
             """
         }
+        var extra = ""
+        let u = URL(string: p.url)
+        let hostURL: String = {
+            guard let u, let host = u.host, !host.isEmpty else { return p.url }
+            let sch = (u.scheme ?? "https").lowercased()
+            let https = (sch == "http" || sch == "ws") ? "http" : "https"
+            if let port = u.port, port != 443, port != 80 {
+                return "\(https)://\(host):\(port)"
+            }
+            return "\(https)://\(host)"
+        }()
+        if !p.wsPath.isEmpty {
+            let wss = hostURL.replacingOccurrences(of: "https://", with: "wss://").replacingOccurrences(of: "http://", with: "ws://")
+            extra += "\n  - name: \(yamlQ(p.name + "-ws"))\n    type: ws\n    url: \(yamlQ(wss + p.wsPath))"
+        }
+        if !p.h2Path.isEmpty {
+            extra += "\n  - name: \(yamlQ(p.name + "-h2"))\n    type: h2\n    url: \(yamlQ(hostURL))\n    path: \(yamlQ(p.h2Path))"
+        }
+        if !p.h3Path.isEmpty {
+            extra += "\n  - name: \(yamlQ(p.name + "-h3"))\n    type: h3\n    url: \(yamlQ(hostURL))\n    path: \(yamlQ(p.h3Path))"
+        }
+        if p.quic {
+            extra += "\n  - name: \(yamlQ(p.name + "-quic"))\n    type: quic\n    url: \(yamlQ(hostURL))"
+        }
         return """
         name: \(yamlQ(p.name))
         token: \(yamlQ(p.token))
@@ -541,8 +570,42 @@ final class ProfileStore {
           - name: \(yamlQ(p.name))
             type: \(p.kind)
             url: \(yamlQ(p.url))
-            path: \(yamlQ(p.path))\(p.cdn.isEmpty ? "" : "\n            cdn: \(yamlQ(p.cdn))")\(p.maskPub.isEmpty ? "" : "\n            mask_pub: \(yamlQ(p.maskPub))")
+            path: \(yamlQ(p.path))\(p.cdn.isEmpty ? "" : "\n            cdn: \(yamlQ(p.cdn))")\(p.maskPub.isEmpty ? "" : "\n            mask_pub: \(yamlQ(p.maskPub))")\(extra)
         """
+    }
+
+    /// Merges Status `fronts=` into a saved loft profile after a successful handshake.
+    func applyLearnedFronts(id: String, raw: String) {
+        guard let i = profiles.firstIndex(where: { $0.id == id }) else { return }
+        var p = profiles[i]
+        if p.isSSTP || p.isVLESS || p.isTrojan { return }
+        var changed = false
+        for part in raw.split(separator: ",") {
+            let s = String(part)
+            let name: String
+            let path: String
+            if let r = s.range(of: "=") {
+                name = String(s[..<r.lowerBound])
+                path = String(s[r.upperBound...])
+            } else {
+                name = s
+                path = ""
+            }
+            switch name {
+            case "get":
+                if !path.isEmpty, p.path != path { p.path = path; changed = true }
+            case "ws":
+                if p.wsPath != path { p.wsPath = path; changed = true }
+            case "h2":
+                if p.h2Path != path { p.h2Path = path; changed = true }
+            case "h3":
+                if p.h3Path != path { p.h3Path = path; changed = true }
+            case "quic":
+                if !p.quic { p.quic = true; changed = true }
+            default: break
+            }
+        }
+        if changed { saveEdited(p) }
     }
 
     /// Active profile, or the first if the id is missing.
@@ -850,7 +913,7 @@ final class ProfileStore {
         }
         if items.isEmpty { return [] }
         let file = fileName
-        return items.map { ob in
+        let mapped = items.map { ob -> LoftProfile in
             let rawKind = ob.type.lowercased()
             let head = headKind.lowercased()
             let kind: String
@@ -893,6 +956,65 @@ final class ProfileStore {
                 maskPub: ob.maskPub
             )
         }
+        return mergeLoftFronts(mapped)
+    }
+
+    /// One loft connection may list get/ws/h2/h3/quic outbounds. Merge them.
+    private func mergeLoftFronts(_ list: [LoftProfile]) -> [LoftProfile] {
+        let mux = Set(["get", "ws", "h2", "h3", "quic"])
+        var out: [LoftProfile] = []
+        var acc: LoftProfile?
+        func flush() {
+            if let a = acc { out.append(a) }
+            acc = nil
+        }
+        for p in list {
+            let k = p.kind.lowercased()
+            if !mux.contains(k) {
+                flush()
+                out.append(p)
+                continue
+            }
+            if var a = acc, a.token == p.token {
+                switch k {
+                case "get":
+                    if a.kind != "get" {
+                        a.kind = "get"
+                        a.url = p.url
+                        a.path = p.path
+                    } else if a.path.isEmpty {
+                        a.path = p.path
+                    }
+                case "ws":
+                    if a.wsPath.isEmpty {
+                        let up = URL(string: p.url)?.path ?? ""
+                        a.wsPath = p.path.isEmpty ? (up == "/" ? "/api/v1/sync" : up) : p.path
+                    }
+                case "h2":
+                    if a.h2Path.isEmpty { a.h2Path = p.path.isEmpty ? "/api/v1/tunnel" : p.path }
+                case "h3":
+                    if a.h3Path.isEmpty { a.h3Path = p.path.isEmpty ? "/api/v1/tunnel" : p.path }
+                case "quic":
+                    a.quic = true
+                default: break
+                }
+                acc = a
+            } else {
+                flush()
+                var n = p
+                if k == "ws" {
+                    let up = URL(string: p.url)?.path ?? ""
+                    n.wsPath = p.path.isEmpty ? (up == "/" ? "" : up) : p.path
+                    if n.kind != "get" { n.kind = "get" }
+                }
+                if k == "h2" { n.h2Path = p.path; n.kind = "get" }
+                if k == "h3" { n.h3Path = p.path; n.kind = "get" }
+                if k == "quic" { n.quic = true; n.kind = "get" }
+                acc = n
+            }
+        }
+        flush()
+        return out
     }
 
     /// Optional dns / dns_replace / dns_system lines for a profile YAML.

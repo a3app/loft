@@ -476,6 +476,10 @@ final class SessionController {
                 LoftLog.shared.add("loft", "on id=\(p.id) overlay=\(ip) socks=\(socksAddr)")
                 self.markFresh(s)
                 self.set(p.id, .on, err: "", ip: ip)
+                let learned = s.helper.overlayFronts
+                if !learned.isEmpty {
+                    self.store.applyLearnedFronts(id: p.id, raw: learned)
+                }
                 if p.tun, !ip.isEmpty, !s.helper.tunSock.isEmpty {
                     do {
                         let takeDefault = self.store.defaultRoute

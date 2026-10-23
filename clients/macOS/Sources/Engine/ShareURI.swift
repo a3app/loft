@@ -59,7 +59,39 @@ enum ShareURI {
         var path = c.path
         if path == "/" { path = "" }
         let q = query(c)
-        let type = (q["type"] ?? "get").lowercased()
+        let frontKeys = ["get", "ws", "h2", "h3", "quic"]
+        let hasFronts = frontKeys.contains { q.keys.contains($0) }
+        var type = (q["type"] ?? "get").lowercased()
+        var wsPath = ""
+        var h2Path = ""
+        var h3Path = ""
+        var quic = false
+        if hasFronts {
+            if q.keys.contains("get") {
+                path = q["get"] ?? ""
+                if path.isEmpty { path = "/static/v3/build" }
+                type = "get"
+            }
+            if q.keys.contains("ws") {
+                wsPath = q["ws"] ?? ""
+                if wsPath.isEmpty { wsPath = "/api/v1/sync" }
+                if type != "get" { type = "ws" }
+            }
+            if q.keys.contains("h2") {
+                h2Path = q["h2"] ?? ""
+                if h2Path.isEmpty { h2Path = "/api/v1/tunnel" }
+                if type != "get" && wsPath.isEmpty { type = "h2" }
+            }
+            if q.keys.contains("h3") {
+                h3Path = q["h3"] ?? ""
+                if h3Path.isEmpty { h3Path = "/api/v1/tunnel" }
+            }
+            quic = q.keys.contains("quic")
+            if type != "get" && wsPath.isEmpty && h2Path.isEmpty && q.keys.contains("get") == false {
+                if q.keys.contains("h3") { type = "h3" }
+                else if quic { type = "quic" }
+            }
+        }
         if !LoftProfile.frontKinds.contains(type) { return nil }
         let scheme: String
         if let s = q["scheme"]?.lowercased(), ["https", "http", "wss", "ws"].contains(s) {
@@ -73,8 +105,8 @@ enum ShareURI {
         let cdn = q["cdn"] ?? ""
         let url: String
         let outPath: String
-        if type == "get" {
-            url = "\(scheme)://\(hostPart)"
+        if type == "get" || hasFronts {
+            url = "\(scheme == "wss" || scheme == "ws" ? "https" : scheme)://\(hostPart)"
             outPath = path
         } else {
             let pth = (path.isEmpty || path == "/") ? "" : path
@@ -94,7 +126,11 @@ enum ShareURI {
             mux: type != "l3",
             instanceID: "",
             file: fileName,
-            maskPub: q["pbk"] ?? ""
+            maskPub: q["pbk"] ?? "",
+            wsPath: wsPath,
+            h2Path: h2Path,
+            h3Path: h3Path,
+            quic: quic
         )
     }
 
@@ -117,22 +153,35 @@ enum ShareURI {
             let def = (scheme == "http" || scheme == "ws") ? 80 : 443
             if port != def { c.port = port }
         }
-        let urlPath = u?.path ?? ""
-        let uriPath: String
-        if kind == "get" {
-            uriPath = p.path
-        } else if !urlPath.isEmpty && urlPath != "/" {
-            uriPath = urlPath
-        } else {
-            uriPath = ""
-        }
-        if !uriPath.isEmpty {
-            c.path = uriPath.hasPrefix("/") ? uriPath : "/" + uriPath
-        }
+        let extra = !p.wsPath.isEmpty || !p.h2Path.isEmpty || !p.h3Path.isEmpty || p.quic
         var items: [URLQueryItem] = []
-        if kind != "get" { items.append(URLQueryItem(name: "type", value: kind)) }
+        if kind == "l3" {
+            let urlPath = u?.path ?? ""
+            if !urlPath.isEmpty && urlPath != "/" {
+                c.path = urlPath.hasPrefix("/") ? urlPath : "/" + urlPath
+            }
+            items.append(URLQueryItem(name: "type", value: "l3"))
+        } else if extra || kind == "get" {
+            items.append(URLQueryItem(name: "get", value: p.path.isEmpty ? "/static/v3/build" : p.path))
+            if !p.wsPath.isEmpty { items.append(URLQueryItem(name: "ws", value: p.wsPath)) }
+            if !p.h2Path.isEmpty { items.append(URLQueryItem(name: "h2", value: p.h2Path)) }
+            if !p.h3Path.isEmpty { items.append(URLQueryItem(name: "h3", value: p.h3Path)) }
+            if p.quic { items.append(URLQueryItem(name: "quic", value: nil)) }
+        } else {
+            let urlPath = u?.path ?? ""
+            let uriPath: String
+            if !urlPath.isEmpty && urlPath != "/" {
+                uriPath = urlPath
+            } else {
+                uriPath = p.path
+            }
+            if !uriPath.isEmpty {
+                c.path = uriPath.hasPrefix("/") ? uriPath : "/" + uriPath
+            }
+            if kind != "get" { items.append(URLQueryItem(name: "type", value: kind)) }
+        }
         let defScheme = kind == "ws" ? "wss" : "https"
-        if scheme != defScheme { items.append(URLQueryItem(name: "scheme", value: scheme)) }
+        if scheme != defScheme && kind != "get" && !extra { items.append(URLQueryItem(name: "scheme", value: scheme)) }
         if !p.cdn.isEmpty { items.append(URLQueryItem(name: "cdn", value: p.cdn)) }
         if !p.maskPub.isEmpty { items.append(URLQueryItem(name: "pbk", value: p.maskPub)) }
         c.queryItems = items.isEmpty ? nil : items
@@ -158,34 +207,28 @@ enum ShareURI {
         return (host, port, scheme, path)
     }
 
-    /// Writes token / host / port / path / kind into a loft profile. Keeps cdn and pbk.
-    static func applyLoftManual(_ p: inout LoftProfile, token: String, host: String, port: Int, path: String, kind: String) {
+    /// Writes token / host / port / front paths into a loft profile. Keeps cdn and pbk.
+    static func applyLoftManual(_ p: inout LoftProfile, token: String, host: String, port: Int, getPath: String, wsPath: String, h2Path: String, h3Path: String, quic: Bool) {
         p.token = token
-        let type = LoftProfile.frontKinds.contains(kind.lowercased()) ? kind.lowercased() : "get"
-        p.kind = type
+        p.kind = "get"
+        p.mux = true
         let cur = loftEndpoint(p)
-        let sch: String
-        if type == "ws" {
-            sch = (cur.scheme == "ws" || cur.scheme == "wss") ? cur.scheme : "wss"
-        } else if cur.scheme == "http" || cur.scheme == "https" {
-            sch = cur.scheme
-        } else {
-            sch = "https"
-        }
+        let sch = (cur.scheme == "http" || cur.scheme == "https") ? cur.scheme : "https"
         if host.isEmpty { return }
-        let def = (sch == "http" || sch == "ws") ? 80 : 443
+        let def = sch == "http" ? 80 : 443
         let portUse = (port > 0 && port < 65536) ? port : def
         let hostPart = bracketHost(host, port: portUse, omitDefault: portUse == def)
-        var pth = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !pth.isEmpty, !pth.hasPrefix("/") { pth = "/" + pth }
-        if type == "get" {
-            p.url = "\(sch)://\(hostPart)"
-            p.path = pth
-        } else {
-            p.url = "\(sch)://\(hostPart)\(pth)"
-            p.path = ""
+        func slash(_ s: String) -> String {
+            var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty, !t.hasPrefix("/") { t = "/" + t }
+            return t
         }
-        if type == "l3" { p.mux = false }
+        p.url = "\(sch)://\(hostPart)"
+        p.path = slash(getPath)
+        p.wsPath = slash(wsPath)
+        p.h2Path = slash(h2Path)
+        p.h3Path = slash(h3Path)
+        p.quic = quic
     }
 
     /// `vless://<uuid>@<host>[:port]?…#Name` (DuckSoft / Xray share).

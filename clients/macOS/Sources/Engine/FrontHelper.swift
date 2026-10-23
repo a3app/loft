@@ -13,6 +13,8 @@ final class FrontHelper {
     private(set) var overlayMTU = 0
     /// Managed CIDRs from STATUS `routes=` (lab LAN behind a member).
     private(set) var overlayRoutes: [String] = []
+    /// Compact Status front map (`get=/static/v3/build,ws=/api/v1/sync,quic`).
+    private(set) var overlayFronts = ""
     private(set) var tunLive = false
     private(set) var lastError = ""
     private(set) var lastStage = ""
@@ -188,6 +190,7 @@ final class FrontHelper {
         overlayDNS = ""
         overlayMTU = 0
         overlayRoutes = []
+        overlayFronts = ""
         tunLive = false
         lastError = ""
         lastStage = ""
@@ -418,7 +421,10 @@ final class FrontHelper {
         if let n = st.down { bytesDown = n }
         if !st.ip.isEmpty { overlayIP = st.ip }
         if !st.gw.isEmpty { overlayGW = st.gw }
-        if st.state == "on" { overlayRoutes = st.routes }
+        if st.state == "on" {
+            overlayRoutes = st.routes
+            if !st.fronts.isEmpty { overlayFronts = st.fronts }
+        }
         if st.tun == "1" { tunLive = true }
         if st.state == "connecting" { lastStage = st.msg }
         if st.state == "error" { lastError = st.msg.isEmpty ? "front" : FrontExplain.display(st.msg) }
@@ -479,6 +485,7 @@ enum FrontExplain {
         var up: Int64?
         var down: Int64?
         var routes: [String] = []
+        var fronts = ""
         /// `-1` omitted, `0` mux down, `1` mux live.
         var mux = -1
     }
@@ -514,6 +521,8 @@ enum FrontExplain {
             case "down": st.down = Int64(v)
             case "routes":
                 st.routes = v.split(separator: ",").map { String($0) }.filter { !$0.isEmpty }
+            case "fronts":
+                st.fronts = v
             default: break
             }
         }

@@ -1163,6 +1163,10 @@ final class EditWindowController: NSWindowController {
     private var loftManual = false
     private var loftHostF: LoftField?
     private var loftPortF: LoftField?
+    private var loftWSF: LoftField?
+    private var loftH2F: LoftField?
+    private var loftH3F: LoftField?
+    private var loftQuicSw: ToggleSwitch?
     /// VLESS Main: paste `vless://` (false) or field form (true). Same share.
     private var vlessManual = false
     private var vlessHostF: LoftField?
@@ -1294,6 +1298,7 @@ final class EditWindowController: NSWindowController {
         dnsF = nil; dnsReplaceSw = nil; dnsSystemSw = nil
         keyF = nil; urlF = nil; socksF = nil; socksSw = nil; tunSw = nil
         loftHostF = nil; loftPortF = nil
+        loftWSF = nil; loftH2F = nil; loftH3F = nil; loftQuicSw = nil
         vlessHostF = nil; vlessPortF = nil; vlessFpF = nil; vlessPbkF = nil; vlessSidF = nil
         vlessPathF = nil; vlessHdrF = nil; vlessSecSeg = nil; vlessNetSeg = nil; vlessVisionSw = nil
         var y: CGFloat = 0
@@ -1458,20 +1463,15 @@ final class EditWindowController: NSWindowController {
                     form.addSubview(hf); form.addSubview(pf)
                     loftHostF = hf; loftPortF = pf
                     y += 48
-                    lab("front")
-                    let fronts = LoftProfile.frontTitles
-                    kindSeg = SegControl(frame: NSRect(x: 28, y: y, width: capsuleWidth(fronts), height: 28), titles: fronts, capsule: true)
-                    kindSeg?.value = LoftProfile.frontIndex(profile.kind)
-                    kindSeg?.onChange = { [weak self] _ in
-                        self?.harvest()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { [weak self] in
-                            self?.paintForm()
-                        }
-                    }
-                    if let s = kindSeg { form.addSubview(s) }
-                    y += 40
-                    lab("vless_path")
-                    pathF = field("/static/v3/build", ep.path)
+                    lab("front_get")
+                    pathF = field("/static/v3/build", profile.path.isEmpty ? ep.path : profile.path)
+                    lab("front_ws")
+                    loftWSF = field("/api/v1/sync", profile.wsPath)
+                    lab("front_h2")
+                    loftH2F = field("/api/v1/tunnel", profile.h2Path)
+                    lab("front_h3")
+                    loftH3F = field("/api/v1/tunnel", profile.h3Path)
+                    loftQuicSw = inbound("front_quic", "front_quic_d", profile.quic)
                 } else {
                     lab("loft_uri")
                     keyF = field("loft://lt_@host/path", ShareURI.emit(profile), secure: true)
@@ -1597,6 +1597,10 @@ final class EditWindowController: NSWindowController {
                 profile.url = q.url
                 profile.kind = q.kind
                 if !q.path.isEmpty { profile.path = q.path }
+                profile.wsPath = q.wsPath
+                profile.h2Path = q.h2Path
+                profile.h3Path = q.h3Path
+                profile.quic = q.quic
                 profile.cdn = q.cdn
                 profile.maskPub = q.maskPub
             } else if !raw.isEmpty {
@@ -1640,9 +1644,12 @@ final class EditWindowController: NSWindowController {
         let host = (loftHostF?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let portS = (loftPortF?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let port = Int(portS) ?? 0
-        let path = pathF?.stringValue ?? profile.path
-        let kind = kindSeg.map { LoftProfile.frontKind($0.value) } ?? profile.kind
-        ShareURI.applyLoftManual(&profile, token: token, host: host, port: port, path: path, kind: kind)
+        let getPath = pathF?.stringValue ?? profile.path
+        let ws = loftWSF?.stringValue ?? profile.wsPath
+        let h2 = loftH2F?.stringValue ?? profile.h2Path
+        let h3 = loftH3F?.stringValue ?? profile.h3Path
+        let quic = loftQuicSw?.on ?? profile.quic
+        ShareURI.applyLoftManual(&profile, token: token, host: host, port: port, getPath: getPath, wsPath: ws, h2Path: h2, h3Path: h3, quic: quic)
     }
 
     /// Writes VLESS Main fields into `profile.url` as a DuckSoft share.
@@ -1698,6 +1705,10 @@ final class EditWindowController: NSWindowController {
             p.url = q.url
             p.kind = q.kind
             p.path = q.path
+            p.wsPath = q.wsPath
+            p.h2Path = q.h2Path
+            p.h3Path = q.h3Path
+            p.quic = q.quic
             p.cdn = q.cdn
             p.maskPub = q.maskPub
         } else if lowURL.hasPrefix("vless://"), let q = ShareURI.vless(p.url, fileName: p.id) {
