@@ -34,8 +34,8 @@ Palette: Ink `#1A1714`, Stone `#B7A99A`, Copper `#C67B3A`, Lamp `#E8B84A`, Snow 
 | Group | Screens |
 |-------|---------|
 | Status | Overview |
+| Internet | Connections, Connection priorities (policies · consumers), Server addresses |
 | loft network | Node, Members, Segments |
-| Network | Network and IP (addresses and routes · upstream channels), Connection priorities (lists · assignment) |
 | Domains and mail | Domains (zones, records, certificates, DNS providers), Mail (with the mail server package) |
 | Management | Packages, Users (list · roles · sessions · log), System (guard, backups, Linux accounts), Settings |
 
@@ -62,7 +62,7 @@ Tabs: Main (role, listen, advertise, certificate from Domains, fronts — defaul
 
 QUIC and HTTP/3 stay selectable while decoy is on: the node advertises `quic_mark` / `h3_mark` instead of raw quic/h3. Member `loft://` includes query `pbk` when mask is on.
 
-## 6. Network and IP
+## 6. Internet
 
 **Addresses and routes.** Address table: address (primary, added in the panel, channel), interface, gateway, who listens, PTR. Route table: destination, via, interface, source (system, panel, channel). The panel adds and removes only its own addresses and routes; system ones are left alone. A change is live at once and undone after 2 minutes unless confirmed on the bar (a timer on the server, so it works without the panel; a reboot also drops an unconfirmed change). What the panel owns is in `/etc/loft-panel/net.json`, applied at boot.
 
@@ -78,9 +78,11 @@ QUIC and HTTP/3 stay selectable while decoy is on: the node advertises `quic_mar
 
 Every dialog has **Use for internet exit** (the channel can be picked in rules) and **Link check** (off, ping or TCP connect; address, interval, failures in a row before “no link”). WireGuard, OpenVPN and ZeroTier can **take incoming connections on the channel's external IP**. Passwords and keys are not shown after saving.
 
-**Connection priorities** — its own menu item under Network, two tabs. **Priority lists**: on the left a column of lists (name, below it “Failover mode” or “Multipath mode”; the chosen one has a pencil and a bin; the bin is off while a rule picks the list), at the bottom “+ Add list” (name, “Start from” — empty or a copy, multipath). The pencil opens editing right in the column: name, “Multipath”, “Save” / “Cancel”. On the right — every connection with “Use for internet exit”: a drag handle (order), a “use” tick, a state dot, the name, system name · type · state, “now” on the current one (failover), the speed limit (↓/↑ Mbit/s or —) and a pencil → the “Speed limit” dialog (incoming and outgoing: off or 1…500 Mbit/s, shared by everyone who leaves by the list). Below the table: “Add new connections automatically”, “If none of them works” (direct or block), a hint which channel carries traffic. Ticks, dragging and fields apply at once, no “Save” button. Failover: the first working channel, the next on failure; multipath: new connections take the working channels in turn. A channel is skipped while it is off, not connected or failing its link check (“no link”). **Assignment**: on the left “Rest of traffic (N)” and the lists with counts, on the right “Network members” and “Tags” as chips; a chip dragged onto a list on the left is a member or tag exit rule to that list; a member rule beats a tag; “Rest of traffic” picks where it goes (the default rule). Address lists stay in the exit rules on “Upstream channels”. Old “on failure” chains turn into lists on upgrade.
+**Connections** is its own menu item: the former “External channels” page (WireGuard, VPN, ZeroTier, proxies, Xray, exit rules by address list, incoming through a channel). **Server addresses** is its own menu item: the former “Addresses and routes” page.
 
-**Exit rules**: a member, a tag or an address list from `node.conf` → a priority list (or direct, block); checked top down, arrows reorder; the "rest of members' traffic" row is where everything else goes. The end of a row is the list's channel order, a link to “Connection priorities”. The server itself always leaves directly; so do ICMP and DNS queries to the node.
+**Connection priorities** — its own menu item under Internet, two tabs with their own hashes (`#prio`, `#prio/use`). The left column is the same on both tabs. System rows, not deletable: **Default policy** (members with no assignment leave directly through the host, eth0; channels are not in this policy) and **No internet access** (empty, members in it do not leave). Then the operator’s policies. **Policies**: for a user policy, every connection with “Use for internet exit”: a drag handle (order), a “use” tick, a state dot, the name, system name · type · state, “now” on the current one (failover), the speed limit (↓/↑ Mbit/s or —) and a pencil → the “Speed limit” dialog (incoming and outgoing: off or 1…500 Mbit/s, shared by everyone who leaves by the policy). Below the table: “Add new connections automatically”, “If none of them works” (direct or block). Ticks, dragging and fields apply at once. Failover: the first working channel, the next on failure; multipath: new connections take the working channels in turn. A channel is skipped while it is off, not connected or failing its link check. The default policy’s pane can still point leftover traffic at a named policy if that was already stored. **Consumers**: on the right “Network members” and “Tags” as chips; a chip dragged onto a policy on the left is a member or tag exit rule; a member rule beats a tag; drop on the default policy clears the rule. Address lists stay in the exit rules on “Connections”.
+
+**Exit rules**: a member, a tag or an address list from `node.conf` → a policy (or direct, block); checked top down, arrows reorder; the “Default policy” row is where everything else goes. The end of a row is the policy’s channel order, a link to “Connection priorities”. The server itself always leaves directly; so do ICMP and DNS queries to the node.
 
 **Incoming through a channel**: channel, external address, address in the channel, who listens.
 

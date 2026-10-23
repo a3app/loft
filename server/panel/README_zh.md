@@ -19,7 +19,7 @@
 - **软件包**：从封闭目录安装、升级、停用、删除软件包（Telegram MTProto 代理、WireGuard、OpenVPN、ZeroTier、fail2ban；节点、nginx、SSTP 为基础），任务日志直接显示在页面上；
 - **loft 节点**：在界面上编辑 node.conf（监听、前端、节点后的 Web 服务器、伪装、路径、中继、CDN 地址段、共享令牌、会话日志）、地址列表、更换节点令牌、服务日志；在线情况来自节点状态文件；
 - **用户**：带“分区 × 无/查看/修改”矩阵的角色（每个请求都检查）、邀请、API 令牌（`Authorization: Bearer lpt_…`）、会话、修改日志；
-- **网络与 IP**：服务器地址与路由（未确认的修改 2 分钟后撤销）；外部通道——WireGuard、SSTP、OpenVPN、ZeroTier、HTTP/HTTPS/SOCKS5 代理、Xray——以及按成员、标签或地址列表的出口规则与备用；经通道接收；
+- **互联网**：连接（WireGuard、SSTP、OpenVPN、ZeroTier、HTTP/HTTPS/SOCKS5 代理、Xray）和出口规则；连接优先级——默认策略、无访问和带消费者的自定义策略；服务器地址与路由（未确认的修改 2 分钟后撤销）；
 - **邮件**：邮件域、邮箱、DNS 记录和 mail.<domain> 的证书（在安装邮件软件包后）；
 - **系统**：fail2ban、加密备份和 Linux 账户；
 - **从发布版更新**：节点与面板来自 GitHub Releases，按 SHA256SUMS 校验，服务未能启动则回滚。

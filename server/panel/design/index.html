@@ -488,12 +488,12 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
 <script>
 const MENU=[
   {id:'status',ic:'i-status',t:'Статус',items:[['main','Обзор']]},
+  {id:'net',ic:'i-net',t:'Интернет',items:[['channels','Подключения'],['prio','Приоритеты подключений'],['addrs','Адреса сервера']]},
   {id:'loft',ic:'i-loft',t:'Сеть loft',items:[['node','Нода loft'],['members','Члены сети'],['segments','Сегменты сети']]},
-  {id:'net',ic:'i-net',t:'Сеть',items:[['network','Сеть и IP'],['prio','Приоритеты подключений']]},
   {id:'dom',ic:'i-dom',t:'Домены и почта',items:[['domains','Домены'],['mail','Почта','Почтовый сервер']]},
   {id:'adm',ic:'i-gear',t:'Управление',items:[['packages','Пакеты'],['users','Пользователи'],['system','Система'],['settings','Настройки']]}
 ];
-const S={route:'main',tab:{network:'addr',users:'list',node:'main'},rail:false,open:false,keepKeys:false};
+const S={route:'main',tab:{users:'list',node:'main',prio:'lists'},prio:'direct',rail:false,open:false,keepKeys:false};
 try{S.rail=localStorage.getItem('lp-rail')==='1'}catch(e){}
 const $=s=>document.querySelector(s);
 const ic=(id,s=20)=>`<svg width="${s}" height="${s}" aria-hidden="true"><use href="#${id}"/></svg>`;
@@ -521,7 +521,7 @@ V.main=()=>pageHead('Обзор','Состояние сервера и ноды 
   <section class="card"><div class="card-h"><h2>Члены сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
     <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${NETS.flatMap(n=>n.members).filter(m=>m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${Object.values(EXTRA).filter(x=>x[3]).length}</div><div class="mute">в сети</div></div><div><div class="big num">${NETS.flatMap(n=>n.members).filter(m=>!m.authorized).length}</div><div class="mute">выключено</div></div></div>
     <button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button></section>
-  <section class="card"><div class="card-h"><h2>Сеть</h2><a href="#network" style="margin-left:auto">Подробно</a></div>
+  <section class="card"><div class="card-h"><h2>Интернет</h2><a href="#addrs" style="margin-left:auto">Подробно</a></div>
     <dl class="kv"><div><dt>Основной IP</dt><dd class="mono">203.0.113.10</dd></div><div><dt>Доп. IP</dt><dd class="mono">203.0.113.11</dd></div>
     <div><dt>IPv6</dt><dd class="mono">2001:db8::10</dd></div><div><dt>Канал «Нидерланды»</dt><dd class="mono">198.51.100.77</dd></div></dl></section>
   <section class="card"><div class="card-h"><h2>Домены</h2><a href="#domains" style="margin-left:auto">Все</a></div>
@@ -546,9 +546,9 @@ V.members=()=>{
    <td>${who(`<label class="sw" onclick="event.stopPropagation()"><input type="checkbox" ${m.authorized?'checked':''} aria-label="Включён" onchange="setMemberAuth('${m.id}',this.checked)"><i></i></label>`,esc(m.name),`<span class="sub mono">${esc(m.id)}</span>`)}</td>
    <td><span class="sq" style="background:${vcol(n,m.vlan)}"></span>${n.id}${v?' · '+v.id+' '+esc(v.name):''}</td><td class="mono">${m.ip||'—'}</td><td>${x[0]}</td><td class="num">${m.multi?x[1].split(' / ')[0]+' / '+(m.multi_limit||8):x[1].split(' / ')[0]+' / 1'}</td><td><span class="dot ${x[3]?'on':''}"></span>${x[2]}</td></tr>`}).join('')));
 };
-V.network=()=>pageHead('Сеть и IP','Адреса и маршруты сервера, оверлей loft и вышестоящие VPN-каналы для выхода в интернет и приёма.')+
- `<div class="tabs" role="tablist">${[['addr','Адреса и маршруты'],['up','Внешние каналы']].map(([k,t])=>`<button class="tab ${S.tab.network===k?'on':''}" role="tab" aria-selected="${S.tab.network===k}" type="button" onclick="S.tab.network='${k}';render()">${t}</button>`).join('')}</div>`+
- (S.tab.network==='addr'?netAddr():netUp());
+V.addrs=()=>pageHead('Адреса сервера','Адреса и маршруты самого сервера. Сети loft — в Сегментах, внешние каналы — в Подключениях.')+netAddr();
+V.channels=()=>pageHead('Подключения','Внешние VPN-каналы для выхода в интернет и приёма. SSTP и прокси встроены в loft, остальные — пакетами.')+netUp();
+V.network=()=>V.channels();
 function netAddr(){
   const del=`<button class="icb del" type="button" aria-label="Удалить" onclick="toast('Применено — подтвердите в течение 2 минут');S.npend=1;render()">${ic('i-trash')}</button>`;
   return (S.npend?`<div class="note" role="status"><span><b>Применено: добавлен адрес 203.0.113.12/32.</b> <span class="mute">Подтвердите, иначе через <b>1:54</b> изменение откатится само.</span></span><span class="note-acts"><button class="btn sm ghost" type="button" onclick="S.npend=0;toast('Изменение откачено');render()">Откатить сейчас</button><button class="btn sm pri" type="button" onclick="S.npend=0;toast('Изменение сохранено');render()">Подтвердить</button></span></div>`:'')+
@@ -611,70 +611,82 @@ const lastT=x=>x==='block'?'блокировать':'напрямую';
 const liveOf=p=>p.use.find(k=>CH[k].on&&CH[k].st==='up');
 function prioChain(p){return p.use.map(k=>`<span class="${CH[k].on&&CH[k].st==='up'?'':'mute'}">${chT(k)}</span>`).join(' → ')+` → <span class="mute">${lastT(p.last)}</span>`}
 const usedBy=i=>EXR.filter(r=>r[2]===i).length+(EXDEF===i?1:0);
-/* ── Приоритеты подключений: списки слева, их каналы справа; применение — кто куда ── */
+/* ── Приоритеты: политики слева (дефолт, без доступа, свои), состав или потребители справа ── */
 const modeT=p=>p.multi?'Многопутевой режим':'Режим резервирования';
 const limT=(p,k)=>{const l=(p.lim||{})[k];return l?[l[0]?`↓ ${l[0]} Мбит/с`:'',l[1]?`↑ ${l[1]} Мбит/с`:''].filter(Boolean).join(' · '):'—'};
 const DRAG=`<span class="drag" aria-hidden="true">${'<i></i>'.repeat(6)}</span>`;
+const prioSys=id=>id==='direct'||id==='block';
 function plList(sel,count){
- const item=(p,i)=>S.prioEdit===i&&S.tab.prio!=='use'?`<div class="pl-item on edit"><div class="fld"><label for="pe1">Название списка</label><input id="pe1" value="${esc(p.t)}" maxlength="40"></div>
-   <label class="chk"><input type="checkbox" ${p.multi?'checked':''}><span>Многопутевая передача<span class="hint" style="display:block;margin:0">Соединения расходятся по всем работающим каналам списка, а не идут в первый.</span></span></label>
+ const sysItem=(id,title,sub)=>`<div class="pl-item ${id===sel?'on':''}" onclick="S.prio='${id}';S.prioEdit=null;render()"><div><b>${title}${count?` <span class="mute">(${count(id)})</span>`:''}</b><span class="sub">${sub}</span></div></div>`;
+ const item=(p,i)=>S.prioEdit===i&&S.tab.prio!=='use'?`<div class="pl-item on edit"><div class="fld"><label for="pe1">Название политики</label><input id="pe1" value="${esc(p.t)}" maxlength="40"></div>
+   <label class="chk"><input type="checkbox" ${p.multi?'checked':''}><span>Многопутевая передача<span class="hint" style="display:block;margin:0">Соединения расходятся по всем работающим каналам политики, а не идут в первый.</span></span></label>
    <div class="acts" style="margin:0"><button class="btn sm pri" type="button" onclick="S.prioEdit=null;render()">Сохранить</button><button class="btn sm" type="button" onclick="S.prioEdit=null;render()">Отменить</button></div></div>`
-  :`<div class="pl-item ${i===sel?'on':''}" onclick="S.prio=${i};render()"><div><b>${esc(p.t)}${count?` <span class="mute">(${count(i)})</span>`:''}</b><span class="sub">${modeT(p)}</span></div>
-   ${i===sel?`<span class="cell-acts"><button class="icb" type="button" aria-label="Изменить" onclick="event.stopPropagation();S.prioEdit=${i};render()">${ic('i-edit')}</button><button class="icb del" type="button" aria-label="Удалить список" ${usedBy(i)?'disabled title="Выбран в правилах выхода"':''} onclick="event.stopPropagation()">${ic('i-trash')}</button></span>`:''}</div>`;
- return `<div class="pl-side">${PRIO.map(item).join('')}<div class="pl-add"><button class="btn" type="button" onclick="openPrioNew()">${ic('i-plus')}Добавить список</button></div></div>`;
+  :`<div class="pl-item ${i===sel?'on':''}" onclick="S.prio=${i};S.prioEdit=null;render()"><div><b>${esc(p.t)}${count?` <span class="mute">(${count(i)})</span>`:''}</b><span class="sub">${modeT(p)}</span></div>
+   ${i===sel&&S.tab.prio!=='use'?`<span class="cell-acts"><button class="icb" type="button" aria-label="Изменить" onclick="event.stopPropagation();S.prioEdit=${i};render()">${ic('i-edit')}</button><button class="icb del" type="button" aria-label="Удалить политику" ${usedBy(i)?'disabled title="Выбрана в правилах выхода"':''} onclick="event.stopPropagation()">${ic('i-trash')}</button></span>`:''}</div>`;
+ return `<div class="pl-side">${sysItem('direct','Политика по умолчанию',EXDEF==='direct'?'выход напрямую':'')}${sysItem('block','Без доступа в интернет','интернет закрыт')}${PRIO.map(item).join('')}<div class="pl-add"><button class="btn" type="button" onclick="openPrioNew()">${ic('i-plus')}Добавить политику</button></div></div>`;
 }
 V.prio=()=>{
- if(!PRIO[S.prio])S.prio=0;
  const t=S.tab.prio||'lists';
- return pageHead('Приоритеты подключений','Списки внешних каналов для выхода в интернет: резервирование (первый работающий канал, при сбое — следующий) или многопутевая передача по всем работающим. Для канала в списке можно ограничить скорость. Списки назначают членам сети и тегам.')+
- `<div class="tabs" role="tablist">${[['lists','Списки приоритетов'],['use','Применение']].map(([k,x])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="S.tab.prio='${k}';render()">${x}</button>`).join('')}</div>`+
+ if(t!=='use'&&!prioSys(S.prio)&&!PRIO[S.prio])S.prio='direct';
+ return pageHead('Приоритеты подключений','Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию выходит напрямую с сервера. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.')+
+ `<div class="tabs" role="tablist">${[['lists','Политики','prio'],['use','Потребители','prio/use']].map(([k,x,h])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>`+
  (t==='use'?prioUse():prioLists());
 };
 function prioLists(){
+ if(S.prio==='direct'){
+  return `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>
+   ${plList('direct')}
+   <div class="pl-main" style="padding:16px 20px"><p>Члены без назначения выходят <b>напрямую</b> через <span class="mono">eth0</span>. Каналы в эту политику не входят — для выхода через VPN добавьте политику и перетащите на неё потребителей.</p>
+    <p class="hint" style="margin:0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p></div></div>`;
+ }
+ if(S.prio==='block'){
+  return `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>
+   ${plList('block')}
+   <div class="pl-main" style="padding:16px 20px"><p>Интернет закрыт. Члены в этой политике наружу не выходят. Подключения не используются.</p></div></div>`;
+ }
  const p=PRIO[S.prio],live=liveOf(p);
  const order=p.use.concat(Object.keys(CH).filter(k=>!p.use.includes(k)));
  const rows=order.map(k=>{const c=CH[k],on=p.use.includes(k),st=c.on?c.st:'off';
   return `<div class="pl-row ${on?'':'off'}">${on?DRAG:'<span class="drag"></span>'}<label class="chk"><input type="checkbox" ${on?'checked':''} aria-label="Использовать"></label><span class="dot ${st==='up'?'on':st==='nolink'||st==='down'?'err':''}"></span>
    <div class="pl-name"><b>${esc(c.title)}</b>${k===live&&!p.multi?' <span class="pill ok">сейчас</span>':''}<span class="sub"><span class="mono">${k}</span> · ${c.t==='vpn'?c.kind:CHT[c.t]} · ${CHST[c.st][0]}</span></div>
    <div class="pl-lim">${on?limT(p,k):''}</div><div>${on?`<button class="icb" type="button" aria-label="Ограничение скорости" onclick="openPrioLim('${k}')">${ic('i-edit')}</button>`:''}</div></div>`}).join('');
- return `<div class="pl-wrap"><div class="pl-head"><span>Список</span><span>Подключение</span><span>Ограничение скорости</span></div>
+ return `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>
   ${plList(S.prio)}
   <div class="pl-main">${rows}
    <div class="pl-foot"><label class="chk"><input type="checkbox" ${p.auto?'checked':''}>Добавлять новые подключения автоматически</label>
     <div class="fld" style="max-width:360px"><label for="pr2">Если ни один не работает</label><select id="pr2"><option ${p.last==='direct'?'selected':''}>Выходить напрямую</option><option ${p.last==='block'?'selected':''}>Блокировать</option></select></div>
-    <p class="hint" style="margin:0">${p.multi?'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.':live?`Сейчас трафик идёт через <b>${chT(live)}</b>.`:`Ни один канал не работает — трафик ${p.last==='block'?'блокируется':'идёт напрямую'}.`} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне подключения в «Сеть и IP» → «Внешние каналы».</p></div>
+    <p class="hint" style="margin:0">${p.multi?'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.':live?`Сейчас трафик идёт через <b>${chT(live)}</b>.`:`Ни один канал не работает — трафик ${p.last==='block'?'блокируется':'идёт напрямую'}.`} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне подключения в «Подключениях».</p></div>
   </div></div>`;
 }
 function openPrioLim(k){
  const p=PRIO[S.prio],l=(p.lim||{})[k]||[0,0];
  const sel=(id,v,lab)=>`<div class="fld"><label for="${id}">${lab}</label><select id="${id}"><option ${v?'':'selected'}>Отключено</option>${[1,5,10,20,50,100,200,500].map(x=>`<option ${v===x?'selected':''}>${x} Мбит/с</option>`).join('')}</select></div>`;
- dialog('Ограничение скорости',`Для подключения «${esc(CH[k].title)}» в списке «${esc(p.t)}». Делится на всех, кто выходит по этому списку.`,
+ dialog('Ограничение скорости',`Для подключения «${esc(CH[k].title)}» в политике «${esc(p.t)}». Делится на всех, кто выходит по этой политике.`,
   sel('pl1',l[0],'Входящий трафик (к членам)')+sel('pl2',l[1],'Исходящий трафик (от членов)'),
   `<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
 }
-// Применение: члены и теги плашками, перетаскиваются между списками (это правила выхода «член» и «тег»).
+// Потребители: члены и теги плашками, перетаскиваются между политиками.
 function prioUse(){
  const all=NETS.flatMap(n=>n.members.map(m=>m.id)),tags=[...new Set(NETS.flatMap(n=>n.members.flatMap(m=>m.tags)))];
  const of=(m,v)=>EXR.filter(r=>r[0]===m&&r[1]===v).map(r=>r[2])[0];
- const dflt=-1,sel=S.prioUse==null?dflt:S.prioUse;
+ const sel=S.prio;
  const tagsOf=m=>NETS.flatMap(n=>n.members.filter(x=>x.id===m).flatMap(x=>x.tags));
- const memIn=i=>all.filter(m=>i===dflt?of('member',m)==null&&!tagsOf(m).some(t=>of('tag',t)!=null):of('member',m)===i),tagIn=i=>tags.filter(t=>i===dflt?of('tag',t)==null:of('tag',t)===i);
+ const memIn=i=>all.filter(m=>i==='direct'?of('member',m)==null&&!tagsOf(m).some(t=>of('tag',t)!=null):i==='block'?of('member',m)==='block':of('member',m)===i);
+ const tagIn=i=>tags.filter(t=>i==='direct'?of('tag',t)==null:i==='block'?of('tag',t)==='block':of('tag',t)===i);
  const chip=(x,cls)=>`<span class="m-chip ${cls||''}" draggable="true">${DRAG}${esc(x)}</span>`;
- const item=(i,title,sub)=>`<div class="pl-item ${i===sel?'on':''}" onclick="S.prioUse=${i};render()"><div><b>${title} <span class="mute">(${memIn(i).length+tagIn(i).length})</span></b><span class="sub">${sub}</span></div></div>`;
  const m=memIn(sel),t=tagIn(sel);
- return `<div class="pl-wrap use"><div class="pl-head"><span>Список</span><span>Кто выходит по нему</span></div>
-  <div class="pl-side">${item(dflt,'Остальной трафик',`по умолчанию: ${EXDEF==='direct'?'напрямую':EXDEF==='block'?'блокировать':esc(PRIO[EXDEF].t)}`)}${PRIO.map((p,i)=>item(i,esc(p.t),modeT(p))).join('')}</div>
+ return `<div class="pl-wrap use"><div class="pl-head"><span>Политика</span><span>Кто выходит по ней</span></div>
+  ${plList(sel,i=>memIn(i).length+tagIn(i).length)}
   <div class="pl-main" style="padding:16px 20px">
    <div class="pl-sec">Члены сети</div><div class="m-chips">${m.length?m.map(x=>chip(x)).join(''):'<span class="mute">—</span>'}</div>
    <div class="pl-sec">Теги</div><div class="m-chips">${t.length?t.map(x=>chip('# '+x,'tag')).join(''):'<span class="mute">—</span>'}</div>
-   <p class="hint">Перетащите плашку на список слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — в «Сеть и IP» → «Внешние каналы» → «Правила выхода».</p>
-   ${sel===dflt?`<div class="fld" style="max-width:360px;margin-top:8px"><label for="pu1">Остальной трафик выходит</label><select id="pu1">${exitTo(EXDEF)}</select></div>`:''}
+   <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — в «Подключениях» → «Правила выхода».</p>
   </div></div>`;
 }
 function openPrioNew(){
-  dialog('Новый список приоритетов','Порядок каналов можно скопировать из другого списка и поправить.',
+  dialog('Новая политика','Порядок каналов можно скопировать из другой политики и поправить.',
    `<div class="fld"><label for="pr1">Название</label><input id="pr1" placeholder="Например, Офис" maxlength="40"></div>
-    <div class="fld"><label for="pr3">Начать с</label><select id="pr3"><option>Пустого списка</option>${PRIO.map(x=>`<option>Копии «${esc(x.t)}»</option>`).join('')}</select></div>
+    <div class="fld"><label for="pr3">Начать с</label><select id="pr3"><option>Пустой политики</option>${PRIO.map(x=>`<option>Копии «${esc(x.t)}»</option>`).join('')}</select></div>
     <label class="chk"><input type="checkbox">Многопутевая передача</label>`,
    `<button class="btn pri" type="button" onclick="closeDlg()">Добавить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
 }
@@ -687,10 +699,10 @@ function netUp(){
   blk('Сети ZeroTier','Подключение к сети ZeroTier по 16-значному ID сети. Новому участнику может понадобиться авторизация у администратора сети.',add('zt','Добавить подключение')+chanTable('zt'))+
   blk('Прокси-подключения','Выход через прокси-сервер по HTTP, HTTPS или SOCKS5. Можно пользоваться само по себе или как первым звеном цепочки для Xray.',add('px','Добавить подключение')+chanTable('px'))+
   blk('Xray','Канал по ссылке vless://, trojan:// или ss://. «Через» — канал, через который Xray подключается к своему серверу.',add('xr','Добавить подключение')+chanTable('xr'))+
-  blk('Правила выхода','Проверяются сверху вниз, срабатывает первое подходящее, и трафик уходит по выбранному списку приоритетов. Сам сервер — панель, обновления, почта — всегда выходит напрямую.',
+  blk('Правила выхода','Проверяются сверху вниз, срабатывает первое подходящее, и трафик уходит по выбранной политике. Сам сервер — панель, обновления, почта — всегда выходит напрямую.',
    `<div class="acts"><button class="btn" type="button" onclick="openExit(-1)">${ic('i-plus')}Добавить правило</button></div><div class="rules">
    ${EXR.map(([m,v,c],i)=>`<div class="rule click" onclick="openExit(${i})"><span class="n">${i+1}</span><span>${what[m](v)} → <b>${esc(PRIO[c].t)}</b></span><span class="tail"><a href="#prio" onclick="event.stopPropagation();S.prio=${c};S.tab.prio='lists'">${prioChain(PRIO[c])}</a></span><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${i?'':'disabled'} onclick="event.stopPropagation()">↑</button><button class="icb" type="button" aria-label="Ниже" ${i<EXR.length-1?'':'disabled'} onclick="event.stopPropagation()">↓</button><button class="icb del" type="button" aria-label="Удалить правило" onclick="event.stopPropagation()">${ic('i-trash')}</button></span></div>`).join('')}
-   <div class="rule click" style="background:var(--bg)" onclick="openExitDefault()"><span class="n">∗</span><span>Остальной трафик членов → <b>напрямую</b> <span class="mono mute">eth0</span></span></div></div>
+   <div class="rule click" style="background:var(--bg)" onclick="openExitDefault()"><span class="n">∗</span><span>Политика по умолчанию → <b>напрямую</b> <span class="mono mute">eth0</span></span></div></div>
    <p class="hint">ICMP (ping) и DNS-запросы к ноде идут напрямую.</p>`)+
   blk('Приём через канал','Внешний IP канала становится адресом сервера; ответы уходят тем же каналом. Только для каналов со своим внешним IP.',
    `<div class="card"><dl class="kv"><div><dt>Канал</dt><dd>Нидерланды</dd></div><div><dt>Внешний адрес</dt><dd class="mono">198.51.100.77</dd></div><div><dt>Адрес в канале</dt><dd class="mono">10.8.0.30</dd></div><div><dt>Слушают</dt><dd>нода loft :443</dd></div></dl></div>`);
@@ -700,9 +712,9 @@ function openExit(i){const r=i>=0?EXR[i]:['member','',0];
  dialog(i>=0?'Правило '+(i+1):'Новое правило','Чей трафик и куда он выходит.',
   `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1">${[['member','Член сети'],['tag','Члены с тегом'],['list','Адреса из списка']].map(([k,l])=>`<option ${r[0]===k?'selected':''}>${l}</option>`).join('')}</select></div>
    <div class="fld"><label for="ru2">Кто или что</label><select id="ru2"><option>${r[1]||'alice-phone'}</option></select></div>
-   <div class="fld"><label for="ru3">Список приоритетов</label><select id="ru3">${exitTo(r[2])}</select></div>`,
+   <div class="fld"><label for="ru3">Политика</label><select id="ru3">${exitTo(r[2])}</select></div>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">${i>=0?'Сохранить':'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
-function openExitDefault(){dialog('Остальной трафик членов','Куда выходит то, что не подошло ни под одно правило.',`<div class="fld"><label for="rd1">Список приоритетов</label><select id="rd1">${exitTo(EXDEF)}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
+function openExitDefault(){dialog('Политика по умолчанию','Куда выходит трафик членов без назначения.',`<div class="fld"><label for="rd1">Выход</label><select id="rd1">${exitTo(EXDEF)}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 
 /* ── Домены: зоны, записи, сертификаты, DNS-провайдеры ── */
 // Record: [name, type, value, priority, made by the panel, check in a manual zone: ok | missing | differs]
@@ -956,9 +968,9 @@ const PKG=[
  ['Сервер Trojan','Trojan поверх TLS на том же Xray-core, свой вход trojan.example.net.','none','—','443 · SNI','—'],
  ['Сервер Shadowsocks','Shadowsocks 2022 на том же Xray-core, на своём порту.','none','—','8388','—'],
  ['VPN-клиенты · вышестоящие каналы'],
- ['WireGuard-клиент','Канал WireGuard по .conf. Сами каналы — в «Сеть и IP» → «Внешние каналы».','run','1.0.20210914','—','1 MB',{tool:1}],
+ ['WireGuard-клиент','Канал WireGuard по .conf. Сами каналы — в «Подключениях».','run','1.0.20210914','—','1 MB',{tool:1}],
  ['AmneziaWG-клиент','WireGuard с обфускацией рукопожатия.','none','—','—','≈ 3 MB'],
- ['OpenVPN-клиент','Канал по файлу .ovpn. Подключения — в «Сеть и IP» → «Внешние каналы» → VPN-подключения.','run','2.6.12','—','2 MB',{tool:1}],
+ ['OpenVPN-клиент','Канал по файлу .ovpn. Подключения — в «Подключениях» → VPN-подключения.','run','2.6.12','—','2 MB',{tool:1}],
  ['SSTP-клиент','Встроен в loft: ставится вместе с нодой, отдельно не удаляется.','run','1.0.22','—','—',{base:1,tool:1}],
  ['ZeroTier-клиент','Подключение к сети ZeroTier по Network ID.','run','1.14.2','9993 udp','9 MB'],
  ['loft-клиент','Другая нода loft как вышестоящий канал.','none','—','—','—'],
@@ -1138,7 +1150,7 @@ function linuxDel(l){dialog(`Удалить учётную запись ${l}?`,'
 
 /* ── Пользователи панели: окно пользователя и права ролей ── */
 const PUSERS=[['admin','Администратор','Владелец','выключен','сейчас',1],['bob','Bob','Оператор','lpt_…9a1c','2 ч назад',1],['support','Поддержка','Наблюдатель','выключен','5 дн. назад',1],['intern','Стажёр','Наблюдатель','выключен','2 мес. назад',0],['carol','Carol','Наблюдатель','выключен','—',2]];
-const AREAS=['Обзор','Нода loft','Члены сети','Сегменты сети','Сеть и IP','Домены','Почта','Пакеты','Пользователи','Система','Настройки'];
+const AREAS=['Обзор','Нода loft','Члены сети','Сегменты сети','Интернет','Домены','Почта','Пакеты','Пользователи','Система','Настройки'];
 const PERM={'Владелец':AREAS.map(()=>2),'Оператор':[1,1,2,2,2,2,2,1,0,1,0],'Наблюдатель':AREAS.map(a=>a==='Пользователи'?0:1)};
 function mockTok(){dialog('API-токен','Показан один раз. Передавайте в заголовке Authorization: Bearer ….','<div class="uri">lpt_8c1e…</div>','<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>')}
 function mockInvite(){dialog('Приглашение для bob','Ссылка действует 24 часа и открывается один раз. Передайте её пользователю — пароль он задаст сам.','<div class="uri">https://panel.example.net/#invite/3f9c…</div>','<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>')}
@@ -1671,7 +1683,7 @@ function openListMock(n){
   `<button class="btn pri" type="button" onclick="closeDlg()">${n?'Сохранить':'Создать'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${n?`<button class="icb del" type="button" aria-label="Удалить список" style="margin-left:auto">${ic('i-trash')}</button>`:''}`);
 }
 function nodeLists(){
- return blk('Списки','Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода в «Сеть и IP» тоже на них ссылаются.',
+ return blk('Списки','Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода в «Подключениях» тоже на них ссылаются.',
   `<div class="acts"><button class="btn" type="button" onclick="openListMock('')">${ic('i-plus')}Создать список</button><button class="btn" type="button">${ic('i-up')}Загрузить из файла</button></div>`+
   table(['Список','Записей','Что внутри'],LISTS.map(r=>`<tr class="click" onclick="openListMock('${r[0]}')"><td class="mono"><b>${r[0]}</b></td><td class="num">${r[1]}</td><td class="mono mute">${r[2]}</td></tr>`).join(''))+
   '<p class="hint">Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24).</p>');
@@ -1831,8 +1843,9 @@ const HELP={
  node:['Настройки ноды loft: роль, фронты, маскировка, ретрансляторы, списки и доступ. Переключатели сразу идут на ноду.',['Включить нужные фронты (GET, WebSocket, HTTP/2, QUIC)','Добавить ретранслятор или CDN','Подождать секунду — нода перезапустится сама'],['После смены фронтов нода не поднялась — откройте журнал службы на вкладке «Основное»','Клиенты не подключаются — проверьте адрес для клиентов и сертификат']],
  members:['Устройства и люди, которые подключаются к серверу. У каждого свой ключ и профиль.',['Добавить члена — панель выдаст ссылку loft://, QR-код и файл .loft','Перевыпустить ключ, если устройство потеряно','Выключить члена, не удаляя его'],['Член не в сети — проверьте, что профиль на устройстве свежий','Выключатель сразу действует на ноде']],
  segments:['Сеть loft как свитч: VLAN, правила доступа между сегментами и текст network.conf.',['Создать VLAN и раздать в нём адреса','Разрешить или запретить доступ между VLAN','Править конфиг текстом — ошибку покажет сама нода'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
- network:['Адреса и маршруты сервера и внешние подключения: WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray.',['Добавить IP или маршрут — без подтверждения он откатится через 2 минуты','Подключить внешний VPN для выхода в интернет','Задать правила выхода: кто через какое подключение идёт'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
- prio:['Списки приоритетов: в каком порядке пробовать подключения, когда первое не работает.',['Создать список и перетащить подключения в нужном порядке','Включить многопутевую передачу или ограничение скорости','Назначить список членам и группам на вкладке «Применение»'],['Трафик идёт не туда — проверьте, какой список назначен члену','Все подключения не работают — сработает пункт «Если ни один не работает»']],
+ channels:['Внешние подключения: WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
+ addrs:['Адреса и маршруты самого сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
+ prio:['Политики выхода: какие подключения пробовать и кто ими пользуется. Политика по умолчанию выходит напрямую.',['Создать политику и отметить подключения','Перетащить члена на политику на вкладке «Потребители»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике член','Все подключения не работают — сработает пункт «Если ни один не работает»']],
  domains:['Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.',['Добавить домен через DNS-провайдера — записи панель создаст сама','Выпустить сертификат Let’s Encrypt','Для ручной зоны — проверить, что записи внесены у регистратора'],['Namecheap отказывает — укажите имя аккаунта (не e-mail), ключ и белый IP сервера','Сертификат не выпускается — имя должно указывать на этот сервер, а для HTTP-01 нужен открытый порт 80']],
  mail:['Почтовый сервер: домены, ящики, псевдонимы и DNS-записи почты.',['Добавить почтовый домен и создать недостающие записи DNS','Завести ящик и выдать пароль','Посмотреть настройки для почтовой программы'],['Письма уходят в спам — проверьте SPF, DKIM, DMARC и PTR в «Записях DNS»','Применение не прошло — панель вернула прежние файлы, исправьте ошибку и нажмите «Применить снова»']],
  packages:['Что установлено на сервере и обновления. Пакеты ставятся заданием, ход виден здесь же.',['Выбрать пакеты и поставить их одним заданием','Настроить окно и режим обновлений','Открыть настройки пакета шестерёнкой'],['Задание упало — откройте его журнал','Раздел меню не появился — нужный пакет ещё не установлен']],
@@ -1860,7 +1873,7 @@ function searchItems(){
  const o=MENU.flatMap(g=>g.items).map(([k,t])=>({g:'Разделы',t,go:()=>go(k)}));
  o.push({g:'Разделы',t:'Личный кабинет',go:()=>go('me')});
  NETS.forEach(n=>n.members.forEach(m=>o.push({g:'Члены сети',t:m.id,s:m.name||'',go:()=>goThen('members',()=>openMember(m.id))})));
- Object.entries(CH).forEach(([k,c])=>o.push({g:'Подключения',t:c.title,s:k,go:()=>{S.tab.network='up';goThen('network',()=>openChan(k))}}));
+ Object.entries(CH).forEach(([k,c])=>o.push({g:'Подключения',t:c.title,s:k,go:()=>goThen('channels',()=>openChan(k))}));
  ZONES.forEach(z=>o.push({g:'Домены',t:z.z,go:()=>go('domains/'+z.z)}));
  BOXES.forEach((b,i)=>o.push({g:'Почта',t:b[0],go:()=>goThen('mail',()=>openBox(i))}));
  PUSERS.forEach((u,i)=>o.push({g:'Пользователи',t:u[0],s:u[1],go:()=>goThen('users',()=>openPUser(i))}));
@@ -1922,7 +1935,12 @@ function render(){
 }
 function go(r){location.hash=r}
 function setOpen(v){S.open=v;$('#app').classList.toggle('menu-open',v);$('#menuBtn').setAttribute('aria-expanded',v);$('#menuBtn').setAttribute('aria-label',v?'Закрыть меню':'Открыть меню');$('#menuBtn').innerHTML=ic(v?'i-x':'i-menu',24)}
-function setRoute(){const [r,...a]=location.hash.slice(1).split('/');S.route=r||'main';S.arg=decodeURIComponent(a.join('/'))}
+function setRoute(){
+ const [r,...a]=location.hash.slice(1).split('/');
+ S.route=r||'main';S.arg=decodeURIComponent(a.join('/'));
+ if(S.route==='network'){S.route=S.arg==='addr'?'addrs':'channels';try{history.replaceState(null,'','#'+S.route)}catch(e){}}
+ if(S.route==='prio')S.tab.prio=S.arg==='use'?'use':'lists';
+}
 window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();closeHelp();render();const f=S.after;S.after=null;if(f)f();$('#main').scrollTop=0});
 $('#menuBtn').onclick=()=>setOpen(!S.open);
 $('#foldBtn').onclick=()=>{S.rail=!S.rail;try{localStorage.setItem('lp-rail',S.rail?'1':'0')}catch(e){}renderMenu()};
