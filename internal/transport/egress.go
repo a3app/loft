@@ -8,6 +8,7 @@ import (
 
 	"github.com/a3app/loft/internal/egress"
 	"github.com/a3app/loft/internal/mux"
+	"github.com/a3app/loft/internal/wire"
 )
 
 // Egress is the node's exit rules (egress.conf); nil sends everything out
@@ -59,6 +60,7 @@ type Peer struct {
 	IP     string    `json:"ip"`
 	Inst   string    `json:"inst,omitempty"`
 	From   string    `json:"from,omitempty"`
+	Front  string    `json:"front,omitempty"` // live bulk mux front (get/ws/h2/quic/h3/l3)
 	Since  time.Time `json:"since"`
 }
 
@@ -71,7 +73,13 @@ func (o *Overlay) Peers() []Peer {
 	defer o.mu.Unlock()
 	out := make([]Peer, 0, len(o.tab))
 	for _, p := range o.tab {
-		out = append(out, Peer{Member: p.member, IP: p.ip, Inst: p.inst, From: p.seen, Since: p.at})
+		front := ""
+		if p.l3 != nil {
+			front = wire.FrontL3
+		} else {
+			front = sessionBulkFront(p.sess)
+		}
+		out = append(out, Peer{Member: p.member, IP: p.ip, Inst: p.inst, From: p.seen, Front: front, Since: p.at})
 	}
 	return out
 }

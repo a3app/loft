@@ -3,6 +3,7 @@ package transport
 // Tests for overlay CIDR, mesh P2P default, bind/admit, key-not-claim, and Detach.
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -105,6 +106,31 @@ func TestStampOverlayAuthBindsKeyNotClaim(t *testing.T) {
 	stampOverlayAuth(&st, hello.Encode(), nil, nil, []byte("lt_unknown"))
 	if st.Code != wire.AuthBadKey {
 		t.Fatalf("unknown key: %v", st.Code)
+	}
+}
+
+// TestOverlayPeersReportsBulkFront copies the GET session's live bulk front.
+func TestOverlayPeersReportsBulkFront(t *testing.T) {
+	n := &netconf.Network{
+		ID: "n", CIDR: "10.8.0.0/29", Gateway: "10.8.0.1",
+		Enabled: true, Peers: netconf.PeersHub,
+		Members: []netconf.Member{{ID: "alice", Name: "alice", IP: "10.8.0.2", Authorized: true}},
+	}
+	o := NewOverlay(n)
+	sess := mux.NewServer()
+	st := wire.Status{}
+	o.Bind(&st, wire.Hello{MemberID: "alice", InstanceID: "phone"}, sess, nil)
+	peers := o.Peers()
+	if len(peers) != 1 || peers[0].Front != "" {
+		t.Fatalf("unattached %+v", peers)
+	}
+	ss := &serverSess{id: "aabbccddeeff001122334455", mux: sess, bulk: wire.FrontH2}
+	ss.cond = sync.NewCond(&ss.mu)
+	ticketTab.Store(ss.id, ss)
+	t.Cleanup(func() { ticketTab.Delete(ss.id) })
+	peers = o.Peers()
+	if len(peers) != 1 || peers[0].Front != wire.FrontH2 || peers[0].Member != "alice" {
+		t.Fatalf("%+v", peers)
 	}
 }
 

@@ -111,6 +111,21 @@ func TestL3PipeGatewayPing(t *testing.T) {
 	}
 }
 
+// TestL3RejectsNodeWithoutCap closes the pipe when Status has no CapL3.
+// The node still completes 0x02 as mux; the IP pump must not stay up.
+func TestL3RejectsNodeWithoutCap(t *testing.T) {
+	const token = "l3-nocap-token"
+	a, b := net.Pipe()
+	t.Cleanup(func() { _ = a.Close(); _ = b.Close() })
+	go serveRaw(b, NodeInfo{Token: []byte(token), Caps: wire.NodeCaps &^ wire.CapL3}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := startL3(ctx, a, []byte(token), wire.CapL3, "", "")
+	if err == nil || err.Error() != "l3: node has no l3" {
+		t.Fatalf("want l3: node has no l3, got %v", err)
+	}
+}
+
 func TestServerCapsL3(t *testing.T) {
 	c := ServerCaps(&config.ServerConfig{Fronts: []string{"l3"}}, false)
 	if !c.Has(wire.CapL3) || c.Has(wire.CapGET) || c.Has(wire.CapH2) {

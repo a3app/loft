@@ -337,6 +337,12 @@ func l3Handshake(conn net.Conn, token []byte, offer wire.Cap, addr, sni string) 
 		conn.Close()
 		return nil, wire.Fail(st.Code, st.Program)
 	}
+	// A node that did not enable l3 still answers 0x02 on the h2 path and
+	// then speaks mux. CapL3 is the only signal that the body is IP frames.
+	if !st.Caps.Has(wire.CapL3) {
+		conn.Close()
+		return nil, fmt.Errorf("l3: node has no l3")
+	}
 	RememberVis(st)
 	if addr == "" {
 		addr = conn.RemoteAddr().String()

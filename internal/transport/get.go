@@ -1609,6 +1609,24 @@ type serverSess struct {
 
 var ticketTab sync.Map // GET sid → *serverSess
 
+// sessionBulkFront is the live bulk mux front for sess (GET sid ticket table).
+// Empty: not a GET-born session (WS/H2 0x02, or unbound).
+func sessionBulkFront(sess *mux.Session) string {
+	if sess == nil {
+		return ""
+	}
+	var name string
+	ticketTab.Range(func(_, v any) bool {
+		ss, ok := v.(*serverSess)
+		if !ok || ss == nil || ss.mux != sess {
+			return true
+		}
+		name = ss.bulkFront()
+		return false
+	})
+	return name
+}
+
 const replyCacheN = 32
 
 // NewGETServer builds a GET origin with the generic CDN profile.
