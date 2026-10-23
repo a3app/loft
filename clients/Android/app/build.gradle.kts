@@ -3,6 +3,14 @@ plugins {
 }
 
 val androidDist = rootProject.projectDir.resolve("../../dist/clients/Android").canonicalFile
+val loftVersion = rootProject.projectDir.resolve("../../VERSION").readText().trim()
+
+fun loftVersionCode(v: String): Int {
+    val core = v.substringBefore('-')
+    val p = core.split('.')
+    fun n(i: Int) = p.getOrNull(i)?.toIntOrNull() ?: 0
+    return n(0) * 1_000_000 + n(1) * 1_000 + n(2)
+}
 
 layout.buildDirectory.set(androidDist.resolve("gradle/app"))
 
@@ -12,10 +20,13 @@ android {
     defaultConfig {
         minSdk = 26
         targetSdk = 36
-        versionCode = 27
-        versionName = "1.0.27"
+        versionCode = loftVersionCode(loftVersion)
+        versionName = loftVersion
     }
-    flavorDimensions += "device"
+    buildFeatures {
+        buildConfig = true
+    }
+    flavorDimensions += listOf("device", "channel")
     productFlavors {
         create("phone") {
             dimension = "device"
@@ -25,6 +36,15 @@ android {
         create("tv") {
             dimension = "device"
             applicationId = "app.loft.android.tv"
+        }
+        create("github") {
+            dimension = "channel"
+            isDefault = true
+            buildConfigField("boolean", "GITHUB", "true")
+        }
+        create("store") {
+            dimension = "channel"
+            buildConfigField("boolean", "GITHUB", "false")
         }
     }
     signingConfigs {
@@ -101,10 +121,14 @@ fun packEmulatorApp(apkDir: File, versionName: String, versionCode: Int) {
 }
 
 afterEvaluate {
-    val phoneApk = layout.buildDirectory.file("outputs/apk/phone/debug/app-phone-debug.apk")
-    val tvApk = layout.buildDirectory.file("outputs/apk/tv/debug/app-tv-debug.apk")
+    val phoneApk = layout.buildDirectory.file(
+        "outputs/apk/phoneGithub/debug/app-phone-github-debug.apk"
+    )
+    val tvApk = layout.buildDirectory.file(
+        "outputs/apk/tvGithub/debug/app-tv-github-debug.apk"
+    )
     tasks.register("distDebug") {
-        dependsOn("packagePhoneDebug", "packageTvDebug")
+        dependsOn("packagePhoneGithubDebug", "packageTvGithubDebug")
         inputs.file(phoneApk)
         inputs.file(tvApk)
         inputs.dir(rootProject.projectDir.resolve("emulator"))
@@ -125,10 +149,10 @@ afterEvaluate {
     tasks.register("packageEmulatorApp") {
         dependsOn("distDebug")
     }
-    tasks.named("assemblePhoneDebug") {
+    tasks.named("assemblePhoneGithubDebug") {
         finalizedBy("distDebug")
     }
-    tasks.named("assembleTvDebug") {
+    tasks.named("assembleTvGithubDebug") {
         finalizedBy("distDebug")
     }
 }

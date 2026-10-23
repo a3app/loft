@@ -98,6 +98,8 @@
             android:textColor="@color/snow"
             android:textSize="20sp" />
 
+        <include layout="@layout/row_channel" />
+
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

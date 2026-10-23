@@ -528,6 +528,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                         })
                         .setNegativeButton(R.string.cancel, null)
                         .show());
+        Channel.attach(this, settings);
     }
 
     private void fetchExt() {

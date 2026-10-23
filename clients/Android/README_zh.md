@@ -34,4 +34,4 @@ make android                 # 在仓库根目录；需要 Android NDK
 
 写出 `dist/clients/Android/app-debug.apk` 和 `loft.app`。中间文件在 `dist/clients/Android/gradle/`，不进 `clients/Android/`。双击 `loft.app` 会启动 AVD `loft-phone`、安装这份 APK、把 loft、Browser、Apps 和 Settings 钉到主屏并打开 loft。Apps 打开启动器应用抽屉；Settings 打开系统设置。AOSP 没有 Chrome；Browser 是 WebView Shell。Intel Mac + AMD GPU 走 SwiftShader（`-gpu swiftshader_indirect`）；host GLES 会黑屏。
 
-Id：手机 `app.loft.android`，电视 `app.loft.android.tv`。VPN 类型：`VpnService`。每台设备一条系统 VPN。flavor `tv` 是 Leanback。`make -C clients/Android release` 写出 ad-hoc 签名的 `app-release.apk` 和 `app-tv-release.apk`。
+Id：手机 `app.loft.android`，电视 `app.loft.android.tv`。VPN 类型：`VpnService`。每台设备一条系统 VPN。flavor `tv` 是 Leanback。渠道 `github`（默认）是 Dist/旁路安装，带应用内更新；`store` 是 Play，更新代码不编进包。`make -C clients/Android release` 用 `secrets/android-github.p12` 签名，写出 `loft-{ver}-android.apk` 和 `loft-{ver}-android-tv.apk`。第一次钥匙：`make -C clients/Android github-key`。

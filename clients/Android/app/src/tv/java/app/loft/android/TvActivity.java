@@ -661,6 +661,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
             Intent i = new Intent(this, AboutActivity.class);
             startActivity(i);
         });
+        Channel.attach(this, settings);
     }
 
     private void fetchExt() {

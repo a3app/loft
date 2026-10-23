@@ -41,7 +41,20 @@ Path change: `ConnectivityManager.NetworkCallback` on the default network. The s
 | Phone app | API **26**, target **36** |
 | Language | Java 17 |
 | Android TV / Google TV | same AAR; flavor `tv` (`app.loft.android.tv`); 10-foot GUI [`design/tv/`](../clients/Android/design/tv/) |
+| Channel | `github` (Dist / sideload, in-app update) or `store` (Play; updater compiled out) |
 
 ## 5. Emulator
 
 `make android` writes `loft.app` next to `app-debug.apk` in [`dist/clients/Android/`](../dist/clients/Android/). Gradle intermediates stay there under `gradle/`, not in `clients/Android/`. Double-click `loft.app` on macOS: boot AVD `loft-phone`, `adb install -r` that APK, pin loft and Browser (AOSP WebView Shell) on the home screen, start `app.loft.android/.MainActivity`. Payload lives in [`clients/Android/emulator/`](../clients/Android/emulator/). SDK: `ANDROID_HOME` or `/usr/local/share/android-commandlinetools`. Log: `~/Library/Logs/loft-emulator.log`. On Intel Mac with an AMD GPU the window stays black with `-gpu auto` (gfxstream/host GLES); `loft.app` starts the AVD with `-gpu swiftshader_indirect`.
+
+## 6. Channels
+
+Two product flavors on the `channel` dimension, same `applicationId`, different signing keys.
+
+| | `github` (default, Dist) | `store` |
+|--|--|--|
+| In-app update | Settings / About → Check. GitHub Releases, SHA-256, `PackageInstaller`. Install-unknown-apps once; later sessions silent (`USER_ACTION_NOT_REQUIRED`, update-ownership). Auto-check every 6 h on unmetered. | compiled out |
+| Permission | `REQUEST_INSTALL_PACKAGES` | none |
+| Key | `secrets/android-github.p12` (`make -C clients/Android github-key`) | Play App Signing |
+
+`make -C clients/Android release` writes `loft-{ver}-android.apk`, `loft-{ver}-android-tv.apk`, and `loft-android-{ver}-SHA256SUMS.txt`. Dist uploads the same names on a `v*` tag when GitHub secrets `LOFT_ANDROID_KEYSTORE` (base64 of the p12) and `LOFT_ANDROID_KEYSTORE_PASSWORD` are set. Stable names: `loft-android.apk`, `loft-android-tv.apk`, `loft-android-SHA256SUMS.txt`. Debug builds can check; they refuse to install a release APK (different cert).

@@ -10,6 +10,7 @@ public final class LoftApp extends Application {
         super.onCreate();
         Lang.apply(this);
         profiles = new Profiles(this);
+        Channel.boot(this);
     }
 
     public Profiles profiles() {

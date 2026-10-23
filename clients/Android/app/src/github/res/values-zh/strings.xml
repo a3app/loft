@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_github">GitHub</string>
+    <string name="channel_update">更新</string>
+    <string name="channel_update_d">GitHub。允许一次安装后自动更新。</string>
+    <string name="channel_check">检查</string>
+    <string name="channel_allow">允许</string>
+    <string name="channel_perm_d">打开允许 loft 安装，然后返回。之后版本会自行安装。</string>
+    <string name="channel_install">更新</string>
+    <string name="channel_checking">检查中…</string>
+    <string name="channel_downloading">下载中…</string>
+    <string name="channel_installing">安装中…</string>
+    <string name="channel_current">已是最新</string>
+    <string name="channel_available">%s 可用</string>
+    <string name="channel_none">该版本还没有 APK</string>
+    <string name="channel_fail">无法更新</string>
+    <string name="channel_bad_sum">SHA-256 不匹配</string>
+    <string name="channel_bad_sign">签名不匹配</string>
+    <string name="channel_debug">调试版 · 请装 GitHub 正式包</string>
+    <string name="channel_perm">打开允许 loft 安装，然后返回</string>
+</resources>

@@ -41,7 +41,20 @@ Java-пакет `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketPr
 | Приложение телефона | API **26**, target **36** |
 | Язык | Java 17 |
 | Android TV / Google TV | тот же AAR; flavor `tv` (`app.loft.android.tv`); GUI с дивана [`design/tv/`](../clients/Android/design/tv/) |
+| Канал | `github` (Dist / sideload, обновление из приложения) или `store` (Play; код обновления вырезан) |
 
 ## 5. Эмулятор
 
 `make android` пишет `loft.app` рядом с `app-debug.apk` в [`dist/clients/Android/`](../dist/clients/Android/). Промежуточное Gradle — там же в `gradle/`, не в `clients/Android/`. На macOS двойной щелчок: поднять AVD `loft-phone`, `adb install -r` этот APK, положить loft и Browser (AOSP WebView Shell) на домашний экран, запустить `app.loft.android/.MainActivity`. Содержимое — [`clients/Android/emulator/`](../clients/Android/emulator/). SDK: `ANDROID_HOME` или `/usr/local/share/android-commandlinetools`. Журнал: `~/Library/Logs/loft-emulator.log`. На Intel Mac с AMD GPU окно остаётся чёрным при `-gpu auto` (gfxstream/host GLES); `loft.app` поднимает AVD с `-gpu swiftshader_indirect`.
+
+## 6. Каналы
+
+Два product flavor по dimension `channel`, один `applicationId`, разные ключи подписи.
+
+| | `github` (по умолчанию, Dist) | `store` |
+|--|--|--|
+| Обновление | Настройки / О программе → Проверить. GitHub Releases, SHA-256, `PackageInstaller`. Установка из неизвестных источников — один раз; дальше тихо (`USER_ACTION_NOT_REQUIRED`, update-ownership). Автопроверка раз в 6 ч на безлимите. | кода нет |
+| Право | `REQUEST_INSTALL_PACKAGES` | нет |
+| Ключ | `secrets/android-github.p12` (`make -C clients/Android github-key`) | Play App Signing |
+
+`make -C clients/Android release` пишет `loft-{ver}-android.apk`, `loft-{ver}-android-tv.apk` и `loft-android-{ver}-SHA256SUMS.txt`. Dist заливает те же имена на тег `v*`, если заданы секреты `LOFT_ANDROID_KEYSTORE` (base64 от p12) и `LOFT_ANDROID_KEYSTORE_PASSWORD`. Стабильные имена: `loft-android.apk`, `loft-android-tv.apk`, `loft-android-SHA256SUMS.txt`. Debug-сборка умеет проверить и не ставит релизный APK (другой сертификат).

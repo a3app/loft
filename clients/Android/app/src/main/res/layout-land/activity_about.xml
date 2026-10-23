@@ -77,6 +77,12 @@
                         android:includeFontPadding="false"
                         android:textAppearance="@style/TextAppearance.Loft.IprowK"
                         android:textColor="@color/mute" />
+
+                    <include
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="62dp"
+                        layout="@layout/row_channel_about" />
                 </LinearLayout>
 
                 <View

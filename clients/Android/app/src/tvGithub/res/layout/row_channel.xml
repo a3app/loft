@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="24dp"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/channel_update"
+        android:textColor="@color/lamp"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/channel_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/channel_update_d"
+        android:textColor="@color/mute"
+        android:textSize="18sp" />
+
+    <Button
+        android:id="@+id/btn_channel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/tv_focus"
+        android:minHeight="48dp"
+        android:text="@string/channel_check"
+        android:textAllCaps="false"
+        android:textColor="@color/snow" />
+</LinearLayout>

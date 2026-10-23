@@ -64,6 +64,8 @@
                 android:textAppearance="@style/TextAppearance.Loft.IprowK"
                 android:textColor="@color/mute" />
 
+            <include layout="@layout/row_channel_about" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="0dp"

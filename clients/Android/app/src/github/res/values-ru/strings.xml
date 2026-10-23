@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_github">GitHub</string>
+    <string name="channel_update">Обновления</string>
+    <string name="channel_update_d">GitHub. Один раз разреши установку — дальше само.</string>
+    <string name="channel_check">Проверить</string>
+    <string name="channel_allow">Разрешить</string>
+    <string name="channel_perm_d">Включи установку из loft и вернись. Дальше версии ставятся сами.</string>
+    <string name="channel_install">Обновить</string>
+    <string name="channel_checking">Проверка…</string>
+    <string name="channel_downloading">Скачивание…</string>
+    <string name="channel_installing">Установка…</string>
+    <string name="channel_current">Актуально</string>
+    <string name="channel_available">Есть %s</string>
+    <string name="channel_none">В этом релизе ещё нет APK</string>
+    <string name="channel_fail">Не удалось обновить</string>
+    <string name="channel_bad_sum">SHA-256 не совпала</string>
+    <string name="channel_bad_sign">Подпись не совпала</string>
+    <string name="channel_debug">Debug-сборка · поставь релиз с GitHub</string>
+    <string name="channel_perm">Включи установку из loft и вернись</string>
+</resources>

@@ -41,7 +41,20 @@ Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProte
 | 手机应用 | API **26**，target **36** |
 | 语言 | Java 17 |
 | Android TV / Google TV | 同一个 AAR；flavor `tv`（`app.loft.android.tv`）；十英尺 GUI [`design/tv/`](../clients/Android/design/tv/) |
+| 渠道 | `github`（Dist / 旁路安装，应用内更新）或 `store`（Play；更新代码不编进包） |
 
 ## 5. 模拟器
 
 `make android` 把 `loft.app` 和 `app-debug.apk` 写到 [`dist/clients/Android/`](../dist/clients/Android/)。Gradle 中间文件在那里的 `gradle/`，不进 `clients/Android/`。在 macOS 上双击 `loft.app`：启动 AVD `loft-phone`，`adb install -r` 这份 APK，把 loft 和 Browser（AOSP WebView Shell）钉到主屏，打开 `app.loft.android/.MainActivity`。内容在 [`clients/Android/emulator/`](../clients/Android/emulator/)。SDK：`ANDROID_HOME` 或 `/usr/local/share/android-commandlinetools`。日志：`~/Library/Logs/loft-emulator.log`。Intel Mac 配 AMD GPU 时 `-gpu auto`（gfxstream/host GLES）会黑屏；`loft.app` 用 `-gpu swiftshader_indirect` 启动 AVD。
+
+## 6. 渠道
+
+`channel` 维度两个 product flavor，同一个 `applicationId`，签名钥匙不同。
+
+| | `github`（默认，Dist） | `store` |
+|--|--|--|
+| 应用内更新 | 设置 / 关于 → 检查。GitHub Releases，SHA-256，`PackageInstaller`。未知来源安装只开一次；之后静默（`USER_ACTION_NOT_REQUIRED`，update-ownership）。非计费网络每 6 小时自检。 | 不编进包 |
+| 权限 | `REQUEST_INSTALL_PACKAGES` | 无 |
+| 钥匙 | `secrets/android-github.p12`（`make -C clients/Android github-key`） | Play App Signing |
+
+`make -C clients/Android release` 写出 `loft-{ver}-android.apk`、`loft-{ver}-android-tv.apk` 和 `loft-android-{ver}-SHA256SUMS.txt`。Dist 在 `v*` 标签上传这些名字，前提是 GitHub secrets 里有 `LOFT_ANDROID_KEYSTORE`（p12 的 base64）和 `LOFT_ANDROID_KEYSTORE_PASSWORD`。稳定名：`loft-android.apk`、`loft-android-tv.apk`、`loft-android-SHA256SUMS.txt`。调试包可以检查，不会装正式 APK（证书不同）。

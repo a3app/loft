@@ -26,7 +26,7 @@ die() {
 }
 
 APK=""
-for cand in "$DIR"/app-debug.apk "$DIR"/app-release.apk; do
+for cand in "$DIR"/app-debug.apk "$DIR"/app-release.apk "$DIR"/loft-android.apk; do
 	if [ -f "$cand" ]; then
 		APK=$cand
 		break

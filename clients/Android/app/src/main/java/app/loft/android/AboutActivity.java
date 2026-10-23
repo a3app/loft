@@ -26,6 +26,7 @@ public final class AboutActivity extends LoftActivity {
         bindProto(R.id.proto_trojan, R.string.about_trojan_k, R.string.about_trojan_v);
         bindProto(R.id.proto_vless, R.string.about_vless_k, R.string.about_vless_v);
         scaleToScreen();
+        Channel.attach(this);
     }
 
     private void bindProto(int row, int k, int v) {

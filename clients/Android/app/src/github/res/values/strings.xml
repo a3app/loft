@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_github">GitHub</string>
+    <string name="channel_update">Updates</string>
+    <string name="channel_update_d">GitHub. Allow installs once, then it updates itself.</string>
+    <string name="channel_check">Check</string>
+    <string name="channel_allow">Allow</string>
+    <string name="channel_perm_d">Turn on installs from loft, then return. Later versions install themselves.</string>
+    <string name="channel_install">Update</string>
+    <string name="channel_checking">Checking…</string>
+    <string name="channel_downloading">Downloading…</string>
+    <string name="channel_installing">Installing…</string>
+    <string name="channel_current">Up to date</string>
+    <string name="channel_available">%s is ready</string>
+    <string name="channel_none">That release has no APK yet</string>
+    <string name="channel_fail">Could not update</string>
+    <string name="channel_bad_sum">SHA-256 does not match</string>
+    <string name="channel_bad_sign">Signature does not match</string>
+    <string name="channel_debug">Debug build · install a GitHub release</string>
+    <string name="channel_perm">Turn on installs from loft, then return</string>
+</resources>

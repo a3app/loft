@@ -127,7 +127,7 @@ android:
 	$(MAKE) -C clients/Android
 
 # Server packages + CLI archives. macOS .app/.dmg is make macos-dmg / macos-dmgs (needs Xcode).
-# Android APK stays local (make android → dist/clients/Android); not in make dist.
+# Android github-channel APKs: make -C clients/Android release (Dist job when the key secret is set).
 dist: dist-node dist-clients
 
 dist-node: dist-clean-legacy dist-debian dist-deb
