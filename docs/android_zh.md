@@ -31,7 +31,7 @@ Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProte
 
 通过 `Engine.SetProtector` 调 `VpnService.protect(fd)`。前置 IP 从 TUN 路由里减去，API 33+ 再 `excludeRoute`。
 
-路径切换：默认网络上的 `ConnectivityManager.NetworkCallback`。服务先 `setUnderlyingNetworks`，再 `NotifyPathChange`。loft：新的 `0x02`，同一个 `instance_id`。overlay IP 不变。SSTP/VLESS/Trojan 重拨；IPCP 若发新地址就重建 TUN。
+路径切换：默认网络上的 `ConnectivityManager.NetworkCallback`。服务先 `setUnderlyingNetworks`，再 `NotifyPathChange`。GET 重绑 HTTP/2 池（同一个 sid）。其它 loft 前置 Park，再用新的 `0x02` 和同一个 `instance_id`。overlay IP 不变。额外 mux 前置用 `0x04` 挂到 GET。SSTP/VLESS/Trojan 重拨；IPCP 若发新地址就重建 TUN。
 
 ## 4. 门槛
 

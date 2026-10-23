@@ -31,7 +31,7 @@ Java package `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketProte
 
 `VpnService.protect(fd)` via `Engine.SetProtector`. Front IPs are subtracted from TUN routes and also `excludeRoute` on API 33+.
 
-Path change: `ConnectivityManager.NetworkCallback` on the default network. The service calls `setUnderlyingNetworks` then `NotifyPathChange`. loft: fresh `0x02`, same `instance_id`. Overlay IP stays. SSTP/VLESS/Trojan redial; if IPCP issues a new address the TUN is rebuilt.
+Path change: `ConnectivityManager.NetworkCallback` on the default network. The service calls `setUnderlyingNetworks` then `NotifyPathChange`. GET rebinds the HTTP/2 pool (same sid). Other loft fronts Park; resume is a fresh `0x02` and the same `instance_id`. Overlay IP stays. Extra mux fronts join GET with `0x04`. SSTP/VLESS/Trojan redial; if IPCP issues a new address the TUN is rebuilt.
 
 ## 4. Floors
 

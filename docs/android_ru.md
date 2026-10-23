@@ -31,7 +31,7 @@ Java-пакет `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketPr
 
 `VpnService.protect(fd)` через `Engine.SetProtector`. IP фронтов вычитаются из маршрутов TUN и ещё `excludeRoute` на API 33+.
 
-Смена пути: `ConnectivityManager.NetworkCallback` на сеть по умолчанию. Служба зовёт `setUnderlyingNetworks`, затем `NotifyPathChange`. loft: свежий `0x02`, тот же `instance_id`. Overlay IP остаётся. SSTP/VLESS/Trojan — повторный набор; если IPCP выдал новый адрес, TUN собирается заново.
+Смена пути: `ConnectivityManager.NetworkCallback` на сеть по умолчанию. Служба зовёт `setUnderlyingNetworks`, затем `NotifyPathChange`. GET пересобирает пул HTTP/2 (тот же sid). Остальные loft-фронты — Park, затем свежий `0x02` и тот же `instance_id`. Overlay IP остаётся. Лишние mux-фронты садятся на GET через `0x04`. SSTP/VLESS/Trojan — повторный набор; если IPCP выдал новый адрес, TUN собирается заново.
 
 ## 4. Полы
 
