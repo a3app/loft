@@ -178,7 +178,7 @@
     <string name="ext_ip_d">After connect, ask a service for the address through this session.</string>
     <string name="hold_and">On Android these are the system Always-on VPN and Block connections without VPN.</string>
     <string name="split_d">A zone goes through loft or around it. A service only belongs to a zone.</string>
-    <string name="lists">Lists</string>
+    <string name="lists">Routes</string>
     <string name="zones">Zones</string>
     <string name="zone">Zone</string>
     <string name="repository">Repository</string>

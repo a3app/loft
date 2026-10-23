@@ -214,37 +214,34 @@
             android:id="@+id/iprows"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="10dp"
             android:orientation="vertical">
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@color/line" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_iprow"
                 android:gravity="center_vertical"
+                android:minHeight="28dp"
                 android:orientation="horizontal"
-                android:paddingLeft="2dp"
-                android:paddingTop="8dp"
-                android:paddingRight="2dp"
-                android:paddingBottom="8dp">
+                android:paddingTop="5dp"
+                android:paddingBottom="5dp">
 
                 <TextView
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:includeFontPadding="false"
                     android:text="@string/ext_ip"
                     android:textAppearance="@style/TextAppearance.Loft.IprowK"
                     android:textColor="@color/mute" />
 
                 <TextView
                     android:id="@+id/row_ext"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginLeft="12dp"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:includeFontPadding="false"
                     android:textAppearance="@style/TextAppearance.Loft.IprowV"
                     android:textColor="@color/snow" />
             </LinearLayout>
@@ -252,26 +249,28 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_iprow"
                 android:gravity="center_vertical"
+                android:minHeight="28dp"
                 android:orientation="horizontal"
-                android:paddingLeft="2dp"
-                android:paddingTop="8dp"
-                android:paddingRight="2dp"
-                android:paddingBottom="8dp">
+                android:paddingTop="5dp"
+                android:paddingBottom="5dp">
 
                 <TextView
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:includeFontPadding="false"
                     android:text="@string/overlay_ip"
                     android:textAppearance="@style/TextAppearance.Loft.IprowK"
                     android:textColor="@color/mute" />
 
                 <TextView
                     android:id="@+id/row_overlay"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginLeft="12dp"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:includeFontPadding="false"
                     android:textAppearance="@style/TextAppearance.Loft.IprowV"
                     android:textColor="@color/snow" />
             </LinearLayout>
@@ -279,26 +278,28 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_iprow"
                 android:gravity="center_vertical"
+                android:minHeight="28dp"
                 android:orientation="horizontal"
-                android:paddingLeft="2dp"
-                android:paddingTop="8dp"
-                android:paddingRight="2dp"
-                android:paddingBottom="8dp">
+                android:paddingTop="5dp"
+                android:paddingBottom="5dp">
 
                 <TextView
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:includeFontPadding="false"
                     android:text="@string/route"
                     android:textAppearance="@style/TextAppearance.Loft.IprowK"
                     android:textColor="@color/mute" />
 
                 <TextView
                     android:id="@+id/row_route"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginLeft="12dp"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:includeFontPadding="false"
                     android:textAppearance="@style/TextAppearance.Loft.IprowV"
                     android:textColor="@color/snow" />
             </LinearLayout>

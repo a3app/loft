@@ -171,7 +171,7 @@
     <string name="ext_ip_d">После подключения запросить адрес у сервиса через это соединение.</string>
     <string name="hold_and">На Android это системные «VPN всегда включён» и «Блокировать подключения без VPN».</string>
     <string name="split_d">Трафик зоны идёт через loft или в обход. Сервис только принадлежит зоне.</string>
-    <string name="lists">Списки</string>
+    <string name="lists">Маршруты</string>
     <string name="zones">Зоны</string>
     <string name="zone">Зона</string>
     <string name="repository">Репозиторий</string>

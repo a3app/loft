@@ -190,20 +190,15 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         iprows.setVisibility(simple || !on ? View.GONE : View.VISIBLE);
         paintCards(p, on);
         boolean bits = Prefs.rateBits(this);
-        boolean liveRates = on && !conn && (Live.rateDown > 0 || Live.rateUp > 0);
         TextView rateDn = home.findViewById(R.id.rate_dn);
         TextView rateUp = home.findViewById(R.id.rate_up);
-        if (liveRates) {
+        View sparkR = home.findViewById(R.id.spark_r);
+        if (on && !conn) {
             rateDn.setText("↓ " + Cidr.fmt(Live.rateDown, bits));
             rateUp.setText("↑ " + Cidr.fmt(Live.rateUp, bits));
-        }
-        View sparkR = home.findViewById(R.id.spark_r);
-        if (!on || conn) {
-            sparkR.setVisibility(View.GONE);
-        } else if (liveRates) {
             sparkR.setVisibility(View.VISIBLE);
         } else {
-            sparkR.setVisibility(View.INVISIBLE);
+            sparkR.setVisibility(View.GONE);
         }
         spark.setBars(Prefs.sparkBars(this));
         if (conn) {
@@ -519,18 +514,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 startActivity(new Intent(this, LogActivity.class)));
         settings.findViewById(R.id.btn_about).setOnClickListener(v ->
                 startActivity(new Intent(this, AboutActivity.class)));
-        settings.findViewById(R.id.btn_routes).setOnClickListener(v ->
-                startActivity(new Intent(this, ListsActivity.class)));
-        settings.findViewById(R.id.btn_reset).setOnClickListener(v ->
-                new AlertDialog.Builder(this)
-                        .setMessage(R.string.reset_routes_q)
-                        .setPositiveButton(R.string.reset_routes, (a, b) -> {
-                            SplitStore st = new SplitStore();
-                            st.seed();
-                            st.save(this);
-                        })
-                        .setNegativeButton(R.string.cancel, null)
-                        .show());
+        View.OnClickListener openLists = v ->
+                startActivity(new Intent(this, ListsActivity.class));
+        settings.findViewById(R.id.btn_lists).setOnClickListener(openLists);
+        settings.findViewById(R.id.btn_routes).setOnClickListener(openLists);
         settings.findViewById(R.id.btn_defaults).setOnClickListener(v ->
                 new AlertDialog.Builder(this)
                         .setMessage(R.string.defaults_q)

@@ -171,7 +171,7 @@
     <string name="ext_ip_d">连接后通过本会话向服务查询地址。</string>
     <string name="hold_and">在 Android 上这是系统的「始终开启的 VPN」和「阻止不使用 VPN 的连接」。</string>
     <string name="split_d">区域经 loft 或绕过。服务只属于某个区域。</string>
-    <string name="lists">列表</string>
+    <string name="lists">路由</string>
     <string name="zones">区域</string>
     <string name="zone">区域</string>
     <string name="repository">仓库</string>

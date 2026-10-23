@@ -29,11 +29,11 @@
                 android:textColor="@color/snow" />
 
             <Button
-                android:id="@+id/btn_reset"
+                android:id="@+id/btn_lists"
                 style="@style/Widget.Loft.HeadBtn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/reset_routes" />
+                android:text="@string/lists" />
         </LinearLayout>
 
         <TextView
@@ -535,32 +535,41 @@
                 android:layout_height="26dp" />
         </LinearLayout>
 
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:gravity="center"
             android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btn_defaults"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:maxLines="1"
                 android:text="@string/defaults" />
 
             <Button
                 android:id="@+id/btn_log"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:maxLines="1"
                 android:text="@string/log" />
 
             <Button
                 android:id="@+id/btn_about"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:maxLines="1"
                 android:text="@string/about" />
         </LinearLayout>
     </LinearLayout>
