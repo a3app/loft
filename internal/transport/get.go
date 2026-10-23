@@ -380,6 +380,12 @@ func (g *GET) Rebind() error {
 		return fmt.Errorf("get rebind: not live")
 	default:
 	}
+	return g.swapFront()
+}
+
+// swapFront parks the live HTTP pool and dials a fresh one. Mux, sid, and
+// seq stay. In-flight GETs finish on drain or retry the same seq.
+func (g *GET) swapFront() error {
 	n := int(g.liveH2.Load())
 	if n < 1 {
 		n = 1
@@ -760,7 +766,9 @@ func (g *GET) waitCalm(ctx context.Context, seq uint64) bool {
 	}
 }
 
-// dropIdleFront drops a dead HTTP/2 conn so the next GET dials a new one.
+// dropIdleFront parks a dead HTTP pool so the next GET dials a new one.
+// CloseIdleConnections leaves a half-dead persistConn in-use after RST/EOF;
+// the next GET then blocks in Transport.getConn across a radio gap.
 func (g *GET) dropIdleFront() {
 	now := time.Now().UnixNano()
 	prev := g.lastDrop.Load()
@@ -770,6 +778,12 @@ func (g *GET) dropIdleFront() {
 	if !g.lastDrop.CompareAndSwap(prev, now) {
 		return
 	}
+	if err := g.swapFront(); err != nil {
+		g.closeIdleFront()
+	}
+}
+
+func (g *GET) closeIdleFront() {
 	g.poolMu.Lock()
 	cs := append([]*http.Client(nil), g.clients...)
 	ds := make([]*http.Client, len(g.drain))

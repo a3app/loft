@@ -1642,27 +1642,40 @@ func TestRetryableGET(t *testing.T) {
 	}
 }
 
-// TestGETRadioGapKeepsSession retries hijacked GETs on the same sid; mux stays.
-func TestGETRadioGapKeepsSession(t *testing.T) {
-	echo, err := net.Listen("tcp", "127.0.0.1:0")
+// TestDropIdleFrontReplacesClient parks the live Transport so getConn
+// cannot stick on a half-dead persistConn after RST.
+func TestDropIdleFrontReplacesClient(t *testing.T) {
+	g, err := NewGET("test-token-please-change", config.Outbound{
+		Type: "get", URL: "http://127.0.0.1:1", Path: "/static/v3/build",
+		Fingerprint: "go", HeaderBudget: 4096, Inflight: 1, Insecure: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer echo.Close()
-	go func() {
-		for {
-			c, err := echo.Accept()
-			if err != nil {
-				return
-			}
-			go func(c net.Conn) {
-				defer c.Close()
-				_, _ = io.Copy(c, c)
-			}(c)
-		}
-	}()
+	old := g.client
+	if old == nil || len(g.clients) == 0 {
+		t.Fatal("no client")
+	}
+	g.dropIdleFront()
+	if g.client == nil || g.client == old {
+		t.Fatal("client not replaced")
+	}
+	if g.clients[0] != g.client {
+		t.Fatal("pool stale")
+	}
+	g.lastDrop.Store(0)
+	g.dropIdleFront()
+	if g.client == old {
+		t.Fatal("second replace reused first Transport")
+	}
+}
 
-	var cuts atomic.Int32
+// TestGETRadioGapKeepsSession retries a dropped GET on the same sid; mux stays.
+func TestGETRadioGapKeepsSession(t *testing.T) {
+	t.Cleanup(clearClientHold)
+	echo := echoListener(t)
+
+	var live, cut atomic.Bool
 	const token = "test-token-please-change"
 	gs := NewGETServer(token, "/static/v3/build")
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1670,7 +1683,7 @@ func TestGETRadioGapKeepsSession(t *testing.T) {
 			gs.ServeHTTP(w, r)
 			return
 		}
-		if cuts.Add(1) == 1 {
+		if live.Load() && cut.CompareAndSwap(false, true) {
 			hj, ok := w.(http.Hijacker)
 			if !ok {
 				t.Error("hijack")
@@ -1686,18 +1699,7 @@ func TestGETRadioGapKeepsSession(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	g, err := NewGET(token, config.Outbound{
-		Type: "get", URL: ts.URL, Path: "/static/v3/build",
-		Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	if err := g.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
+	g := startGET(t, ts.URL, 2)
 	defer g.Close()
 
 	conn, err := g.Open(echo.Addr().String())
@@ -1705,24 +1707,30 @@ func TestGETRadioGapKeepsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(20 * time.Second))
-	if _, err := conn.Write([]byte("hold-gap")); err != nil {
-		t.Fatal(err)
+	ping := func(s string) {
+		t.Helper()
+		_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
+		if _, err := conn.Write([]byte(s)); err != nil {
+			t.Fatal(err)
+		}
+		buf := make([]byte, len(s))
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			t.Fatal(err)
+		}
+		if string(buf) != s {
+			t.Fatalf("got %q", buf)
+		}
 	}
-	buf := make([]byte, 8)
-	if _, err := io.ReadFull(conn, buf); err != nil {
-		t.Fatal(err)
-	}
-	if string(buf) != "hold-gap" {
-		t.Fatalf("got %q", buf)
-	}
+	ping("hold-gap")
+	live.Store(true)
+	ping("aftergap")
 	select {
 	case <-g.Done():
 		t.Fatal("front died across radio gap")
 	default:
 	}
-	if cuts.Load() < 1 {
-		t.Fatalf("cuts=%d", cuts.Load())
+	if !cut.Load() {
+		t.Fatal("no cut")
 	}
 }
 
