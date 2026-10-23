@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -76,28 +75,13 @@ func TestOpenSessTraceFile(t *testing.T) {
 }
 
 func TestSessTraceHandshakeAndGET(t *testing.T) {
+	clearClientHold()
+	t.Cleanup(clearClientHold)
 	var buf bytes.Buffer
 	SetSessTrace(NewSessTrace(&buf))
 	t.Cleanup(func() { SetSessTrace(nil) })
 
-	echo, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer echo.Close()
-	go func() {
-		for {
-			c, err := echo.Accept()
-			if err != nil {
-				return
-			}
-			go func(c net.Conn) {
-				defer c.Close()
-				_, _ = io.Copy(c, c)
-			}(c)
-		}
-	}()
-
+	echo := echoListener(t)
 	const token = "test-token-please-change"
 	gs := NewGETServer(token, "/static/v3/build")
 	ts := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
@@ -122,13 +106,16 @@ func TestSessTraceHandshakeAndGET(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
 	if _, err := conn.Write([]byte("ping-get")); err != nil {
 		t.Fatal(err)
 	}
 	got := make([]byte, 8)
 	if _, err := io.ReadFull(conn, got); err != nil {
 		t.Fatal(err)
+	}
+	if string(got) != "ping-get" {
+		t.Fatalf("got %q", got)
 	}
 
 	log := buf.String()

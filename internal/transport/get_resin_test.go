@@ -255,6 +255,8 @@ func echoListener(t *testing.T) net.Listener {
 
 func startGET(t *testing.T, url string, inflight int) *GET {
 	t.Helper()
+	clearClientHold()
+	t.Cleanup(clearClientHold)
 	g, err := NewGET("test-token-please-change", config.Outbound{
 		Type: "get", URL: url, Path: "/static/v3/build",
 		Fingerprint: "go", HeaderBudget: 4096, Inflight: inflight, Insecure: true,
