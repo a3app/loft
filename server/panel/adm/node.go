@@ -51,6 +51,9 @@ func (o *Ops) NodeInfo() (admproto.NodeInfo, error) {
 	}
 	in := admproto.NodeInfo{Advertise: c.Advertise, GetPath: c.GetPath, WSPath: c.WSPath, H2Path: c.H2Path, H3Path: c.H3Path, RosterPath: c.RosterPath,
 		Fronts: c.EnabledFronts(), Decoy: c.Decoy, Mask: c.Mask}
+	if c.Mask && len(c.Decoy) > 0 {
+		in.MaskPub = o.maskPubB64()
+	}
 	if u, err := url.Parse(c.Advertise); err == nil {
 		in.Host = u.Hostname()
 	}

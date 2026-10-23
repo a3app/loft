@@ -60,7 +60,7 @@ Draft vs applied: every change stays in a draft. A bar shows how many lines diff
 
 Tabs: Main (role, listen, advertise, certificate from Domains, fronts — default GET; ws/h2/quic/h3 opt-in, `get_h2`), Masking (decoy list, `mask` and `pbk`, cover site, request paths), Relays and CDN (`enrol`, `relays[]`, `cdn_peers`), Lists (signed lists for clients; egress rules reuse them), Access (controller key, shared token, token rotation, trace).
 
-QUIC and HTTP/3 are shown greyed with the reason while decoy is on.
+QUIC and HTTP/3 stay selectable while decoy is on: the node advertises `quic_mark` / `h3_mark` instead of raw quic/h3. Member `loft://` includes query `pbk` when mask is on.
 
 ## 6. Network and IP
 

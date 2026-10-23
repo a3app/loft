@@ -109,9 +109,24 @@ func TestMemberLinkQueryFronts(t *testing.T) {
 	if !strings.Contains(file, "type: get") || strings.Contains(file, "type: ws") {
 		t.Fatalf("file %s", file)
 	}
-	getOnly, _ := s.memberLink(admproto.NodeInfo{Host: "huy.com", GetPath: "/static/js"}, "lt_abc", "bob", "bob")
+	if !strings.Contains(file, "fronts: [get, ws, h2, quic]") {
+		t.Fatalf("hello fronts %s", file)
+	}
+	getOnly, getFile := s.memberLink(admproto.NodeInfo{Host: "huy.com", GetPath: "/static/js"}, "lt_abc", "bob", "bob")
 	if getOnly != "loft://lt_abc@huy.com/?get=/static/js&fp=chrome#bob" {
 		t.Fatalf("get-only %s", getOnly)
+	}
+	if strings.Contains(getFile, "fronts:") || strings.Contains(getFile, "mask_pub:") {
+		t.Fatalf("get-only file %s", getFile)
+	}
+	masked, maskedFile := s.memberLink(admproto.NodeInfo{
+		Host: "huy.com", GetPath: "/static/js", Mask: true, MaskPub: "cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc09443",
+	}, "lt_abc", "bob", "bob")
+	if !strings.Contains(masked, "pbk=cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc09443") {
+		t.Fatalf("pbk %s", masked)
+	}
+	if !strings.Contains(maskedFile, "mask_pub: cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc09443") {
+		t.Fatalf("yaml pbk %s", maskedFile)
 	}
 }
 

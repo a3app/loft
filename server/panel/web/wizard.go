@@ -311,8 +311,9 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // memberLink is the loft:// address (docs/share.md §2) and a .loft file with a
-// GET outbound. Query get=/ws=/h2= lists node fronts; YAML stays GET-only so
-// the client learns the rest from Status. conn is the connection name;
+// GET outbound. Query get=/ws=/h2= lists node fronts; YAML keeps one GET
+// outbound and a fronts: list so Hello offers mux caps for 0x04 attach.
+// Status remains source of truth for paths. conn is the connection name;
 // memberID is the outbound-name part «член».
 func (s *Server) memberLink(in admproto.NodeInfo, key, conn, memberID string) (string, string) {
 	host := in.Host
@@ -326,6 +327,9 @@ func (s *Server) memberLink(in admproto.NodeInfo, key, conn, memberID string) (s
 	ob := st.OutboundName(host, memberID, "get")
 	var b strings.Builder
 	fmt.Fprintf(&b, "name: %q\nkind: loft\ntoken: %q\nselect: auto\n", conn, key)
+	if fronts := loftMuxFronts(in); len(fronts) > 1 {
+		fmt.Fprintf(&b, "fronts: [%s]\n", strings.Join(fronts, ", "))
+	}
 	if in.RosterPath != "" {
 		fmt.Fprintf(&b, "bootstrap: https://%s%s\n", host, in.RosterPath)
 	}
@@ -337,6 +341,9 @@ func (s *Server) memberLink(in admproto.NodeInfo, key, conn, memberID string) (s
 		getP = config.DefaultGETPath
 	}
 	fmt.Fprintf(&b, "outbounds:\n  - name: %q\n    type: get\n    url: https://%s\n    path: %s\n    fingerprint: chrome\n", ob, host, getP)
+	if in.MaskPub != "" {
+		fmt.Fprintf(&b, "    mask_pub: %s\n", in.MaskPub)
+	}
 	return link, b.String()
 }
 
@@ -392,7 +399,28 @@ func loftFrontQuery(in admproto.NodeInfo) string {
 		add("quic", "")
 	}
 	add("fp", "chrome")
+	if in.MaskPub != "" {
+		add("pbk", in.MaskPub)
+	}
 	return strings.Join(q, "&")
+}
+
+// loftMuxFronts is get/ws/h2/quic/h3 from NodeInfo in FrontOrder. l3/connect stay off Hello.
+func loftMuxFronts(in admproto.NodeInfo) []string {
+	enabled := map[string]bool{}
+	for _, f := range in.Fronts {
+		enabled[strings.ToLower(strings.TrimSpace(f))] = true
+	}
+	if len(enabled) == 0 {
+		return []string{"get"}
+	}
+	var out []string
+	for _, f := range []string{"get", "ws", "h2", "quic", "h3"} {
+		if enabled[f] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func loftQueryVal(s string) string {

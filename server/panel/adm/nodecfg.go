@@ -39,6 +39,20 @@ func (o *Ops) nodeToken() string {
 	return ""
 }
 
+// maskPubB64 is the node's X25519 mask public as base64url. Derived from
+// LOFT_TOKEN only (NewMask must not run here: it starts origin-cert refresh).
+func (o *Ops) maskPubB64() string {
+	tok := o.nodeToken()
+	if tok == "" {
+		return ""
+	}
+	pub := transport.NodeMaskPub([]byte(tok))
+	if len(pub) != 32 {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(pub)
+}
+
 // NodeConfig is node.conf, lists.conf and the node's state.
 func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 	c, err := config.LoadServer(o.nodeConf())
@@ -58,9 +72,7 @@ func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 	for _, r := range c.Relays {
 		v.Relays = append(v.Relays, admproto.Relay{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: int(r.Weight), Drain: r.Drain})
 	}
-	if tok := o.nodeToken(); tok != "" && len(c.Decoy) > 0 {
-		v.MaskPub = base64.RawURLEncoding.EncodeToString(transport.NewMask([]byte(tok), c.Decoy[0]).Public())
-	}
+	v.MaskPub = o.maskPubB64()
 	if in, err := o.NodeInfo(); err == nil {
 		v.ControllerPub = in.ControllerPub
 	}

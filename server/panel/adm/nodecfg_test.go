@@ -35,9 +35,13 @@ func TestNodeSave(t *testing.T) {
 	fn.reload = true
 	os.WriteFile(filepath.Join(o.Etc, "node.conf"), []byte(nodeConf0), 0o640)
 	ctx := context.Background()
+	os.WriteFile(filepath.Join(o.Etc, "loft.env"), []byte("LOFT_TOKEN=test-token-please-change\n"), 0o640)
 	v, err := o.NodeConfig(ctx)
 	if err != nil || v.Listen != ":443" || len(v.Fronts) != 1 || v.Fronts[0] != "get" || v.Decoy[0] != "127.0.0.1:8443" {
 		t.Fatalf("%+v %v", v, err)
+	}
+	if v.MaskPub == "" {
+		t.Fatal("mask_pub empty with token")
 	}
 	in := v
 	in.Decoy = []string{"127.0.0.1:9000"}

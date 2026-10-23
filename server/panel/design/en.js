@@ -1336,6 +1336,7 @@ window.LOFT_EN = {
   "С самоподписанным сертификатом браузеры и приложения предупреждают.": "With a self-signed certificate, browsers and apps show warnings.",
   "Сайт веб-почты не принят nginx: $": "nginx refused the webmail site: $",
   "Сайт для посторонних": "Site for outsiders",
+  "С decoy клиент помечает QUIC Initial (quic_mark / h3_mark).": "With a decoy the client marks the QUIC Initial (quic_mark / h3_mark).",
   "Сбросить пароль можно на самом сервере": "The password can be reset on the server itself",
   "Свернуть": "Collapse",
   "Свернуть меню": "Collapse menu",

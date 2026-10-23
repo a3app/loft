@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"math/big"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/server/panel/admproto"
 )
 
@@ -69,6 +71,31 @@ func TestNodeInfo(t *testing.T) {
 	// ed25519 public key of the all-zero seed
 	if in.ControllerPub != "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29" {
 		t.Fatalf("pub %s", in.ControllerPub)
+	}
+	if in.MaskPub != "" {
+		t.Fatalf("pbk with mask off: %s", in.MaskPub)
+	}
+}
+
+func TestNodeInfoMaskPub(t *testing.T) {
+	o, _ := nodeSetup(t)
+	os.WriteFile(filepath.Join(o.Etc, "loft.env"), []byte("LOFT_TOKEN=test-token-please-change\n"), 0o640)
+	in, err := o.NodeInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.MaskPub != "" {
+		t.Fatalf("mask off exported pbk %s", in.MaskPub)
+	}
+	conf, _ := os.ReadFile(filepath.Join(o.Etc, "node.conf"))
+	os.WriteFile(filepath.Join(o.Etc, "node.conf"), []byte("mask enable\n"+string(conf)), 0o640)
+	in, err = o.NodeInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := base64.RawURLEncoding.EncodeToString(transport.NodeMaskPub([]byte("test-token-please-change")))
+	if !in.Mask || in.MaskPub != want {
+		t.Fatalf("%+v want %s", in, want)
 	}
 }
 

@@ -205,18 +205,19 @@ func (c Client) Call(ctx context.Context, op string, body, out any) error {
 
 // NodeInfo is what a member link needs from node.conf and the controller seed.
 type NodeInfo struct {
-	Advertise     string   `json:"advertise"`      // https://host[:port]
-	Host          string   `json:"host"`           // host of Advertise
-	GetPath       string   `json:"get_path"`       // GET front path
-	WSPath        string   `json:"ws_path"`        // WebSocket front path
-	H2Path        string   `json:"h2_path"`        // HTTP/2 CONNECT path
-	H3Path        string   `json:"h3_path"`        // HTTP/3 CONNECT path; empty = H2Path
-	RosterPath    string   `json:"roster_path"`    // signed roster, the client bootstrap
-	Fronts        []string `json:"fronts"`         // enabled; empty = GET
-	Decoy         []string `json:"decoy"`          // splice origins
-	Mask          bool     `json:"mask"`           // pbk would be needed (not exported here)
-	ControllerPub string   `json:"controller_pub"` // Ed25519 hex, for client pinning
-	Panel         string   `json:"panel"`          // names the panel answers to (PANEL_HOSTS)
+	Advertise     string   `json:"advertise"`          // https://host[:port]
+	Host          string   `json:"host"`               // host of Advertise
+	GetPath       string   `json:"get_path"`           // GET front path
+	WSPath        string   `json:"ws_path"`            // WebSocket front path
+	H2Path        string   `json:"h2_path"`            // HTTP/2 CONNECT path
+	H3Path        string   `json:"h3_path"`            // HTTP/3 CONNECT path; empty = H2Path
+	RosterPath    string   `json:"roster_path"`        // signed roster, the client bootstrap
+	Fronts        []string `json:"fronts"`             // enabled; empty = GET
+	Decoy         []string `json:"decoy"`              // splice origins
+	Mask          bool     `json:"mask"`               // borrowed-cert mask on the loft TLS path
+	MaskPub       string   `json:"mask_pub,omitempty"` // base64url X25519; empty = mask off / omit pbk
+	ControllerPub string   `json:"controller_pub"`     // Ed25519 hex, for client pinning
+	Panel         string   `json:"panel"`              // names the panel answers to (PANEL_HOSTS)
 }
 
 // DomainSet names the server: Name is what clients dial (node advertise);

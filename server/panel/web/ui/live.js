@@ -1661,7 +1661,7 @@
         <div><div class="fld"><label for="nd3">Адрес для клиентов</label><input id="nd3" class="mono" value="${esc(c.advertise.replace(/^https:\/\//, ''))}" readonly></div><div class="hint">Меняется в мастере установки — шаг «Домен и DNS».</div></div>
         <div><div class="fld"><label for="nd4">Сертификат</label><input id="nd4" class="mono" value="${esc((c.cert_names || []).join(', ') || '—')}${c.cert_until ? ' · до ' + new Date(c.cert_until).toLocaleDateString(LOC()) : ''}" readonly></div><div class="hint">Выпускается в мастере установки и продлевается сам.</div></div>`)) +
       blk('Фронты', 'Публичный путь — GET. Остальные фронты включаются здесь, если нужен прямой origin без CDN.',
-        `<div class="rules">${FR.map(([k, l, h]) => `<label class="rule chk" style="cursor:pointer"><input type="checkbox" ${d.fronts.includes(k) ? 'checked' : ''} ${dis()} onchange="LIVE.ndFront('${k}',this.checked)"><span><b>${l}</b> <span class="mono mute">${k}</span><span class="hint" style="display:block;margin:0">${h}</span></span></label>`).join('')}</div>
+        `<div class="rules">${FR.map(([k, l, h]) => `<label class="rule chk" style="cursor:pointer"><input type="checkbox" ${d.fronts.includes(k) ? 'checked' : ''} ${dis()} onchange="LIVE.ndFront('${k}',this.checked)"><span><b>${l}</b> <span class="mono mute">${k}</span><span class="hint" style="display:block;margin:0">${h}${udpDecoy && (k === 'quic' || k === 'h3') ? ' С decoy клиент помечает QUIC Initial (quic_mark / h3_mark).' : ''}</span></span></label>`).join('')}</div>
         <div class="fgrid" style="margin-top:20px"><div><div class="fld"><label for="nd5">Соединений HTTP/2 для GET</label><select id="nd5" ${dis()} onchange="LIVE.ndSet('get_h2',+this.value)">${[1, 2, 3, 4].map(x => `<option ${d.get_h2 === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div class="hint">Сколько параллельных HTTP/2-соединений клиент держит для фронта GET.</div></div></div>`);
   }
   function ndMask() {
@@ -1671,7 +1671,7 @@
         (own ? `<div class="acts" style="margin-top:16px"><button class="btn" type="button" onclick="LIVE.ndDecoyAdd()">${ic('i-plus')}Добавить адрес</button></div>` : '') + '<p class="hint">Первый адрес принимает постороннее; следующие — запасные.</p>') +
       blk('Маскировка рукопожатия', 'Рукопожатие loft прячется в обычный TLS. Ключ маскировки выводится из токена ноды и входит в ссылки членов (pbk).',
         `<div class="card"><label class="sw" style="margin-bottom:16px"><input type="checkbox" ${d.mask ? 'checked' : ''} ${dis()} aria-label="Маскировка" onchange="LIVE.ndSet('mask',this.checked)"><i></i><span>Маскировать рукопожатие</span></label>
-        <dl class="kv"><div><dt>Ключ pbk</dt><dd class="mono">${esc(L.nd.mask_pub ? L.nd.mask_pub.slice(0, 6) + '…' + L.nd.mask_pub.slice(-4) : '—')}</dd></div></dl></div>`) +
+        <div class="uri" id="ndpbk" style="margin-bottom:12px">${esc(L.nd.mask_pub || '—')}</div>${L.nd.mask_pub ? `<div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.copy('#ndpbk')">Копировать</button></div>` : ''}</div>`) +
       blk('Сайт для посторонних', 'Что видит браузер, открывший адрес ноды, если веб-сервера за нодой нет.', grid(`<div class="fld"><label for="mk1">Каталог сайта</label><input id="mk1" class="mono" value="${esc(d.cover_dir)}" placeholder="встроенная страница" ${dis()} onchange="LIVE.ndSet('cover_dir',this.value.trim())"></div>`)) +
       blk('Пути запросов', 'Пути, похожие на статику и API обычного сайта. Менять их стоит, только если их кто-то начал блокировать — новые ссылки членам придётся выдать заново.', grid(
         [['get_path', 'GET'], ['ws_path', 'WebSocket'], ['h2_path', 'HTTP/2 и HTTP/3'], ['roster_path', 'Список ретрансляторов'], ['lists_path', 'Списки']].map(([k, l]) => `<div class="fld"><label for="pp-${k}">${l}</label><input id="pp-${k}" class="mono" value="${esc(d[k])}" ${dis()} onchange="LIVE.ndSet('${k}',this.value.trim())"></div>`).join('')));
@@ -1773,7 +1773,7 @@
     try { L.pres = await api('GET', '/api/presence'); } catch (e) { return; }
     for (const id of Object.keys(L.pres.members || {})) {
       const x = L.pres.members[id];
-      EXTRA[id] = ['loft', `${x.online} / ${Math.max(x.devices, x.online)}`, x.online ? 'сейчас' : agoT(x.last), x.online ? 1 : 0];
+      EXTRA[id] = [x.front ? 'loft · ' + x.front : 'loft', `${x.online} / ${Math.max(x.devices, x.online)}`, x.online ? 'сейчас' : agoT(x.last), x.online ? 1 : 0];
     }
   }
   L.loadPresence = loadPresence;
