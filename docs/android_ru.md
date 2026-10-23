@@ -2,7 +2,7 @@
 
 [English](android.md) · **Русский** · [中文](android_zh.md)
 
-Как loft работает на телефоне, затем на Android TV / Google TV. Каталог: [clients/Android/](../clients/Android/). План: [clients/Android/PLAN.md](../clients/Android/PLAN.md). Движок: [clients/mobile/](../clients/mobile/). Протокол: [protocol.md](protocol.md). URI импорта: [share.md](share.md). UX: [clients/Android/design/DESIGN_ru.md](../clients/Android/design/DESIGN_ru.md). Макет телефона: [clients/Android/design/index.html](../clients/Android/design/index.html). Макет TV: [clients/Android/design/tv/](../clients/Android/design/tv/).
+Как loft работает на телефоне, затем на Android TV / Google TV. Каталог: [clients/Android/](../clients/Android/). Движок: [clients/mobile/](../clients/mobile/). Протокол: [protocol.md](protocol.md). URI импорта: [share.md](share.md). UX: [clients/Android/design/DESIGN_ru.md](../clients/Android/design/DESIGN_ru.md). Макет телефона: [clients/Android/design/index.html](../clients/Android/design/index.html). Макет TV: [clients/Android/design/tv/](../clients/Android/design/tv/).
 
 Адаптер — Java 17 Views. Сессия — Go. Overlay — обычная сеть Android (одна строка VPN): `protect(fd)`, `NetworkCallback` → `NotifyPathChange`, dual-stack из Snapshot.
 
@@ -40,7 +40,7 @@ Java-пакет `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketPr
 | AAR движка | API **24** |
 | Приложение телефона | API **26**, target **36** |
 | Язык | Java 17 |
-| Android TV / Google TV | тот же AAR; макет [`design/tv/`](../clients/Android/design/tv/); Leanback flavor позже ([план](../clients/Android/PLAN.md) фаза 4) |
+| Android TV / Google TV | тот же AAR; flavor `tv` (`app.loft.android.tv`); GUI с дивана [`design/tv/`](../clients/Android/design/tv/) |
 
 ## 5. Эмулятор
 

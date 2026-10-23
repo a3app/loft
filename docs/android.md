@@ -2,7 +2,7 @@
 
 **English** · [Русский](android_ru.md) · [中文](android_zh.md)
 
-How loft runs on a phone, then Android TV / Google TV. Catalog: [clients/Android/](../clients/Android/). Plan: [clients/Android/PLAN.md](../clients/Android/PLAN.md). Engine: [clients/mobile/](../clients/mobile/). Protocol: [protocol.md](protocol.md). Import URI: [share.md](share.md). UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). Phone mock: [clients/Android/design/index.html](../clients/Android/design/index.html). TV mock: [clients/Android/design/tv/](../clients/Android/design/tv/).
+How loft runs on a phone, then Android TV / Google TV. Catalog: [clients/Android/](../clients/Android/). Engine: [clients/mobile/](../clients/mobile/). Protocol: [protocol.md](protocol.md). Import URI: [share.md](share.md). UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). Phone mock: [clients/Android/design/index.html](../clients/Android/design/index.html). TV mock: [clients/Android/design/tv/](../clients/Android/design/tv/).
 
 The adapter is Java 17 Views. The session is Go. The overlay is a first-class Android network (one VPN row): `protect(fd)`, `NetworkCallback` → `NotifyPathChange`, dual-stack from Snapshot.
 
@@ -40,7 +40,7 @@ Path change: `ConnectivityManager.NetworkCallback` on the default network. The s
 | Engine AAR | API **24** |
 | Phone app | API **26**, target **36** |
 | Language | Java 17 |
-| Android TV / Google TV | same AAR; 10-foot mock [`design/tv/`](../clients/Android/design/tv/); Leanback flavor later ([PLAN](../clients/Android/PLAN.md) phase 4) |
+| Android TV / Google TV | same AAR; flavor `tv` (`app.loft.android.tv`); 10-foot GUI [`design/tv/`](../clients/Android/design/tv/) |
 
 ## 5. Emulator
 

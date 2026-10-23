@@ -2,7 +2,7 @@
 
 [English](android.md) · [Русский](android_ru.md) · **中文**
 
-loft 在手机上怎么跑，然后是 Android TV / Google TV。目录：[clients/Android/](../clients/Android/)。计划：[clients/Android/PLAN.md](../clients/Android/PLAN.md)。引擎：[clients/mobile/](../clients/mobile/)。协议：[protocol_zh.md](protocol_zh.md)。导入 URI：[share_zh.md](share_zh.md)。UX：[clients/Android/design/DESIGN_zh.md](../clients/Android/design/DESIGN_zh.md)。手机模型：[clients/Android/design/index.html](../clients/Android/design/index.html)。电视模型：[clients/Android/design/tv/](../clients/Android/design/tv/)。
+loft 在手机上怎么跑，然后是 Android TV / Google TV。目录：[clients/Android/](../clients/Android/)。引擎：[clients/mobile/](../clients/mobile/)。协议：[protocol_zh.md](protocol_zh.md)。导入 URI：[share_zh.md](share_zh.md)。UX：[clients/Android/design/DESIGN_zh.md](../clients/Android/design/DESIGN_zh.md)。手机模型：[clients/Android/design/index.html](../clients/Android/design/index.html)。电视模型：[clients/Android/design/tv/](../clients/Android/design/tv/)。
 
 适配器是 Java 17 Views。会话是 Go。overlay 是 Android 上的一条网络（一条 VPN）：`protect(fd)`，`NetworkCallback` → `NotifyPathChange`，Snapshot 双栈。
 
@@ -40,7 +40,7 @@ Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProte
 | 引擎 AAR | API **24** |
 | 手机应用 | API **26**，target **36** |
 | 语言 | Java 17 |
-| Android TV / Google TV | 同一个 AAR；十英尺模型 [`design/tv/`](../clients/Android/design/tv/)；Leanback flavor 以后再说（[计划](../clients/Android/PLAN.md) 第 4 阶段） |
+| Android TV / Google TV | 同一个 AAR；flavor `tv`（`app.loft.android.tv`）；十英尺 GUI [`design/tv/`](../clients/Android/design/tv/) |
 
 ## 5. 模拟器
 

@@ -2,7 +2,7 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-Общая сессия Go для **iOS Packet Tunnel** и **Android VpnService**. Позже тот же bind даёт flavor Android TV / Google TV (тот же AAR) и слайс tvOS (Apple TV, фаза 6 плана). Без GUI. Без `loft-front`. Протокол 1.0 не меняется.
+Общая сессия Go для **iOS Packet Tunnel** и **Android VpnService** (flavor телефона и TV, тот же AAR). Позже тот же bind может дать слайс tvOS (Apple TV, iOS PLAN фаза 6). Без GUI. Без `loft-front`. Протокол 1.0 не меняется.
 
 Каталог iOS: [../iOS/](../iOS/). Каталог Android: [../Android/](../Android/). URI импорта: [docs/share_ru.md](../../docs/share_ru.md).
 

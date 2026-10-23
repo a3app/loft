@@ -2,7 +2,7 @@
 
 [English](README.md) · [Русский](README_ru.md) · **中文**
 
-共用的 Go 会话，给 **iOS Packet Tunnel** 和 **Android VpnService**。后面同一个 bind 再出 Android TV / Google TV 的 flavor（还是那个 AAR），以及 tvOS 切片（Apple TV，计划第 6 阶段）。没有 GUI。没有 `loft-front`。协议 1.0 不变。
+共用的 Go 会话，给 **iOS Packet Tunnel** 和 **Android VpnService**（手机和电视 flavor，同一个 AAR）。后面同一个 bind 可以再出 tvOS 切片（Apple TV，iOS PLAN 第 6 阶段）。没有 GUI。没有 `loft-front`。协议 1.0 不变。
 
 iOS 产品目录：[../iOS/](../iOS/)。Android 产品目录：[../Android/](../Android/)。导入 URI：[docs/share_zh.md](../../docs/share_zh.md)。
 

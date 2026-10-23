@@ -12,7 +12,7 @@
 | [`Keenetic/`](Keenetic/) | Entware / OpkgTun. План: [`Keenetic/PLAN.md`](Keenetic/PLAN.md). Макет: [`Keenetic/design/index.html`](Keenetic/design/index.html) |
 | [`MikroTik/`](MikroTik/) | Контейнер RouterOS 7. Макет: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Тонкий хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md) фаза 6 |
-| [`Android/`](Android/) | VpnService. Тонкий хост Java. Макет: [`Android/design/index.html`](Android/design/index.html). Android TV / Google TV: [`Android/PLAN.md`](Android/PLAN.md) фаза 4 |
+| [`Android/`](Android/) | VpnService. Тонкий хост Java. Flavor телефона и TV. Макет: [`Android/design/index.html`](Android/design/index.html) |
 | [`Sailfish/`](Sailfish/) | Оверлей ConnMan. Тонкий хост QML + loft-front. ОС Аврора — RPM OMP. Макет: [`Sailfish/design/index.html`](Sailfish/design/index.html) |
 | [`mobile/`](mobile/) | Общий движок Go (`gomobile bind`). Без GUI. |
 

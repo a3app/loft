@@ -47,7 +47,7 @@ clients/
   Keenetic/           Entware OpkgTun catalog (plan and mock; no binary yet)
   MikroTik/           RouterOS 7 container (image + .rsc; SOCKS first; not Dist)
   iOS/                Packet Tunnel (thin host + appex; gomobile xcframework; Apple TV in PLAN phase 6)
-  Android/            VpnService (thin Java host; gomobile AAR; UX mock; Android TV / Google TV in PLAN phase 4)
+  Android/            VpnService (thin Java host; gomobile AAR; phone + TV flavors)
   Sailfish/           ConnMan overlay (QML host + loft-connman plugin + loft-front; Aurora is the OMP RPM)
   mobile/             shared Go engine for iOS/Android (loft, SSTP, VLESS)
 ```

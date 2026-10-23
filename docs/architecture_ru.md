@@ -47,7 +47,7 @@ clients/
   Keenetic/           каталог Entware OpkgTun (план и макет; сборки ещё нет)
   MikroTik/           контейнер RouterOS 7 (образ + .rsc; сначала SOCKS; не в Dist)
   iOS/                Packet Tunnel (тонкий хост + appex; gomobile xcframework; Apple TV в плане, фаза 6)
-  Android/            VpnService (тонкий хост Java; gomobile AAR; UX-макет; Android TV / Google TV в плане, фаза 4)
+  Android/            VpnService (тонкий хост Java; gomobile AAR; flavor телефона и TV)
   Sailfish/           оверлей ConnMan (хост QML + плагин loft-connman + loft-front; Аврора — RPM OMP)
   mobile/             общий движок Go для iOS/Android (loft, SSTP, VLESS)
 ```

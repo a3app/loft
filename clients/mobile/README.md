@@ -2,7 +2,7 @@
 
 **English** · [Русский](README_ru.md) · [中文](README_zh.md)
 
-Shared Go session for **iOS Packet Tunnel** and **Android VpnService**. Later the same bind produces an Android TV / Google TV flavor (same AAR) and a tvOS slice (Apple TV, PLAN phase 6). No GUI. No `loft-front`. Protocol 1.0 is unchanged.
+Shared Go session for **iOS Packet Tunnel** and **Android VpnService** (phone and TV flavors, same AAR). A later bind may add a tvOS slice (Apple TV, iOS PLAN phase 6). No GUI. No `loft-front`. Protocol 1.0 is unchanged.
 
 iOS catalog: [../iOS/](../iOS/). Android catalog: [../Android/](../Android/). Import URI: [docs/share.md](../../docs/share.md).
 
