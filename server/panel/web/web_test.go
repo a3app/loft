@@ -387,7 +387,7 @@ func TestWizardFlow(t *testing.T) {
 	}
 	j = e.job(e.do("POST", "/api/wizard/member", map[string]string{"id": "alice-phone", "name": "Alice"}, c, csrf), c)
 	res, _ := j["result"].(map[string]any)
-	if j["state"] != "done" || res["link"] != "loft://lt_"+strings.Repeat("a", 48)+"@vpn.example.org/static/js?type=get&fp=chrome#Alice" {
+	if j["state"] != "done" || res["link"] != "loft://lt_"+strings.Repeat("a", 48)+"@vpn.example.org/?get=/static/js&fp=chrome#Alice" {
 		t.Fatalf("member %v", j)
 	}
 	if !strings.Contains(res["file"].(string), "controller_pub: ab12") || !strings.Contains(res["file"].(string), "type: get") || strings.Contains(res["file"].(string), "type: ws") {

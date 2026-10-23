@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/a3app/loft/internal/config"
 	"github.com/a3app/loft/internal/netconf"
 	"github.com/a3app/loft/server/panel/adm"
 	"github.com/a3app/loft/server/panel/admproto"
@@ -309,12 +310,13 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// memberLink is the loft:// address (GET front, docs/share.md §2) and a .loft
-// file with a GET outbound pinned to the controller key. conn is the
-// connection name; memberID is the outbound-name part «член».
+// memberLink is the loft:// address (docs/share.md §2) and a .loft file with a
+// GET outbound. Query get=/ws=/h2= lists node fronts; YAML stays GET-only so
+// the client learns the rest from Status. conn is the connection name;
+// memberID is the outbound-name part «член».
 func (s *Server) memberLink(in admproto.NodeInfo, key, conn, memberID string) (string, string) {
 	host := in.Host
-	link := "loft://" + url.PathEscape(key) + "@" + host + in.GetPath + "?type=get&fp=chrome#" + url.PathEscape(conn)
+	link := "loft://" + url.PathEscape(key) + "@" + host + "/?" + loftFrontQuery(in) + "#" + url.PathEscape(conn)
 	var st store.Settings
 	if s.Settings != nil {
 		if got, err := s.Settings.Get(); err == nil {
@@ -330,8 +332,71 @@ func (s *Server) memberLink(in admproto.NodeInfo, key, conn, memberID string) (s
 	if in.ControllerPub != "" {
 		fmt.Fprintf(&b, "controller_pub: %s\n", in.ControllerPub)
 	}
-	fmt.Fprintf(&b, "outbounds:\n  - name: %q\n    type: get\n    url: https://%s\n    path: %s\n    fingerprint: chrome\n", ob, host, in.GetPath)
+	getP := in.GetPath
+	if getP == "" {
+		getP = config.DefaultGETPath
+	}
+	fmt.Fprintf(&b, "outbounds:\n  - name: %q\n    type: get\n    url: https://%s\n    path: %s\n    fingerprint: chrome\n", ob, host, getP)
 	return link, b.String()
+}
+
+// loftFrontQuery is get=/ws=/h2=/h3=/quic&fp=chrome. Empty Fronts is GET only.
+func loftFrontQuery(in admproto.NodeInfo) string {
+	enabled := map[string]bool{}
+	for _, f := range in.Fronts {
+		enabled[strings.ToLower(strings.TrimSpace(f))] = true
+	}
+	want := func(name string) bool {
+		if len(enabled) == 0 {
+			return name == "get"
+		}
+		return enabled[name]
+	}
+	getP := in.GetPath
+	if getP == "" {
+		getP = config.DefaultGETPath
+	}
+	wsP := in.WSPath
+	if wsP == "" {
+		wsP = config.DefaultWSPath
+	}
+	h2P := in.H2Path
+	if h2P == "" {
+		h2P = config.DefaultH2Path
+	}
+	h3P := in.H3Path
+	if h3P == "" {
+		h3P = h2P
+	}
+	var q []string
+	add := func(k, v string) {
+		if v == "" {
+			q = append(q, k)
+			return
+		}
+		q = append(q, k+"="+loftQueryVal(v))
+	}
+	if want("get") {
+		add("get", getP)
+	}
+	if want("ws") {
+		add("ws", wsP)
+	}
+	if want("h2") {
+		add("h2", h2P)
+	}
+	if want("h3") {
+		add("h3", h3P)
+	}
+	if want("quic") {
+		add("quic", "")
+	}
+	add("fp", "chrome")
+	return strings.Join(q, "&")
+}
+
+func loftQueryVal(s string) string {
+	return strings.ReplaceAll(url.QueryEscape(s), "%2F", "/")
 }
 
 func (s *Server) wizardDone(w http.ResponseWriter, r *http.Request) {

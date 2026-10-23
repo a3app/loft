@@ -91,6 +91,30 @@ func TestLoftOutboundInFile(t *testing.T) {
 	}
 }
 
+func TestMemberLinkQueryFronts(t *testing.T) {
+	s := &Server{}
+	link, file := s.memberLink(admproto.NodeInfo{
+		Host: "huy.com", GetPath: "/static/v3/build", WSPath: "/api/v1/sync", H2Path: "/api/v1/tunnel",
+		Fronts: []string{"get", "ws", "h2", "quic"},
+	}, "lt_abc", "bob", "bob")
+	if !strings.Contains(link, "get=/static/v3/build") || !strings.Contains(link, "ws=/api/v1/sync") || !strings.Contains(link, "h2=/api/v1/tunnel") || !strings.Contains(link, "quic") {
+		t.Fatalf("link %s", link)
+	}
+	if strings.Contains(link, "type=get") {
+		t.Fatalf("old type= in %s", link)
+	}
+	if !strings.HasPrefix(link, "loft://lt_abc@huy.com/?") || !strings.HasSuffix(link, "#bob") {
+		t.Fatalf("shape %s", link)
+	}
+	if !strings.Contains(file, "type: get") || strings.Contains(file, "type: ws") {
+		t.Fatalf("file %s", file)
+	}
+	getOnly, _ := s.memberLink(admproto.NodeInfo{Host: "huy.com", GetPath: "/static/js"}, "lt_abc", "bob", "bob")
+	if getOnly != "loft://lt_abc@huy.com/?get=/static/js&fp=chrome#bob" {
+		t.Fatalf("get-only %s", getOnly)
+	}
+}
+
 func TestKeepMemberKeysPeekAndPanelCopy(t *testing.T) {
 	e := newEnv(t)
 	c, csrf := e.owner()

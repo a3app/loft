@@ -209,6 +209,8 @@ type NodeInfo struct {
 	Host          string   `json:"host"`           // host of Advertise
 	GetPath       string   `json:"get_path"`       // GET front path
 	WSPath        string   `json:"ws_path"`        // WebSocket front path
+	H2Path        string   `json:"h2_path"`        // HTTP/2 CONNECT path
+	H3Path        string   `json:"h3_path"`        // HTTP/3 CONNECT path; empty = H2Path
 	RosterPath    string   `json:"roster_path"`    // signed roster, the client bootstrap
 	Fronts        []string `json:"fronts"`         // enabled; empty = GET
 	Decoy         []string `json:"decoy"`          // splice origins
