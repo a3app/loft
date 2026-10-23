@@ -1,4 +1,4 @@
-# loft 1.0.26
+# loft 1.0.27
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -29,6 +29,25 @@ Not in Dist: iOS / Android / Sailfish / Keenetic / MikroTik clients (catalog and
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.27
+
+Protocol stays **loft/1.0**.
+
+Android:
+
+- Phone GUI is native Java Views matching the DESIGN mock (Home spark, connections, FAB sheets, split lists).
+- Flavor `tv` (`app.loft.android.tv`) is Leanback 10-foot UI. Same AAR and VpnService.
+- `make release` writes ad-hoc-signed sideload APKs. PLAN.md dropped.
+- Emulator `loft.app` pins loft, Browser, Apps (launcher drawer), and Settings.
+
+GET / CI:
+
+- Origin 404 drops the GET sid. A radio gap replaces the GET pool. Pages deploys from Actions.
+
+Panel:
+
+- Settings pick which parts go into the `.loft` outbound name: host, member, front (default member+front).
 
 ## 1.0.26
 
@@ -116,7 +135,7 @@ macOS:
 
 В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Sailfish, Keenetic, MikroTik в этот Dist не входят.
 
-1.0.26: Android GET — stub DNS у шлюза overlay, PreferGo без hairpin, без `::/0` пока нет overlay IPv6, instance_id на диске, path watch NOT_VPN; фронт на физическом uplink; панель применяет правки без Save. Протокол loft/1.0.
+1.0.27: Android — native Views как в макете, flavor TV Leanback, подписанные sideload APK; loft.app кладёт Apps и Settings; панель собирает имя исходящего в .loft из хоста/члена/фронта; GET сбрасывает sid на 404. Протокол loft/1.0.
 
 ---
 
@@ -126,4 +145,4 @@ loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流
 
 本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Sailfish / Keenetic / MikroTik 不在这次包里。
 
-1.0.26：Android GET 在网关 53 上本地解析、PreferGo 避开 overlay DNS、无 overlay IPv6 时不加 ::/0、instance_id 落盘、path watch NOT_VPN；前置钉在物理上行；面板改成员/节点无需 Save。协议仍是 loft/1.0。
+1.0.27：Android 原生 Views 对齐模型、Leanback 电视 flavor、ad-hoc 签名 sideload APK；loft.app 钉 Apps 和 Settings；面板用主机/成员/前置拼 .loft 出站名；GET 遇 404 丢掉 sid。协议仍是 loft/1.0。

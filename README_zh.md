@@ -9,7 +9,7 @@ loft 是跑在 TLS 里面的覆盖网。流在 GET、WebSocket、HTTP/2、QUIC �
 
 协议 **loft/1.0**。分享链接 **`loft://`**。YAML 里 `kind: loft`。
 
-本仓库是开放规范，加上参考节点、网页面板和客户端（macOS 应用，Linux / macOS CLI）。软件版本 `1.0.26`。第三方按 [docs/protocol_zh.md](docs/protocol_zh.md) 就能自己实现 loft。
+本仓库是开放规范，加上参考节点、网页面板和客户端（macOS 应用，Linux / macOS CLI）。软件版本 `1.0.27`。第三方按 [docs/protocol_zh.md](docs/protocol_zh.md) 就能自己实现 loft。
 
 ## 目录
 
