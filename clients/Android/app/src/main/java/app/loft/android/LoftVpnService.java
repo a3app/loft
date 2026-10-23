@@ -260,9 +260,18 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     private void paint(Snapshot snap) {
         Live.state = nz(snap.getState()).isEmpty() ? "on" : snap.getState();
         Live.err = nz(snap.getErr());
-        Live.ip = nz(snap.getIP());
-        Live.ip6 = nz(snap.getIP6());
-        Live.gateway = nz(snap.getGateway());
+        String ip = nz(snap.getIP());
+        if (!ip.isEmpty()) {
+            Live.ip = ip;
+        }
+        String ip6 = nz(snap.getIP6());
+        if (!ip6.isEmpty()) {
+            Live.ip6 = ip6;
+        }
+        String gw = nz(snap.getGateway());
+        if (!gw.isEmpty()) {
+            Live.gateway = gw;
+        }
         Live.kind = nz(snap.getKind());
         Live.dns = nz(snap.getDNS());
         Live.instance = nz(snap.getInstanceID());

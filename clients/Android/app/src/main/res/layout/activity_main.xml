@@ -12,14 +12,20 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/line" />
+
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/nav"
         style="@style/Widget.Loft.Nav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/ink"
-        android:paddingTop="6dp"
-        android:paddingBottom="8dp"
+        android:background="@color/ink0"
+        android:minHeight="72dp"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
         app:itemActiveIndicatorStyle="@style/Widget.Loft.NavIndicator"
         app:itemIconTint="@color/nav_icon"
         app:itemRippleColor="@color/lamp"

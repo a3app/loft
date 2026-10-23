@@ -7,87 +7,125 @@
 
     <ImageButton
         android:id="@+id/btn_back"
+        style="@style/Widget.Loft.IconBtn"
         android:layout_width="36dp"
         android:layout_height="36dp"
         android:layout_marginLeft="4dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
+        android:layout_marginBottom="6dp"
         android:contentDescription="@string/back"
         android:src="@drawable/ic_back" />
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:paddingBottom="28dp">
 
             <ImageView
                 android:layout_width="72dp"
                 android:layout_height="72dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="10dp"
                 android:contentDescription="@string/app_name"
                 android:src="@drawable/ic_lamp_on" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:fontFamily="sans-serif-medium"
-                android:letterSpacing="-0.04"
+                android:includeFontPadding="false"
                 android:text="@string/app_name"
-                android:textColor="@color/snow"
-                android:textSize="22sp" />
+                android:textAppearance="@style/TextAppearance.Loft.Hero"
+                android:textColor="@color/snow" />
 
             <TextView
                 android:id="@+id/ver"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:textColor="@color/mute"
-                android:textSize="13sp" />
+                android:includeFontPadding="false"
+                android:textAppearance="@style/TextAppearance.Loft.IprowK"
+                android:textColor="@color/mute" />
 
             <TextView
-                android:id="@+id/rss"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/mute"
-                android:textSize="12sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
-                android:text="@string/about_proto"
-                android:textColor="@color/stone"
-                android:textSize="13sp" />
+                android:layout_marginBottom="8dp"
+                android:includeFontPadding="false"
+                android:text="@string/about_protos"
+                android:textAppearance="@style/TextAppearance.Loft.Kick"
+                android:textColor="@color/mute" />
+
+            <LinearLayout
+                android:layout_width="280dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <include layout="@layout/row_proto"
+                    android:id="@+id/proto_loft" />
+
+                <include layout="@layout/row_proto"
+                    android:id="@+id/proto_sstp" />
+
+                <include layout="@layout/row_proto"
+                    android:id="@+id/proto_trojan" />
+
+                <include layout="@layout/row_proto"
+                    android:id="@+id/proto_vless" />
+            </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="@string/about_fronts"
-                android:textColor="@color/mute"
-                android:textSize="12sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
+                android:layout_marginLeft="16dp"
+                android:layout_marginTop="22dp"
+                android:layout_marginRight="16dp"
                 android:gravity="center"
+                android:includeFontPadding="false"
+                android:lineSpacingMultiplier="1.4"
                 android:text="@string/about_blurb"
-                android:textColor="@color/snow"
-                android:textSize="16sp" />
+                android:textAppearance="@style/TextAppearance.Loft.Blurb"
+                android:textColor="@color/stone" />
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:text="@string/about_made"
-                android:textColor="@color/mute"
-                android:textSize="13sp" />
+                android:layout_marginTop="28dp"
+                android:gravity="center_vertical"
+                android:layoutDirection="ltr"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:text="@string/about_made_pre"
+                    android:textAppearance="@style/TextAppearance.Loft.Made"
+                    android:textColor="@color/mute" />
+
+                <app.loft.android.HeartView
+                    android:layout_width="12dp"
+                    android:layout_height="10dp"
+                    android:layout_marginLeft="4dp"
+                    android:layout_marginRight="4dp"
+                    android:contentDescription="@null" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:text="@string/about_made_post"
+                    android:textAppearance="@style/TextAppearance.Loft.Made"
+                    android:textColor="@color/mute" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

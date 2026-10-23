@@ -149,10 +149,13 @@ public final class SparkView extends View {
         if (n < 2) {
             return;
         }
-        float max = 1;
+        float max = 0;
         for (int i = 0; i < n; i++) {
             max = Math.max(max, dn[i]);
             max = Math.max(max, up[i]);
+        }
+        if (max <= 0) {
+            return;
         }
         if (bars) {
             drawBars(c, w, h, max);
@@ -190,30 +193,40 @@ public final class SparkView extends View {
 
     private void drawBars(Canvas c, int w, int h, float max) {
         float gap = dp(2);
-        float bw = Math.max(dp(1), (w - gap * (n - 1)) / n);
-        float rowH = (h - dp(6)) / 2f;
+        // Always a 40-slot window so the first samples stay thin, latest on the right.
+        float bw = Math.max(dp(1), (w - gap * (N - 1)) / N);
+        float gutter = dp(6);
+        float rowH = (h - gutter) / 2f;
+        int origin = N - n;
         for (int i = 0; i < n; i++) {
-            float x = i * (bw + gap);
-            float op = 0.3f + 0.7f * (i / (float) Math.max(1, n - 1));
-            bar.setColor(0xFFE8B84A);
-            bar.setAlpha((int) (255 * op));
-            float hd = Math.max(dp(2), (dn[i] / max) * rowH);
-            c.drawRoundRect(x, rowH - hd, x + bw, rowH, dp(1.5f), dp(1.5f), bar);
-            bar.setColor(0xFFA89A8C);
-            bar.setAlpha((int) (255 * op));
-            float hu = Math.max(dp(2), (up[i] / max) * rowH);
-            float y0 = rowH + dp(6);
-            c.drawRoundRect(x, y0 + rowH - hu, x + bw, y0 + rowH, dp(1.5f), dp(1.5f), bar);
+            float x = (origin + i) * (bw + gap);
+            float op = 0.3f + 0.7f * ((origin + i) / (float) (N - 1));
+            float y0 = rowH + gutter;
+            if (dn[i] > 0) {
+                bar.setColor(0xFFE8B84A);
+                bar.setAlpha((int) (255 * op));
+                float hd = Math.max(dp(2), (dn[i] / max) * rowH);
+                c.drawRoundRect(x, rowH - hd, x + bw, rowH, dp(1.5f), dp(1.5f), bar);
+            }
+            if (up[i] > 0) {
+                bar.setColor(0xFFA89A8C);
+                bar.setAlpha((int) (255 * op));
+                float hu = Math.max(dp(2), (up[i] / max) * rowH);
+                c.drawRoundRect(x, y0 + rowH - hu, x + bw, y0 + rowH, dp(1.5f), dp(1.5f), bar);
+            }
         }
         bar.setAlpha(255);
     }
 
     private void pts(float[] v, float max, int w, int h, float[] x, float[] y, float scale) {
-        float pad = dp(2);
+        float padX = dp(2);
+        float padY = dp(6);
+        int origin = N - n;
+        float span = (w - padX * 2) / (float) (N - 1);
         for (int i = 0; i < n; i++) {
-            x[i] = pad + i * (w - pad * 2) / (float) (n - 1);
+            x[i] = padX + (origin + i) * span;
             float t = Math.max(0, Math.min(1, (v[i] / max) * scale));
-            y[i] = h - dp(3) - t * (h - dp(8));
+            y[i] = h - padY - t * (h - padY * 2);
         }
     }
 

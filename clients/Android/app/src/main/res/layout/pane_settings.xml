@@ -23,466 +23,545 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:fontFamily="sans-serif-medium"
-                android:letterSpacing="-0.03"
+                android:includeFontPadding="false"
                 android:text="@string/settings"
-                android:textColor="@color/snow"
-                android:textSize="20sp" />
+                android:textAppearance="@style/TextAppearance.Loft.Title"
+                android:textColor="@color/snow" />
 
             <Button
                 android:id="@+id/btn_reset"
-                style="@style/Widget.Loft.Ghost"
+                style="@style/Widget.Loft.HeadBtn"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:minHeight="36dp"
-                android:text="@string/reset_routes"
-                android:textSize="10sp" />
+                android:layout_height="wrap_content"
+                android:text="@string/reset_routes" />
         </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:includeFontPadding="false"
             android:text="@string/general"
-            android:textAllCaps="true"
-            android:textColor="@color/mute"
-            android:textSize="12sp" />
+            android:textAppearance="@style/TextAppearance.Loft.Grp"
+            android:textColor="@color/mute" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/simple"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/simple_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
-            <Switch
+            <app.loft.android.ToggleView
                 android:id="@+id/sw_simple"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                style="@style/Widget.Loft.Toggle"
+                android:layout_width="42dp"
+                android:layout_height="26dp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/rate_unit"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/rate_unit_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
             <Spinner
                 android:id="@+id/sp_rate"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_select"
+                android:overlapAnchor="false"
+                android:popupBackground="@color/ink2"
+                android:spinnerMode="dropdown" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/spark_k"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/spark_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
             <Spinner
                 android:id="@+id/sp_spark"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_select"
+                android:overlapAnchor="false"
+                android:popupBackground="@color/ink2"
+                android:spinnerMode="dropdown" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/language"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/lang_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
             <Spinner
                 android:id="@+id/sp_lang"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_select"
+                android:overlapAnchor="false"
+                android:popupBackground="@color/ink2"
+                android:spinnerMode="dropdown" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/extended_log"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/diag_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
-            <Switch
+            <app.loft.android.ToggleView
                 android:id="@+id/sw_log"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                style="@style/Widget.Loft.Toggle"
+                android:layout_width="42dp"
+                android:layout_height="26dp" />
         </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
+            android:includeFontPadding="false"
             android:text="@string/route_group"
-            android:textAllCaps="true"
-            android:textColor="@color/mute"
-            android:textSize="12sp" />
+            android:textAppearance="@style/TextAppearance.Loft.Grp"
+            android:textColor="@color/mute" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/default_route"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/default_route_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
-            <Switch
+            <app.loft.android.ToggleView
                 android:id="@+id/sw_default"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                style="@style/Widget.Loft.Toggle"
+                android:layout_width="42dp"
+                android:layout_height="26dp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:orientation="vertical">
+            android:background="@drawable/bg_setrow"
+            android:orientation="vertical"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:includeFontPadding="false"
                 android:text="@string/hold_sys"
-                android:textColor="@color/snow"
-                android:textSize="14sp" />
+                android:textAppearance="@style/TextAppearance.Loft.RowK"
+                android:textColor="@color/snow" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:includeFontPadding="false"
+                android:lineSpacingMultiplier="1.35"
                 android:text="@string/hold_and"
-                android:textColor="@color/mute"
-                android:textSize="12sp" />
+                android:textAppearance="@style/TextAppearance.Loft.RowS"
+                android:textColor="@color/mute" />
 
             <Button
                 android:id="@+id/btn_vpn"
-                style="@style/Widget.Loft.Ghost"
+                style="@style/Widget.Loft.GhostSm"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginTop="4dp"
-                android:minHeight="36dp"
-                android:text="@string/open_sys"
-                android:textSize="12sp" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/open_sys" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/split"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/split_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
 
                 <Button
                     android:id="@+id/btn_routes"
-                    style="@style/Widget.Loft.Ghost"
+                    style="@style/Widget.Loft.GhostSm"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginTop="4dp"
-                    android:backgroundTint="@color/lamp"
-                    android:minHeight="36dp"
-                    android:text="@string/lists"
-                    android:textColor="@color/ink"
-                    android:textSize="12sp" />
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/lists" />
             </LinearLayout>
 
-            <Switch
+            <app.loft.android.ToggleView
                 android:id="@+id/sw_split"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                style="@style/Widget.Loft.Toggle"
+                android:layout_width="42dp"
+                android:layout_height="26dp" />
         </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
+            android:includeFontPadding="false"
             android:text="@string/conn_group"
-            android:textAllCaps="true"
-            android:textColor="@color/mute"
-            android:textSize="12sp" />
+            android:textAppearance="@style/TextAppearance.Loft.Grp"
+            android:textColor="@color/mute" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/auto"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/auto_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
-            <Switch
+            <app.loft.android.ToggleView
                 android:id="@+id/sw_auto"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                style="@style/Widget.Loft.Toggle"
+                android:layout_width="42dp"
+                android:layout_height="26dp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/reconnect"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/reconnect_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
-            <Switch
+            <app.loft.android.ToggleView
                 android:id="@+id/sw_re"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                style="@style/Widget.Loft.Toggle"
+                android:layout_width="42dp"
+                android:layout_height="26dp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_setrow"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:paddingRight="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
                     android:text="@string/ext_ip"
-                    android:textColor="@color/snow"
-                    android:textSize="14sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
                     android:text="@string/ext_ip_d"
-                    android:textColor="@color/mute"
-                    android:textSize="12sp" />
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
             </LinearLayout>
 
-            <Switch
+            <app.loft.android.ToggleView
                 android:id="@+id/sw_ext"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                style="@style/Widget.Loft.Toggle"
+                android:layout_width="42dp"
+                android:layout_height="26dp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
             android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btn_defaults"
-                style="@style/Widget.Loft.Ghost"
-                android:layout_width="0dp"
+                style="@style/Widget.Loft.LinkBtn"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/defaults"
-                android:textSize="13sp" />
+                android:text="@string/defaults" />
 
             <Button
                 android:id="@+id/btn_log"
-                style="@style/Widget.Loft.Ghost"
-                android:layout_width="0dp"
+                style="@style/Widget.Loft.LinkBtn"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="6dp"
-                android:layout_weight="1"
-                android:text="@string/log"
-                android:textSize="13sp" />
+                android:text="@string/log" />
 
             <Button
                 android:id="@+id/btn_about"
-                style="@style/Widget.Loft.Ghost"
-                android:layout_width="0dp"
+                style="@style/Widget.Loft.LinkBtn"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="6dp"
-                android:layout_weight="1"
-                android:text="@string/about"
-                android:textSize="13sp" />
+                android:text="@string/about" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

@@ -72,9 +72,17 @@
     <string name="enter_key">Enter the key and address by hand</string>
     <string name="ok_system">Then tap OK on the system sheet.</string>
     <string name="about_blurb">Ordinary HTTPS on the outside.\nInside, a network of your own.</string>
-    <string name="about_made">Made with love by A³</string>
-    <string name="about_proto">loft/1.0 · SSTP · VLESS · Trojan</string>
-    <string name="about_fronts">get · ws · h2 · quic · h3 · l3 · mask</string>
+    <string name="about_made_pre">Made with love</string>
+    <string name="about_made_post">by A³</string>
+    <string name="about_protos">protocols</string>
+    <string name="about_loft_k" translatable="false">loft/1.0</string>
+    <string name="about_sstp_k" translatable="false">SSTP</string>
+    <string name="about_trojan_k" translatable="false">Trojan</string>
+    <string name="about_vless_k" translatable="false">VLESS</string>
+    <string name="about_fronts" translatable="false">get · ws · h2 · quic · h3 · l3 · mask</string>
+    <string name="about_sstp_v" translatable="false">ppp · mschapv2 · pap</string>
+    <string name="about_trojan_v" translatable="false">tcp · tls · reality · xhttp</string>
+    <string name="about_vless_v" translatable="false">tcp · tls</string>
     <string name="routes">Lists</string>
     <string name="route_add">Add CIDR</string>
     <string name="via_through">through loft</string>

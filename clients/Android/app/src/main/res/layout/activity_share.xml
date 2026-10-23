@@ -14,9 +14,10 @@
 
         <ImageButton
             android:id="@+id/btn_close"
+            style="@style/Widget.Loft.IconBtn"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginRight="4dp"
             android:contentDescription="@string/close"
             android:src="@drawable/ic_close" />
 

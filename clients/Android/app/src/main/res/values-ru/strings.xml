@@ -40,7 +40,7 @@
     <string name="simple">Упрощённый интерфейс</string>
     <string name="ext_ip">Внешний IP</string>
     <string name="overlay_ip">Overlay IP</string>
-    <string name="route">Шлюз</string>
+    <string name="route">Маршрут</string>
     <string name="underlying">Сеть</string>
     <string name="protocol">Протокол</string>
     <string name="front">Фронт</string>
@@ -72,9 +72,10 @@
     <string name="enter_key">Ввести ключ и адрес вручную</string>
     <string name="ok_system">Дальше нажмите OK в системном окне.</string>
     <string name="about_blurb">Снаружи — обычный HTTPS.\nВнутри — своя сеть.</string>
-    <string name="about_made">Made with love by A³</string>
-    <string name="about_proto">loft/1.0 · SSTP · VLESS · Trojan</string>
-    <string name="about_fronts">get · ws · h2 · quic · h3 · l3 · mask</string>
+    <string name="about_made_pre">Made with love</string>
+    <string name="about_made_post">by A³</string>
+    <string name="about_protos">протоколы</string>
+
     <string name="routes">Списки</string>
     <string name="route_add">Добавить CIDR</string>
     <string name="via_through">через loft</string>

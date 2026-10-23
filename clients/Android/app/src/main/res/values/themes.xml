@@ -47,26 +47,236 @@
         <item name="cornerSize">16dp</item>
     </style>
 
+    <!-- Mock tabbar: 22px icon, lamp capsule padding 4×20, 3px gap, 9.5px label. -->
     <style name="Widget.Loft.Nav" parent="Widget.MaterialComponents.BottomNavigationView">
-        <item name="android:background">@color/ink</item>
+        <item name="android:background">@color/ink0</item>
+        <item name="android:minHeight">72dp</item>
         <item name="elevation">0dp</item>
+        <item name="itemBackground">@android:color/transparent</item>
+        <item name="itemHorizontalTranslationEnabled">false</item>
+        <item name="itemIconSize">22dp</item>
         <item name="itemIconTint">@color/nav_icon</item>
         <item name="itemTextColor">@color/nav_text</item>
+        <item name="itemTextAppearanceInactive">@style/TextAppearance.Loft.Nav</item>
+        <item name="itemTextAppearanceActive">@style/TextAppearance.Loft.Nav</item>
         <item name="itemRippleColor">@color/lamp</item>
         <item name="itemActiveIndicatorStyle">@style/Widget.Loft.NavIndicator</item>
+        <item name="itemPaddingTop">6dp</item>
+        <item name="itemPaddingBottom">12dp</item>
+        <item name="activeIndicatorLabelPadding">4dp</item>
         <item name="labelVisibilityMode">labeled</item>
+    </style>
+
+    <!-- Mock UI face is Avenir Next; Android keeps Roboto with the same sizes and tracking. -->
+    <style name="TextAppearance.Loft.Hero" parent="">
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">-0.04</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Title" parent="">
+        <item name="android:textSize">20sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">-0.03</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Pill" parent="">
+        <item name="android:textSize">11.5sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.PlateK" parent="">
+        <item name="android:textSize">9sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.PlateV" parent="">
+        <item name="android:textSize">12.5sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Rate" parent="">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:fontFeatureSettings">tnum, lnum</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.IprowK" parent="">
+        <item name="android:textSize">12.5sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.IprowV" parent="">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Grp" parent="">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.RowK" parent="">
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.RowS" parent="">
+        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Link" parent="">
+        <item name="android:textSize">11.5sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Kick" parent="">
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Blurb" parent="">
+        <item name="android:textSize">13.5sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/stone</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.ProtoK" parent="">
+        <item name="android:textSize">12.5sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.ProtoV" parent="">
+        <item name="android:textSize">10sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Made" parent="">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="TextAppearance.Loft.Nav" parent="">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:letterSpacing">0.01</item>
     </style>
 
     <style name="Widget.Loft.NavIndicator" parent="">
         <item name="android:color">@color/lamp22</item>
-        <item name="android:width">64dp</item>
-        <item name="android:height">32dp</item>
+        <item name="android:width">62dp</item>
+        <item name="android:height">30dp</item>
         <item name="shapeAppearance">@style/Shape.Loft.NavPill</item>
     </style>
 
     <style name="Shape.Loft.NavPill" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">16dp</item>
+    </style>
+
+    <!-- Mock .toggle 42×26. Drawn by ToggleView; size is also enforced in onMeasure. -->
+    <style name="Widget.Loft.Toggle" parent="">
+        <item name="android:background">@null</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="Widget.Loft.Switch" parent="">
+        <item name="android:thumbTint">@color/switch_thumb</item>
+        <item name="android:trackTint">@color/switch_track</item>
+        <item name="android:showText">false</item>
+    </style>
+
+    <style name="Widget.Loft.GhostSm" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textColor">@color/lamp</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:minHeight">28dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingLeft">0dp</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingRight">0dp</item>
+        <item name="android:paddingBottom">2dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="rippleColor">@color/lamp22</item>
+    </style>
+
+    <style name="Widget.Loft.LinkBtn" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textColor">@color/mute</item>
+        <item name="android:textSize">13.5sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="rippleColor">@color/lamp22</item>
+    </style>
+
+    <style name="Widget.Loft.HeadBtn" parent="Widget.MaterialComponents.Button.UnelevatedButton">
+        <item name="backgroundTint">@color/wood</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:minHeight">32dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingLeft">10dp</item>
+        <item name="android:paddingRight">10dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="Widget.Loft.IconBtn" parent="">
+        <item name="android:background">@drawable/bg_icon_btn</item>
+        <item name="android:padding">7dp</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:tint">@color/icon_btn</item>
+        <item name="android:stateListAnimator">@null</item>
     </style>
 
     <style name="Widget.Loft.Go" parent="Widget.MaterialComponents.Button.UnelevatedButton">

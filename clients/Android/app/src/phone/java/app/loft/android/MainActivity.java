@@ -18,9 +18,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -38,6 +38,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class MainActivity extends LoftActivity implements Bus.Listener {
     private static final int REQ_VPN = 1;
@@ -48,6 +49,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     private View settings;
     private ConnAdapter adapter;
     private boolean askedVpn;
+    private final AtomicBoolean extFetch = new AtomicBoolean();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -184,13 +186,25 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             go.setTextColor(getColor(R.color.ink));
         }
         cards.setVisibility(simple ? View.GONE : View.VISIBLE);
-        sparkRow.setVisibility(simple ? View.GONE : View.VISIBLE);
+        sparkRow.setVisibility(simple || (!on && !conn) ? View.GONE : View.VISIBLE);
         iprows.setVisibility(simple || !on ? View.GONE : View.VISIBLE);
         paintCards(p, on);
         boolean bits = Prefs.rateBits(this);
-        ((TextView) home.findViewById(R.id.rate_dn)).setText("↓ " + Cidr.fmt(Live.rateDown, bits));
-        ((TextView) home.findViewById(R.id.rate_up)).setText("↑ " + Cidr.fmt(Live.rateUp, bits));
-        home.findViewById(R.id.spark_r).setVisibility(conn ? View.GONE : View.VISIBLE);
+        boolean liveRates = on && !conn && (Live.rateDown > 0 || Live.rateUp > 0);
+        TextView rateDn = home.findViewById(R.id.rate_dn);
+        TextView rateUp = home.findViewById(R.id.rate_up);
+        if (liveRates) {
+            rateDn.setText("↓ " + Cidr.fmt(Live.rateDown, bits));
+            rateUp.setText("↑ " + Cidr.fmt(Live.rateUp, bits));
+        }
+        View sparkR = home.findViewById(R.id.spark_r);
+        if (!on || conn) {
+            sparkR.setVisibility(View.GONE);
+        } else if (liveRates) {
+            sparkR.setVisibility(View.VISIBLE);
+        } else {
+            sparkR.setVisibility(View.INVISIBLE);
+        }
         spark.setBars(Prefs.sparkBars(this));
         if (conn) {
             spark.setHandshake(true, getString(R.string.handshake));
@@ -200,16 +214,17 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         } else {
             spark.clear();
         }
-        ((TextView) home.findViewById(R.id.row_ext)).setText(Live.extIP.isEmpty() ? "—" : Live.extIP);
+        if (on && Prefs.showExtIP(this) && Live.extIP.isEmpty()) {
+            fetchExt();
+        }
+        String ext = Live.extIP;
+        ((TextView) home.findViewById(R.id.row_ext)).setText(ext.isEmpty() ? "—" : ext);
         String ov = Live.ip;
         if (!Live.ip6.isEmpty()) {
             ov = ov.isEmpty() ? Live.ip6 : ov + "  " + Live.ip6;
         }
         ((TextView) home.findViewById(R.id.row_overlay)).setText(ov.isEmpty() ? "—" : ov);
         ((TextView) home.findViewById(R.id.row_route)).setText(Live.gateway.isEmpty() ? "—" : Live.gateway);
-        if (on && Prefs.showExtIP(this) && Live.extIP.isEmpty()) {
-            fetchExt();
-        }
     }
 
     private void paintCards(Profile p, boolean on) {
@@ -448,13 +463,13 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     }
 
     private void wireSettings() {
-        Switch simple = settings.findViewById(R.id.sw_simple);
-        Switch def = settings.findViewById(R.id.sw_default);
-        Switch split = settings.findViewById(R.id.sw_split);
-        Switch auto = settings.findViewById(R.id.sw_auto);
-        Switch re = settings.findViewById(R.id.sw_re);
-        Switch ext = settings.findViewById(R.id.sw_ext);
-        Switch log = settings.findViewById(R.id.sw_log);
+        CompoundButton simple = settings.findViewById(R.id.sw_simple);
+        CompoundButton def = settings.findViewById(R.id.sw_default);
+        CompoundButton split = settings.findViewById(R.id.sw_split);
+        CompoundButton auto = settings.findViewById(R.id.sw_auto);
+        CompoundButton re = settings.findViewById(R.id.sw_re);
+        CompoundButton ext = settings.findViewById(R.id.sw_ext);
+        CompoundButton log = settings.findViewById(R.id.sw_log);
         simple.setChecked(Prefs.simple(this));
         def.setChecked(Prefs.defaultRoute(this));
         split.setChecked(Prefs.split(this));
@@ -473,24 +488,21 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         ext.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("ext_ip", on).apply());
         log.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("verbose", on).apply());
         Spinner rate = settings.findViewById(R.id.sp_rate);
-        rate.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-                new String[]{getString(R.string.rate_kbit), getString(R.string.rate_kb)}));
+        rate.setAdapter(spin(getString(R.string.rate_kbit), getString(R.string.rate_kb)));
         rate.setSelection(Prefs.rateBits(this) ? 0 : 1);
         rate.setOnItemSelectedListener(new SimplePick(i -> {
             Prefs.p(this).edit().putBoolean("rate_bits", i == 0).apply();
             paintHome();
         }));
         Spinner spark = settings.findViewById(R.id.sp_spark);
-        spark.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-                new String[]{getString(R.string.spark_lines), getString(R.string.spark_bars)}));
+        spark.setAdapter(spin(getString(R.string.spark_lines), getString(R.string.spark_bars)));
         spark.setSelection(Prefs.sparkBars(this) ? 1 : 0);
         spark.setOnItemSelectedListener(new SimplePick(i -> {
             Prefs.p(this).edit().putBoolean("spark_bars", i == 1).apply();
             paintHome();
         }));
         Spinner lang = settings.findViewById(R.id.sp_lang);
-        lang.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-                new String[]{getString(R.string.lang_en), getString(R.string.lang_ru), getString(R.string.lang_zh)}));
+        lang.setAdapter(spin(getString(R.string.lang_en), getString(R.string.lang_ru), getString(R.string.lang_zh)));
         lang.setSelection(Lang.index(this));
         lang.setOnItemSelectedListener(new SimplePick(i -> {
             String tag = Lang.TAGS[i];
@@ -532,8 +544,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     }
 
     private void fetchExt() {
+        if (!extFetch.compareAndSet(false, true)) {
+            return;
+        }
         Live.extIP = "…";
         new Thread(() -> {
+            String got = "—";
             try {
                 java.net.URL u = new java.net.URL(Prefs.extIPURL(this));
                 java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
@@ -544,13 +560,16 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                     if (s.length() > 64) {
                         s = s.substring(0, 64);
                     }
-                    Live.extIP = s;
+                    if (!s.isEmpty()) {
+                        got = s;
+                    }
                 }
-            } catch (Exception e) {
-                Live.extIP = "";
+            } catch (Exception ignored) {
             }
+            Live.extIP = got;
+            extFetch.set(false);
             Bus.post();
-        }).start();
+        }, "loft-extip").start();
     }
 
     static String readAll(InputStream in) throws Exception {
@@ -605,6 +624,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             }
             super.onChildDraw(c, rv, vh, dx, dy, actionState, active);
         }
+    }
+
+    private ArrayAdapter<String> spin(String... items) {
+        ArrayAdapter<String> a = new ArrayAdapter<>(this, R.layout.spinner_item, items);
+        a.setDropDownViewResource(R.layout.spinner_dropdown);
+        return a;
     }
 
     private static final class SimplePick implements android.widget.AdapterView.OnItemSelectedListener {

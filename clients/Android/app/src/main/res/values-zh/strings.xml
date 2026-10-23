@@ -40,7 +40,7 @@
     <string name="simple">简洁界面</string>
     <string name="ext_ip">外部 IP</string>
     <string name="overlay_ip">Overlay IP</string>
-    <string name="route">网关</string>
+    <string name="route">路由</string>
     <string name="underlying">网络</string>
     <string name="protocol">协议</string>
     <string name="front">前置</string>
@@ -72,9 +72,10 @@
     <string name="enter_key">手动输入密钥和地址</string>
     <string name="ok_system">然后在系统对话框点确定。</string>
     <string name="about_blurb">外面是普通 HTTPS。\n里面是自己的网络。</string>
-    <string name="about_made">Made with love by A³</string>
-    <string name="about_proto">loft/1.0 · SSTP · VLESS · Trojan</string>
-    <string name="about_fronts">get · ws · h2 · quic · h3 · l3 · mask</string>
+    <string name="about_made_pre">Made with love</string>
+    <string name="about_made_post">by A³</string>
+    <string name="about_protos">协议</string>
+
     <string name="routes">列表</string>
     <string name="route_add">添加 CIDR</string>
     <string name="via_through">经 loft</string>

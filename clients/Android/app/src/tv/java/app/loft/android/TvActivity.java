@@ -43,6 +43,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     private View overlay;
     private String selected = "";
     private TvPair pair;
+    private final java.util.concurrent.atomic.AtomicBoolean extFetch = new java.util.concurrent.atomic.AtomicBoolean();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -663,8 +664,13 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     }
 
     private void fetchExt() {
+        if (!extFetch.compareAndSet(false, true)) {
+            return;
+        }
+        Live.extIP = "…";
         String url = Prefs.extIPURL(this);
         new Thread(() -> {
+            String got = "—";
             try {
                 java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
                 c.setConnectTimeout(4000);
@@ -673,13 +679,15 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
                 int n = c.getInputStream().read(b);
                 if (n > 0) {
                     String ip = new String(b, 0, n, StandardCharsets.US_ASCII).trim();
-                    runOnUiThread(() -> {
-                        Live.extIP = ip;
-                        paintHome();
-                    });
+                    if (!ip.isEmpty()) {
+                        got = ip;
+                    }
                 }
             } catch (Exception ignored) {
             }
+            Live.extIP = got;
+            extFetch.set(false);
+            Bus.post();
         }, "loft-extip").start();
     }
 

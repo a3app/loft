@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ink">#1A1714</color>
+    <color name="ink0">#181512</color>
     <color name="ink2">#241F1B</color>
     <color name="plate">#211C19</color>
+    <color name="wood">#2A2420</color>
+    <color name="edge">#2E2824</color>
     <color name="slate">#3A332E</color>
     <color name="lamp22">#38E8B84A</color>
     <color name="danger_bg">#26E24B4B</color>
