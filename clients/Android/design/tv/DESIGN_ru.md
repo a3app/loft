@@ -2,7 +2,7 @@
 
 [English](DESIGN.md) · **Русский** · [中文](DESIGN_zh.md)
 
-Та же сессия, что на телефоне: `LoftVpnService` + AAR `clients/mobile`. Этот макет — оболочка с дивана. Марка, палитра, Avenir Next: [`brand/`](../../../../docs/brand/). Интерактивный макет: [`index.html`](index.html); у каждого состояния своя ссылка, например `#home-on`, `#pair`, `#settings-route`. Макет телефона: [`../index.html`](../index.html). Протокол: [docs/protocol_ru.md](../../../../docs/protocol_ru.md). URI импорта: [docs/share_ru.md](../../../../docs/share_ru.md). План: [PLAN](../../PLAN.md), фаза 4.
+Та же сессия, что на телефоне: `LoftVpnService` + AAR `clients/mobile`. Этот макет — оболочка с дивана. Марка, палитра, Avenir Next: [`brand/`](../../../../docs/brand/). Интерактивный макет: [`index.html`](index.html); у каждого состояния своя ссылка, например `#home-on`, `#pair`, `#settings-route`. Макет телефона: [`../index.html`](../index.html). Протокол: [docs/protocol_ru.md](../../../../docs/protocol_ru.md). URI импорта: [docs/share_ru.md](../../../../docs/share_ru.md). Каталог: [README](../../README_ru.md).
 
 Живой GUI позже — Leanback (Java 17 Views, пульт). Без Compose. `connect` — только на ноде. Авто = GET.
 
@@ -102,4 +102,4 @@ Hairpin, dual-stack, `protect(fd)`, FrontIP `excludeRoute` — движок те
 
 ## 7. Вне этого макета
 
-Java Leanback, flavor `tv`, ресурс баннера, карточка Play TV, замер RSS на приставке 2 ГиБ. Вёрстка телефона остаётся в phone flavor. Dist / VERSION не трогаем.
+Карточка Play TV. RSS на приставке 2 ГиБ — замер оператора (About показывает VmRSS). Dist / VERSION не трогаем, пока не попросили. Flavor `tv`, Java Leanback, баннер и GUI с дивана живут в `app/src/tv/`.

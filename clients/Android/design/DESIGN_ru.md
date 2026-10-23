@@ -22,7 +22,7 @@ v1: именные подключения на диске, импорт/эксп
 
 Язык адаптера — **Java 17**. gomobile уже отдаёт Java; Kotlin runtime в этот процесс не грузим. Макет — HTML; живой GUI позже на Views (без Compose).
 
-Android TV / Google TV — тот же `VpnService` и AAR, flavor Leanback. Макет с дивана: [`tv/`](tv/). [План](../PLAN.md) фаза 4. VIDAA / Tizen / webOS вне рамок.
+Android TV / Google TV — тот же `VpnService` и AAR, flavor Leanback. Макет с дивана: [`tv/`](tv/). VIDAA / Tizen / webOS вне рамок.
 
 ## 2. Экраны
 

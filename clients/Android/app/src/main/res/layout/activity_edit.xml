@@ -1,216 +1,534 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/ink">
+    android:background="@color/ink"
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="4dp"
+        android:paddingRight="8dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/title"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/new_conn"
-                android:textColor="@color/snow"
-                android:textSize="20sp"
-                android:textStyle="bold" />
-
-            <Button
-                android:id="@+id/btn_close"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/slate"
-                android:text="✕"
-                android:textColor="@color/snow" />
-        </LinearLayout>
-
-        <Spinner
-            android:id="@+id/kind"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp" />
-
-        <EditText
-            android:id="@+id/name"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/name"
-            android:inputType="text"
-            android:textColor="@color/snow"
-            android:textColorHint="@color/mute" />
-
-        <EditText
-            android:id="@+id/token"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:hint="@string/key_title"
-            android:inputType="textVisiblePassword"
-            android:textColor="@color/snow"
-            android:textColorHint="@color/mute" />
-
-        <EditText
-            android:id="@+id/user"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/user"
-            android:inputType="text"
-            android:textColor="@color/snow"
-            android:textColorHint="@color/mute" />
-
-        <EditText
-            android:id="@+id/pass"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/password"
-            android:inputType="textPassword"
-            android:textColor="@color/snow"
-            android:textColorHint="@color/mute" />
-
-        <EditText
-            android:id="@+id/host"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/host"
-            android:inputType="textUri"
-            android:textColor="@color/snow"
-            android:textColorHint="@color/mute" />
-
-        <EditText
-            android:id="@+id/port"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/port"
-            android:inputType="number"
-            android:textColor="@color/snow"
-            android:textColorHint="@color/mute" />
+        <ImageButton
+            android:id="@+id/btn_close"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/close"
+            android:src="@drawable/ic_close" />
 
         <TextView
-            android:id="@+id/lbl_method"
-            android:layout_width="match_parent"
+            android:id="@+id/title"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/method"
-            android:textColor="@color/mute" />
-
-        <Spinner
-            android:id="@+id/method"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-        <EditText
-            android:id="@+id/path"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/path"
-            android:inputType="textUri"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="-0.03"
+            android:text="@string/new_conn"
             android:textColor="@color/snow"
-            android:textColorHint="@color/mute" />
+            android:textSize="20sp" />
 
-        <EditText
-            android:id="@+id/link"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:hint="@string/link"
-            android:inputType="textUri"
-            android:textColor="@color/snow"
-            android:textColorHint="@color/mute" />
+        <ImageButton
+            android:id="@+id/btn_scan"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/scan"
+            android:src="@drawable/ic_scan"
+            android:visibility="gone" />
 
-        <LinearLayout
-            android:id="@+id/row_mux"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/mux"
-                android:textColor="@color/snow" />
-
-            <Switch
-                android:id="@+id/sw_mux"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/row_tls"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/tls_check"
-                android:textColor="@color/snow" />
-
-            <Switch
-                android:id="@+id/sw_tls"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/row_pap"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/pap"
-                android:textColor="@color/snow" />
-
-            <Switch
-                android:id="@+id/sw_pap"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <Button
-            android:id="@+id/btn_save"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="16dp"
-            android:backgroundTint="@color/lamp"
-            android:text="@string/save"
-            android:textColor="@color/ink" />
-
-        <Button
-            android:id="@+id/btn_share"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:backgroundTint="@color/slate"
-            android:text="@string/share"
-            android:textColor="@color/snow" />
-
-        <Button
-            android:id="@+id/btn_delete"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:backgroundTint="@color/err"
-            android:text="@string/delete"
-            android:textColor="@color/snow" />
+        <ImageButton
+            android:id="@+id/btn_more"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/menu_more"
+            android:src="@drawable/ic_more" />
     </LinearLayout>
-</ScrollView>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/name"
+                android:textColor="@color/mute"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/bg_field"
+                android:inputType="text"
+                android:padding="12dp"
+                android:textColor="@color/snow"
+                android:textColorHint="@color/mute" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/vpn_type"
+                    android:textColor="@color/snow"
+                    android:textSize="13.5sp" />
+
+                <TextView
+                    android:id="@+id/kind_cap"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_plate"
+                    android:paddingLeft="12dp"
+                    android:paddingTop="7dp"
+                    android:paddingRight="12dp"
+                    android:paddingBottom="7dp"
+                    android:textColor="@color/snow"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <HorizontalScrollView
+                android:id="@+id/kind_scroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="14dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/kind_seg"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/k_loft"
+                        style="@style/Widget.Loft.Chip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="loft" />
+
+                    <Button
+                        android:id="@+id/k_sstp"
+                        style="@style/Widget.Loft.Chip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="6dp"
+                        android:text="SSTP" />
+
+                    <Button
+                        android:id="@+id/k_vless"
+                        style="@style/Widget.Loft.Chip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="6dp"
+                        android:text="VLESS" />
+
+                    <Button
+                        android:id="@+id/k_trojan"
+                        style="@style/Widget.Loft.Chip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="6dp"
+                        android:text="Trojan" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <LinearLayout
+                android:id="@+id/entry_seg"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_seg"
+                android:orientation="horizontal"
+                android:padding="3dp">
+
+                <Button
+                    android:id="@+id/entry_link"
+                    style="@style/Widget.Loft.Chip"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/entry_link" />
+
+                <Button
+                    android:id="@+id/entry_man"
+                    style="@style/Widget.Loft.Chip"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/entry_man" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/block_link"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/lbl_link"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/loft_uri"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/bg_field"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/link"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@android:color/transparent"
+                        android:fontFamily="monospace"
+                        android:inputType="textUri"
+                        android:padding="12dp"
+                        android:textColor="@color/snow"
+                        android:textColorHint="@color/mute"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_eye"
+                        style="@style/Widget.Loft.Chip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/show_secret" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/block_loft_man"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/lbl_token"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/key_title"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+
+                <EditText
+                    android:id="@+id/token"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:inputType="textVisiblePassword"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textSize="12sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/host"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_field"
+                        android:fontFamily="monospace"
+                        android:hint="@string/host"
+                        android:inputType="textUri"
+                        android:padding="12dp"
+                        android:textColor="@color/snow"
+                        android:textColorHint="@color/mute" />
+
+                    <EditText
+                        android:id="@+id/port"
+                        android:layout_width="88dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="6dp"
+                        android:background="@drawable/bg_field"
+                        android:fontFamily="monospace"
+                        android:hint="@string/port"
+                        android:inputType="number"
+                        android:padding="12dp"
+                        android:textColor="@color/snow"
+                        android:textColorHint="@color/mute" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/lbl_method"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/method"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+
+                <HorizontalScrollView
+                    android:id="@+id/method_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/method_seg"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <Button android:id="@+id/m_auto" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/method_auto" />
+                        <Button android:id="@+id/m_get" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="GET" />
+                        <Button android:id="@+id/m_ws" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="WS" />
+                        <Button android:id="@+id/m_h2" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="H2" />
+                        <Button android:id="@+id/m_quic" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="QUIC" />
+                        <Button android:id="@+id/m_h3" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="H3" />
+                        <Button android:id="@+id/m_l3" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="L3" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+
+                <EditText
+                    android:id="@+id/path"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/path"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/block_sstp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <EditText
+                    android:id="@+id/user"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:hint="@string/user"
+                    android:inputType="text"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+
+                <EditText
+                    android:id="@+id/pass"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:hint="@string/password"
+                    android:inputType="textPassword"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+
+                <LinearLayout
+                    android:id="@+id/row_tls"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/tls_check"
+                        android:textColor="@color/snow" />
+
+                    <Switch
+                        android:id="@+id/sw_tls"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/row_pap"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/pap"
+                        android:textColor="@color/snow" />
+
+                    <Switch
+                        android:id="@+id/sw_pap"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_adv"
+                style="@style/Widget.Loft.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:backgroundTint="@android:color/transparent"
+                android:text="@string/more_options"
+                android:textColor="@color/lamp" />
+
+            <LinearLayout
+                android:id="@+id/block_adv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/row_mux"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/mux"
+                            android:textColor="@color/snow" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/mux_d"
+                            android:textColor="@color/mute"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/sw_mux"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/dns"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/dns"
+                    android:inputType="text"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/dns_sys"
+                            android:textColor="@color/snow" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/dns_sys_d"
+                            android:textColor="@color/mute"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/sw_dns_sys"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/sni"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/tls_host"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_save"
+                style="@style/Widget.Loft.Go"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/save" />
+
+            <Button
+                android:id="@+id/btn_delete"
+                style="@style/Widget.Loft.Danger"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/delete" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

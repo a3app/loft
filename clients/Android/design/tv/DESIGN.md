@@ -2,7 +2,7 @@
 
 **English** · [Русский](DESIGN_ru.md) · [中文](DESIGN_zh.md)
 
-Same session as the phone: `LoftVpnService` + `clients/mobile` AAR. This mock is the 10-foot shell. Mark, palette, Avenir Next: [`brand/`](../../../../docs/brand/). Interactive mock: [`index.html`](index.html); every state has its own link, e.g. `#home-on`, `#pair`, `#settings-route`. Phone mock: [`../index.html`](../index.html). Protocol: [docs/protocol.md](../../../../docs/protocol.md). Import URI: [docs/share.md](../../../../docs/share.md). Plan: [PLAN](../../PLAN.md) phase 4.
+Same session as the phone: `LoftVpnService` + `clients/mobile` AAR. This mock is the 10-foot shell. Mark, palette, Avenir Next: [`brand/`](../../../../docs/brand/). Interactive mock: [`index.html`](index.html); every state has its own link, e.g. `#home-on`, `#pair`, `#settings-route`. Phone mock: [`../index.html`](../index.html). Protocol: [docs/protocol.md](../../../../docs/protocol.md). Import URI: [docs/share.md](../../../../docs/share.md). Catalog: [README](../../README.md).
 
 The later GUI is Leanback (Java 17 Views, D-pad). Not Compose. `connect` is node-only. Auto = GET.
 
@@ -102,4 +102,4 @@ Shared buttons come from `clients/macOS/lang/*.lang`. TV-only lines: the three a
 
 ## 7. Out of this mock
 
-Leanback Java, `tv` flavor, banner resource, Play TV listing, RSS measurement on a 2 GiB stick. Phone layouts stay in the phone flavor. Dist / VERSION untouched.
+Play TV listing. RSS on a 2 GiB stick is an operator measurement (About shows VmRSS). Dist / VERSION untouched unless asked. Flavor `tv`, Leanback Java, banner, and the 10-foot GUI live in `app/src/tv/`.

@@ -3,63 +3,120 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/ink"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="4dp">
+
+        <ImageButton
+            android:id="@+id/btn_close"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/close"
+            android:src="@drawable/ic_close" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="-0.03"
+            android:text="@string/scan_title"
+            android:textColor="@color/snow"
+            android:textSize="20sp" />
+    </LinearLayout>
 
     <androidx.camera.view.PreviewView
         android:id="@+id/preview"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_margin="16dp"
         android:layout_weight="1" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:text="@string/scan_hint"
+        android:textColor="@color/mute"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingLeft="16dp"
+        android:paddingTop="8dp"
+        android:paddingRight="16dp">
+
+        <Button
+            android:id="@+id/btn_file"
+            style="@style/Widget.Loft.Ghost"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/from_file" />
+
+        <Button
+            android:id="@+id/btn_gal"
+            style="@style/Widget.Loft.Ghost"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="6dp"
+            android:layout_weight="1"
+            android:text="@string/from_gallery" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="16dp"
+        android:paddingTop="8dp"
+        android:text="@string/paste_or"
+        android:textColor="@color/mute"
+        android:textSize="12sp" />
 
     <EditText
         android:id="@+id/paste"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginLeft="16dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginRight="16dp"
+        android:background="@drawable/bg_field"
         android:hint="@string/paste_hint"
-        android:inputType="textUri"
+        android:inputType="textUri|textMultiLine"
+        android:minLines="2"
+        android:padding="12dp"
         android:textColor="@color/snow"
         android:textColorHint="@color/mute" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:padding="16dp">
 
         <Button
             android:id="@+id/btn_paste"
+            style="@style/Widget.Loft.Ghost"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:backgroundTint="@color/slate"
-            android:text="@string/paste"
-            android:textColor="@color/snow" />
+            android:text="@string/paste" />
 
         <Button
-            android:id="@+id/btn_file"
+            android:id="@+id/btn_add"
+            style="@style/Widget.Loft.Go"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginLeft="6dp"
             android:layout_weight="1"
-            android:backgroundTint="@color/slate"
-            android:text="@string/from_file"
-            android:textColor="@color/snow" />
-
-        <Button
-            android:id="@+id/btn_gal"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:backgroundTint="@color/slate"
-            android:text="@string/from_gallery"
-            android:textColor="@color/snow" />
+            android:text="@string/add" />
     </LinearLayout>
-
-    <Button
-        android:id="@+id/btn_add"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:backgroundTint="@color/lamp"
-        android:text="@string/add"
-        android:textColor="@color/ink" />
 </LinearLayout>

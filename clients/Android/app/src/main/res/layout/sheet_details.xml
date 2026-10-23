@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/ink2"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:text="@string/details"
+        android:textColor="@color/snow"
+        android:textSize="18sp" />
+
+    <TextView
+        android:id="@+id/det_addr"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:fontFamily="monospace"
+        android:textColor="@color/snow"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/det_front"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="@color/stone"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/det_mtu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="@color/stone"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/det_server"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="monospace"
+        android:textColor="@color/stone"
+        android:textSize="13sp" />
+</LinearLayout>

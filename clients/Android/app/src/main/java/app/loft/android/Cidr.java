@@ -236,6 +236,24 @@ final class Cidr {
         }
     }
 
+    static Cidr fromIpMask(String ip, String mask) {
+        InetAddress m = numeric(mask);
+        if (m == null) {
+            return parse(ip);
+        }
+        byte[] b = m.getAddress();
+        int bits = 0;
+        for (byte x : b) {
+            bits += Integer.bitCount(x & 0xff);
+        }
+        return parse(ip + "/" + bits);
+    }
+
+    static String dottedMask(int bits) {
+        int n = bits <= 0 ? 0 : bits >= 32 ? 0xFFFFFFFF : (0xFFFFFFFF << (32 - bits));
+        return ((n >>> 24) & 255) + "." + ((n >>> 16) & 255) + "." + ((n >>> 8) & 255) + "." + (n & 255);
+    }
+
     static String fmt(long n, boolean bits) {
         if (n < 0) {
             n = 0;

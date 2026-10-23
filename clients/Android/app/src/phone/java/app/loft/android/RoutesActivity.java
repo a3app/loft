@@ -9,12 +9,12 @@ import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
-import androidx.appcompat.app.AppCompatActivity;
+
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class RoutesActivity extends AppCompatActivity {
+public final class RoutesActivity extends LoftActivity {
     private static final String[] VIA = {"through", "bypass", "drop"};
     private List<Prefs.Route> list;
     private ArrayAdapter<String> adapter;

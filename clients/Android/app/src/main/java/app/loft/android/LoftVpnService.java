@@ -148,6 +148,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             }
             tick();
             retries = 0;
+            Live.since = System.currentTimeMillis();
             Journal.add("up " + Live.ip + (Live.ip6.isEmpty() ? "" : " " + Live.ip6));
         } catch (Exception e) {
             fail(e.getMessage());
@@ -566,7 +567,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
         PendingIntent open = PendingIntent.getActivity(this, 0,
-                new Intent(this, MainActivity.class), flags);
+                new Intent(this, Home.activity()), flags);
         PendingIntent stop = PendingIntent.getService(this, 1,
                 new Intent(this, LoftVpnService.class).setAction(ACTION_STOP), flags);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26

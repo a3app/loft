@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Loft.Tv" parent="Theme.Leanback">
+        <item name="android:windowBackground">@color/ink</item>
+        <item name="android:colorBackground">@color/ink</item>
+        <item name="android:textColor">@color/snow</item>
+        <item name="android:textColorPrimary">@color/snow</item>
+        <item name="android:textColorSecondary">@color/mute</item>
+        <item name="colorPrimary">@color/lamp</item>
+        <item name="colorOnPrimary">@color/ink</item>
+        <item name="defaultBrandColor">@color/ink</item>
+        <item name="defaultBrandColorDark">@color/ink</item>
+    </style>
+</resources>

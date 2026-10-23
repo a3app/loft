@@ -4,7 +4,7 @@
 
 手机应用 + `VpnService`。会话是 Go [`clients/mobile`](../mobile/)。**Java 17**，不是 Kotlin：gomobile 已经吐 Java。
 
-协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/android_zh.md](../../docs/android_zh.md)。导入 URI：[docs/share_zh.md](../../docs/share_zh.md)。计划：[PLAN.md](PLAN.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。手机模型：[design/index.html](design/index.html)。电视模型：[design/tv/](design/tv/)。
+协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/android_zh.md](../../docs/android_zh.md)。导入 URI：[docs/share_zh.md](../../docs/share_zh.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。手机模型：[design/index.html](design/index.html)。电视模型：[design/tv/](design/tv/)。
 
 overlay 是 Android 上的一条网络：系统里一条 VPN，每个前置套接字 `protect(fd)`，`NetworkCallback` → `NotifyPathChange`（新的 `0x02`，同一个 `instance_id`）。Snapshot 双栈。前置：get、ws、h2、quic、h3、l3。`connect` 只在节点上。
 
@@ -12,7 +12,6 @@ overlay 是 Android 上的一条网络：系统里一条 VPN，每个前置套�
 
 ```
 clients/Android/
-  PLAN.md                  手机已完成；电视模型在 design/tv；Leanback flavor 以后
   design/                  手机 UX 说明和 HTML 模型
   design/tv/               十英尺 UX 说明和 HTML 模型
   emulator/                macOS loft.app 内容（复制进 dist）
@@ -33,6 +32,6 @@ make android                 # 在仓库根目录；需要 Android NDK
 # 或：make -C clients/Android
 ```
 
-写出 `dist/clients/Android/app-debug.apk` 和 `loft.app`。中间文件在 `dist/clients/Android/gradle/`，不进 `clients/Android/`。双击 `loft.app` 会启动 AVD `loft-phone`、安装这份 APK、把 loft 和 Browser 钉到主屏并打开 loft。AOSP 没有 Chrome；Browser 是 WebView Shell。Intel Mac + AMD GPU 走 SwiftShader（`-gpu swiftshader_indirect`）；host GLES 会黑屏。
+写出 `dist/clients/Android/app-debug.apk` 和 `loft.app`。中间文件在 `dist/clients/Android/gradle/`，不进 `clients/Android/`。双击 `loft.app` 会启动 AVD `loft-phone`、安装这份 APK、把 loft、Browser、Apps 和 Settings 钉到主屏并打开 loft。Apps 打开启动器应用抽屉；Settings 打开系统设置。AOSP 没有 Chrome；Browser 是 WebView Shell。Intel Mac + AMD GPU 走 SwiftShader（`-gpu swiftshader_indirect`）；host GLES 会黑屏。
 
-Id：`app.loft.android`。VPN 类型：`VpnService`。系统里一条 VPN。
+Id：手机 `app.loft.android`，电视 `app.loft.android.tv`。VPN 类型：`VpnService`。每台设备一条系统 VPN。flavor `tv` 是 Leanback。`make -C clients/Android release` 写出 ad-hoc 签名的 `app-release.apk` 和 `app-tv-release.apk`。

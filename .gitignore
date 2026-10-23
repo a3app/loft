@@ -27,6 +27,8 @@ docs/brand/concepts/
 *.cer
 *.p12
 *.pfx
+*.jks
+*.keystore
 *.pass
 .env
 *.env

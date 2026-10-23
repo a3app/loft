@@ -2,7 +2,7 @@
 
 [English](DESIGN.md) · [Русский](DESIGN_ru.md) · **中文**
 
-和手机同一条会话：`LoftVpnService` + `clients/mobile` AAR。这份模型是十英尺外壳。标志、色板、Avenir Next：[`brand/`](../../../../docs/brand/)。交互模型：[`index.html`](index.html)；每个状态有自己的链接，例如 `#home-on`、`#pair`、`#settings-route`。手机模型：[`../index.html`](../index.html)。协议：[docs/protocol_zh.md](../../../../docs/protocol_zh.md)。导入 URI：[docs/share_zh.md](../../../../docs/share_zh.md)。计划：[PLAN](../../PLAN.md) 第 4 阶段。
+和手机同一条会话：`LoftVpnService` + `clients/mobile` AAR。这份模型是十英尺外壳。标志、色板、Avenir Next：[`brand/`](../../../../docs/brand/)。交互模型：[`index.html`](index.html)；每个状态有自己的链接，例如 `#home-on`、`#pair`、`#settings-route`。手机模型：[`../index.html`](../index.html)。协议：[docs/protocol_zh.md](../../../../docs/protocol_zh.md)。导入 URI：[docs/share_zh.md](../../../../docs/share_zh.md)。目录：[README](../../README_zh.md)。
 
 后面的 GUI 是 Leanback（Java 17 Views，遥控器）。不用 Compose。`connect` 只在节点上。自动 = GET。
 
@@ -102,4 +102,4 @@ Hairpin、双栈、`protect(fd)`、FrontIP `excludeRoute` 是手机引擎。这�
 
 ## 7. 这份模型不做
 
-Leanback 的 Java、`tv` flavor、横幅资源、Play TV 卡片、2 GiB 盒子上的 RSS 实测。手机布局留在 phone flavor。不改 Dist / VERSION。
+Play TV 卡片。2 GiB 盒子上的 RSS 由运营者实测（About 显示 VmRSS）。未要求时不改 Dist / VERSION。`tv` flavor、Leanback Java、横幅和十英尺 GUI 在 `app/src/tv/`。

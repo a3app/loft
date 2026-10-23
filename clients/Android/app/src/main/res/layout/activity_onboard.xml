@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ink"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <ImageView
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:contentDescription="@string/app_name"
+            android:src="@drawable/ic_lamp_on" />
+
+        <TextView
+            android:id="@+id/step"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/mute"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="-0.04"
+            android:text="@string/app_name"
+            android:textColor="@color/snow"
+            android:textSize="22sp" />
+
+        <TextView
+            android:id="@+id/body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:textColor="@color/mute"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:id="@+id/step0"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical">
+
+            <Button
+                android:id="@+id/btn_scan"
+                style="@style/Widget.Loft.Go"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/scan" />
+
+            <Button
+                android:id="@+id/btn_paste"
+                style="@style/Widget.Loft.Ghost"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/paste" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/start_hint"
+                android:textColor="@color/mute"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_hand"
+                style="@style/Widget.Loft.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="14dp"
+                android:backgroundTint="@android:color/transparent"
+                android:text="@string/start_manual"
+                android:textColor="@color/lamp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/step1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/token"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_field"
+                android:fontFamily="monospace"
+                android:hint="lt_"
+                android:inputType="textVisiblePassword"
+                android:padding="12dp"
+                android:textColor="@color/snow"
+                android:textColorHint="@color/mute" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/key_hint"
+                android:textColor="@color/mute"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_cont"
+                style="@style/Widget.Loft.Go"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="@string/continue_btn" />
+
+            <Button
+                android:id="@+id/btn_back1"
+                style="@style/Widget.Loft.Ghost"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/back" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/step2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_field"
+                android:fontFamily="monospace"
+                android:hint="https://"
+                android:inputType="textUri"
+                android:padding="12dp"
+                android:text="https://"
+                android:textColor="@color/snow"
+                android:textColorHint="@color/mute" />
+
+            <Button
+                android:id="@+id/btn_adv"
+                style="@style/Widget.Loft.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@android:color/transparent"
+                android:text="@string/more_options"
+                android:textColor="@color/lamp" />
+
+            <LinearLayout
+                android:id="@+id/adv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/method_seg"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <Button android:id="@+id/m_auto" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/method_auto" />
+                        <Button android:id="@+id/m_get" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="GET" />
+                        <Button android:id="@+id/m_ws" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="WS" />
+                        <Button android:id="@+id/m_h2" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="H2" />
+                        <Button android:id="@+id/m_quic" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="QUIC" />
+                        <Button android:id="@+id/m_h3" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="H3" />
+                        <Button android:id="@+id/m_l3" style="@style/Widget.Loft.Chip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4dp" android:text="L3" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+
+                <EditText
+                    android:id="@+id/path"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/path"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_go"
+                style="@style/Widget.Loft.Go"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="@string/onb_go" />
+
+            <Button
+                android:id="@+id/btn_back2"
+                style="@style/Widget.Loft.Ghost"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/back" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/onb_vpn"
+                android:textColor="@color/mute"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

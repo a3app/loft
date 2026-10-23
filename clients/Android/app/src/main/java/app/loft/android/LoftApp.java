@@ -8,6 +8,7 @@ public final class LoftApp extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        Lang.apply(this);
         profiles = new Profiles(this);
     }
 

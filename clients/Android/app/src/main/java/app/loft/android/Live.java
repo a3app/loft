@@ -17,8 +17,13 @@ final class Live {
     static volatile int mtu = 1280;
     static volatile boolean holding;
     static volatile long lastAt;
+    static volatile long since;
     static volatile long rateDown;
     static volatile long rateUp;
+    static final int SPARK_N = SparkView.N;
+    static final float[] sparkDn = new float[SPARK_N];
+    static final float[] sparkUp = new float[SPARK_N];
+    static volatile int sparkCount;
 
     static boolean on() {
         return "on".equals(state);
@@ -35,6 +40,7 @@ final class Live {
             if (s >= 0.2) {
                 rateUp = (long) Math.max(0, (upNow - up) / s);
                 rateDown = (long) Math.max(0, (downNow - down) / s);
+                pushSpark(rateDown, rateUp);
             }
         }
         up = upNow;
@@ -59,5 +65,22 @@ final class Live {
         rateUp = 0;
         rateDown = 0;
         lastAt = 0;
+        since = 0;
+        sparkCount = 0;
+        java.util.Arrays.fill(sparkDn, 0);
+        java.util.Arrays.fill(sparkUp, 0);
+    }
+
+    static void pushSpark(long down, long upBps) {
+        if (sparkCount < SPARK_N) {
+            sparkDn[sparkCount] = down;
+            sparkUp[sparkCount] = upBps;
+            sparkCount++;
+            return;
+        }
+        System.arraycopy(sparkDn, 1, sparkDn, 0, SPARK_N - 1);
+        System.arraycopy(sparkUp, 1, sparkUp, 0, SPARK_N - 1);
+        sparkDn[SPARK_N - 1] = down;
+        sparkUp[SPARK_N - 1] = upBps;
     }
 }

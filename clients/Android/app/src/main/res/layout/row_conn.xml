@@ -1,47 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:paddingLeft="16dp"
-    android:paddingTop="12dp"
-    android:paddingRight="16dp"
-    android:paddingBottom="12dp">
-
-    <Button
-        android:id="@+id/mini"
-        android:layout_width="wrap_content"
-        android:layout_height="40dp"
-        android:backgroundTint="@color/slate"
-        android:minWidth="88dp"
-        android:text="@string/connect"
-        android:textColor="@color/snow"
-        android:textSize="12sp" />
+    android:paddingLeft="12dp"
+    android:paddingTop="3dp"
+    android:paddingRight="12dp"
+    android:paddingBottom="3dp">
 
     <LinearLayout
-        android:id="@+id/body"
-        android:layout_width="0dp"
+        android:id="@+id/card"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginLeft="12dp"
-        android:layout_weight="1"
-        android:background="?android:attr/selectableItemBackground"
-        android:clickable="true"
-        android:focusable="true"
-        android:orientation="vertical">
+        android:background="@drawable/bg_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="10dp"
+        android:paddingTop="8dp"
+        android:paddingRight="10dp"
+        android:paddingBottom="8dp">
 
-        <TextView
-            android:id="@+id/title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@color/snow"
-            android:textSize="16sp" />
+        <Button
+            android:id="@+id/mini"
+            style="@style/Widget.Loft.Mini"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="@string/connect" />
 
-        <TextView
-            android:id="@+id/sub"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:id="@+id/body"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textColor="@color/mute"
-            android:textSize="12sp" />
+            android:layout_marginLeft="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/snow"
+                android:textSize="13.5sp" />
+
+            <TextView
+                android:id="@+id/sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="monospace"
+                android:maxLines="1"
+                android:textColor="@color/mute"
+                android:textSize="10.5sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/live"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/active"
+                android:textColor="@color/lamp"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/kind"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/stone"
+                android:textSize="11sp" />
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
+</FrameLayout>

@@ -12,7 +12,6 @@ import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
@@ -35,7 +34,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public final class ScanActivity extends AppCompatActivity {
+public final class ScanActivity extends LoftActivity {
     private static final int REQ_CAM = 3;
     private static final int REQ_FILE = 4;
     private static final int REQ_GAL = 5;
@@ -46,6 +45,7 @@ public final class ScanActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scan);
+        findViewById(R.id.btn_close).setOnClickListener(v -> finish());
         findViewById(R.id.btn_paste).setOnClickListener(v -> {
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             if (cm != null && cm.getPrimaryClip() != null && cm.getPrimaryClip().getItemCount() > 0) {
@@ -197,14 +197,58 @@ public final class ScanActivity extends AppCompatActivity {
         if (raw == null || raw.trim().isEmpty() || !got.compareAndSet(false, true)) {
             return;
         }
+        if (PairUrl.isPair(raw)) {
+            String body = LoftApp.of(this).profiles().shareAll();
+            if (body.isEmpty()) {
+                got.set(false);
+                Toast.makeText(this, R.string.empty_conns, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            PairUrl.send(this, raw, body, (ok, err) -> {
+                if (ok) {
+                    Toast.makeText(this, R.string.sent_tv, Toast.LENGTH_SHORT).show();
+                    finish();
+                } else {
+                    got.set(false);
+                    Toast.makeText(this, err == null ? getString(R.string.paste_hint) : err,
+                            Toast.LENGTH_SHORT).show();
+                }
+            });
+            return;
+        }
         List<Profile> list = Importer.parse(raw);
         if (list.isEmpty()) {
             got.set(false);
             Toast.makeText(this, R.string.paste_hint, Toast.LENGTH_SHORT).show();
             return;
         }
-        LoftApp.of(this).profiles().addAll(list);
-        Toast.makeText(this, R.string.imported, Toast.LENGTH_SHORT).show();
-        finish();
+        if (getIntent().getBooleanExtra("return", false)) {
+            setResult(RESULT_OK, new Intent().putExtra("raw", raw));
+            finish();
+            return;
+        }
+        Profile first = list.get(0);
+        String title = first.name.isEmpty() ? first.host() : first.name;
+        StringBuilder msg = new StringBuilder();
+        for (Profile p : list) {
+            if (msg.length() > 0) {
+                msg.append('\n');
+            }
+            msg.append(p.side());
+            if (!p.host().isEmpty()) {
+                msg.append("  ").append(p.host());
+            }
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(title.isEmpty() ? getString(R.string.imported) : title)
+                .setMessage(msg.toString())
+                .setPositiveButton(R.string.confirm_imported, (d, w) -> {
+                    LoftApp.of(this).profiles().addAll(list);
+                    Toast.makeText(this, R.string.imported, Toast.LENGTH_SHORT).show();
+                    finish();
+                })
+                .setNegativeButton(R.string.cancel, (d, w) -> got.set(false))
+                .setOnCancelListener(d -> got.set(false))
+                .show();
     }
 }

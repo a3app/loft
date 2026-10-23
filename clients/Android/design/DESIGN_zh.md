@@ -22,7 +22,7 @@ Android 设置里显示的就是应用拉起的那条 VPN。应用不替代设�
 
 适配器语言是 **Java 17**。gomobile 已经吐 Java；这个进程不装 Kotlin runtime。模型是 HTML；后面的 GUI 是 Views（不用 Compose）。
 
-Android TV / Google TV 是同一个 `VpnService` 和 AAR，加 Leanback flavor。十英尺模型：[`tv/`](tv/)。[计划](../PLAN.md) 第 4 阶段。VIDAA / Tizen / webOS 不做。
+Android TV / Google TV 是同一个 `VpnService` 和 AAR，加 Leanback flavor。十英尺模型：[`tv/`](tv/)。VIDAA / Tizen / webOS 不做。
 
 ## 2. 屏幕
 

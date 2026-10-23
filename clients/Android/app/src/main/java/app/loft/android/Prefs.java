@@ -14,7 +14,8 @@ final class Prefs {
     static final String DEFAULT_EXT_IP = "https://api.ipify.org";
 
     static SharedPreferences p(Context c) {
-        return c.getApplicationContext().getSharedPreferences("loft.prefs", Context.MODE_PRIVATE);
+        Context app = c.getApplicationContext();
+        return (app != null ? app : c).getSharedPreferences("loft.prefs", Context.MODE_PRIVATE);
     }
 
     static boolean simple(Context c) {
@@ -47,6 +48,21 @@ final class Prefs {
 
     static boolean rateBits(Context c) {
         return p(c).getBoolean("rate_bits", true);
+    }
+
+    static boolean verbose(Context c) {
+        return p(c).getBoolean("verbose", false);
+    }
+
+    static boolean sparkBars(Context c) {
+        return p(c).getBoolean("spark_bars", false);
+    }
+
+    static void defaults(Context c) {
+        p(c).edit().clear().apply();
+        SplitStore st = new SplitStore();
+        st.seed();
+        st.save(c);
     }
 
     static String lang(Context c) {

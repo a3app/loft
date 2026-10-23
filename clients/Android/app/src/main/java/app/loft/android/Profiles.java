@@ -101,6 +101,25 @@ final class Profiles {
         save();
     }
 
+    /** loft:// / YAML docs joined for TV pairing. */
+    synchronized String shareAll() {
+        StringBuilder b = new StringBuilder();
+        for (Profile p : items) {
+            String y = YamlBuilder.emit(p);
+            if (y == null || y.trim().isEmpty()) {
+                y = p.sessionYaml();
+            }
+            if (y == null || y.trim().isEmpty()) {
+                continue;
+            }
+            if (b.length() > 0) {
+                b.append("\n---\n");
+            }
+            b.append(y.trim());
+        }
+        return b.toString();
+    }
+
     synchronized String exportOne(Profile p) {
         if (p == null) {
             return "";

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/ink2"
+    android:orientation="vertical"
+    android:paddingLeft="8dp"
+    android:paddingTop="12dp"
+    android:paddingRight="8dp"
+    android:paddingBottom="24dp">
+
+    <Button
+        android:id="@+id/add_scan"
+        style="@style/Widget.Loft.Ghost"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/scan" />
+
+    <Button
+        android:id="@+id/add_paste"
+        style="@style/Widget.Loft.Ghost"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/paste" />
+
+    <Button
+        android:id="@+id/add_file"
+        style="@style/Widget.Loft.Ghost"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/from_file" />
+
+    <Button
+        android:id="@+id/add_manual"
+        style="@style/Widget.Loft.Ghost"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/manual" />
+</LinearLayout>

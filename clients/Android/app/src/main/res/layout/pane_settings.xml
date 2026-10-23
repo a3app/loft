@@ -8,14 +8,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/general"
-            android:textColor="@color/mute"
-            android:textSize="12sp" />
+        android:paddingLeft="16dp"
+        android:paddingTop="8dp"
+        android:paddingRight="16dp"
+        android:paddingBottom="24dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -27,8 +23,58 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/simple"
-                android:textColor="@color/snow" />
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="-0.03"
+                android:text="@string/settings"
+                android:textColor="@color/snow"
+                android:textSize="20sp" />
+
+            <Button
+                android:id="@+id/btn_reset"
+                style="@style/Widget.Loft.Ghost"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minHeight="36dp"
+                android:text="@string/reset_routes"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/general"
+            android:textAllCaps="true"
+            android:textColor="@color/mute"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/simple"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/simple_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Switch
                 android:id="@+id/sw_simple"
@@ -39,18 +85,135 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/rate_bits"
-                android:textColor="@color/snow" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/rate_unit"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/rate_unit_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <Spinner
+                android:id="@+id/sp_rate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/spark_k"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/spark_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <Spinner
+                android:id="@+id/sp_spark"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/language"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/lang_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <Spinner
+                android:id="@+id/sp_lang"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/extended_log"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/diag_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Switch
-                android:id="@+id/sw_bits"
+                android:id="@+id/sw_log"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
@@ -60,21 +223,37 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
             android:text="@string/route_group"
+            android:textAllCaps="true"
             android:textColor="@color/mute"
             android:textSize="12sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/default_route"
-                android:textColor="@color/snow" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/default_route"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/default_route_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Switch
                 android:id="@+id/sw_default"
@@ -85,34 +264,73 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:layout_marginTop="10dp"
+            android:orientation="vertical">
 
             <TextView
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/lan_bypass"
-                android:textColor="@color/snow" />
+                android:text="@string/hold_sys"
+                android:textColor="@color/snow"
+                android:textSize="14sp" />
 
-            <Switch
-                android:id="@+id/sw_lan"
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/hold_and"
+                android:textColor="@color/mute"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_vpn"
+                style="@style/Widget.Loft.Ghost"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="36dp"
+                android:layout_marginTop="4dp"
+                android:minHeight="36dp"
+                android:text="@string/open_sys"
+                android:textSize="12sp" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/split"
-                android:textColor="@color/snow" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/split"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/split_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_routes"
+                    style="@style/Widget.Loft.Ghost"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginTop="4dp"
+                    android:backgroundTint="@color/lamp"
+                    android:minHeight="36dp"
+                    android:text="@string/lists"
+                    android:textColor="@color/ink"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Switch
                 android:id="@+id/sw_split"
@@ -120,50 +338,42 @@
                 android:layout_height="wrap_content" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btn_routes"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="@color/slate"
-            android:text="@string/routes"
-            android:textColor="@color/snow" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/hold_sys_d"
-            android:textColor="@color/mute"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btn_vpn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="@color/slate"
-            android:text="@string/open_sys"
-            android:textColor="@color/snow" />
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
             android:text="@string/conn_group"
+            android:textAllCaps="true"
             android:textColor="@color/mute"
             android:textSize="12sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/auto"
-                android:textColor="@color/snow" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/auto"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/auto_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Switch
                 android:id="@+id/sw_auto"
@@ -174,15 +384,30 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/reconnect"
-                android:textColor="@color/snow" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/reconnect"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/reconnect_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Switch
                 android:id="@+id/sw_re"
@@ -193,15 +418,30 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/ext_ip"
-                android:textColor="@color/snow" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/ext_ip"
+                    android:textColor="@color/snow"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/ext_ip_d"
+                    android:textColor="@color/mute"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Switch
                 android:id="@+id/sw_ext"
@@ -209,21 +449,40 @@
                 android:layout_height="wrap_content" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btn_log"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:backgroundTint="@color/slate"
-            android:text="@string/log"
-            android:textColor="@color/snow" />
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/btn_about"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="@color/slate"
-            android:text="@string/about"
-            android:textColor="@color/snow" />
+            <Button
+                android:id="@+id/btn_defaults"
+                style="@style/Widget.Loft.Ghost"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/defaults"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_log"
+                style="@style/Widget.Loft.Ghost"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:layout_weight="1"
+                android:text="@string/log"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_about"
+                style="@style/Widget.Loft.Ghost"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:layout_weight="1"
+                android:text="@string/about"
+                android:textSize="13sp" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

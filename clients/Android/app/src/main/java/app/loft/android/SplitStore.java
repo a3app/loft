@@ -1,0 +1,388 @@
+package app.loft.android;
+
+import android.content.Context;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+
+/** Zones + services + exclusions. Same model as macOS DESIGN §5. */
+final class SplitStore {
+    static final String LOCAL = "local";
+    static final String GLOBAL = "global";
+    static final String REPO_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
+    static final String[][] CATALOG = {
+            {"global", "World", "Мир", "全球"},
+            {"ru", "Russia", "Россия", "俄罗斯"},
+            {"cn", "China", "Китай", "中国"},
+            {"ir", "Iran", "Иран", "伊朗"},
+            {"kz", "Kazakhstan", "Казахстан", "哈萨克斯坦"},
+            {"by", "Belarus", "Беларусь", "白俄罗斯"},
+    };
+
+    final List<Zone> zones = new ArrayList<>();
+    final List<Svc> services = new ArrayList<>();
+
+    static final class Zone {
+        String id = "";
+        String name = "";
+        boolean builtin;
+        boolean through;
+        String repo = "";
+        boolean auto = true;
+    }
+
+    static final class Svc {
+        String id = UUID.randomUUID().toString();
+        String name = "";
+        String zone = GLOBAL;
+        String src = "me"; // me | repo | ignore
+        boolean ignore;
+        final List<String> cidrs = new ArrayList<>();
+    }
+
+    static SplitStore load(Context c) {
+        SplitStore st = new SplitStore();
+        String raw = Prefs.p(c).getString("split_store", "");
+        if (raw == null || raw.isEmpty()) {
+            st.seed();
+            st.migrateRoutes(c);
+            st.save(c);
+            return st;
+        }
+        try {
+            JSONObject o = new JSONObject(raw);
+            JSONArray zs = o.optJSONArray("zones");
+            if (zs != null) {
+                for (int i = 0; i < zs.length(); i++) {
+                    JSONObject z = zs.getJSONObject(i);
+                    Zone zone = new Zone();
+                    zone.id = z.optString("id");
+                    zone.name = z.optString("name");
+                    zone.builtin = z.optBoolean("builtin");
+                    zone.through = z.optBoolean("through");
+                    zone.repo = z.optString("repo");
+                    zone.auto = z.optBoolean("auto", true);
+                    if (!zone.id.isEmpty()) {
+                        st.zones.add(zone);
+                    }
+                }
+            }
+            JSONArray ss = o.optJSONArray("services");
+            if (ss != null) {
+                for (int i = 0; i < ss.length(); i++) {
+                    JSONObject s = ss.getJSONObject(i);
+                    Svc svc = new Svc();
+                    svc.id = s.optString("id", svc.id);
+                    svc.name = s.optString("name");
+                    svc.zone = s.optString("zone", GLOBAL);
+                    svc.src = s.optString("src", "me");
+                    svc.ignore = s.optBoolean("ignore") || "ignore".equals(svc.src);
+                    JSONArray cidrs = s.optJSONArray("cidrs");
+                    if (cidrs != null) {
+                        for (int j = 0; j < cidrs.length(); j++) {
+                            String x = cidrs.optString(j);
+                            if (Cidr.parse(x) != null) {
+                                svc.cidrs.add(Cidr.parse(x).display());
+                            }
+                        }
+                    }
+                    st.services.add(svc);
+                }
+            }
+        } catch (Exception ignored) {
+            st.zones.clear();
+            st.services.clear();
+        }
+        if (st.zone(LOCAL) == null || st.zone(GLOBAL) == null) {
+            st.seed();
+        }
+        return st;
+    }
+
+    void save(Context c) {
+        JSONObject o = new JSONObject();
+        try {
+            JSONArray zs = new JSONArray();
+            for (Zone z : zones) {
+                JSONObject j = new JSONObject();
+                j.put("id", z.id);
+                j.put("name", z.name);
+                j.put("builtin", z.builtin);
+                j.put("through", z.through);
+                j.put("repo", z.repo);
+                j.put("auto", z.auto);
+                zs.put(j);
+            }
+            JSONArray ss = new JSONArray();
+            for (Svc s : services) {
+                JSONObject j = new JSONObject();
+                j.put("id", s.id);
+                j.put("name", s.name);
+                j.put("zone", s.zone);
+                j.put("src", s.ignore ? "ignore" : s.src);
+                j.put("ignore", s.ignore);
+                JSONArray cidrs = new JSONArray();
+                for (String x : s.cidrs) {
+                    cidrs.put(x);
+                }
+                j.put("cidrs", cidrs);
+                ss.put(j);
+            }
+            o.put("zones", zs);
+            o.put("services", ss);
+        } catch (Exception ignored) {
+        }
+        Prefs.p(c).edit().putString("split_store", o.toString()).apply();
+    }
+
+    void seed() {
+        zones.clear();
+        services.clear();
+        Zone local = new Zone();
+        local.id = LOCAL;
+        local.name = "Local";
+        local.builtin = true;
+        local.through = false;
+        local.auto = true;
+        Zone global = new Zone();
+        global.id = GLOBAL;
+        global.name = "Global";
+        global.builtin = true;
+        global.through = true;
+        global.repo = REPO_BASE + "global.bat";
+        global.auto = true;
+        zones.add(local);
+        zones.add(global);
+        Svc lan = new Svc();
+        lan.id = "lan";
+        lan.name = "LAN";
+        lan.zone = LOCAL;
+        lan.src = "me";
+        lan.cidrs.add("10.0.0.0/8");
+        lan.cidrs.add("172.16.0.0/12");
+        lan.cidrs.add("192.168.0.0/16");
+        services.add(lan);
+    }
+
+    void migrateRoutes(Context c) {
+        for (Prefs.Route r : Prefs.routes(c)) {
+            Cidr cidr = Cidr.parse(r.cidr);
+            if (cidr == null) {
+                continue;
+            }
+            Svc s = new Svc();
+            s.name = cidr.display();
+            s.cidrs.add(cidr.display());
+            if ("bypass".equals(r.via)) {
+                s.zone = LOCAL;
+            } else if ("drop".equals(r.via)) {
+                s.zone = LOCAL;
+                s.src = "ignore";
+                s.ignore = true;
+                s.name = "ignore";
+            } else {
+                s.zone = GLOBAL;
+            }
+            services.add(s);
+        }
+    }
+
+    Zone zone(String id) {
+        for (Zone z : zones) {
+            if (z.id.equals(id)) {
+                return z;
+            }
+        }
+        return null;
+    }
+
+    Svc svc(String id) {
+        for (Svc s : services) {
+            if (s.id.equals(id)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    int count(String zoneId) {
+        int n = 0;
+        for (Svc s : services) {
+            if (zoneId.equals(s.zone) && !s.ignore) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    List<Svc> in(String zoneId, String q) {
+        String needle = q == null ? "" : q.trim().toLowerCase(Locale.US);
+        List<Svc> out = new ArrayList<>();
+        for (Svc s : services) {
+            if (!zoneId.equals(s.zone)) {
+                continue;
+            }
+            if (!needle.isEmpty() && !s.name.toLowerCase(Locale.US).contains(needle)
+                    && !join(s.cidrs).toLowerCase(Locale.US).contains(needle)) {
+                continue;
+            }
+            out.add(s);
+        }
+        return out;
+    }
+
+    void deleteZone(String id) {
+        Zone z = zone(id);
+        if (z == null || z.builtin) {
+            return;
+        }
+        for (Svc s : services) {
+            if (id.equals(s.zone)) {
+                s.zone = GLOBAL;
+            }
+        }
+        Iterator<Zone> it = zones.iterator();
+        while (it.hasNext()) {
+            if (it.next().id.equals(id)) {
+                it.remove();
+            }
+        }
+    }
+
+    void replaceRepo(String zoneId, List<Bat.Row> rows) {
+        Iterator<Svc> it = services.iterator();
+        while (it.hasNext()) {
+            Svc s = it.next();
+            if (zoneId.equals(s.zone) && "repo".equals(s.src) && !s.ignore) {
+                it.remove();
+            }
+        }
+        // group by name
+        for (Bat.Row r : rows) {
+            if (r.ignore) {
+                Svc ign = findIgnore(zoneId, r.cidr);
+                if (ign == null) {
+                    ign = new Svc();
+                    ign.name = "ignore";
+                    ign.zone = zoneId;
+                    ign.src = "ignore";
+                    ign.ignore = true;
+                    ign.cidrs.add(r.cidr);
+                    services.add(ign);
+                } else if (!ign.cidrs.contains(r.cidr)) {
+                    ign.cidrs.add(r.cidr);
+                }
+                continue;
+            }
+            Svc s = findRepo(zoneId, r.name);
+            if (s == null) {
+                s = new Svc();
+                s.name = r.name;
+                s.zone = zoneId;
+                s.src = "repo";
+                services.add(s);
+            }
+            if (!s.cidrs.contains(r.cidr)) {
+                s.cidrs.add(r.cidr);
+            }
+        }
+    }
+
+    private Svc findRepo(String zoneId, String name) {
+        for (Svc s : services) {
+            if (zoneId.equals(s.zone) && "repo".equals(s.src) && s.name.equals(name) && !s.ignore) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    private Svc findIgnore(String zoneId, String cidr) {
+        for (Svc s : services) {
+            if (zoneId.equals(s.zone) && s.ignore && s.cidrs.contains(cidr)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    List<Cidr> through() {
+        return cidrs(true);
+    }
+
+    List<Cidr> around() {
+        return cidrs(false);
+    }
+
+    List<Cidr> ignores() {
+        List<Cidr> out = new ArrayList<>();
+        for (Svc s : services) {
+            if (!s.ignore) {
+                continue;
+            }
+            addCidrs(s, out);
+        }
+        return out;
+    }
+
+    private List<Cidr> cidrs(boolean through) {
+        List<Cidr> out = new ArrayList<>();
+        for (Zone z : zones) {
+            if (z.through != through) {
+                continue;
+            }
+            for (Svc s : services) {
+                if (!z.id.equals(s.zone) || s.ignore) {
+                    continue;
+                }
+                addCidrs(s, out);
+            }
+        }
+        return out;
+    }
+
+    private static void addCidrs(Svc s, List<Cidr> out) {
+        for (String x : s.cidrs) {
+            Cidr c = Cidr.parse(x);
+            if (c != null) {
+                out.add(c);
+            }
+        }
+    }
+
+    static String join(List<String> cidrs) {
+        StringBuilder b = new StringBuilder();
+        for (String x : cidrs) {
+            if (b.length() > 0) {
+                b.append(' ');
+            }
+            b.append(x);
+        }
+        return b.toString();
+    }
+
+    static String catalogUrl(String id) {
+        return REPO_BASE + id + ".bat";
+    }
+
+    static String catalogLabel(String id, String lang) {
+        for (String[] row : CATALOG) {
+            if (row[0].equals(id)) {
+                if ("ru".equals(lang)) {
+                    return row[2];
+                }
+                if ("zh".equals(lang)) {
+                    return row[3];
+                }
+                return row[1];
+            }
+        }
+        return id;
+    }
+}

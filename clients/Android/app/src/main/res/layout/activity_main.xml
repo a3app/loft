@@ -14,11 +14,16 @@
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/nav"
+        style="@style/Widget.Loft.Nav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/ink2"
-        app:itemIconTint="@color/nav_item"
-        app:itemTextColor="@color/nav_item"
+        android:background="@color/ink"
+        android:paddingTop="6dp"
+        android:paddingBottom="8dp"
+        app:itemActiveIndicatorStyle="@style/Widget.Loft.NavIndicator"
+        app:itemIconTint="@color/nav_icon"
         app:itemRippleColor="@color/lamp"
+        app:itemTextColor="@color/nav_text"
+        app:labelVisibilityMode="labeled"
         app:menu="@menu/nav" />
 </LinearLayout>

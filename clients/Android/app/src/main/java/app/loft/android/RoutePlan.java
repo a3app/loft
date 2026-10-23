@@ -69,19 +69,10 @@ final class RoutePlan {
         List<Cidr> extraThrough = new ArrayList<>();
         List<Cidr> extraBypass = new ArrayList<>();
         if (split) {
-            for (Prefs.Route r : Prefs.routes(ctx)) {
-                Cidr c = Cidr.parse(r.cidr);
-                if (c == null) {
-                    continue;
-                }
-                if ("bypass".equals(r.via)) {
-                    extraBypass.add(c);
-                } else if ("drop".equals(r.via)) {
-                    p.drop.add(c);
-                } else {
-                    extraThrough.add(c);
-                }
-            }
+            SplitStore st = SplitStore.load(ctx);
+            extraThrough.addAll(st.through());
+            extraBypass.addAll(st.around());
+            extraBypass.addAll(st.ignores());
         }
         v4.addAll(filter(extraThrough, false));
         v6.addAll(filter(extraThrough, true));

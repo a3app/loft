@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/conns"
+        android:textColor="@color/snow"
+        android:textSize="34sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/conns_sub"
+        android:textColor="@color/mute"
+        android:textSize="16sp" />
+
+    <HorizontalScrollView
+        android:id="@+id/row_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:fillViewport="false">
+
+        <LinearLayout
+            android:id="@+id/row"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <LinearLayout
+        android:id="@+id/actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/act_edit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/tv_focus"
+            android:minHeight="48dp"
+            android:text="@string/edit"
+            android:textAllCaps="false"
+            android:textColor="@color/snow" />
+
+        <Button
+            android:id="@+id/act_share"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:background="@drawable/tv_focus"
+            android:minHeight="48dp"
+            android:text="@string/share"
+            android:textAllCaps="false"
+            android:textColor="@color/snow" />
+
+        <Button
+            android:id="@+id/act_del"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:background="@drawable/tv_focus"
+            android:minHeight="48dp"
+            android:text="@string/delete"
+            android:textAllCaps="false"
+            android:textColor="@color/err" />
+    </LinearLayout>
+</LinearLayout>
