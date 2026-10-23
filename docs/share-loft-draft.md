@@ -38,7 +38,7 @@ Detector still runs on content, not extension:
 
 ## URI vs YAML
 
-A `loft://` line already carries token, host, port, path, front (`type`), `fp`, `cdn`, `pbk`, name.
+A `loft://` line already carries token, host, port, path, front (`type` or query `get=`/`ws=`/`h2=`/`h3=`/`quic`), `fp`, `cdn`, `pbk`, name. Live `loft://` now prefers query front keys (see [share.md](share.md) §2); this draft is still the URI-line `.loft` file, not in force.
 
 Not in the URI (stay in `.yaml` or on the device): `listen` / SOCKS / TUN, `instance_id`, `pause`.
 
@@ -46,7 +46,7 @@ Poorer than today’s panel YAML `.loft`:
 
 - `bootstrap` (roster before a session). After connect, or a default `https://host` + roster path, can fill this later.
 - `controller_pub` (pin). Without it, first roster is TOFU.
-- several fronts in the file (`select: auto`). One GET `loft://` is enough; the live session attaches `ws`/`h2`/`quic`/`h3` with `0x04` (protocol §4.4).
+- several fronts in the file (`select: auto`). One GET `loft://` is enough; Status `fronts` plus `0x04` attach the rest (protocol §4.4 / §5.2). Query `get=`/`ws=`/`h2=` can still list them up front.
 - `lists_url`, `p2p`, `decoy`, `sni`, `mux`, `inflight`, `h2_max_age_ms` — panel does not put these in issued files today; clients use defaults.
 
 ## Panel

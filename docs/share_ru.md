@@ -4,7 +4,7 @@
 
 Строка импорта на клиенте. Это **не** возможность протокола loft/1.0 и сессию не устанавливает. Нода этот URL не видит.
 
-Адрес loft — `loft://`: тип подключения и транспорт в одной строке. Один исходящий на URI. Файл `.loft` (YAML) держит **одно или несколько подключений** и **может** смешивать все поддерживаемые типы (`loft`, `sstp`, `vless`, `trojan`). Формат файла: [§8](#8-файл-loft).
+Адрес loft — `loft://`: тип подключения и транспорт в одной строке. Ключи query `get` `ws` `h2` `h3` `quic` — фронты **одного** подключения. Без них один исходящий на URI (`type` плюс путь URI). Файл `.loft` (YAML) держит **одно или несколько подключений** и **может** смешивать все поддерживаемые типы (`loft`, `sstp`, `vless`, `trojan`). Формат файла: [§8](#8-файл-loft).
 
 Протокол: [protocol_ru.md](protocol_ru.md). UX iOS: [clients/iOS/design/DESIGN_ru.md](../clients/iOS/design/DESIGN_ru.md). UX Android: [clients/Android/design/DESIGN_ru.md](../clients/Android/design/DESIGN_ru.md). UX macOS: [clients/macOS/design/DESIGN_ru.md](../clients/macOS/design/DESIGN_ru.md). UX Sailfish: [clients/Sailfish/design/DESIGN_ru.md](../clients/Sailfish/design/DESIGN_ru.md).
 
@@ -40,29 +40,36 @@ loft://<token>@<host>[:port][/path][?query][#name]
 
 RFC 3986. `token` и `name` процентировать (`application/x-www-form-urlencoded` для фрагмента не подходит). Порт по умолчанию **443**. IPv6-хост в скобках.
 
-Схема **и есть** тип подключения (`loft`). Query `type` — **транспорт** (`get` `ws` `h2` `quic` `h3` `l3`). Строка списка показывает оба: `loft · get · cdn.example.com`.
+Схема **и есть** тип подключения (`loft`). Хост:порт — authority (`huy.com:443`). Пути фронтов — ключи query. Query `type` — **транспорт** только в старой форме. Строка списка: `loft · get · cdn.example.com`.
 
 | Часть | Куда в `client.yaml` |
 |-------|----------------------|
 | схема `loft` | `kind: loft` |
 | `token` (userinfo) | `token` (`lt_…`) |
-| `host`[:`port`] | хост исходящего `url` |
-| `/path` | исходящий `path` (можно пустой) |
+| `host`[:`port`] | хост каждого loft исходящего `url` |
+| `/path` | старая форма: исходящий `path`. Игнорируется, когда есть `get=` / `ws=` / `h2=` |
 | `#name` | имя подключения; если пусто — `host` |
 
 ### Query
 
 | Ключ | Значения | По умолчанию | YAML |
 |------|----------|--------------|------|
-| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | исходящий `type` (транспорт) |
+| `get` | HTTP-путь | `/static/v3/build`, если ключ есть и пуст | исходящий GET |
+| `ws` | HTTP-путь | `/api/v1/sync`, если ключ есть и пуст | исходящий WS |
+| `h2` | HTTP-путь | `/api/v1/tunnel`, если ключ есть и пуст | исходящий H2 |
+| `h3` | HTTP-путь | `/api/v1/tunnel`, если ключ есть и пуст | исходящий H3 |
+| `quic` | пустой флаг | — | исходящий QUIC (без пути) |
+| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | один исходящий, только когда нет `get`/`ws`/`h2`/`h3`/`quic` |
 | `cdn` | имя профиля (`yandex`, …) | нет | исходящий `cdn` |
 | `fp` | отпечаток TLS (`chrome`, …) | `chrome` | исходящий `fingerprint` |
-| `scheme` | `https` `http` `wss` `ws` | из `type` | схема `url` |
+| `scheme` | `https` `http` `wss` `ws` | из фронта | схема `url` |
 | `pbk` | открытый X25519 ноды, base64url или hex, 32 байта | нет | исходящий `mask_pub` |
+
+Наличие `get` / `ws` / `h2` / `h3` / `quic` включает этот фронт. Пустой `get=` — путь GET по умолчанию. Несколько таких ключей — несколько исходящих **одного** подключения (`select: auto`). После Status карта фронтов ноды — источник истины.
 
 `scheme` по умолчанию: `ws` → `wss`; остальное → `https`.
 
-Собрать URL исходящего: `{scheme}://{host}:{port}{path}`.
+Собрать URL каждого исходящего: `{scheme}://{host}:{port}` плюс путь этого фронта.
 
 `insecure_skip_verify`, `header_budget` и `inflight` не класть. Клиент берёт свои обычные значения. Ключ участника в query не класть.
 
@@ -70,7 +77,13 @@ RFC 3986. `token` и `name` процентировать (`application/x-www-for
 
 ### Примеры
 
-GET на CDN:
+Одно подключение, несколько фронтов:
+
+```
+loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
+```
+
+GET на CDN (старая форма, по-прежнему принимается):
 
 ```
 loft://lt_change-me-long-random@cdn.example.com/static/v3/build?type=get&cdn=yandex&fp=chrome#Home
@@ -110,7 +123,7 @@ loft://lt_change-me-long-random@app.example.com:443?type=quic#Fast
 
 ### Экспорт
 
-Клиент, который умеет шарить, выдаёт `loft://` для **выбранного** исходящего **выбранного** подключения (один QR, один фронт). Несколько фронтов этого подключения или несколько подключений: экспорт `.loft` ([§7](#7-файл-loft)). URI — секрет: в нём ключ участника. Показывать на устройстве; в журнал не писать.
+Клиент, который умеет шарить, выдаёт `loft://` для **выбранного** подключения (ключи query на каждый loft-фронт). Несколько подключений или разные типы: экспорт `.loft` ([§8](#8-файл-loft)). URI — секрет: в нём ключ участника. Показывать на устройстве; в журнал не писать.
 
 iOS регистрирует схему URL `loft`. Android — тот же фильтр intent. Sailfish (и Аврора) — `x-scheme-handler/loft`. Тап по `loft://…` в Сообщениях открывает приложение и предлагает импорт.
 

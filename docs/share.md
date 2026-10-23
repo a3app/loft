@@ -4,7 +4,7 @@
 
 A client-side import string is described. It is **not** a loft/1.0 wire feature and does not bump the protocol. The URL is never seen by the node.
 
-The loft address is `loft://` — kind plus transport in one string. One outbound is obtained per URI. A `.loft` YAML file holds **one or several connections** and MAY mix every supported kind (`loft`, `sstp`, `vless`, `trojan`). File format: [§8](#8-loft-file).
+The loft address is `loft://` — kind plus transport in one string. Query keys `get` `ws` `h2` `h3` `quic` list fronts of **one connection**. Without those keys, one outbound is obtained per URI (`type` plus the URI path). A `.loft` YAML file holds **one or several connections** and MAY mix every supported kind (`loft`, `sstp`, `vless`, `trojan`). File format: [§8](#8-loft-file).
 
 Protocol: [protocol.md](protocol.md). iOS UX: [clients/iOS/design/DESIGN.md](../clients/iOS/design/DESIGN.md). Android UX: [clients/Android/design/DESIGN.md](../clients/Android/design/DESIGN.md). macOS UX: [clients/macOS/design/DESIGN.md](../clients/macOS/design/DESIGN.md). Sailfish UX: [clients/Sailfish/design/DESIGN.md](../clients/Sailfish/design/DESIGN.md).
 
@@ -40,29 +40,36 @@ Clients emit and accept `loft://`.
 
 RFC 3986. Percent-encode `token` and `name` (`application/x-www-form-urlencoded` is wrong for the fragment). Default port **443**. IPv6 host in brackets.
 
-The scheme **is** the connection kind (`loft`). Query `type` is the **transport** (`get` `ws` `h2` `quic` `h3` `l3`). A list row shows both: `loft · get · cdn.example.com`.
+The scheme **is** the connection kind (`loft`). Host:port is the authority (`huy.com:443`). Front paths are query keys. Query `type` is the **transport** only in the old form. A list row shows `loft · get · cdn.example.com`.
 
 | Part | Maps to `client.yaml` |
 |------|------------------------|
 | scheme `loft` | `kind: loft` |
 | `token` (userinfo) | `token` (`lt_…`) |
-| `host`[:`port`] | host of the outbound `url` |
-| `/path` | outbound `path` (empty allowed) |
+| `host`[:`port`] | host of every loft outbound `url` |
+| `/path` | old form: outbound `path`. Ignored when `get=` / `ws=` / `h2=` are present |
 | `#name` | connection display name; if empty, use `host` |
 
 ### Query
 
 | Key | Values | Default | YAML |
 |-----|--------|---------|------|
-| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | outbound `type` (transport) |
+| `get` | HTTP path | `/static/v3/build` when the key is present and empty | GET outbound |
+| `ws` | HTTP path | `/api/v1/sync` when present and empty | WS outbound |
+| `h2` | HTTP path | `/api/v1/tunnel` when present and empty | H2 outbound |
+| `h3` | HTTP path | `/api/v1/tunnel` when present and empty | H3 outbound |
+| `quic` | empty flag | — | QUIC outbound (no path) |
+| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | one outbound, only when none of `get`/`ws`/`h2`/`h3`/`quic` is present |
 | `cdn` | profile name (`yandex`, …) | omit | outbound `cdn` |
 | `fp` | TLS fingerprint (`chrome`, …) | `chrome` | outbound `fingerprint` |
-| `scheme` | `https` `http` `wss` `ws` | from `type` | scheme of `url` |
+| `scheme` | `https` `http` `wss` `ws` | from the front | scheme of `url` |
 | `pbk` | node X25519 public, base64url or hex, 32 bytes | omit | outbound `mask_pub` |
+
+Presence of `get` / `ws` / `h2` / `h3` / `quic` enables that front. Empty `get=` is the default GET path. Several of those keys are several outbounds of **one** connection (`select: auto`). After Status, the node front map is source of truth.
 
 Default `scheme`: `ws` → `wss`; everything else → `https`.
 
-Rebuild the outbound URL as `{scheme}://{host}:{port}{path}`.
+Rebuild each outbound URL as `{scheme}://{host}:{port}` plus that front's path.
 
 Omit `insecure_skip_verify`, `header_budget`, and `inflight`. The client uses its usual defaults. Do not put the member key in a query parameter.
 
@@ -70,7 +77,13 @@ Unknown query keys MUST be ignored (forward compatible). An unknown `type` is an
 
 ### Examples
 
-GET on a CDN:
+One connection, several fronts:
+
+```
+loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
+```
+
+GET on a CDN (old form, still accepted):
 
 ```
 loft://lt_change-me-long-random@cdn.example.com/static/v3/build?type=get&cdn=yandex&fp=chrome#Home
@@ -110,7 +123,7 @@ loft://lt_change-me-long-random@app.example.com:443?type=quic#Fast
 
 ### Export
 
-A client that can share emits `loft://` for the **selected** outbound of the **selected** connection (one QR, one front). Several fronts of that connection, or several connections: export `.loft` ([§7](#7-loft-file)). The URI is a secret: it contains the member key. Show it on-device; do not log it.
+A client that can share emits `loft://` for the **selected** connection (query keys for every loft front). Several connections, or mixed kinds: export `.loft` ([§8](#8-loft-file)). The URI is a secret: it contains the member key. Show it on-device; do not log it.
 
 iOS registers URL scheme `loft`. Android registers the same intent filter. Sailfish (and Aurora) registers `x-scheme-handler/loft`. A tap on `loft://…` in Messages opens the app and offers import.
 

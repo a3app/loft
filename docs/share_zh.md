@@ -4,7 +4,7 @@
 
 客户端导入串。这**不是** loft/1.0 的线能力，也不抬协议版本。节点看不到这个 URL。
 
-loft 地址是 `loft://`：类型加传输写在一串里。一条 URI 一个出站。`.loft` YAML 文件装着**一条或多条连接**，**可以**混用所有支持的类型（`loft`、`sstp`、`vless`、`trojan`）。文件格式：[§8](#8-loft-文件)。
+loft 地址是 `loft://`：类型加传输写在一串里。Query 键 `get` `ws` `h2` `h3` `quic` 列出**一条连接**的前置。没有这些键时，一条 URI 一个出站（`type` 加 URI 路径）。`.loft` YAML 文件装着**一条或多条连接**，**可以**混用所有支持的类型（`loft`、`sstp`、`vless`、`trojan`）。文件格式：[§8](#8-loft-文件)。
 
 协议：[protocol_zh.md](protocol_zh.md)。iOS UX：[clients/iOS/design/DESIGN_zh.md](../clients/iOS/design/DESIGN_zh.md)。Android UX：[clients/Android/design/DESIGN_zh.md](../clients/Android/design/DESIGN_zh.md)。macOS UX：[clients/macOS/design/DESIGN_zh.md](../clients/macOS/design/DESIGN_zh.md)。Sailfish UX：[clients/Sailfish/design/DESIGN_zh.md](../clients/Sailfish/design/DESIGN_zh.md)。
 
@@ -40,29 +40,36 @@ loft://<token>@<host>[:port][/path][?query][#name]
 
 RFC 3986。`token` 和 `name` 要百分号编码（fragment 不能用 `application/x-www-form-urlencoded`）。默认端口 **443**。IPv6 主机加方括号。
 
-scheme **本身就是**连接类型（`loft`）。Query 的 `type` 是**传输**（`get` `ws` `h2` `quic` `h3` `l3`）。列表行两个都显示：`loft · get · cdn.example.com`。
+scheme **本身就是**连接类型（`loft`）。主机:端口是 authority（`huy.com:443`）。前置路径是 query 键。Query `type` 只在旧形式里表示传输。列表行：`loft · get · cdn.example.com`。
 
 | 部分 | 对应到 `client.yaml` |
 |------|----------------------|
 | scheme `loft` | `kind: loft` |
 | `token`（userinfo） | `token`（`lt_…`） |
-| `host`[:`port`] | 出站 `url` 的主机 |
-| `/path` | 出站 `path`（可以空） |
+| `host`[:`port`] | 每个 loft 出站 `url` 的主机 |
+| `/path` | 旧形式：出站 `path`。有 `get=` / `ws=` / `h2=` 时忽略 |
 | `#name` | 连接显示名；空则用 `host` |
 
 ### Query
 
 | 键 | 取值 | 默认 | YAML |
 |----|------|------|------|
-| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | 出站 `type`（传输） |
+| `get` | HTTP 路径 | 键在且为空时 `/static/v3/build` | GET 出站 |
+| `ws` | HTTP 路径 | 键在且为空时 `/api/v1/sync` | WS 出站 |
+| `h2` | HTTP 路径 | 键在且为空时 `/api/v1/tunnel` | H2 出站 |
+| `h3` | HTTP 路径 | 键在且为空时 `/api/v1/tunnel` | H3 出站 |
+| `quic` | 空标志 | — | QUIC 出站（无路径） |
+| `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | 仅当没有 `get`/`ws`/`h2`/`h3`/`quic` 时，一个出站 |
 | `cdn` | 配置名（`yandex`，…） | 不写 | 出站 `cdn` |
 | `fp` | TLS 指纹（`chrome`，…） | `chrome` | 出站 `fingerprint` |
-| `scheme` | `https` `http` `wss` `ws` | 随 `type` | `url` 的 scheme |
+| `scheme` | `https` `http` `wss` `ws` | 随前置 | `url` 的 scheme |
 | `pbk` | 节点 X25519 公钥，base64url 或 hex，32 字节 | 不写 | 出站 `mask_pub` |
+
+出现 `get` / `ws` / `h2` / `h3` / `quic` 就启用该前置。空 `get=` 是默认 GET 路径。多个这样的键是**一条**连接的多个出站（`select: auto`）。Status 之后节点前置地图是权威。
 
 默认 `scheme`：`ws` → `wss`；其余 → `https`。
 
-出站 URL 拼成 `{scheme}://{host}:{port}{path}`。
+每个出站 URL 拼成 `{scheme}://{host}:{port}` 加上该前置的路径。
 
 不要放 `insecure_skip_verify`、`header_budget` 和 `inflight`。客户端用自己的默认值。访问密钥不要放进 query 参数。
 
@@ -70,7 +77,13 @@ scheme **本身就是**连接类型（`loft`）。Query 的 `type` 是**传输**
 
 ### 例子
 
-CDN 上的 GET：
+一条连接、多个前置：
+
+```
+loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
+```
+
+CDN 上的 GET（旧形式，仍接受）：
 
 ```
 loft://lt_change-me-long-random@cdn.example.com/static/v3/build?type=get&cdn=yandex&fp=chrome#Home
@@ -110,7 +123,7 @@ loft://lt_change-me-long-random@app.example.com:443?type=quic#Fast
 
 ### 导出
 
-会分享的客户端，给**当前选中**连接的**当前选中**出站发 `loft://`（一个二维码，一个前置）。这条连接有多个前置，或多条连接：导出 `.loft`（[§8](#8-loft-文件)）。URI 是秘密：里面有访问密钥。在设备上显示；不要写进日志。
+会分享的客户端，给**当前选中**连接发 `loft://`（query 键列出每个 loft 前置）。多条连接或混用类型：导出 `.loft`（[§8](#8-loft-文件)）。URI 是秘密：里面有访问密钥。在设备上显示；不要写进日志。
 
 iOS 注册 URL scheme `loft`。Android 注册同样的 intent filter。Sailfish（以及 Aurora）注册 `x-scheme-handler/loft`。在信息里点 `loft://…` 会打开应用并提示导入。
 
