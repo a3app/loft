@@ -59,6 +59,46 @@ func TestParseShareLoftPbk(t *testing.T) {
 	}
 }
 
+func TestParseShareLoftFrontQuery(t *testing.T) {
+	y, err := ParseShare("loft://lt_abc@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := decodeFile([]byte(y))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Outbounds) != 4 {
+		t.Fatalf("outbounds %d\n%s", len(cfg.Outbounds), y)
+	}
+	if cfg.Outbounds[0].Type != "get" || cfg.Outbounds[0].Path != "/static/v3/build" || cfg.Outbounds[0].URL != "https://huy.com" {
+		t.Fatalf("get %+v", cfg.Outbounds[0])
+	}
+	if cfg.Outbounds[1].Type != "ws" || cfg.Outbounds[1].URL != "wss://huy.com/api/v1/sync" {
+		t.Fatalf("ws %+v", cfg.Outbounds[1])
+	}
+	if cfg.Outbounds[2].Type != "h2" || cfg.Outbounds[2].Path != "/api/v1/tunnel" {
+		t.Fatalf("h2 %+v", cfg.Outbounds[2])
+	}
+	if cfg.Outbounds[3].Type != "quic" {
+		t.Fatalf("quic %+v", cfg.Outbounds[3])
+	}
+	empty, err := ParseShare("loft://lt_abc@huy.com/?get=&ws=&h2=#Home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := decodeFile([]byte(empty))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Outbounds) != 3 || got.Outbounds[0].Path != "/static/v3/build" {
+		t.Fatalf("empty get= %+v", got.Outbounds)
+	}
+	if got.Outbounds[1].Type != "ws" || got.Outbounds[2].Type != "h2" {
+		t.Fatalf("empty fronts %+v", got.Outbounds)
+	}
+}
+
 func TestParseShareLoftRejectsSSTPType(t *testing.T) {
 	_, err := ParseShare("loft://lt_abc@edge.example.com?type=sstp")
 	if err == nil {

@@ -146,52 +146,114 @@ func loftYAML(raw string) (string, error) {
 		path = ""
 	}
 	q := u.Query()
-	typ := strings.ToLower(q.Get("type"))
-	if typ == "" {
-		typ = "get"
-	}
-	if !loftTypes[typ] {
-		return "", fmt.Errorf("loft:// type")
-	}
-	scheme := strings.ToLower(q.Get("scheme"))
-	if scheme == "" {
-		if typ == "ws" {
-			scheme = "wss"
-		} else {
-			scheme = "https"
-		}
-	}
 	fp := q.Get("fp")
 	if fp == "" {
 		fp = "chrome"
 	}
 	cdn := q.Get("cdn")
+	pbk := q.Get("pbk")
 	name := u.Fragment
 	if name == "" {
 		name = host
 	}
+	scheme := strings.ToLower(q.Get("scheme"))
 	portN, _ := strconv.Atoi(port)
-	omit := portN == 443 && (scheme == "https" || scheme == "wss")
-	hostPart := hostPort(host, port, omit)
-	frontURL := scheme + "://" + hostPart
-	if typ == "ws" && path != "" {
-		frontURL += path
-		path = ""
+	keys := []string{"get", "ws", "h2", "h3", "quic"}
+	var listed []string
+	for _, k := range keys {
+		if _, ok := q[k]; ok {
+			listed = append(listed, k)
+		}
+	}
+	var outs []config.Outbound
+	if len(listed) > 0 {
+		for _, typ := range listed {
+			pth := q.Get(typ)
+			if pth == "" {
+				switch typ {
+				case "get":
+					pth = config.DefaultGETPath
+				case "ws":
+					pth = config.DefaultWSPath
+				case "h2", "h3":
+					pth = config.DefaultH2Path
+				}
+			}
+			ob := loftOutbound(name, typ, host, port, portN, scheme, pth, fp, cdn, pbk)
+			if ob.Type == "" {
+				return "", fmt.Errorf("loft:// type")
+			}
+			outs = append(outs, ob)
+		}
+	} else {
+		typ := strings.ToLower(q.Get("type"))
+		if typ == "" {
+			typ = "get"
+		}
+		if !loftTypes[typ] {
+			return "", fmt.Errorf("loft:// type")
+		}
+		outs = []config.Outbound{loftOutbound(name, typ, host, port, portN, scheme, path, fp, cdn, pbk)}
+	}
+	if len(outs) > 1 {
+		for i := range outs {
+			if i == 0 {
+				continue
+			}
+			outs[i].Name = name + "-" + outs[i].Type
+		}
 	}
 	cfg := &config.ClientConfig{
-		Token:  token,
-		Select: "auto",
-		Outbounds: []config.Outbound{{
-			Name:        name,
-			Type:        typ,
-			CDN:         cdn,
-			URL:         frontURL,
-			Path:        path,
-			Fingerprint: fp,
-			MaskPub:     q.Get("pbk"),
-		}},
+		Token:     token,
+		Select:    "auto",
+		Outbounds: outs,
 	}
 	return marshalClient(cfg, "", "", false, nil)
+}
+
+func loftOutbound(name, typ, host, port string, portN int, scheme, path, fp, cdn, pbk string) config.Outbound {
+	if !loftTypes[typ] {
+		return config.Outbound{}
+	}
+	sch := scheme
+	if sch == "" {
+		if typ == "ws" {
+			sch = "wss"
+		} else {
+			sch = "https"
+		}
+	}
+	if typ == "ws" && sch != "ws" && sch != "wss" {
+		sch = "wss"
+	}
+	if typ != "ws" && sch != "http" && sch != "https" {
+		sch = "https"
+	}
+	omit := portN == 443 && (sch == "https" || sch == "wss")
+	hostPart := hostPort(host, port, omit)
+	frontURL := sch + "://" + hostPart
+	pth := path
+	if pth == "/" {
+		pth = ""
+	}
+	switch typ {
+	case "ws":
+		if pth != "" {
+			frontURL += pth
+			pth = ""
+		}
+	case "quic":
+		pth = ""
+	}
+	return config.Outbound{
+		Name:        name,
+		Type:        typ,
+		CDN:         cdn,
+		URL:         frontURL,
+		Path:        pth,
+		Fingerprint: fp,
+		MaskPub:     pbk,
+	}
 }
 
 func vlessYAML(raw string) (string, error) {
