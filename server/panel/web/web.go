@@ -703,7 +703,7 @@ func (s *Server) wrapIssued(ctx context.Context, a Adm, k admproto.IssuedKey) me
 	out := memberKeyOut{IssuedKey: k}
 	var info admproto.NodeInfo
 	if err := a.Call(ctx, admproto.OpNodeInfo, nil, &info); err == nil && info.Host != "" {
-		out.Link, out.File = memberLink(info, k.Key, k.ID)
+		out.Link, out.File = s.memberLink(info, k.Key, k.ID, k.ID)
 		out.QR, _ = qrSVG(out.Link)
 	}
 	return out

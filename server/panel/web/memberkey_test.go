@@ -34,6 +34,9 @@ func TestKeepMemberKeys(t *testing.T) {
 	if issued.code != 200 || !strings.HasPrefix(issued.body["key"].(string), "lt_") {
 		t.Fatalf("issue %d %v", issued.code, issued.body)
 	}
+	if file, _ := issued.body["file"].(string); !strings.Contains(file, `name: "alice-get"`) {
+		t.Fatalf("default outbound name in .loft: %q", file)
+	}
 	key := issued.body["key"].(string)
 	if strings.Contains(e.do("GET", "/api/settings", nil, c, "").raw(), key) {
 		t.Fatal("plaintext key in GET /api/settings")
@@ -66,6 +69,25 @@ func TestKeepMemberKeys(t *testing.T) {
 	}
 	if _, ok, _ := e.srv.Keys.Get("alice"); ok {
 		t.Fatal("wipe left the panel copy")
+	}
+}
+
+func TestLoftOutboundInFile(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.owner()
+	e.do("POST", "/api/settings/panel", map[string]any{"session_idle": "30m", "session_max": "7d", "lang": "ru",
+		"loft_outbound": map[string]any{"host": true, "front": true}}, c, csrf)
+	issued := e.do("POST", "/api/members/key", map[string]string{"id": "bob"}, c, csrf)
+	file, _ := issued.body["file"].(string)
+	if !strings.Contains(file, `name: "panel.example.net-get"`) {
+		t.Fatalf("host+front .loft: %q", file)
+	}
+	e.do("POST", "/api/settings/panel", map[string]any{"session_idle": "30m", "session_max": "7d", "lang": "ru",
+		"loft_outbound": map[string]any{"host": true, "member": true, "front": true}}, c, csrf)
+	issued = e.do("POST", "/api/members/key", map[string]string{"id": "bob"}, c, csrf)
+	file, _ = issued.body["file"].(string)
+	if !strings.Contains(file, `name: "panel.example.net-bob-get"`) {
+		t.Fatalf("host+member+front .loft: %q", file)
 	}
 }
 

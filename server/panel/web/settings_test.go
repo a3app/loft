@@ -36,6 +36,23 @@ func TestSettingsAPI(t *testing.T) {
 		t.Fatalf("bad lang: %d", r.code)
 	}
 
+	if r := e.do("GET", "/api/settings", nil, c, ""); r.code != 200 {
+		t.Fatalf("get again %d", r.code)
+	} else if o, _ := r.body["loft_outbound"].(map[string]any); o["member"] != true || o["front"] != true || o["host"] == true {
+		t.Fatalf("default loft_outbound %v", r.body["loft_outbound"])
+	}
+	if r := e.do("POST", "/api/settings/panel", map[string]any{"session_idle": "30m", "session_max": "7d", "lang": "zh",
+		"loft_outbound": map[string]any{"host": true, "front": true}}, c, csrf); r.code != 200 {
+		t.Fatalf("loft_outbound %d %v", r.code, r.body)
+	} else if o, _ := r.body["loft_outbound"].(map[string]any); o["host"] != true || o["member"] == true || o["front"] != true {
+		t.Fatalf("host+front %v", r.body["loft_outbound"])
+	}
+	if r := e.do("POST", "/api/settings/panel", map[string]string{"session_idle": "30m", "session_max": "7d", "lang": "zh"}, c, csrf); r.code != 200 {
+		t.Fatalf("omit loft %d", r.code)
+	} else if o, _ := r.body["loft_outbound"].(map[string]any); o["host"] != true || o["front"] != true {
+		t.Fatalf("omit cleared loft_outbound %v", r.body["loft_outbound"])
+	}
+
 	n := map[string]any{"to": "alice@example.net", "from": "panel@example.net", "host": "smtp.example.net", "port": 587, "security": "starttls", "user": "u", "password": "secret-1", "events": []string{"cert", "node"}}
 	if r := e.do("POST", "/api/settings/notify", n, c, csrf); r.code != 200 || r.body["notify"].(map[string]any)["has_password"] != true {
 		t.Fatalf("notify %d %v", r.code, r.body)

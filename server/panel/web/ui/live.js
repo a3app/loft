@@ -843,6 +843,7 @@
         <div><div class="fld"><label for="st2">Язык по умолчанию</label><select id="st2" onchange="LIVE.stPanel()">${opts(LANGS, st.lang)}</select></div><div class="hint">Для страницы входа и тех, кто не выбрал язык сам.</div></div>
         <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3" ${tz ? '' : 'disabled'} onchange="LIVE.stTz(this)">${zones}</select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`) +
         `<div><label class="chk"><input id="stKeep" type="checkbox" ${st.keep_member_keys ? 'checked' : ''} onchange="LIVE.stPanel()"><span>Хранить ключи членов</span></label><div class="hint">Ссылка, QR-код и файл .loft открываются снова без перевыпуска. Копия лежит в каталоге данных панели, права 0600. Выключение стирает копию в панели; файл на ноде остаётся.</div></div>`) +
+      blk('Файлы .loft', 'Какие части входят в имя исходящего в профиле члена. Ссылка loft:// не меняется.', loftOutboundBlock(st)) +
       blk('Вход', 'Блокировка адресов после неудачных входов — в <a href="#system">Системе</a>.', grid(`<div class="fld"><label for="st4">Выходить при бездействии</label><select id="st4" onchange="LIVE.stPanel()">${opts(IDLE, st.session_idle)}</select></div>
         <div class="fld"><label for="st5">Срок сессии</label><select id="st5" onchange="LIVE.stPanel()">${opts(SMAX, st.session_max)}</select></div>`)) +
       blk('Уведомления', 'Письма о событиях уходят через SMTP-сервер, указанный здесь.', `<div class="card">${grid(`<div class="fld"><label for="st6">Кому</label><input id="st6" type="email" value="${esc(n.to)}" placeholder="admin@example.net"></div>
@@ -855,6 +856,39 @@
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:16px">${EV.map(([k, t]) => `<label class="chk"><input type="checkbox" data-ev="${k}" ${n.events.includes(k) ? 'checked' : ''}>${t}</label>`).join('')}</div>
         <div class="acts" style="margin:16px 0 0"><button class="btn pri sm" type="button" onclick="LIVE.stNotify(this)">Сохранить</button><button class="btn sm" type="button" ${n.host && n.to ? '' : 'disabled'} onclick="LIVE.stTest(this)">Отправить пробное</button></div></div>`);
   }
+  function loftObName(o, host, member, front) {
+    const h = !!o.host, m = !!o.member, f = !!o.front || (!o.host && !o.member);
+    const p = [];
+    if (h && host) p.push(host);
+    if (m && member) p.push(member);
+    if (f && front) p.push(front);
+    return p.join('-') || front;
+  }
+  function loftOutboundBlock(st) {
+    const o = st.loft_outbound || { member: true, front: true };
+    const host = (L.node && L.node.host) || st.node || location.hostname;
+    const member = (NETS[0] && NETS[0].members[0] && NETS[0].members[0].id) || 'bob';
+    const name = loftObName(o, host, member, 'get');
+    return `<div class="chk-row">
+      <label class="chk"><input id="stLoftHost" type="checkbox" ${o.host ? 'checked' : ''} onchange="LIVE.stLoft()"><span>Хост</span></label>
+      <label class="chk"><input id="stLoftMember" type="checkbox" ${o.member ? 'checked' : ''} onchange="LIVE.stLoft()"><span>Член</span></label>
+      <label class="chk"><input id="stLoftFront" type="checkbox" ${o.front ? 'checked' : ''} onchange="LIVE.stLoft()"><span>Фронт</span></label>
+    </div>
+    <pre class="mono" id="stLoftPrev" style="margin:12px 0 0">outbounds:\n  - name: ${esc(name)}</pre>
+    <div class="hint">Меняется в новых файлах и при повторном скачивании, если ключи хранятся в панели.</div>`;
+  }
+  L.stLoft = () => {
+    const o = { host: $('#stLoftHost').checked, member: $('#stLoftMember').checked, front: $('#stLoftFront').checked };
+    if (!o.host && !o.member && !o.front) { $('#stLoftFront').checked = true; o.front = true; }
+    if (L.st) L.st.loft_outbound = o;
+    const prev = $('#stLoftPrev');
+    if (prev) {
+      const host = (L.node && L.node.host) || (L.st && L.st.node) || location.hostname;
+      const member = (NETS[0] && NETS[0].members[0] && NETS[0].members[0].id) || 'bob';
+      prev.textContent = 'outbounds:\n  - name: ' + loftObName(o, host, member, 'get');
+    }
+    L.stPanelGo($('#stKeep') ? $('#stKeep').checked : !!L.keepKeys);
+  };
   L.stPanel = () => {
     const keep = $('#stKeep') ? $('#stKeep').checked : !!L.keepKeys;
     if (L.keepKeys && !keep) {
@@ -867,7 +901,11 @@
   L.stPanelGo = async keep => {
     closeDlg();
     try {
-      L.st = await api('POST', '/api/settings/panel', { session_idle: $('#st4').value, session_max: $('#st5').value, lang: $('#st2').value, keep_member_keys: keep });
+      const loft = $('#stLoftHost') ? {
+        host: $('#stLoftHost').checked, member: $('#stLoftMember').checked, front: $('#stLoftFront').checked
+      } : undefined;
+      if (loft && !loft.host && !loft.member && !loft.front) loft.front = true;
+      L.st = await api('POST', '/api/settings/panel', { session_idle: $('#st4').value, session_max: $('#st5').value, lang: $('#st2').value, keep_member_keys: keep, loft_outbound: loft });
       L.keepKeys = !!L.st.keep_member_keys;
       if (window.I18N) I18N.def(L.st.lang);
       toast('Сохранено');

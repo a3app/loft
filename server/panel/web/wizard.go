@@ -302,7 +302,7 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 		if err := a.Call(ctx, admproto.OpNodeInfo, nil, &info); err != nil {
 			return nil, admErr(err)
 		}
-		link, file := memberLink(info, k.Key, firstNonEmpty(in.Name, in.ID))
+		link, file := s.memberLink(info, k.Key, firstNonEmpty(in.Name, in.ID), in.ID)
 		s.logf("member %s created by %s", in.ID, by)
 		svg, _ := qrSVG(link)
 		return memberJSON{ID: in.ID, Key: k.Key, Link: link, File: file, QR: svg}, nil
@@ -310,19 +310,27 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // memberLink is the loft:// address (GET front, docs/share.md §2) and a .loft
-// file with a GET outbound pinned to the controller key.
-func memberLink(in admproto.NodeInfo, key, name string) (string, string) {
+// file with a GET outbound pinned to the controller key. conn is the
+// connection name; memberID is the outbound-name part «член».
+func (s *Server) memberLink(in admproto.NodeInfo, key, conn, memberID string) (string, string) {
 	host := in.Host
-	link := "loft://" + url.PathEscape(key) + "@" + host + in.GetPath + "?type=get&fp=chrome#" + url.PathEscape(name)
+	link := "loft://" + url.PathEscape(key) + "@" + host + in.GetPath + "?type=get&fp=chrome#" + url.PathEscape(conn)
+	var st store.Settings
+	if s.Settings != nil {
+		if got, err := s.Settings.Get(); err == nil {
+			st = got
+		}
+	}
+	ob := st.OutboundName(host, memberID, "get")
 	var b strings.Builder
-	fmt.Fprintf(&b, "name: %q\nkind: loft\ntoken: %q\nselect: auto\n", name, key)
+	fmt.Fprintf(&b, "name: %q\nkind: loft\ntoken: %q\nselect: auto\n", conn, key)
 	if in.RosterPath != "" {
 		fmt.Fprintf(&b, "bootstrap: https://%s%s\n", host, in.RosterPath)
 	}
 	if in.ControllerPub != "" {
 		fmt.Fprintf(&b, "controller_pub: %s\n", in.ControllerPub)
 	}
-	fmt.Fprintf(&b, "outbounds:\n  - name: get\n    type: get\n    url: https://%s\n    path: %s\n    fingerprint: chrome\n", host, in.GetPath)
+	fmt.Fprintf(&b, "outbounds:\n  - name: %q\n    type: get\n    url: https://%s\n    path: %s\n    fingerprint: chrome\n", ob, host, in.GetPath)
 	return link, b.String()
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,6 +37,67 @@ type Settings struct {
 	// KeepMemberKeys stores issued member secrets in member-keys.json so
 	// the operator can show the link, QR and .loft again. Off by default.
 	KeepMemberKeys bool `json:"keep_member_keys,omitempty"`
+	// LoftOutbound is which parts go into outbounds[].name in issued .loft
+	// files. Nil is the default: member id and front (bob-get).
+	LoftOutbound *LoftOutbound `json:"loft_outbound,omitempty"`
+}
+
+// LoftOutbound is host, member id, and front as parts of outbounds[].name.
+type LoftOutbound struct {
+	Host   bool `json:"host"`
+	Member bool `json:"member"`
+	Front  bool `json:"front"`
+}
+
+// LoftOutboundView is the effective parts (nil storage → member+front).
+func (s Settings) LoftOutboundView() LoftOutbound {
+	if s.LoftOutbound == nil {
+		return LoftOutbound{Member: true, Front: true}
+	}
+	o := *s.LoftOutbound
+	if !o.Host && !o.Member && !o.Front {
+		o.Front = true
+	}
+	return o
+}
+
+// OutboundName builds outbounds[].name from the advertise host, member id
+// and front (get, ws, …). Empty parts are skipped; an empty result is the front.
+func (s Settings) OutboundName(host, member, front string) string {
+	o := s.LoftOutboundView()
+	var p []string
+	if o.Host {
+		if h := hostLabel(host); h != "" {
+			p = append(p, h)
+		}
+	}
+	if o.Member && member != "" {
+		p = append(p, member)
+	}
+	if o.Front && front != "" {
+		p = append(p, front)
+	}
+	if len(p) == 0 {
+		return front
+	}
+	return strings.Join(p, "-")
+}
+
+func hostLabel(host string) string {
+	h := strings.TrimSpace(host)
+	h = strings.TrimPrefix(h, "https://")
+	h = strings.TrimPrefix(h, "http://")
+	if i := strings.IndexByte(h, '/'); i >= 0 {
+		h = h[:i]
+	}
+	if strings.HasPrefix(h, "[") {
+		if i := strings.Index(h, "]"); i >= 0 {
+			h = h[1:i]
+		}
+	} else if i := strings.LastIndexByte(h, ':'); i >= 0 && strings.Count(h, ":") == 1 {
+		h = h[:i]
+	}
+	return strings.TrimSuffix(strings.ToLower(h), ".")
 }
 
 // Notify is where event letters go and through which SMTP server.
