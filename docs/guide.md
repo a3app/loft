@@ -306,6 +306,8 @@ Unauthorized TCP (any SNI, broken hello, plaintext) is spliced to `decoy:`. UDP 
 
 `session_id` is 32 bytes. sid v3 is HKDF under ECDH with the node X25519 (`mask_pub` / share-URI `pbk`). sid v2 (fallback) is HKDF under the member key. A stolen member key marks v2 hellos only.
 
+With mask on, a hello whose SNI is the decoy name is admitted only as sid v3 (`mask_pub` / `pbk`); sid v2 is spliced to the origin. If the ClientHello offers X25519MLKEM768, mask selects that group (RFC 10024). The leaf is still not a public CA chain. A repeat of the same `client_random` within 10 minutes is spliced as a probe. On a mask node a QUIC Initial is admitted only with the v3 mark.
+
 Origin hostnames in example YAML are examples. Choose origins whose public site the path is unwilling to drop, and whose TLS the node can splice. They are not compiled into the protocol.
 
 ---

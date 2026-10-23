@@ -71,7 +71,7 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`Supervise` prefers GET. After GET Status a non-empty `ticket` is the session identifier. The client MAY attach `ws` / `h2` / `quic` / `h3` with tag `0x04` (HMAC of the session key, not a second `0x02`). GET stays up. Bulk mux runs on the attached front (`CmdFront`); if that front dies, bulk returns to GET with the same key, mux, and sequence. `l3` and `connect` do not attach.
+`Supervise` prefers GET. After GET Status a non-empty `ticket` is the session identifier. Status `fronts` lists the mux endpoints (name, path, optional URL) this node accepts; the client attaches with those paths and SHOULD rewrite the saved profile. The client MAY attach `ws` / `h2` / `quic` / `h3` with tag `0x04` (HMAC of the session key, not a second `0x02`). GET stays up. Bulk mux runs on the attached front (`CmdFront`); if that front dies, bulk returns to GET with the same key, mux, and sequence. `l3` and `connect` do not attach.
 
 When there is no GET session to attach to, `Supervise` tries configured outbounds in list order (`select: auto`). After the first Status it keeps only the intersection of fronts. On failure it moves to the next remaining front, then unsigned `replicas`, then the signed roster. A node that omits `fronts` advertises GET only; `ws`, `h2`, `quic`, `h3`, and `l3` are listed explicitly. `l3` is HTTP/2 CONNECT then IP datagrams (no mux); TUN copies packets and skips the userspace TCP stack.
 
@@ -141,7 +141,7 @@ Accept
       node certificate (member on advertise, CDN after sid)
   else if own SNI from cdn_peers
       node certificate (CDN origin pull)
-  else if session_id = sid v3 (node X25519) or sid v2 (member HMAC)
+  else if session_id = sid v3, or sid v2 while mask is off
       if mask ready → dest-shaped ECDSA leaf + record pad
       else            → loft HTTP handler
   else
@@ -153,7 +153,7 @@ UDP
 
 The splice destination is node configuration. The client discovers it. Example hostnames in YAML are examples. They are not protocol constants.
 
-Mask mints an ECDSA P-256 leaf that copies the origin identity and signs CertificateVerify with `ecdsa_secp256r1_sha256`. Serial is bound to ECDH with the node X25519. Probes still splice. Application records MAY follow origin ciphertext lengths.
+Mask mints an ECDSA P-256 leaf that copies the origin identity and signs CertificateVerify with `ecdsa_secp256r1_sha256`. Serial is bound to ECDH with the node X25519. When the ClientHello offers X25519MLKEM768 (`0x11EC`), the ServerHello selects that group; the leaf stays outside WebPKI. Own SNI still accepts sid v2 and presents the node certificate. Probes, sid v2 on a decoy SNI, and a TCP `client_random` repeated within 10 minutes splice. On a mask node a QUIC Initial is admitted only with the v3 mark. Application records MAY follow origin ciphertext lengths.
 
 ---
 

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,6 +39,7 @@ var (
 	visRoutes []string
 	visPolicy wire.Policy
 	visTTLMS  uint32
+	visFronts []wire.FrontEP
 
 	p2pKeyMu sync.Mutex
 	p2pKey   *ecdh.PrivateKey
@@ -128,11 +130,60 @@ func RememberVis(st wire.Status) {
 	}
 	visPolicy = st.Policy
 	visTTLMS = st.SessionTTLMS
+	visFronts = append([]wire.FrontEP(nil), st.Fronts...)
 	visMu.Unlock()
 	rememberHold(st)
 	if st.InstanceID != "" {
 		RememberInstance(st.InstanceID)
 	}
+}
+
+// LearnedFronts is the Status front map from the last OK handshake. Empty = URI/defaults.
+func LearnedFronts() []wire.FrontEP {
+	visMu.Lock()
+	defer visMu.Unlock()
+	return append([]wire.FrontEP(nil), visFronts...)
+}
+
+// FormatFronts is a compact STATUS token: get=/static/v3/build,ws=/api/v1/sync,quic
+func FormatFronts(eps []wire.FrontEP) string {
+	var b strings.Builder
+	for _, e := range eps {
+		if e.Name == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(e.Name)
+		if e.Path != "" {
+			b.WriteByte('=')
+			b.WriteString(e.Path)
+		}
+	}
+	return b.String()
+}
+
+// ParseFrontEPs reads FormatFronts output.
+func ParseFrontEPs(s string) []wire.FrontEP {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	var out []wire.FrontEP
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		name, path, ok := strings.Cut(p, "=")
+		if !ok {
+			out = append(out, wire.FrontEP{Name: p})
+			continue
+		}
+		out = append(out, wire.FrontEP{Name: name, Path: path})
+	}
+	return out
 }
 
 // OverlayIP is the session overlay IPv4 from the last Status.

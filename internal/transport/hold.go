@@ -25,6 +25,7 @@ var (
 		sid   string
 		key   []byte
 		seq   uint64
+		gen   uint64
 		until time.Time
 	}
 	visGapMS  uint32
@@ -58,11 +59,20 @@ func clientHolds() bool {
 // clientHoldMux is the mux that SOCKS/TUN streams sit on. Reused across
 // Park until gap_hold expires, then a new mux (inner TCP RSTs).
 func clientHoldMux() *mux.Session {
+	s, _ := takeClientHold()
+	return s
+}
+
+// takeClientHold hands out the parked mux, or a new one. Each handout bumps
+// gen. Close of an older front must not Session.Close the mux a newer front
+// already owns: Holder.Set closes the previous dialer after the next Start.
+func takeClientHold() (*mux.Session, uint64) {
 	clientHoldMu.Lock()
 	defer clientHoldMu.Unlock()
 	now := time.Now()
+	clientHold.gen++
 	if clientHold.sess != nil && !clientHold.sess.Closed() && now.Before(clientHold.until) {
-		return clientHold.sess
+		return clientHold.sess, clientHold.gen
 	}
 	if clientHold.sess != nil {
 		clientHold.sess.Close()
@@ -71,7 +81,23 @@ func clientHoldMux() *mux.Session {
 	clientHold.sess.SetHold(true)
 	clientHold.sid, clientHold.key, clientHold.seq = "", nil, 0
 	clientHold.until = now.Add(24 * time.Hour)
-	return clientHold.sess
+	return clientHold.sess, clientHold.gen
+}
+
+// releaseClientHold closes the parked mux only when gen is still the owner.
+// False means a newer front has taken the hold.
+func releaseClientHold(gen uint64) bool {
+	clientHoldMu.Lock()
+	defer clientHoldMu.Unlock()
+	if gen == 0 || clientHold.gen != gen {
+		return false
+	}
+	if clientHold.sess != nil {
+		clientHold.sess.Close()
+		clientHold.sess = nil
+	}
+	clientHold.sid, clientHold.key, clientHold.seq = "", nil, 0
+	return true
 }
 
 func parkClient(sess *mux.Session, sid string, key []byte, seq uint64) {

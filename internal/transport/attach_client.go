@@ -97,7 +97,7 @@ func (g *GET) attachExtras(ctx context.Context) {
 	if g.attachStopped() || g.attachLive.Load() {
 		return
 	}
-	for _, f := range []string{wire.FrontH2, wire.FrontWS, wire.FrontQUIC, wire.FrontH3} {
+	for _, f := range g.attachNames() {
 		if !g.caps.Has(wire.CapForFront(f)) || !g.offer.Has(wire.CapForFront(f)) {
 			continue
 		}
@@ -110,8 +110,26 @@ func (g *GET) attachExtras(ctx context.Context) {
 	}
 }
 
+func (g *GET) attachNames() []string {
+	order := []string{wire.FrontH2, wire.FrontWS, wire.FrontQUIC, wire.FrontH3}
+	if len(g.fronts) == 0 {
+		return order
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, e := range g.fronts {
+		n := e.Name
+		if n == wire.FrontGET || n == wire.FrontConnect || n == wire.FrontL3 || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
+}
+
 func (g *GET) attachFront(ctx context.Context, front string) error {
-	o := attachOutbound(g.cfg, front)
+	o := attachOutbound(g.cfg, front, g.fronts)
 	switch front {
 	case wire.FrontH2:
 		parent, stream, _, _, err := dialH2CONNECT(ctx, o, g.token)
@@ -130,29 +148,60 @@ func (g *GET) attachFront(ctx context.Context, front string) error {
 	}
 }
 
-func attachOutbound(get config.Outbound, front string) config.Outbound {
+func attachOutbound(get config.Outbound, front string, learned []wire.FrontEP) config.Outbound {
 	o := get
 	o.Type = front
-	u := get.URL
-	u = strings.TrimSuffix(u, "/")
+	path, rawURL := frontEP(learned, front)
+	if path == "" {
+		switch front {
+		case wire.FrontH2, wire.FrontH3:
+			path = config.DefaultH2Path
+		case wire.FrontWS:
+			path = config.DefaultWSPath
+		}
+	}
+	if rawURL != "" {
+		o.URL = rawURL
+		o.Path = path
+		if front == wire.FrontWS {
+			o.Path = ""
+		}
+		if front == wire.FrontQUIC {
+			o.Path = ""
+		}
+		return o
+	}
+	u := strings.TrimSuffix(get.URL, "/")
 	switch front {
 	case wire.FrontH2, wire.FrontH3:
-		o.Path = "/api/v1/tunnel"
+		o.Path = path
 		o.URL = u
 	case wire.FrontWS:
-		o.Path = "/api/v1/sync"
+		o.Path = ""
 		host := strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://")
 		host = strings.TrimPrefix(strings.TrimPrefix(host, "wss://"), "ws://")
+		if i := strings.IndexByte(host, '/'); i >= 0 {
+			host = host[:i]
+		}
 		if strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "wss://") {
-			o.URL = "wss://" + host + "/api/v1/sync"
+			o.URL = "wss://" + host + path
 		} else {
-			o.URL = "ws://" + host + "/api/v1/sync"
+			o.URL = "ws://" + host + path
 		}
 	case wire.FrontQUIC:
 		o.Path = ""
 		o.URL = u
 	}
 	return o
+}
+
+func frontEP(learned []wire.FrontEP, name string) (path, rawURL string) {
+	for _, e := range learned {
+		if e.Name == name {
+			return e.Path, e.URL
+		}
+	}
+	return "", ""
 }
 
 func (g *GET) runAttach(ctx context.Context, conn io.ReadWriteCloser, front string) error {

@@ -45,6 +45,26 @@ const (
 	hsFinished                 = 20
 )
 
+// lastKEX is the group of the latest client handshake ("tls" or a mask group).
+var lastKEX atomic.Value
+
+// noteKEX records the handshake group for bench and drive logs.
+func noteKEX(name string) {
+	lastKEX.Store(name)
+	if name == "" {
+		return
+	}
+	if d := driveLog.Load(); d != nil {
+		d.Event("KEX", "group="+name)
+	}
+}
+
+// LastKEX is the group recorded by the latest successful client handshake.
+func LastKEX() string {
+	s, _ := lastKEX.Load().(string)
+	return s
+}
+
 // Mask is decoy mask: loft TLS wears a dest-shaped ECDSA leaf. Probes still splice.
 type Mask struct {
 	xpriv  []byte // 32-byte X25519 static private
@@ -196,7 +216,7 @@ func (m *Mask) Handshake(raw net.Conn, rec []byte, hello clientHello) (net.Conn,
 	if !m.Ready() {
 		return nil, errors.New("mask: origin cert not ready")
 	}
-	if len(hello.KeyShare) != 32 {
+	if len(hello.sidShare()) != 32 {
 		return nil, fmt.Errorf("mask: no x25519 share (len %d sni %q)", len(hello.KeyShare), hello.SNI)
 	}
 	certs, originALPN, pads := m.snapshot()
@@ -245,19 +265,11 @@ func maskServer(raw net.Conn, rec []byte, hello clientHello, staticPriv []byte, 
 	}
 	tr.Write(chMsg)
 
-	ephPriv := make([]byte, 32)
-	if _, err := rand.Read(ephPriv); err != nil {
-		return nil, err
-	}
-	ephPub, err := curve25519.X25519(ephPriv, curve25519.Basepoint)
+	shared, serverShare, group, err := maskKEX(hello)
 	if err != nil {
 		return nil, err
 	}
-	shared, err := curve25519.X25519(ephPriv, hello.KeyShare)
-	if err != nil {
-		return nil, err
-	}
-	auth := authSharedFromPriv(staticPriv, hello.KeyShare)
+	auth := authSharedFromPriv(staticPriv, hello.sidShare())
 	serial := certSerial(auth, hello.Random)
 	certs, ident, err := maskChain(origin, serial, hello.SNI)
 	if err != nil {
@@ -269,7 +281,7 @@ func maskServer(raw net.Conn, rec []byte, hello clientHello, staticPriv []byte, 
 		return nil, err
 	}
 	sid := hello.SessionID
-	sh := marshalServerHello(srvRand[:], sid, ephPub)
+	sh := marshalServerHello(srvRand[:], sid, group, serverShare)
 	tr.Write(sh)
 	if err := writeRecord(raw, recHandshake, sh); err != nil {
 		return nil, err
@@ -358,11 +370,12 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 	if pol.Split {
 		raw = &splitHelloConn{Conn: raw, at: 1}
 	}
-	helloRaw, priv, err := buildMaskHello(sni, fingerprint, token, maskPub, alpn)
+	kx, err := buildMaskHello(sni, fingerprint, token, maskPub, alpn)
 	if err != nil {
 		raw.Close()
 		return nil, err
 	}
+	helloRaw := kx.raw
 	if err := writeRecord(raw, recHandshake, helloRaw); err != nil {
 		raw.Close()
 		return nil, err
@@ -388,7 +401,7 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 		raw.Close()
 		return nil, err
 	}
-	serverShare, err := parseServerHelloShare(shMsg)
+	group, peerShare, err := parseServerHelloShare(shMsg)
 	if err != nil {
 		head := shMsg
 		if len(head) > 32 {
@@ -398,8 +411,9 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 		return nil, fmt.Errorf("%w (sh %d %x)", err, len(shMsg), head)
 	}
 	tr.Write(shMsg)
+	noteKEX(kexName(group))
 
-	shared, err := curve25519.X25519(priv, serverShare)
+	shared, err := clientShared(group, peerShare, kx)
 	if err != nil {
 		raw.Close()
 		return nil, err
@@ -475,7 +489,10 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 					raw.Close()
 					return nil, err
 				}
-				auth := authSharedFromPub(priv, maskPub)
+				auth := authSharedFromPub(kx.xPriv, maskPub)
+				if len(kx.xPriv) != 32 {
+					auth = authSharedFromPub(kx.hybridX, maskPub)
+				}
 				if !serialEqual(leaf, certSerial(auth, parseHelloRandom(helloRaw))) {
 					raw.Close()
 					return nil, errors.New("mask: serial bind")
@@ -538,12 +555,16 @@ func parseHelloRandom(msg []byte) []byte {
 
 // buildMaskHello prefers a uTLS ClientHello (browser JA3) and falls back to
 // the compact builder. session_id is sid v3 when maskPub is known, else v2.
-func buildMaskHello(sni, fingerprint string, token, maskPub []byte, alpn []string) (msg, priv []byte, err error) {
-	msg, priv, err = buildUTLSHello(sni, fingerprint, token, maskPub, alpn)
-	if err == nil && len(msg) > 4 && len(priv) == 32 {
-		return msg, priv, nil
+func buildMaskHello(sni, fingerprint string, token, maskPub []byte, alpn []string) (clientKX, error) {
+	kx, err := buildUTLSHello(sni, fingerprint, token, maskPub, alpn)
+	if err == nil && len(kx.raw) > 4 && (len(kx.xPriv) == 32 || kx.mlkem != nil) {
+		return kx, nil
 	}
-	return buildMaskClientHello(sni, token, maskPub, alpn)
+	msg, priv, err := buildMaskClientHello(sni, token, maskPub, alpn)
+	if err != nil {
+		return clientKX{}, err
+	}
+	return clientKX{raw: msg, xPriv: priv}, nil
 }
 
 func firstALPN(alpn []string) string {
@@ -571,8 +592,10 @@ func buildMaskClientHello(sni string, token, maskPub []byte, alpn []string) (msg
 	var sid []byte
 	if len(maskPub) == 32 {
 		sid = sid3FromPriv(ephPriv[:], maskPub, h)
-	}
-	if len(sid) != 32 {
+		if len(sid) != 32 {
+			return nil, nil, errors.New("mask: sid v3")
+		}
+	} else {
 		sid = sessionHMAC(token, h)
 	}
 	var b cryptobyte.Builder
@@ -767,8 +790,9 @@ func certVerifySigned(transcript []byte, server bool) []byte {
 	return append(out, transcript...)
 }
 
-// marshalServerHello builds a TLS 1.3 ServerHello with X25519 key_share.
-func marshalServerHello(random, sid, share []byte) []byte {
+// marshalServerHello builds a TLS 1.3 ServerHello. group is x25519 or
+// X25519MLKEM768; share is the key_exchange for that group.
+func marshalServerHello(random, sid []byte, group uint16, share []byte) []byte {
 	var b cryptobyte.Builder
 	b.AddUint8(hsServerHello)
 	b.AddUint24LengthPrefixed(func(b *cryptobyte.Builder) {
@@ -784,7 +808,7 @@ func marshalServerHello(random, sid, share []byte) []byte {
 			// key_share
 			b.AddUint16(51)
 			b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
-				b.AddUint16(x25519Group)
+				b.AddUint16(group)
 				b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) { b.AddBytes(share) })
 			})
 		})
@@ -845,21 +869,21 @@ func marshalFinished(mac []byte) []byte {
 	return msg
 }
 
-// parseServerHelloShare returns the X25519 public from ServerHello key_share.
-func parseServerHelloShare(msg []byte) ([]byte, error) {
+// parseServerHelloShare returns the selected group and its key_exchange.
+func parseServerHelloShare(msg []byte) (uint16, []byte, error) {
 	if len(msg) < 40 || msg[0] != hsServerHello {
-		return nil, errors.New("mask: not server hello")
+		return 0, nil, errors.New("mask: not server hello")
 	}
 	n := int(msg[1])<<16 | int(msg[2])<<8 | int(msg[3])
 	body := msg[4 : 4+n]
 	off := 2 + 32 // version + random
 	if off >= len(body) {
-		return nil, errors.New("mask: short sh")
+		return 0, nil, errors.New("mask: short sh")
 	}
 	sidLen := int(body[off])
 	off += 1 + sidLen + 2 + 1 // sid, cipher, compression
 	if off+2 > len(body) {
-		return nil, errors.New("mask: no ext")
+		return 0, nil, errors.New("mask: no ext")
 	}
 	extLen := int(binary.BigEndian.Uint16(body[off : off+2]))
 	off += 2
@@ -874,18 +898,26 @@ func parseServerHelloShare(msg []byte) ([]byte, error) {
 		if off+ln > end {
 			break
 		}
-		if typ == 51 && ln >= 36 {
-			// group + key
-			if binary.BigEndian.Uint16(body[off:off+2]) == x25519Group {
-				klen := int(binary.BigEndian.Uint16(body[off+2 : off+4]))
-				if klen == 32 && 4+klen <= ln {
-					return append([]byte(nil), body[off+4:off+4+32]...), nil
+		if typ == 51 && ln >= 4 {
+			group := binary.BigEndian.Uint16(body[off : off+2])
+			klen := int(binary.BigEndian.Uint16(body[off+2 : off+4]))
+			if klen >= 0 && 4+klen <= ln {
+				share := body[off+4 : off+4+klen]
+				switch group {
+				case x25519Group:
+					if klen == 32 {
+						return group, append([]byte(nil), share...), nil
+					}
+				case x25519MLKEM768:
+					if klen == hybridServerShare() {
+						return group, append([]byte(nil), share...), nil
+					}
 				}
 			}
 		}
 		off += ln
 	}
-	return nil, errors.New("mask: no x25519 in server hello")
+	return 0, nil, errors.New("mask: no key share in server hello")
 }
 
 // writeRecord writes one TLS record of typ.

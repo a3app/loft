@@ -55,10 +55,17 @@ func sealAuthReject(blob, aad []byte) ([]byte, error) {
 
 // verifyAny reports whether hello.SessionID is loft: sid v3 under the node
 // X25519 (fallback is LOFT_TOKEN), then sid v2 under a member key.
+// The decoy listener does not use this for a mask node's decoy SNI: there
+// only sid v3 is admitted.
 func verifyAny(fallback []byte, h clientHello) bool {
 	if verifySID3(fallback, h) {
 		return true
 	}
+	return verifyMemberV2(fallback, h)
+}
+
+// verifyMemberV2 reports whether hello.SessionID is sid v2 under a member key.
+func verifyMemberV2(fallback []byte, h clientHello) bool {
 	for _, tok := range clientTokens(fallback) {
 		if verifySessionID(tok, h) {
 			return true

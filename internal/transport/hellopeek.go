@@ -10,6 +10,8 @@ import (
 	"io"
 	"strings"
 
+	"crypto/mlkem"
+
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
 )
@@ -19,8 +21,22 @@ type clientHello struct {
 	Random    []byte
 	SessionID []byte
 	SNI       string
-	KeyShare  []byte // X25519 public, 32 bytes
+	KeyShare  []byte // standalone X25519 public (group 0x001d), 32 bytes
+	hybridEK  []byte // ML-KEM-768 encapsulation key from group 0x11EC
+	hybridX   []byte // X25519 public carried inside that hybrid share
 	ALPNs     []string
+}
+
+// sidShare is the X25519 public sid v3 (and v2) bind to: the standalone
+// share when the hello has one, otherwise the X25519 half of X25519MLKEM768.
+func (h clientHello) sidShare() []byte {
+	if len(h.KeyShare) == 32 {
+		return h.KeyShare
+	}
+	if len(h.hybridX) == 32 {
+		return h.hybridX
+	}
+	return nil
 }
 
 // readClientHello concatenates handshake records until one ClientHello is complete.
@@ -138,7 +154,7 @@ func parseClientHello(body []byte) (clientHello, error) {
 			h.ALPNs = parseALPN(body[off : off+ln])
 		}
 		if typ == 51 { // key_share
-			h.KeyShare = parseX25519Share(body[off : off+ln])
+			h.KeyShare, h.hybridEK, h.hybridX = parseKeyShares(body[off : off+ln])
 		}
 		off += ln
 	}
@@ -169,10 +185,11 @@ func parseALPN(b []byte) []string {
 	return out
 }
 
-// parseX25519Share returns the 32-byte X25519 public from key_share, or nil.
-func parseX25519Share(b []byte) []byte {
+// parseKeyShares returns the standalone X25519 public and, when present,
+// the ML-KEM encapsulation key and X25519 half of X25519MLKEM768.
+func parseKeyShares(b []byte) (x25519, ek, hx []byte) {
 	if len(b) < 2 {
-		return nil
+		return nil, nil, nil
 	}
 	n := int(binary.BigEndian.Uint16(b[0:2]))
 	off := 2
@@ -184,15 +201,24 @@ func parseX25519Share(b []byte) []byte {
 		group := binary.BigEndian.Uint16(b[off : off+2])
 		ln := int(binary.BigEndian.Uint16(b[off+2 : off+4]))
 		off += 4
-		if off+ln > end {
+		if ln < 0 || off+ln > end {
 			break
 		}
-		if group == 0x001d && ln == 32 { // x25519
-			return append([]byte(nil), b[off:off+32]...)
+		data := b[off : off+ln]
+		switch group {
+		case x25519Group:
+			if ln == 32 {
+				x25519 = append([]byte(nil), data...)
+			}
+		case x25519MLKEM768:
+			if ln == hybridClientShare() {
+				ek = append([]byte(nil), data[:mlkem.EncapsulationKeySize768]...)
+				hx = append([]byte(nil), data[mlkem.EncapsulationKeySize768:]...)
+			}
 		}
 		off += ln
 	}
-	return nil
+	return x25519, ek, hx
 }
 
 // sessionHMAC is sid v2: HKDF under the member key. Kept so a client that
@@ -200,7 +226,7 @@ func parseX25519Share(b []byte) []byte {
 // can recompute this value; sid v3 cannot.
 func sessionHMAC(token []byte, h clientHello) []byte {
 	info := append([]byte("loft-sid-v2\x00"), []byte(strings.ToLower(h.SNI))...)
-	info = append(info, h.KeyShare...)
+	info = append(info, h.sidShare()...)
 	out := make([]byte, 32)
 	if _, err := io.ReadFull(hkdf.New(sha256.New, token, h.Random, info), out); err != nil {
 		m := hmac.New(sha256.New, token)
@@ -247,10 +273,11 @@ func sid3FromPriv(clientPriv, nodePub []byte, h clientHello) []byte {
 
 // verifySID3 reports whether h.SessionID is sid v3 under the node secret.
 func verifySID3(nodeToken []byte, h clientHello) bool {
-	if len(h.SessionID) != 32 || len(h.Random) != 32 || len(h.KeyShare) != 32 || len(nodeToken) == 0 {
+	x := h.sidShare()
+	if len(h.SessionID) != 32 || len(h.Random) != 32 || len(x) != 32 || len(nodeToken) == 0 {
 		return false
 	}
-	shared, err := curve25519.X25519(maskX25519Priv(nodeToken), h.KeyShare)
+	shared, err := curve25519.X25519(maskX25519Priv(nodeToken), x)
 	if err != nil {
 		return false
 	}

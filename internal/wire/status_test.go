@@ -166,6 +166,53 @@ func TestStatusRateBPSOptionalTail(t *testing.T) {
 	}
 }
 
+// TestStatusFrontsOptionalTail keeps the front map after rate_bps.
+func TestStatusFrontsOptionalTail(t *testing.T) {
+	s := Status{
+		Code: OK, IP: "10.8.0.2", Gateway: "10.8.0.1", InstanceID: "b",
+		MTU: 1280, Proto: Proto, Min: ProtoMin, Max: Proto, Caps: NodeCaps,
+		Fronts: []FrontEP{
+			{Name: FrontGET, Path: "/static/v3/build"},
+			{Name: FrontWS, Path: "/api/v1/sync"},
+			{Name: FrontH2, Path: "/api/v1/tunnel"},
+			{Name: FrontQUIC},
+		},
+	}
+	out, err := DecodeStatus(s.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Fronts) != 4 {
+		t.Fatalf("fronts %d %+v", len(out.Fronts), out.Fronts)
+	}
+	if out.Fronts[0].Name != FrontGET || out.Fronts[0].Path != "/static/v3/build" {
+		t.Fatalf("get %+v", out.Fronts[0])
+	}
+	if out.Fronts[1].Name != FrontWS || out.Fronts[2].Name != FrontH2 || out.Fronts[3].Name != FrontQUIC {
+		t.Fatalf("%+v", out.Fronts)
+	}
+	if out.RateBPS != 0 || out.SessionTTLMS != 0 {
+		t.Fatalf("rate %d ttl %d", out.RateBPS, out.SessionTTLMS)
+	}
+	withRate := s
+	withRate.RateBPS = 800000
+	got, err := DecodeStatus(withRate.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RateBPS != 800000 || len(got.Fronts) != 4 {
+		t.Fatalf("rate+fronts %d %d", got.RateBPS, len(got.Fronts))
+	}
+	old := Status{Code: OK, IP: "10.8.0.2", Gateway: "10.8.0.1", InstanceID: "b", MTU: 1280, Proto: Proto, Min: ProtoMin, Max: Proto, Caps: NodeCaps, RateBPS: 800000}
+	got, err = DecodeStatus(old.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RateBPS != 800000 || len(got.Fronts) != 0 {
+		t.Fatalf("old fronts %d rate %d", len(got.Fronts), got.RateBPS)
+	}
+}
+
 // TestStatusPeerHintPubRoundTrip keeps the 32-byte X25519 pub on a hint
 // and does not steal the DNS / GapHold tail.
 func TestStatusPeerHintPubRoundTrip(t *testing.T) {

@@ -142,6 +142,8 @@ HKDF-SHA256(ikm=token, salt=R, info="loft-sid-v2" || 0x00 || S || X, L=32)
 
 A client that has not yet learned `mask_pub` sends v2. Possession of `token` allows detection of v2 ClientHellos. Binding to `R`, `S`, and `X` prevents a construction of the form HMAC(`token`, `random`) from matching.
 
+When mask is enabled, a ClientHello whose SNI is a decoy name is admitted only as sid v3. sid v2 on that name is spliced to the origin, so a stolen member key does not mark it. Own SNI still accepts v2: that path presents the node certificate. A client that has `mask_pub` MUST send sid v3 and MUST NOT fall back to v2. A `client_random` already seen in the last 10 minutes is spliced.
+
 Any other TCP ClientHello is spliced to a configured origin: TLS is already complete; subsequent bytes go to that site. The first origin is the node’s identity. If SNI matches one of the node’s origins, that origin is used; otherwise the primary. Origin hostnames are configuration. They MUST NOT appear as protocol constants.
 
 Without a valid `session_id` the field is a 32-byte string of the same shape as Chrome’s compatibility `session_id`. On a direct path the client MUST send the node’s primary origin hostname as SNI. It learns that name from Status, from the roster, or from the certificate a probe would see. After Status, a mismatch MUST reconnect with the advertised name. A CDN front keeps the CDN hostname.
@@ -155,6 +157,8 @@ HKDF-SHA256(ikm=shared, salt=R, info="loft-cert-serial", L=16)
 ```
 
 with `shared` the sid-v3 ECDH. CertificateVerify is `ecdsa_secp256r1_sha256` under that leaf. A client that knows `mask_pub` MUST check the serial binding and the ECDSA signature. Application-record lengths SHOULD follow a pattern sampled from the origin, including after the first sampled records. Status `mask_pub` and roster `mask_pub` carry the 32-byte X25519 public key. Empty means mask is off. Probes continue to splice. An implementation that only splices remains compatible with nodes that do not mask.
+
+If the ClientHello offers group X25519MLKEM768 (`0x11EC`, [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024)), the server selects it. The TLS 1.3 key-schedule input is the ML-KEM-768 shared secret concatenated with the X25519 shared secret. The X25519 half is the 32 bytes inside that group. It is not required to equal the standalone X25519 share. sid v3 keeps using the standalone share (group `0x001d`) when both are present, and the hybrid half when it is the only X25519. A ClientHello that offers only X25519 is answered with X25519. The hybrid group does not make the leaf a public CA chain.
 
 ### 3.3 WebSocket (`ws`)
 
@@ -339,6 +343,7 @@ Fields in order:
 | policy | optional after routes: compact ACL so a client can enforce the same Allow on direct P2P. `u8 n_own_tags` then tags; `u8 acl_default` (0 peers/accept, 1 drop); `u8 n_rules` then rules; `u8 n_peers` then overlay IP and tags. Omitted when empty. A decoder that sees this tail MUST set Present. Old clients ignore the extra bytes. |
 | session_ttl_ms | optional after policy: u32be live-session maximum. 0 = off. Distinct from `lease_sec` (IP hold after disconnect). When this field is present without a policy, the encoder writes an empty policy first. Old clients ignore the extra bytes. |
 | rate_bps | optional after session_ttl_ms: u32be bulk `CmdData`/`CmdDgram` cap for this session, both directions, bytes per second. 0 = off. Control and small frames (Open, Ping, ACK ≤ 4 KiB, DNS/ICMP Dgram ≤ 512 B) are unshaped. The node enforces. When this field is present without `session_ttl_ms`, the encoder writes ttl 0 first. Old clients ignore the extra bytes. |
+| fronts | optional after rate_bps: u8 n ≤ 8, then n × (name, path, url) as u8 len \|\| bytes. Mux fronts this node accepts (`get` `ws` `h2` `h3` `quic`). Empty url is the host:port of the front that did `0x02`. `quic` has an empty path. Empty list = the client keeps URI/defaults. When this field is present without `rate_bps`, the encoder writes rate 0 first. Old clients ignore the extra bytes. After a successful Status the node map is source of truth; the client SHOULD persist it into the saved profile. |
 
 Selected protocol is the maximum of the intersection of the two ranges. Empty intersection yields code `protocol` (0x0203) and no mux.
 
@@ -593,9 +598,9 @@ This section classifies what a CDN, reverse proxy, or TLS terminator observes. l
 
 A ClientHello that matches a current browser passes the same JA3/JA4 filters already deployed in front of banks and portals. The reference client uses uTLS fingerprints. A private ALPN, a private GREASE pattern, or the Go default cipher list identifies a non-browser. QUIC ALPN is therefore `h3`.
 
-`session_id` is 32 random-looking bytes. sid v3 is HKDF under ECDH with the node’s static X25519; a middlebox needs that private key to mark those ClientHellos. A stolen member key marks only sid v2 (the fallback used before `mask_pub` is known). A middlebox without either secret sees a string of the same length Chrome already sends.
+`session_id` is 32 random-looking bytes. sid v3 is HKDF under ECDH with the node’s static X25519; a middlebox needs that private key to mark those ClientHellos. A stolen member key marks only sid v2. A mask node does not admit sid v2 on a decoy SNI, so that key does not mark the ClientHello that carries the decoy name. A middlebox without either secret sees a string of the same length Chrome already sends.
 
-Mask presents a destination-shaped ECDSA P-256 leaf and `ecdsa_secp256r1_sha256` CertificateVerify, bound by the serial to the same ECDH. A middlebox that verifies a public CA chain will not accept the leaf; a middlebox that inspects names, dates, and the signature scheme sees destination-typical values. Application-record lengths on the loft path SHOULD follow a pattern sampled from the origin. Splice-only nodes skip mask.
+Mask presents a destination-shaped ECDSA P-256 leaf and `ecdsa_secp256r1_sha256` CertificateVerify, bound by the serial to the same ECDH. A middlebox that verifies a public CA chain will not accept the leaf; a middlebox that inspects names, dates, and the signature scheme sees destination-typical values. When the ClientHello offers X25519MLKEM768, the ServerHello selects that group. Application-record lengths on the loft path SHOULD follow a pattern sampled from the origin. Splice-only nodes skip mask. The leaf remains outside WebPKI either way.
 
 ### 11.2 Destination
 
@@ -605,7 +610,7 @@ A probe without a key sees the origin. Taking the origin hostname or IP out of s
 
 ### 11.3 Active probe
 
-A scanner that opens TLS without a valid `session_id` is spliced to the configured origin, including own SNI (CT / reverse-DNS hostname), empty SNI, and a first packet that is not a TLS ClientHello. It receives the origin’s live certificate and bytes. UDP on that IP is forwarded to the same origin, so a QUIC probe sees the destination, not loft. The exception is a marked loft QUIC v1 Initial. Its source connection ID is 20 bytes of `HKDF-SHA256(secret, salt = client_random, info = "loft-quic-v3")`, where client_random is an ephemeral X25519 public key (top bit random) and secret is ECDH(that ephemeral, `mask_pub`). A client without `mask_pub` uses info `loft-quic-v2` with its member key as secret. The node opens the Initial with the public Initial keys ([RFC 9001](https://www.rfc-editor.org/rfc/rfc9001) §5.2), checks the mark, holds each client_random single-use for 10 minutes, and gives that client address to its quic/h3 fronts. The node’s own connection IDs carry an HMAC, so a short-header packet from a new address stays on loft. Such a node advertises `quic_mark` / `h3_mark` instead of `quic` / `h3`; a client that does not mark MUST NOT use them. Forming sid v3 requires `mask_pub`; overlay Hello still requires the member key. CDN origin pull is the exception: configured `cdn_peers` CIDRs MAY complete TLS with the node certificate on own SNI without sid.
+A scanner that opens TLS without a valid `session_id` is spliced to the configured origin, including own SNI (CT / reverse-DNS hostname), empty SNI, and a first packet that is not a TLS ClientHello. It receives the origin’s live certificate and bytes. UDP on that IP is forwarded to the same origin, so a QUIC probe sees the destination, not loft. The exception is a marked loft QUIC v1 Initial. Its source connection ID is 20 bytes of `HKDF-SHA256(secret, salt = client_random, info = "loft-quic-v3")`, where client_random is an ephemeral X25519 public key (top bit random) and secret is ECDH(that ephemeral, `mask_pub`). A client without `mask_pub` uses info `loft-quic-v2` with its member key as secret. The node opens the Initial with the public Initial keys ([RFC 9001](https://www.rfc-editor.org/rfc/rfc9001) §5.2), checks the mark, holds each client_random single-use for 10 minutes, and gives that client address to its quic/h3 fronts. A TCP `client_random` is single-use for the same 10 minutes; a repeat is spliced. On a mask node the QUIC mark is v3 only (`quic_mark` / `h3_mark`): a v2 Initial is forwarded to the origin. The node’s own connection IDs carry an HMAC, so a short-header packet from a new address stays on loft. Such a node advertises `quic_mark` / `h3_mark` instead of `quic` / `h3`; a client that does not mark MUST NOT use them. Forming sid v3 requires `mask_pub`; overlay Hello still requires the member key. CDN origin pull is the exception: configured `cdn_peers` CIDRs MAY complete TLS with the node certificate on own SNI without sid.
 
 GET without a valid Cookie returns 404 with HTML. Roster, lists, and static assets are ordinary GET.
 
@@ -646,6 +651,7 @@ A TLS middlebox that already holds the member key is not addressed. A path on wh
 | canary_pad | 0–2048 |
 | gap_hold_ms | 0–600000 (default 8000) |
 | rate_bps | 0 = off; else bytes/s, u32 |
+| fronts | n ≤ 8; name/path/url each ≤ 64 |
 
 ---
 
@@ -679,6 +685,16 @@ Reset `stream_refused`: payload `05 01`.
 
 Member key shape: `lt_` + 48 lowercase hex. SHA-256 of the whole string is what the node stores.
 
+sid v3, cert serial, and the QUIC v3 source connection ID. Node secret is the ASCII string `loft-vector-node`. Client X25519 scalar is `01 02 … 20` (32 bytes). `R` is 32 bytes of `0x11`. SNI is `origin.example`. QUIC `client_random` is X25519(scalar, basepoint), top bit clear, and the HKDF key is the same ECDH as the cert serial.
+
+```
+mask_pub   cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc09443
+X          07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c
+session_id 699f169d38b0f02b98ade7ad3234aab2006d7cb3da449842d3a0d791b12dfb87
+serial     46112462b0f8327be74b9dac22a7ce55
+quic scid  25b8c53ebe475334b474445e3ee3253691b18faa
+```
+
 ---
 
 ## 15. References
@@ -695,3 +711,4 @@ Member key shape: `lt_` + 48 lowercase hex. SHA-256 of the whole string is what 
 10. [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455). The WebSocket Protocol.
 11. [RFC 1928](https://www.rfc-editor.org/rfc/rfc1928). SOCKS Protocol Version 5.
 12. ZeroMQ RFC 32. Z85 (ZeroMQ Base-85 Encoding).
+13. [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024). Hybrid key exchange in TLS 1.3 (X25519MLKEM768).

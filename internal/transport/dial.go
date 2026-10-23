@@ -109,6 +109,7 @@ func startWithOffer(ctx context.Context, token string, o config.Outbound, offer 
 
 // startFront constructs get, ws, quic, h2, h3, or l3 and runs Start.
 func startFront(ctx context.Context, token string, o config.Outbound, offer wire.Cap) (Dialer, error) {
+	noteKEX("")
 	if o.CDN != "" {
 		if p, err := cdn.Lookup(o.CDN); err == nil && o.Type == "" {
 			o.Type = p.Front
@@ -307,6 +308,7 @@ func StartSelected(ctx context.Context, cfg *config.ClientConfig) (Dialer, confi
 	for _, o := range list {
 		d, err := try(o)
 		if err != nil {
+			log.Printf("loft dial %s: %v", o.Type, err)
 			last = fmt.Errorf("%s: %w", o.Name, err)
 			if d, o2, err2 := tryReplicas(ctx, try, o); err2 == nil {
 				return d, o2, nil

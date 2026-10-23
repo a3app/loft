@@ -180,6 +180,24 @@ func TestParkTakeSameMemberOnly(t *testing.T) {
 	ms.Close()
 }
 
+func TestReleaseHoldLeavesNewerFront(t *testing.T) {
+	t.Cleanup(clearClientHold)
+	a, g1 := takeClientHold()
+	b, g2 := takeClientHold()
+	if a != b || g1 == g2 {
+		t.Fatalf("reuse a=%p b=%p gen %d %d", a, b, g1, g2)
+	}
+	if releaseClientHold(g1) {
+		t.Fatal("stale owner released")
+	}
+	if b.Closed() {
+		t.Fatal("stale close killed the live mux")
+	}
+	if !releaseClientHold(g2) || !b.Closed() {
+		t.Fatal("current owner did not close")
+	}
+}
+
 func TestClientHoldMuxReusesUntilClear(t *testing.T) {
 	t.Cleanup(clearClientHold)
 	a := clientHoldMux()

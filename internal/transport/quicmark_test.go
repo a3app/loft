@@ -124,6 +124,25 @@ func TestQUICMarkInRealInitial(t *testing.T) {
 	}
 }
 
+func TestMaskQUICRejectsV2(t *testing.T) {
+	node := []byte("node-token")
+	pkt := firstInitial(t, markedDial(node))
+	d := &udpDemux{token: node, v3Only: true, seen: map[string]seenHello{}}
+	if d.classify(pkt, "10.0.0.1:1", time.Now()) != toDest {
+		t.Fatal("sid v2 Initial admitted on a mask node")
+	}
+	scid, random, err := initialHello(pkt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !quicMarked(node, random, scid, true) {
+		t.Fatal("v2 mark rejected when v2 is allowed")
+	}
+	if quicMarked(node, random, scid, false) {
+		t.Fatal("v2 mark admitted when v2 is off")
+	}
+}
+
 func TestServerCIDsOwn(t *testing.T) {
 	s := newServerCIDs([]byte("node"))
 	id, err := s.GenerateConnectionID()

@@ -16,11 +16,12 @@ import (
 
 // rawSess runs mux over a bidirectional byte stream (h2 CONNECT, h3 CONNECT).
 type rawSess struct {
-	conn net.Conn
-	sess *mux.Session
-	key  []byte
-	done chan struct{}
-	dead sync.Once
+	conn    net.Conn
+	sess    *mux.Session
+	key     []byte
+	holdGen uint64
+	done    chan struct{}
+	dead    sync.Once
 }
 
 // Session returns the live mux session.
@@ -56,8 +57,13 @@ func (r *rawSess) Close() error {
 			_ = r.conn.SetWriteDeadline(time.Time{})
 		}
 	}
-	clearClientHold()
-	r.sess.Close()
+	// Same as QUIC: a held mux stays parked so the next front keeps stream
+	// ids. Closing it here aliased a fresh client stream onto a parked one.
+	if r.sess != nil && r.sess.Holding() {
+		parkClient(r.sess, "", nil, 0)
+	} else if releaseClientHold(r.holdGen) {
+		r.sess.Close()
+	}
 	r.die()
 	if r.conn != nil {
 		return r.conn.Close()
@@ -105,9 +111,9 @@ func startRaw(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, 
 		conn.Close()
 		return nil, err
 	}
-	sess := clientHoldMux()
+	sess, gen := takeClientHold()
 	sess.SetHold(st.Caps.Has(wire.CapHold))
-	s := &rawSess{conn: conn, sess: sess, key: key, done: make(chan struct{})}
+	s := &rawSess{conn: conn, sess: sess, key: key, holdGen: gen, done: make(chan struct{})}
 	go s.readLoop()
 	go s.writeLoop()
 	return s, nil

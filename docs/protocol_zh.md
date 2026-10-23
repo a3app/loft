@@ -142,6 +142,8 @@ HKDF-SHA256(ikm=token, salt=R, info="loft-sid-v2" || 0x00 || S || X, L=32)
 
 尚未学到 `mask_pub` 的客户端发送 v2。持有 `token` 即可检测 v2 ClientHello。绑定到 `R`、`S` 与 `X`，使形如 HMAC(`token`, `random`) 的构造无法匹配。
 
+伪装开启时，SNI 为诱饵名的 ClientHello 只作为 sid v3 准入。该名字上的 sid v2 拼接到源站，因此窃得的成员密钥标不出它。自身 SNI 仍接受 v2：这条路出示节点证书。已有 `mask_pub` 的客户端必须发送 sid v3，不得回退到 v2。最近 10 分钟内已经见过的 `client_random` 被拼接。
+
 任何其他 TCP ClientHello 拼接到已配置的源站：TLS 已经完成，后续字节发往该站点。第一个源站是节点的身份。若 SNI 匹配节点源站之一，则用该源站，否则用主源站。源站主机名是配置。它们不得作为协议常量出现。
 
 没有有效 `session_id` 时，该字段是与 Chrome 兼容 `session_id` 同形的 32 字节串。在直连路径上，客户端必须把节点的主源站主机名作为 SNI 发出。该名字来自 Status、名册，或探测会看到的证书。Status 之后若不匹配，必须用宣告的名字重连。CDN 前置继续使用 CDN 主机名。
@@ -155,6 +157,8 @@ HKDF-SHA256(ikm=shared, salt=R, info="loft-cert-serial", L=16)
 ```
 
 其中 `shared` 为 sid v3 的 ECDH。CertificateVerify 为该叶子上的 `ecdsa_secp256r1_sha256`。知道 `mask_pub` 的客户端必须核验序列号绑定与 ECDSA 签名。应用记录长度应该跟随从源站采样的样式，包括采样过的前几条之后。Status `mask_pub` 与名册 `mask_pub` 携带 32 字节 X25519 公钥。空表示伪装关闭。探测仍拼接。只做拼接的实现，与不做伪装的节点仍然兼容。
+
+若 ClientHello 提供群组 X25519MLKEM768（`0x11EC`，[RFC 10024](https://www.rfc-editor.org/rfc/rfc10024)），服务器选择它。TLS 1.3 密钥调度的输入是 ML-KEM-768 共享秘密拼接 X25519 共享秘密。X25519 那一半是该群组内的 32 字节。它不必等于单独的 X25519 share。两者都在时，sid v3 仍用单独的 share（群组 `0x001d`）；它是唯一的 X25519 时用混合那一半。只提供 X25519 的 ClientHello 得到 X25519 应答。混合群组并不使叶子成为公开 CA 链。
 
 ### 3.3 WebSocket (`ws`)
 
@@ -339,6 +343,7 @@ u8    software_len || software
 | policy | routes 之后可选：紧凑 ACL，使客户端能在直接 P2P 上执行同一套 Allow。`u8 n_own_tags` 然后标签；`u8 acl_default`（0 peers/accept，1 drop）；`u8 n_rules` 然后规则；`u8 n_peers` 然后覆盖网 IP 与标签。空则省略。见到该尾部的解码器必须置 Present。旧客户端忽略多余字节。 |
 | session_ttl_ms | policy 之后可选：u32be 存活会话上限。0 = 关。有别于 `lease_sec`（断开后的 IP 保留）。有本字段而无 policy 时，编码器先写空 policy。旧客户端忽略多余字节。 |
 | rate_bps | session_ttl_ms 之后可选：u32be 本会话双向批量 `CmdData`/`CmdDgram` 上限，字节每秒。0 = 关。控制与小帧（Open、Ping、ACK ≤ 4 KiB、DNS/ICMP Dgram ≤ 512 B）不整形。由节点执行。有本字段而无 `session_ttl_ms` 时，编码器先写 ttl 0。旧客户端忽略多余字节。 |
+| fronts | rate_bps 之后可选：u8 n ≤ 8，然后 n ×（name、path、url），各为 u8 len \|\| bytes。本节点接受的 mux 前置（`get` `ws` `h2` `h3` `quic`）。空 url 为完成 `0x02` 的前置的 host:port。`quic` 路径为空。空列表 = 客户端保留 URI/默认。有本字段而无 `rate_bps` 时，编码器先写 rate 0。旧客户端忽略多余字节。成功 Status 后节点地图为权威；客户端应写入已保存的配置。 |
 
 选定协议为两范围交集的最大值。交集为空则码为 `protocol`（0x0203），无 mux。
 
@@ -593,9 +598,9 @@ Status 携带 `lists_serial` 与已签名块的 SHA-256。序号或散列更新�
 
 与当下浏览器匹配的 ClientHello 通过银行与门户前已经部署的同一套 JA3/JA4 过滤器。参考客户端使用 uTLS 指纹。私有 ALPN、私有 GREASE 模式或 Go 默认密码套件列表会标出非浏览器。因此 QUIC ALPN 为 `h3`。
 
-`session_id` 为 32 个看似随机的字节。sid v3 为与节点静态 X25519 的 ECDH 下的 HKDF；中间盒需要该私钥才能标出这些 ClientHello。窃得的成员密钥只标出 sid v2（尚未得知 `mask_pub` 时的回退）。两种秘密都没有的中间盒看到的是 Chrome 已经发送的同长度串。
+`session_id` 为 32 个看似随机的字节。sid v3 为与节点静态 X25519 的 ECDH 下的 HKDF；中间盒需要该私钥才能标出这些 ClientHello。窃得的成员密钥只标出 sid v2。伪装节点不在诱饵 SNI 上准入 sid v2，因此该密钥标不出携带诱饵名的 ClientHello。两种秘密都没有的中间盒看到的是 Chrome 已经发送的同长度串。
 
-伪装出示目的地形态的 ECDSA P-256 叶子与 `ecdsa_secp256r1_sha256` CertificateVerify，序列号绑定到同一 ECDH。核验公开 CA 链的中间盒不会接受该叶子；检查名称、日期与签名方案的中间盒看到目的地典型值。loft 路径上的应用记录长度应该跟随从源站采样的样式。只拼接的节点跳过伪装。
+伪装出示目的地形态的 ECDSA P-256 叶子与 `ecdsa_secp256r1_sha256` CertificateVerify，序列号绑定到同一 ECDH。核验公开 CA 链的中间盒不会接受该叶子；检查名称、日期与签名方案的中间盒看到目的地典型值。ClientHello 提供 X25519MLKEM768 时，ServerHello 选择该群组。loft 路径上的应用记录长度应该跟随从源站采样的样式。只拼接的节点跳过伪装。叶子在两种情况下都不在 WebPKI 之内。
 
 ### 11.2 目的地
 
@@ -605,7 +610,7 @@ Status 携带 `lists_serial` 与已签名块的 SHA-256。序号或散列更新�
 
 ### 11.3 主动探测
 
-没有有效 `session_id` 就打开 TLS 的扫描器拼接到已配置源站，包括自身 SNI（CT / 反向 DNS 主机名）、空 SNI，以及首包不是 TLS ClientHello 的情况。它收到源站的存活证书与字节。该 IP 上的 UDP 转发到同一源站，因此 QUIC 探测看到目的地，而不是 loft。例外是带标记的 loft QUIC v1 Initial。其源连接 ID 为 20 字节 `HKDF-SHA256(secret, salt = client_random, info = "loft-quic-v3")`，其中 client_random 为临时 X25519 公钥（最高位随机），secret 为 ECDH(该临时密钥, `mask_pub`)。没有 `mask_pub` 的客户端使用 info `loft-quic-v2`，以成员密钥为 secret。节点用公开 Initial 密钥打开 Initial（[RFC 9001](https://www.rfc-editor.org/rfc/rfc9001) §5.2），检查标记，将每个 client_random 单次持有 10 分钟，并把该客户端地址交给其 quic/h3 前置。节点自身的连接 ID 携带 HMAC，因此来自新地址的短头分组仍留在 loft。此类节点宣告 `quic_mark` / `h3_mark` 而非 `quic` / `h3`；不打标记的客户端不得使用它们。构成 sid v3 需要 `mask_pub`；覆盖网 Hello 仍需要成员密钥。例外是 CDN 源站拉取：已配置的 `cdn_peers` CIDR 可以在自身 SNI 上以节点证书完成 TLS，无需 sid。
+没有有效 `session_id` 就打开 TLS 的扫描器拼接到已配置源站，包括自身 SNI（CT / 反向 DNS 主机名）、空 SNI，以及首包不是 TLS ClientHello 的情况。它收到源站的存活证书与字节。该 IP 上的 UDP 转发到同一源站，因此 QUIC 探测看到目的地，而不是 loft。例外是带标记的 loft QUIC v1 Initial。其源连接 ID 为 20 字节 `HKDF-SHA256(secret, salt = client_random, info = "loft-quic-v3")`，其中 client_random 为临时 X25519 公钥（最高位随机），secret 为 ECDH(该临时密钥, `mask_pub`)。没有 `mask_pub` 的客户端使用 info `loft-quic-v2`，以成员密钥为 secret。节点用公开 Initial 密钥打开 Initial（[RFC 9001](https://www.rfc-editor.org/rfc/rfc9001) §5.2），检查标记，将每个 client_random 单次持有 10 分钟，并把该客户端地址交给其 quic/h3 前置。TCP `client_random` 在同样的 10 分钟内单次使用；重复则拼接。伪装节点上的 QUIC 标记只有 v3（`quic_mark` / `h3_mark`）：v2 Initial 转发到源站。节点自身的连接 ID 携带 HMAC，因此来自新地址的短头分组仍留在 loft。此类节点宣告 `quic_mark` / `h3_mark` 而非 `quic` / `h3`；不打标记的客户端不得使用它们。构成 sid v3 需要 `mask_pub`；覆盖网 Hello 仍需要成员密钥。例外是 CDN 源站拉取：已配置的 `cdn_peers` CIDR 可以在自身 SNI 上以节点证书完成 TLS，无需 sid。
 
 没有有效 Cookie 的 GET 返回带 HTML 的 404。名册、列表与静态资源是普通 GET。
 
@@ -646,6 +651,7 @@ Auth `0x02` 为 nonce、临时 X25519 公钥，以及成员密钥下的 HMAC。�
 | canary_pad | 0–2048 |
 | gap_hold_ms | 0–600000（默认 8000） |
 | rate_bps | 0 = 关；否则字节/秒，u32 |
+| fronts | n ≤ 8；name/path/url 各 ≤ 64 |
 
 ---
 
@@ -679,6 +685,16 @@ Reset `stream_refused`：载荷 `05 01`。
 
 成员密钥形态：`lt_` + 48 个小写十六进制。节点存储的是整串的 SHA-256。
 
+sid v3、证书序列号与 QUIC v3 源连接 ID。节点秘密为 ASCII 串 `loft-vector-node`。客户端 X25519 标量为 `01 02 … 20`（32 字节）。`R` 为 32 字节 `0x11`。SNI 为 `origin.example`。QUIC `client_random` 为 X25519(标量, 基点)，最高位清零，HKDF 密钥与证书序列号同一 ECDH。
+
+```
+mask_pub   cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc09443
+X          07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c
+session_id 699f169d38b0f02b98ade7ad3234aab2006d7cb3da449842d3a0d791b12dfb87
+serial     46112462b0f8327be74b9dac22a7ce55
+quic scid  25b8c53ebe475334b474445e3ee3253691b18faa
+```
+
 ---
 
 ## 15. 参考文献
@@ -695,3 +711,4 @@ Reset `stream_refused`：载荷 `05 01`。
 10. [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455). The WebSocket Protocol.
 11. [RFC 1928](https://www.rfc-editor.org/rfc/rfc1928). SOCKS Protocol Version 5.
 12. ZeroMQ RFC 32. Z85 (ZeroMQ Base-85 Encoding).
+13. [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024). Hybrid key exchange in TLS 1.3 (X25519MLKEM768).

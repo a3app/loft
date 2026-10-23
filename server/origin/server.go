@@ -111,6 +111,10 @@ func nodeInfo(cfg *config.ServerConfig) transport.NodeInfo {
 		CanaryPad:   cfg.Canary.Pad16(),
 		QuicALPN:    cfg.QuicALPN,
 		Roster:      nil,
+		GetPath:     cfg.GetPath,
+		WSPath:      cfg.WSPath,
+		H2Path:      cfg.H2Path,
+		H3Path:      cfg.H3Path,
 	}
 }
 

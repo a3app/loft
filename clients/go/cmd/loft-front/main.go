@@ -23,6 +23,7 @@ import (
 	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/internal/trojan"
 	"github.com/a3app/loft/internal/vless"
+	"github.com/a3app/loft/internal/wire"
 )
 
 // frontDecoy and frontPBK are -decoy / -pbk for direct loft fronts.
@@ -35,7 +36,7 @@ var frontH2MaxAgeMS int
 func main() {
 	token := flag.String("token", "", "member key")
 	rawURL := flag.String("url", "", "front URL")
-	kind := flag.String("type", "auto", "get | ws | h2 | quic | h3 | l3 | sstp | vless | trojan | auto")
+	kind := flag.String("type", "auto", "get | ws | h2 | quic | h3 | l3 | all | get,ws,h2 | sstp | vless | trojan | auto")
 	path := flag.String("path", "", "GET path; empty get is "+config.DefaultGETPath)
 	user := flag.String("user", "", "SSTP username")
 	insecure := flag.Bool("insecure", false, "SSTP: skip TLS verify")
@@ -135,6 +136,10 @@ func main() {
 	status("connecting", "front", "", false)
 
 	if *probe {
+		if multiKind(*kind) {
+			probeFronts(ctx, *token, *rawURL, *kind, *path, *muxOn, *cdnName)
+			return
+		}
 		d, front, err := dial(ctx, *token, *rawURL, *kind, *path, *muxOn, *cdnName)
 		if err != nil {
 			status("error", err.Error(), "", false)
@@ -143,12 +148,26 @@ func main() {
 		ip := transport.OverlayIP()
 		status("on", "", ip, false)
 		_ = d.Close()
-		fmt.Fprintf(os.Stderr, "ok overlay=%s front=%s dns=%s\n", ip, front, strings.Join(transport.OverlayDNS(), ","))
+		fmt.Fprintf(os.Stderr, "ok overlay=%s front=%s dns=%s %s\n", ip, front, strings.Join(transport.OverlayDNS(), ","), transport.SessionLine(*rawURL))
 		return
 	}
 
 	h := &transport.Holder{}
 	defer h.Close()
+	// atomic.Value rejects a second concrete type. get then h3 is a panic.
+	var liveMu sync.Mutex
+	var liveRaw transport.Dialer
+	onSwitch = func() {
+		liveMu.Lock()
+		d := liveRaw
+		liveMu.Unlock()
+		if d == nil {
+			fmt.Fprintln(os.Stderr, "switch: no front")
+			return
+		}
+		fmt.Fprintln(os.Stderr, "switch: drop live front")
+		_ = d.Close()
+	}
 	defer serveSOCKS(ctx, *socks, h).Close()
 
 	var (
@@ -231,6 +250,9 @@ func main() {
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
 	go func() {
 		err := transport.SuperviseOn(ctx, cfg, pathCh, func(d transport.Dialer, o config.Outbound) {
+			// Supervise waits on this dialer. The holder may swap in an
+			// L3Net wrapper; switch must close the dialer, not the wrapper.
+			raw := d
 			if live, ok := h.Live().(*inbound.L3Net); ok {
 				if p, ok := d.(transport.IPPump); ok {
 					live.Swap(d, p)
@@ -245,13 +267,17 @@ func main() {
 				}
 				h.Set(d)
 			}
+			liveMu.Lock()
+			liveRaw = raw
+			liveMu.Unlock()
 			ip := transport.OverlayIP()
 			bringTUN()
 			n := resumes.Add(1)
+			line := transport.SessionLine(*rawURL)
 			if n == 1 {
-				fmt.Fprintf(os.Stderr, "front %s overlay=%s\n", o.Type, ip)
+				fmt.Fprintf(os.Stderr, "front %s overlay=%s %s\n", o.Type, ip, line)
 			} else {
-				fmt.Fprintf(os.Stderr, "resume %s overlay=%s n=%d\n", o.Type, ip, n)
+				fmt.Fprintf(os.Stderr, "resume %s overlay=%s n=%d %s\n", o.Type, ip, n, line)
 			}
 			if drv != nil {
 				drv.Event("LIVE", fmt.Sprintf("n=%d", n), "type="+o.Type, "overlay="+ip)
@@ -273,10 +299,49 @@ func main() {
 	<-ctx.Done()
 }
 
+// multiKind is -type all or a comma list. Those sessions rotate in Supervise.
+func multiKind(kind string) bool {
+	k := strings.ToLower(strings.TrimSpace(kind))
+	return k == "all" || strings.Contains(k, ",")
+}
+
+// probeFronts handshakes every named front and prints SessionLine after each.
+func probeFronts(ctx context.Context, token, raw, kind, path string, muxOn bool, cdnName string) {
+	order := frontOrder(kind, raw, muxOn, false)
+	var failed int
+	for _, t := range order {
+		o := outboundFor(raw, t, path, cdnName)
+		if !muxOn {
+			f := false
+			o.Mux = &f
+		}
+		d, err := transport.Start(ctx, token, o)
+		if err != nil {
+			failed++
+			fmt.Fprintf(os.Stderr, "front %s: %v\n", t, err)
+			continue
+		}
+		ip := transport.OverlayIP()
+		fmt.Fprintf(os.Stderr, "ok overlay=%s front=%s dns=%s %s\n", ip, t, strings.Join(transport.OverlayDNS(), ","), transport.SessionLine(raw))
+		_ = d.Close()
+	}
+	if failed == len(order) {
+		status("error", "no front", "", false)
+		os.Exit(2)
+	}
+}
+
 // frontOrder is the try-list for -type. Stock public path is GET.
+// all and a comma list are the mux fronts Supervise rotates.
 // WS fallback is only for an explicit ws URL or -type ws.
 func frontOrder(kind, raw string, muxOn, fallback bool) []string {
 	kind = strings.ToLower(strings.TrimSpace(kind))
+	if kind == "all" {
+		return append([]string{}, wire.FrontOrder...)
+	}
+	if strings.Contains(kind, ",") {
+		return parseKindList(kind)
+	}
 	if kind == "auto" {
 		kind = ""
 	}
@@ -304,6 +369,28 @@ func frontOrder(kind, raw string, muxOn, fallback bool) []string {
 	default:
 		return []string{kind}
 	}
+}
+
+// parseKindList keeps known front names, in the order given.
+func parseKindList(kind string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range strings.Split(kind, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		f, err := wire.ParseFront(p)
+		if err != nil || seen[f] {
+			continue
+		}
+		seen[f] = true
+		out = append(out, f)
+	}
+	if len(out) == 0 {
+		return []string{"get"}
+	}
+	return out
 }
 
 // frontConfig is the in-memory ClientConfig Supervise uses for this helper.
@@ -769,6 +856,9 @@ func statusMTU(state, msg, ip string, tun bool, dns string, mtu int, up, down ui
 	routeKV := ""
 	if rts != "" {
 		routeKV = " routes=" + rts
+	}
+	if fronts := transport.FormatFronts(transport.LearnedFronts()); fronts != "" {
+		routeKV += " fronts=" + fronts
 	}
 	if state == "on" {
 		if mtu > 0 {

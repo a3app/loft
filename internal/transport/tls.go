@@ -133,6 +133,7 @@ func dialTLSALPN(addr, sni, fingerprint string, insecure bool, token []byte, alp
 		}
 		return nil, err
 	}
+	noteKEX("tls")
 	return u, nil
 }
 
@@ -167,15 +168,17 @@ func finishClientHello(u *utls.UConn, token []byte, sni string, alpn []string, m
 	if len(token) > 0 {
 		rnd := u.HandshakeState.Hello.Random
 		if len(rnd) == 32 {
-			share := utlsShare(u)
+			share, priv := sidMaterial(u)
 			h := clientHello{Random: rnd, SNI: sni, KeyShare: share}
 			var sid []byte
 			if len(maskPub) == 32 {
-				if priv := utlsSharePriv(u, share); len(priv) == 32 {
+				if len(priv) == 32 {
 					sid = sid3FromPriv(priv, maskPub, h)
 				}
-			}
-			if len(sid) != 32 {
+				if len(sid) != 32 {
+					return fmt.Errorf("mask: sid v3")
+				}
+			} else {
 				sid = sessionHMAC(token, h)
 			}
 			u.HandshakeState.Hello.SessionId = sid
@@ -184,10 +187,11 @@ func finishClientHello(u *utls.UConn, token []byte, sni string, alpn []string, m
 	return u.MarshalClientHello()
 }
 
-// buildUTLSHello marshals a browser ClientHello (no record header) and the
-// X25519 private that matches key_share. session_id is sid v3 when maskPub
-// is 32 bytes, else sid v2 under token.
-func buildUTLSHello(sni, fingerprint string, token, maskPub []byte, alpn []string) (msg, priv []byte, err error) {
+// buildUTLSHello marshals a browser ClientHello (no record header).
+// session_id is sid v3 when maskPub is 32 bytes. v2 is only the fallback
+// when mask_pub is not known. The hybrid decapsulation key is returned when
+// the fingerprint offered X25519MLKEM768.
+func buildUTLSHello(sni, fingerprint string, token, maskPub []byte, alpn []string) (clientKX, error) {
 	if len(alpn) == 0 {
 		alpn = []string{"h2", "http/1.1"}
 	}
@@ -202,7 +206,7 @@ func buildUTLSHello(sni, fingerprint string, token, maskPub []byte, alpn []strin
 	}
 	u := utls.UClient(p1, cfg, helloID(fingerprint))
 	if err := u.BuildHandshakeState(); err != nil {
-		return nil, nil, err
+		return clientKX{}, err
 	}
 	if len(alpn) > 0 {
 		for _, ext := range u.Extensions {
@@ -213,36 +217,75 @@ func buildUTLSHello(sni, fingerprint string, token, maskPub []byte, alpn []strin
 		u.HandshakeState.Hello.AlpnProtocols = append([]string(nil), alpn...)
 	}
 	rnd := u.HandshakeState.Hello.Random
-	share := utlsShare(u)
-	priv = utlsSharePriv(u, share)
+	share, priv := sidMaterial(u)
 	h := clientHello{Random: rnd, SNI: sni, KeyShare: share}
 	var sid []byte
-	if len(maskPub) == 32 && len(priv) == 32 {
+	if len(maskPub) == 32 {
+		if len(priv) != 32 || len(rnd) != 32 {
+			return clientKX{}, fmt.Errorf("mask: sid v3")
+		}
 		sid = sid3FromPriv(priv, maskPub, h)
-	}
-	if len(sid) != 32 && len(token) > 0 && len(rnd) == 32 {
+		if len(sid) != 32 {
+			return clientKX{}, fmt.Errorf("mask: sid v3")
+		}
+	} else if len(token) > 0 && len(rnd) == 32 {
 		sid = sessionHMAC(token, h)
 	}
 	if len(sid) == 32 {
 		u.HandshakeState.Hello.SessionId = sid
 	}
 	if err := u.MarshalClientHello(); err != nil {
-		return nil, nil, err
+		return clientKX{}, err
 	}
 	raw := u.HandshakeState.Hello.Raw
 	if len(raw) >= 5 && raw[0] == 0x16 {
 		raw = raw[5:]
 	}
 	if len(raw) < 4 || raw[0] != hsClientHello {
-		return nil, nil, fmt.Errorf("mask: utls hello")
+		return clientKX{}, fmt.Errorf("mask: utls hello")
 	}
-	if len(priv) != 32 {
-		parsed, perr := parseClientHello(raw)
-		if perr == nil {
-			priv = utlsSharePriv(u, parsed.KeyShare)
+	parsed, perr := parseClientHello(raw)
+	kx := clientKX{raw: raw, xPriv: priv}
+	if perr == nil {
+		if len(kx.xPriv) != 32 {
+			kx.xPriv = utlsSharePriv(u, parsed.sidShare())
+		}
+		kx.hybridX = hybridScalar(u, parsed.hybridX)
+		if ks := u.HandshakeState.State13.KeyShareKeys; ks != nil {
+			kx.mlkem = ks.Mlkem
 		}
 	}
-	return raw, priv, nil
+	return kx, nil
+}
+
+// sidMaterial is the X25519 public and private sid v3 binds: the standalone
+// share, or the hybrid half when that is all the hello carries.
+func sidMaterial(u *utls.UConn) (pub, priv []byte) {
+	pub = utlsShare(u)
+	priv = utlsSharePriv(u, pub)
+	if len(priv) == 32 {
+		return pub, priv
+	}
+	ks := u.HandshakeState.State13.KeyShareKeys
+	if ks != nil && ks.MlkemEcdhe != nil {
+		return ks.MlkemEcdhe.PublicKey().Bytes(), ks.MlkemEcdhe.Bytes()
+	}
+	return pub, priv
+}
+
+// hybridScalar is the X25519 private inside the hybrid key share.
+func hybridScalar(u *utls.UConn, hx []byte) []byte {
+	ks := u.HandshakeState.State13.KeyShareKeys
+	if ks == nil || len(hx) != 32 {
+		return nil
+	}
+	if ks.MlkemEcdhe != nil && bytesEqual(ks.MlkemEcdhe.PublicKey().Bytes(), hx) {
+		return ks.MlkemEcdhe.Bytes()
+	}
+	if ks.Ecdhe != nil && bytesEqual(ks.Ecdhe.PublicKey().Bytes(), hx) {
+		return ks.Ecdhe.Bytes()
+	}
+	return nil
 }
 
 // utlsShare returns the X25519 public from uTLS key_share, or nil.

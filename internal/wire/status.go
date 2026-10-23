@@ -62,18 +62,27 @@ type Status struct {
 	Peers        byte     // 0 hub, 1 mesh, 2 vlan
 	P2P          byte     // 1 = node allows p2p
 	PeerHints    []PeerHint
-	DNS          []string // resolver IPs for the client TUN; empty = do not change OS DNS
-	IP6          string   // overlay IPv6; empty = IPv4-only (optional tail)
-	Gateway6     string   // overlay IPv6 gateway; empty = none
-	HeaderBudget uint16   // GET encoded Cookie budget; 0 = client keeps its own
-	Inflight     uint8    // GET inflight; 0 = client keeps its own
-	H2Conns      uint8    // GET HTTP/2 connections (1–4); 0 = client keeps one
-	UplinkEnc    uint8    // 0 base64url, 1 Cookie Z85; 0 = client keeps base64url
-	GapHoldMS    uint32   // mux/stream hold after a front drop; 0 = client default
-	Routes       []Route  // managed CIDRs (lab LAN behind a member); empty = none
-	Policy       Policy   // compact ACL for P2P; omitted when empty
-	SessionTTLMS uint32   // live session max; 0 = off. Distinct from LeaseSec (IP hold).
-	RateBPS      uint32   // bulk Data/Dgram cap, both ways; 0 = off
+	DNS          []string  // resolver IPs for the client TUN; empty = do not change OS DNS
+	IP6          string    // overlay IPv6; empty = IPv4-only (optional tail)
+	Gateway6     string    // overlay IPv6 gateway; empty = none
+	HeaderBudget uint16    // GET encoded Cookie budget; 0 = client keeps its own
+	Inflight     uint8     // GET inflight; 0 = client keeps its own
+	H2Conns      uint8     // GET HTTP/2 connections (1–4); 0 = client keeps one
+	UplinkEnc    uint8     // 0 base64url, 1 Cookie Z85; 0 = client keeps base64url
+	GapHoldMS    uint32    // mux/stream hold after a front drop; 0 = client default
+	Routes       []Route   // managed CIDRs (lab LAN behind a member); empty = none
+	Policy       Policy    // compact ACL for P2P; omitted when empty
+	SessionTTLMS uint32    // live session max; 0 = off. Distinct from LeaseSec (IP hold).
+	RateBPS      uint32    // bulk Data/Dgram cap, both ways; 0 = off
+	Fronts       []FrontEP // mux fronts this node accepts; empty = client keeps URI/defaults
+}
+
+// FrontEP is one Status front: name (get/ws/h2/h3/quic), HTTP path, optional URL.
+// Empty URL is the host:port of the front that did 0x02. quic has an empty path.
+type FrontEP struct {
+	Name string
+	Path string
+	URL  string
 }
 
 // Policy is compact ACL pushed so a client can enforce the same Allow on
@@ -303,7 +312,8 @@ func (s Status) Encode() []byte {
 	needRoutes := len(s.Routes) > 0
 	needPolicy := s.Policy.Present || len(s.Policy.OwnTags) > 0 || s.Policy.ACLDefault > 0 || len(s.Policy.Rules) > 0 || len(s.Policy.Peers) > 0
 	needTTL := s.SessionTTLMS > 0
-	needRate := s.RateBPS > 0
+	needFronts := len(s.Fronts) > 0
+	needRate := s.RateBPS > 0 || needFronts
 	needAfterGap := needRoutes || needPolicy || needTTL || needRate
 	if s.IP6 != "" || s.Gateway6 != "" || s.HeaderBudget > 0 || s.Inflight > 0 || s.H2Conns > 0 || s.UplinkEnc > 0 || s.GapHoldMS > 0 || needAfterGap {
 		tail = append(tail, putStr(s.IP6)...)
@@ -339,6 +349,9 @@ func (s Status) Encode() []byte {
 									var rb [4]byte
 									binary.BigEndian.PutUint32(rb[:], s.RateBPS)
 									tail = append(tail, rb[:]...)
+									if needFronts {
+										tail = append(tail, encodeFronts(s.Fronts)...)
+									}
 								}
 							}
 						}
@@ -580,6 +593,12 @@ func DecodeStatus(b []byte) (Status, error) {
 									off += 4
 									if off+4 <= len(b) {
 										s.RateBPS = binary.BigEndian.Uint32(b[off : off+4])
+										off += 4
+										if off < len(b) {
+											eps, n := decodeFronts(b[off:])
+											s.Fronts = eps
+											off += n
+										}
 									}
 								}
 							}
@@ -605,6 +624,46 @@ func putStr(s string) []byte {
 	out[0] = byte(len(b))
 	copy(out[1:], b)
 	return out
+}
+
+// encodeFronts is u8 n ≤ 8, then n × (name, path, url) as putStr. Empty URL is the 0x02 host.
+func encodeFronts(eps []FrontEP) []byte {
+	n := len(eps)
+	if n > 8 {
+		n = 8
+	}
+	b := []byte{byte(n)}
+	for i := 0; i < n; i++ {
+		b = append(b, putStr(eps[i].Name)...)
+		b = append(b, putStr(eps[i].Path)...)
+		b = append(b, putStr(eps[i].URL)...)
+	}
+	return b
+}
+
+// decodeFronts reads the Status fronts tail. Truncation returns what was parsed.
+func decodeFronts(b []byte) ([]FrontEP, int) {
+	if len(b) < 1 {
+		return nil, 0
+	}
+	n := int(b[0])
+	off := 1
+	if n > 8 {
+		n = 8
+	}
+	var out []FrontEP
+	for i := 0; i < n && off < len(b); i++ {
+		name, k := getStr(b[off:])
+		off += k
+		path, k := getStr(b[off:])
+		off += k
+		u, k := getStr(b[off:])
+		off += k
+		if name != "" {
+			out = append(out, FrontEP{Name: name, Path: path, URL: u})
+		}
+	}
+	return out, off
 }
 
 // encodePolicy is own tags, acl_default, rules, peer tags. Always at least 4 bytes.

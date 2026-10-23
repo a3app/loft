@@ -71,7 +71,7 @@ client.Holder
             mux Open / Data / Close / Dgram / Leave
 ```
 
-`Supervise` 优先 GET。GET 的 Status 里非空 `ticket` 就是会话标识。客户端可用 `0x04` 挂上 `ws` / `h2` / `quic` / `h3`（用会话密钥做 HMAC，不再发第二次 `0x02`）。GET 留着。Mux 大宗走挂上的前置（`CmdFront`）；那条前置死了，大宗回到 GET，同一密钥、mux、序号。`l3` 和 `connect` 不 attach。
+`Supervise` 优先 GET。GET 的 Status 里非空 `ticket` 就是会话标识。Status `fronts` 列出本节点接受的 mux 端点（name、path、可选 URL）；客户端按这些路径 attach，并应把地图写回已保存的配置。客户端可用 `0x04` 挂上 `ws` / `h2` / `quic` / `h3`（用会话密钥做 HMAC，不再发第二次 `0x02`）。GET 留着。Mux 大宗走挂上的前置（`CmdFront`）；那条前置死了，大宗回到 GET，同一密钥、mux、序号。`l3` 和 `connect` 不 attach。
 
 没有可 attach 的 GET 会话时，`select: auto` 下 `Supervise` 按列表顺序试配置好的出站。第一次 Status 之后只留前置的交集。失败就换下一条还在的前置，再试未签名的 `replicas`，再试签过的名册。节点省略 `fronts` 只宣告 GET；`ws`、`h2`、`quic`、`h3`、`l3` 要显式列出。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报（无 mux）；TUN 直接拷包，不走用户态 TCP 栈。
 
@@ -141,7 +141,7 @@ Accept
       节点证书（advertise 上的成员，sid 之后的 CDN）
   else if own SNI from cdn_peers
       节点证书（CDN 拉源站）
-  else if session_id = sid v3（节点 X25519）or sid v2（成员 HMAC）
+  else if session_id = sid v3，或伪装关闭时的 sid v2
       if mask ready → dest 形状的 ECDSA 叶子 + 记录填充
       else            → loft HTTP 处理
   else
@@ -153,7 +153,7 @@ UDP
 
 拼接到哪是节点配置。客户端自己发现。YAML 里的主机名是例子，不是协议常量。
 
-伪装签发一张 ECDSA P-256 叶子，抄源站身份，用 `ecdsa_secp256r1_sha256` 签 CertificateVerify。序列号绑在和节点 X25519 的 ECDH 上。探测照样拼接。应用记录可以跟源站密文长度。
+伪装签发一张 ECDSA P-256 叶子，抄源站身份，用 `ecdsa_secp256r1_sha256` 签 CertificateVerify。序列号绑在和节点 X25519 的 ECDH 上。ClientHello 提供 X25519MLKEM768（`0x11EC`）时，ServerHello 选择该群组；叶子仍在 WebPKI 之外。自身 SNI 仍接受 sid v2，并出示节点证书。探测、诱饵 SNI 上的 sid v2，以及 10 分钟内重复的 TCP `client_random`，都拼接。伪装节点上的 QUIC Initial 只在 v3 标记下准入。应用记录可以跟源站密文长度。
 
 ---
 

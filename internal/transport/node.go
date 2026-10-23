@@ -3,6 +3,7 @@ package transport
 // NodeInfo is stamped into Status by every front: caps, decoy, mask, roster, lists.
 
 import (
+	"github.com/a3app/loft/internal/config"
 	"github.com/a3app/loft/internal/netconf"
 	"github.com/a3app/loft/internal/wire"
 )
@@ -24,6 +25,10 @@ type NodeInfo struct {
 	// ListsFn, when set, gives the current lists serial and hash (lists
 	// are re-signed on reload).
 	ListsFn func() (uint64, []byte)
+	GetPath string
+	WSPath  string
+	H2Path  string
+	H3Path  string
 }
 
 // Status builds the first AEAD Status from session defaults and this node's offer.
@@ -52,7 +57,46 @@ func (n NodeInfo) Status(sid string) wire.Status {
 	if validGETSID(sid) {
 		st.Ticket = []byte(sid)
 	}
+	st.Fronts = n.frontEPs()
 	return st
+}
+
+// frontEPs lists mux fronts this node accepts, with HTTP paths. connect/l3 stay off this map.
+func (n NodeInfo) frontEPs() []wire.FrontEP {
+	var out []wire.FrontEP
+	for _, f := range n.Caps.Fronts() {
+		if f == wire.FrontConnect || f == wire.FrontL3 {
+			continue
+		}
+		ep := wire.FrontEP{Name: f}
+		switch f {
+		case wire.FrontGET:
+			ep.Path = n.GetPath
+			if ep.Path == "" {
+				ep.Path = config.DefaultGETPath
+			}
+		case wire.FrontWS:
+			ep.Path = n.WSPath
+			if ep.Path == "" {
+				ep.Path = config.DefaultWSPath
+			}
+		case wire.FrontH2:
+			ep.Path = n.H2Path
+			if ep.Path == "" {
+				ep.Path = config.DefaultH2Path
+			}
+		case wire.FrontH3:
+			ep.Path = n.H3Path
+			if ep.Path == "" {
+				ep.Path = n.H2Path
+			}
+			if ep.Path == "" {
+				ep.Path = config.DefaultH2Path
+			}
+		}
+		out = append(out, ep)
+	}
+	return out
 }
 
 // withDecoy copies decoy hostnames onto st.

@@ -108,6 +108,7 @@ func ListenUDPDecoy(listen, certFile, keyFile string, info NodeInfo, fronts []st
 		return err
 	}
 	d := newUDPDemux(pc, upAddr, info.Token)
+	d.v3Only = len(info.MaskPub) == 32
 	go d.run()
 	defer d.close()
 	tr := &quic.Transport{Conn: d.loft, ConnectionIDGenerator: d.cids}
@@ -142,6 +143,7 @@ type udpDemux struct {
 	pc     net.PacketConn
 	upAddr *net.UDPAddr
 	token  []byte
+	v3Only bool // mask node: sid/QUIC v2 is a probe
 	cids   *serverCIDs
 	loft   *demuxConn
 
@@ -197,7 +199,7 @@ func (d *udpDemux) classify(pkt []byte, key string, now time.Time) verdict {
 	if errors.Is(err, errNoHello) && len(scid) == quicMarkLen {
 		return toWait
 	}
-	if err != nil || !verifyQUICMark(d.token, random, scid) {
+	if err != nil || !quicMarked(d.token, random, scid, !d.v3Only) {
 		return toDest
 	}
 	if s, ok := d.seen[string(random)]; ok && s.from != key {

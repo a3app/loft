@@ -306,6 +306,8 @@ use:
 
 `session_id` 是 32 字节。sid v3 是和节点 X25519 做 ECDH 再 HKDF（`mask_pub` / 分享链接 `pbk`）。sid v2（回退）是成员密钥上的 HKDF。偷到的成员密钥只标 v2 hello。
 
+伪装开启时，SNI 为诱饵名的 hello 只作为 sid v3 准入（`mask_pub` / `pbk`）；sid v2 拼接到源站。ClientHello 提供 X25519MLKEM768 时，伪装选择该群组（RFC 10024）。叶子仍不是公开 CA 链。10 分钟内重复同一 `client_random` 作为探测拼接。伪装节点上的 QUIC Initial 只在 v3 标记下准入。
+
 例子 YAML 里的源站主机名是例子。选公网站点这条路径不愿意丢掉、节点又能拼接其 TLS 的源站。它们不编进协议。
 
 ---

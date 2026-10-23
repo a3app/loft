@@ -44,6 +44,7 @@ type GET struct {
 	path         string
 	host         string
 	sess         *mux.Session
+	holdGen      uint64
 	key          []byte
 	sid          string
 	seq          atomic.Uint64
@@ -75,6 +76,7 @@ type GET struct {
 	uplinkEnc    atomic.Int32  // wire.UplinkBase64 or UplinkCookie85
 	applied      atomic.Uint64 // CmdReport applied-through GET seq
 	ticket       []byte
+	fronts       []wire.FrontEP
 	attachLive   atomic.Bool
 	attachMu     sync.Mutex
 	attach       io.Closer
@@ -184,6 +186,7 @@ func NewGET(token string, o config.Outbound) (*GET, error) {
 		return nil, err
 	}
 	base := strings.TrimRight(o.URL, "/")
+	sess, gen := takeClientHold()
 	g := &GET{
 		prof:     prof,
 		cfg:      o,
@@ -195,7 +198,8 @@ func NewGET(token string, o config.Outbound) (*GET, error) {
 		base:     base,
 		path:     strings.TrimRight(o.Path, "/"),
 		host:     u.Host,
-		sess:     clientHoldMux(),
+		sess:     sess,
+		holdGen:  gen,
 		done:     make(chan struct{}),
 		held:     map[uint64][]wire.Frame{},
 	}
@@ -274,6 +278,7 @@ func (g *GET) Start(ctx context.Context) error {
 	RememberVis(st)
 	g.caps = st.Caps
 	g.ticket = append([]byte(nil), st.Ticket...)
+	g.fronts = append([]wire.FrontEP(nil), st.Fronts...)
 	g.sess.SetHold(st.Caps.Has(wire.CapHold))
 	if !g.cfg.UseMux() && !st.Caps.Has(wire.CapConnect) {
 		return fmt.Errorf("node requires mux")
@@ -459,8 +464,9 @@ func (g *GET) Close() error {
 	}
 	g.closeAttach()
 	g.sendLeave()
-	clearClientHold()
-	g.sess.Close()
+	if releaseClientHold(g.holdGen) {
+		g.sess.Close()
+	}
 	g.die()
 	return nil
 }

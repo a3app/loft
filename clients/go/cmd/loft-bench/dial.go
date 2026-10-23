@@ -12,26 +12,39 @@ import (
 	"github.com/a3app/loft/internal/cdn"
 	"github.com/a3app/loft/internal/config"
 	"github.com/a3app/loft/internal/transport"
+	"github.com/a3app/loft/internal/wire"
 )
+
+// benchDecoy and benchPBK are -decoy / -pbk. pbk makes the first hello sid v3.
+var benchDecoy, benchPBK string
 
 // outboundH2MaxAgeMS is -h2-max-age in milliseconds (0 = keep HTTP/2 until error).
 var outboundH2MaxAgeMS int
 
-// dialFront tries the requested kind first (GUI: empty kind from URL), then the other.
-func dialFront(ctx context.Context, token, raw, kind, path, cdnName string, muxOn bool) (transport.Dialer, string, error) {
+// dialOrder is the single front dialFront will start. Empty follows the URL.
+func dialOrder(kind, raw string) ([]string, error) {
 	kind = strings.ToLower(strings.TrimSpace(kind))
-	order := []string{kind}
 	switch kind {
-	case "ws":
-		order = []string{"ws"}
-	case "get":
-		order = []string{"get"}
-	default:
+	case "", "auto":
 		if strings.HasPrefix(raw, "ws://") || strings.HasPrefix(raw, "wss://") {
-			order = []string{"ws"}
-		} else {
-			order = []string{"get"}
+			return []string{"ws"}, nil
 		}
+		return []string{"get"}, nil
+	default:
+		f, err := wire.ParseFront(kind)
+		if err != nil {
+			return nil, err
+		}
+		return []string{f}, nil
+	}
+}
+
+// dialFront dials the named front. Empty follows the URL scheme.
+// h2, quic, h3 and l3 stay on that front: they are not a GET fallback.
+func dialFront(ctx context.Context, token, raw, kind, path, cdnName string, muxOn bool) (transport.Dialer, string, error) {
+	order, err := dialOrder(kind, raw)
+	if err != nil {
+		return nil, "", err
 	}
 	var last error
 	for _, t := range order {
@@ -59,6 +72,8 @@ func outboundFor(raw, kind, path, cdnName string, muxOn bool) config.Outbound {
 		CDN:          strings.TrimSpace(cdnName),
 		Fingerprint:  "chrome",
 		Insecure:     true,
+		Decoy:        strings.TrimSpace(benchDecoy),
+		MaskPub:      strings.TrimSpace(benchPBK),
 		HeaderBudget: 16 << 10,
 		Inflight:     48,
 		H2MaxAgeMS:   outboundH2MaxAgeMS,
@@ -84,15 +99,22 @@ func outboundFor(raw, kind, path, cdnName string, muxOn bool) config.Outbound {
 		}
 	case "ws":
 		o.URL = withWSPath(wsURL(raw), "/api/v1/sync")
-	case "h2", "h3":
+	case "h2", "h3", "l3":
 		o.URL = httpOrigin(raw)
-		if o.Path == "" || o.Path == "/static/js" {
+		// A leftover GET cover is not the CONNECT resource.
+		if o.Path == "" || getCoverPath(o.Path) {
 			o.Path = "/api/v1/tunnel"
 		}
 	case "quic":
 		o.URL = httpOrigin(raw)
 	}
 	return o
+}
+
+// getCoverPath is a GET static cover. It is not an h2/h3/l3 CONNECT resource.
+func getCoverPath(p string) bool {
+	p = strings.TrimSpace(p)
+	return strings.HasPrefix(p, "/static/") || strings.HasSuffix(p, ".js")
 }
 
 // httpOrigin maps a ws(s) URL to the matching http(s) origin.
@@ -144,4 +166,43 @@ func withWSPath(raw, fallback string) string {
 		u.Path = fallback
 	}
 	return u.String()
+}
+
+// benchConfig is the Supervise list for -switch and -type all.
+func benchConfig(token, raw, path, cdnName string, muxOn bool, kinds []string) *config.ClientConfig {
+	cfg := &config.ClientConfig{
+		Token:  token,
+		Select: "auto",
+		Fronts: append([]string{}, kinds...),
+	}
+	for _, t := range kinds {
+		cfg.Outbounds = append(cfg.Outbounds, outboundFor(raw, t, path, cdnName, muxOn))
+	}
+	return cfg
+}
+
+// splitTypes parses -type. all is the mux try order. Empty stays ws,get.
+func splitTypes(s string) []string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "all" {
+		return append([]string{}, wire.FrontOrder...)
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		f, err := wire.ParseFront(p)
+		if err != nil || seen[f] {
+			continue
+		}
+		seen[f] = true
+		out = append(out, f)
+	}
+	if len(out) == 0 {
+		return []string{"ws", "get"}
+	}
+	return out
 }

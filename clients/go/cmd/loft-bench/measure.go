@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -185,13 +186,40 @@ func withConn(ctx context.Context, timeout time.Duration, dial func(context.Cont
 }
 
 func httpsThrough(ctx context.Context, socksAddr string, n int, timeout time.Duration) (time.Duration, error) {
+	var peek *peekConn
 	tr := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return socksDial(ctx, socksAddr, addr)
+			c, err := socksDial(ctx, socksAddr, addr)
+			if err != nil {
+				return nil, err
+			}
+			peek = &peekConn{Conn: c}
+			return peek, nil
 		},
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 	}
-	return httpsGet(ctx, tr, n, timeout)
+	dt, err := httpsGet(ctx, tr, n, timeout)
+	if err != nil && peek != nil && len(peek.head) > 0 {
+		fmt.Fprintf(os.Stderr, "https head %x\n", peek.head)
+	}
+	return dt, err
+}
+
+// peekConn keeps the first bytes read, so a non-TLS response is visible.
+type peekConn struct {
+	net.Conn
+	head []byte
+}
+
+func (p *peekConn) Read(b []byte) (int, error) {
+	n, err := p.Conn.Read(b)
+	if n > 0 && len(p.head) < 24 {
+		p.head = append(p.head, b[:n]...)
+		if len(p.head) > 24 {
+			p.head = p.head[:24]
+		}
+	}
+	return n, err
 }
 
 func httpsDirect(ctx context.Context, n int, timeout time.Duration) error {

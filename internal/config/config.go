@@ -40,6 +40,8 @@ const (
 	DebugSOCKS5   = "127.0.0.1:18080"
 	// DefaultGETPath is empty node get_path and empty client GET outbound.
 	DefaultGETPath = "/static/v3/build"
+	DefaultWSPath  = "/api/v1/sync"
+	DefaultH2Path  = "/api/v1/tunnel"
 )
 
 // ListenConfig is local SOCKS5 and optional TUN.
@@ -271,13 +273,13 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 		c.GetPath = DefaultGETPath
 	}
 	if c.WSPath == "" {
-		c.WSPath = "/api/v1/sync"
+		c.WSPath = DefaultWSPath
 	}
 	if c.H2Path == "" {
-		c.H2Path = "/api/v1/tunnel"
+		c.H2Path = DefaultH2Path
 	}
 	if c.H3Path == "" {
-		c.H3Path = "/api/v1/tunnel"
+		c.H3Path = DefaultH2Path
 	}
 	if c.QuicALPN == "" {
 		c.QuicALPN = "h3"

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/mlkem"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -137,8 +138,13 @@ func TestMaskHandshakeLoopback(t *testing.T) {
 			errc <- io.ErrUnexpectedEOF
 			return
 		}
-		if hello.KeyShare == nil {
+		if hello.sidShare() == nil {
 			errc <- fmt.Errorf("hello sni=%q sid=%d raw=%d exts=%v", hello.SNI, len(hello.SessionID), len(raw), extTypes(raw))
+			c.Close()
+			return
+		}
+		if len(hello.hybridEK) != mlkem.EncapsulationKeySize768 || len(hello.hybridX) != 32 {
+			errc <- fmt.Errorf("chrome hello: hybrid ek %d x %d", len(hello.hybridEK), len(hello.hybridX))
 			c.Close()
 			return
 		}

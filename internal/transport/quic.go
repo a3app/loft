@@ -86,20 +86,22 @@ func quicCfg() *quic.Config {
 // QUIC is the loss-tolerant front. Retransmit is QUIC's. Path change still
 // Parks: one UDP 4-tuple, no CID migration onto a new socket.
 type QUIC struct {
-	cfg    config.Outbound
-	token  []byte
-	sess   *mux.Session
-	conn   *quic.Conn
-	stream *quic.Stream
-	key    []byte
-	done   chan struct{}
-	dead   sync.Once
-	offer  wire.Cap
+	cfg     config.Outbound
+	token   []byte
+	sess    *mux.Session
+	conn    *quic.Conn
+	stream  *quic.Stream
+	key     []byte
+	holdGen uint64
+	done    chan struct{}
+	dead    sync.Once
+	offer   wire.Cap
 }
 
 // NewQUIC builds a QUIC client that has not yet dialed.
 func NewQUIC(token string, o config.Outbound) *QUIC {
-	return &QUIC{cfg: o, token: []byte(token), sess: clientHoldMux(), done: make(chan struct{})}
+	sess, gen := takeClientHold()
+	return &QUIC{cfg: o, token: []byte(token), sess: sess, holdGen: gen, done: make(chan struct{})}
 }
 
 // Session returns the live mux session.
@@ -203,8 +205,14 @@ func (q *QUIC) Close() error {
 			_ = writeMsg(q.stream, sealed)
 		}
 	}
-	clearClientHold()
-	q.sess.Close()
+	// Hold keeps this mux. The server parks it when the QUIC conn drops
+	// (Leave is often lost). Closing the client mux here made the next
+	// front start stream ids at 1 and read the parked server stream.
+	if q.sess != nil && q.sess.Holding() {
+		parkClient(q.sess, "", nil, 0)
+	} else if releaseClientHold(q.holdGen) {
+		q.sess.Close()
+	}
 	q.die()
 	if q.conn != nil {
 		return q.conn.CloseWithError(0, "bye")

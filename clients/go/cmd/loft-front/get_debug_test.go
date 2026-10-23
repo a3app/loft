@@ -32,6 +32,18 @@ func TestFrontOrderDefaultGET(t *testing.T) {
 	if len(ws) != 2 || ws[0] != "ws" || ws[1] != "get" {
 		t.Fatalf("auto wss %v", ws)
 	}
+	all := frontOrder("all", "https://example.com", true, false)
+	if len(all) != 5 || all[0] != "get" || all[2] != "h2" || all[4] != "h3" {
+		t.Fatalf("all %v", all)
+	}
+	list := frontOrder("quic,h3,quic,nope", "https://example.com", true, false)
+	if len(list) != 2 || list[0] != "quic" || list[1] != "h3" {
+		t.Fatalf("list %v", list)
+	}
+	cfg := frontConfig("tok", "https://example.com", "get,ws", "", true, "")
+	if len(cfg.Outbounds) != 2 || cfg.Outbounds[0].Type != "get" || cfg.Outbounds[1].Type != "ws" {
+		t.Fatalf("cfg %+v", cfg.Outbounds)
+	}
 }
 
 func TestOutboundForH2MaxAge(t *testing.T) {

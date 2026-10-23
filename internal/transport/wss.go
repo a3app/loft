@@ -23,21 +23,23 @@ import (
 
 // WSS is the generic CDN profile (Cloudflare and anything that passes WebSocket).
 type WSS struct {
-	cfg    config.Outbound
-	token  []byte
-	sess   *mux.Session
-	conn   *websocket.Conn
-	key    []byte
-	done   chan struct{}
-	dead   sync.Once
-	mu     sync.Mutex
-	closed bool
-	offer  wire.Cap
+	cfg     config.Outbound
+	token   []byte
+	sess    *mux.Session
+	conn    *websocket.Conn
+	key     []byte
+	holdGen uint64
+	done    chan struct{}
+	dead    sync.Once
+	mu      sync.Mutex
+	closed  bool
+	offer   wire.Cap
 }
 
 // NewWSS builds a WebSocket client that has not yet dialed.
 func NewWSS(token string, o config.Outbound) *WSS {
-	return &WSS{cfg: o, token: []byte(token), sess: clientHoldMux(), done: make(chan struct{})}
+	sess, gen := takeClientHold()
+	return &WSS{cfg: o, token: []byte(token), sess: sess, holdGen: gen, done: make(chan struct{})}
 }
 
 // Start dials WebSocket, writes auth, reads AEAD(Status), and starts mux loops.
@@ -181,8 +183,9 @@ func (w *WSS) Close() error {
 			cancel()
 		}
 	}
-	clearClientHold()
-	w.sess.Close()
+	if releaseClientHold(w.holdGen) {
+		w.sess.Close()
+	}
 	w.die()
 	if conn != nil {
 		return conn.Close(websocket.StatusNormalClosure, "")

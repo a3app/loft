@@ -4,6 +4,8 @@ package transport
 
 import (
 	"encoding/base64"
+	"encoding/hex"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -20,6 +22,10 @@ type nodeView struct {
 // views caches Status fronts and mask_pub; rotateN rotates filterOutbounds.
 var views sync.Map // addr -> nodeView
 var rotateN atomic.Uint64
+
+// RotateCount is how many times Supervise has moved to the next front.
+// loft-bench uses it so a forced switch lands on the front it asked for.
+func RotateCount() uint64 { return rotateN.Load() }
 
 // RememberFronts stores Status caps fronts for addr.
 func RememberFronts(addr string, caps wire.Cap) {
@@ -114,6 +120,37 @@ func filterOutbounds(cfg *config.ClientConfig, list []config.Outbound) []config.
 		return out
 	}
 	return append(append([]config.Outbound{}, out[n:]...), out[:n]...)
+}
+
+// SessionLine is the post-handshake debug line: the next hello's sid,
+// whether mask_pub is known, the group of the handshake just finished,
+// the decoy name, and the fronts Status listed.
+func SessionLine(rawURL string) string {
+	o := config.Outbound{URL: rawURL, Type: "get"}
+	addr, err := outboundAddr(o)
+	next := "v2"
+	mask := "off"
+	decoy := "-"
+	pbk := "-"
+	if err == nil {
+		if pub := CachedMaskPub(addr); len(pub) == 32 {
+			next = "v3"
+			mask = "on"
+			pbk = hex.EncodeToString(pub)
+		}
+		if origins, ok := CachedDecoy(addr); ok && len(origins) > 0 {
+			decoy = decoyHost(origins[0])
+		}
+	}
+	kex := LastKEX()
+	if kex == "" {
+		kex = "-"
+	}
+	fronts := FormatFronts(LearnedFronts())
+	if fronts == "" {
+		fronts = "-"
+	}
+	return fmt.Sprintf("next_sid=%s mask=%s kex=%s decoy=%s pbk=%s fronts=%s", next, mask, kex, decoy, pbk, fronts)
 }
 
 // helloCaps is Hello caps: enabled fronts, extra caps, and optional P2P.

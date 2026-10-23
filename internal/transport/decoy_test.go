@@ -348,6 +348,89 @@ func TestMemberSIDAdmittedOnDecoySNI(t *testing.T) {
 	}
 }
 
+func TestMaskDecoySNIRejectsV2(t *testing.T) {
+	inner, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inner.Close()
+	mask := &Mask{}
+	mask.ready.Store(true)
+	w := WrapDecoyMask(inner, []byte("tok"), []string{"origin.example:443"}, mask, nil, "node.example")
+	got := make(chan struct{}, 1)
+	go func() {
+		c, err := w.Accept()
+		if err != nil {
+			return
+		}
+		c.Close()
+		got <- struct{}{}
+	}()
+	cli, err := net.Dial("tcp", inner.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.Close()
+	raw, _, err := buildMaskClientHello("origin.example", []byte("tok"), nil, []string{"h2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeRecord(cli, recHandshake, raw); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-got:
+		t.Fatal("sid v2 on a mask node's decoy SNI was admitted")
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestHelloRandomIsSingleUse(t *testing.T) {
+	inner, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inner.Close()
+	w := WrapDecoyMask(inner, []byte("tok"), []string{"origin.example:443"}, nil, nil, "node.example")
+	ok := make(chan struct{}, 2)
+	go func() {
+		for {
+			c, err := w.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+			ok <- struct{}{}
+		}
+	}()
+	pub := NodeMaskPub([]byte("tok"))
+	raw, _, err := buildMaskClientHello("origin.example", []byte("tok"), pub, []string{"h2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		cli, err := net.Dial("tcp", inner.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := writeRecord(cli, recHandshake, raw); err != nil {
+			cli.Close()
+			t.Fatal(err)
+		}
+		cli.Close()
+	}
+	select {
+	case <-ok:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first sid v3 was not admitted")
+	}
+	select {
+	case <-ok:
+		t.Fatal("replayed client_random was admitted")
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
 func TestProbeTLSSeesDestCert(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)

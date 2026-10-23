@@ -30,7 +30,11 @@ func serveSOCKS(ctx context.Context, addr string, d transport.Dialer) *inbound.S
 	return g
 }
 
-// watchSOCKS reads "socks ADDR" / "socks off" from stdin until ctx is done.
+// onSwitch drops the live front so Supervise dials the next one.
+// SOCKS and TUN stay up. The GUI does not send this line.
+var onSwitch func()
+
+// watchSOCKS reads "socks ADDR" / "socks off" / "switch" until ctx is done.
 func watchSOCKS(ctx context.Context, g *inbound.SocksGate) {
 	sc := bufio.NewScanner(os.Stdin)
 	for sc.Scan() {
@@ -44,6 +48,12 @@ func watchSOCKS(ctx context.Context, g *inbound.SocksGate) {
 			continue
 		}
 		cmd, arg, _ := strings.Cut(line, " ")
+		if strings.EqualFold(cmd, "switch") {
+			if onSwitch != nil {
+				onSwitch()
+			}
+			continue
+		}
 		if !strings.EqualFold(cmd, "socks") {
 			continue
 		}

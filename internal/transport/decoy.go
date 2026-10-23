@@ -205,8 +205,18 @@ func (d *decoyListener) Accept() (net.Conn, error) {
 		}
 		d.mu.Lock()
 		own := d.own
+		maskOn := d.mask != nil
 		d.mu.Unlock()
-		loft := verifyAny(d.token, hello)
+		// Mask nodes admit a decoy SNI only as sid v3. sid v2 is the member
+		// key, so a stolen key would otherwise mark those ClientHellos.
+		// Own SNI still accepts v2: that path presents the node certificate.
+		loft := verifySID3(d.token, hello)
+		if !loft && (!maskOn || sniIsOwn(hello.SNI, own)) {
+			loft = verifyMemberV2(d.token, hello)
+		}
+		if loft && !helloOnce.take(hello.Random) {
+			loft = false
+		}
 		if sniIsOwn(hello.SNI, own) && (loft || d.isCDNPeer(c.RemoteAddr())) {
 			return &prefixConn{Conn: c, prefix: raw}, nil
 		}

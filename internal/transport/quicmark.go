@@ -72,6 +72,12 @@ func newQUICMark(token, maskPub []byte) (random, scid []byte, err error) {
 // verifyQUICMark reports whether scid marks random: v3 under the node
 // mask key, then v2 under a member key (as verifyAny for TCP).
 func verifyQUICMark(nodeToken, random, scid []byte) bool {
+	return quicMarked(nodeToken, random, scid, true)
+}
+
+// quicMarked is verifyQUICMark. allowV2 is false on a mask node: a stolen
+// member key must not mark the Initial.
+func quicMarked(nodeToken, random, scid []byte, allowV2 bool) bool {
 	if len(random) != 32 || len(scid) != quicMarkLen {
 		return false
 	}
@@ -81,6 +87,9 @@ func verifyQUICMark(nodeToken, random, scid []byte) bool {
 		if shared, err := curve25519.X25519(maskPrivFor(nodeToken), pub); err == nil && hmac.Equal(scid, quicMark("v3", shared, random)) {
 			return true
 		}
+	}
+	if !allowV2 {
+		return false
 	}
 	for _, tok := range clientTokens(nodeToken) {
 		if hmac.Equal(scid, quicMark("v2", tok, random)) {

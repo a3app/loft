@@ -26,9 +26,13 @@ func main() {
 	rawURL := flag.String("url", envOr("LOFT_URL", "https://loft.example.com:444"), "front URL")
 	path := flag.String("path", "/static/js", "GET path")
 	origin := flag.String("origin", "127.0.0.1:9474", "bench origin the node dials (loopback on the node)")
-	types := flag.String("type", "ws,get", "comma list: ws, get")
+	types := flag.String("type", "ws,get", "comma list: get,ws,h2,quic,h3,l3 or all")
 	cdnName := flag.String("cdn", "", "edge profile: yandex (GET, 16 KiB Cookie, verify TLS)")
+	decoy := flag.String("decoy", "", "direct-path decoy SNI (dest hostname)")
+	pbk := flag.String("pbk", "", "node X25519 public, hex or base64url; first hello is sid v3")
 	muxOn := flag.Bool("mux", true, "inner mux; false = HTTP/2 CONNECT splice")
+	live := flag.Bool("live", false, "skip the node-local origin; HTTPS through the front")
+	switchOn := flag.Bool("switch", false, "keep SOCKS up and rotate -type while HTTPS flows")
 	bytesN := flag.Int("bytes", 2<<20, "payload size for down/up")
 	httpN := flag.Int("http", 1<<20, "HTTPS body for internet/direct samples")
 	timeout := flag.Duration("timeout", 45*time.Second, "per-case deadline")
@@ -38,6 +42,8 @@ func main() {
 	if *h2MaxAge > 0 {
 		outboundH2MaxAgeMS = int(h2MaxAge.Milliseconds())
 	}
+	benchDecoy = strings.TrimSpace(*decoy)
+	benchPBK = strings.TrimSpace(*pbk)
 
 	if *serve != "" {
 		if err := serveOrigin(*serve); err != nil {
@@ -61,7 +67,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Fprintf(os.Stderr, "loft-bench url=%s origin=%s cdn=%s mux=%v bytes=%d http=%d\n", *rawURL, *origin, *cdnName, *muxOn, *bytesN, *httpN)
+	fmt.Fprintf(os.Stderr, "loft-bench url=%s origin=%s cdn=%s mux=%v live=%v switch=%v bytes=%d http=%d\n", *rawURL, *origin, *cdnName, *muxOn, *live, *switchOn, *bytesN, *httpN)
 	kinds := splitTypes(*types)
 	if strings.EqualFold(strings.TrimSpace(*cdnName), "yandex") {
 		var onlyGET []string
@@ -81,8 +87,23 @@ func main() {
 	direct := measureDirect(ctx, *httpN, *timeout)
 	rows = append(rows, direct...)
 
+	if *switchOn {
+		rs, err := runSwitch(ctx, *token, *rawURL, *path, *cdnName, *muxOn, kinds, *httpN, *timeout)
+		if err != nil {
+			rows = append(rows, row{Kind: "switch", Path: "rotate", Err: err.Error()})
+			fmt.Fprintf(os.Stderr, "switch: %v\n", err)
+		} else {
+			rows = append(rows, rs...)
+		}
+		printTable(rows)
+		if anyFail(rows) {
+			os.Exit(1)
+		}
+		return
+	}
+
 	for _, kind := range kinds {
-		rs, err := runFront(ctx, *token, *rawURL, kind, *path, *origin, *cdnName, *muxOn, *bytesN, *httpN, *timeout)
+		rs, err := runFront(ctx, *token, *rawURL, kind, *path, *origin, *cdnName, *muxOn, *live, *bytesN, *httpN, *timeout)
 		if err != nil {
 			rows = append(rows, row{Kind: kind, Path: "handshake", Err: err.Error()})
 			fmt.Fprintf(os.Stderr, "front %s: %v\n", kind, err)
@@ -104,23 +125,9 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// splitTypes parses -type into ws/get tokens.
-func splitTypes(s string) []string {
-	var out []string
-	for _, p := range strings.Split(s, ",") {
-		p = strings.ToLower(strings.TrimSpace(p))
-		if p == "ws" || p == "get" {
-			out = append(out, p)
-		}
-	}
-	if len(out) == 0 {
-		return []string{"ws", "get"}
-	}
-	return out
-}
-
 // runFront is one GUI-style session: Start front, SOCKS, TCP probe, mux and SOCKS bulk.
-func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName string, muxOn bool, nbyte, httpN int, timeout time.Duration) ([]row, error) {
+// live skips the node-local origin and samples HTTPS through the front.
+func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName string, muxOn, live bool, nbyte, httpN int, timeout time.Duration) ([]row, error) {
 	hs, cancel := context.WithTimeout(ctx, 20*time.Second)
 	t0 := time.Now()
 	d, front, err := dialFront(hs, token, raw, kind, path, cdnName, muxOn)
@@ -131,7 +138,7 @@ func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName strin
 	defer d.Close()
 	hsMS := float64(time.Since(t0).Milliseconds())
 	ip := transport.OverlayIP()
-	fmt.Fprintf(os.Stderr, "session type=%s front=%s overlay=%s mux=%v handshake=%.0fms\n", kind, front, ip, muxOn, hsMS)
+	fmt.Fprintf(os.Stderr, "session type=%s front=%s overlay=%s mux=%v handshake=%.0fms %s\n", kind, front, ip, muxOn, hsMS, transport.SessionLine(raw))
 
 	h := &transport.Holder{}
 	h.Set(d)
@@ -147,7 +154,7 @@ func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName strin
 	if !muxOn {
 		note += " connect-splice"
 	}
-	rows = append(rows, row{Kind: kind, Path: "handshake", MS: hsMS, Extra: note})
+	rows = append(rows, row{Kind: kind, Path: "handshake", MS: hsMS, Extra: note + " " + transport.SessionLine(raw)})
 
 	probeCtx, cancelP := context.WithTimeout(ctx, 8*time.Second)
 	tcpOK, tcpMS, tcpErr := socksCarriesTCP(probeCtx, socksAddr)
@@ -160,8 +167,20 @@ func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName strin
 	}
 	rows = append(rows, pr)
 
-	rows = append(rows, measureMux(ctx, d, origin, nbyte, timeout, kind)...)
-	rows = append(rows, measureSOCKS(ctx, socksAddr, origin, nbyte, httpN, timeout, kind)...)
+	if live {
+		cf, err := httpsThrough(ctx, socksAddr, httpN, timeout)
+		cr := row{Kind: kind, Path: "socks-https", Extra: "speed.cloudflare.com"}
+		if err != nil {
+			cr.Err = err.Error()
+		} else {
+			cr.MS = float64(cf.Milliseconds())
+			cr.Down = mbit(httpN, cf)
+		}
+		rows = append(rows, cr)
+	} else {
+		rows = append(rows, measureMux(ctx, d, origin, nbyte, timeout, kind)...)
+		rows = append(rows, measureSOCKS(ctx, socksAddr, origin, nbyte, httpN, timeout, kind)...)
+	}
 	if g, ok := d.(*transport.GET); ok {
 		fmt.Fprintf(os.Stderr, "%s\n", g.TripSummary())
 	}
