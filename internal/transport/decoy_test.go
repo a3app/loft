@@ -3,6 +3,7 @@ package transport
 // Decoy splice pick, cache, resolveTLS, and DiscoverDecoy tests.
 
 import (
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -428,6 +429,27 @@ func TestHelloRandomIsSingleUse(t *testing.T) {
 	case <-ok:
 		t.Fatal("replayed client_random was admitted")
 	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+// TestHelloOnceExpires: a client_random older than the TTL is admitted again.
+// The sweep does not have to have run; lookup itself honours the TTL.
+func TestHelloOnceExpires(t *testing.T) {
+	var k [32]byte
+	if _, err := rand.Read(k[:]); err != nil {
+		t.Fatal(err)
+	}
+	helloOnce.mu.Lock()
+	if helloOnce.m == nil {
+		helloOnce.m = map[[32]byte]time.Time{}
+	}
+	helloOnce.m[k] = time.Now().Add(-helloOnceTTL - time.Second)
+	helloOnce.mu.Unlock()
+	if !helloOnce.take(k[:]) {
+		t.Fatal("expired client_random still rejected")
+	}
+	if helloOnce.take(k[:]) {
+		t.Fatal("fresh client_random admitted twice")
 	}
 }
 

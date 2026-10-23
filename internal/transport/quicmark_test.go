@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -140,6 +141,47 @@ func TestMaskQUICRejectsV2(t *testing.T) {
 	}
 	if quicMarked(node, random, scid, false) {
 		t.Fatal("v2 mark admitted when v2 is off")
+	}
+}
+
+// TestMaskPubQUICMarkIsV3: with mask_pub the Initial mark is v3, not a v2
+// fallback under the member key.
+func TestMaskPubQUICMarkIsV3(t *testing.T) {
+	node := []byte("node-token")
+	random, scid, err := newQUICMark(node, NodeMaskPub(node))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !quicMarked(node, random, scid, false) {
+		t.Fatal("mask_pub mark rejected with v2 disabled")
+	}
+	if bytes.Equal(scid, quicMark("v2", node, random)) {
+		t.Fatal("mask_pub mark is v2")
+	}
+}
+
+// TestQUICSameAddressReplayStaysLoft: a retransmitted Initial from the same
+// address stays on loft. The same bytes from another address are a probe.
+func TestQUICSameAddressReplayStaysLoft(t *testing.T) {
+	node := []byte("node-token")
+	var addr string
+	pkt := firstInitial(t, func(a string) {
+		addr = a
+		RememberMaskPub(a, NodeMaskPub(node))
+		markedDial(node)(a)
+	})
+	t.Cleanup(func() { views.Delete(addr) })
+	d := &udpDemux{token: node, v3Only: true, cids: newServerCIDs(node), seen: map[string]seenHello{}}
+	now := time.Now()
+	key := "10.1.1.1:40000"
+	if d.classify(pkt, key, now) != toLoft {
+		t.Fatal("first Initial was not loft")
+	}
+	if d.classify(pkt, key, now.Add(time.Second)) != toLoft {
+		t.Fatal("same-address retransmit was spliced")
+	}
+	if d.classify(pkt, "10.9.9.9:9", now.Add(time.Second)) != toDest {
+		t.Fatal("other-address replay was admitted")
 	}
 }
 

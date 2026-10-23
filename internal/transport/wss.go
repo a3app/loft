@@ -114,9 +114,13 @@ func (w *WSS) Start(ctx context.Context) error {
 	}
 	st, err := wire.DecodeStatus(plain)
 	if err != nil {
+		c.Close(websocket.StatusInternalError, "status")
 		return err
 	}
 	if !st.Code.OK() {
+		// Same as QUIC: the node is already in its read loop. Close so the
+		// next front can admit instead of sitting behind this socket.
+		c.Close(websocket.StatusInternalError, "status")
 		return wire.Fail(st.Code, st.Program)
 	}
 	RememberVis(st)

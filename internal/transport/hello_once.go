@@ -31,7 +31,10 @@ func (c *helloOnceCache) take(random []byte) bool {
 	if c.m == nil {
 		c.m = map[[32]byte]time.Time{}
 	}
-	if len(c.m) > 50000 {
+	// Expired randoms used to sit until 50k entries. Sweep as soon as the
+	// map is large enough that a busy node would otherwise keep them for
+	// the process lifetime. Lookup itself still honours the TTL.
+	if len(c.m) > 4096 {
 		for id, at := range c.m {
 			if now.Sub(at) > helloOnceTTL {
 				delete(c.m, id)

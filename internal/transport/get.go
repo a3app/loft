@@ -225,6 +225,13 @@ func (g *GET) Start(ctx context.Context) error {
 	if g.started.Load() {
 		return nil
 	}
+	// A failed handshake must drop the HTTP pool. An idle h2 conn keeps the
+	// node session, and the next front waits until that session times out.
+	defer func() {
+		if !g.started.Load() {
+			g.closeIdleFront()
+		}
+	}()
 	if g.sid != "" && g.sid != "new" && len(g.key) > 0 {
 		if g.keepAlive <= 0 {
 			g.keepAlive = 15 * time.Second

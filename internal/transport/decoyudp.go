@@ -357,6 +357,22 @@ func (c *demuxConn) push(b []byte, from net.Addr) {
 }
 
 func (c *demuxConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	// One timer for the life of this read. defer Stop inside the loop pinned
+	// a timer per SetReadDeadline until the datagram arrived; quic-go moves
+	// the deadline on every packet.
+	var timer *time.Timer
+	stopTimer := func() {
+		if timer == nil {
+			return
+		}
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}
+	defer stopTimer()
 	for {
 		c.mu.Lock()
 		dl, wake := c.deadline, c.wake
@@ -367,9 +383,13 @@ func (c *demuxConn) ReadFrom(b []byte) (int, net.Addr, error) {
 			if wait <= 0 {
 				return 0, nil, os.ErrDeadlineExceeded
 			}
-			t := time.NewTimer(wait)
-			expire = t.C
-			defer t.Stop()
+			if timer == nil {
+				timer = time.NewTimer(wait)
+			} else {
+				stopTimer()
+				timer.Reset(wait)
+			}
+			expire = timer.C
 		}
 		select {
 		case p := <-c.in:

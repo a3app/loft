@@ -411,7 +411,6 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 		return nil, fmt.Errorf("%w (sh %d %x)", err, len(shMsg), head)
 	}
 	tr.Write(shMsg)
-	noteKEX(kexName(group))
 
 	shared, err := clientShared(group, peerShare, kx)
 	if err != nil {
@@ -530,6 +529,7 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 		return nil, err
 	}
 	_ = raw.SetDeadline(time.Time{})
+	noteKEX(kexName(group))
 	return &maskConn{
 		Conn: raw,
 		in:   sApp,

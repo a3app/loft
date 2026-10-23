@@ -138,6 +138,7 @@ func (q *QUIC) Start(ctx context.Context) error {
 	hello := newClientHello(q.offer)
 	proof, nonce, sk, err := ecrypto.MakeAuth(q.token)
 	if err != nil {
+		conn.CloseWithError(0, "auth")
 		return err
 	}
 	auth := append(proof, hello.Encode()...)
@@ -156,13 +157,19 @@ func (q *QUIC) Start(ctx context.Context) error {
 	}
 	key, plain, err := ecrypto.OpenHello(sk, nonce, raw, nil)
 	if err != nil {
+		conn.CloseWithError(0, "status")
 		return err
 	}
 	status, err := wire.DecodeStatus(plain)
 	if err != nil {
+		conn.CloseWithError(0, "status")
 		return err
 	}
 	if !status.Code.OK() {
+		// The node already admitted this conn and is blocked in its read
+		// loop. Leaving it open holds the member until idle timeout, so the
+		// next front cannot take the session.
+		conn.CloseWithError(0, "status")
 		return wire.Fail(status.Code, status.Program)
 	}
 	RememberVis(status)
@@ -172,9 +179,25 @@ func (q *QUIC) Start(ctx context.Context) error {
 		return err
 	}
 	q.conn, q.stream, q.key = conn, st, key
+	noteQUICKEX(conn)
 	go q.readLoop()
 	go q.writeLoop()
 	return nil
+}
+
+// noteQUICKEX records the TLS group quic-go actually negotiated.
+// quic and h3 do not go through the mask stack, so without this the debug
+// line stays "kex=-" after a successful UDP handshake.
+func noteQUICKEX(conn *quic.Conn) {
+	if conn == nil {
+		return
+	}
+	id := uint16(conn.ConnectionState().TLS.CurveID)
+	if id == 0 {
+		noteKEX("tls")
+		return
+	}
+	noteKEX(kexName(id))
 }
 
 // Open starts the front if needed and opens a mux stream to target.

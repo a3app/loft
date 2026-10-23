@@ -117,7 +117,12 @@ func (h *H3) Start(ctx context.Context) error {
 			if tc == nil {
 				tc = tlsCfg
 			}
-			return dialQUIC(dialCtx, addr, h.token, tc, qc)
+			c, err := dialQUIC(dialCtx, addr, h.token, tc, qc)
+			if err != nil {
+				return nil, err
+			}
+			noteQUICKEX(c)
+			return c, nil
 		},
 	}
 	pr, pw := io.Pipe()

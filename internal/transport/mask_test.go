@@ -188,6 +188,187 @@ func TestMaskHandshakeLoopback(t *testing.T) {
 	}
 }
 
+// TestMaskPubRefusesSIDV2: a client that already knows mask_pub must send
+// sid v3. Falling back to sid v2 would mark a decoy ClientHello with the
+// member key.
+func TestMaskPubRefusesSIDV2(t *testing.T) {
+	token := []byte("mask-test-token-32bytes-minimum!")
+	pub := NodeMaskPub(token)
+	sni := "origin.example"
+	msg, _, err := buildMaskClientHello(sni, token, pub, []string{"h2", "http/1.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := parseClientHello(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !verifySID3(token, h) {
+		t.Fatal("compact hello with mask_pub is not sid v3")
+	}
+	if verifySessionID(token, h) {
+		t.Fatal("compact hello fell back to sid v2")
+	}
+	kx, err := buildUTLSHello(sni, "chrome", token, pub, []string{"h2", "http/1.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err = parseClientHello(kx.raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !verifySID3(token, h) {
+		t.Fatal("chrome hello with mask_pub is not sid v3")
+	}
+	if verifySessionID(token, h) {
+		t.Fatal("chrome hello fell back to sid v2")
+	}
+}
+
+// TestMaskX25519OnlySecret completes the X25519 share when the ClientHello
+// has no hybrid key. An older peer answers this group.
+func TestMaskX25519OnlySecret(t *testing.T) {
+	var priv, pub [32]byte
+	if _, err := rand.Read(priv[:]); err != nil {
+		t.Fatal(err)
+	}
+	curve25519.ScalarBaseMult(&pub, &priv)
+	h := clientHello{KeyShare: pub[:], Random: bytes.Repeat([]byte{1}, 32), SNI: "origin.example"}
+	shared, serverShare, group, err := maskKEX(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if group != x25519Group || len(serverShare) != 32 || len(shared) != 32 {
+		t.Fatalf("group %x share %d secret %d", group, len(serverShare), len(shared))
+	}
+	got, err := clientShared(group, serverShare, clientKX{xPriv: priv[:]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, shared) {
+		t.Fatal("x25519 secret mismatch")
+	}
+}
+
+// TestChromeAcceptsX25519ServerShare: a chrome hello that offered hybrid
+// still finishes against a server that selected standalone X25519.
+func TestChromeAcceptsX25519ServerShare(t *testing.T) {
+	token := []byte("mask-test-token-32bytes-minimum!")
+	kx, err := buildUTLSHello("origin.example", "chrome", token, NodeMaskPub(token), []string{"h2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(kx.xPriv) != 32 {
+		t.Fatal("chrome hello has no standalone x25519 scalar")
+	}
+	eph := make([]byte, 32)
+	if _, err := rand.Read(eph); err != nil {
+		t.Fatal(err)
+	}
+	ephPub, err := curve25519.X25519(eph, curve25519.Basepoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := clientShared(x25519Group, ephPub, kx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := curve25519.X25519(kx.xPriv, ephPub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("chrome client rejected an X25519 server share")
+	}
+}
+
+// TestMaskHandshakeX25519Server is the full record handshake when the server
+// ignores the hybrid share and answers X25519, as an older node does.
+func TestMaskHandshakeX25519Server(t *testing.T) {
+	token := []byte("mask-test-token-32bytes-minimum!")
+	xpriv := maskX25519Priv(token)
+	xpub, err := curve25519.X25519(xpriv, curve25519.Basepoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert := selfSigned(t, testcfg.Decoy())
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	m := &Mask{xpriv: xpriv, xpub: xpub}
+	m.certs = [][]byte{cert}
+	m.alpn = "h2"
+	m.ready.Store(true)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	errc := make(chan error, 1)
+	go func() {
+		defer wg.Done()
+		c, err := ln.Accept()
+		if err != nil {
+			errc <- err
+			return
+		}
+		raw, hello, err := readClientHello(c)
+		if err != nil {
+			c.Close()
+			errc <- err
+			return
+		}
+		if len(hello.KeyShare) != 32 {
+			c.Close()
+			errc <- fmt.Errorf("chrome hello has no standalone x25519 (%d)", len(hello.KeyShare))
+			return
+		}
+		// Drop the hybrid share so maskKEX selects X25519. The transcript
+		// still covers the original ClientHello bytes.
+		hello.hybridEK, hello.hybridX = nil, nil
+		mc, err := m.Handshake(c, raw, hello)
+		if err != nil {
+			c.Close()
+			errc <- err
+			return
+		}
+		buf := make([]byte, 4)
+		if _, err := io.ReadFull(mc, buf); err != nil {
+			errc <- err
+			return
+		}
+		_, err = mc.Write(buf)
+		errc <- err
+	}()
+
+	addr := ln.Addr().String()
+	RememberMaskPub(addr, m.Public())
+	t.Cleanup(func() { views.Delete(addr) })
+	client, err := DialMask(addr, testcfg.Decoy(), "chrome", token, m.Public())
+	if err != nil {
+		wg.Wait()
+		t.Fatalf("dial %v server %v", err, <-errc)
+	}
+	defer client.Close()
+	if LastKEX() != "X25519" {
+		t.Fatalf("kex %q", LastKEX())
+	}
+	if _, err := client.Write([]byte("ping")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(client, buf); err != nil {
+		t.Fatal(err)
+	}
+	if string(buf) != "ping" {
+		t.Fatalf("got %q", buf)
+	}
+	wg.Wait()
+	if err := <-errc; err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestFilterOutboundsRespectsFronts keeps only client-enabled fronts.
 func TestFilterOutboundsRespectsFronts(t *testing.T) {
 	clearDecoyCache()
