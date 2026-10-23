@@ -159,6 +159,48 @@ func TestLoftOnlyStripsSSTP(t *testing.T) {
 	if only.P2P == nil || *only.P2P {
 		t.Fatal("p2p off")
 	}
+	if strings.Join(only.Fronts, ",") != "get,ws,h2,quic,h3" {
+		t.Fatalf("fronts %v", only.Fronts)
+	}
+}
+
+func TestDecodeInflightPause(t *testing.T) {
+	cfg, _, err := decodeFile([]byte("token: lt_x\npause: starlink\noutbounds:\n  - name: a\n    type: get\n    url: https://a.example.com\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Outbounds[0].Inflight != 8 {
+		t.Fatalf("inflight %d", cfg.Outbounds[0].Inflight)
+	}
+	if cfg.Pause != "starlink" {
+		t.Fatalf("pause %q", cfg.Pause)
+	}
+	only := loftOnly(cfg)
+	if only.Pause != "starlink" {
+		t.Fatalf("loftOnly pause %q", only.Pause)
+	}
+}
+
+func TestLoftOnlyKeepsExplicitFronts(t *testing.T) {
+	cfg, _, err := decodeFile([]byte("token: lt_x\nfronts: [get]\noutbounds:\n  - name: a\n    type: get\n    url: https://a.example.com\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	only := loftOnly(cfg)
+	if strings.Join(only.Fronts, ",") != "get" {
+		t.Fatalf("fronts %v", only.Fronts)
+	}
+}
+
+func TestLoftOnlyL3NoMuxFronts(t *testing.T) {
+	cfg, _, err := decodeFile([]byte("token: lt_x\noutbounds:\n  - name: a\n    type: l3\n    url: https://a.example.com\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	only := loftOnly(cfg)
+	if len(only.Fronts) != 0 {
+		t.Fatalf("fronts %v", only.Fronts)
+	}
 }
 
 type testSink func([]byte)

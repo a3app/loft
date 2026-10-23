@@ -239,7 +239,8 @@ func (e *Engine) PullPacket() []byte {
 }
 
 // NotifyPathChange is Wi-Fi ↔ LTE from the OS. Non-blocking.
-// loft: close the front, fresh 0x02, same instance_id. SSTP/VLESS/Trojan: redial.
+// GET rebinds the HTTP/2 pool (same sid). Other loft fronts Park; resume is
+// 0x02 plus the same instance_id. SSTP/VLESS/Trojan redial.
 func (e *Engine) NotifyPathChange() {
 	e.mu.Lock()
 	ch := e.pathCh

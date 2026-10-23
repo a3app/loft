@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/a3app/loft/internal/config"
+	"github.com/a3app/loft/internal/wire"
 )
 
 type fileExtra struct {
@@ -35,6 +36,7 @@ type fileYAML struct {
 	Default     string              `yaml:"default"`
 	ListsURL    string              `yaml:"lists_url"`
 	P2P         *bool               `yaml:"p2p"`
+	Pause       string              `yaml:"pause,omitempty"`
 	Listen      config.ListenConfig `yaml:"listen"`
 	PAPCHAP     bool                `yaml:"pap_chap"`
 	TLSCheck    *bool               `yaml:"tls_check"`
@@ -81,7 +83,7 @@ func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
 			o.HeaderBudget = 16 * 1024
 		}
 		if o.Inflight <= 0 {
-			o.Inflight = 48
+			o.Inflight = 8
 		}
 		if o.Type == "" {
 			return nil, fileExtra{}, fmt.Errorf("outbound %q: type is required", o.Name)
@@ -117,6 +119,7 @@ func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
 		Default:    f.Default,
 		ListsURL:   f.ListsURL,
 		P2P:        f.P2P,
+		Pause:      f.Pause,
 	}
 	ex := fileExtra{username: f.Username, password: f.Password, pap: f.PAPCHAP, tlsCheck: f.TLSCheck, sni: f.SNI, name: f.Name}
 	if ex.password == "" {
@@ -149,6 +152,7 @@ func marshalClient(cfg *config.ClientConfig, user, pass string, pap bool, tlsChe
 		Default:    cfg.Default,
 		ListsURL:   cfg.ListsURL,
 		P2P:        cfg.P2P,
+		Pause:      cfg.Pause,
 		Listen:     cfg.Listen,
 		PAPCHAP:    pap,
 		TLSCheck:   tlsCheck,
@@ -197,13 +201,26 @@ func credFromOutbounds(outs []config.Outbound) string {
 func loftOnly(cfg *config.ClientConfig) *config.ClientConfig {
 	c := *cfg
 	var out []config.Outbound
+	hasGET := false
+	onlyL3 := true
 	for _, o := range cfg.Outbounds {
-		if loftTypes[strings.ToLower(o.Type)] {
-			out = append(out, o)
+		t := strings.ToLower(o.Type)
+		if !loftTypes[t] {
+			continue
+		}
+		out = append(out, o)
+		if t == "get" {
+			hasGET = true
+		}
+		if t != "l3" {
+			onlyL3 = false
 		}
 	}
 	c.Outbounds = out
-	c.Fronts = nil
+	if len(c.Fronts) == 0 && hasGET && !onlyL3 {
+		// Hello offers every mux front this engine can 0x04-attach; Status paths win.
+		c.Fronts = append([]string(nil), wire.FrontOrder...)
+	}
 	off := false
 	c.P2P = &off
 	return &c

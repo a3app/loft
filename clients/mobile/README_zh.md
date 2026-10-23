@@ -35,7 +35,7 @@ ParseShare(s) (yaml, error) // loft://, sstp://, vless://, trojan://, YAML, .lof
 ParseShareAll(s) (yaml, error) // 同样，每条连接用 --- 拼接
 ```
 
-整条隧道里不要跑 `WatchPath`（出口会变成覆盖网）。系统适配器调用 `NotifyPathChange`。loft 换路用新的 `0x02` 和同一个 `instance_id`。SSTP/VLESS/Trojan 重拨；IPCP 可能发新 IP，适配器再套一遍隧道设置。
+整条隧道里不要跑 `WatchPath`（出口会变成覆盖网）。系统适配器调用 `NotifyPathChange`。GET 重绑 HTTP/2 池（同一个 sid）。其它 loft 前置 Park，再用新的 `0x02` 和同一个 `instance_id`。额外 mux 前置用 `0x04` 挂到活着的 GET（路径来自 Status）。SSTP/VLESS/Trojan 重拨；IPCP 可能发新 IP，适配器再套一遍隧道设置。GET 默认 `inflight` 为 8，与 loft-front 相同。
 
 前置 / SSTP / VLESS 服务器 IP 在 `Snapshot.FrontIPs`（逗号分隔），适配器把它们排除出去（不要发夹）。
 

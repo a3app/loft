@@ -35,7 +35,7 @@ ParseShare(s) (yaml, error) // loft://, sstp://, vless://, trojan://, YAML, .lof
 ParseShareAll(s) (yaml, error) // same, every connection joined by ---
 ```
 
-`WatchPath` is not used inside a full tunnel (egress would be the overlay). The OS adapter calls `NotifyPathChange`. loft path change uses a fresh `0x02` and the same `instance_id`. SSTP/VLESS/Trojan redial; IPCP may issue a new IP and the OS adapter reapplies tunnel settings.
+`WatchPath` is not used inside a full tunnel (egress would be the overlay). The OS adapter calls `NotifyPathChange`. GET rebinds the HTTP/2 pool (same sid). Other loft fronts Park; resume is a fresh `0x02` and the same `instance_id`. Extra mux fronts join a live GET with `0x04` (Status paths). SSTP/VLESS/Trojan redial; IPCP may issue a new IP and the OS adapter reapplies tunnel settings. Default GET `inflight` is 8, same as loft-front.
 
 Front / SSTP / VLESS server IPs are in `Snapshot.FrontIPs` (comma-separated) so the adapter can exclude them (no hairpin).
 

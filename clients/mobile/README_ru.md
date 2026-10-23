@@ -35,7 +35,7 @@ ParseShare(s) (yaml, error) // loft://, sstp://, vless://, trojan://, YAML, .lof
 ParseShareAll(s) (yaml, error) // то же, каждое подключение через ---
 ```
 
-`WatchPath` внутри полного туннеля не запускать (egress стал бы оверлеем). Адаптер OS вызывает `NotifyPathChange`. Смена пути loft — свежий `0x02` и тот же `instance_id`. SSTP/VLESS/Trojan — повторный набор; IPCP может выдать новый IP, адаптер OS заново ставит настройки туннеля.
+`WatchPath` внутри полного туннеля не запускать (egress стал бы оверлеем). Адаптер OS вызывает `NotifyPathChange`. GET пересобирает пул HTTP/2 (тот же sid). Остальные loft-фронты — Park, затем свежий `0x02` и тот же `instance_id`. Лишние mux-фронты садятся на живой GET через `0x04` (пути из Status). SSTP/VLESS/Trojan — повторный набор; IPCP может выдать новый IP, адаптер OS заново ставит настройки туннеля. GET `inflight` по умолчанию 8, как у loft-front.
 
 IP фронта / сервера SSTP / VLESS — в `Snapshot.FrontIPs` (через запятую), адаптер исключает их из туннеля (без петли).
 
