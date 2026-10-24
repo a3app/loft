@@ -28,11 +28,11 @@ v1 已带：密钥、经 `loft-front` 的出站 `get` / `ws` / `h2` / `quic` / `
 |--------|--------|
 | 连接（配置，`.loft`） | 一份 `client.yaml` **或** `connections:` 下的一项：`kind`、`token` / 凭证、`outbounds`、`select`，可选 `bootstrap` / `controller_pub` / `fronts` / `lists_url` / `use` / `default` / `p2p` |
 | 密钥 `lt_` + 48 hex | 认证 blob `0x02` + HMAC；节点存 SHA-256 |
-| URL + 类型 + path | 一条出站：`type` `get`\|`ws`\|`h2`\|`quic`\|`h3`\|`l3`，`url`，`path` |
+| URL + GET 路径 + 额外 mux 前置 | 一条连接：GET 出站 + Hello `fronts`（`ws` / `h2` / `quic` / `h3`）。`l3` 是另一条连接。 |
 | 状态面板里的前置 | Hello/Status `caps` 求交之后活着的出站 |
 | Overlay IP | Status `ip`（以及 `mtu`、覆盖网 `gateway`） |
 | `select: auto` | 剩下的前置 → 下一条出站 → Status `replicas` → 名册 |
-| 多个出站 | 多份配置 = 多个会话。和 cap `multi` 不是一回事 |
+| 一条连接的 mux 前置 | 一个会话。Hello 给出这些前置；路径来自 Status；0x04 挂上。多份配置仍是多个会话。和 cap `multi` 不是一回事 |
 | Cap `multi` | 一把密钥，多个 `instance_id`。节点：`auth_already_online` / `auth_limit` |
 | — | 按配置持久化 `instance_id`；空 → 节点签发，存下来 |
 | — | 在 `lease_hold` 内重连用新的 `0x02` |
@@ -44,7 +44,7 @@ v1 已带：密钥、经 `loft-front` 的出站 `get` / `ws` / `h2` / `quic` / `
 | TUN UDP | Cap `dgram`，mux `CmdDgram` |
 | 到另一成员的覆盖网 | Status `peers` hub\|mesh\|vlan。Cap `p2p` 可选；`p2p: false` = 只做 hub 拼接 |
 
-活着的助手（`loft-front`，成员，不是中继）的 Hello：配置打开的前置（`get` / `ws` / `h2` / `quic` / `h3` / `l3`），加上 `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`。Cap `p2p` 只在配置允许监听时开。Cap `relay` 关。`hub:*` 和 `ctl:1` 从不打开。
+活着的助手（`loft-front`，成员，不是中继）的 Hello：配置打开的 mux 前置（`get` / `ws` / `h2` / `quic` / `h3`），加上 `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`。`l3` 是单独会话。Cap `p2p` 只在配置允许监听时开。Cap `relay` 关。`hub:*` 和 `ctl:1` 从不打开。启动是 `-type get`，Hello 用 `-fronts`；`-type` 逗号列表仍轮换独立出站。
 
 第一次 Status 之后，只留下前置的交集，按这个客户端的顺序。非 OK 的 Status 禁止 mux。认证时 GET 404 是 `auth_bad_key`。
 
@@ -52,7 +52,7 @@ v1 已带：密钥、经 `loft-front` 的出站 `get` / `ws` / `h2` / `quic` / `
 
 Hold、故障切换、Packet Tunnel 对助手、「重置路由」是这张映射之上的机器策略。它们不是 cap。
 
-**AppKit 分流和模型一致（区域）。** 还落后于线上的：手动屏只有 GET\|WS；没有 `bootstrap` / `controller_pub`；不拉控制器具名列表；没有 `drop`；故障切换之后不换活着的前置。往系统表里加额外 CIDR 是经 loft-priv 的 `viaSets` / `bypassSets`（`--apply-split`）。完整的 `.loft` 已经带着这些 YAML 字段。
+**AppKit 分流和模型一致（区域）。** 还落后于线上的：没有 `bootstrap` / `controller_pub`；不拉控制器具名列表；没有 `drop`。手动屏是 GET 加上 mux 前置路径（`ws` / `h2` / `h3` / `quic`）。活着的前置跟 STATUS `front=`。往系统表里加额外 CIDR 是经 loft-priv 的 `viaSets` / `bypassSets`（`--apply-split`）。完整的 `.loft` 已经带着这些 YAML 字段。
 
 ---
 
@@ -81,7 +81,7 @@ Hold、故障切换、Packet Tunnel 对助手、「重置路由」是这张映�
 
 导入：`.loft` 或 `client.yaml`。`.loft` **可以** 是今天的单份文档 **或** 带 `connections:` 的包（一条或多条，协议可混）。每一项变成一份配置。导出选中的连接为 `Office.loft`；多条为 `Family.loft`。文件里有密钥；界面警告不要给外人。
 
-loft 地址栏是 `loft://<token>@host…`。一个前置 → 二维码 `loft://`。一条连接的多个前置 → 这条连接的 `.loft`。
+loft 地址栏是 `loft://<token>@host…`。查询键 `get=` / `ws=` / `h2=` / `h3=` / `quic` 是这条连接的额外前置。YAML `fronts:` 一样。`l3` 是另一条连接。
 
 编辑：名称、类型，然后该类型的块。页签 **连接 / 高级**。loft 和 VLESS 共用一颗安静的胶囊 **链接 / 手动**，段里是链条和铅笔。loft：粘贴 `loft://`，或密钥 / 主机 / 端口 / GET·WS·H2·QUIC·H3·L3 / 路径。两种都写入同一份配置。VLESS：粘贴 `vless://`，或地址 / 端口 / UUID / TLS·REALITY / TCP·XHTTP 以及该模式要的字段。两种都写成 `vless://`。SOCKS5、隧道、DNS 和 mux 在高级。多个出站时，这个屏幕还有这条配置的状态和打开/断开。
 

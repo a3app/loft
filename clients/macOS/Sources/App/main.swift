@@ -14,7 +14,7 @@ if CommandLine.arguments.contains("--probe") {
     }
     var failed = 0
     for p in list {
-        fputs("probe \(p.name) \(p.kind) \(p.url) \(p.path)\n", stderr)
+        fputs("probe \(p.name) \(p.cliType()) \(p.url) \(p.path)\n", stderr)
         let h = FrontHelper()
         do {
             try h.start(profile: p, socksBind: "off", probe: true)

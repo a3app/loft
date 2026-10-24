@@ -66,30 +66,34 @@ enum ShareURI {
         var h2Path = ""
         var h3Path = ""
         var quic = false
+        var listedFronts: [String] = []
         if hasFronts {
             if q.keys.contains("get") {
                 path = q["get"] ?? ""
-                if path.isEmpty { path = "/static/v3/build" }
+                if path.isEmpty { path = LoftProfile.defaultGETPath }
                 type = "get"
             }
             if q.keys.contains("ws") {
                 wsPath = q["ws"] ?? ""
-                if wsPath.isEmpty { wsPath = "/api/v1/sync" }
+                if wsPath.isEmpty { wsPath = LoftProfile.defaultWSPath }
                 if type != "get" { type = "ws" }
             }
             if q.keys.contains("h2") {
                 h2Path = q["h2"] ?? ""
-                if h2Path.isEmpty { h2Path = "/api/v1/tunnel" }
+                if h2Path.isEmpty { h2Path = LoftProfile.defaultH2Path }
                 if type != "get" && wsPath.isEmpty { type = "h2" }
             }
             if q.keys.contains("h3") {
                 h3Path = q["h3"] ?? ""
-                if h3Path.isEmpty { h3Path = "/api/v1/tunnel" }
+                if h3Path.isEmpty { h3Path = LoftProfile.defaultH2Path }
             }
             quic = q.keys.contains("quic")
             if type != "get" && wsPath.isEmpty && h2Path.isEmpty && q.keys.contains("get") == false {
                 if q.keys.contains("h3") { type = "h3" }
                 else if quic { type = "quic" }
+            }
+            for f in LoftProfile.muxOrder where q.keys.contains(f) {
+                listedFronts.append(f)
             }
         }
         if !LoftProfile.frontKinds.contains(type) { return nil }
@@ -130,7 +134,8 @@ enum ShareURI {
             wsPath: wsPath,
             h2Path: h2Path,
             h3Path: h3Path,
-            quic: quic
+            quic: quic,
+            listedFronts: listedFronts
         )
     }
 
@@ -153,7 +158,8 @@ enum ShareURI {
             let def = (scheme == "http" || scheme == "ws") ? 80 : 443
             if port != def { c.port = port }
         }
-        let extra = !p.wsPath.isEmpty || !p.h2Path.isEmpty || !p.h3Path.isEmpty || p.quic
+        let mux = p.muxFronts()
+        let extra = mux.count > 1 || p.hasMuxExtras
         var items: [URLQueryItem] = []
         if kind == "l3" {
             let urlPath = u?.path ?? ""
@@ -162,11 +168,17 @@ enum ShareURI {
             }
             items.append(URLQueryItem(name: "type", value: "l3"))
         } else if extra || kind == "get" {
-            items.append(URLQueryItem(name: "get", value: p.path.isEmpty ? "/static/v3/build" : p.path))
-            if !p.wsPath.isEmpty { items.append(URLQueryItem(name: "ws", value: p.wsPath)) }
-            if !p.h2Path.isEmpty { items.append(URLQueryItem(name: "h2", value: p.h2Path)) }
-            if !p.h3Path.isEmpty { items.append(URLQueryItem(name: "h3", value: p.h3Path)) }
-            if p.quic { items.append(URLQueryItem(name: "quic", value: nil)) }
+            items.append(URLQueryItem(name: "get", value: p.path.isEmpty ? LoftProfile.defaultGETPath : p.path))
+            if mux.contains("ws") || !p.wsPath.isEmpty {
+                items.append(URLQueryItem(name: "ws", value: p.wsPath.isEmpty ? LoftProfile.defaultWSPath : p.wsPath))
+            }
+            if mux.contains("h2") || !p.h2Path.isEmpty {
+                items.append(URLQueryItem(name: "h2", value: p.h2Path.isEmpty ? LoftProfile.defaultH2Path : p.h2Path))
+            }
+            if mux.contains("h3") || !p.h3Path.isEmpty {
+                items.append(URLQueryItem(name: "h3", value: p.h3Path.isEmpty ? LoftProfile.defaultH2Path : p.h3Path))
+            }
+            if mux.contains("quic") || p.quic { items.append(URLQueryItem(name: "quic", value: nil)) }
         } else {
             let urlPath = u?.path ?? ""
             let uriPath: String
@@ -229,6 +241,12 @@ enum ShareURI {
         p.h2Path = slash(h2Path)
         p.h3Path = slash(h3Path)
         p.quic = quic
+        var listed = ["get"]
+        if !p.wsPath.isEmpty { listed.append("ws") }
+        if !p.h2Path.isEmpty { listed.append("h2") }
+        if p.quic { listed.append("quic") }
+        if !p.h3Path.isEmpty { listed.append("h3") }
+        p.listedFronts = listed.count == 1 ? [] : listed
     }
 
     /// `vless://<uuid>@<host>[:port]?…#Name` (DuckSoft / Xray share).

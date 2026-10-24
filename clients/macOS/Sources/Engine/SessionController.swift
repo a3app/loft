@@ -422,10 +422,24 @@ final class SessionController {
                 } else if p.isTrojan {
                     LoftLog.shared.add("loft", "open \(p.name) trojan \(p.url)")
                 } else {
-                    LoftLog.shared.add("loft", "open \(p.name) \(p.kind) \(p.url) path=\(p.path)")
+                    let hello = p.helloFrontsCSV()
+                    let frontsLog = hello.isEmpty ? "" : " fronts=\(hello)"
+                    LoftLog.shared.add("loft", "open \(p.name) \(p.spawnType())\(frontsLog) \(p.url) path=\(p.path)")
                 }
                 s.helper.onLine = { [weak self] line in
                     guard let self = self else { return }
+                    if line.hasPrefix("STATUS ") {
+                        let st = FrontExplain.parseStatus(line)
+                        if !st.front.isEmpty {
+                            self.queue.async {
+                                guard s.frontName != st.front else { return }
+                                s.frontName = st.front
+                                DispatchQueue.main.async {
+                                    NotificationCenter.default.post(name: .loftState, object: self)
+                                }
+                            }
+                        }
+                    }
                     if s.state == .connecting, let tok = FrontExplain.stageToken(from: line) {
                         DispatchQueue.main.async {
                             guard s.state == .connecting else { return }
@@ -464,7 +478,7 @@ final class SessionController {
                 Priv.pinFront(url: p.url)
                 try s.helper.start(profile: p, socksBind: socksAddr, instanceFile: self.store.instanceFile(for: p.id))
                 if ticket != s.generation { return }
-                s.frontName = p.kind
+                s.frontName = s.helper.overlayFront.isEmpty ? p.kind : s.helper.overlayFront
                 let ip = s.helper.overlayIP
                 s.probeSocks = socksAddr
                 s.socksDisplay = advertised

@@ -28,11 +28,11 @@
 |--------------|------------|
 | Подключение (профиль, `.loft`) | Один `client.yaml` **или** элемент `connections:`: `kind`, `token` / учётка, `outbounds`, `select`, опционально `bootstrap` / `controller_pub` / `fronts` / `lists_url` / `use` / `default` / `p2p` |
 | Ключ `lt_` + 48 hex | Auth blob `0x02` + HMAC; нода хранит SHA-256 |
-| URL + type + path | Один outbound: `type` `get`\|`ws`\|`h2`\|`quic`\|`h3`\|`l3`, `url`, `path` |
+| URL + GET path + дополнительные mux-фронты | Одно подключение: GET outbound + Hello `fronts` (`ws` / `h2` / `quic` / `h3`). `l3` — отдельное подключение. |
 | Фронты в панели статуса | Живой outbound после пересечения Hello/Status `caps` |
 | IP оверлея | Status `ip` (и `mtu`, `gateway` оверлея) |
 | `select: auto` | Оставшиеся фронты → следующий outbound → Status `replicas` → roster |
-| Несколько outbound | Несколько профилей = несколько сессий. Отдельно от cap `multi` |
+| Mux-фронты одного подключения | Одна сессия. Hello отдаёт эти фронты; пути из Status; attach 0x04. Несколько профилей остаются несколькими сессиями. Отдельно от cap `multi` |
 | Cap `multi` | Один ключ, несколько `instance_id`. Нода: `auth_already_online` / `auth_limit` |
 | — | Персистить `instance_id` на профиль; пусто → нода чеканит, сохранить |
 | — | Свежий `0x02` на реконнект внутри `lease_hold` |
@@ -44,7 +44,7 @@
 | TUN UDP | Cap `dgram`, mux `CmdDgram` |
 | Оверлей к другому члену | Status `peers` hub\|mesh\|vlan. Cap `p2p` опционален; `p2p: false` = только hub-сплайс |
 
-Hello живого `loft-front` (член, не relay): фронты, которые включает профиль (`get` / `ws` / `h2` / `quic` / `h3` / `l3`), плюс `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. Cap `p2p` только если профиль разрешает слушать. Cap `relay` выкл. `hub:*` и `ctl:1` никогда не открываются.
+Hello живого `loft-front` (член, не relay): mux-фронты профиля (`get` / `ws` / `h2` / `quic` / `h3`), плюс `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. `l3` — отдельная сессия. Cap `p2p` только если профиль разрешает слушать. Cap `relay` выкл. `hub:*` и `ctl:1` никогда не открываются. Спавн — `-type get` и `-fronts` для Hello; список через запятую в `-type` по-прежнему ротирует отдельные outbound.
 
 После первого Status — только пересечение фронтов, в порядке этого клиента. Не-OK Status запрещает mux. GET 404 на auth — `auth_bad_key`.
 
@@ -52,7 +52,7 @@ Hello живого `loft-front` (член, не relay): фронты, котор
 
 Hold, failover, Packet Tunnel vs привилегированный помощник, «reset routes» — политика машины поверх этого маппинга. Это не caps.
 
-**AppKit split совпадает с макетом (зоны).** От протокола ещё отстаёт: ручной экран только GET\|WS; нет `bootstrap` / `controller_pub`; нет fetch именованных списков контроллера; нет `drop`; нет смены живого фронта после failover. Extra CIDR в системную таблицу — `viaSets` / `bypassSets` через loft-priv (`--apply-split`). Полный `.loft` уже несёт поля YAML.
+**AppKit split совпадает с макетом (зоны).** От протокола ещё отстаёт: нет `bootstrap` / `controller_pub`; нет fetch именованных списков контроллера; нет `drop`. Ручной экран — GET плюс пути mux-фронтов (`ws` / `h2` / `h3` / `quic`). Живой фронт берётся из STATUS `front=`. Extra CIDR в системную таблицу — `viaSets` / `bypassSets` через loft-priv (`--apply-split`). Полный `.loft` уже несёт поля YAML.
 
 ---
 
@@ -81,7 +81,7 @@ Hold, failover, Packet Tunnel vs привилегированный помощн
 
 Импорт: `.loft` или `client.yaml`. `.loft` **может** быть сегодняшним одним документом **или** пакетом с `connections:` (одно или несколько, смешанные протоколы). Каждый элемент становится профилем. Экспорт выбранного — `Office.loft`; нескольких — `Family.loft`. В файле ключи; UI предупреждает не раздавать.
 
-Адрес loft — `loft://<token>@host…`. Один фронт → QR `loft://`. Несколько фронтов одного подключения → `.loft` этого подключения.
+Адрес loft — `loft://<token>@host…`. Ключи запроса `get=` / `ws=` / `h2=` / `h3=` / `quic` — дополнительные фронты этого подключения. YAML `fronts:` — то же. `l3` — отдельное подключение.
 
 Правка: имя, QR, тип, затем блок типа. Вкладки **Соединение / Расширенные**. loft и VLESS — спокойная капсула **Ссылка / Вручную**. loft: вставка `loft://` или ключ / хост / порт / GET·WS·H2·QUIC·H3·L3 / путь. Обе проекции — один профиль. VLESS: вставка `vless://` или адрес / порт / UUID / TLS·REALITY / TCP·XHTTP и поля режима. Обе проекции пишут `vless://`. SOCKS5, туннель, DNS — на «Расширенные». На этом экране нет статуса сессии и нет Connect/Disconnect.
 

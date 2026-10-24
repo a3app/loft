@@ -28,11 +28,11 @@ Software `1.0.22`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local.
 |--------------------|-------------|
 | Connection (profile, `.loft`) | One `client.yaml` **or** one entry under `connections:`: `kind`, `token` / creds, `outbounds`, `select`, optional `bootstrap` / `controller_pub` / `fronts` / `lists_url` / `use` / `default` / `p2p` |
 | Key `lt_` + 48 hex | Auth blob `0x02` + HMAC; the node stores SHA-256 |
-| URL + type + path | One outbound: `type` `get`\|`ws`\|`h2`\|`quic`\|`h3`\|`l3`, `url`, `path` |
+| URL + GET path + extra mux fronts | One connection: GET outbound + Hello `fronts` (`ws` / `h2` / `quic` / `h3`). `l3` is its own connection. |
 | FRONT card in the status pane | Live outbound after Hello/Status `caps` intersection |
 | Overlay IP | Status `ip` (and `mtu`, overlay `gateway`) |
 | `select: auto` | Remaining fronts → next outbound → Status `replicas` → roster |
-| Several outbounds | Several profiles = several sessions. Distinct from cap `multi` |
+| Mux fronts of one connection | One session. Hello offers those fronts; Status paths; 0x04 attach. Several profiles remain several sessions. Distinct from cap `multi` |
 | Cap `multi` | One key, several `instance_id`. Node: `auth_already_online` / `auth_limit` |
 | — | Persist `instance_id` per profile; empty → node mints, store it |
 | — | Fresh `0x02` on reconnect inside `lease_hold` |
@@ -44,7 +44,7 @@ Software `1.0.22`. Protocol `1.0` (`0x0100` in Hello). SOCKS and TUN stay local.
 | TUN UDP | Cap `dgram`, mux `CmdDgram` |
 | Overlay to another member | Status `peers` hub\|mesh\|vlan. Cap `p2p` optional; `p2p: false` = hub splice only |
 
-Hello of the live helper (`loft-front`, member, not a relay): fronts the profile enables (`get` / `ws` / `h2` / `quic` / `h3` / `l3`), plus `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. Cap `p2p` only if the profile allows a listen. Cap `relay` is off. `hub:*` and `ctl:1` are never opened.
+Hello of the live helper (`loft-front`, member, not a relay): mux fronts the profile enables (`get` / `ws` / `h2` / `quic` / `h3`), plus `status timers hello_caps reset dgram clockless ticket decoy mask roster resume lists`. `l3` is a separate session. Cap `p2p` only if the profile allows a listen. Cap `relay` is off. `hub:*` and `ctl:1` are never opened. Spawn is `-type get` plus `-fronts` for Hello; a comma `-type` list still rotates separate outbounds.
 
 After the first Status, only the intersection of fronts, in this client’s order. A non-OK Status forbids mux. GET 404 on auth is `auth_bad_key`.
 
@@ -52,7 +52,7 @@ Lists: Status `lists_serial` / `lists_hash` → `GET {lists_path}` (default `/st
 
 Hold, failover, Packet Tunnel vs helper, “reset routes” are machine policy on top of that mapping. They are not caps.
 
-**AppKit split matches the mock (zones).** Still behind the wire: Manual screen is GET\|WS only; no `bootstrap` / `controller_pub`; no fetch of named controller lists; no `drop`; no live-front change after failover. Extra CIDR apply into the system table is `viaSets` / `bypassSets` through loft-priv (`--apply-split`). A complete `.loft` already carries the YAML fields.
+**AppKit split matches the mock (zones).** Still behind the wire: no `bootstrap` / `controller_pub`; no fetch of named controller lists; no `drop`. Manual is GET plus extra mux paths (`ws` / `h2` / `h3` / `quic`). Live front follows STATUS `front=`. Extra CIDR apply into the system table is `viaSets` / `bypassSets` through loft-priv (`--apply-split`). A complete `.loft` already carries the YAML fields.
 
 ---
 
@@ -81,7 +81,7 @@ Two modes (Settings → “Several outbounds”, the same toggle on the list):
 
 Import: `.loft` or `client.yaml`. A `.loft` MAY be today’s single document **or** a bundle with `connections:` (one or several, mixed protocols). Each entry becomes a profile. Export the selected connection as `Office.loft`; export several as `Family.loft`. The file contains keys; the UI warns against giving it away.
 
-The loft address field is `loft://<token>@host…`. One front → QR `loft://`. Several fronts of one connection → that connection’s `.loft`.
+The loft address field is `loft://<token>@host…`. Query keys `get=` / `ws=` / `h2=` / `h3=` / `quic` are extra fronts of this connection. YAML `fronts:` is the same. `l3` is a separate connection.
 
 Edit: name, QR, kind, then the type-specific block. Tabs **Connection / Advanced**. loft and VLESS share a quiet capsule **Link / Manual**. loft: paste `loft://`, or key / host / port / GET·WS·H2·QUIC·H3·L3 / path. Both write the same profile. VLESS: paste `vless://`, or address / port / UUID / TLS·REALITY / TCP·XHTTP and the fields that mode needs. Both write `vless://`. SOCKS5, TUN, DNS sit on Advanced. This screen has no session status and no Connect/Disconnect.
 

@@ -32,11 +32,14 @@ struct LoftProfile {
     var dnsSystem: Bool = false
     /// Node X25519 public (share-URI `pbk` / YAML `mask_pub`). Empty = learn from Status.
     var maskPub: String = ""
-    /// Extra mux fronts of this connection. GET path stays in `path`. Empty = off until Status.
+    /// Extra mux fronts of this connection. GET path stays in `path`.
+    /// Empty extras + empty `listedFronts` + kind get = GET-only Hello.
     var wsPath: String = ""
     var h2Path: String = ""
     var h3Path: String = ""
     var quic: Bool = false
+    /// YAML `fronts:` / loft:// query keys, FrontOrder subset. Empty = derive.
+    var listedFronts: [String] = []
 
     /// Canonical SSTP DNS field: unique IPv4, comma-separated.
     static func normalizeDNS(_ raw: String) -> String {
@@ -72,6 +75,114 @@ struct LoftProfile {
     /// Loft fronts this GUI can open. `connect` is node-only; SSTP is a different VPN.
     static let frontKinds = ["get", "ws", "h2", "quic", "h3", "l3"]
     static let frontTitles = ["GET", "WS", "H2", "QUIC", "H3", "L3"]
+    /// Hello mux order. l3 and connect stay off this list.
+    static let muxOrder = ["get", "ws", "h2", "quic", "h3"]
+    static let defaultGETPath = "/static/v3/build"
+    static let defaultWSPath = "/api/v1/sync"
+    static let defaultH2Path = "/api/v1/tunnel"
+
+    /// True when extra mux paths/quic are set on this connection.
+    var hasMuxExtras: Bool {
+        !wsPath.isEmpty || !h2Path.isEmpty || !h3Path.isEmpty || quic
+    }
+
+    /// Yandex/Cloudflare GET cover. Extra mux fronts are origin paths; this URL does not speak them.
+    var isCDN: Bool {
+        if !cdn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        guard let host = URL(string: url)?.host?.lowercased(), !host.isEmpty else { return false }
+        return host.contains("cdn.")
+    }
+
+    /// Hello mux fronts. l3 / SSTP / VLESS / Trojan stay one kind.
+    /// CDN GET and GET with no extras stay GET-only.
+    func muxFronts() -> [String] {
+        let k = kind.lowercased()
+        if isSSTP || isVLESS || isTrojan || k == "l3" { return [k] }
+        if isCDN { return ["get"] }
+        let allow = Set(Self.muxOrder)
+        if !listedFronts.isEmpty {
+            var out: [String] = []
+            var seen = Set<String>()
+            for f in listedFronts {
+                let t = f.lowercased()
+                if allow.contains(t), seen.insert(t).inserted { out.append(t) }
+            }
+            if !out.isEmpty { return out }
+        }
+        if hasMuxExtras {
+            var out = ["get"]
+            if !wsPath.isEmpty { out.append("ws") }
+            if !h2Path.isEmpty { out.append("h2") }
+            if quic { out.append("quic") }
+            if !h3Path.isEmpty { out.append("h3") }
+            return out
+        }
+        if k == "get" || k.isEmpty { return ["get"] }
+        return [k]
+    }
+
+    /// loft-front `-type`: one outbound. Extra mux fronts go in `-fronts`.
+    func spawnType() -> String {
+        let mux = muxFronts()
+        if mux.contains("get") { return "get" }
+        if let first = mux.first, !first.isEmpty { return first }
+        return kind.isEmpty ? "get" : kind
+    }
+
+    /// Hello mux list for loft-front `-fronts`. Empty when GET-only / one kind.
+    func helloFrontsCSV() -> String {
+        let mux = muxFronts()
+        if mux.count <= 1 { return "" }
+        return mux.joined(separator: ",")
+    }
+
+    /// Comma Hello list (probe / log). Spawn uses `spawnType()`.
+    func cliType() -> String {
+        muxFronts().joined(separator: ",")
+    }
+
+    /// YAML `fronts: [get, ws]` or a comma list. Unknown names dropped.
+    static func parseFrontList(_ v: String) -> [String] {
+        var s = v.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("["), s.hasSuffix("]") {
+            s = String(s.dropFirst().dropLast())
+        }
+        let allow = Set(muxOrder)
+        var out: [String] = []
+        var seen = Set<String>()
+        for part in s.split(separator: ",") {
+            let t = part.trimmingCharacters(in: CharacterSet(charactersIn: " \t\"'")).lowercased()
+            if allow.contains(t), seen.insert(t).inserted { out.append(t) }
+        }
+        return out
+    }
+
+    /// Fills extra paths from a fronts list. `fronts: [get]` stays GET-only.
+    mutating func applyFrontList(_ raw: [String]) {
+        let allow = Set(Self.muxOrder)
+        var listed: [String] = []
+        var seen = Set<String>()
+        for f in raw {
+            let t = f.lowercased()
+            if !allow.contains(t) || !seen.insert(t).inserted { continue }
+            listed.append(t)
+            switch t {
+            case "get":
+                if kind.lowercased() != "get" { kind = "get" }
+            case "ws":
+                if wsPath.isEmpty { wsPath = Self.defaultWSPath }
+            case "h2":
+                if h2Path.isEmpty { h2Path = Self.defaultH2Path }
+            case "h3":
+                if h3Path.isEmpty { h3Path = Self.defaultH2Path }
+            case "quic":
+                quic = true
+            default:
+                break
+            }
+        }
+        listedFronts = listed
+    }
 
     /// True for Microsoft SSTP (PPP over HTTPS), not a loft front.
     var isSSTP: Bool { kind.lowercased() == "sstp" }
@@ -544,41 +655,43 @@ final class ProfileStore {
             }
             return "\(https)://\(host)"
         }()
-        if !p.wsPath.isEmpty {
+        // Panel-style YAML is GET + fronts:. Extra named outbounds keep a non-default path.
+        if !p.wsPath.isEmpty, p.wsPath != LoftProfile.defaultWSPath {
             let wss = hostURL.replacingOccurrences(of: "https://", with: "wss://").replacingOccurrences(of: "http://", with: "ws://")
             extra += "\n  - name: \(yamlQ(p.name + "-ws"))\n    type: ws\n    url: \(yamlQ(wss + p.wsPath))"
         }
-        if !p.h2Path.isEmpty {
+        if !p.h2Path.isEmpty, p.h2Path != LoftProfile.defaultH2Path {
             extra += "\n  - name: \(yamlQ(p.name + "-h2"))\n    type: h2\n    url: \(yamlQ(hostURL))\n    path: \(yamlQ(p.h2Path))"
         }
-        if !p.h3Path.isEmpty {
+        if !p.h3Path.isEmpty, p.h3Path != LoftProfile.defaultH2Path {
             extra += "\n  - name: \(yamlQ(p.name + "-h3"))\n    type: h3\n    url: \(yamlQ(hostURL))\n    path: \(yamlQ(p.h3Path))"
         }
-        if p.quic {
-            extra += "\n  - name: \(yamlQ(p.name + "-quic"))\n    type: quic\n    url: \(yamlQ(hostURL))"
-        }
+        let mux = p.muxFronts()
+        let obType = mux.contains("get") ? "get" : p.kind
         return """
         name: \(yamlQ(p.name))
         token: \(yamlQ(p.token))
         instance_id: \(yamlQ(p.instanceID))\(dnsYAML(p))
-        select: auto
+        select: auto\(frontsYAML(p))
         listen:
           socks5: \(p.socksOn ? yamlQ(p.socks) : "false")
           tun: \(p.tun ? "auto" : "false")
         mux: \(p.mux)
         outbounds:
           - name: \(yamlQ(p.name))
-            type: \(p.kind)
+            type: \(obType)
             url: \(yamlQ(p.url))
             path: \(yamlQ(p.path))\(p.cdn.isEmpty ? "" : "\n            cdn: \(yamlQ(p.cdn))")\(p.maskPub.isEmpty ? "" : "\n            mask_pub: \(yamlQ(p.maskPub))")\(extra)
         """
     }
 
     /// Merges Status `fronts=` into a saved loft profile after a successful handshake.
+    /// CDN GET stays GET-only: Status lists origin paths this cover does not speak.
     func applyLearnedFronts(id: String, raw: String) {
         guard let i = profiles.firstIndex(where: { $0.id == id }) else { return }
         var p = profiles[i]
         if p.isSSTP || p.isVLESS || p.isTrojan { return }
+        if p.isCDN { return }
         var changed = false
         for part in raw.split(separator: ",") {
             let s = String(part)
@@ -811,6 +924,8 @@ final class ProfileStore {
         var tlsCheck = true
         var papCHAP = false
         var inOutbounds = false
+        var inFronts = false
+        var headFronts: [String] = []
         var items: [(name: String, type: String, url: String, path: String, cdn: String, user: String, maskPub: String)] = []
         var curName = ""
         var curType = ""
@@ -830,6 +945,7 @@ final class ProfileStore {
             if trimmed.hasPrefix("#") || trimmed.isEmpty { continue }
             if trimmed == "outbounds:" || trimmed.hasPrefix("outbounds:") {
                 inOutbounds = true
+                inFronts = false
                 continue
             }
             var line = trimmed
@@ -837,6 +953,14 @@ final class ProfileStore {
             if dashed {
                 line = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
                 if inOutbounds { flush() }
+            }
+            if inFronts && !inOutbounds {
+                if dashed {
+                    let name = line.lowercased()
+                    if LoftProfile.muxOrder.contains(name) { headFronts.append(name) }
+                    continue
+                }
+                inFronts = false
             }
             let kv = line.split(separator: ":", maxSplits: 1)
             if kv.count < 2 { continue }
@@ -890,6 +1014,13 @@ final class ProfileStore {
             case "mux":
                 let low = v.lowercased()
                 mux = !(low == "false" || low == "off" || low == "0")
+            case "fronts":
+                let parsed = LoftProfile.parseFrontList(v)
+                if parsed.isEmpty {
+                    inFronts = true
+                } else {
+                    headFronts = parsed
+                }
             default: break
             }
         }
@@ -956,7 +1087,16 @@ final class ProfileStore {
                 maskPub: ob.maskPub
             )
         }
-        return mergeLoftFronts(mapped)
+        var merged = mergeLoftFronts(mapped)
+        if !headFronts.isEmpty {
+            for i in merged.indices {
+                let k = merged[i].kind.lowercased()
+                if LoftProfile.muxOrder.contains(k) {
+                    merged[i].applyFrontList(headFronts)
+                }
+            }
+        }
+        return merged
     }
 
     /// One loft connection may list get/ws/h2/h3/quic outbounds. Merge them.
@@ -1015,6 +1155,15 @@ final class ProfileStore {
         }
         flush()
         return out
+    }
+
+    /// `fronts: [get, ws, …]` when this connection offers more than one mux front.
+    private func frontsYAML(_ p: LoftProfile) -> String {
+        if p.isSSTP || p.isVLESS || p.isTrojan { return "" }
+        if p.kind.lowercased() == "l3" { return "" }
+        let mux = p.muxFronts()
+        if mux.count <= 1 { return "" }
+        return "\nfronts: [\(mux.joined(separator: ", "))]"
     }
 
     /// Optional dns / dns_replace / dns_system lines for a profile YAML.

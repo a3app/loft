@@ -43,11 +43,11 @@ CODESIGN_IDENTITY=auto NOTARY_PROFILE=loft make dmg
 
 Каждый `make app` поднимает patch в [`VERSION`](VERSION) (`1.0.0` → `0.9.1` → `0.9.2`) и штампует `Info.plist`. About читает эту строку. Версия ПО протокола остаётся корневым `VERSION`. `BUMP=0` штампует текущий файл и не пишет его. В имени DMG есть `ARCH` (`arm64` / `x86_64`), по умолчанию `uname -m`. CI (`make macos-dmgs BUMP=0`) собирает оба на раннере Apple Silicon: нативный arm64 и кросс `ARCH=x86_64`.
 
-Интерфейс — Swift 5 + AppKit (после Go 1.20 in-process Go не целится в 10.13). Swift stdlib копируется в `Contents/Frameworks`. Сессия оверлея — **`loft-front`** (Go) в `Contents/MacOS/` рядом с `loft`. [`gooverlay/`](gooverlay/) подменяет Darwin-проверку `crypto/x509`, чтобы dyld не требовал символы Security из macOS 12. Он говорит GET, WS, H2, QUIC и H3, mux, clockless auth, mask, CmdLeave, ICMP оверлея как Dgram `:1`. Hello-caps берутся из Go-клиента, не из `GETFront.swift`.
+Интерфейс — Swift 5 + AppKit (после Go 1.20 in-process Go не целится в 10.13). Swift stdlib копируется в `Contents/Frameworks`. Сессия оверлея — **`loft-front`** (Go) в `Contents/MacOS/` рядом с `loft`. [`gooverlay/`](gooverlay/) подменяет Darwin-проверку `crypto/x509`, чтобы dyld не требовал символы Security из macOS 12. Он говорит GET, WS, H2, QUIC и H3, mux, clockless auth, mask, CmdLeave, ICMP оверлея как Dgram `:1`. Hello отдаёт mux-фронты профиля (GET плюс `ws` / `h2` / `quic` / `h3`), чтобы 0x04 мог прикрепиться. `l3` — отдельная сессия. Hello-caps берутся из Go-клиента, не из `GETFront.swift`.
 
 | Локально | В канале |
 |----------|------------|
-| TUN (utun, маршрут по умолчанию) через loft-front | фронт GET, WS, H2, QUIC или H3, протокол 1.0 |
+| TUN (utun, маршрут по умолчанию) через loft-front | одно подключение, mux-фронты GET/WS/H2/QUIC/H3, протокол 1.0 |
 | SSTP | PPP поверх HTTPS к Windows/accel-ppp SSTP |
 
 Первый Open спрашивает пароль администратора (`ifconfig` / `route`). Hold закрывает нативный default, когда Loft умирает. **Reset routes** возвращает его.

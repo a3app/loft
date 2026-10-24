@@ -15,6 +15,8 @@ final class FrontHelper {
     private(set) var overlayRoutes: [String] = []
     /// Compact Status front map (`get=/static/v3/build,ws=/api/v1/sync,quic`).
     private(set) var overlayFronts = ""
+    /// Live bulk front from STATUS `front=` (Supervise `o.Type`).
+    private(set) var overlayFront = ""
     private(set) var tunLive = false
     private(set) var lastError = ""
     private(set) var lastStage = ""
@@ -115,7 +117,10 @@ final class FrontHelper {
             throw NSError(domain: "loft", code: 20, userInfo: [NSLocalizedDescriptionKey: "no loft-front"])
         }
         let kind = profile.kind.isEmpty ? "auto" : profile.kind
-        let path = FrontHelper.cliPath(kind: kind, path: profile.path)
+        let types = profile.isSSTP || profile.isVLESS || profile.isTrojan ? kind : profile.spawnType()
+        let hello = profile.isSSTP || profile.isVLESS || profile.isTrojan ? "" : profile.helloFrontsCSV()
+        let pathKind = types == "get" || types.contains(",") ? "get" : kind
+        let path = FrontHelper.cliPath(kind: pathKind, path: profile.path)
         let socks = socksBind
         _ = Priv.physicalGateway()
         let iff = Priv.cachedIface()
@@ -127,18 +132,28 @@ final class FrontHelper {
         } else if profile.isTrojan {
             LoftLog.shared.add("front", "spawn trojan \(profile.url) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) if=\(ifLog)")
         } else {
-            LoftLog.shared.add("front", "spawn \(kind) \(profile.url) path=\(path ?? "") socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) mux=\(profile.mux ? 1 : 0) if=\(ifLog)")
+            let frontsLog = hello.isEmpty ? "" : " fronts=\(hello)"
+            LoftLog.shared.add("front", "spawn \(types)\(frontsLog) \(profile.url) path=\(path ?? "") socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) mux=\(profile.mux ? 1 : 0) if=\(ifLog)")
         }
         let p = Process()
         var args = [
             "-token", profile.token,
             "-url", profile.url,
-            "-type", kind,
+            "-type", types,
             "-socks", socks.isEmpty ? "off" : socks,
         ]
+        if !hello.isEmpty {
+            args += ["-fronts", hello]
+        }
         if let path = path, !path.isEmpty {
             args += ["-path", path]
         }
+        let ws = profile.wsPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !ws.isEmpty { args += ["-ws-path", ws] }
+        let h2 = profile.h2Path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !h2.isEmpty { args += ["-h2-path", h2] }
+        let h3 = profile.h3Path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !h3.isEmpty { args += ["-h3-path", h3] }
         if !profile.mux || kind.lowercased() == "l3" { args.append("-mux=0") }
         if profile.isSSTP, !profile.user.isEmpty {
             args += ["-user", profile.user]
@@ -191,6 +206,7 @@ final class FrontHelper {
         overlayMTU = 0
         overlayRoutes = []
         overlayFronts = ""
+        overlayFront = ""
         tunLive = false
         lastError = ""
         lastStage = ""
@@ -424,6 +440,7 @@ final class FrontHelper {
         if st.state == "on" {
             overlayRoutes = st.routes
             if !st.fronts.isEmpty { overlayFronts = st.fronts }
+            if !st.front.isEmpty { overlayFront = st.front }
         }
         if st.tun == "1" { tunLive = true }
         if st.state == "connecting" { lastStage = st.msg }
@@ -486,6 +503,8 @@ enum FrontExplain {
         var down: Int64?
         var routes: [String] = []
         var fronts = ""
+        /// Live bulk front (`get` / `ws` / `h2` / `quic` / `h3` / `l3`).
+        var front = ""
         /// `-1` omitted, `0` mux down, `1` mux live.
         var mux = -1
     }
@@ -523,6 +542,8 @@ enum FrontExplain {
                 st.routes = v.split(separator: ",").map { String($0) }.filter { !$0.isEmpty }
             case "fronts":
                 st.fronts = v
+            case "front":
+                st.front = v
             default: break
             }
         }

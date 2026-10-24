@@ -1601,6 +1601,7 @@ final class EditWindowController: NSWindowController {
                 profile.h2Path = q.h2Path
                 profile.h3Path = q.h3Path
                 profile.quic = q.quic
+                profile.listedFronts = q.listedFronts
                 profile.cdn = q.cdn
                 profile.maskPub = q.maskPub
             } else if !raw.isEmpty {
@@ -1709,6 +1710,7 @@ final class EditWindowController: NSWindowController {
             p.h2Path = q.h2Path
             p.h3Path = q.h3Path
             p.quic = q.quic
+            p.listedFronts = q.listedFronts
             p.cdn = q.cdn
             p.maskPub = q.maskPub
         } else if lowURL.hasPrefix("vless://"), let q = ShareURI.vless(p.url, fileName: p.id) {
