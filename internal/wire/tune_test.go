@@ -58,6 +58,45 @@ func TestStatusOldBlobHasNoHeaderBudget(t *testing.T) {
 	}
 }
 
+func TestStatusEdgeTight(t *testing.T) {
+	s := Status{
+		Code: OK, IP: "10.8.0.2", Gateway: "10.8.0.1", InstanceID: "b",
+		MTU: 1280, Proto: Proto, Min: ProtoMin, Max: Proto, Caps: NodeCaps,
+		HeaderBudget: EdgeTightBudget, Inflight: EdgeTightInflight, Edge: EdgeTight,
+	}
+	out, err := DecodeStatus(s.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Edge != EdgeTight || out.HeaderBudget != EdgeTightBudget || out.Inflight != EdgeTightInflight {
+		t.Fatalf("%+v", out)
+	}
+	s.Edge = EdgePlain
+	out, err = DecodeStatus(s.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Edge != EdgePlain {
+		t.Fatalf("plain %+v", out)
+	}
+}
+
+func TestStatusEdgeWithFront(t *testing.T) {
+	s := Status{
+		Code: OK, IP: "10.8.0.2", Gateway: "10.8.0.1", InstanceID: "b",
+		MTU: 1280, Proto: Proto, Min: ProtoMin, Max: Proto, Caps: NodeCaps,
+		Fronts: []FrontEP{{Name: "get", Path: "/static/v3/build"}},
+		Edge:   EdgeTight,
+	}
+	out, err := DecodeStatus(s.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Edge != EdgeTight || len(out.Fronts) != 1 || out.Fronts[0].Name != "get" || out.Fronts[0].Path != "/static/v3/build" {
+		t.Fatalf("%+v", out)
+	}
+}
+
 func TestStatusH2ConnsAndUplinkEnc(t *testing.T) {
 	s := Status{
 		Code: OK, IP: "10.8.0.2", Gateway: "10.8.0.1", InstanceID: "b",

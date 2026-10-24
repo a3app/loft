@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -126,7 +127,8 @@ type ServerConfig struct {
 	Decoy         []string            `yaml:"decoy"`       // this node's splice origins; first = identity; empty = off
 	DecoyProxy    bool                `yaml:"decoy_proxy"` // send a PROXY v1 header on TCP splice (own nginx with proxy_protocol only)
 	CDNPeers      []string            `yaml:"cdn_peers"`   // CIDRs allowed to use own SNI without sid (CDN origin pull)
-	CDN           string              `yaml:"cdn"`         // GET origin edge profile: yandex | cloudflare | empty=generic
+	CDN           string              `yaml:"cdn"`         // legacy GET profile: yandex selects edge tight when edge is empty
+	Edge          string              `yaml:"edge"`        // plain | tight; empty = plain, or tight when cdn is yandex
 	Mask          bool                `yaml:"mask"`        // borrowed origin cert on loft TLS path
 	QuicALPN      string              `yaml:"quic_alpn"`   // default h3; "loft" only for old clients
 	Replicas      []string            `yaml:"replicas"`
@@ -297,7 +299,31 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 	if c.GetH2 > 4 {
 		c.GetH2 = 4
 	}
+	if _, err := c.EdgeByte(); err != nil {
+		return nil, err
+	}
 	return c, nil
+}
+
+// EdgeByte is the Status edge preset. An empty edge with cdn yandex is tight.
+// An explicit plain stays plain. Unknown names are an error.
+func (c *ServerConfig) EdgeByte() (byte, error) {
+	if c == nil {
+		return wire.EdgePlain, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Edge)) {
+	case "":
+		if strings.EqualFold(strings.TrimSpace(c.CDN), "yandex") {
+			return wire.EdgeTight, nil
+		}
+		return wire.EdgePlain, nil
+	case "plain":
+		return wire.EdgePlain, nil
+	case "tight":
+		return wire.EdgeTight, nil
+	default:
+		return 0, fmt.Errorf("edge %q: plain or tight", c.Edge)
+	}
 }
 
 // IsRelay is role relay (TLS edge); otherwise this node is the controller.

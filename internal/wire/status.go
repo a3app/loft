@@ -75,6 +75,7 @@ type Status struct {
 	SessionTTLMS uint32    // live session max; 0 = off. Distinct from LeaseSec (IP hold).
 	RateBPS      uint32    // bulk Data/Dgram cap, both ways; 0 = off
 	Fronts       []FrontEP // mux fronts this node accepts; empty = client keeps URI/defaults
+	Edge         byte      // 0 plain, 1 tight; 0 = client keeps its opening GET limits
 }
 
 // FrontEP is one Status front: name (get/ws/h2/h3/quic), HTTP path, optional URL.
@@ -312,7 +313,7 @@ func (s Status) Encode() []byte {
 	needRoutes := len(s.Routes) > 0
 	needPolicy := s.Policy.Present || len(s.Policy.OwnTags) > 0 || s.Policy.ACLDefault > 0 || len(s.Policy.Rules) > 0 || len(s.Policy.Peers) > 0
 	needTTL := s.SessionTTLMS > 0
-	needFronts := len(s.Fronts) > 0
+	needFronts := len(s.Fronts) > 0 || s.Edge > 0
 	needRate := s.RateBPS > 0 || needFronts
 	needAfterGap := needRoutes || needPolicy || needTTL || needRate
 	if s.IP6 != "" || s.Gateway6 != "" || s.HeaderBudget > 0 || s.Inflight > 0 || s.H2Conns > 0 || s.UplinkEnc > 0 || s.GapHoldMS > 0 || needAfterGap {
@@ -351,6 +352,9 @@ func (s Status) Encode() []byte {
 									tail = append(tail, rb[:]...)
 									if needFronts {
 										tail = append(tail, encodeFronts(s.Fronts)...)
+										if s.Edge > 0 {
+											tail = append(tail, s.Edge)
+										}
 									}
 								}
 							}
@@ -598,6 +602,10 @@ func DecodeStatus(b []byte) (Status, error) {
 											eps, n := decodeFronts(b[off:])
 											s.Fronts = eps
 											off += n
+											if off < len(b) {
+												s.Edge = b[off]
+												off++
+											}
 										}
 									}
 								}

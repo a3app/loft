@@ -295,19 +295,9 @@ func (g *GET) Start(ctx context.Context) error {
 		ka = 15 * time.Second
 	}
 	g.keepAlive = ka
-	// Handshake Status is a ceiling. Live CmdTune later is authoritative.
-	if st.HeaderBudget > 0 {
-		cur := g.budget.Load()
-		if cur <= 0 || int32(st.HeaderBudget) < cur {
-			g.budget.Store(int32(st.HeaderBudget))
-		}
-	}
-	if st.Inflight > 0 {
-		cur := g.liveInflight.Load()
-		if cur <= 0 || int32(st.Inflight) < cur {
-			g.liveInflight.Store(int32(st.Inflight))
-		}
-	}
+	// edge raises the pump to the node preset. header_budget and inflight
+	// then only lower it. CmdTune on a later GET is authoritative.
+	g.applyStatusEdge(st)
 	if st.UplinkEnc == wire.UplinkCookie85 {
 		g.uplinkEnc.Store(int32(wire.UplinkCookie85))
 	}
@@ -339,6 +329,32 @@ func (g *GET) Start(ctx context.Context) error {
 	}
 	go g.pump(loopCtx, n)
 	return nil
+}
+
+// applyStatusEdge runs after the handshake GET and before the pump.
+// tight sets the preset, including a higher inflight. Status numbers only lower it.
+func (g *GET) applyStatusEdge(st wire.Status) {
+	if st.Edge == wire.EdgeTight {
+		g.budget.Store(int32(wire.EdgeTightBudget))
+		g.liveInflight.Store(int32(wire.EdgeTightInflight))
+		g.cfg.HeaderBudget = int(wire.EdgeTightBudget)
+		g.cfg.Inflight = int(wire.EdgeTightInflight)
+		g.prof.TripTimeout = wire.EdgeTightTrip
+	}
+	if st.HeaderBudget > 0 {
+		cur := g.budget.Load()
+		if cur <= 0 || int32(st.HeaderBudget) < cur {
+			g.budget.Store(int32(st.HeaderBudget))
+			g.cfg.HeaderBudget = int(st.HeaderBudget)
+		}
+	}
+	if st.Inflight > 0 {
+		cur := g.liveInflight.Load()
+		if cur <= 0 || int32(st.Inflight) < cur {
+			g.liveInflight.Store(int32(st.Inflight))
+			g.cfg.Inflight = int(st.Inflight)
+		}
+	}
 }
 
 // Session returns the live mux session.
@@ -1576,6 +1592,7 @@ type GETServer struct {
 	Info    NodeInfo
 	Seen    *ecrypto.Nonces
 	H2Conns byte // advertised Status h2_conns; 0 = client keeps one
+	Edge    byte // Status edge preset; 0 plain, 1 tight
 
 	mu       sync.Mutex
 	sessions map[string]*serverSess
@@ -1762,6 +1779,7 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if s.tune != nil {
 				st.HeaderBudget, st.Inflight = s.tune.advertised()
 			}
+			st.Edge = s.Edge
 			st.UplinkEnc = wire.UplinkCookie85
 			st.H2Conns = s.H2Conns
 			sealed, err := ecrypto.Seal(ss.key, st.Encode(), []byte(ss.id))

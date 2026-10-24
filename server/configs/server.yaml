@@ -73,6 +73,12 @@ enrol: list
 
 # quic_alpn: h3   # default; do not use "loft"
 
+# edge: plain | tight
+# tight: GET behind an edge that drops a fat concurrent Cookie burst.
+# Status tells the client after the handshake. Empty is plain.
+# cdn: yandex still selects tight when edge is empty.
+# edge: tight
+
 # canary: path-integrity testimony for TLS. Chrome-shaped ClientHello
 # through CDNs, reverse proxies, and TLS middleboxes. Does not hide SNI.
 canary:

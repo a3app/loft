@@ -12,6 +12,37 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+func TestApplyEdgeTightThenCeiling(t *testing.T) {
+	g := &GET{}
+	g.budget.Store(16 << 10)
+	g.liveInflight.Store(8)
+	g.cfg.Inflight = 8
+	g.applyStatusEdge(wire.Status{Edge: wire.EdgeTight, HeaderBudget: 12 << 10, Inflight: 10})
+	if g.liveInflight.Load() != 10 || g.cfg.Inflight != 10 {
+		t.Fatalf("inflight live=%d cfg=%d", g.liveInflight.Load(), g.cfg.Inflight)
+	}
+	if g.budget.Load() != 12<<10 || g.cfg.HeaderBudget != 12<<10 {
+		t.Fatalf("budget %d cfg %d", g.budget.Load(), g.cfg.HeaderBudget)
+	}
+	if g.prof.TripTimeout != wire.EdgeTightTrip {
+		t.Fatalf("trip %s", g.prof.TripTimeout)
+	}
+}
+
+func TestApplyEdgePlainDoesNotRaise(t *testing.T) {
+	g := &GET{}
+	g.budget.Store(16 << 10)
+	g.liveInflight.Store(8)
+	g.cfg.Inflight = 8
+	g.applyStatusEdge(wire.Status{Inflight: 16, HeaderBudget: 32 << 10})
+	if g.liveInflight.Load() != 8 || g.budget.Load() != 16<<10 {
+		t.Fatalf("raised live=%d budget=%d", g.liveInflight.Load(), g.budget.Load())
+	}
+	if g.prof.TripTimeout != 0 {
+		t.Fatalf("trip %s", g.prof.TripTimeout)
+	}
+}
+
 func TestFrontTuneCalmLowersInflight(t *testing.T) {
 	ft := newFrontTune(cdn.Profile{HeaderBudget: 16 << 10, Inflight: 16})
 	for i := 0; i < 2; i++ {

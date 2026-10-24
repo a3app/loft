@@ -49,8 +49,18 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 			}
 		}
 	}
-	getProf, _ := cdn.Lookup(cfg.CDN)
+	edge, err := cfg.EdgeByte()
+	if err != nil {
+		return nil, err
+	}
+	getProf := cdn.GenericGET()
+	if edge == wire.EdgeTight {
+		getProf = cdn.Yandex()
+	} else if p, lerr := cdn.Lookup(cfg.CDN); lerr == nil && strings.TrimSpace(cfg.CDN) != "" {
+		getProf = p
+	}
 	getFront := transport.NewGETServerProfile(cfg.Token, cfg.GetPath, getProf)
+	getFront.Edge = edge
 	getFront.Decoy = append([]string(nil), cfg.Decoy...)
 	getFront.Info = info
 	if cfg.GetH2 > 1 {

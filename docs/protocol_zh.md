@@ -188,6 +188,10 @@ sequenceDiagram
 
 **预算与编码。** 上行必须装进一个头。Status `header_budget` 为编码后 Cookie 字节；省略时为 16 KiB HTTP 头。Status `uplink_enc` 为 1 时是 `~` 加 `u16be length || AEAD` 的 Z85（ZeroMQ Z85）；0 与省略为 base64url。握手 Cookie 仍为 base64url。节点必须两种都收。Status `h2_conns`（1–4）为到该前置的 HTTP/2 连接数；0 保持一条。Inflight 为这些连接上未完成 GET 的总数。并发未完成 GET 为 2–8（协议默认 4；Status `inflight` 为上限）。
 
+**边缘预设。** 握手 GET 是一次请求。Status `edge` 随其后，在客户端打开 inflight 泵之前。`0` 或省略为 `plain`：客户端保留那次首个 GET 的限额。`1` 为 `tight`：Cookie 预算 16 KiB、16 条未完成 GET、其后每条 GET 6 秒超时。当 origin 位于会丢掉过胖并发 HEADERS 突发的边缘之后，节点配置将此预设名为 `edge: tight`。`header_budget` 与 `inflight` 非零时为该预设之下的上限。厂商名不是 Status 字段。
+
+**GET 未完成。** 已启用其他 mux 前置的客户端，在 GET 握手未能产生会话时必须尝试那些前置。尝试顺序为已启用的 GET、WebSocket、HTTP/2、QUIC、HTTP/3 子集。节点的密封认证失败在每个已试前置同样失败后使客户端停止。GET 封面的 HTTP 404 仅为 GET 的该失败；其本身不禁止下一个前置。
+
 **更换套接字而不更换会话。** 客户端可以在本地 max-age 之后更换一条 HTTP/2 连接（省略或 0：保留到出错）。Mux 与 GET 会话标识不变。客户端也可以在本机出口变更后更换 HTTP/2 池：mux、GET 会话标识、序号与 AEAD 密钥留下，不再发新的 `0x02`。节点按 GET sid 识别会话，不按客户端地址。旧池上的 CONNECT 拼接随这些套接字结束。
 
 **HTTP 错误。** 413：预算减半，下限 1024，再拆分。405：该前置不是 GET。收到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` 的客户端必须在同一会话上退避，可以在下一条已经携带 mux 的 GET 上发送 CmdTune event 1。节点可以降低该前置的 `header_budget` / `inflight`，并在该 GET 体中回显 CmdTune event 0。
