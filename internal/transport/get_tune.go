@@ -62,7 +62,7 @@ func (t *frontTune) observe(ev byte) {
 	defer t.mu.Unlock()
 	now := time.Now()
 	switch ev {
-	case wire.TuneCalm:
+	case wire.TuneCalm, wire.Tune404:
 		if now.Sub(t.calmWin) > 30*time.Second {
 			t.calmN = 0
 			t.calmWin = now

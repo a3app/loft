@@ -1,10 +1,14 @@
 package transport
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/a3app/loft/internal/cdn"
+	"github.com/a3app/loft/internal/config"
 	"github.com/a3app/loft/internal/wire"
 )
 
@@ -28,6 +32,25 @@ func TestFrontTuneCalmLowersInflight(t *testing.T) {
 	b, in := ft.advertised()
 	if b != 16<<10 || in != 8 {
 		t.Fatalf("adv %d %d", b, in)
+	}
+}
+
+func TestFrontTune404LowersInflight(t *testing.T) {
+	ft := newFrontTune(cdn.Profile{HeaderBudget: 16 << 10, Inflight: 16})
+	for i := 0; i < 2; i++ {
+		ft.observe(wire.Tune404)
+		if _, ok := ft.takeReply(); ok {
+			t.Fatal("early")
+		}
+	}
+	ft.observe(wire.Tune404)
+	f, ok := ft.takeReply()
+	if !ok {
+		t.Fatal("reply")
+	}
+	got, ok := wire.ParseTune(f.Payload)
+	if !ok || got.Event != wire.TuneSet || got.Inflight != 8 || got.Budget != 16<<10 {
+		t.Fatalf("%+v", got)
 	}
 }
 
@@ -117,5 +140,42 @@ func TestApplyTuneH2Conns(t *testing.T) {
 	g.applyTune(wire.Tune{Event: wire.TuneSet, H2Conns: 0})
 	if g.liveH2.Load() != 2 {
 		t.Fatal("zero leaves")
+	}
+}
+
+// TestGETStatusAdvertisesYandexInflight: the node's Status ceiling is taken
+// as min(client, node). A Yandex-profile server must advertise 16, so a
+// client configured higher lands on 16, not the generic 8.
+func TestGETStatusAdvertisesYandexInflight(t *testing.T) {
+	const token = "test-token-please-change"
+	gs := NewGETServerProfile(token, "/static/v3/build", cdn.Yandex())
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := httptest.NewRecorder()
+		gs.ServeHTTP(rec, r)
+		for k, vv := range rec.Header() {
+			if k == "X-Session" {
+				continue
+			}
+			w.Header()[k] = vv
+		}
+		w.WriteHeader(rec.Code)
+		_, _ = w.Write(rec.Body.Bytes())
+	}))
+	defer ts.Close()
+	g, err := NewGET(token, config.Outbound{
+		Type: "get", URL: ts.URL, Path: "/static/v3/build",
+		Fingerprint: "go", HeaderBudget: 4096, Inflight: 48, Insecure: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := g.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	if v := g.liveInflight.Load(); v != 16 {
+		t.Fatalf("liveInflight=%d want 16 (yandex ceiling)", v)
 	}
 }

@@ -134,7 +134,9 @@ func startFront(ctx context.Context, token string, o config.Outbound, offer wire
 		if err := y.Start(ctx); err != nil {
 			return nil, err
 		}
-		y.attachExtras(ctx)
+		// Overlay STATUS is the GET session. Extra fronts attach in the
+		// background; a CDN GET URL does not speak ws/h2/quic/h3.
+		go y.attachExtras(ctx)
 		return y, nil
 	case "ws":
 		w := NewWSS(token, o)

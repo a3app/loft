@@ -87,6 +87,9 @@ func (g *GET) attachExtras(ctx context.Context) {
 	if g == nil || !g.caps.Has(wire.CapTicket) || len(g.ticket) == 0 || len(g.key) == 0 {
 		return
 	}
+	if strings.TrimSpace(g.cfg.CDN) != "" {
+		return
+	}
 	if g.attachStopped() || g.attachLive.Load() {
 		return
 	}
