@@ -1,4 +1,4 @@
-// Share-string detector: loft://, vless://, trojan://, YAML, SSTP .vpn JSON (docs/share.md).
+// Share-string detector: loft://, sstp://, vless://, trojan://, YAML, SSTP .vpn JSON (docs/share.md).
 
 import Foundation
 
@@ -40,6 +40,10 @@ enum ShareURI {
         }
         if low.hasPrefix("trojan://") {
             if let p = trojan(s, fileName: fileName) { return [p] }
+            return []
+        }
+        if low.hasPrefix("sstp://") {
+            if let p = sstp(s, fileName: fileName) { return [p] }
             return []
         }
         if allowB64, let decoded = unwrapBase64(s) {
@@ -141,7 +145,8 @@ enum ShareURI {
 
     /// Canonical `loft://token@host[:port][/path][?type=&cdn=&scheme=][#name]`. Empty when there is nothing to emit.
     static func emit(_ p: LoftProfile) -> String {
-        if p.isSSTP || p.isVLESS || p.isTrojan { return p.url }
+        if p.isSSTP { return emitSSTP(p) }
+        if p.isVLESS || p.isTrojan { return p.url }
         let token = p.token.trimmingCharacters(in: .whitespacesAndNewlines)
         let u = URL(string: p.url)
         let host = u?.host ?? ""
@@ -159,7 +164,8 @@ enum ShareURI {
             if port != def { c.port = port }
         }
         let mux = p.muxFronts()
-        let extra = mux.count > 1 || p.hasMuxExtras
+        let explicit = !p.listedFronts.isEmpty
+        let extra = explicit ? mux.count > 1 : (mux.count > 1 || p.hasMuxExtras)
         var items: [URLQueryItem] = []
         if kind == "l3" {
             let urlPath = u?.path ?? ""
@@ -167,18 +173,20 @@ enum ShareURI {
                 c.path = urlPath.hasPrefix("/") ? urlPath : "/" + urlPath
             }
             items.append(URLQueryItem(name: "type", value: "l3"))
-        } else if extra || kind == "get" {
-            items.append(URLQueryItem(name: "get", value: p.path.isEmpty ? LoftProfile.defaultGETPath : p.path))
-            if mux.contains("ws") || !p.wsPath.isEmpty {
+        } else if explicit || extra || kind == "get" {
+            if !explicit || mux.contains("get") {
+                items.append(URLQueryItem(name: "get", value: p.path.isEmpty ? LoftProfile.defaultGETPath : p.path))
+            }
+            if mux.contains("ws") || (!explicit && !p.wsPath.isEmpty) {
                 items.append(URLQueryItem(name: "ws", value: p.wsPath.isEmpty ? LoftProfile.defaultWSPath : p.wsPath))
             }
-            if mux.contains("h2") || !p.h2Path.isEmpty {
+            if mux.contains("h2") || (!explicit && !p.h2Path.isEmpty) {
                 items.append(URLQueryItem(name: "h2", value: p.h2Path.isEmpty ? LoftProfile.defaultH2Path : p.h2Path))
             }
-            if mux.contains("h3") || !p.h3Path.isEmpty {
+            if mux.contains("h3") || (!explicit && !p.h3Path.isEmpty) {
                 items.append(URLQueryItem(name: "h3", value: p.h3Path.isEmpty ? LoftProfile.defaultH2Path : p.h3Path))
             }
-            if mux.contains("quic") || p.quic { items.append(URLQueryItem(name: "quic", value: nil)) }
+            if mux.contains("quic") || (!explicit && p.quic) { items.append(URLQueryItem(name: "quic", value: nil)) }
         } else {
             let urlPath = u?.path ?? ""
             let uriPath: String
@@ -220,9 +228,9 @@ enum ShareURI {
     }
 
     /// Writes token / host / port / front paths into a loft profile. Keeps cdn and pbk.
-    static func applyLoftManual(_ p: inout LoftProfile, token: String, host: String, port: Int, getPath: String, wsPath: String, h2Path: String, h3Path: String, quic: Bool) {
+    /// A switch that is off keeps the typed path and drops that front from Hello.
+    static func applyLoftManual(_ p: inout LoftProfile, token: String, host: String, port: Int, getPath: String, wsPath: String, h2Path: String, h3Path: String, getOn: Bool, wsOn: Bool, h2On: Bool, h3On: Bool, quic: Bool) {
         p.token = token
-        p.kind = "get"
         p.mux = true
         let cur = loftEndpoint(p)
         let sch = (cur.scheme == "http" || cur.scheme == "https") ? cur.scheme : "https"
@@ -240,13 +248,16 @@ enum ShareURI {
         p.wsPath = slash(wsPath)
         p.h2Path = slash(h2Path)
         p.h3Path = slash(h3Path)
-        p.quic = quic
-        var listed = ["get"]
-        if !p.wsPath.isEmpty { listed.append("ws") }
-        if !p.h2Path.isEmpty { listed.append("h2") }
-        if p.quic { listed.append("quic") }
-        if !p.h3Path.isEmpty { listed.append("h3") }
-        p.listedFronts = listed.count == 1 ? [] : listed
+        var listed: [String] = []
+        if getOn { listed.append("get") }
+        if wsOn { listed.append("ws") }
+        if h2On { listed.append("h2") }
+        if quic { listed.append("quic") }
+        if h3On { listed.append("h3") }
+        if listed.isEmpty { listed = ["get"] }
+        p.listedFronts = listed
+        p.kind = listed.contains("get") ? "get" : listed[0]
+        p.quic = listed.contains("quic")
     }
 
     /// `vless://<uuid>@<host>[:port]?…#Name` (DuckSoft / Xray share).
@@ -404,6 +415,90 @@ enum ShareURI {
         }
         if s.contains(":") { return nil }
         return (s, 443)
+    }
+
+    /// `sstp://<user>:<password>@<host>[:port][/path]?sni=…&pap=1#Name` (docs/share.md §7).
+    /// `url` on the profile is the HTTPS dial address. Password is required.
+    static func sstp(_ raw: String, fileName: String) -> LoftProfile? {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let c = URLComponents(string: s),
+              (c.scheme ?? "").lowercased() == "sstp" else { return nil }
+        let user = decode(c.percentEncodedUser ?? c.user ?? "")
+        let pass = decode(c.percentEncodedPassword ?? c.password ?? "")
+        let host = c.host ?? ""
+        if host.isEmpty || pass.isEmpty { return nil }
+        let port = c.port ?? 443
+        var path = c.path
+        if path == "/" { path = "" }
+        let q = query(c)
+        let sni = q["sni"] ?? ""
+        let papRaw = (q["pap"] ?? "").lowercased()
+        let pap = papRaw == "1" || papRaw == "true" || papRaw == "on"
+        let name = decode(c.percentEncodedFragment ?? c.fragment ?? "")
+        let https = sstpHTTPS(host: host, port: port, path: path)
+        return LoftProfile(
+            id: fileName,
+            name: name.isEmpty ? host : name,
+            token: pass,
+            user: user,
+            url: https,
+            kind: "sstp",
+            path: "",
+            socks: "auto",
+            tun: true,
+            mux: false,
+            instanceID: "",
+            file: fileName,
+            sni: sni,
+            papCHAP: pap
+        )
+    }
+
+    /// Share string for an SSTP profile. Empty when the server host is missing.
+    static func emitSSTP(_ p: LoftProfile) -> String {
+        var user = p.user.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pass = p.token.trimmingCharacters(in: .whitespacesAndNewlines)
+        var dial = p.url.trimmingCharacters(in: .whitespacesAndNewlines)
+        var sni = p.sni.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pap = p.papCHAP
+        var name = p.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if dial.lowercased().hasPrefix("sstp://"), let q = sstp(dial, fileName: p.id) {
+            user = q.user
+            pass = q.token
+            dial = q.url
+            if sni.isEmpty { sni = q.sni }
+            pap = q.papCHAP
+            if name.isEmpty { name = q.name }
+        }
+        guard let u = URL(string: dial), let host = u.host, !host.isEmpty else { return "" }
+        let scheme = (u.scheme ?? "https").lowercased()
+        let def = (scheme == "http") ? 80 : 443
+        let port = u.port ?? def
+        var path = u.path
+        if path == "/" { path = "" }
+        var c = URLComponents()
+        c.scheme = "sstp"
+        if !user.isEmpty { c.user = user }
+        if !pass.isEmpty { c.password = pass }
+        c.host = host
+        if port != 443 { c.port = port }
+        if !path.isEmpty { c.path = path.hasPrefix("/") ? path : "/" + path }
+        var items: [URLQueryItem] = []
+        if !sni.isEmpty { items.append(URLQueryItem(name: "sni", value: sni)) }
+        if pap { items.append(URLQueryItem(name: "pap", value: "1")) }
+        c.queryItems = items.isEmpty ? nil : items
+        if !name.isEmpty { c.fragment = name }
+        return c.string ?? ""
+    }
+
+    /// HTTPS dial URL for an SSTP share host. Port 443 is omitted.
+    private static func sstpHTTPS(host: String, port: Int, path: String) -> String {
+        let hostPart = bracketHost(host, port: port, omitDefault: port == 443)
+        var https = "https://\(hostPart)"
+        if !path.isEmpty && path != "/" {
+            https += path.hasPrefix("/") ? path : "/" + path
+        }
+        return https
     }
 
     /// `trojan://<password>@<host>[:port]?…#Name` (DuckSoft / Xray share).

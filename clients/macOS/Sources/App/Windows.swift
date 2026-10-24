@@ -1161,11 +1161,19 @@ final class EditWindowController: NSWindowController {
     private var editTab = 0
     /// loft Main: paste `loft://` (false) or field form (true). Same profile.
     private var loftManual = false
+    /// SSTP Main: paste `sstp://` (false) or field form (true). Same profile.
+    private var sstpManual = false
+    /// Link text last painted, so a PAP toggle does not fight an unedited link.
+    private var sstpLinkShown = ""
     private var loftHostF: LoftField?
     private var loftPortF: LoftField?
     private var loftWSF: LoftField?
     private var loftH2F: LoftField?
     private var loftH3F: LoftField?
+    private var loftGetSw: ToggleSwitch?
+    private var loftWSSw: ToggleSwitch?
+    private var loftH2Sw: ToggleSwitch?
+    private var loftH3Sw: ToggleSwitch?
     private var loftQuicSw: ToggleSwitch?
     /// VLESS Main: paste `vless://` (false) or field form (true). Same share.
     private var vlessManual = false
@@ -1291,6 +1299,12 @@ final class EditWindowController: NSWindowController {
         paintForm()
     }
 
+    /// `--shot` shows the SSTP field form.
+    func shotSSTPManual() {
+        sstpManual = true
+        paintForm()
+    }
+
     /// Reloads the type-specific block and resizes the window.
     private func paintForm() {
         form.subviews.forEach { $0.removeFromSuperview() }
@@ -1299,6 +1313,7 @@ final class EditWindowController: NSWindowController {
         keyF = nil; urlF = nil; socksF = nil; socksSw = nil; tunSw = nil
         loftHostF = nil; loftPortF = nil
         loftWSF = nil; loftH2F = nil; loftH3F = nil; loftQuicSw = nil
+        loftGetSw = nil; loftWSSw = nil; loftH2Sw = nil; loftH3Sw = nil
         vlessHostF = nil; vlessPortF = nil; vlessFpF = nil; vlessPbkF = nil; vlessSidF = nil
         vlessPathF = nil; vlessHdrF = nil; vlessSecSeg = nil; vlessNetSeg = nil; vlessVisionSw = nil
         var y: CGFloat = 0
@@ -1315,6 +1330,27 @@ final class EditWindowController: NSWindowController {
             form.addSubview(f)
             y += 48
             return f
+        }
+        /// Front path, shortened so the enable switch sits on the same row.
+        func frontField(_ ph: String, _ val: String, _ on: Bool) -> (LoftField, ToggleSwitch) {
+            let gap: CGFloat = 10
+            let swW: CGFloat = 36
+            let fieldW = 384 - gap - swW
+            let f = LoftField(frame: NSRect(x: 28, y: y, width: fieldW, height: 36), placeholder: ph)
+            f.stringValue = val
+            f.alphaValue = on ? 1 : 0.4
+            let sw = ToggleSwitch(frame: NSRect(x: 28 + fieldW + gap, y: y + 7, width: swW, height: 22))
+            sw.on = on
+            sw.onChange = { [weak f] now in
+                f?.alphaValue = now ? 1 : 0.4
+                if now, let f, f.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    f.stringValue = ph
+                }
+            }
+            form.addSubview(f)
+            form.addSubview(sw)
+            y += 48
+            return (f, sw)
         }
         func capsuleWidth(_ titles: [String], icon: CGFloat = 0) -> CGFloat {
             let face = Palette.font(11.5)
@@ -1361,14 +1397,23 @@ final class EditWindowController: NSWindowController {
         }
         if editTab == 0 {
             if sstp {
-                lab("sstp_user")
-                userF = field("", profile.user)
-                lab("sstp_pass")
-                keyF = field("", profile.token, secure: true)
-                lab("sstp_url")
-                urlF = field("https://", profile.url)
-                lab("sstp_sni")
-                sniF = field("", profile.sni)
+                linkManual(sstpManual) { [weak self] on in self?.sstpManual = on }
+                if sstpManual {
+                    sstpLinkShown = ""
+                    lab("sstp_user")
+                    userF = field("", profile.user)
+                    lab("sstp_pass")
+                    keyF = field("", profile.token, secure: true)
+                    lab("sstp_url")
+                    urlF = field("https://", profile.url)
+                    lab("sstp_sni")
+                    sniF = field("", profile.sni)
+                } else {
+                    lab("sstp_uri")
+                    let link = ShareURI.emitSSTP(profile)
+                    sstpLinkShown = link
+                    keyF = field("sstp://user:password@host", link, secure: true)
+                }
             } else if vless {
                 linkManual(vlessManual) { [weak self] on in self?.vlessManual = on }
                 if vlessManual {
@@ -1464,14 +1509,22 @@ final class EditWindowController: NSWindowController {
                     loftHostF = hf; loftPortF = pf
                     y += 48
                     lab("front_get")
-                    pathF = field("/static/v3/build", profile.path.isEmpty ? ep.path : profile.path)
+                    let getRow = frontField("/static/v3/build", profile.path.isEmpty ? ep.path : profile.path, profile.frontEnabled("get"))
+                    pathF = getRow.0
+                    loftGetSw = getRow.1
                     lab("front_ws")
-                    loftWSF = field("/api/v1/sync", profile.wsPath)
+                    let wsRow = frontField("/api/v1/sync", profile.wsPath, profile.frontEnabled("ws"))
+                    loftWSF = wsRow.0
+                    loftWSSw = wsRow.1
                     lab("front_h2")
-                    loftH2F = field("/api/v1/tunnel", profile.h2Path)
+                    let h2Row = frontField("/api/v1/tunnel", profile.h2Path, profile.frontEnabled("h2"))
+                    loftH2F = h2Row.0
+                    loftH2Sw = h2Row.1
                     lab("front_h3")
-                    loftH3F = field("/api/v1/tunnel", profile.h3Path)
-                    loftQuicSw = inbound("front_quic", "front_quic_d", profile.quic)
+                    let h3Row = frontField("/api/v1/tunnel", profile.h3Path, profile.frontEnabled("h3"))
+                    loftH3F = h3Row.0
+                    loftH3Sw = h3Row.1
+                    loftQuicSw = inbound("front_quic", "front_quic_d", profile.frontEnabled("quic"))
                 } else {
                     lab("loft_uri")
                     keyF = field("loft://lt_@host/path", ShareURI.emit(profile), secure: true)
@@ -1561,6 +1614,7 @@ final class EditWindowController: NSWindowController {
             profile.kind = "sstp"
             profile.mux = false
             profile.tun = true
+            sstpManual = false
         } else if i == 2 {
             profile.kind = "vless"
             profile.mux = false
@@ -1582,7 +1636,30 @@ final class EditWindowController: NSWindowController {
         profile.name = nameF.stringValue
         if profile.isVLESS {
             harvestVLESS()
-        } else if profile.isSSTP || profile.isTrojan {
+        } else if profile.isSSTP {
+            if sstpManual {
+                if let k = keyF {
+                    let tok = k.stringValue
+                    if !tok.isEmpty { profile.token = tok }
+                }
+                if let u = urlF { profile.url = u.stringValue }
+            } else if let k = keyF {
+                let raw = k.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if raw != sstpLinkShown, let q = ShareURI.sstp(raw, fileName: profile.id.isEmpty ? "edit" : profile.id) {
+                    profile.user = q.user
+                    profile.token = q.token
+                    profile.url = q.url
+                    profile.sni = q.sni
+                    profile.kind = "sstp"
+                    profile.papCHAP = q.papCHAP
+                    papSw?.on = q.papCHAP
+                    if profile.name.isEmpty {
+                        profile.name = q.name
+                        nameF.stringValue = q.name
+                    }
+                }
+            }
+        } else if profile.isTrojan {
             if let k = keyF {
                 let tok = k.stringValue
                 if !tok.isEmpty { profile.token = tok }
@@ -1649,8 +1726,12 @@ final class EditWindowController: NSWindowController {
         let ws = loftWSF?.stringValue ?? profile.wsPath
         let h2 = loftH2F?.stringValue ?? profile.h2Path
         let h3 = loftH3F?.stringValue ?? profile.h3Path
-        let quic = loftQuicSw?.on ?? profile.quic
-        ShareURI.applyLoftManual(&profile, token: token, host: host, port: port, getPath: getPath, wsPath: ws, h2Path: h2, h3Path: h3, quic: quic)
+        let getOn = loftGetSw?.on ?? profile.frontEnabled("get")
+        let wsOn = loftWSSw?.on ?? profile.frontEnabled("ws")
+        let h2On = loftH2Sw?.on ?? profile.frontEnabled("h2")
+        let h3On = loftH3Sw?.on ?? profile.frontEnabled("h3")
+        let quic = loftQuicSw?.on ?? profile.frontEnabled("quic")
+        ShareURI.applyLoftManual(&profile, token: token, host: host, port: port, getPath: getPath, wsPath: ws, h2Path: h2, h3Path: h3, getOn: getOn, wsOn: wsOn, h2On: h2On, h3On: h3On, quic: quic)
     }
 
     /// Writes VLESS Main fields into `profile.url` as a DuckSoft share.
@@ -1719,6 +1800,15 @@ final class EditWindowController: NSWindowController {
             p.url = q.url
             p.kind = "vless"
             if p.sni.isEmpty { p.sni = q.sni }
+            p.mux = false
+        } else if lowURL.hasPrefix("sstp://"), let q = ShareURI.sstp(p.url, fileName: p.id) {
+            if p.name.isEmpty { p.name = q.name }
+            p.user = q.user
+            p.token = q.token
+            p.url = q.url
+            p.kind = "sstp"
+            if p.sni.isEmpty { p.sni = q.sni }
+            p.papCHAP = q.papCHAP
             p.mux = false
         } else if lowURL.hasPrefix("trojan://"), let q = ShareURI.trojan(p.url, fileName: p.id) {
             if p.name.isEmpty { p.name = q.name }
@@ -1796,6 +1886,7 @@ final class EditWindowController: NSWindowController {
         if q.isSSTP || q.isVLESS || q.isTrojan || q.kind.lowercased() == "l3" { profile.mux = false }
         else { profile.mux = q.mux }
         vlessManual = false
+        sstpManual = false
         nameF.stringValue = profile.name
         vpnSeg.value = vpnIndex(profile)
         paintForm()

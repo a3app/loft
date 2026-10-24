@@ -511,6 +511,7 @@ L10N_PACKS["ja"] = {
   "sstp_tun_d": "マシンのルートは設定にあります。",
   "sstp_url": "サーバー",
   "sstp_user": "ユーザー名",
+  "sstp_uri": "sstp:// アドレス",
   "st_front": "フロント",
   "st_handshake": "ハンドシェイク",
   "status.closed": "閉じました",

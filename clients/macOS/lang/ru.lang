@@ -513,6 +513,7 @@ L10N_PACKS["ru"] = {
   "sstp_tun_d": "Маршрут машины — в Настройках.",
   "sstp_url": "Сервер",
   "sstp_user": "Пользователь",
+  "sstp_uri": "Адрес sstp://",
   "st_front": "фронт",
   "st_handshake": "рукопожатие",
   "status.closed": "закрыт",

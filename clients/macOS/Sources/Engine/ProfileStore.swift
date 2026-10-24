@@ -93,12 +93,27 @@ struct LoftProfile {
         return host.contains("cdn.")
     }
 
+    /// Switch state for one mux front. An explicit `listedFronts` wins.
+    /// Otherwise a filled path (or QUIC) counts as on, and GET is on.
+    func frontEnabled(_ name: String) -> Bool {
+        let n = name.lowercased()
+        if !listedFronts.isEmpty { return listedFronts.contains(n) }
+        switch n {
+        case "get": return true
+        case "ws": return !wsPath.isEmpty
+        case "h2": return !h2Path.isEmpty
+        case "h3": return !h3Path.isEmpty
+        case "quic": return quic
+        default: return false
+        }
+    }
+
     /// Hello mux fronts. l3 / SSTP / VLESS / Trojan stay one kind.
-    /// CDN GET and GET with no extras stay GET-only.
+    /// An explicit fronts list wins, including on a CDN host.
+    /// CDN GET with no list, and GET with no extras, stay GET-only.
     func muxFronts() -> [String] {
         let k = kind.lowercased()
         if isSSTP || isVLESS || isTrojan || k == "l3" { return [k] }
-        if isCDN { return ["get"] }
         let allow = Set(Self.muxOrder)
         if !listedFronts.isEmpty {
             var out: [String] = []
@@ -109,6 +124,7 @@ struct LoftProfile {
             }
             if !out.isEmpty { return out }
         }
+        if isCDN { return ["get"] }
         if hasMuxExtras {
             var out = ["get"]
             if !wsPath.isEmpty { out.append("ws") }
@@ -1157,10 +1173,16 @@ final class ProfileStore {
         return out
     }
 
-    /// `fronts: [get, ws, …]` when this connection offers more than one mux front.
+    /// `fronts: [get, ws, …]`. An explicit switch list is written even for one front,
+    /// so a disabled front with a leftover path stays off.
     private func frontsYAML(_ p: LoftProfile) -> String {
         if p.isSSTP || p.isVLESS || p.isTrojan { return "" }
         if p.kind.lowercased() == "l3" { return "" }
+        let allow = Set(LoftProfile.muxOrder)
+        if !p.listedFronts.isEmpty {
+            let listed = p.listedFronts.map { $0.lowercased() }.filter { allow.contains($0) }
+            if !listed.isEmpty { return "\nfronts: [\(listed.joined(separator: ", "))]" }
+        }
         let mux = p.muxFronts()
         if mux.count <= 1 { return "" }
         return "\nfronts: [\(mux.joined(separator: ", "))]"

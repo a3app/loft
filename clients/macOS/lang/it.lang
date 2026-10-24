@@ -511,6 +511,7 @@ L10N_PACKS["it"] = {
   "sstp_tun_d": "Il percorso della macchina è in Impostazioni.",
   "sstp_url": "Server",
   "sstp_user": "Utente",
+  "sstp_uri": "Indirizzo sstp://",
   "st_front": "front",
   "st_handshake": "handshake",
   "status.closed": "chiuso",

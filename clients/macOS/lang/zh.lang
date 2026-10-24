@@ -511,6 +511,7 @@ L10N_PACKS["zh"] = {
   "sstp_tun_d": "机器路由在设置里。",
   "sstp_url": "服务器",
   "sstp_user": "用户名",
+  "sstp_uri": "sstp:// 地址",
   "st_front": "前置",
   "st_handshake": "握手",
   "status.closed": "已关闭",

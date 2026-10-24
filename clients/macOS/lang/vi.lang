@@ -511,6 +511,7 @@ L10N_PACKS["vi"] = {
   "sstp_tun_d": "Route của máy nằm trong Cài đặt.",
   "sstp_url": "Server",
   "sstp_user": "Username",
+  "sstp_uri": "địa chỉ sstp://",
   "st_front": "front",
   "st_handshake": "handshake",
   "status.closed": "đã đóng",

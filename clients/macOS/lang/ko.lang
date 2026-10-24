@@ -511,6 +511,7 @@ L10N_PACKS["ko"] = {
   "sstp_tun_d": "기기 경로는 설정에 있습니다.",
   "sstp_url": "서버",
   "sstp_user": "사용자 이름",
+  "sstp_uri": "sstp:// 주소",
   "st_front": "프론트",
   "st_handshake": "핸드셰이크",
   "status.closed": "닫힘",

@@ -511,6 +511,7 @@ L10N_PACKS["de"] = {
   "sstp_tun_d": "Die Maschinenroute steht in Einstellungen.",
   "sstp_url": "Server",
   "sstp_user": "Benutzer",
+  "sstp_uri": "sstp://-Adresse",
   "st_front": "Front",
   "st_handshake": "Handshake",
   "status.closed": "geschlossen",

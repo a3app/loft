@@ -511,6 +511,7 @@ L10N_PACKS["fr"] = {
   "sstp_tun_d": "La route de la machine est dans Réglages.",
   "sstp_url": "Serveur",
   "sstp_user": "Nom d’utilisateur",
+  "sstp_uri": "Adresse sstp://",
   "st_front": "front",
   "st_handshake": "handshake",
   "status.closed": "fermé",

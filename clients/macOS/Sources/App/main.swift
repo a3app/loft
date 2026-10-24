@@ -136,6 +136,20 @@ if CommandLine.arguments.contains("--shot") {
         editV.showWindow(nil)
         editV.shotManual()
         if let v = editV.window?.contentView { dump(v, "edit-vless") }
+        var sp = p
+        sp.kind = "sstp"
+        sp.name = "Office"
+        sp.user = "alice"
+        sp.token = "secret"
+        sp.url = "https://vpn.example.com:8443/path"
+        sp.sni = "vpn.example.com"
+        sp.papCHAP = true
+        sp.mux = false
+        let editS = EditWindowController(engine: engine, profile: sp)
+        editS.showWindow(nil)
+        if let v = editS.window?.contentView { dump(v, "edit-sstp") }
+        editS.shotSSTPManual()
+        if let v = editS.window?.contentView { dump(v, "edit-sstp-manual") }
     }
 
     // Several on: one popover and one status window walk through accordion states, so a row

@@ -511,6 +511,7 @@ L10N_PACKS["pt"] = {
   "sstp_tun_d": "A rota da máquina está em Ajustes.",
   "sstp_url": "Servidor",
   "sstp_user": "Usuário",
+  "sstp_uri": "Endereço sstp://",
   "st_front": "front",
   "st_handshake": "handshake",
   "status.closed": "fechado",
