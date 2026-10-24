@@ -19,6 +19,14 @@ import (
 
 const maxPrios = 50
 
+// defaultPrioID is the reserved list leftover members use. Direct is a
+// Use item: the host's own default route. The name "direct" is a terminal
+// in egress.conf, so the list itself is called "default".
+const (
+	defaultPrioID    = "default"
+	defaultPrioTitle = "Политика по умолчанию"
+)
+
 func findPrio(s chanStore, id string) int {
 	return slices.IndexFunc(s.Prios, func(p admproto.Prio) bool { return p.ID == id })
 }
@@ -32,14 +40,25 @@ func freePrioID(s chanStore) string {
 	}
 }
 
-// prioUsing is the first list that holds channel name, or nil.
-func prioUsing(s chanStore, name string) *admproto.Prio {
+// dropFromPrios takes name out of every list. Use and Limits are cloned
+// so the caller's have-store is left as it was.
+func dropFromPrios(s *chanStore, name string) {
 	for i := range s.Prios {
 		if slices.Contains(s.Prios[i].Use, name) {
-			return &s.Prios[i]
+			s.Prios[i].Use = slices.DeleteFunc(slices.Clone(s.Prios[i].Use), func(u string) bool { return u == name })
+		}
+		if s.Prios[i].Limits != nil {
+			if _, ok := s.Prios[i].Limits[name]; ok {
+				lim := make(map[string]admproto.PrioLimit, len(s.Prios[i].Limits))
+				for k, v := range s.Prios[i].Limits {
+					if k != name {
+						lim[k] = v
+					}
+				}
+				s.Prios[i].Limits = lim
+			}
 		}
 	}
-	return nil
 }
 
 // migrate turns rules that still name a channel into priority lists built
@@ -92,6 +111,36 @@ func migrate(s *chanStore) {
 	for i := range s.Channels {
 		s.Channels[i].Fail = ""
 	}
+	ensureDefaultPrio(s)
+}
+
+// ensureDefaultPrio makes the leftover policy a real list: the host
+// default route first, then every exit channel. New channels join it
+// (Auto). Last is block: native is already in the list. On first create,
+// leftover (empty or "direct", or an old fail-chain list) is pointed at it.
+func ensureDefaultPrio(s *chanStore) {
+	if i := findPrio(*s, defaultPrioID); i >= 0 {
+		if s.Prios[i].Title == "" {
+			s.Prios[i].Title = defaultPrioTitle
+			s.seeded = true
+		}
+		return
+	}
+	p := admproto.Prio{
+		ID:    defaultPrioID,
+		Title: defaultPrioTitle,
+		Use:   []string{egress.Direct},
+		Last:  egress.Block,
+		Auto:  true,
+	}
+	for _, c := range s.Channels {
+		if c.Exit && c.Name != "" && c.Name != egress.Direct {
+			p.Use = append(p.Use, c.Name)
+		}
+	}
+	s.Prios = append([]admproto.Prio{p}, s.Prios...)
+	s.Rules.Default = defaultPrioID
+	s.seeded = true
 }
 
 // checkCheck validates and fills a channel's link probe.
@@ -166,11 +215,22 @@ func checkPrio(p *admproto.Prio, s chanStore) error {
 		}
 	}()
 	for ch, l := range p.Limits {
+		if ch == egress.Direct {
+			delete(p.Limits, ch)
+			continue
+		}
 		if l.In < 0 || l.Out < 0 || l.In > 100000 || l.Out > 100000 {
 			return fmt.Errorf("speed limit of %s: 0 to 100000 Mbit/s", ch)
 		}
 	}
 	for _, u := range p.Use {
+		if u == egress.Direct {
+			if seen[u] {
+				return fmt.Errorf("%s is in the list twice", u)
+			}
+			seen[u] = true
+			continue
+		}
 		i := find(s, u)
 		if i < 0 {
 			return fmt.Errorf("%q is no channel", u)
@@ -217,6 +277,9 @@ func (o *Ops) ChannelPrio(ctx context.Context, p admproto.Prio) (admproto.Channe
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, fmt.Errorf("no list %q", p.ID)
 	}
+	if p.ID == defaultPrioID {
+		p.Title = defaultPrioTitle
+	}
 	if err := checkPrio(&p, s); err != nil {
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, err
@@ -248,6 +311,10 @@ func (o *Ops) ChannelPrioDelete(ctx context.Context, id string) (admproto.Channe
 	if i < 0 {
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, fmt.Errorf("no list %q", id)
+	}
+	if id == defaultPrioID {
+		o.chanMu.Unlock()
+		return admproto.ChannelsView{}, errors.New("the default policy cannot be deleted")
 	}
 	if usedByRules(s, id) {
 		o.chanMu.Unlock()

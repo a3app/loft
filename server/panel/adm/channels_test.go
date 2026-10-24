@@ -57,6 +57,15 @@ func wgChan(name string) admproto.Channel {
 			{Name: "nl1", PublicKey: pubB, Endpoint: "nl1.example.net", AllowedIPs: []string{"0.0.0.0/0", "10.20.0.1/16"}, Keepalive: 25}}}}
 }
 
+func viewPrio(v admproto.ChannelsView, id string) admproto.Prio {
+	for _, p := range v.Prios {
+		if p.ID == id {
+			return p
+		}
+	}
+	return admproto.Prio{}
+}
+
 func TestChannelSaveWireGuard(t *testing.T) {
 	o, f := chanOps(t)
 	ctx := context.Background()
@@ -184,8 +193,11 @@ func TestChannelRulesAndDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(v.Prios) != 1 || v.Prios[0].ID != "prio1" || v.Prios[0].Last != "direct" {
+	if p := viewPrio(v, "prio1"); p.ID != "prio1" || p.Last != "direct" {
 		t.Fatalf("prios %+v", v.Prios)
+	}
+	if p := viewPrio(v, "default"); p.ID != "default" || strings.Join(p.Use, " ") != "direct wg-nl px" || p.Last != "block" || !p.Auto {
+		t.Fatalf("default %+v", p)
 	}
 	if _, err := o.ChannelPrio(ctx, admproto.Prio{Title: "main"}); err == nil {
 		t.Fatal("two lists with one name")
@@ -219,8 +231,10 @@ func TestChannelRulesAndDelete(t *testing.T) {
 	}
 	nr := wgChan("wg-nl")
 	nr.Exit = false
-	if _, err := o.ChannelSave(ctx, nr); err == nil {
-		t.Fatal("exit switched off under a list")
+	if v, err := o.ChannelSave(ctx, nr); err != nil {
+		t.Fatal(err)
+	} else if strings.Contains(strings.Join(viewPrio(v, "prio1").Use, " "), "wg-nl") || strings.Contains(strings.Join(viewPrio(v, "default").Use, " "), "wg-nl") {
+		t.Fatalf("exit off left wg-nl in lists %+v", v.Prios)
 	}
 	if _, err := o.ChannelPrioDelete(ctx, "prio1"); err == nil {
 		t.Fatal("deleted a list rules use")
@@ -250,17 +264,20 @@ func TestMigrateFailChains(t *testing.T) {
 		Rules: admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "wg0"}, {Match: "tag", Value: "x", Via: "wg0"}, {Match: "list", Value: "l", Via: "block"}}, Default: "px0"},
 	}
 	migrate(&s)
-	if len(s.Prios) != 2 {
+	if len(s.Prios) != 3 {
 		t.Fatalf("prios %+v", s.Prios)
 	}
-	a, b := s.Prios[0], s.Prios[1]
+	d, a, b := s.Prios[0], s.Prios[1], s.Prios[2]
+	if d.ID != "default" || strings.Join(d.Use, " ") != "direct wg0 wg1 px0" || d.Last != "block" || !d.Auto {
+		t.Fatalf("default %+v", d)
+	}
 	if a.ID != "prio1" || a.Title != "NL" || strings.Join(a.Use, " ") != "wg0 wg1" || a.Last != "block" {
 		t.Fatalf("first %+v", a)
 	}
 	if b.Title != "px0" || strings.Join(b.Use, " ") != "px0" || b.Last != "direct" {
 		t.Fatalf("second %+v", b)
 	}
-	if s.Rules.Rules[0].Via != "prio1" || s.Rules.Rules[1].Via != "prio1" || s.Rules.Rules[2].Via != "block" || s.Rules.Default != "prio2" {
+	if s.Rules.Rules[0].Via != "prio1" || s.Rules.Rules[1].Via != "prio1" || s.Rules.Rules[2].Via != "block" || s.Rules.Default != "default" {
 		t.Fatalf("rules %+v", s.Rules)
 	}
 	for _, c := range s.Channels {
@@ -406,12 +423,42 @@ func TestPrioMultiLimitsAuto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := v.Prios[0]
+	p := viewPrio(v, "prio1")
 	if strings.Join(p.Use, " ") != "wg-nl px0" || len(p.Limits) != 1 || p.Limits["wg-nl"] != (admproto.PrioLimit{In: 50, Out: 10}) {
 		t.Fatalf("list %+v", p)
 	}
+	if d := viewPrio(v, "default"); strings.Join(d.Use, " ") != "direct wg-nl px0" {
+		t.Fatalf("default %+v", d)
+	}
 	eg, _ := os.ReadFile(o.egressFile())
 	if !strings.Contains(string(eg), "prio prio1 wg-nl px0 then direct multi limit wg-nl 50/10\n") {
+		t.Fatalf("egress.conf:\n%s", eg)
+	}
+}
+
+func TestDefaultPrioCannotDelete(t *testing.T) {
+	o, _ := chanOps(t)
+	ctx := context.Background()
+	v, err := o.Channels(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := viewPrio(v, "default")
+	if d.ID != "default" || strings.Join(d.Use, " ") != "direct" || d.Last != "block" || !d.Auto || v.Rules.Default != "default" {
+		t.Fatalf("seeded %+v default %s", d, v.Rules.Default)
+	}
+	if _, err := o.ChannelPrioDelete(ctx, "default"); err == nil {
+		t.Fatal("deleted the default policy")
+	}
+	if _, err := o.ChannelPrio(ctx, admproto.Prio{ID: "default", Title: "Other", Use: []string{"direct"}, Last: "block", Auto: true}); err != nil {
+		t.Fatal(err)
+	}
+	v, _ = o.Channels(ctx)
+	if viewPrio(v, "default").Title != "Политика по умолчанию" {
+		t.Fatalf("title changed %+v", viewPrio(v, "default"))
+	}
+	eg, _ := os.ReadFile(o.egressFile())
+	if !strings.Contains(string(eg), "prio default direct then block\n") || !strings.Contains(string(eg), "default via default\n") {
 		t.Fatalf("egress.conf:\n%s", eg)
 	}
 }

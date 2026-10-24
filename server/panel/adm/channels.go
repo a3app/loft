@@ -45,6 +45,7 @@ type chanStore struct {
 	Channels []admproto.Channel `json:"channels"`
 	Prios    []admproto.Prio    `json:"prios,omitempty"`
 	Rules    admproto.ExitRules `json:"rules"`
+	seeded   bool               `json:"-"` // ensureDefaultPrio just created the leftover list
 }
 
 func (o *Ops) chanFile() string {
@@ -55,14 +56,13 @@ func (o *Ops) egressFile() string { return filepath.Join(o.Dir, "egress.conf") }
 func (o *Ops) readChans() (chanStore, error) {
 	var s chanStore
 	b, err := os.ReadFile(o.chanFile())
-	if errors.Is(err, os.ErrNotExist) {
-		return s, nil
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return s, err
 	}
-	if err := json.Unmarshal(b, &s); err != nil {
-		return s, err
+	if err == nil {
+		if err := json.Unmarshal(b, &s); err != nil {
+			return s, err
+		}
 	}
 	migrate(&s)
 	return s, nil
@@ -384,10 +384,18 @@ func redact(c admproto.Channel) admproto.Channel {
 
 // Channels is the External channels tab.
 func (o *Ops) Channels(ctx context.Context) (admproto.ChannelsView, error) {
+	o.chanMu.Lock()
 	s, err := o.readChans()
 	if err != nil {
+		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, err
 	}
+	if s.seeded {
+		if aerr := o.applyChans(ctx, s, s); aerr == nil {
+			s.seeded = false
+		}
+	}
+	o.chanMu.Unlock()
 	v := admproto.ChannelsView{Rules: s.Rules, Channels: []admproto.Channel{}, Prios: s.Prios}
 	if v.Prios == nil {
 		v.Prios = []admproto.Prio{}
@@ -430,10 +438,6 @@ func (o *Ops) ChannelSave(ctx context.Context, c admproto.Channel) (admproto.Cha
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, err
 	}
-	if p := prioUsing(s, c.Name); !c.Exit && p != nil {
-		o.chanMu.Unlock()
-		return admproto.ChannelsView{}, fmt.Errorf("priority list %q uses this channel: keep \"use for internet exit\" or take it out of the list first", p.Title)
-	}
 	if c.Table == 0 {
 		c.Table = freeTable(s)
 	}
@@ -442,12 +446,15 @@ func (o *Ops) ChannelSave(ctx context.Context, c admproto.Channel) (admproto.Cha
 	}
 	next := s
 	next.Channels = slices.Clone(s.Channels)
+	next.Prios = slices.Clone(s.Prios)
 	if i >= 0 {
 		next.Channels[i] = c
 	} else {
 		next.Channels = append(next.Channels, c)
-		next.Prios = slices.Clone(s.Prios)
 		autoJoin(&next, c)
+	}
+	if !c.Exit {
+		dropFromPrios(&next, c.Name)
 	}
 	err = o.applyChans(ctx, s, next)
 	o.chanMu.Unlock()
@@ -493,10 +500,6 @@ func (o *Ops) ChannelDelete(ctx context.Context, name string) (admproto.Channels
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, fmt.Errorf("no channel %q", name)
 	}
-	if p := prioUsing(s, name); p != nil {
-		o.chanMu.Unlock()
-		return admproto.ChannelsView{}, fmt.Errorf("priority list %q uses this channel: take it out first", p.Title)
-	}
 	for _, c := range s.Channels {
 		if c.Via == name {
 			o.chanMu.Unlock()
@@ -505,6 +508,8 @@ func (o *Ops) ChannelDelete(ctx context.Context, name string) (admproto.Channels
 	}
 	next := s
 	next.Channels = slices.Delete(slices.Clone(s.Channels), i, i+1)
+	next.Prios = slices.Clone(s.Prios)
+	dropFromPrios(&next, name)
 	err = o.applyChans(ctx, s, next)
 	o.chanMu.Unlock()
 	if err != nil {
@@ -565,8 +570,8 @@ func (o *Ops) ChannelRules(ctx context.Context, r admproto.ExitRules) (admproto.
 			return admproto.ChannelsView{}, fmt.Errorf("rule %d: %v", i+1, err)
 		}
 	}
-	if r.Default == "" {
-		r.Default = egress.Direct
+	if r.Default == "" || r.Default == egress.Direct {
+		r.Default = defaultPrioID
 	}
 	if err := ok(r.Default); err != nil {
 		o.chanMu.Unlock()
@@ -885,7 +890,7 @@ func (o *Ops) Reconcile(ctx context.Context) {
 			}
 		}
 	}
-	if changed {
+	if changed || s.seeded {
 		o.writeChans(s)
 		if conf, err := EgressConf(s); err == nil {
 			if old, _ := os.ReadFile(o.egressFile()); string(old) != conf {

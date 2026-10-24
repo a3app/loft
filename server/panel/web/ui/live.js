@@ -1036,9 +1036,20 @@
   const prOf = id => (L.ch.prios || []).find(p => p.id === id);
   const lastT = x => x === 'block' ? 'блокировать' : 'напрямую';
   const prName = v => !v || v === 'direct' ? 'напрямую' : v === 'block' ? 'блокировать' : (prOf(v) || {}).title || v;
-  const chUp = n => { const c = chOf(n); return !!(c && c.on && stOf(n).state === 'up'); };
+  const isNative = n => n === 'direct';
+  const nativeDev = () => ((L.net && L.net.addrs.find(a => a.primary)) || {}).dev || '';
+  const connTitle = n => isNative(n) ? (nativeDev() || 'Напрямую') : (tt(chOf(n)) || n);
+  const connState = n => {
+    if (isNative(n)) {
+      const d = nativeDev();
+      return `<span class="sub ${d ? 'okt' : ''}"><span class="mono">${esc(d || 'direct')}</span> · адаптер${d ? ' · работает' : ''}</span>`;
+    }
+    const c = chOf(n);
+    return c ? chState(c) : `<span class="sub"><span class="mono">${esc(n)}</span></span>`;
+  };
+  const chUp = n => { if (isNative(n)) return true; const c = chOf(n); return !!(c && c.on && stOf(n).state === 'up'); };
   const prLive = use => use.find(chUp);
-  const prChain = p => p.use.map(n => `<span class="${chUp(n) ? '' : 'mute'}">${esc(tt(chOf(n)) || n)}</span>`).concat(`<span class="mute">${lastT(p.last)}</span>`).join(' → ');
+  const prChain = p => p.use.map(n => `<span class="${chUp(n) ? '' : 'mute'}">${esc(connTitle(n))}</span>`).concat(`<span class="mute">${lastT(p.last)}</span>`).join(' → ');
   const prLink = id => prOf(id) ? `<span class="tail"><a href="#iface-priorities" onclick="event.stopPropagation();LIVE.toPrio('${esc(id)}')">${prChain(prOf(id))}</a></span>` : '';
   function chState(c) {
     const st = stOf(c.name), [t, k] = STW[st.state] || [st.state, ''];
@@ -1081,11 +1092,11 @@
     const R = L.ch.rules.rules, own = L.can('network');
     const tail = r => prLink(r.via);
     const acts = i => own ? `<span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${i ? '' : 'disabled'} onclick="event.stopPropagation();LIVE.ruleMove(${i},-1)">↑</button><button class="icb" type="button" aria-label="Ниже" ${i < R.length - 1 ? '' : 'disabled'} onclick="event.stopPropagation();LIVE.ruleMove(${i},1)">↓</button><button class="icb del" type="button" aria-label="Удалить правило" onclick="event.stopPropagation();LIVE.ruleDel(${i})">${ic('i-trash')}</button></span>` : '';
-    const def = L.ch.rules.default || 'direct';
+    const def = L.ch.rules.default || 'default';
     return blk('Правила выхода', 'Проверяются сверху вниз, срабатывает первое подходящее, и трафик уходит по выбранной политике. Сам сервер — панель, обновления, почта — всегда выходит напрямую.',
       (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openRule(-1)">${ic('i-plus')}Добавить правило</button></div>` : '') +
       `<div class="rules">${R.map((r, i) => `<div class="rule ${own ? 'click' : ''}" ${own ? `onclick="LIVE.openRule(${i})"` : ''}><span class="n">${i + 1}</span><span>${ruleText(r)}</span>${tail(r)}${acts(i)}</div>`).join('')}
-       <div class="rule ${own ? 'click' : ''}" style="background:var(--bg)" ${own ? 'onclick="LIVE.openDefault()"' : ''}><span class="n">∗</span><span>Политика по умолчанию → <b>${esc(prName(def))}</b>${def === 'direct' ? ' <span class="mono mute">' + esc(((L.net && L.net.addrs.find(a => a.primary)) || {}).dev || '') + '</span>' : ''}</span>${prLink(def)}</div></div>
+       <div class="rule" style="background:var(--bg)"><span class="n">∗</span><span>Политика по умолчанию → <b>${esc(prName(def))}</b></span>${prLink(def)}</div></div>
        <p class="hint">ICMP (ping) и DNS-запросы к ноде идут напрямую.</p>`);
   }
   function acceptBlock() {
@@ -1280,7 +1291,7 @@
   }
   L.ruleMatch = m => { const vals = ruleValues(m); $('#ru2').innerHTML = vals.length ? vals.map(v => `<option>${esc(v)}</option>`).join('') : '<option value="">—</option>'; $('#ruH').textContent = m === 'list' && !vals.length ? 'В node.conf нет списков адресов (lists).' : m === 'tag' && !vals.length ? 'Ни у одного члена нет тегов.' : ''; };
   L.openRule = i => {
-    const r = i >= 0 ? L.ch.rules.rules[i] : { match: 'member', value: '', via: ((L.ch.prios || [])[0] || {}).id || 'direct' };
+    const r = i >= 0 ? L.ch.rules.rules[i] : { match: 'member', value: '', via: ((L.ch.prios || []).find(p => p.id !== 'default') || prOf('default') || {}).id || 'direct' };
     const vals = ruleValues(r.match);
     dialog(i >= 0 ? `Правило ${i + 1}` : 'Новое правило', 'Чей трафик и куда он выходит.',
       `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1" onchange="LIVE.ruleMatch(this.value)">${[['member', 'Член сети'], ['tag', 'Члены с тегом'], ['list', 'Адреса из списка']].map(([k, l]) => `<option value="${k}" ${r.match === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -1295,30 +1306,26 @@
     if (i >= 0) all[i] = r; else all.push(r);
     saveRules(all);
   };
-  L.openDefault = () => dialog('Политика по умолчанию', 'Куда выходит трафик членов без назначения.',
-    `<div class="fld"><label for="rd1">Выход</label><select id="rd1">${exits(L.ch.rules.default || 'direct')}</select></div>`,
-    `<button class="btn pri" type="button" onclick="LIVE.saveDefault()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
-  L.saveDefault = () => saveRules(L.ch.rules.rules, $('#rd1').value);
-
   /* ── connection priorities: lists of channels and who leaves by which ── */
   const modeT = p => p.multi ? 'Многопутевой режим' : 'Режим резервирования';
   const limT = (p, n) => { const l = (p.limits || {})[n]; return l && (l.in || l.out) ? [l.in ? `↓ ${l.in} Мбит/с` : '', l.out ? `↑ ${l.out} Мбит/с` : ''].filter(Boolean).join(' · ') : '—'; };
   const DRAG = `<span class="drag" aria-hidden="true">${'<i></i>'.repeat(6)}</span>`;
   let dragCh = null, dragChip = null;
   const prioSys = id => id === 'direct' || id === 'block';
-  const primaryDev = () => ((L.net && L.net.addrs.find(a => a.primary)) || {}).dev || '';
+  const ownPrios = () => (L.ch.prios || []).filter(p => p.id !== 'default');
   function prioPage() {
     if (!L.ch) { loadChannels().then(() => { if (S.route === 'iface-priorities') render(); }); return pageHead('Приоритеты подключений', '') + '<p class="mute">Загружаю…</p>'; }
     if (!L.net) loadNet().then(() => { if (S.route === 'iface-priorities') render(); });
     const t = S.tab.prio || 'lists';
-    const P = L.ch.prios || [];
+    const P = ownPrios();
+    if (S.prio === 'default') S.prio = 'direct';
     if (!prioSys(S.prio) && !P.some(p => p.id === S.prio)) S.prio = 'direct';
-    return pageHead('Приоритеты подключений', 'Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию выходит напрямую с сервера. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.') +
+    return pageHead('Приоритеты подключений', 'Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию включает адаптер сервера и все каналы с выходом; члены без назначения идут по ней. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.') +
       `<div class="tabs" role="tablist">${[['lists', 'Политики доступа в интернет', 'iface-priorities'], ['use', 'Применение политик', 'iface-priorities/use']].map(([k, x, h]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>` +
       (t === 'use' ? prioUse() : prioLists());
   }
   function prioSide(own, count, dropId) {
-    const P = L.ch.prios || [];
+    const P = ownPrios();
     const n = id => count ? ` <span class="mute">(${count(id)})</span>` : '';
     const drop = id => dropId && own ? `ondragover="event.preventDefault()" ondrop="event.preventDefault();LIVE.chipDrop('${esc(id)}')"` : '';
     const sys = (id, title, sub) => `<div class="pl-item ${S.prio === id ? 'on' : ''}" onclick="LIVE.prioPick('${id}')" ${drop(id)}><div><b>${title}${n(id)}</b><span class="sub">${sub}</span></div></div>`;
@@ -1327,45 +1334,41 @@
         <div class="acts" style="margin:0"><button class="btn sm pri" type="button" onclick="LIVE.prioRename()">Сохранить</button><button class="btn sm" type="button" onclick="S.prioEdit=null;render()">Отменить</button></div></div>`
       : `<div class="pl-item ${p.id === S.prio ? 'on' : ''}" onclick="LIVE.prioPick('${esc(p.id)}')" ${drop(p.id)}><div><b>${esc(p.title)}${n(p.id)}</b><span class="sub">${modeT(p)}</span></div>
         ${p.id === S.prio && own && !dropId ? `<span class="cell-acts"><button class="icb" type="button" aria-label="Изменить" onclick="event.stopPropagation();S.prioEdit='${esc(p.id)}';render()">${ic('i-edit')}</button><button class="icb del" type="button" aria-label="Удалить политику" ${prUsed(p.id) ? 'disabled title="Выбрана в правилах выхода"' : ''} onclick="event.stopPropagation();LIVE.prioAskDel()">${ic('i-trash')}</button></span>` : ''}</div>`;
-    const def = L.ch.rules.default || 'direct';
-    return `<div class="pl-side">${sys('direct', 'Политика по умолчанию', def === 'direct' ? 'выход напрямую' : 'выход: ' + prName(def))}${sys('block', 'Без доступа в интернет', 'интернет закрыт')}${P.map(item).join('')}${own ? `<div class="pl-add"><button class="btn" type="button" onclick="LIVE.prioNew()">${ic('i-plus')}Добавить политику</button></div>` : ''}</div>`;
+    const defP = prOf('default');
+    return `<div class="pl-side">${sys('direct', 'Политика по умолчанию', defP ? modeT(defP) : 'выход напрямую')}${sys('block', 'Без доступа в интернет', 'интернет закрыт')}${P.map(item).join('')}${own ? `<div class="pl-add"><button class="btn" type="button" onclick="LIVE.prioNew()">${ic('i-plus')}Добавить политику</button></div>` : ''}</div>`;
   }
-  const prUsed = id => L.ch.rules.rules.some(r => r.via === id) || (L.ch.rules.default || 'direct') === id;
+  const prUsed = id => L.ch.rules.rules.some(r => r.via === id) || (L.ch.rules.default || 'default') === id;
   function prioLists() {
     const own = L.can('network'), wrap = (main, extra) => `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>${prioSide(own)}<div class="pl-main">${main}${extra || ''}</div></div>`;
-    if (S.prio === 'direct') {
-      const def = L.ch.rules.default || 'direct', dev = primaryDev();
-      return wrap(`<div style="padding:16px 20px"><p>Члены без назначения выходят <b>${esc(prName(def))}</b>${def === 'direct' && dev ? ` через <span class="mono">${esc(dev)}</span>` : ''}. Каналы в эту политику не входят — для выхода через VPN добавьте политику и на вкладке «Применение политик» перетащите на неё членов.</p>
-        ${own ? `<div class="fld" style="max-width:360px;margin-top:8px"><label for="pu1">Выход по умолчанию</label><select id="pu1" onchange="LIVE.useDefault(this.value)">${exits(def)}</select></div>` : ''}
-        <p class="hint" style="margin:8px 0 0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p></div>`);
-    }
     if (S.prio === 'block') {
       return wrap(`<div style="padding:16px 20px"><p>Интернет закрыт. Члены в этой политике наружу не выходят. Подключения не используются.</p></div>`);
     }
     const p = prCur();
     if (!p) return wrap('<p class="mute" style="padding:16px">Политика не найдена.</p>');
     const live = prLive(p.use);
-    const ex = L.ch.channels.filter(c => c.exit || p.use.includes(c.name)).map(c => c.name);
-    const order = p.use.concat(ex.filter(n => !p.use.includes(n)));
+    const extra = L.ch.channels.filter(c => c.exit || p.use.includes(c.name)).map(c => c.name);
+    const avail = ['direct'].concat(extra);
+    const order = p.use.concat(avail.filter(n => !p.use.includes(n)));
     const rows = order.map(n => {
-      const c = chOf(n) || { name: n }, on = p.use.includes(n), st = stOf(n).state;
+      const on = p.use.includes(n), st = isNative(n) ? (nativeDev() ? 'up' : 'down') : stOf(n).state;
       const dnd = own && on ? `draggable="true" ondragstart="LIVE.pdDrag('${esc(n)}')" ondragover="event.preventDefault()" ondrop="event.preventDefault();LIVE.pdDrop('${esc(n)}')"` : '';
       return `<div class="pl-row ${on ? '' : 'off'}" ${dnd}>${on && own ? DRAG : '<span class="drag"></span>'}<label class="chk"><input type="checkbox" ${on ? 'checked' : ''} ${own ? '' : 'disabled'} aria-label="Использовать" onchange="LIVE.pdUse('${esc(n)}',this.checked)"></label><span class="dot ${st === 'up' ? 'on' : ''}"></span>
-        <div class="pl-name"><b>${esc(tt(c))}</b>${n === live && !p.multi ? ' <span class="pill ok">сейчас</span>' : ''}${chState(c)}</div>
-        <div class="pl-lim">${on ? limT(p, n) : ''}</div><div>${on && own ? `<button class="icb" type="button" aria-label="Ограничение скорости" onclick="LIVE.prioLim('${esc(n)}')">${ic('i-edit')}</button>` : ''}</div></div>`;
+        <div class="pl-name"><b>${esc(connTitle(n))}</b>${n === live && !p.multi ? ' <span class="pill ok">сейчас</span>' : ''}${connState(n)}</div>
+        <div class="pl-lim">${on && !isNative(n) ? limT(p, n) : ''}</div><div>${on && own && !isNative(n) ? `<button class="icb" type="button" aria-label="Ограничение скорости" onclick="LIVE.prioLim('${esc(n)}')">${ic('i-edit')}</button>` : ''}</div></div>`;
     }).join('') || '<p class="mute" style="padding:16px">Нет подключений с «Использовать для выхода в интернет».</p>';
-    const now = p.multi ? 'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.' : live ? `Сейчас трафик идёт через <b>${esc(tt(chOf(live)))}</b>.` : `Ни один канал не работает — трафик ${p.last === 'block' ? 'блокируется' : 'идёт напрямую'}.`;
+    const now = p.multi ? 'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.' : live ? `Сейчас трафик идёт через <b>${esc(connTitle(live))}</b>.` : `Ни один канал не работает — трафик ${p.last === 'block' ? 'блокируется' : 'идёт напрямую'}.`;
+    const hostHint = S.prio === 'direct' ? '<p class="hint" style="margin:0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p>' : '';
     return wrap(rows, `<div class="pl-foot"><label class="chk"><input type="checkbox" ${p.auto ? 'checked' : ''} ${own ? '' : 'disabled'} onchange="LIVE.prioSet({auto:this.checked})">Добавлять новые подключения автоматически</label>
         <div class="fld" style="max-width:360px"><label for="pr2">Если ни один не работает</label><select id="pr2" ${own ? '' : 'disabled'} onchange="LIVE.prioSet({last:this.value})"><option value="direct" ${p.last === 'direct' ? 'selected' : ''}>Выходить напрямую</option><option value="block" ${p.last === 'block' ? 'selected' : ''}>Блокировать</option></select></div>
-        <p class="hint" style="margin:0">${now} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».</p></div>`);
+        <p class="hint" style="margin:0">${now} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».</p>${hostHint}</div>`);
   }
   // Every change goes to the server at once, the whole list.
   const prioPost = async (body, msg) => {
     try { L.ch = await api('POST', '/api/channels/prio', body); closeDlg(); toast(msg); return true; } catch (e) { toast(e.message); return false; } finally { render(); }
   };
-  const prCur = () => (L.ch.prios || []).find(p => p.id === S.prio);
+  const prCur = () => (L.ch.prios || []).find(p => p.id === (S.prio === 'direct' ? 'default' : S.prio));
   L.prioSet = x => { const p = Object.assign({}, prCur(), x); return prioPost(p, 'Политика сохранена — нода перечитала её'); };
-  L.toPrio = id => { S.prio = id; S.tab.prio = 'lists'; S.prioEdit = null; };
+  L.toPrio = id => { S.prio = id === 'default' ? 'direct' : id; S.tab.prio = 'lists'; S.prioEdit = null; };
   L.prioPick = id => { S.prio = id; S.prioEdit = null; render(); };
   L.pdUse = (n, on) => { const p = prCur(), use = p.use.filter(x => x !== n); if (on) use.push(n); L.prioSet({ use }); };
   L.pdDrag = n => { dragCh = n; };
@@ -1378,6 +1381,7 @@
   };
   L.prioRename = () => { const p = prCur(); S.prioEdit = null; prioPost(Object.assign({}, p, { title: $('#pe1').value.trim(), multi: $('#pe2').checked }), 'Политика сохранена'); };
   L.prioLim = n => {
+    if (isNative(n)) return;
     const p = prCur(), l = (p.limits || {})[n] || {};
     const sel = (id, v, lab) => `<div class="fld"><label for="${id}">${lab}</label><select id="${id}"><option value="0">Отключено</option>${[1, 5, 10, 20, 50, 100, 200, 500].concat(v && ![1, 5, 10, 20, 50, 100, 200, 500].includes(v) ? [v] : []).map(x => `<option value="${x}" ${v === x ? 'selected' : ''}>${x} Мбит/с</option>`).join('')}</select></div>`;
     dialog('Ограничение скорости', `Для подключения «${esc(tt(chOf(n)))}» в политике «${esc(p.title)}». Делится на всех, кто выходит по этой политике.`,
@@ -1389,14 +1393,14 @@
     const P = L.ch.prios || [];
     dialog('Новая политика', 'Порядок каналов можно скопировать из другой политики и поправить.',
       `<div class="fld"><label for="pr1">Название</label><input id="pr1" placeholder="Например, Офис" maxlength="40"></div>
-       <div class="fld"><label for="pr3">Начать с</label><select id="pr3"><option value="-1">Пустой политики</option>${P.map((x, i) => `<option value="${i}">Копии «${esc(x.title)}»</option>`).join('')}</select></div>
+       <div class="fld"><label for="pr3">Начать с</label><select id="pr3"><option value="">Пустой политики</option>${P.map(x => `<option value="${esc(x.id)}">Копии «${esc(x.title)}»</option>`).join('')}</select></div>
        <label class="chk"><input id="pr4" type="checkbox">Многопутевая передача</label>`,
       `<button class="btn pri" type="button" onclick="LIVE.prioAdd()">Добавить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   };
   L.prioAdd = async () => {
-    const src = (L.ch.prios || [])[+$('#pr3').value];
+    const src = (L.ch.prios || []).find(p => p.id === $('#pr3').value);
     const body = { id: '', title: $('#pr1').value.trim(), use: src ? src.use : [], last: src ? src.last : 'direct', multi: $('#pr4').checked, auto: src ? !!src.auto : false, limits: src ? src.limits : undefined };
-    if (await prioPost(body, 'Политика добавлена')) { S.prio = L.ch.prios[L.ch.prios.length - 1].id; render(); }
+    if (await prioPost(body, 'Политика добавлена')) { S.prio = ownPrios().slice(-1)[0].id; render(); }
   };
   L.prioAskDel = () => { const p = prCur(); dialog(`Удалить политику «${esc(p.title)}»?`, 'Подключения останутся, удалится только порядок.', '', `<button class="btn danger" type="button" onclick="LIVE.prioDel()">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`); };
   L.prioDel = async () => {
@@ -1413,8 +1417,8 @@
     const ruleOf = (m, v) => (R.find(r => r.match === m && r.value === v) || {}).via;
     const tagsOf = id => NETS.flatMap(n => n.members.filter(m => m.id === id).flatMap(m => m.tags || []));
     const leftover = m => !ruleOf('member', m) && !tagsOf(m).some(t => ruleOf('tag', t));
-    const memIn = id => mems.filter(m => id === 'direct' ? leftover(m) : ruleOf('member', m) === id);
-    const tagIn = id => tags.filter(t => id === 'direct' ? !ruleOf('tag', t) : ruleOf('tag', t) === id);
+    const memIn = id => mems.filter(m => id === 'direct' ? leftover(m) || ruleOf('member', m) === 'default' : ruleOf('member', m) === id);
+    const tagIn = id => tags.filter(t => id === 'direct' ? !ruleOf('tag', t) || ruleOf('tag', t) === 'default' : ruleOf('tag', t) === id);
     const count = id => memIn(id).length + tagIn(id).length;
     const chip = (kind, v) => `<span class="m-chip ${kind === 'tag' ? 'tag' : ''}" ${own ? `draggable="true" ondragstart="LIVE.chipDrag('${kind}','${esc(v)}')"` : ''}>${own ? DRAG : ''}${kind === 'tag' ? '# ' : ''}${esc(v)}</span>`;
     const m = memIn(S.prio), t = tagIn(S.prio);
@@ -1433,14 +1437,13 @@
     const [kind, v] = dragChip;
     dragChip = null;
     const R = L.ch.rules.rules.filter(r => !(r.match === kind && r.value === v));
-    if (id && id !== 'direct') {
+    if (id && id !== 'direct' && id !== 'default') {
       const r = { match: kind, value: v, via: id };
       if (kind === 'member') R.unshift(r);
       else { const k = R.findIndex(x => x.match === 'list'); R.splice(k < 0 ? R.length : k, 0, r); }
     }
     saveRules(R);
   };
-  L.useDefault = v => saveRules(L.ch.rules.rules, v);
 
   function addrsPage() {
     if (!L.net) { loadNet().then(() => { if (S.route === 'adapters' || S.route === 'addrs') render(); }); return pageHead('Адаптеры', '') + '<p class="mute">Загружаю…</p>'; }
@@ -1910,6 +1913,7 @@
   // A save answers with the whole state; a failed apply comes back as an
   // error and is shown from the reloaded state.
   async function mailPost(path, body, done) {
+    toast('Сохраняю…');
     try { L.ml = await api('POST', path, body); closeDlg(); if (done) toast(done); } catch (e) { toast(e.message); await loadMail(); }
     if (!L.ml.domains.some(d => d.name === L.mlDom)) L.mlDom = (L.ml.domains[0] || {}).name || null;
     render(); loadMailDNS().then(mlRe);
@@ -1970,6 +1974,7 @@
     if (!pwCheck($('#dlgRoot'), true)) { toast('Проверьте пароль'); return; }
     const nw = i < 0, address = nw ? $('#mb1').value.trim().toLowerCase() + '@' + L.mlDom : L.ml.boxes[i].address, password = $('#mb3').value;
     const body = { address, owner: $('#mb2').value, password, quota_mb: +$('#mb4').value, forwards: addrs($('#mb5').value), send_only: $('#mb6').checked, enabled: $('#mb7').checked };
+    toast('Сохраняю…');
     try { L.ml = await api('POST', '/api/mail/box', body); } catch (e) { toast(e.message); await loadMail(); render(); return; }
     render();
     const host = 'mail.' + address.split('@')[1];

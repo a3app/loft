@@ -425,7 +425,7 @@ type ChanCheck struct {
 type Prio struct {
 	ID    string   `json:"id"`              // set by the helper (prio1, prio2…); rules name it
 	Title string   `json:"title"`           // what the panel shows
-	Use   []string `json:"use"`             // channel names in order
+	Use   []string `json:"use"`             // channel names in order; "direct" is the host default route
 	Last  string   `json:"last"`            // direct | block
 	Multi bool     `json:"multi,omitempty"` // spread connections over the working channels
 	Auto  bool     `json:"auto,omitempty"`  // new exit channels join the list at its end
