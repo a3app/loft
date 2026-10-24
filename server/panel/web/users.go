@@ -310,5 +310,5 @@ func (s *Server) inviteAccept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Audit.Add(store.Entry{User: u.Login, Op: "POST /api/invite", From: clientIP(r)})
-	s.startSession(w, r, u.Login)
+	s.startSession(w, r, u.Login, false)
 }

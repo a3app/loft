@@ -21,6 +21,8 @@ type Session struct {
 	Agent   string
 	Created time.Time
 	Seen    time.Time
+	// Remember skips Idle: the session lasts until Max or sign-out.
+	Remember bool `json:"remember,omitempty"`
 }
 
 // Sessions keeps sessions in memory and, after Persist, in a file, so a
@@ -55,7 +57,7 @@ func (s *Sessions) Persist(path string) error {
 	}
 	t := s.now()
 	for k, ss := range m {
-		if ss != nil && len(k) == 64 && t.Sub(ss.Seen) <= s.Idle && t.Sub(ss.Created) <= s.Max {
+		if ss != nil && len(k) == 64 && !s.expiredLocked(ss, t) {
 			s.m[k] = ss
 		}
 	}
@@ -99,11 +101,11 @@ func NewSessions() *Sessions {
 	return &Sessions{Idle: 30 * time.Minute, Max: 7 * 24 * time.Hour, now: time.Now, m: map[string]*Session{}}
 }
 
-// Create starts a session for user.
-func (s *Sessions) Create(user, ip, agent string) *Session {
+// Create starts a session for user. remember keeps it past Idle, until Max.
+func (s *Sessions) Create(user, ip, agent string, remember bool) *Session {
 	t := s.now()
 	id := token(32)
-	ss := &Session{CSRF: token(24), User: user, IP: ip, Agent: agent, Created: t, Seen: t}
+	ss := &Session{CSRF: token(24), User: user, IP: ip, Agent: agent, Created: t, Seen: t, Remember: remember}
 	s.mu.Lock()
 	s.m[key(id)] = ss
 	s.saveLocked(true)
@@ -111,6 +113,17 @@ func (s *Sessions) Create(user, ip, agent string) *Session {
 	c := *ss
 	c.ID = id
 	return &c
+}
+
+// expiredLocked is true when Idle (unless Remember) or Max has run out.
+func (s *Sessions) expiredLocked(ss *Session, t time.Time) bool {
+	if t.Sub(ss.Created) > s.Max {
+		return true
+	}
+	if ss.Remember {
+		return false
+	}
+	return t.Sub(ss.Seen) > s.Idle
 }
 
 // Get returns a live session and marks it seen; nil when unknown or expired.
@@ -125,7 +138,7 @@ func (s *Sessions) Get(id string) *Session {
 	if ss == nil {
 		return nil
 	}
-	if t.Sub(ss.Seen) > s.Idle || t.Sub(ss.Created) > s.Max {
+	if s.expiredLocked(ss, t) {
 		delete(s.m, key(id))
 		s.saveLocked(true)
 		return nil
@@ -164,7 +177,7 @@ func (s *Sessions) List() []Session {
 	defer s.mu.Unlock()
 	out := make([]Session, 0, len(s.m))
 	for k, ss := range s.m {
-		if t.Sub(ss.Seen) > s.Idle || t.Sub(ss.Created) > s.Max {
+		if s.expiredLocked(ss, t) {
 			delete(s.m, k)
 			continue
 		}
@@ -189,7 +202,7 @@ func (s *Sessions) ListKeyed() []Keyed {
 	defer s.mu.Unlock()
 	out := []Keyed{}
 	for k, ss := range s.m {
-		if t.Sub(ss.Seen) > s.Idle || t.Sub(ss.Created) > s.Max {
+		if s.expiredLocked(ss, t) {
 			continue
 		}
 		c := *ss

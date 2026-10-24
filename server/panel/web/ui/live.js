@@ -369,7 +369,7 @@
     const btn = f.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-      signedIn(await api('POST', '/api/login', { login: f.querySelector('#lg1').value.trim(), password: f.querySelector('#lg2').value }));
+      signedIn(await api('POST', '/api/login', { login: f.querySelector('#lg1').value.trim(), password: f.querySelector('#lg2').value, remember: !!(f.querySelector('#lgRemember') && f.querySelector('#lgRemember').checked) }));
     } catch (e) {
       toast(e.message);
     } finally { btn.disabled = false; }

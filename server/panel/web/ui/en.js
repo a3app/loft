@@ -521,6 +521,7 @@ window.LOFT_EN = {
   "Запись удалена": "Record deleted",
   "Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24).": "An entry is a domain (example.com), a domain with all subdomains (.example.com) or a subnet (198.51.100.0/24).",
   "Запишите её не на этом сервере. Панель её не хранит и больше не покажет: без неё копии не открыть.": "Write it down somewhere other than this server. The panel does not keep it and will not show it again: without it the copies cannot be opened.",
+  "Запомнить меня": "Remember me",
   "Запрашиваю сертификат у Let’s Encrypt…": "Requesting a certificate from Let’s Encrypt…",
   "Запрос http://$": "Request http://$",
   "Запрос к Let’s Encrypt": "Request to Let’s Encrypt",

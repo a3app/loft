@@ -198,6 +198,13 @@ func TestLogin(t *testing.T) {
 	if r.code != 200 || r.cookie == nil || r.body["role"] != "owner" {
 		t.Fatalf("login %d %v", r.code, r.body)
 	}
+	if r.cookie.MaxAge != 0 {
+		t.Fatalf("session cookie MaxAge %d", r.cookie.MaxAge)
+	}
+	rm := e.do("POST", "/api/login", map[string]any{"login": "admin", "password": "correct horse battery", "remember": true}, nil, "")
+	if rm.code != 200 || rm.cookie == nil || rm.cookie.MaxAge != 7*24*3600 {
+		t.Fatalf("remember cookie %d MaxAge %v", rm.code, rm.cookie)
+	}
 	if r := e.do("POST", "/api/login", map[string]any{"login": "admin", "password": "x", "extra": 1}, nil, ""); r.code != 400 {
 		t.Fatalf("unknown field %d", r.code)
 	}

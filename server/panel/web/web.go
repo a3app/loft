@@ -505,6 +505,7 @@ type credJSON struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
 	Code     string `json:"code,omitempty"`
+	Remember bool   `json:"remember,omitempty"`
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, max int64, v any) bool {
@@ -561,7 +562,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		os.Remove(s.SetupFile)
 	}
 	s.SetupCode = "" // one owner per setup code
-	s.startSession(w, r, in.Login)
+	s.startSession(w, r, in.Login, false)
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -606,15 +607,19 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Store.Update(u.Login, func(x *store.User) { x.Seen = time.Now().UTC() })
 	s.Audit.Add(store.Entry{User: u.Login, Op: "POST /api/login", From: clientIP(r)})
-	s.startSession(w, r, u.Login)
+	s.startSession(w, r, u.Login, in.Remember)
 }
 
-func (s *Server) startSession(w http.ResponseWriter, r *http.Request, login string) {
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, login string, remember bool) {
 	u, _ := s.Store.Get(login)
-	ss := s.Sessions.Create(login, clientIP(r), r.UserAgent())
-	_, max := s.Sessions.Limits()
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: ss.ID, Path: "/", HttpOnly: true,
-		Secure: secure(r), SameSite: http.SameSiteStrictMode, MaxAge: int(max / time.Second)})
+	ss := s.Sessions.Create(login, clientIP(r), r.UserAgent(), remember)
+	c := &http.Cookie{Name: cookieName, Value: ss.ID, Path: "/", HttpOnly: true,
+		Secure: secure(r), SameSite: http.SameSiteStrictMode}
+	if remember {
+		_, max := s.Sessions.Limits()
+		c.MaxAge = int(max / time.Second)
+	}
+	http.SetCookie(w, c)
 	ok(w, s.me(u, ss.CSRF))
 }
 

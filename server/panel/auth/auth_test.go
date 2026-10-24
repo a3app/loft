@@ -52,7 +52,7 @@ func TestSessions(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	s := NewSessions()
 	s.now = func() time.Time { return now }
-	a := s.Create("admin", "198.51.100.20", "test")
+	a := s.Create("admin", "198.51.100.20", "test", false)
 	if len(a.ID) != 64 || len(a.CSRF) != 48 {
 		t.Fatalf("token sizes %d %d", len(a.ID), len(a.CSRF))
 	}
@@ -67,8 +67,8 @@ func TestSessions(t *testing.T) {
 	if s.Get(a.ID) != nil {
 		t.Fatal("idle session still alive")
 	}
-	b := s.Create("bob", "", "")
-	c := s.Create("bob", "", "")
+	b := s.Create("bob", "", "", false)
+	c := s.Create("bob", "", "", false)
 	s.DeleteUser("bob")
 	if s.Get(b.ID) != nil || s.Get(c.ID) != nil {
 		t.Fatal("DeleteUser left sessions")
@@ -82,13 +82,28 @@ func TestSessionsMax(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	s := NewSessions()
 	s.now = func() time.Time { return now }
-	a := s.Create("admin", "", "")
+	a := s.Create("admin", "", "", false)
 	for i := 0; i < 7*24*4+1; i++ { // keep it busy every 15 min past 7 days
 		now = now.Add(15 * time.Minute)
 		s.Get(a.ID)
 	}
 	if s.Get(a.ID) != nil {
 		t.Fatal("session outlived Max")
+	}
+}
+
+func TestSessionsRemember(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	s := NewSessions()
+	s.now = func() time.Time { return now }
+	a := s.Create("admin", "", "", true)
+	now = now.Add(31 * time.Minute)
+	if s.Get(a.ID) == nil {
+		t.Fatal("remembered session died on idle")
+	}
+	now = now.Add(7 * 24 * time.Hour)
+	if s.Get(a.ID) != nil {
+		t.Fatal("remembered session outlived Max")
 	}
 }
 
@@ -178,7 +193,7 @@ func TestSessionsPersist(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "sessions.json")
 	a := NewSessions()
 	a.Persist(p)
-	ss := a.Create("admin", "198.51.100.1", "test")
+	ss := a.Create("admin", "198.51.100.1", "test", false)
 	b, _ := os.ReadFile(p)
 	if strings.Contains(string(b), ss.ID) {
 		t.Fatal("cookie stored in the file")
