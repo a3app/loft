@@ -9,7 +9,7 @@ A private overlay is described which is carried inside TLS 1.3. Application stre
 
 The protocol is **loft/1.0**. Connections are shared as **`loft://`**. YAML `kind: loft`.
 
-This repository is the specification together with a reference node, a web panel, and clients (a macOS application and CLI tools for Linux and macOS). Software `1.0.28`. A third party may implement loft from [docs/protocol.md](docs/protocol.md).
+This repository is the specification together with a reference node, a web panel, and clients (a macOS application, Android phone and TV, and CLI tools for Linux and macOS). Software `1.0.28`. A third party may implement loft from [docs/protocol.md](docs/protocol.md).
 
 ## Contents
 
@@ -48,6 +48,14 @@ The macOS client is a menu-bar application. The overlay is opened from it; sever
 | Status | Connections |
 |:--:|:--:|
 | <img src="docs/img/macos/en-status.png" alt="loft status window" width="400"> | <img src="docs/img/macos/en-connections.png" alt="Named connections" width="400"> |
+
+The Android phone is a system VPN (`VpnService`). Named connections, a `loft://` link or a `.loft` file; the overlay is one VPN row. GitHub APKs update from Dist; Play builds compile the updater out. Android TV is Leanback, same engine.
+
+| Home | Connections |
+|:--:|:--:|
+| <img src="docs/img/android/en-home.png" alt="loft Android home" width="240"> | <img src="docs/img/android/en-conns.png" alt="loft Android connections" width="240"> |
+
+<img src="docs/img/android/en-tv.png" alt="loft on Android TV" width="640">
 
 ## Panel
 

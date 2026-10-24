@@ -26,7 +26,14 @@ Not in Dist: iOS / Sailfish / Keenetic / MikroTik clients (catalog and mocks).
 ## What it does
 
 - **macOS app** — menu bar. Named connections, import `loft://` or `.loft`, local SOCKS5 and TUN, split routes, reconnect, failover.
-- **Android** — phone `VpnService` and Leanback TV. GitHub APKs self-update from Dist; Play builds compile the updater out.
+- **Android** — phone `VpnService` and Leanback TV. Named connections, `loft://` / `.loft` import, overlay as one system VPN. GitHub APKs self-update from Dist; Play builds compile the updater out.
+
+| Home | Connections |
+|:--:|:--:|
+| <img src="https://raw.githubusercontent.com/a3app/loft/main/docs/img/android/en-home.png" alt="loft Android home" width="240"> | <img src="https://raw.githubusercontent.com/a3app/loft/main/docs/img/android/en-conns.png" alt="loft Android connections" width="240"> |
+
+<img src="https://raw.githubusercontent.com/a3app/loft/main/docs/img/android/en-tv.png" alt="loft on Android TV" width="640">
+
 - **loft / loft-front** — CLI session. Same fronts as the app.
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.

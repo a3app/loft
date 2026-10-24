@@ -9,7 +9,7 @@ loft 是跑在 TLS 里面的覆盖网。流在 GET、WebSocket、HTTP/2、QUIC �
 
 协议 **loft/1.0**。分享链接 **`loft://`**。YAML 里 `kind: loft`。
 
-本仓库是开放规范，加上参考节点、网页面板和客户端（macOS 应用，Linux / macOS CLI）。软件版本 `1.0.28`。第三方按 [docs/protocol_zh.md](docs/protocol_zh.md) 就能自己实现 loft。
+本仓库是开放规范，加上参考节点、网页面板和客户端（macOS 应用、Android 手机和电视、Linux / macOS CLI）。软件版本 `1.0.28`。第三方按 [docs/protocol_zh.md](docs/protocol_zh.md) 就能自己实现 loft。
 
 ## 目录
 
@@ -48,6 +48,14 @@ macOS 客户端住在菜单栏。从那里打开覆盖网，挂着几条有名�
 | 状态 | 连接 |
 |:--:|:--:|
 | <img src="docs/img/macos/zh-status.png" alt="loft 状态窗口" width="400"> | <img src="docs/img/macos/zh-connections.png" alt="命名连接" width="400"> |
+
+Android 手机是系统 VPN（`VpnService`）。命名连接、`loft://` 链接或 `.loft` 文件；覆盖网占一行 VPN。GitHub APK 从 Dist 自更新；Play 包把更新器编掉。Android TV 是 Leanback，同一套引擎。
+
+| 主页 | 连接 |
+|:--:|:--:|
+| <img src="docs/img/android/zh-home.png" alt="loft Android 主页" width="240"> | <img src="docs/img/android/zh-conns.png" alt="loft Android 连接" width="240"> |
+
+<img src="docs/img/android/zh-tv.png" alt="Android TV 上的 loft" width="640">
 
 ## 面板
 

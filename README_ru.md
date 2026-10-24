@@ -9,7 +9,7 @@ loft — оверлей внутри TLS. Потоки мультиплекси�
 
 Протокол **loft/1.0**. Ссылка **`loft://`**. В YAML `kind: loft`.
 
-В этом репозитории открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, CLI для Linux и macOS). Версия ПО `1.0.28`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
+В этом репозитории открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.28`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
 
 ## Содержание
 
@@ -48,6 +48,14 @@ loft — оверлей внутри TLS. Потоки мультиплекси�
 | Статус | Подключения |
 |:--:|:--:|
 | <img src="docs/img/macos/ru-status.png" alt="Окно статуса loft" width="400"> | <img src="docs/img/macos/ru-connections.png" alt="Список подключений" width="400"> |
+
+Телефон на Android — системный VPN (`VpnService`). Именованные подключения, ссылка `loft://` или файл `.loft`; оверлей — одна строка VPN. GitHub APK сами обновляются из Dist; в сборках Play встроенного обновления нет. Android TV — Leanback, тот же движок.
+
+| Главная | Подключения |
+|:--:|:--:|
+| <img src="docs/img/android/ru-home.png" alt="Главная loft на Android" width="240"> | <img src="docs/img/android/ru-conns.png" alt="Подключения loft на Android" width="240"> |
+
+<img src="docs/img/android/ru-tv.png" alt="loft на Android TV" width="640">
 
 ## Панель
 
