@@ -41,7 +41,7 @@ private/
 *.local.yml
 *.instance
 
-# research and other local-only notes (never push)
+# Local research lives in ../loft-research, outside this repo. Never commit copies.
 research_notes/
 reports/
 
