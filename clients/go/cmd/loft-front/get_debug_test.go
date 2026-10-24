@@ -44,6 +44,14 @@ func TestFrontOrderDefaultGET(t *testing.T) {
 	if len(cfg.Outbounds) != 2 || cfg.Outbounds[0].Type != "get" || cfg.Outbounds[1].Type != "ws" {
 		t.Fatalf("cfg %+v", cfg.Outbounds)
 	}
+	one := frontConfig("tok", "https://cdn.example", "get", "/static/v3/build", true, "yandex")
+	one.Fronts = parseKindList("get,ws,h2,quic,h3")
+	if len(one.Outbounds) != 1 || one.Outbounds[0].Type != "get" {
+		t.Fatalf("hello outbound %+v", one.Outbounds)
+	}
+	if got := strings.Join(one.EnabledFronts(), ","); got != "get,ws,h2,quic,h3" {
+		t.Fatalf("hello fronts %s", got)
+	}
 }
 
 func TestOutboundForH2MaxAge(t *testing.T) {
@@ -52,6 +60,38 @@ func TestOutboundForH2MaxAge(t *testing.T) {
 	o := outboundFor("https://example.com", "get", "/static/js", "")
 	if o.H2MaxAgeMS != 60000 {
 		t.Fatalf("h2_max_age_ms %d", o.H2MaxAgeMS)
+	}
+}
+
+func TestOutboundForPerFrontPaths(t *testing.T) {
+	frontWSPath = "/custom/sync"
+	frontH2Path = "/custom/h2"
+	frontH3Path = "/custom/h3"
+	t.Cleanup(func() { frontWSPath = ""; frontH2Path = ""; frontH3Path = "" })
+	ws := outboundFor("https://example.com", "ws", "/static/js", "")
+	if !strings.HasSuffix(ws.URL, "/custom/sync") {
+		t.Fatalf("ws %s", ws.URL)
+	}
+	h2 := outboundFor("https://example.com", "h2", "/static/js", "")
+	if h2.Path != "/custom/h2" {
+		t.Fatalf("h2 %s", h2.Path)
+	}
+	h3 := outboundFor("https://loft.example:444", "h3", "", "")
+	if h3.Path != "/custom/h3" {
+		t.Fatalf("h3 %s", h3.Path)
+	}
+	cfg := frontConfig("tok", "https://example.com", "get,ws,h2", "/static/v3/build", true, "")
+	if len(cfg.Outbounds) != 3 {
+		t.Fatalf("cfg %d", len(cfg.Outbounds))
+	}
+	if cfg.Outbounds[0].Type != "get" || cfg.Outbounds[0].Path != "/static/v3/build" {
+		t.Fatalf("get %+v", cfg.Outbounds[0])
+	}
+	if cfg.Outbounds[1].Type != "ws" || !strings.HasSuffix(cfg.Outbounds[1].URL, "/custom/sync") {
+		t.Fatalf("ws %+v", cfg.Outbounds[1])
+	}
+	if cfg.Outbounds[2].Type != "h2" || cfg.Outbounds[2].Path != "/custom/h2" {
+		t.Fatalf("h2 %+v", cfg.Outbounds[2])
 	}
 }
 

@@ -29,6 +29,13 @@ import (
 // frontDecoy and frontPBK are -decoy / -pbk for direct loft fronts.
 var frontDecoy, frontPBK string
 
+// Per-front CLI paths. Empty uses outboundFor defaults / GET-cover remap.
+var frontWSPath, frontH2Path, frontH3Path string
+
+// statusFront is the live bulk front Supervise last handed the GUI (STATUS front=).
+var statusFrontMu sync.Mutex
+var statusFront string
+
 // frontH2MaxAgeMS is -h2-max-age in milliseconds (0 = keep HTTP/2 until error).
 var frontH2MaxAgeMS int
 
@@ -37,7 +44,11 @@ func main() {
 	token := flag.String("token", "", "member key")
 	rawURL := flag.String("url", "", "front URL")
 	kind := flag.String("type", "auto", "get | ws | h2 | quic | h3 | l3 | all | get,ws,h2 | sstp | vless | trojan | auto")
+	helloFronts := flag.String("fronts", "", "Hello mux fronts; empty = outbound types. Comma -type still rotates.")
 	path := flag.String("path", "", "GET path; empty get is "+config.DefaultGETPath)
+	wsPath := flag.String("ws-path", "", "WS path; empty is "+config.DefaultWSPath)
+	h2Path := flag.String("h2-path", "", "H2 CONNECT path; empty remaps GET cover to "+config.DefaultH2Path)
+	h3Path := flag.String("h3-path", "", "H3 CONNECT path; empty same as h2")
 	user := flag.String("user", "", "SSTP username")
 	insecure := flag.Bool("insecure", false, "SSTP: skip TLS verify")
 	pap := flag.Bool("pap", false, "SSTP: allow PAP and CHAP-MD5")
@@ -96,6 +107,9 @@ func main() {
 	}
 	frontDecoy = strings.TrimSpace(*decoy)
 	frontPBK = strings.TrimSpace(*pbk)
+	frontWSPath = strings.TrimSpace(*wsPath)
+	frontH2Path = strings.TrimSpace(*h2Path)
+	frontH3Path = strings.TrimSpace(*h3Path)
 	if strings.EqualFold(*kind, "auto") {
 		switch {
 		case strings.HasPrefix(strings.ToLower(*rawURL), "vless://"):
@@ -245,6 +259,9 @@ func main() {
 	}
 
 	cfg := frontConfig(*token, *rawURL, *kind, *path, *muxOn, *cdnName)
+	if s := strings.TrimSpace(*helloFronts); s != "" {
+		cfg.Fronts = parseKindList(s)
+	}
 	first := make(chan struct{})
 	var once sync.Once
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
@@ -270,6 +287,7 @@ func main() {
 			liveMu.Lock()
 			liveRaw = raw
 			liveMu.Unlock()
+			setStatusFront(o.Type)
 			ip := transport.OverlayIP()
 			bringTUN()
 			n := resumes.Add(1)
@@ -419,6 +437,7 @@ func dial(ctx context.Context, token, raw, kind, path string, muxOn bool, cdnNam
 		}
 		d, err := transport.Start(ctx, token, o)
 		if err == nil {
+			setStatusFront(t)
 			return d, t, nil
 		}
 		last = err
@@ -462,13 +481,28 @@ func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 			o.Path = config.DefaultGETPath
 		}
 	case "ws":
-		o.URL = withWSPath(wsURL(raw), "/api/v1/sync")
+		wsPath := config.DefaultWSPath
+		if frontWSPath != "" {
+			wsPath = frontWSPath
+			o.URL = forceWSPath(wsURL(raw), wsPath)
+		} else {
+			o.URL = withWSPath(wsURL(raw), wsPath)
+		}
 	case "h2", "h3", "l3":
 		o.URL = httpOrigin(raw)
-		// GUI used to pass the GET cover (/static/js) for every loft kind.
-		// CONNECT Match is /api/v1/tunnel; a leftover GET path is 404.
-		if o.Path == "" || getCoverPath(o.Path) {
-			o.Path = "/api/v1/tunnel"
+		custom := ""
+		if kind == "h2" {
+			custom = frontH2Path
+		}
+		if kind == "h3" {
+			custom = frontH3Path
+		}
+		if custom != "" {
+			o.Path = custom
+		} else if o.Path == "" || getCoverPath(o.Path) {
+			// GUI used to pass the GET cover (/static/js) for every loft kind.
+			// CONNECT Match is /api/v1/tunnel; a leftover GET path is 404.
+			o.Path = config.DefaultH2Path
 		}
 	case "quic":
 		o.URL = httpOrigin(raw)
@@ -531,6 +565,25 @@ func withWSPath(raw, fallback string) string {
 		u.Path = fallback
 	}
 	return u.String()
+}
+
+// forceWSPath sets the WS resource, replacing a leftover GET cover.
+func forceWSPath(raw, path string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	if path != "" {
+		u.Path = path
+	}
+	return u.String()
+}
+
+// setStatusFront is the live bulk front STATUS front= reports.
+func setStatusFront(t string) {
+	statusFrontMu.Lock()
+	statusFront = t
+	statusFrontMu.Unlock()
 }
 
 // ipCIDR appends /24 when overlay IP has no prefix.
@@ -856,6 +909,12 @@ func statusMTU(state, msg, ip string, tun bool, dns string, mtu int, up, down ui
 	routeKV := ""
 	if rts != "" {
 		routeKV = " routes=" + rts
+	}
+	statusFrontMu.Lock()
+	front := statusFront
+	statusFrontMu.Unlock()
+	if front != "" {
+		routeKV += " front=" + front
 	}
 	if fronts := transport.FormatFronts(transport.LearnedFronts()); fronts != "" {
 		routeKV += " fronts=" + fronts
