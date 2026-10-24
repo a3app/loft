@@ -26,7 +26,7 @@ make bench         # dist/clients/go/loft-bench
 make macos         # dist/clients/macOS/loft.app
 make macos-dmg     # dist/clients/macOS/loft-*-macos-<arch>.dmg
 make macos-dmgs    # оба DMG, arm64 и x86_64 (CI)
-make android       # dist/clients/Android/loft.app + app-debug.apk
+make android       # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make dist-clients  # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
 ```
 

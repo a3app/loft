@@ -14,7 +14,7 @@ Overlay — обычная сеть Android: одна системная стр�
 clients/Android/
   design/                  спецификация UX и HTML-макет телефона
   design/tv/               макет с дивана
-  emulator/                содержимое macOS loft.app (копируется в dist)
+  emulator/                содержимое macOS loft.app / loft-tv.app / loft-gtv.app
   app/src/main/java/app/loft/android/
     LoftVpnService.java    tun ↔ Engine, путь, dual-stack, protect
     MainActivity.java      Главная / Подключения / Настройки
@@ -32,6 +32,14 @@ make android                 # из корня репозитория; нуже�
 # или: make -C clients/Android
 ```
 
-Пишет `dist/clients/Android/app-debug.apk` и `loft.app`. Промежуточное — в `dist/clients/Android/gradle/`, не в `clients/Android/`. Двойной щелчок по `loft.app` поднимает AVD `loft-phone`, ставит этот APK, кладёт loft, Browser, Apps и Settings на домашний экран и открывает loft. Apps открывает список приложений лаунчера; Settings — настройки ОС. В AOSP нет Chrome; Browser — WebView Shell. Intel Mac + AMD GPU — SwiftShader (`-gpu swiftshader_indirect`); host GLES даёт чёрное окно.
+Пишет `dist/clients/Android/app-debug.apk`, `app-tv-debug.apk`, `loft.app`, `loft-tv.app` и `loft-gtv.app`. Промежуточное — в `dist/clients/Android/gradle/`, не в `clients/Android/`. Три лаунчера macOS, у каждого свой AVD; serial привязан к этому AVD, их можно держать вместе. Стрелки на TV — D-pad.
+
+| App | AVD | Образ | APK | Activity |
+|--|--|--|--|--|
+| `loft.app` | `loft-phone` | AOSP телефон API 34 | телефон | `MainActivity` — loft, Browser, Apps, Settings на домашнем экране |
+| `loft-tv.app` | `loft-tv` | AOSP Android TV API 36 x86_64, `tv_1080p` | TV | `TvActivity` |
+| `loft-gtv.app` | `loft-gtv` | Google TV API 36 x86_64, `tv_1080p` | TV | `TvActivity` |
+
+AVD для TV один раз: `make -C clients/Android avds` (`emulator/setup-avds`). В AOSP нет Chrome; Browser на телефоне — WebView Shell. Intel Mac + AMD GPU — SwiftShader (`-gpu swiftshader_indirect`); host GLES даёт чёрное окно. Журналы: `~/Library/Logs/loft-emulator.log`, `loft-tv-emulator.log`, `loft-gtv-emulator.log`.
 
 Id: телефон `app.loft.android`, TV `app.loft.android.tv`. Тип VPN: `VpnService`. Одна системная строка на устройство. Flavor `tv` — Leanback. Канал `github` (по умолчанию) — Dist/sideload с обновлением из приложения; `store` — Play, код обновления вырезан. `make -C clients/Android release` подписывает `secrets/android-github.p12` и пишет `loft-{ver}-android.apk` и `loft-{ver}-android-tv.apk`. Первый ключ: `make -C clients/Android github-key`.

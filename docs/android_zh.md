@@ -45,7 +45,15 @@ Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProte
 
 ## 5. 模拟器
 
-`make android` 把 `loft.app` 和 `app-debug.apk` 写到 [`dist/clients/Android/`](../dist/clients/Android/)。Gradle 中间文件在那里的 `gradle/`，不进 `clients/Android/`。在 macOS 上双击 `loft.app`：启动 AVD `loft-phone`，`adb install -r` 这份 APK，把 loft 和 Browser（AOSP WebView Shell）钉到主屏，打开 `app.loft.android/.MainActivity`。内容在 [`clients/Android/emulator/`](../clients/Android/emulator/)。SDK：`ANDROID_HOME` 或 `/usr/local/share/android-commandlinetools`。日志：`~/Library/Logs/loft-emulator.log`。Intel Mac 配 AMD GPU 时 `-gpu auto`（gfxstream/host GLES）会黑屏；`loft.app` 用 `-gpu swiftshader_indirect` 启动 AVD。
+`make android` 把 `loft.app`、`loft-tv.app`、`loft-gtv.app` 以及 `app-debug.apk`、`app-tv-debug.apk` 写到 [`dist/clients/Android/`](../dist/clients/Android/)。Gradle 中间文件在那里的 `gradle/`，不进 `clients/Android/`。内容在 [`clients/Android/emulator/`](../clients/Android/emulator/)。SDK：`ANDROID_HOME` 或 `/usr/local/share/android-commandlinetools`。Intel Mac 配 AMD GPU 时 `-gpu auto`（gfxstream/host GLES）会黑屏；启动器用 `-gpu swiftshader_indirect` 拉起各自的 AVD。serial 按 AVD 名匹配，三个可以同时跑。电视方向键是 D-pad。电视 AVD：`make -C clients/Android avds`。
+
+| App | AVD | 镜像 | 启动 |
+|--|--|--|--|
+| `loft.app` | `loft-phone` | AOSP 手机 API 34 | `app.loft.android/.MainActivity`；把 loft、Browser（WebView Shell）、Apps、Settings 钉到主屏 |
+| `loft-tv.app` | `loft-tv` | AOSP Android TV API 36 x86_64 | `app.loft.android.tv/app.loft.android.TvActivity` |
+| `loft-gtv.app` | `loft-gtv` | Google TV API 36 x86_64 | `app.loft.android.tv/app.loft.android.TvActivity` |
+
+日志：`~/Library/Logs/loft-emulator.log`、`loft-tv-emulator.log`、`loft-gtv-emulator.log`。
 
 ## 6. 渠道
 

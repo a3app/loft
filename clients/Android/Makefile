@@ -1,4 +1,4 @@
-# Local phone APK + macOS loft.app → ../../dist/clients/Android/
+# Local phone+TV APKs + macOS loft.app / loft-tv.app / loft-gtv.app → ../../dist/clients/Android/
 # Intermediates stay under dist/clients/Android/gradle, not clients/Android/.
 # Channel github is the Dist/sideload APK (self-update). store is Play/App Gallery.
 
@@ -14,7 +14,7 @@ ANDROID_HOME ?= /usr/local/share/android-commandlinetools
 ANDROID_SDK_ROOT ?= $(ANDROID_HOME)
 export JAVA_HOME ANDROID_HOME ANDROID_SDK_ROOT
 
-.PHONY: all debug release test github-key clean
+.PHONY: all debug release test github-key avds clean
 
 all: debug
 
@@ -41,6 +41,9 @@ release: $(AAR)
 	cp $(DIST)/loft-$(VER)-android.apk $(DIST)/app-release.apk
 	cp $(DIST)/loft-$(VER)-android-tv.apk $(DIST)/app-tv-release.apk
 	cd $(DIST) && (command -v sha256sum >/dev/null && sha256sum loft-$(VER)-android.apk loft-$(VER)-android-tv.apk || shasum -a 256 loft-$(VER)-android.apk loft-$(VER)-android-tv.apk) > loft-android-$(VER)-SHA256SUMS.txt
+
+avds:
+	./emulator/setup-avds
 
 github-key:
 	mkdir -p $(ROOT)/secrets

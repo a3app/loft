@@ -45,7 +45,15 @@ Java-пакет `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketPr
 
 ## 5. Эмулятор
 
-`make android` пишет `loft.app` рядом с `app-debug.apk` в [`dist/clients/Android/`](../dist/clients/Android/). Промежуточное Gradle — там же в `gradle/`, не в `clients/Android/`. На macOS двойной щелчок: поднять AVD `loft-phone`, `adb install -r` этот APK, положить loft и Browser (AOSP WebView Shell) на домашний экран, запустить `app.loft.android/.MainActivity`. Содержимое — [`clients/Android/emulator/`](../clients/Android/emulator/). SDK: `ANDROID_HOME` или `/usr/local/share/android-commandlinetools`. Журнал: `~/Library/Logs/loft-emulator.log`. На Intel Mac с AMD GPU окно остаётся чёрным при `-gpu auto` (gfxstream/host GLES); `loft.app` поднимает AVD с `-gpu swiftshader_indirect`.
+`make android` пишет `loft.app`, `loft-tv.app` и `loft-gtv.app` рядом с `app-debug.apk` и `app-tv-debug.apk` в [`dist/clients/Android/`](../dist/clients/Android/). Промежуточное Gradle — там же в `gradle/`, не в `clients/Android/`. Содержимое — [`clients/Android/emulator/`](../clients/Android/emulator/). SDK: `ANDROID_HOME` или `/usr/local/share/android-commandlinetools`. На Intel Mac с AMD GPU окно остаётся чёрным при `-gpu auto` (gfxstream/host GLES); лаунчеры поднимают каждый AVD с `-gpu swiftshader_indirect`. Serial выбирается по имени AVD, три штуки можно держать вместе. Стрелки на TV — D-pad. AVD для TV: `make -C clients/Android avds`.
+
+| App | AVD | Образ | Запуск |
+|--|--|--|--|
+| `loft.app` | `loft-phone` | AOSP телефон API 34 | `app.loft.android/.MainActivity`; loft, Browser (WebView Shell), Apps, Settings на домашнем экране |
+| `loft-tv.app` | `loft-tv` | AOSP Android TV API 36 x86_64 | `app.loft.android.tv/app.loft.android.TvActivity` |
+| `loft-gtv.app` | `loft-gtv` | Google TV API 36 x86_64 | `app.loft.android.tv/app.loft.android.TvActivity` |
+
+Журналы: `~/Library/Logs/loft-emulator.log`, `loft-tv-emulator.log`, `loft-gtv-emulator.log`.
 
 ## 6. Каналы
 

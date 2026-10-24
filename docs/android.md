@@ -45,7 +45,15 @@ Path change: `ConnectivityManager.NetworkCallback` on the default network. The s
 
 ## 5. Emulator
 
-`make android` writes `loft.app` next to `app-debug.apk` in [`dist/clients/Android/`](../dist/clients/Android/). Gradle intermediates stay there under `gradle/`, not in `clients/Android/`. Double-click `loft.app` on macOS: boot AVD `loft-phone`, `adb install -r` that APK, pin loft and Browser (AOSP WebView Shell) on the home screen, start `app.loft.android/.MainActivity`. Payload lives in [`clients/Android/emulator/`](../clients/Android/emulator/). SDK: `ANDROID_HOME` or `/usr/local/share/android-commandlinetools`. Log: `~/Library/Logs/loft-emulator.log`. On Intel Mac with an AMD GPU the window stays black with `-gpu auto` (gfxstream/host GLES); `loft.app` starts the AVD with `-gpu swiftshader_indirect`.
+`make android` writes `loft.app`, `loft-tv.app`, and `loft-gtv.app` next to `app-debug.apk` and `app-tv-debug.apk` in [`dist/clients/Android/`](../dist/clients/Android/). Gradle intermediates stay there under `gradle/`, not in `clients/Android/`. Payload lives in [`clients/Android/emulator/`](../clients/Android/emulator/). SDK: `ANDROID_HOME` or `/usr/local/share/android-commandlinetools`. On Intel Mac with an AMD GPU the window stays black with `-gpu auto` (gfxstream/host GLES); the launchers start each AVD with `-gpu swiftshader_indirect`. Serial is matched by AVD name, so the three can run together. TV arrows are the D-pad. Create TV AVDs with `make -C clients/Android avds`.
+
+| App | AVD | Image | Starts |
+|--|--|--|--|
+| `loft.app` | `loft-phone` | AOSP phone API 34 | `app.loft.android/.MainActivity`; pins loft, Browser (WebView Shell), Apps, Settings |
+| `loft-tv.app` | `loft-tv` | AOSP Android TV API 36 x86_64 | `app.loft.android.tv/app.loft.android.TvActivity` |
+| `loft-gtv.app` | `loft-gtv` | Google TV API 36 x86_64 | `app.loft.android.tv/app.loft.android.TvActivity` |
+
+Logs: `~/Library/Logs/loft-emulator.log`, `loft-tv-emulator.log`, `loft-gtv-emulator.log`.
 
 ## 6. Channels
 

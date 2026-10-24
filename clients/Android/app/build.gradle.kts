@@ -92,13 +92,27 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 }
 
-fun packEmulatorApp(apkDir: File, versionName: String, versionCode: Int) {
+class EmuSpec(
+    val dirName: String,
+    val bundleId: String,
+    val name: String,
+    val displayName: String,
+    val variant: String,
+)
+
+val emuSpecs = listOf(
+    EmuSpec("loft.app", "app.loft.android.emulator", "loft", "loft", "phone"),
+    EmuSpec("loft-tv.app", "app.loft.android.emulator.tv", "loft tv", "loft tv", "tv"),
+    EmuSpec("loft-gtv.app", "app.loft.android.emulator.gtv", "loft gtv", "loft gtv", "gtv"),
+)
+
+fun packEmulatorApp(apkDir: File, versionName: String, versionCode: Int, spec: EmuSpec) {
     val src = rootProject.projectDir.resolve("emulator")
     val script = src.resolve("loft")
     val plistIn = src.resolve("Info.plist")
     require(script.isFile) { "missing ${script}" }
     require(plistIn.isFile) { "missing ${plistIn}" }
-    val bundle = apkDir.resolve("loft.app")
+    val bundle = apkDir.resolve(spec.dirName)
     if (bundle.exists()) bundle.deleteRecursively()
     val contents = bundle.resolve("Contents")
     val macos = contents.resolve("MacOS")
@@ -107,7 +121,11 @@ fun packEmulatorApp(apkDir: File, versionName: String, versionCode: Int) {
     resources.mkdirs()
     script.copyTo(macos.resolve("loft"))
     macos.resolve("loft").setExecutable(true, false)
+    resources.resolve("variant").writeText(spec.variant)
     val plist = plistIn.readText()
+        .replace("__LOFT_BUNDLE_ID__", spec.bundleId)
+        .replace("__LOFT_NAME__", spec.name)
+        .replace("__LOFT_DISPLAY_NAME__", spec.displayName)
         .replace("__LOFT_VERSION__", versionName)
         .replace("__LOFT_CODE__", versionCode.toString())
     contents.resolve("Info.plist").writeText(plist)
@@ -134,16 +152,14 @@ afterEvaluate {
         inputs.dir(rootProject.projectDir.resolve("emulator"))
         outputs.file(androidDist.resolve("app-debug.apk"))
         outputs.file(androidDist.resolve("app-tv-debug.apk"))
-        outputs.dir(androidDist.resolve("loft.app"))
+        emuSpecs.forEach { outputs.dir(androidDist.resolve(it.dirName)) }
         doLast {
             androidDist.mkdirs()
             phoneApk.get().asFile.copyTo(androidDist.resolve("app-debug.apk"), overwrite = true)
             tvApk.get().asFile.copyTo(androidDist.resolve("app-tv-debug.apk"), overwrite = true)
-            packEmulatorApp(
-                androidDist,
-                android.defaultConfig.versionName!!,
-                android.defaultConfig.versionCode!!,
-            )
+            val ver = android.defaultConfig.versionName!!
+            val code = android.defaultConfig.versionCode!!
+            emuSpecs.forEach { packEmulatorApp(androidDist, ver, code, it) }
         }
     }
     tasks.register("packageEmulatorApp") {

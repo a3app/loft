@@ -20,7 +20,7 @@ make probe     # dist/clients/go/loft-probe
 make macos     # dist/clients/macOS/loft.app
 make macos-dmg # dist/clients/macOS/loft-*-macos-<arch>.dmg  (симлинк Applications)
 make macos-dmgs # оба DMG, arm64 и x86_64 (CI)
-make android   # dist/clients/Android/loft.app + app-debug.apk
+make android   # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make dist      # tarball/.deb ноды + архивы CLI
 ```
 

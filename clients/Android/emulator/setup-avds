@@ -1,0 +1,138 @@
+#!/bin/bash
+# Create local AVDs for the macOS loft launchers (phone is already expected).
+# loft-tv  = AOSP Android TV API 36 x86_64, device tv_1080p
+# loft-gtv = Google TV API 36 x86_64, device tv_1080p
+#
+# Writes ~/.android/avd directly. avdmanager rejects Google TV's stock
+# TagId "google-tv,google_apis" (comma) when the image was unpacked by hand.
+set -euo pipefail
+
+SDK=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/share/android-commandlinetools}}
+export ANDROID_HOME=$SDK ANDROID_SDK_ROOT=$SDK
+SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+EMU="$SDK/emulator/emulator"
+[ -x "$EMU" ] || { echo "error: emulator missing under $SDK" >&2; exit 1; }
+
+have_pkg() {
+	[ -d "$SDK/system-images/$(echo "$1" | awk -F';' '{print $2"/"$3"/"$4}')" ]
+}
+
+install_pkg() {
+	local p=$1
+	if have_pkg "$p"; then
+		echo "image $p"
+		return 0
+	fi
+	[ -x "$SDKM" ] || { echo "error: missing $p and sdkmanager" >&2; exit 1; }
+	echo "install $p"
+	yes | "$SDKM" --sdk_root="$SDK" "$p"
+}
+
+# Google TV source.properties ships TagId=google-tv,google_apis. The comma
+# is not a valid sdk package path segment. Keep the files on disk as google-tv.
+fix_gtv_tag() {
+	local src="$SDK/system-images/android-36/google-tv/x86_64/source.properties"
+	[ -f "$src" ] || return 0
+	python3 - "$src" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+t = p.read_text()
+t = t.replace("SystemImage.TagId=google-tv,google_apis", "SystemImage.TagId=google-tv")
+t = t.replace("SystemImage.TagDisplay=Google TV,Google APIs", "SystemImage.TagDisplay=Google TV")
+p.write_text(t)
+PY
+}
+
+write_avd() {
+	python3 - "$SDK" "$HOME" <<'PY'
+import pathlib, sys
+sdk, home = sys.argv[1], pathlib.Path(sys.argv[2])
+avd_root = home / ".android" / "avd"
+avd_root.mkdir(parents=True, exist_ok=True)
+
+specs = [
+    {
+        "name": "loft-tv",
+        "tag": "android-tv",
+        "tag_display": "Android TV",
+        "sysdir": "system-images/android-36/android-tv/x86_64/",
+        "play": "false",
+    },
+    {
+        "name": "loft-gtv",
+        "tag": "google-tv",
+        "tag_display": "Google TV",
+        "sysdir": "system-images/android-36/google-tv/x86_64/",
+        "play": "true",
+    },
+]
+
+for s in specs:
+    name = s["name"]
+    img = pathlib.Path(sdk) / s["sysdir"]
+    if not (img / "system.img").is_file():
+        raise SystemExit(f"missing {img / 'system.img'}")
+    d = avd_root / f"{name}.avd"
+    d.mkdir(parents=True, exist_ok=True)
+    (avd_root / f"{name}.ini").write_text(
+        "avd.ini.encoding=UTF-8\n"
+        f"path={d}\n"
+        f"path.rel=avd/{name}.avd\n"
+        "target=android-36\n"
+    )
+    (d / "config.ini").write_text(
+        f"AvdId={name}\n"
+        f"PlayStore.enabled={s['play']}\n"
+        "abi.type=x86_64\n"
+        f"avd.ini.displayname={name}\n"
+        "avd.ini.encoding=UTF-8\n"
+        "disk.dataPartition.size=6G\n"
+        "fastboot.forceColdBoot=yes\n"
+        "hw.accelerometer=no\n"
+        "hw.arc=false\n"
+        "hw.audioInput=yes\n"
+        "hw.battery=no\n"
+        "hw.camera.back=none\n"
+        "hw.camera.front=none\n"
+        "hw.cpu.arch=x86_64\n"
+        "hw.cpu.ncore=4\n"
+        "hw.dPad=yes\n"
+        "hw.device.manufacturer=Google\n"
+        "hw.device.name=tv_1080p\n"
+        "hw.gps=no\n"
+        "hw.gpu.enabled=yes\n"
+        "hw.gpu.mode=swiftshader_indirect\n"
+        "hw.initialOrientation=landscape\n"
+        "hw.keyboard=yes\n"
+        "hw.lcd.density=320\n"
+        "hw.lcd.height=1080\n"
+        "hw.lcd.width=1920\n"
+        "hw.mainKeys=yes\n"
+        "hw.ramSize=3072\n"
+        "hw.sdCard=no\n"
+        "hw.sensors.orientation=no\n"
+        "hw.sensors.proximity=no\n"
+        "hw.trackBall=no\n"
+        f"image.sysdir.1={s['sysdir']}\n"
+        "runtime.network.latency=none\n"
+        "runtime.network.speed=full\n"
+        "showDeviceFrame=no\n"
+        "skin.dynamic=yes\n"
+        "skin.name=1920x1080\n"
+        "skin.path=_no_skin\n"
+        f"tag.display={s['tag_display']}\n"
+        f"tag.id={s['tag']}\n"
+        "vm.heapSize=256\n"
+    )
+    print(f"avd {name}")
+PY
+}
+
+install_pkg "system-images;android-36;android-tv;x86_64"
+install_pkg "system-images;android-36;google-tv;x86_64"
+fix_gtv_tag
+write_avd
+
+echo "ok"
+"$EMU" -list-avds

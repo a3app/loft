@@ -4,7 +4,8 @@
         <item name="android:windowBackground">@drawable/splash_tv</item>
     </style>
 
-    <style name="Theme.Loft.Tv" parent="Theme.Leanback">
+    <!-- LoftActivity is AppCompat; Theme.Leanback is not and crashes at setContentView. -->
+    <style name="Theme.Loft.Tv" parent="Theme.Loft">
         <item name="android:windowBackground">@color/ink</item>
         <item name="android:colorBackground">@color/ink</item>
         <item name="android:textColor">@color/snow</item>
