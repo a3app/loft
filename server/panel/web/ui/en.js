@@ -2259,5 +2259,12 @@ window.LOFT_EN = {
   "Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».": "Drag to reorder; changes apply at once. The link check is in the channel's dialog in “External channels”.",
   "Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».": "Drag a chip onto a policy on the left. A member rule beats a tag rule. Address lists (by site) are in “External channels” → “Egress rules”.",
   "Каналы WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.": "WireGuard, OpenVPN, SSTP, ZeroTier, proxy and Xray channels. Exit rules by address list live here too.",
-  "Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.": "Addresses and routes of the server's network adapters. An unconfirmed change rolls back after 2 minutes."
+  "Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.": "Addresses and routes of the server's network adapters. An unconfirmed change rolls back after 2 minutes.",
+  "Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию включает адаптер сервера и все каналы с выходом; члены без назначения идут по ней. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.": "A policy is a set of connections for internet exit and who uses it. The default policy includes the server adapter and every exit channel; unassigned members follow it. Extra policies are failover or multipath over the chosen channels.",
+  "Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию — адаптер сервера и все каналы с выходом.": "Internet access policies: which connections to try and who uses them. The default policy is the server adapter and every exit channel.",
+  "адаптер": "adapter",
+  " · адаптер": " · adapter",
+  " · адаптер · работает": " · adapter · up",
+  "· работает": "· up",
+  ". Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».": ". Drag to reorder; changes apply at once. The link check is in the channel's dialog in “External channels”."
 };

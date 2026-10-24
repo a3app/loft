@@ -1042,7 +1042,7 @@
   const connState = n => {
     if (isNative(n)) {
       const d = nativeDev();
-      return `<span class="sub ${d ? 'okt' : ''}"><span class="mono">${esc(d || 'direct')}</span> · адаптер${d ? ' · работает' : ''}</span>`;
+      return `<span class="sub ${d ? 'okt' : ''}"><span class="mono">${esc(d || 'direct')}</span>${d ? ' · адаптер · работает' : ' · адаптер'}</span>`;
     }
     const c = chOf(n);
     return c ? chState(c) : `<span class="sub"><span class="mono">${esc(n)}</span></span>`;
