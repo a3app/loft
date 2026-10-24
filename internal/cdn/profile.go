@@ -23,6 +23,10 @@ type Profile struct {
 	FetchDest    string
 	// TripTimeout is one GET after handshake. Zero is 15s. Yandex origin is 5s.
 	TripTimeout time.Duration
+	// PullWait is how long a non-Puller HTTP/2 GET may sit before an empty
+	// 200. Zero keeps the direct default (5s). An edge that cuts origin-fetch
+	// at 5s must sit less than that, or the response is a 504.
+	PullWait time.Duration
 }
 
 // GenericGET is the default GET front: 16 KiB headers, inflight 8, asset-shaped path.

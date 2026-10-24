@@ -68,7 +68,8 @@ type GET struct {
 	trips        getTrips
 	lastDrop     atomic.Int64
 	budget       atomic.Int32  // live header budget; 413 halves it, floor 1024
-	miss         atomic.Int32  // consecutive same-seq retry 404s; 3 → dropLostSid+die
+	miss         atomic.Int32  // first 404 of a quiet period gates Tune404
+	lastOK       atomic.Int64  // unix nano of the last GET that returned a body
 	calmUntil    atomic.Int64  // unix nano; H2 ENHANCE_YOUR_CALM shared backoff
 	liveInflight atomic.Int32  // node Tune / Status; pump caps outstanding
 	note         atomic.Uint32 // packed CmdTune to send once on next GET
@@ -250,6 +251,7 @@ func (g *GET) Start(ctx context.Context) error {
 		if g.liveInflight.Load() <= 0 {
 			g.liveInflight.Store(int32(n))
 		}
+		g.noteFrontOK()
 		go g.pump(loopCtx, n)
 		return nil
 	}
@@ -327,6 +329,7 @@ func (g *GET) Start(ctx context.Context) error {
 	if g.liveInflight.Load() <= 0 {
 		g.liveInflight.Store(int32(n))
 	}
+	g.noteFrontOK()
 	go g.pump(loopCtx, n)
 	return nil
 }
@@ -649,6 +652,7 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 			}
 			t0 := time.Now()
 			tries := 0
+			holds := 0
 			payload := j.payload
 			for {
 				if g.applied.Load() >= j.seq && j.seq > 0 {
@@ -660,6 +664,7 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 				_, _, _, err := g.roundTripAt(ctx, nil, payload, j.seq)
 				if err == nil {
 					g.miss.Store(0)
+					g.noteFrontOK()
 					break
 				}
 				// Pump Close cancels ctx; do not die() on that or Supervise
@@ -674,20 +679,19 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 				}
 				if status404(err) {
 					// First-attempt 404s race across inflight workers; that
-					// is edge noise. Count only same-seq retries. Three
-					// retry 404s is origin without sid.
+					// is edge noise. Three retries of this seq is origin
+					// without the sid. A shared counter used to trip when
+					// three workers each saw one retry, and dropLostSid
+					// closed the mux (resume, streams drop).
 					if tries == 0 {
 						if g.miss.Load() == 0 {
 							g.queueNote(wire.Tune404)
 						}
-					} else {
-						n404 := g.miss.Add(1)
-						if n404 >= 3 {
-							fmt.Fprintf(os.Stderr, "get front sid lost seq=%d\n", j.seq)
-							g.dropLostSid()
-							g.die()
-							return
-						}
+					} else if sameSeqLost(tries) {
+						fmt.Fprintf(os.Stderr, "get front sid lost seq=%d\n", j.seq)
+						g.dropLostSid()
+						g.die()
+						return
 					}
 					fmt.Fprintf(os.Stderr, "get front 404 seq=%d retry\n", j.seq)
 				} else if status429(err) {
@@ -703,9 +707,20 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 				// the same sid instead.
 				tries++
 				if getGiveUp(tries, t0) {
-					fmt.Fprintf(os.Stderr, "get front give up seq=%d %v\n", j.seq, err)
-					g.die()
-					return
+					// One seq's 504 or trip-cancel used to die() the front.
+					// Supervise then resume'd a new sid and every stream
+					// reset. Hold the seq while some other GET still
+					// returns; a dead edge still give-up's.
+					if holdGiveUp(holds, err, g.frontAlive(time.Now())) {
+						holds++
+						tries = 0
+						t0 = time.Now()
+						fmt.Fprintf(os.Stderr, "get front hold seq=%d %v\n", j.seq, err)
+					} else {
+						fmt.Fprintf(os.Stderr, "get front give up seq=%d %v\n", j.seq, err)
+						g.die()
+						return
+					}
 				}
 				if g.applied.Load() >= j.seq && j.seq > 0 {
 					break
@@ -725,7 +740,7 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 					}
 					continue
 				}
-				if frontReset(err) || radioGap(err) {
+				if frontReset(err) || radioGap(err) || tripCancel(err) {
 					fmt.Fprintf(os.Stderr, "get front reset seq=%d %v\n", j.seq, err)
 					g.busy.Store(false)
 					g.dropIdleFront()
@@ -758,10 +773,61 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 }
 
 const (
-	getRetryMax    = 8
-	getRetryWindow = 12 * time.Second
-	getCalmBackoff = 2 * time.Second
+	getRetryMax      = 8
+	getRetryWindow   = 12 * time.Second
+	getCalmBackoff   = 2 * time.Second
+	getHoldMax       = 1
+	frontAliveWindow = 15 * time.Second
 )
+
+// sameSeqLost is three retries of this seq (tries is the failure count
+// already finished). The first 404 is tries==0 and does not count.
+func sameSeqLost(tries int) bool { return tries >= 3 }
+
+// noteFrontOK marks a GET that returned a body. give-up uses it so one
+// edge 504 does not resume the session while the rest of the pool works.
+func (g *GET) noteFrontOK() { g.lastOK.Store(time.Now().UnixNano()) }
+
+func (g *GET) frontAlive(now time.Time) bool {
+	ns := g.lastOK.Load()
+	if ns == 0 {
+		return false
+	}
+	return now.Sub(time.Unix(0, ns)) < frontAliveWindow
+}
+
+// edgeBlip is an edge/timeout failure of one GET. 404 is not a blip:
+// repeated 404 of the same seq is a lost sid.
+func edgeBlip(err error) bool {
+	if err == nil || status404(err) {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "status 502") ||
+		strings.Contains(s, "status 503") ||
+		strings.Contains(s, "status 504") ||
+		strings.Contains(s, "timeout") ||
+		strings.Contains(s, "deadline") ||
+		strings.Contains(s, "canceled") ||
+		strings.Contains(s, "cancelled")
+}
+
+// holdGiveUp keeps the sid across one extra retry window when the front
+// still returns bodies. A second window dies, so a poisoned URL cannot
+// HOL-block the mux forever.
+func holdGiveUp(holds int, err error, alive bool) bool {
+	return holds < getHoldMax && edgeBlip(err) && alive
+}
+
+// tripCancel is the per-GET timer (child ctx). The pump ctx is checked
+// first; this one means the edge sent no byte inside TripTimeout.
+func tripCancel(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "context canceled") || strings.Contains(s, "context cancelled")
+}
 
 // getGiveUp is the worker retry cap: radioGap used to continue past this
 // and occupy inflight forever (SOCKS HOL, LIVE n=1, no die/resume).
@@ -1840,7 +1906,7 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Yandex Cookie TTFB went 238ms (pad) → 973ms (14 KiB up) and
 	// CDN upload sat at ~3 Mbit. Return empty at once if not Puller;
 	// jump stays false so downSeq is not skipped.
-	turn := getH2PullerWait
+	turn := s.h2Turn()
 	jump := false
 	if r.ProtoMajor < 2 {
 		jump = true
@@ -2058,8 +2124,18 @@ const (
 	getDgramHold = 80 * time.Millisecond
 	getTurnWait  = 5 * time.Millisecond
 	// HTTP/2 waiters poll until they are Puller. Safety cap only.
+	// Tight edges override this via Profile.PullWait (Yandex origin-fetch is 5s).
 	getH2PullerWait = 5 * time.Second
 )
+
+// h2Turn is how long a non-Puller HTTP/2 GET waits to become Puller.
+// Yandex PullWait is 1s: a 5s sit is an nginx 504 and the client drops the sid.
+func (s *GETServer) h2Turn() time.Duration {
+	if s != nil && s.Profile.PullWait > 0 {
+		return s.Profile.PullWait
+	}
+	return getH2PullerWait
+}
 
 // pullHold is how long the exclusive Puller waits for mux downlink.
 // Empty keepalive pads return immediately so they do not stall ping/upload.

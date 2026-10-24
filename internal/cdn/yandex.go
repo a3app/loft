@@ -22,5 +22,9 @@ func Yandex() Profile {
 	p.UplinkHeader = "Cookie"
 	// Origin fetch dies at 5s (504). Waiting 15s HOL-blocks mux on a dead GET.
 	p.TripTimeout = 6 * time.Second
+	// Non-Puller h2 GETs used to sit getH2PullerWait (5s). That is the
+	// origin-fetch cliff: nginx 504, client give-up, new sid, streams drop.
+	// 1s still lets a waiter become Puller; the slot is free before the edge cuts.
+	p.PullWait = time.Second
 	return p
 }

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/a3app/loft/internal/cdn"
 	"github.com/a3app/loft/internal/config"
 	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/wire"
@@ -42,6 +43,56 @@ func TestGetGiveUp(t *testing.T) {
 	}
 	if !getGiveUp(1, t0.Add(-getRetryWindow-time.Second)) {
 		t.Fatal("past window")
+	}
+}
+
+func TestSameSeqLost(t *testing.T) {
+	if sameSeqLost(0) || sameSeqLost(1) || sameSeqLost(2) {
+		t.Fatal("early")
+	}
+	if !sameSeqLost(3) {
+		t.Fatal("third retry")
+	}
+}
+
+func TestHoldGiveUpKeepsSidOn504(t *testing.T) {
+	err := fmt.Errorf("GET front: status 504: Gateway Time-out")
+	if !edgeBlip(err) {
+		t.Fatal("504")
+	}
+	if edgeBlip(fmt.Errorf("GET front: status 404: missing")) {
+		t.Fatal("404 is sid loss")
+	}
+	if !holdGiveUp(0, err, true) {
+		t.Fatal("hold")
+	}
+	if holdGiveUp(getHoldMax, err, true) || holdGiveUp(0, err, false) {
+		t.Fatal("second window or dead front")
+	}
+	if !tripCancel(fmt.Errorf(`Get "https://cdn.example/x": context canceled`)) {
+		t.Fatal("cancel")
+	}
+	var g GET
+	if g.frontAlive(time.Now()) {
+		t.Fatal("no success yet")
+	}
+	g.noteFrontOK()
+	if !g.frontAlive(time.Now()) {
+		t.Fatal("alive")
+	}
+	if g.frontAlive(time.Now().Add(frontAliveWindow + time.Second)) {
+		t.Fatal("stale")
+	}
+}
+
+func TestYandexH2Turn(t *testing.T) {
+	y := NewGETServerProfile("t", "/static/v3/build", cdn.Yandex())
+	if y.h2Turn() != time.Second {
+		t.Fatal(y.h2Turn())
+	}
+	plain := NewGETServerProfile("t", "/static/v3/build", cdn.GenericGET())
+	if plain.h2Turn() != getH2PullerWait {
+		t.Fatal(plain.h2Turn())
 	}
 }
 
