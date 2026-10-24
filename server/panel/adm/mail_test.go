@@ -225,6 +225,37 @@ func TestMailSaveFlow(t *testing.T) {
 	}
 }
 
+func TestMailBoxSaveMapsOnly(t *testing.T) {
+	o, f := mailOps(t)
+	ctx := context.Background()
+	if _, err := o.MailDomainSave(ctx, admproto.MailDomainSave{MailDomain: admproto.MailDomain{Name: "example.net", Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	f.scripts = nil
+	if _, err := o.MailBoxSave(ctx, admproto.MailBoxSave{MailBox: admproto.MailBox{Address: "a@example.net", Hash: testHash, Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(f.scripts, "\n")
+	for _, w := range []string{"postmap hash:" + mailPostfixDir + "/vmailbox", "systemctl reload-or-restart postfix"} {
+		if !strings.Contains(got, w) {
+			t.Fatalf("maps apply lacks %q:\n%s", w, got)
+		}
+	}
+	for _, w := range []string{"postfix check", "doveconf -n", "postconf -e", "opendkim"} {
+		if strings.Contains(got, w) {
+			t.Fatalf("mailbox save ran a full apply (%q):\n%s", w, got)
+		}
+	}
+	f.scripts = nil
+	if _, err := o.MailAliasSave(ctx, admproto.MailAliasSave{MailAlias: admproto.MailAlias{From: "info@example.net", To: []string{"a@example.net"}}}); err != nil {
+		t.Fatal(err)
+	}
+	got = strings.Join(f.scripts, "\n")
+	if !strings.Contains(got, "postmap hash:"+mailPostfixDir+"/valias") || strings.Contains(got, "postfix check") {
+		t.Fatalf("alias save:\n%s", got)
+	}
+}
+
 func TestMailRejectsInjection(t *testing.T) {
 	o, _ := mailOps(t)
 	ctx := context.Background()

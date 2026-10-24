@@ -23,9 +23,11 @@ import (
 	"github.com/a3app/loft/server/panel/admproto"
 )
 
-// Mail: the operator's intent lives in /etc/loft-panel/mail.json, and every
-// change writes all the files again, checks them with postfix check and
-// doveconf, and only then reloads. A failed check puts every file back —
+// Mail: the operator's intent lives in /etc/loft-panel/mail.json.
+// Adding a domain (or applying after a package) writes every file, checks
+// them with postfix check and doveconf, then reloads. A mailbox or alias
+// only rebuilds the maps and reloads Postfix: Dovecot rereads its users
+// file, OpenDKIM and nginx stay. A failed full check puts every file back —
 // a broken main.cf stops mail for every domain, not only the one edited.
 
 func (o *Ops) mailFile() string {
@@ -126,6 +128,15 @@ func (o *Ops) Mail(ctx context.Context) (admproto.MailView, error) {
 	return o.mailView(ctx, s), nil
 }
 
+type mailViewSnap struct {
+	used    map[string]float64
+	svcs    []admproto.MailService
+	dovecot string
+	at      time.Time
+}
+
+const mailSnapFresh = 10 * time.Second
+
 func (o *Ops) mailView(ctx context.Context, s *mailStore) admproto.MailView {
 	v := admproto.MailView{Installed: o.mailInstalled(), Helo: s.helo(), Domains: []admproto.MailDomain{},
 		Boxes: []admproto.MailBox{}, Aliases: []admproto.MailAlias{}, Services: []admproto.MailService{}, WebHosts: []string{}, Error: s.Error}
@@ -140,34 +151,24 @@ func (o *Ops) mailView(ctx context.Context, s *mailStore) admproto.MailView {
 		}
 		v.Domains = append(v.Domains, d)
 	}
-	used := o.mailUsage(ctx)
-	for _, b := range s.Boxes {
-		b.Hash = ""
-		b.UsedMB = used[b.Address]
-		v.Boxes = append(v.Boxes, b)
-	}
 	v.Aliases = append(v.Aliases, s.Aliases...)
 	if !v.Installed {
+		for _, b := range s.Boxes {
+			b.Hash = ""
+			v.Boxes = append(v.Boxes, b)
+		}
 		return v
+	}
+	sn := o.mailSnap(ctx)
+	for _, b := range s.Boxes {
+		b.Hash = ""
+		b.UsedMB = sn.used[b.Address]
+		v.Boxes = append(v.Boxes, b)
 	}
 	v.Webmail = e.Webmail
 	v.WebHosts = webHosts(s, e)
-	if out, err := o.host(ctx, "dovecot", "--version"); err == nil {
-		v.Dovecot = strings.Fields(out + " ")[0]
-	}
-	keys := []string{"postfix", "dovecot", "opendkim", "rspamd"}
-	out, _ := o.host(ctx, "systemctl", append([]string{"is-active"}, keys...)...)
-	st := strings.Fields(out)
-	for i, k := range keys {
-		state := "unknown"
-		if i < len(st) {
-			state = st[i]
-		}
-		if k == "rspamd" && !exists(o.sys("/usr/bin/rspamd")) {
-			state = "absent"
-		}
-		v.Services = append(v.Services, admproto.MailService{Key: k, State: state})
-	}
+	v.Dovecot = sn.dovecot
+	v.Services = sn.svcs
 	return v
 }
 
@@ -188,11 +189,18 @@ func certUntil(path string) (time.Time, error) {
 	return c.NotAfter, nil
 }
 
-// mailUsage is the size of every Maildir, in MB.
-func (o *Ops) mailUsage(ctx context.Context) map[string]float64 {
-	out := map[string]float64{}
-	res, _ := o.host(ctx, "sh", "-c", "du -sk "+mailRoot+"/*/* 2>/dev/null")
-	for _, ln := range strings.Split(res, "\n") {
+// mailSnap is usage and daemon state; systemd-run is paid once per few seconds.
+func (o *Ops) mailSnap(ctx context.Context) mailViewSnap {
+	if o.mSnap.used != nil && time.Since(o.mSnap.at) < mailSnapFresh {
+		return o.mSnap
+	}
+	out, _ := o.host(ctx, "sh", "-c", "du -sk "+mailRoot+"/*/* 2>/dev/null; echo @@; dovecot --version 2>/dev/null; echo @@; systemctl is-active postfix dovecot opendkim rspamd")
+	part := strings.SplitN(out, "@@", 3)
+	for len(part) < 3 {
+		part = append(part, "")
+	}
+	used := map[string]float64{}
+	for _, ln := range strings.Split(part[0], "\n") {
 		f := strings.Fields(ln)
 		if len(f) != 2 {
 			continue
@@ -203,9 +211,27 @@ func (o *Ops) mailUsage(ctx context.Context) map[string]float64 {
 		if err != nil || !ok || !ok2 {
 			continue
 		}
-		out[l+"@"+d] = kb / 1024
+		used[l+"@"+d] = kb / 1024
 	}
-	return out
+	dovecot := ""
+	if f := strings.Fields(part[1]); len(f) > 0 {
+		dovecot = f[0]
+	}
+	keys := []string{"postfix", "dovecot", "opendkim", "rspamd"}
+	st := strings.Fields(part[2])
+	var svcs []admproto.MailService
+	for i, k := range keys {
+		state := "unknown"
+		if i < len(st) {
+			state = st[i]
+		}
+		if k == "rspamd" && !exists(o.sys("/usr/bin/rspamd")) {
+			state = "absent"
+		}
+		svcs = append(svcs, admproto.MailService{Key: k, State: state})
+	}
+	o.mSnap = mailViewSnap{used: used, svcs: svcs, dovecot: dovecot, at: time.Now()}
+	return o.mSnap
 }
 
 // mailEnvLite is what the view needs without asking systemd: certificates
@@ -315,7 +341,7 @@ func (o *Ops) MailBoxSave(ctx context.Context, req admproto.MailBoxSave) (admpro
 			l, d := splitAddr(b.Address)
 			drop = append(drop, mailRoot+"/"+d+"/"+l)
 		}
-		return o.mailCommit(ctx, s, drop)
+		return o.mailCommitMaps(ctx, s, drop)
 	}
 	if s.alias(b.Address) >= 0 {
 		return admproto.MailView{}, fmt.Errorf("%s is an alias", b.Address)
@@ -351,7 +377,7 @@ func (o *Ops) MailBoxSave(ctx context.Context, req admproto.MailBoxSave) (admpro
 		b.Created = s.Boxes[i].Created
 		s.Boxes[i] = b
 	}
-	return o.mailCommit(ctx, s, nil)
+	return o.mailCommitMaps(ctx, s, nil)
 }
 
 // MailAliasSave adds, changes or removes an alias.
@@ -395,7 +421,7 @@ func (o *Ops) MailAliasSave(ctx context.Context, req admproto.MailAliasSave) (ad
 		s.Aliases = append(s.Aliases, a)
 		sort.Slice(s.Aliases, func(i, j int) bool { return s.Aliases[i].From < s.Aliases[j].From })
 	}
-	return o.mailCommit(ctx, s, nil)
+	return o.mailCommitMaps(ctx, s, nil)
 }
 
 // MailCerts installs the certificates of the mail names; a name not listed
@@ -480,12 +506,24 @@ func (o *Ops) MailApply(ctx context.Context) (admproto.MailView, error) {
 // apply fails, with the error, so the screen shows what is wrong and the
 // next save tries again; the files on the machine stay the old ones.
 func (o *Ops) mailCommit(ctx context.Context, s *mailStore, drop []string) (admproto.MailView, error) {
+	return o.mailCommitKind(ctx, s, drop, false)
+}
+
+func (o *Ops) mailCommitMaps(ctx context.Context, s *mailStore, drop []string) (admproto.MailView, error) {
+	return o.mailCommitKind(ctx, s, drop, true)
+}
+
+func (o *Ops) mailCommitKind(ctx context.Context, s *mailStore, drop []string, mapsOnly bool) (admproto.MailView, error) {
 	if s.DESKey == "" {
 		s.DESKey = randText(24)
 	}
 	var aerr error
 	if o.mailInstalled() {
-		aerr = o.mailApply(ctx, s)
+		if mapsOnly && s.Error == "" {
+			aerr = o.mailApplyMaps(ctx, s)
+		} else {
+			aerr = o.mailApply(ctx, s)
+		}
 	} else if len(s.Domains) > 0 {
 		aerr = errors.New("the mail server package is not installed")
 	}
@@ -552,6 +590,21 @@ func (o *Ops) mailEnv(ctx context.Context) (mailEnv, error) {
 	return e, nil
 }
 
+func (o *Ops) mailEnvCached(ctx context.Context) (mailEnv, error) {
+	if !o.mEnvAt.IsZero() && time.Since(o.mEnvAt) < time.Minute {
+		e := o.mEnv
+		lite := o.mailEnvLite()
+		e.Certs, e.Webmail, e.PHPSock = lite.Certs, lite.Webmail, lite.PHPSock
+		return e, nil
+	}
+	e, err := o.mailEnv(ctx)
+	if err != nil {
+		return e, err
+	}
+	o.mEnv, o.mEnvAt = e, time.Now()
+	return e, nil
+}
+
 // dkimRecord makes the domain's key when it has none and returns the TXT
 // value. An existing key is never replaced: mail in transit is signed with
 // it, and a new key is a new selector.
@@ -590,7 +643,8 @@ func (o *Ops) dkimKey(d admproto.MailDomain) (pemKey []byte, record string, err 
 // mailApply writes the files, checks them, reloads the daemons; a failed
 // check or reload puts the old files back.
 func (o *Ops) mailApply(ctx context.Context, s *mailStore) error {
-	e, err := o.mailEnv(ctx)
+	o.mSnap = mailViewSnap{}
+	e, err := o.mailEnvCached(ctx)
 	if err != nil {
 		return err
 	}
@@ -683,6 +737,40 @@ func (o *Ops) mailApply(ctx context.Context, s *mailStore) error {
 		return restore(fmt.Errorf("mail did not restart: %v", err))
 	}
 	return o.writeMailSite(ctx, s, e)
+}
+
+// mailApplyMaps writes mailbox/alias maps and reloads Postfix. Dovecot
+// rereads the users file on each login; OpenDKIM and nginx are untouched.
+func (o *Ops) mailApplyMaps(ctx context.Context, s *mailStore) error {
+	if !exists(o.sys(mailPostfixDir+"/vmailbox")) || !exists(o.sys(mailDovecotUsers)) {
+		return o.mailApply(ctx, s)
+	}
+	e, err := o.mailEnvCached(ctx)
+	if err != nil {
+		return err
+	}
+	files := []hostFile{
+		{Path: mailPostfixDir + "/vmailbox", Data: renderVMailbox(s), Mode: "0644"},
+		{Path: mailPostfixDir + "/valias", Data: renderVAlias(s), Mode: "0644"},
+		{Path: mailPostfixDir + "/vlogin", Data: renderVLogin(s), Mode: "0644"},
+		{Path: mailPostfixDir + "/norecv", Data: renderNoRecv(s), Mode: "0644"},
+		{Path: mailDovecotUsers, Data: renderUsers(s, e), Mode: "0640", Owner: "root", Group: "dovecot"},
+	}
+	put, err := o.stage(files)
+	if err != nil {
+		return err
+	}
+	var sc strings.Builder
+	sc.WriteString("set -e\n")
+	sc.WriteString(put)
+	for _, m := range []string{"vmailbox", "valias", "vlogin", "norecv"} {
+		sc.WriteString("[ -f " + mailPostfixDir + "/" + m + " ] && postmap hash:" + mailPostfixDir + "/" + m + "\n")
+	}
+	sc.WriteString("systemctl reload-or-restart postfix\n")
+	if out, err := o.host(ctx, "sh", "-c", sc.String()); err != nil {
+		return fmt.Errorf("the mail maps did not apply: %s", lastLines(out+" "+err.Error(), 6))
+	}
+	return nil
 }
 
 // postmapAll rebuilds the maps; sni is built with -F, which reads the

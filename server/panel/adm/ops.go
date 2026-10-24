@@ -80,8 +80,11 @@ type Ops struct {
 	netMu   sync.Mutex // net.json and the held change
 	chanMu  sync.Mutex // channels.json and what it writes
 	mailMu  sync.Mutex // mail.json and the mail server's files
-	sysMu   sync.Mutex // Linux accounts
-	recMu   sync.Mutex // one Reconcile at a time
+	mEnv    mailEnv    // host bits of mailEnv, kept a minute
+	mEnvAt  time.Time
+	mSnap   mailViewSnap // du / service state, a few seconds
+	sysMu   sync.Mutex   // Linux accounts
+	recMu   sync.Mutex   // one Reconcile at a time
 	extMu   sync.Mutex
 	ext     map[string]extIP
 	jobMu   sync.Mutex // job.json between start and status
