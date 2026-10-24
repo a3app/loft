@@ -182,13 +182,16 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
             let name = (a["name"] as? String) ?? ""
             let u = (a["browser_download_url"] as? String).flatMap { URL(string: $0) }
             if let u = u, Self.asset(name, matches: want) {
-                if name == want || dmgURL == nil {
+                let versioned = name != want
+                if versioned || dmgURL == nil {
                     dmgURL = u
                     size = (a["size"] as? NSNumber)?.int64Value ?? 0
                 }
             }
-            if name == "loft-clients-SHA256SUMS.txt", let u = u {
-                sumsURL = u
+            if name == "loft-clients-\(ver)-SHA256SUMS.txt" || name == "loft-clients-SHA256SUMS.txt", let u = u {
+                if name.hasPrefix("loft-clients-\(ver)-") || sumsURL == nil {
+                    sumsURL = u
+                }
             }
         }
         guard let dmgURL = dmgURL else { throw Fail.noAsset }
@@ -235,7 +238,7 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
         try writeRelaunch(from: staged, onto: dest)
     }
 
-    /// Unversioned `loft-macos-arm64.dmg` or `loft-1.0.22-macos-arm64.dmg`.
+    /// `loft-1.0.28-macos-arm64.dmg` (Dist) or the old unversioned name.
     private static func asset(_ name: String, matches want: String) -> Bool {
         if name == want { return true }
         #if arch(arm64)
