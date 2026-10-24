@@ -2,7 +2,7 @@
 
 [English](guide.md) · [Русский](guide_ru.md) · **中文**
 
-软件 1.0.27。协议 1.0（loft/1.0）。规范：[protocol_zh.md](protocol_zh.md)。结构：[architecture_zh.md](architecture_zh.md)。
+软件 1.0.28。协议 1.0（loft/1.0）。规范：[protocol_zh.md](protocol_zh.md)。结构：[architecture_zh.md](architecture_zh.md)。
 
 这是参考实现。
 

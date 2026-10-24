@@ -1,4 +1,4 @@
-# loft 1.0.27
+# loft 1.0.28
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -15,20 +15,52 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 | Linux CLI | `loft-linux-arm64.tar.gz` | `loft-linux-amd64.tar.gz` |
 | Node | `loft-node-linux-arm64.tar.gz` · `loft-node_arm64.deb` | `loft-node-linux-amd64.tar.gz` · `loft-node_amd64.deb` |
 | Panel | `loft-panel-linux-arm64.tar.gz` · `loft-panel_arm64.deb` | `loft-panel-linux-amd64.tar.gz` · `loft-panel_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-android.apk` · `loft-android-tv.apk` | same fat APKs |
 
-Checksums: `loft-clients-SHA256SUMS.txt`, `loft-node-SHA256SUMS.txt`, `loft-panel-SHA256SUMS.txt`.
+Checksums: `loft-clients-SHA256SUMS.txt`, `loft-node-SHA256SUMS.txt`, `loft-panel-SHA256SUMS.txt`, `loft-android-SHA256SUMS.txt`.
 
 CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`.
 
-Not in Dist: iOS / Android / Sailfish / Keenetic / MikroTik clients (catalog and mocks).
+Not in Dist: iOS / Sailfish / Keenetic / MikroTik clients (catalog and mocks).
 
 ## What it does
 
 - **macOS app** — menu bar. Named connections, import `loft://` or `.loft`, local SOCKS5 and TUN, split routes, reconnect, failover.
+- **Android** — phone `VpnService` and Leanback TV. GitHub APKs self-update from Dist; Play builds compile the updater out.
 - **loft / loft-front** — CLI session. Same fronts as the app.
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.28
+
+Protocol stays **loft/1.0**.
+
+Android:
+
+- Dist publishes signed GitHub-channel APKs: phone `loft-android.apk` (`app.loft.android`) and TV `loft-android-tv.apk` (`app.loft.android.tv`). Flavor `github` has the in-app updater; `store` compiles it out.
+
+GET / fronts:
+
+- Extra mux fronts attach in the background so overlay STATUS is the GET session.
+- A CDN GET does not attach origin WS/H2/QUIC/H3.
+- Tune404 shares Calm: inflight drops after repeated 404.
+- loft-front `-fronts` offers Hello mux fronts on a single GET outbound.
+
+macOS:
+
+- One GET outbound; Hello fronts from `-fronts`. A CDN host stays GET-only.
+- Per-front enable switches. Share `sstp://`.
+
+Panel:
+
+- Internet: Adapters, External channels, Connection priorities.
+- Channel snapshot cache. SSTP save does not wait on the host snapshot. Node reload retries the save.
+
+Node:
+
+- Origin GET uses the node `cdn:` profile.
+- `egress-status.json` is written on load. SSTP starts as connecting.
 
 ## 1.0.27
 
@@ -133,9 +165,9 @@ macOS:
 
 Оверлей внутри TLS 1.3. Приложения ходят в локальные SOCKS5 или TUN. Потоки в одном mux, ChaCha20-Poly1305, снаружи обычный HTTPS: GET, WebSocket, HTTP/2, QUIC или HTTP/3. Перед нодой может стоять CDN. Протокол **loft/1.0**. Ссылка `loft://`.
 
-В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb). iOS, Android, Sailfish, Keenetic, MikroTik в этот Dist не входят.
+В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV). iOS, Sailfish, Keenetic, MikroTik в этот Dist не входят.
 
-1.0.27: Android — native Views как в макете, flavor TV Leanback, подписанные sideload APK; loft.app кладёт Apps и Settings; панель собирает имя исходящего в .loft из хоста/члена/фронта; GET сбрасывает sid на 404. Протокол loft/1.0.
+1.0.28: Dist публикует подписанные GitHub APK; GET вешает лишние фронты в фоне и не цепляет их на CDN; macOS — один GET outbound и `sstp://`; панель — Адаптеры / Внешние каналы. Протокол loft/1.0.
 
 ---
 
@@ -143,6 +175,6 @@ macOS:
 
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
-本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）。iOS / Android / Sailfish / Keenetic / MikroTik 不在这次包里。
+本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）。iOS / Sailfish / Keenetic / MikroTik 不在这次包里。
 
-1.0.27：Android 原生 Views 对齐模型、Leanback 电视 flavor、ad-hoc 签名 sideload APK；loft.app 钉 Apps 和 Settings；面板用主机/成员/前置拼 .loft 出站名；GET 遇 404 丢掉 sid。协议仍是 loft/1.0。
+1.0.28：Dist 发布已签名 GitHub APK；GET 在后台挂额外前置、CDN 上不挂；macOS 单 GET outbound 和 `sstp://`；面板「适配器 / 外部通道」。协议仍是 loft/1.0。

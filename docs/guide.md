@@ -2,7 +2,7 @@
 
 **English** · [Русский](guide_ru.md) · [中文](guide_zh.md)
 
-Software 1.0.27. Protocol 1.0 (loft/1.0). Spec: [protocol.md](protocol.md). Layout: [architecture.md](architecture.md).
+Software 1.0.28. Protocol 1.0 (loft/1.0). Spec: [protocol.md](protocol.md). Layout: [architecture.md](architecture.md).
 
 A reference implementation is described.
 

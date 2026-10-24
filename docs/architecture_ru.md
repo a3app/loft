@@ -2,7 +2,7 @@
 
 [English](architecture.md) · **Русский** · [中文](architecture_zh.md)
 
-ПО 1.0.27. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Эксплуатация: [guide_ru.md](guide_ru.md).
+ПО 1.0.28. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Эксплуатация: [guide_ru.md](guide_ru.md).
 
 Документ описывает дерево на Go в этом репозитории. Сторонняя реализация **может** отличаться устройством каталогов и всё равно говорить по протоколу.
 
