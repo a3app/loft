@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/net/http2"
 
+	"github.com/a3app/loft/internal/cdn"
 	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
 	"github.com/a3app/loft/internal/netconf"
@@ -48,7 +49,8 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 			}
 		}
 	}
-	getFront := transport.NewGETServer(cfg.Token, cfg.GetPath)
+	getProf, _ := cdn.Lookup(cfg.CDN)
+	getFront := transport.NewGETServerProfile(cfg.Token, cfg.GetPath, getProf)
 	getFront.Decoy = append([]string(nil), cfg.Decoy...)
 	getFront.Info = info
 	if cfg.GetH2 > 1 {

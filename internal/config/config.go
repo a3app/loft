@@ -126,6 +126,7 @@ type ServerConfig struct {
 	Decoy         []string            `yaml:"decoy"`       // this node's splice origins; first = identity; empty = off
 	DecoyProxy    bool                `yaml:"decoy_proxy"` // send a PROXY v1 header on TCP splice (own nginx with proxy_protocol only)
 	CDNPeers      []string            `yaml:"cdn_peers"`   // CIDRs allowed to use own SNI without sid (CDN origin pull)
+	CDN           string              `yaml:"cdn"`         // GET origin edge profile: yandex | cloudflare | empty=generic
 	Mask          bool                `yaml:"mask"`        // borrowed origin cert on loft TLS path
 	QuicALPN      string              `yaml:"quic_alpn"`   // default h3; "loft" only for old clients
 	Replicas      []string            `yaml:"replicas"`
