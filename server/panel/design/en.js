@@ -2260,6 +2260,7 @@ window.LOFT_EN = {
   "Канал по файлу .ovpn. Сами каналы — во «Внешних каналах» → VPN-подключения.": "Channel via an .ovpn file. The channels themselves are in “External channels” → VPN connections.",
   "Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода во «Внешних каналах» тоже на них ссылаются.": "Domain and subnet lists signed by the node. The client decides what to send through the server, send direct or block; egress rules in “External channels” use them too.",
   "Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».": "Drag to reorder; changes apply at once. The link check is in the channel's dialog in “External channels”.",
+  "Порядок — перетаскиванием. Проверка связи — в окне канала во «Внешних каналах».": "Drag to reorder. The link check is in the channel's dialog in “External channels”.",
   "Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».": "Drag a chip onto a policy on the left. A member rule beats a tag rule. Address lists (by site) are in “External channels” → “Egress rules”.",
   "Каналы WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.": "WireGuard, OpenVPN, SSTP, ZeroTier, proxy and Xray channels. Exit rules by address list live here too.",
   "Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.": "Addresses and routes of the server's network adapters. An unconfirmed change rolls back after 2 minutes.",
@@ -2268,6 +2269,9 @@ window.LOFT_EN = {
   "адаптер": "adapter",
   " · адаптер": " · adapter",
   " · адаптер · работает": " · adapter · up",
+  "· адаптер": "· adapter",
+  "· адаптер · работает": "· adapter · up",
   "· работает": "· up",
-  ". Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».": ". Drag to reorder; changes apply at once. The link check is in the channel's dialog in “External channels”."
+  ". Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».": ". Drag to reorder; changes apply at once. The link check is in the channel's dialog in “External channels”.",
+  ". Порядок — перетаскиванием. Проверка связи — в окне канала во «Внешних каналах».": ". Drag to reorder. The link check is in the channel's dialog in “External channels”."
 };

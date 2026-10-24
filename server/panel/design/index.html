@@ -211,6 +211,7 @@ tr.off td{color:var(--mute)}
 .drag{display:inline-grid;grid-template-columns:repeat(2,4px);gap:3px;cursor:grab;padding:2px}
 .drag i{width:4px;height:4px;border-radius:2px;background:var(--stroke)}
 .pl-foot{display:flex;flex-direction:column;gap:16px;padding:16px}
+.pl-save{display:flex;flex-wrap:wrap;gap:16px;margin:0;padding-top:16px;border-top:1px solid var(--line);background:var(--surface);position:sticky;bottom:0}
 .pl-sec{font-weight:600;margin:4px 0 10px}
 .m-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
 .m-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;border:1px solid var(--stroke);border-radius:4px;background:var(--field);cursor:grab;font-size:14px}
@@ -493,7 +494,7 @@ const MENU=[
   {id:'dom',ic:'i-dom',t:'Домены и почта',items:[['domains','Домены'],['mail','Почта','Почтовый сервер']]},
   {id:'adm',ic:'i-gear',t:'Управление',items:[['packages','Пакеты'],['users','Пользователи'],['system','Система'],['settings','Настройки']]}
 ];
-const S={route:'main',tab:{users:'list',node:'main',prio:'lists'},prio:'direct',rail:false,open:false,keepKeys:false};
+const S={route:'main',tab:{users:'list',node:'main',prio:'lists'},prio:'direct',rail:false,open:false,keepKeys:false,prioDraft:null,defUse:null};
 try{S.rail=localStorage.getItem('lp-rail')==='1'}catch(e){}
 const $=s=>document.querySelector(s);
 const ic=(id,s=20)=>`<svg width="${s}" height="${s}" aria-hidden="true"><use href="#${id}"/></svg>`;
@@ -617,6 +618,17 @@ const modeT=p=>p.multi?'Многопутевой режим':'Режим рез�
 const limT=(p,k)=>{const l=(p.lim||{})[k];return l?[l[0]?`↓ ${l[0]} Мбит/с`:'',l[1]?`↑ ${l[1]} Мбит/с`:''].filter(Boolean).join(' · '):'—'};
 const DRAG=`<span class="drag" aria-hidden="true">${'<i></i>'.repeat(6)}</span>`;
 const prioSys=id=>id==='direct'||id==='block';
+const sameUse=(a,b)=>a.length===b.length&&a.every((x,i)=>x===b[i]);
+function prioSavedUse(){return S.prio==='direct'?(S.defUse||['eth0',...Object.keys(CH)]).slice():(PRIO[S.prio]||{}).use?PRIO[S.prio].use.slice():[]}
+function prioUseNow(){const d=S.prioDraft;return d&&d.id===S.prio?d.use.slice():prioSavedUse()}
+function prioIsDirty(){return S.prio!=='block'&&!!S.prioDraft&&!sameUse(prioUseNow(),prioSavedUse())}
+function prioTouch(use){S.prioDraft=sameUse(use,prioSavedUse())?null:{id:S.prio,use:use.slice()};render()}
+function pdDrag(k){S.dragCh=k}
+function pdDrop(k){const use=prioUseNow(),from=use.indexOf(S.dragCh),to=use.indexOf(k);S.dragCh=null;if(from<0||to<0||from===to)return;use.splice(to,0,use.splice(from,1)[0]);prioTouch(use)}
+function pdUse(k,on){const use=prioUseNow().filter(x=>x!==k);if(on)use.push(k);prioTouch(use)}
+function prioSave(){const use=prioUseNow();if(S.prio==='direct')S.defUse=use;else if(PRIO[S.prio])PRIO[S.prio].use=use;S.prioDraft=null;toast('Политика сохранена — нода перечитала её');render()}
+function prioCancel(){S.prioDraft=null;render()}
+const prioSaveBar=()=>prioIsDirty()?`<div class="pl-save"><button class="btn pri" type="button" onclick="prioSave()">Сохранить</button><button class="btn" type="button" onclick="prioCancel()">Отменить</button></div>`:'';
 function plList(sel,count){
  const sysItem=(id,title,sub)=>`<div class="pl-item ${id===sel?'on':''}" onclick="S.prio='${id}';S.prioEdit=null;render()"><div><b>${title}${count?` <span class="mute">(${count(id)})</span>`:''}</b><span class="sub">${sub}</span></div></div>`;
  const item=(p,i)=>S.prioEdit===i&&S.tab.prio!=='use'?`<div class="pl-item on edit"><div class="fld"><label for="pe1">Название политики</label><input id="pe1" value="${esc(p.t)}" maxlength="40"></div>
@@ -636,20 +648,21 @@ V['iface-priorities']=()=>{
 V.prio=()=>V['iface-priorities']();
 function prioLists(){
  if(S.prio==='direct'){
-  const keys=['eth0',...Object.keys(CH)];
-  const rows=keys.map(k=>{
-   const isN=k==='eth0',c=isN?{title:'eth0',t:'nic',kind:'адаптер',st:'up',on:1}:CH[k],st=c.on?c.st:'off';
-   return `<div class="pl-row">${DRAG}<label class="chk"><input type="checkbox" checked aria-label="Использовать"></label><span class="dot ${st==='up'?'on':''}"></span>
-    <div class="pl-name"><b>${esc(c.title)}</b>${isN?' <span class="pill ok">сейчас</span>':''}<span class="sub"><span class="mono">${k}</span> · ${isN?'адаптер':(c.t==='vpn'?c.kind:CHT[c.t])} · ${isN?'работает':CHST[c.st][0]}</span></div>
-    <div class="pl-lim">${isN?'':'—'}</div><div>${isN?'':`<button class="icb" type="button" aria-label="Ограничение скорости" onclick="openPrioLim('${k}')">${ic('i-edit')}</button>`}</div></div>`;
+  const use=prioUseNow(),keys=['eth0',...Object.keys(CH)],order=use.concat(keys.filter(k=>!use.includes(k)));
+  const rows=order.map(k=>{
+   const isN=k==='eth0',on=use.includes(k),c=isN?{title:'eth0',t:'nic',kind:'адаптер',st:'up',on:1}:CH[k],st=c.on?c.st:'off';
+   const dnd=on?`draggable="true" ondragstart="pdDrag('${k}')" ondragover="event.preventDefault()" ondrop="event.preventDefault();pdDrop('${k}')"`:'';
+   return `<div class="pl-row ${on?'':'off'}" ${dnd}>${on?DRAG:'<span class="drag"></span>'}<label class="chk"><input type="checkbox" ${on?'checked':''} aria-label="Использовать" onchange="pdUse('${k}',this.checked)"></label><span class="dot ${st==='up'?'on':''}"></span>
+    <div class="pl-name"><b>${esc(c.title)}</b>${isN&&on?' <span class="pill ok">сейчас</span>':''}<span class="sub"><span class="mono">${k}</span> · ${isN?'адаптер':(c.t==='vpn'?c.kind:CHT[c.t])} · ${isN?'работает':CHST[c.st][0]}</span></div>
+    <div class="pl-lim">${isN||!on?'':limT({lim:{}},k)}</div><div>${isN||!on?'':`<button class="icb" type="button" aria-label="Ограничение скорости" onclick="openPrioLim('${k}')">${ic('i-edit')}</button>`}</div></div>`;
   }).join('');
   return `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>
    ${plList('direct')}
    <div class="pl-main">${rows}
     <div class="pl-foot"><label class="chk"><input type="checkbox" checked>Добавлять новые подключения автоматически</label>
      <div class="fld" style="max-width:360px"><label for="pr2d">Если ни один не работает</label><select id="pr2d"><option>Выходить напрямую</option><option selected>Блокировать</option></select></div>
-     <p class="hint" style="margin:0">Сейчас трафик идёт через <b>eth0</b>. Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».</p>
-     <p class="hint" style="margin:0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p></div>
+     <p class="hint" style="margin:0">Сейчас трафик идёт через <b>eth0</b>. Порядок — перетаскиванием. Проверка связи — в окне канала во «Внешних каналах».</p>
+     <p class="hint" style="margin:0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p>${prioSaveBar()}</div>
    </div></div>`;
  }
  if(S.prio==='block'){
@@ -657,10 +670,11 @@ function prioLists(){
    ${plList('block')}
    <div class="pl-main" style="padding:16px 20px"><p>Интернет закрыт. Члены в этой политике наружу не выходят. Подключения не используются.</p></div></div>`;
  }
- const p=PRIO[S.prio],live=liveOf(p);
- const order=p.use.concat(Object.keys(CH).filter(k=>!p.use.includes(k)));
- const rows=order.map(k=>{const c=CH[k],on=p.use.includes(k),st=c.on?c.st:'off';
-  return `<div class="pl-row ${on?'':'off'}">${on?DRAG:'<span class="drag"></span>'}<label class="chk"><input type="checkbox" ${on?'checked':''} aria-label="Использовать"></label><span class="dot ${st==='up'?'on':st==='nolink'||st==='down'?'err':''}"></span>
+ const p=PRIO[S.prio],use=prioUseNow(),live=use.find(k=>CH[k]&&CH[k].on&&CH[k].st==='up');
+ const order=use.concat(Object.keys(CH).filter(k=>!use.includes(k)));
+ const rows=order.map(k=>{const c=CH[k],on=use.includes(k),st=c.on?c.st:'off';
+  const dnd=on?`draggable="true" ondragstart="pdDrag('${k}')" ondragover="event.preventDefault()" ondrop="event.preventDefault();pdDrop('${k}')"`:'';
+  return `<div class="pl-row ${on?'':'off'}" ${dnd}>${on?DRAG:'<span class="drag"></span>'}<label class="chk"><input type="checkbox" ${on?'checked':''} aria-label="Использовать" onchange="pdUse('${k}',this.checked)"></label><span class="dot ${st==='up'?'on':st==='nolink'||st==='down'?'err':''}"></span>
    <div class="pl-name"><b>${esc(c.title)}</b>${k===live&&!p.multi?' <span class="pill ok">сейчас</span>':''}<span class="sub"><span class="mono">${k}</span> · ${c.t==='vpn'?c.kind:CHT[c.t]} · ${CHST[c.st][0]}</span></div>
    <div class="pl-lim">${on?limT(p,k):''}</div><div>${on?`<button class="icb" type="button" aria-label="Ограничение скорости" onclick="openPrioLim('${k}')">${ic('i-edit')}</button>`:''}</div></div>`}).join('');
  return `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>
@@ -668,7 +682,7 @@ function prioLists(){
   <div class="pl-main">${rows}
    <div class="pl-foot"><label class="chk"><input type="checkbox" ${p.auto?'checked':''}>Добавлять новые подключения автоматически</label>
     <div class="fld" style="max-width:360px"><label for="pr2">Если ни один не работает</label><select id="pr2"><option ${p.last==='direct'?'selected':''}>Выходить напрямую</option><option ${p.last==='block'?'selected':''}>Блокировать</option></select></div>
-    <p class="hint" style="margin:0">${p.multi?'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.':live?`Сейчас трафик идёт через <b>${chT(live)}</b>.`:`Ни один канал не работает — трафик ${p.last==='block'?'блокируется':'идёт напрямую'}.`} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».</p></div>
+    <p class="hint" style="margin:0">${p.multi?'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.':live?`Сейчас трафик идёт через <b>${chT(live)}</b>.`:`Ни один канал не работает — трафик ${p.last==='block'?'блокируется':'идёт напрямую'}.`} Порядок — перетаскиванием. Проверка связи — в окне канала во «Внешних каналах».</p>${prioSaveBar()}</div>
   </div></div>`;
 }
 function openPrioLim(k){

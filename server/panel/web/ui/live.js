@@ -1345,12 +1345,13 @@
     }
     const p = prCur();
     if (!p) return wrap('<p class="mute" style="padding:16px">Политика не найдена.</p>');
-    const live = prLive(p.use);
-    const extra = L.ch.channels.filter(c => c.exit || p.use.includes(c.name)).map(c => c.name);
+    const use = prUse(p);
+    const live = prLive(use);
+    const extra = L.ch.channels.filter(c => c.exit || p.use.includes(c.name) || use.includes(c.name)).map(c => c.name);
     const avail = ['direct'].concat(extra);
-    const order = p.use.concat(avail.filter(n => !p.use.includes(n)));
+    const order = use.concat(avail.filter(n => !use.includes(n)));
     const rows = order.map(n => {
-      const on = p.use.includes(n), st = isNative(n) ? (nativeDev() ? 'up' : 'down') : stOf(n).state;
+      const on = use.includes(n), st = isNative(n) ? (nativeDev() ? 'up' : 'down') : stOf(n).state;
       const dnd = own && on ? `draggable="true" ondragstart="LIVE.pdDrag('${esc(n)}')" ondragover="event.preventDefault()" ondrop="event.preventDefault();LIVE.pdDrop('${esc(n)}')"` : '';
       return `<div class="pl-row ${on ? '' : 'off'}" ${dnd}>${on && own ? DRAG : '<span class="drag"></span>'}<label class="chk"><input type="checkbox" ${on ? 'checked' : ''} ${own ? '' : 'disabled'} aria-label="Использовать" onchange="LIVE.pdUse('${esc(n)}',this.checked)"></label><span class="dot ${st === 'up' ? 'on' : ''}"></span>
         <div class="pl-name"><b>${esc(connTitle(n))}</b>${n === live && !p.multi ? ' <span class="pill ok">сейчас</span>' : ''}${connState(n)}</div>
@@ -1358,27 +1359,48 @@
     }).join('') || '<p class="mute" style="padding:16px">Нет подключений с «Использовать для выхода в интернет».</p>';
     const now = p.multi ? 'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.' : live ? `Сейчас трафик идёт через <b>${esc(connTitle(live))}</b>.` : `Ни один канал не работает — трафик ${p.last === 'block' ? 'блокируется' : 'идёт напрямую'}.`;
     const hostHint = S.prio === 'direct' ? '<p class="hint" style="margin:0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p>' : '';
+    const saveBar = own && prioDirty(p) ? `<div class="pl-save"><button class="btn pri" type="button" onclick="LIVE.prioSave()">Сохранить</button><button class="btn" type="button" onclick="LIVE.prioCancel()">Отменить</button></div>` : '';
     return wrap(rows, `<div class="pl-foot"><label class="chk"><input type="checkbox" ${p.auto ? 'checked' : ''} ${own ? '' : 'disabled'} onchange="LIVE.prioSet({auto:this.checked})">Добавлять новые подключения автоматически</label>
         <div class="fld" style="max-width:360px"><label for="pr2">Если ни один не работает</label><select id="pr2" ${own ? '' : 'disabled'} onchange="LIVE.prioSet({last:this.value})"><option value="direct" ${p.last === 'direct' ? 'selected' : ''}>Выходить напрямую</option><option value="block" ${p.last === 'block' ? 'selected' : ''}>Блокировать</option></select></div>
-        <p class="hint" style="margin:0">${now} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».</p>${hostHint}</div>`);
+        <p class="hint" style="margin:0">${now} Порядок — перетаскиванием. Проверка связи — в окне канала во «Внешних каналах».</p>${hostHint}${saveBar}</div>`);
   }
-  // Every change goes to the server at once, the whole list.
+  // Order and “use” ticks stay local until Save; auto, last, limits and rename still go at once.
   const prioPost = async (body, msg) => {
     try { L.ch = await api('POST', '/api/channels/prio', body); closeDlg(); toast(msg); return true; } catch (e) { toast(e.message); return false; } finally { render(); }
   };
   const prCur = () => (L.ch.prios || []).find(p => p.id === (S.prio === 'direct' ? 'default' : S.prio));
+  const sameUse = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const prUse = p => (S.prioDraft && p && S.prioDraft.id === p.id) ? S.prioDraft.use : (p.use || []);
+  const prioDirty = p => !!(p && S.prioDraft && S.prioDraft.id === p.id && !sameUse(S.prioDraft.use, p.use || []));
+  const prioTouch = use => {
+    const p = prCur();
+    if (!p) return;
+    S.prioDraft = sameUse(use, p.use || []) ? null : { id: p.id, use: use.slice() };
+    render();
+  };
   L.prioSet = x => { const p = Object.assign({}, prCur(), x); return prioPost(p, 'Политика сохранена — нода перечитала её'); };
   L.toPrio = id => { S.prio = id === 'default' ? 'direct' : id; S.tab.prio = 'lists'; S.prioEdit = null; };
   L.prioPick = id => { S.prio = id; S.prioEdit = null; render(); };
-  L.pdUse = (n, on) => { const p = prCur(), use = p.use.filter(x => x !== n); if (on) use.push(n); L.prioSet({ use }); };
+  L.pdUse = (n, on) => { const use = prUse(prCur()).filter(x => x !== n); if (on) use.push(n); prioTouch(use); };
   L.pdDrag = n => { dragCh = n; };
   L.pdDrop = n => {
-    const use = prCur().use.slice(), from = use.indexOf(dragCh), to = use.indexOf(n);
+    const use = prUse(prCur()).slice(), from = use.indexOf(dragCh), to = use.indexOf(n);
     dragCh = null;
     if (from < 0 || to < 0 || from === to) return;
     use.splice(to, 0, use.splice(from, 1)[0]);
-    L.prioSet({ use });
+    prioTouch(use);
   };
+  L.prioSave = once(async () => {
+    const p = prCur();
+    if (!prioDirty(p)) return;
+    try {
+      L.ch = await api('POST', '/api/channels/prio', Object.assign({}, p, { use: S.prioDraft.use }));
+      S.prioDraft = null;
+      toast('Политика сохранена — нода перечитала её');
+    } catch (e) { toast(e.message); }
+    render();
+  });
+  L.prioCancel = () => { S.prioDraft = null; render(); };
   L.prioRename = () => { const p = prCur(); S.prioEdit = null; prioPost(Object.assign({}, p, { title: $('#pe1').value.trim(), multi: $('#pe2').checked }), 'Политика сохранена'); };
   L.prioLim = n => {
     if (isNative(n)) return;
@@ -1406,7 +1428,7 @@
   L.prioDel = async () => {
     const p = prCur();
     closeDlg();
-    try { L.ch = await api('POST', '/api/channels/prio/delete', { name: p.id }); S.prio = 'direct'; toast('Политика удалена'); } catch (e) { toast(e.message); }
+    try { L.ch = await api('POST', '/api/channels/prio/delete', { name: p.id }); S.prio = 'direct'; if (S.prioDraft && S.prioDraft.id === p.id) S.prioDraft = null; toast('Политика удалена'); } catch (e) { toast(e.message); }
     render();
   };
 
