@@ -1898,7 +1898,7 @@
     c += evRow('TLS', esc(h), D.cert ? 'сертификат до ' + new Date(D.cert_until).toLocaleDateString(LOC()) : 'сертификата нет: почтовые программы предупредят о самоподписанном', D.cert ? pill('есть', 'ok') : own ? `<button class="btn sm" type="button" onclick="LIVE.mailCert('${esc(D.name)}')">Выпустить</button>` : pill('нет', 'warn'), true);
     if (own && N.api && N.records.some(r => r.auto)) c += `<div class="acts" style="margin:16px 0 8px"><button class="btn" type="button" onclick="LIVE.mailDNSFix()">Создать недостающие</button></div>`;
     const ptr = (N.ptr || []).filter(p => p.state !== 'ok').map(p => p.ip);
-    c += `<p class="hint" style="margin:${own && N.api ? 0 : '16px 0 0'}">${N.api ? `Зона ${esc(N.zone)} ведётся через DNS-провайдера — панель создаст записи, которых нет; чужие SPF и DMARC не трогает.` : N.zone ? `Зона ${esc(N.zone)} ведётся вручную: внесите эти записи у регистратора.` : 'Домена нет в «Доменах»: внесите записи у регистратора или добавьте зону с DNS-провайдером.'}${ptr.length ? ` PTR для ${esc(ptr.join(', '))} ставится в кабинете хостера: <span class="mono">${esc((N.ptr[0] || {}).want || '')}</span>.` : ''}</p></section>`;
+    c += `<p class="hint" style="margin:${own && N.api ? 0 : '16px 0 0'}">${N.api ? `Зона ${esc(N.zone)} ведётся через DNS-провайдера — панель создаст недостающие и поправит чужой MX, A и DKIM; чужие SPF и DMARC не трогает.` : N.zone ? `Зона ${esc(N.zone)} ведётся вручную: внесите эти записи у регистратора.` : 'Домена нет в «Доменах»: внесите записи у регистратора или добавьте зону с DNS-провайдером.'}${ptr.length ? ` PTR для ${esc(ptr.join(', '))} ставится в кабинете хостера: <span class="mono">${esc((N.ptr[0] || {}).want || '')}</span>.` : ''}</p></section>`;
     return c;
   }
   function mailSvcCard(M, h) {
@@ -1924,10 +1924,11 @@
     try { await job('/api/mail/cert', { domain: d }); toast('Сертификат для mail.' + d + ' выпущен'); } catch (e) { toast(e.message); }
     await loadMail(); render();
   };
-  L.mailDNSFix = async () => {
+  L.mailDNSFix = once(async () => {
+    toast('Создаю записи DNS…');
     try { const r = await api('POST', '/api/mail/dns', { domain: L.mlDom }); toast(r.created ? 'Создано записей: ' + r.created : 'Создавать нечего'); } catch (e) { toast(e.message); }
     await L.mailCheck();
-  };
+  });
   const addrs = v => v.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
   L.openMDom = name => {
     const nw = !name, D = nw ? { name: '', enabled: true, dkim: true, catch_all: [], selector: '' } : L.ml.domains.find(d => d.name === name);

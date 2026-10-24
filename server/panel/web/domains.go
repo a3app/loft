@@ -145,6 +145,16 @@ func (d *domains) prov(id string) *dnsProv {
 	return nil
 }
 
+func (z *zoneRec) remember(rec Record, auto bool) {
+	for i, o := range z.Ours {
+		if o.ID == rec.ID || (o.ID == "" && o.Type == rec.Type && o.Name == rec.Name) {
+			z.Ours[i].ID, z.Ours[i].Auto = rec.ID, auto
+			return
+		}
+	}
+	z.Ours = append(z.Ours, ourRec{Type: rec.Type, Name: rec.Name, ID: rec.ID, Auto: auto})
+}
+
 // zoneFor is the longest zone that name is in.
 func (d *domains) zoneFor(name string) *zoneRec {
 	name = strings.TrimPrefix(strings.ToLower(name), "*.")

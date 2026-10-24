@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -346,7 +347,9 @@ func lookupState(ctx context.Context, r *mailRec) {
 			got = slices.DeleteFunc(got, func(v string) bool { return !strings.HasPrefix(strings.TrimSpace(v), prefix) })
 		}
 	}
-	norm := func(v string) string { return strings.Join(strings.Fields(strings.TrimSuffix(strings.ToLower(v), ".")), " ") }
+	norm := func(v string) string {
+		return strings.Join(strings.Fields(strings.TrimSuffix(strings.ToLower(v), ".")), " ")
+	}
 	switch {
 	case err != nil || len(got) == 0:
 		r.State = "missing"
@@ -399,7 +402,7 @@ func (s *Server) mailDNS(w http.ResponseWriter, r *http.Request) {
 	}
 	wg.Wait()
 	for i := range recs {
-		recs[i].Auto = api && recs[i].State == "missing"
+		recs[i].Auto = mailAuto(api, recs[i])
 	}
 	var ptr []map[string]string
 	for _, ip := range ips {
@@ -421,8 +424,109 @@ func (s *Server) mailDNS(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{"records": recs, "zone": zone, "api": api, "ptr": ptr})
 }
 
-// mailDNSCreate creates the missing records through the zone's provider.
-// Records that exist with another value are left alone.
+// mailAuto is whether the panel can write rec: anything still missing, and a
+// foreign MX / A / DKIM. SPF and DMARC with some value of their own stay.
+func mailAuto(api bool, r mailRec) bool {
+	if !api {
+		return false
+	}
+	if r.State == "missing" {
+		return true
+	}
+	return r.State == "differs" && (r.Key == "mx" || r.Key == "a" || r.Key == "dkim")
+}
+
+func dnsValEq(a, b string) bool {
+	norm := func(v string) string {
+		return strings.Join(strings.Fields(strings.TrimSuffix(strings.ToLower(v), ".")), " ")
+	}
+	return norm(a) == norm(b)
+}
+
+func sameNameType(have []Record, rec Record) []Record {
+	var out []Record
+	for _, x := range have {
+		if strings.EqualFold(x.Type, rec.Type) && strings.EqualFold(x.Name, rec.Name) {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+func hasTXTPrefix(have []Record, name, prefix string) bool {
+	for _, x := range have {
+		if x.Type == "TXT" && strings.EqualFold(x.Name, name) && strings.HasPrefix(strings.TrimSpace(x.Value), prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func recIDDesc(a, b Record) bool {
+	ia, ea := strconv.Atoi(a.ID)
+	ib, eb := strconv.Atoi(b.ID)
+	if ea == nil && eb == nil {
+		return ia > ib
+	}
+	return a.ID > b.ID
+}
+
+// syncMailRec writes rec through the provider. Public DNS is not the source:
+// Namecheap forwarding MX lives outside setHosts, so lookup can say "differs"
+// while getHosts has no MX at all. SPF/DMARC/HELO with any own TXT stay.
+func (s *Server) syncMailRec(ctx context.Context, z *zoneRec, api DNSProvider, have []Record, rec mailRec) (int, error) {
+	dr := Record{Type: rec.Type, Name: relName(rec.Name, z.Name), Value: rec.Value, Priority: rec.Prio}
+	auto := rec.Key == "a"
+	same := sameNameType(have, dr)
+	switch rec.Key {
+	case "spf", "helo", "dmarc":
+		prefix := "v=spf1"
+		if rec.Key == "dmarc" {
+			prefix = "v=DMARC1"
+		}
+		if hasTXTPrefix(have, dr.Name, prefix) {
+			return 0, nil
+		}
+	case "mx":
+		if len(same) == 1 && dnsValEq(same[0].Value, dr.Value) && same[0].Priority == dr.Priority {
+			return 0, nil
+		}
+	case "dkim":
+		if slices.ContainsFunc(same, func(x Record) bool { return dnsValEq(x.Value, dr.Value) }) && len(same) == 1 {
+			return 0, nil
+		}
+	default: // A / AAAA: another address at the same name is kept
+		if slices.ContainsFunc(same, func(x Record) bool { return dnsValEq(x.Value, dr.Value) }) {
+			return 0, nil
+		}
+	}
+	replace := rec.Key == "mx" || rec.Key == "dkim"
+	if replace && len(same) > 0 {
+		dr.ID = same[0].ID
+		if err := api.Update(ctx, z.Name, dr); err != nil {
+			return 0, err
+		}
+		z.remember(dr, auto)
+		extras := append([]Record(nil), same[1:]...)
+		sort.Slice(extras, func(i, j int) bool { return recIDDesc(extras[i], extras[j]) })
+		for _, x := range extras {
+			if err := api.Delete(ctx, z.Name, x.ID); err != nil {
+				return 0, err
+			}
+			z.Ours = slices.DeleteFunc(z.Ours, func(o ourRec) bool { return o.ID == x.ID })
+		}
+		return 1, nil
+	}
+	if err := s.putRecord(ctx, z, api, dr, auto); err != nil {
+		return 0, err
+	}
+	return 1, nil
+}
+
+// mailDNSCreate writes missing mail records, and replaces a foreign MX / A /
+// DKIM, through the zone's provider. It looks at the provider's list, not
+// public DNS: registrar forwarding MX is not in that list and would be skipped
+// as "already there". Own SPF and DMARC stay.
 func (s *Server) mailDNSCreate(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Domain string `json:"domain"`
@@ -439,9 +543,6 @@ func (s *Server) mailDNSCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	auditTarget(r, d.Name)
 	recs := mailNeeds(d, ServerIPs())
-	for i := range recs {
-		lookupState(ctx, &recs[i])
-	}
 	s.dom.mu.Lock()
 	defer s.dom.mu.Unlock()
 	s.dom.load()
@@ -456,18 +557,28 @@ func (s *Server) mailDNSCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api := s.providerAPI(*p)
+	have, err := api.Records(ctx, z.Name)
+	if err != nil {
+		fail(w, http.StatusBadGateway, err.Error())
+		return
+	}
 	made := 0
 	for _, rec := range recs {
-		if rec.State != "missing" {
-			continue
-		}
-		dr := Record{Type: rec.Type, Name: relName(rec.Name, z.Name), Value: rec.Value, Priority: rec.Prio}
-		if err := s.putRecord(ctx, z, api, dr, rec.Key == "a"); err != nil {
+		n, err := s.syncMailRec(ctx, z, api, have, rec)
+		if err != nil {
 			s.dom.save()
 			fail(w, http.StatusBadGateway, fmt.Sprintf("%s %s: %v", rec.Type, rec.Name, err))
 			return
 		}
-		made++
+		if n == 0 {
+			continue
+		}
+		made += n
+		if have, err = api.Records(ctx, z.Name); err != nil {
+			s.dom.save()
+			fail(w, http.StatusBadGateway, err.Error())
+			return
+		}
 	}
 	if err := s.dom.save(); err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())

@@ -1707,6 +1707,8 @@ window.LOFT_EN = {
   "ведётся вручную: записи вносятся у регистратора": "is managed by hand: records are added at the registrar",
   "ведётся через DNS-провайдера — панель создаст записи, которых нет; чужие SPF и DMARC не трогает.": "is managed through a DNS provider — the panel creates the records that are missing and leaves existing SPF and DMARC alone.",
   "ведётся через DNS-провайдера — панель создаст записи, которых нет; чужие SPF и DMARC не трогает. PTR для 203.0.113.10 ставится в кабинете хостера": "is managed through a DNS provider — the panel creates the records that are missing and leaves existing SPF and DMARC alone. PTR for 203.0.113.10 is set in the hosting provider's dashboard",
+  "ведётся через DNS-провайдера — панель создаст недостающие и поправит чужой MX, A и DKIM; чужие SPF и DMARC не трогает.": "is managed through a DNS provider — the panel creates missing records and replaces a foreign MX, A and DKIM; existing SPF and DMARC stay.",
+  "ведётся через DNS-провайдера — панель создаст недостающие и поправит чужой MX, A и DKIM; чужие SPF и DMARC не трогает. PTR для 203.0.113.10 ставится в кабинете хостера": "is managed through a DNS provider — the panel creates missing records and replaces a foreign MX, A and DKIM; existing SPF and DMARC stay. PTR for 203.0.113.10 is set in the hosting provider's dashboard",
   "везде, где подходит имя": "wherever the name matches",
   "верно": "correct",
   "видят друг друга": "see each other",

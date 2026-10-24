@@ -23,6 +23,7 @@ type fakeAdm struct {
 	text *string
 	host *string
 	keys *map[string]admproto.IssuedKey
+	mail *admproto.MailView
 }
 
 func (f fakeAdm) Call(_ context.Context, op string, body, out any) error {
@@ -77,16 +78,21 @@ func (f fakeAdm) Call(_ context.Context, op string, body, out any) error {
 			}
 		}
 		return errors.New("no stored key for this member")
+	case admproto.OpMail:
+		if f.mail != nil {
+			set(*f.mail)
+		}
 	}
 	return nil
 }
 
 type env struct {
-	t   *testing.T
-	srv *Server
-	h   http.Handler
-	ops []string
-	by  []string
+	t    *testing.T
+	srv  *Server
+	h    http.Handler
+	ops  []string
+	by   []string
+	mail *admproto.MailView
 }
 
 func newEnv(t *testing.T) *env {
@@ -96,11 +102,13 @@ func newEnv(t *testing.T) *env {
 	host := "panel.example.net"
 	dir := t.TempDir()
 	keys := map[string]admproto.IssuedKey{}
+	mail := &admproto.MailView{Installed: true, Helo: "mail.example.net"}
+	e.mail = mail
 	e.srv = &Server{Store: st, Sessions: auth.NewSessions(), Limit: auth.NewLimiter(), SetupCode: "123456-abcdef",
 		Hosts: []string{"panel.example.net"}, Settings: store.OpenSettings(dir), Keys: store.OpenMemberKeys(dir), ACME: &ACME{Dir: dir}, sleep: func(time.Duration) {}}
 	e.srv.Adm = func(by string) Adm {
 		e.by = append(e.by, by)
-		return fakeAdm{by: &e.by, ops: &e.ops, text: &text, host: &host, keys: &keys}
+		return fakeAdm{by: &e.by, ops: &e.ops, text: &text, host: &host, keys: &keys, mail: mail}
 	}
 	h, err := e.srv.Handler()
 	if err != nil {
