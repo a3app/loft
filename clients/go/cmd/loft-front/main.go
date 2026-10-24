@@ -262,6 +262,9 @@ func main() {
 	if s := strings.TrimSpace(*helloFronts); s != "" {
 		cfg.Fronts = parseKindList(s)
 	}
+	// GET through a CDN is one handshake. If it does not come up, Supervise
+	// tries the other fronts named in -fronts, on the same host.
+	addEnabledFronts(cfg)
 	first := make(chan struct{})
 	var once sync.Once
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
@@ -409,6 +412,39 @@ func parseKindList(kind string) []string {
 		return []string{"get"}
 	}
 	return out
+}
+
+// addEnabledFronts appends mux fronts from cfg.Fronts that -type did not
+// already dial. Order is GET, WS, H2, QUIC, H3. Mux-off stays one outbound.
+func addEnabledFronts(cfg *config.ClientConfig) {
+	if cfg == nil || len(cfg.Fronts) < 2 || len(cfg.Outbounds) == 0 {
+		return
+	}
+	base := cfg.Outbounds[0]
+	if base.Mux != nil && !*base.Mux {
+		return
+	}
+	have := map[string]bool{}
+	for _, o := range cfg.Outbounds {
+		have[strings.ToLower(o.Type)] = true
+	}
+	want := map[string]bool{}
+	for _, f := range cfg.Fronts {
+		want[strings.ToLower(f)] = true
+	}
+	for _, f := range wire.FrontOrder {
+		if !want[f] || have[f] {
+			continue
+		}
+		o := outboundFor(base.URL, f, "", base.CDN)
+		o.Insecure = base.Insecure
+		o.Fingerprint = base.Fingerprint
+		o.Decoy = base.Decoy
+		o.MaskPub = base.MaskPub
+		o.H2MaxAgeMS = base.H2MaxAgeMS
+		cfg.Outbounds = append(cfg.Outbounds, o)
+		have[f] = true
+	}
 }
 
 // frontConfig is the in-memory ClientConfig Supervise uses for this helper.

@@ -387,6 +387,35 @@ func TestGETHandshake404IsAuthBadKey(t *testing.T) {
 	}
 }
 
+func TestStartSelectedFallsThroughGET404(t *testing.T) {
+	dead := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(dead.Close)
+	gs := NewGETServer("test-token-please-change", "/static/v3/build")
+	live := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
+	t.Cleanup(live.Close)
+	rotateN.Store(0)
+	off := false
+	cfg := &config.ClientConfig{
+		Token:  "test-token-please-change",
+		Select: "auto",
+		P2P:    &off,
+		Outbounds: []config.Outbound{
+			{Name: "cdn", Type: "get", URL: dead.URL, Path: "/static/v3/build", Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true},
+			{Name: "node", Type: "get", URL: live.URL, Path: "/static/v3/build", Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true},
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	d, o, err := StartSelected(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if o.Name != "node" {
+		t.Fatalf("dialed %s", o.Name)
+	}
+}
+
 func TestSuperviseAuthBadKeyStops(t *testing.T) {
 	gs := NewGETServer("test-token-please-change", "/static/v3/build")
 	ts := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
