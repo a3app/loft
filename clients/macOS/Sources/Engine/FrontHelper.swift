@@ -133,7 +133,9 @@ final class FrontHelper {
             LoftLog.shared.add("front", "spawn trojan \(profile.url) socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) if=\(ifLog)")
         } else {
             let frontsLog = hello.isEmpty ? "" : " fronts=\(hello)"
-            LoftLog.shared.add("front", "spawn \(types)\(frontsLog) \(profile.url) path=\(path ?? "") socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) mux=\(profile.mux ? 1 : 0) if=\(ifLog)")
+            let edgeLog = profile.edge.trimmingCharacters(in: .whitespacesAndNewlines)
+            let edgePart = edgeLog.isEmpty ? "" : " edge=\(edgeLog)"
+            LoftLog.shared.add("front", "spawn \(types)\(frontsLog) \(profile.url)\(edgePart) path=\(path ?? "") socks=\(socks.isEmpty ? "off" : socks) tun=\(profile.tun ? 1 : 0) mux=\(profile.mux ? 1 : 0) if=\(ifLog)")
         }
         let p = Process()
         var args = [
@@ -169,10 +171,13 @@ final class FrontHelper {
             if !dns.isEmpty { args += ["-dns", dns] }
             if profile.dnsReplace { args.append("-dns-replace") }
         }
+        let edge = profile.edge.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !edge.isEmpty { args += ["-edge", edge] }
         let cdn = profile.cdn.trimmingCharacters(in: .whitespacesAndNewlines)
         if !cdn.isEmpty {
             args += ["-cdn", cdn]
-        } else if profile.kind == "get", let host = URL(string: profile.url)?.host, host.contains("cdn.") {
+        } else if edge.isEmpty, profile.kind == "get", let host = URL(string: profile.url)?.host, host.contains("cdn.") {
+            // Legacy links whose url is the CDN host. Do not infer this from -edge.
             args += ["-cdn", "yandex"]
         }
         let pbk = profile.maskPub.trimmingCharacters(in: .whitespacesAndNewlines)

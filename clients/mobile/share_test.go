@@ -99,6 +99,36 @@ func TestParseShareLoftFrontQuery(t *testing.T) {
 	}
 }
 
+func TestParseShareEdgeGETThenNode(t *testing.T) {
+	raw := "loft://lt_abc@loft.example.com:444/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&edge=https://cdn.example.com/static/v3/build#Home"
+	y, err := ParseShare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := decodeFile([]byte(y))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Outbounds) != 5 {
+		t.Fatalf("outbounds %d\n%s", len(cfg.Outbounds), y)
+	}
+	if cfg.Outbounds[0].Type != "get" || cfg.Outbounds[0].URL != "https://cdn.example.com" || cfg.Outbounds[0].Path != "/static/v3/build" {
+		t.Fatalf("edge %+v", cfg.Outbounds[0])
+	}
+	if cfg.Outbounds[1].Type != "get" || cfg.Outbounds[1].URL != "https://loft.example.com:444" || cfg.Outbounds[1].Path != "/static/v3/build" {
+		t.Fatalf("node %+v", cfg.Outbounds[1])
+	}
+	if cfg.Outbounds[2].Type != "ws" || cfg.Outbounds[2].URL != "wss://loft.example.com:444/api/v1/sync" {
+		t.Fatalf("ws %+v", cfg.Outbounds[2])
+	}
+	if cfg.Outbounds[3].URL != "https://loft.example.com:444" || cfg.Outbounds[4].URL != "https://loft.example.com:444" {
+		t.Fatalf("h2/quic %+v %+v", cfg.Outbounds[3], cfg.Outbounds[4])
+	}
+	if cfg.EdgeURL != "https://cdn.example.com/static/v3/build" {
+		t.Fatalf("edge field %q", cfg.EdgeURL)
+	}
+}
+
 func TestParseShareLoftRejectsSSTPType(t *testing.T) {
 	_, err := ParseShare("loft://lt_abc@edge.example.com?type=sstp")
 	if err == nil {

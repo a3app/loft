@@ -46,7 +46,7 @@ scheme **本身就是**连接类型（`loft`）。主机:端口是 authority（`
 |------|----------------------|
 | scheme `loft` | `kind: loft` |
 | `token`（userinfo） | `token`（`lt_…`） |
-| `host`[:`port`] | 每个 loft 出站 `url` 的主机 |
+| `host`[:`port`] | 节点主机。前置拨它。`edge` 是唯一例外，且只用于第一次 GET |
 | `/path` | 旧形式：出站 `path`。有 `get=` / `ws=` / `h2=` 时忽略 |
 | `#name` | 连接显示名；空则用 `host` |
 
@@ -61,6 +61,7 @@ scheme **本身就是**连接类型（`loft`）。主机:端口是 authority（`
 | `quic` | 空标志 | — | QUIC 出站（无路径） |
 | `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | 仅当没有 `get`/`ws`/`h2`/`h3`/`quic` 时，一个出站 |
 | `cdn` | 配置名（`yandex`，…） | 不写 | 出站 `cdn` |
+| `edge` | 绝对 `http` 或 `https` URL | 不写 | 客户端 `edge`。仅 GET |
 | `fp` | TLS 指纹（`chrome`，…） | `chrome` | 出站 `fingerprint` |
 | `scheme` | `https` `http` `wss` `ws` | 随前置 | `url` 的 scheme |
 | `pbk` | 节点 X25519 公钥，base64url 或 hex，32 字节 | 不写 | 出站 `mask_pub` |
@@ -70,6 +71,8 @@ scheme **本身就是**连接类型（`loft`）。主机:端口是 authority（`
 默认 `scheme`：`ws` → `wss`；其余 → `https`。
 
 每个出站 URL 拼成 `{scheme}://{host}:{port}` 加上该前置的路径。
+
+`edge` 若给出，是绝对 `http` 或 `https` URL。第一次 GET 拨它。路径用该 URL 的路径（不是 `/` 时）；否则用 `get=`。下一次 GET 以及 `ws` / `h2` / `quic` / `h3` 拨 `host`。没有 `edge` 时每个前置都拨 `host`。`cdn` 仍是旧的配置名，不是这个 URL。节点配置 `edge: plain|tight` 是 Status 预设，不是这个参数。不认识 `edge` 的客户端忽略它并拨 `host`。
 
 不要放 `insecure_skip_verify`、`header_budget` 和 `inflight`。客户端用自己的默认值。访问密钥不要放进 query 参数。
 
@@ -82,6 +85,14 @@ scheme **本身就是**连接类型（`loft`）。主机:端口是 authority（`
 ```
 loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
 ```
+
+节点主机，CDN 只给 GET：
+
+```
+loft://lt_change-me-long-random@loft.example.com:444/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&edge=https://cdn.example.com#Home
+```
+
+`url` 仍是 `https://loft.example.com:444`。拨号时客户端把指向 `https://cdn.example.com` 的 GET（路径 `/static/v3/build`）插在节点 GET 之前。`ws`、`h2` 和 `quic` 仍在 `loft.example.com:444`。
 
 CDN 上的 GET（旧形式，仍接受）：
 

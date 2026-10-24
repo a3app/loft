@@ -46,7 +46,7 @@ RFC 3986. `token` и `name` процентировать (`application/x-www-for
 |-------|----------------------|
 | схема `loft` | `kind: loft` |
 | `token` (userinfo) | `token` (`lt_…`) |
-| `host`[:`port`] | хост каждого loft исходящего `url` |
+| `host`[:`port`] | хост ноды. Фронты бьют в него. `edge` — единственное исключение, и только для первого GET |
 | `/path` | старая форма: исходящий `path`. Игнорируется, когда есть `get=` / `ws=` / `h2=` |
 | `#name` | имя подключения; если пусто — `host` |
 
@@ -61,6 +61,7 @@ RFC 3986. `token` и `name` процентировать (`application/x-www-for
 | `quic` | пустой флаг | — | исходящий QUIC (без пути) |
 | `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | один исходящий, только когда нет `get`/`ws`/`h2`/`h3`/`quic` |
 | `cdn` | имя профиля (`yandex`, …) | нет | исходящий `cdn` |
+| `edge` | абсолютный URL `http` или `https` | нет | клиентский `edge`. Только GET |
 | `fp` | отпечаток TLS (`chrome`, …) | `chrome` | исходящий `fingerprint` |
 | `scheme` | `https` `http` `wss` `ws` | из фронта | схема `url` |
 | `pbk` | открытый X25519 ноды, base64url или hex, 32 байта | нет | исходящий `mask_pub` |
@@ -70,6 +71,8 @@ RFC 3986. `token` и `name` процентировать (`application/x-www-for
 `scheme` по умолчанию: `ws` → `wss`; остальное → `https`.
 
 Собрать URL каждого исходящего: `{scheme}://{host}:{port}` плюс путь этого фронта.
+
+`edge`, если задан, — абсолютный URL `http` или `https`. Первый GET бьёт в него. Путь — путь этого URL, если он не `/`; иначе `get=`. Следующий GET и `ws` / `h2` / `quic` / `h3` бьют в `host`. Без `edge` каждый фронт бьёт в `host`. `cdn` остаётся старым именем профиля, не этим URL. `edge: plain|tight` в конфиге ноды — пресет Status, не этот аргумент. Клиент, который не знает `edge`, игнорирует его и бьёт в `host`.
 
 `insecure_skip_verify`, `header_budget` и `inflight` не класть. Клиент берёт свои обычные значения. Ключ участника в query не класть.
 
@@ -82,6 +85,14 @@ RFC 3986. `token` и `name` процентировать (`application/x-www-for
 ```
 loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
 ```
+
+Хост ноды, CDN только для GET:
+
+```
+loft://lt_change-me-long-random@loft.example.com:444/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&edge=https://cdn.example.com#Home
+```
+
+`url` остаётся `https://loft.example.com:444`. На dial клиент ставит GET на `https://cdn.example.com` (путь `/static/v3/build`) перед GET ноды. `ws`, `h2` и `quic` остаются на `loft.example.com:444`.
 
 GET на CDN (старая форма, по-прежнему принимается):
 

@@ -40,6 +40,8 @@ struct LoftProfile {
     var quic: Bool = false
     /// YAML `fronts:` / loft:// query keys, FrontOrder subset. Empty = derive.
     var listedFronts: [String] = []
+    /// Optional CDN URL. GET dials it first. `url` stays the node. Empty = every front uses `url`.
+    var edge: String = ""
 
     /// Canonical SSTP DNS field: unique IPv4, comma-separated.
     static func normalizeDNS(_ raw: String) -> String {
@@ -86,8 +88,10 @@ struct LoftProfile {
         !wsPath.isEmpty || !h2Path.isEmpty || !h3Path.isEmpty || quic
     }
 
-    /// Yandex/Cloudflare GET cover. Extra mux fronts are origin paths; this URL does not speak them.
+    /// Old link whose dial host is the CDN cover. Extra mux fronts are not offered.
+    /// A separate `edge` means `url` is the node, so those fronts stay.
     var isCDN: Bool {
+        if !edge.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
         if !cdn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
         guard let host = URL(string: url)?.host?.lowercased(), !host.isEmpty else { return false }
         return host.contains("cdn.")
@@ -687,7 +691,7 @@ final class ProfileStore {
         return """
         name: \(yamlQ(p.name))
         token: \(yamlQ(p.token))
-        instance_id: \(yamlQ(p.instanceID))\(dnsYAML(p))
+        instance_id: \(yamlQ(p.instanceID))\(p.edge.isEmpty ? "" : "\nedge: \(yamlQ(p.edge))")\(dnsYAML(p))
         select: auto\(frontsYAML(p))
         listen:
           socks5: \(p.socksOn ? yamlQ(p.socks) : "false")
@@ -942,6 +946,7 @@ final class ProfileStore {
         var inOutbounds = false
         var inFronts = false
         var headFronts: [String] = []
+        var headEdge = ""
         var items: [(name: String, type: String, url: String, path: String, cdn: String, user: String, maskPub: String)] = []
         var curName = ""
         var curType = ""
@@ -1037,6 +1042,7 @@ final class ProfileStore {
                 } else {
                     headFronts = parsed
                 }
+            case "edge": headEdge = v
             default: break
             }
         }
@@ -1104,6 +1110,33 @@ final class ProfileStore {
             )
         }
         var merged = mergeLoftFronts(mapped)
+        if !headEdge.isEmpty {
+            let norm = ShareURI.normalizeEdge(headEdge)
+            let eh = URL(string: norm)?.host?.lowercased() ?? ""
+            for i in merged.indices {
+                let k = merged[i].kind.lowercased()
+                if !LoftProfile.muxOrder.contains(k) { continue }
+                merged[i].edge = norm
+                let uh = URL(string: merged[i].url)?.host?.lowercased() ?? ""
+                if eh.isEmpty || uh != eh { continue }
+                var nodeURL = ""
+                var nodePath = ""
+                for ob in items {
+                    let h = URL(string: ob.url)?.host?.lowercased() ?? ""
+                    if h.isEmpty || h == eh { continue }
+                    if nodeURL.isEmpty, let origin = ShareURI.nodeOrigin(ob.url) {
+                        nodeURL = origin
+                    }
+                    if ob.type.lowercased() == "get" {
+                        if !ob.path.isEmpty { nodePath = ob.path }
+                        if let origin = ShareURI.nodeOrigin(ob.url) { nodeURL = origin }
+                        break
+                    }
+                }
+                if !nodeURL.isEmpty { merged[i].url = nodeURL }
+                if !nodePath.isEmpty { merged[i].path = nodePath }
+            }
+        }
         if !headFronts.isEmpty {
             for i in merged.indices {
                 let k = merged[i].kind.lowercased()

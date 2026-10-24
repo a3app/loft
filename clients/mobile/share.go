@@ -208,6 +208,9 @@ func loftYAML(raw string) (string, error) {
 		Select:    "auto",
 		Outbounds: outs,
 	}
+	if err := config.PinEdgeGET(cfg, q.Get("edge")); err != nil {
+		return "", err
+	}
 	return marshalClient(cfg, "", "", false, nil)
 }
 

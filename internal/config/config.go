@@ -32,6 +32,7 @@ type ClientConfig struct {
 	ListsURL      string            `yaml:"lists_url"`
 	P2P           *bool             `yaml:"p2p"`             // nil/true: try direct; false: only hub
 	Pause         string            `yaml:"pause,omitempty"` // empty | starlink — client draft pause, not on the wire
+	EdgeURL       string            `yaml:"edge,omitempty"`  // optional CDN URL; GET only. Not the node preset plain|tight
 }
 
 // Published SOCKS5 (GUI / client.yaml). Debug CLI binds DebugSOCKS5 so the
@@ -247,6 +248,9 @@ func LoadClient(path string) (*ClientConfig, error) {
 		if o.URL == "" {
 			return nil, fmt.Errorf("outbound %q: url is required", o.Name)
 		}
+	}
+	if err := PinEdgeGET(&c, c.EdgeURL); err != nil {
+		return nil, err
 	}
 	return &c, nil
 }

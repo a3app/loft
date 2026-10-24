@@ -41,6 +41,7 @@ type fileYAML struct {
 	PAPCHAP     bool                `yaml:"pap_chap"`
 	TLSCheck    *bool               `yaml:"tls_check"`
 	SNI         string              `yaml:"sni"`
+	Edge        string              `yaml:"edge,omitempty"`
 }
 
 func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
@@ -120,6 +121,10 @@ func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
 		ListsURL:   f.ListsURL,
 		P2P:        f.P2P,
 		Pause:      f.Pause,
+		EdgeURL:    strings.TrimSpace(f.Edge),
+	}
+	if err := config.PinEdgeGET(cfg, cfg.EdgeURL); err != nil {
+		return nil, fileExtra{}, err
 	}
 	ex := fileExtra{username: f.Username, password: f.Password, pap: f.PAPCHAP, tlsCheck: f.TLSCheck, sni: f.SNI, name: f.Name}
 	if ex.password == "" {
@@ -156,6 +161,7 @@ func marshalClient(cfg *config.ClientConfig, user, pass string, pap bool, tlsChe
 		Listen:     cfg.Listen,
 		PAPCHAP:    pap,
 		TLSCheck:   tlsCheck,
+		Edge:       cfg.EdgeURL,
 	}
 	if len(cfg.Outbounds) == 1 {
 		f.Name = cfg.Outbounds[0].Name

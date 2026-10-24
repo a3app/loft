@@ -163,6 +163,7 @@ L10N_PACKS["ru"] = {
   "failover_d": "Оборвалось — маршрут на другой туннель.",
   "front": "Фронт",
   "front_get": "Путь GET",
+  "loft_edge": "CDN",
   "front_ws": "Путь WebSocket",
   "front_h2": "Путь HTTP/2",
   "front_h3": "Путь HTTP/3",

@@ -111,6 +111,7 @@ enum ShareURI {
         let hostPart = bracketHost(host, port: port, omitDefault: omit)
         let name = decode(c.percentEncodedFragment ?? c.fragment ?? "")
         let cdn = q["cdn"] ?? ""
+        let edge = normalizeEdge(q["edge"] ?? "")
         let url: String
         let outPath: String
         if type == "get" || hasFronts {
@@ -139,7 +140,8 @@ enum ShareURI {
             h2Path: h2Path,
             h3Path: h3Path,
             quic: quic,
-            listedFronts: listedFronts
+            listedFronts: listedFronts,
+            edge: edge
         )
     }
 
@@ -202,6 +204,8 @@ enum ShareURI {
         }
         let defScheme = kind == "ws" ? "wss" : "https"
         if scheme != defScheme && kind != "get" && !extra { items.append(URLQueryItem(name: "scheme", value: scheme)) }
+        let edge = normalizeEdge(p.edge)
+        if !edge.isEmpty { items.append(URLQueryItem(name: "edge", value: edge)) }
         if !p.cdn.isEmpty { items.append(URLQueryItem(name: "cdn", value: p.cdn)) }
         if !p.maskPub.isEmpty { items.append(URLQueryItem(name: "pbk", value: p.maskPub)) }
         c.queryItems = items.isEmpty ? nil : items
@@ -228,8 +232,9 @@ enum ShareURI {
     }
 
     /// Writes token / host / port / front paths into a loft profile. Keeps cdn and pbk.
-    /// A switch that is off keeps the typed path and drops that front from Hello.
-    static func applyLoftManual(_ p: inout LoftProfile, token: String, host: String, port: Int, getPath: String, wsPath: String, h2Path: String, h3Path: String, getOn: Bool, wsOn: Bool, h2On: Bool, h3On: Bool, quic: Bool) {
+    /// `host` is the node. `edge` is the optional CDN URL for GET. A switch that is
+    /// off keeps the typed path and drops that front from Hello.
+    static func applyLoftManual(_ p: inout LoftProfile, token: String, host: String, port: Int, getPath: String, wsPath: String, h2Path: String, h3Path: String, getOn: Bool, wsOn: Bool, h2On: Bool, h3On: Bool, quic: Bool, edge: String) {
         p.token = token
         p.mux = true
         let cur = loftEndpoint(p)
@@ -258,6 +263,37 @@ enum ShareURI {
         p.listedFronts = listed
         p.kind = listed.contains("get") ? "get" : listed[0]
         p.quic = listed.contains("quic")
+        p.edge = normalizeEdge(edge)
+    }
+
+    /// Absolute http(s) CDN URL. Empty when `raw` is empty or not http(s).
+    /// A bare host becomes `https`. Default ports are omitted.
+    static func normalizeEdge(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.isEmpty { return "" }
+        if !s.contains("://") { s = "https://" + s }
+        guard let u = URL(string: s),
+              let scheme = u.scheme?.lowercased(),
+              scheme == "https" || scheme == "http",
+              let host = u.host, !host.isEmpty else { return "" }
+        var path = u.path
+        if path == "/" { path = "" }
+        let def = scheme == "http" ? 80 : 443
+        let port = u.port ?? def
+        let hostPart = bracketHost(host, port: port, omitDefault: port == def)
+        return "\(scheme)://\(hostPart)\(path)"
+    }
+
+    /// `scheme://host[:port]` of a front URL. `wss`/`ws` become `https`/`http`.
+    static func nodeOrigin(_ raw: String) -> String? {
+        guard let u = URL(string: raw), let host = u.host, !host.isEmpty else { return nil }
+        var scheme = (u.scheme ?? "https").lowercased()
+        if scheme == "wss" { scheme = "https" }
+        if scheme == "ws" { scheme = "http" }
+        if scheme != "https" && scheme != "http" { scheme = "https" }
+        let def = scheme == "http" ? 80 : 443
+        let port = u.port ?? def
+        return "\(scheme)://\(bracketHost(host, port: port, omitDefault: port == def))"
     }
 
     /// `vless://<uuid>@<host>[:port]?…#Name` (DuckSoft / Xray share).

@@ -46,7 +46,7 @@ The scheme **is** the connection kind (`loft`). Host:port is the authority (`huy
 |------|------------------------|
 | scheme `loft` | `kind: loft` |
 | `token` (userinfo) | `token` (`lt_…`) |
-| `host`[:`port`] | host of every loft outbound `url` |
+| `host`[:`port`] | node host. Fronts dial it. `edge` is the only exception, and only for the first GET |
 | `/path` | old form: outbound `path`. Ignored when `get=` / `ws=` / `h2=` are present |
 | `#name` | connection display name; if empty, use `host` |
 
@@ -61,6 +61,7 @@ The scheme **is** the connection kind (`loft`). Host:port is the authority (`huy
 | `quic` | empty flag | — | QUIC outbound (no path) |
 | `type` | `get` `ws` `h2` `quic` `h3` `l3` | `get` | one outbound, only when none of `get`/`ws`/`h2`/`h3`/`quic` is present |
 | `cdn` | profile name (`yandex`, …) | omit | outbound `cdn` |
+| `edge` | absolute `http` or `https` URL | omit | client `edge`. GET only |
 | `fp` | TLS fingerprint (`chrome`, …) | `chrome` | outbound `fingerprint` |
 | `scheme` | `https` `http` `wss` `ws` | from the front | scheme of `url` |
 | `pbk` | node X25519 public, base64url or hex, 32 bytes | omit | outbound `mask_pub` |
@@ -70,6 +71,8 @@ Presence of `get` / `ws` / `h2` / `h3` / `quic` enables that front. Empty `get=`
 Default `scheme`: `ws` → `wss`; everything else → `https`.
 
 Rebuild each outbound URL as `{scheme}://{host}:{port}` plus that front's path.
+
+`edge`, when set, is an absolute `http` or `https` URL. The first GET dials it. The path is the URL path when that path is not `/`; otherwise it is `get=`. The next GET, and `ws` / `h2` / `quic` / `h3`, dial `host`. No `edge`: every front dials `host`. `cdn` stays the legacy profile name, not this URL. Node config `edge: plain|tight` is the Status preset, not this argument. A client that does not know `edge` ignores it and dials `host`.
 
 Omit `insecure_skip_verify`, `header_budget`, and `inflight`. The client uses its usual defaults. Do not put the member key in a query parameter.
 
@@ -82,6 +85,14 @@ One connection, several fronts:
 ```
 loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
 ```
+
+Node host, CDN only for GET:
+
+```
+loft://lt_change-me-long-random@loft.example.com:444/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&edge=https://cdn.example.com#Home
+```
+
+`url` stays `https://loft.example.com:444`. At dial the client inserts a GET to `https://cdn.example.com` (path `/static/v3/build`) ahead of the node GET. `ws`, `h2`, and `quic` stay on `loft.example.com:444`.
 
 GET on a CDN (old form, still accepted):
 

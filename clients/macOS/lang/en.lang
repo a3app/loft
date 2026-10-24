@@ -163,6 +163,7 @@ L10N_PACKS["en"] = {
   "failover_d": "If it drops, the route moves to another tunnel.",
   "front": "Front",
   "front_get": "GET path",
+  "loft_edge": "CDN",
   "front_ws": "WebSocket path",
   "front_h2": "HTTP/2 path",
   "front_h3": "HTTP/3 path",

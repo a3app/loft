@@ -1167,6 +1167,7 @@ final class EditWindowController: NSWindowController {
     private var sstpLinkShown = ""
     private var loftHostF: LoftField?
     private var loftPortF: LoftField?
+    private var loftEdgeF: LoftField?
     private var loftWSF: LoftField?
     private var loftH2F: LoftField?
     private var loftH3F: LoftField?
@@ -1311,7 +1312,7 @@ final class EditWindowController: NSWindowController {
         userF = nil; pathF = nil; kindSeg = nil; muxSw = nil; sniF = nil; tlsSw = nil; papSw = nil
         dnsF = nil; dnsReplaceSw = nil; dnsSystemSw = nil
         keyF = nil; urlF = nil; socksF = nil; socksSw = nil; tunSw = nil
-        loftHostF = nil; loftPortF = nil
+        loftHostF = nil; loftPortF = nil; loftEdgeF = nil
         loftWSF = nil; loftH2F = nil; loftH3F = nil; loftQuicSw = nil
         loftGetSw = nil; loftWSSw = nil; loftH2Sw = nil; loftH3Sw = nil
         vlessHostF = nil; vlessPortF = nil; vlessFpF = nil; vlessPbkF = nil; vlessSidF = nil
@@ -1501,13 +1502,15 @@ final class EditWindowController: NSWindowController {
                     let pl = Palette.label(L10n.t("vless_port"), font: Palette.body(11.5), color: Palette.mute, frame: NSRect(x: 28 + hostW + gap, y: y, width: portW, height: 16))
                     form.addSubview(hl); form.addSubview(pl)
                     y += 18
-                    let hf = LoftField(frame: NSRect(x: 28, y: y, width: hostW, height: 36), placeholder: "cdn.example.com")
+                    let hf = LoftField(frame: NSRect(x: 28, y: y, width: hostW, height: 36), placeholder: "loft.example.com")
                     hf.stringValue = ep.host
                     let pf = LoftField(frame: NSRect(x: 28 + hostW + gap, y: y, width: portW, height: 36), placeholder: "443")
                     pf.stringValue = ep.port > 0 ? String(ep.port) : "443"
                     form.addSubview(hf); form.addSubview(pf)
                     loftHostF = hf; loftPortF = pf
                     y += 48
+                    lab("loft_edge")
+                    loftEdgeF = field("https://cdn.example.com", profile.edge)
                     lab("front_get")
                     let getRow = frontField("/static/v3/build", profile.path.isEmpty ? ep.path : profile.path, profile.frontEnabled("get"))
                     pathF = getRow.0
@@ -1680,6 +1683,7 @@ final class EditWindowController: NSWindowController {
                 profile.quic = q.quic
                 profile.listedFronts = q.listedFronts
                 profile.cdn = q.cdn
+                profile.edge = q.edge
                 profile.maskPub = q.maskPub
             } else if !raw.isEmpty {
                 profile.url = raw
@@ -1731,7 +1735,8 @@ final class EditWindowController: NSWindowController {
         let h2On = loftH2Sw?.on ?? profile.frontEnabled("h2")
         let h3On = loftH3Sw?.on ?? profile.frontEnabled("h3")
         let quic = loftQuicSw?.on ?? profile.frontEnabled("quic")
-        ShareURI.applyLoftManual(&profile, token: token, host: host, port: port, getPath: getPath, wsPath: ws, h2Path: h2, h3Path: h3, getOn: getOn, wsOn: wsOn, h2On: h2On, h3On: h3On, quic: quic)
+        let edge = loftEdgeF?.stringValue ?? profile.edge
+        ShareURI.applyLoftManual(&profile, token: token, host: host, port: port, getPath: getPath, wsPath: ws, h2Path: h2, h3Path: h3, getOn: getOn, wsOn: wsOn, h2On: h2On, h3On: h3On, quic: quic, edge: edge)
     }
 
     /// Writes VLESS Main fields into `profile.url` as a DuckSoft share.

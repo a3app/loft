@@ -55,6 +55,7 @@ func main() {
 	sni := flag.String("sni", "", "SSTP/VLESS/Trojan TLS ServerName")
 	socks := flag.String("socks", config.DebugSOCKS5, "SOCKS5 listen; empty/off to disable")
 	cdnName := flag.String("cdn", "", "edge profile: yandex | cloudflare")
+	edgeURL := flag.String("edge", "", "CDN URL for the first GET; other fronts use -url")
 	decoy := flag.String("decoy", "", "direct-path decoy SNI (dest hostname)")
 	pbk := flag.String("pbk", "", "node X25519 public, hex or base64url")
 	tun := flag.String("tun", "", "TUN device; empty = off, auto = create (needs root)")
@@ -103,7 +104,11 @@ func main() {
 		transport.SetDrive(drv)
 		drv.SetFront(*rawURL)
 		fmt.Fprintf(os.Stderr, "drive log %s\n", logPath)
-		drv.Event("START", "if="+protect.Bound(), "url="+*rawURL, "type="+*kind)
+		start := []string{"if=" + protect.Bound(), "url=" + *rawURL, "type=" + *kind}
+		if s := strings.TrimSpace(*edgeURL); s != "" {
+			start = append(start, "edge="+s)
+		}
+		drv.Event("START", start...)
 	}
 	frontDecoy = strings.TrimSpace(*decoy)
 	frontPBK = strings.TrimSpace(*pbk)
@@ -149,20 +154,19 @@ func main() {
 
 	status("connecting", "front", "", false)
 
+	cfg := frontConfig(*token, *rawURL, *kind, *path, *muxOn, *cdnName)
+	if s := strings.TrimSpace(*helloFronts); s != "" {
+		cfg.Fronts = parseKindList(s)
+	}
+	// -fronts is the mux set Supervise tries. -edge is a GET inserted in
+	// front of that set. WS, H2, QUIC, H3 and the fallback GET keep -url.
+	addEnabledFronts(cfg)
+	if err := config.PinEdgeGET(cfg, *edgeURL); err != nil {
+		fmt.Fprintf(os.Stderr, "loft-front: %v\n", err)
+		os.Exit(2)
+	}
 	if *probe {
-		if multiKind(*kind) {
-			probeFronts(ctx, *token, *rawURL, *kind, *path, *muxOn, *cdnName)
-			return
-		}
-		d, front, err := dial(ctx, *token, *rawURL, *kind, *path, *muxOn, *cdnName)
-		if err != nil {
-			status("error", err.Error(), "", false)
-			os.Exit(2)
-		}
-		ip := transport.OverlayIP()
-		status("on", "", ip, false)
-		_ = d.Close()
-		fmt.Fprintf(os.Stderr, "ok overlay=%s front=%s dns=%s %s\n", ip, front, strings.Join(transport.OverlayDNS(), ","), transport.SessionLine(*rawURL))
+		probeOutbounds(ctx, cfg, !multiKind(*kind))
 		return
 	}
 
@@ -190,7 +194,7 @@ func main() {
 		tunLive atomic.Bool
 		resumes atomic.Uint64
 	)
-	exclude := outboundHosts(*rawURL)
+	exclude := hostsOf(cfg, *rawURL)
 	bringTUN := func() {
 		ip := transport.OverlayIP()
 		if ip == "" {
@@ -258,13 +262,6 @@ func main() {
 		}
 	}
 
-	cfg := frontConfig(*token, *rawURL, *kind, *path, *muxOn, *cdnName)
-	if s := strings.TrimSpace(*helloFronts); s != "" {
-		cfg.Fronts = parseKindList(s)
-	}
-	// GET through a CDN is one handshake. If it does not come up, Supervise
-	// tries the other fronts named in -fronts, on the same host.
-	addEnabledFronts(cfg)
 	first := make(chan struct{})
 	var once sync.Once
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
@@ -326,27 +323,31 @@ func multiKind(kind string) bool {
 	return k == "all" || strings.Contains(k, ",")
 }
 
-// probeFronts handshakes every named front and prints SessionLine after each.
-func probeFronts(ctx context.Context, token, raw, kind, path string, muxOn bool, cdnName string) {
-	order := frontOrder(kind, raw, muxOn, false)
-	var failed int
-	for _, t := range order {
-		o := outboundFor(raw, t, path, cdnName)
-		if !muxOn {
-			f := false
-			o.Mux = &f
-		}
-		d, err := transport.Start(ctx, token, o)
+// probeOutbounds handshakes cfg.Outbounds. stopAtFirst returns on the first session.
+func probeOutbounds(ctx context.Context, cfg *config.ClientConfig, stopAtFirst bool) {
+	if cfg == nil || len(cfg.Outbounds) == 0 {
+		status("error", "no front", "", false)
+		os.Exit(2)
+	}
+	failed := 0
+	for _, o := range cfg.Outbounds {
+		status("connecting", o.Type, "", false)
+		d, err := transport.Start(ctx, cfg.Token, o)
 		if err != nil {
 			failed++
-			fmt.Fprintf(os.Stderr, "front %s: %v\n", t, err)
+			fmt.Fprintf(os.Stderr, "front %s: %v\n", o.Type, err)
 			continue
 		}
 		ip := transport.OverlayIP()
-		fmt.Fprintf(os.Stderr, "ok overlay=%s front=%s dns=%s %s\n", ip, t, strings.Join(transport.OverlayDNS(), ","), transport.SessionLine(raw))
+		setStatusFront(o.Type)
+		fmt.Fprintf(os.Stderr, "ok overlay=%s front=%s dns=%s %s\n", ip, o.Type, strings.Join(transport.OverlayDNS(), ","), transport.SessionLine(o.URL))
 		_ = d.Close()
+		if stopAtFirst {
+			status("on", "", ip, false)
+			return
+		}
 	}
-	if failed == len(order) {
+	if failed == len(cfg.Outbounds) {
 		status("error", "no front", "", false)
 		os.Exit(2)
 	}
@@ -631,6 +632,28 @@ func ipCIDR(ip string) string {
 		return ip
 	}
 	return ip + "/24"
+}
+
+// hostsOf is every dial hostname TUN split routes must not capture.
+func hostsOf(cfg *config.ClientConfig, raw string) []string {
+	out := outboundHosts(raw)
+	seen := map[string]bool{}
+	for _, h := range out {
+		seen[h] = true
+	}
+	if cfg == nil {
+		return out
+	}
+	for _, o := range cfg.Outbounds {
+		for _, h := range outboundHosts(o.URL) {
+			if h == "" || seen[h] {
+				continue
+			}
+			seen[h] = true
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // outboundHosts returns the front hostname so TUN split routes can exclude it.
