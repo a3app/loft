@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Launch theme: lockup on ink until the first frame, then Theme.Loft. -->
+    <style name="Theme.Loft.Splash" parent="Theme.Loft">
+        <item name="android:windowBackground">@drawable/splash</item>
+    </style>
+
     <style name="Theme.Loft" parent="Theme.MaterialComponents.NoActionBar">
         <item name="android:statusBarColor">@color/ink</item>
         <item name="android:navigationBarColor">@color/ink</item>

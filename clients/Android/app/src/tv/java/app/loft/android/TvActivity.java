@@ -47,6 +47,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        setTheme(R.style.Theme_Loft_Tv);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_tv);
         LayoutInflater inf = getLayoutInflater();

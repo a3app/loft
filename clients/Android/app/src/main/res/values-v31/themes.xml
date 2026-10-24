@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- API 31+ system splash: lockup instead of the adaptive-icon mark. -->
+    <style name="Theme.Loft.Splash" parent="Theme.Loft">
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:windowSplashScreenBackground">@color/ink</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_lockup_icon</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/ink</item>
+    </style>
+</resources>

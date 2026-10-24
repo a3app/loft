@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="@color/ink" />
+    </item>
+    <!-- Same lockup as the phone splash, wider on a 10-foot screen. -->
+    <item
+        android:width="560dp"
+        android:height="262dp"
+        android:gravity="center">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/splash_lockup" />
+    </item>
+</layer-list>

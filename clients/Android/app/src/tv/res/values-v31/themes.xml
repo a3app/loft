@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Loft.Tv.Splash" parent="Theme.Loft.Tv">
+        <item name="android:windowBackground">@drawable/splash_tv</item>
+        <item name="android:windowSplashScreenBackground">@color/ink</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_lockup_icon</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/ink</item>
+    </style>
+</resources>

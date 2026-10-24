@@ -13,7 +13,7 @@
             android:name=".TvActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.Loft.Tv"
+            android:theme="@style/Theme.Loft.Tv.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

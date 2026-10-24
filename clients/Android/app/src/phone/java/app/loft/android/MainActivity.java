@@ -53,6 +53,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        setTheme(R.style.Theme_Loft);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         LayoutInflater inf = getLayoutInflater();
