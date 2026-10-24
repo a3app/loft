@@ -76,15 +76,19 @@ type Ops struct {
 	// PanelEtc is /etc/loft-panel (net.json, channels).
 	PanelEtc string
 
-	mu     sync.Mutex // one writer for network.conf and members.keys
-	netMu  sync.Mutex // net.json and the held change
-	chanMu sync.Mutex // channels.json and what it writes
-	mailMu sync.Mutex // mail.json and the mail server's files
-	sysMu  sync.Mutex // Linux accounts
-	recMu  sync.Mutex // one Reconcile at a time
-	extMu  sync.Mutex
-	ext    map[string]extIP
-	jobMu  sync.Mutex // job.json between start and status
+	mu      sync.Mutex // one writer for network.conf and members.keys
+	netMu   sync.Mutex // net.json and the held change
+	chanMu  sync.Mutex // channels.json and what it writes
+	mailMu  sync.Mutex // mail.json and the mail server's files
+	sysMu   sync.Mutex // Linux accounts
+	recMu   sync.Mutex // one Reconcile at a time
+	extMu   sync.Mutex
+	ext     map[string]extIP
+	jobMu   sync.Mutex // job.json between start and status
+	snapMu  sync.Mutex // hostSnapshot cache, shared by Reconcile and channels.get
+	snap    snapshot
+	snapAt  time.Time
+	snapKey string
 }
 
 // Defaults is the Debian layout from server/debian/install.sh.

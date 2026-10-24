@@ -96,10 +96,37 @@ type ipRoute struct {
 	Scope    string `json:"scope"`
 }
 
+// netProbe is ip addr, both route tables and ss. Tests keep four Exec
+// calls; on the host it is one systemd-run.
+func (o *Ops) netProbe(ctx context.Context) (addr, r4, r6, ss string, err error) {
+	if o.Exec != nil {
+		if addr, err = o.host(ctx, "ip", "-j", "addr", "show"); err != nil {
+			return
+		}
+		if r4, err = o.host(ctx, "ip", "-j", "-4", "route", "show", "table", "main"); err != nil {
+			return
+		}
+		if r6, err = o.host(ctx, "ip", "-j", "-6", "route", "show", "table", "main"); err != nil {
+			return
+		}
+		ss, _ = o.host(ctx, "ss", "-Htlnup")
+		return
+	}
+	out, err := o.host(ctx, "sh", "-c", "ip -j addr show; echo @@; ip -j -4 route show table main; echo @@; ip -j -6 route show table main; echo @@; ss -Htlnup")
+	if err != nil && out == "" {
+		return "", "", "", "", err
+	}
+	p := strings.Split(out, "@@")
+	for len(p) < 4 {
+		p = append(p, "")
+	}
+	return strings.TrimSpace(p[0]), strings.TrimSpace(p[1]), strings.TrimSpace(p[2]), strings.TrimSpace(p[3]), nil
+}
+
 // NetState is the server's addresses, routes and listeners.
 func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 	var st admproto.NetState
-	out, err := o.host(ctx, "ip", "-j", "addr", "show")
+	out, r4, r6, ssOut, err := o.netProbe(ctx)
 	if err != nil {
 		return st, err
 	}
@@ -108,13 +135,12 @@ func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 		return st, fmt.Errorf("ip addr: %v", err)
 	}
 	var routes []ipRoute
-	for _, fam := range []string{"-4", "-6"} {
-		r, err := o.host(ctx, "ip", "-j", fam, "route", "show", "table", "main")
-		if err != nil {
-			return st, err
+	for _, raw := range []string{r4, r6} {
+		if strings.TrimSpace(raw) == "" {
+			continue
 		}
 		var l []ipRoute
-		if err := json.Unmarshal([]byte(r), &l); err != nil {
+		if err := json.Unmarshal([]byte(raw), &l); err != nil {
 			return st, fmt.Errorf("ip route: %v", err)
 		}
 		routes = append(routes, l...)
@@ -136,7 +162,7 @@ func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 			}
 		}
 	}
-	listen := o.listeners(ctx)
+	listen := parseListeners(ssOut)
 	chDev := map[string]string{} // interface → channel
 	if cs, err := o.readChans(); err == nil {
 		for _, c := range cs.Channels {
@@ -189,12 +215,7 @@ type listenSet []struct{ addr, fam, what string }
 
 var ssUsers = regexp.MustCompile(`\(\("([^"]+)"`)
 
-// listeners is ss -tlnup: who listens on which address and port.
-func (o *Ops) listeners(ctx context.Context) listenSet {
-	out, err := o.host(ctx, "ss", "-Htlnup")
-	if err != nil {
-		return nil
-	}
+func parseListeners(out string) listenSet {
 	var ls listenSet
 	seen := map[string]bool{}
 	for _, ln := range strings.Split(out, "\n") {

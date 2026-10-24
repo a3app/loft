@@ -308,6 +308,7 @@ func TestReconcile(t *testing.T) {
 		`[{"ifname":"wg-nl","addr_info":[{"family":"inet","local":"10.8.0.2","prefixlen":24,"scope":"global"}]}]@@` +
 		`[{"priority":0,"src":"all","table":"local"},{"priority":10010,"src":"all","oifname":"old","table":"1005"}]@@[]@@` +
 		"wg-nl\tPRIV\tPUB\t51820\toff\n" + "wg-nl\t" + pubB + "\t(none)\t198.51.100.1:51820\t0.0.0.0/0\t" + "1\t9\t5\t25\n" + `@@@@@@`
+	o.dropSnap()
 	o.Reconcile(ctx)
 	got := strings.Join(f.ran, "\n")
 	for _, want := range []string{
@@ -378,5 +379,30 @@ func TestPrioMultiLimitsAuto(t *testing.T) {
 	eg, _ := os.ReadFile(o.egressFile())
 	if !strings.Contains(string(eg), "prio prio1 wg-nl px0 then direct multi limit wg-nl 50/10\n") {
 		t.Fatalf("egress.conf:\n%s", eg)
+	}
+}
+
+func TestHostSnapshotCached(t *testing.T) {
+	o, f := chanOps(t)
+	f.snap = "[]\n@@\n[]\n@@\n[]\n@@\n[]\n@@\n\n@@\n[]\n@@\n{}\n@@\n"
+	var n int
+	inner := o.Exec
+	o.Exec = func(ctx context.Context, name string, args ...string) (string, error) {
+		if name == "sh" {
+			n++
+		}
+		return inner(ctx, name, args...)
+	}
+	ctx := context.Background()
+	s := chanStore{Channels: []admproto.Channel{wgChan("wg-nl")}}
+	o.hostSnapshot(ctx, s)
+	o.hostSnapshot(ctx, s)
+	if n != 1 {
+		t.Fatalf("snapshot ran %d times, want 1", n)
+	}
+	o.dropSnap()
+	o.hostSnapshot(ctx, s)
+	if n != 2 {
+		t.Fatalf("after drop ran %d, want 2", n)
 	}
 }

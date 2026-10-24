@@ -667,6 +667,7 @@ func (o *Ops) applyChans(ctx context.Context, have, want chanStore) error {
 			return err
 		}
 	}
+	o.dropSnap()
 	o.Reconcile(ctx)
 	return nil
 }
@@ -983,7 +984,40 @@ type wgDev struct {
 	endpoint  string
 }
 
+const snapFresh = 3 * time.Second
+
+func snapKey(s chanStore) string {
+	var b strings.Builder
+	for _, c := range s.Channels {
+		b.WriteString(c.Name)
+		b.WriteByte('/')
+		b.WriteString(c.Type)
+		b.WriteByte('/')
+		b.WriteString(unitOf(c))
+		b.WriteByte(';')
+	}
+	return b.String()
+}
+
+func (o *Ops) dropSnap() {
+	o.snapMu.Lock()
+	o.snapAt = time.Time{}
+	o.snapMu.Unlock()
+}
+
 func (o *Ops) hostSnapshot(ctx context.Context, s chanStore) snapshot {
+	key := snapKey(s)
+	o.snapMu.Lock()
+	defer o.snapMu.Unlock()
+	if time.Since(o.snapAt) < snapFresh && o.snapKey == key {
+		return o.snap
+	}
+	sn := o.hostSnapshotRun(ctx, s)
+	o.snap, o.snapAt, o.snapKey = sn, time.Now(), key
+	return sn
+}
+
+func (o *Ops) hostSnapshotRun(ctx context.Context, s chanStore) snapshot {
 	sn := snapshot{devs: map[string]bool{}, addrs: map[string][]string{}, stats: map[string][2]uint64{}, ztDev: map[string]string{},
 		zt: map[string]ztNet{}, wg: map[string]wgDev{}, units: map[string][2]string{}}
 	var units []string
@@ -997,7 +1031,7 @@ func (o *Ops) hostSnapshot(ctx context.Context, s chanStore) snapshot {
 	script := "ip -j -s link show; echo @@; ip -j -4 addr show; echo @@; ip -j rule show; echo @@; ip -j route show proto " + ChannelProto +
 		"; echo @@; wg show all dump 2>/dev/null; echo @@; "
 	if hasZT {
-		script += "zerotier-cli -j listnetworks 2>/dev/null; echo @@; zerotier-cli -j info 2>/dev/null; echo @@; "
+		script += "timeout -k 1 2 zerotier-cli -j listnetworks 2>/dev/null; echo @@; timeout -k 1 2 zerotier-cli -j info 2>/dev/null; echo @@; "
 	} else {
 		script += "echo; echo @@; echo; echo @@; "
 	}
