@@ -180,7 +180,7 @@ func (w *WSS) Close() error {
 	conn := w.conn
 	key := w.key
 	w.mu.Unlock()
-	if conn != nil && len(key) > 0 {
+	if holdOwner(w.holdGen) && conn != nil && len(key) > 0 {
 		if sealed, err := sealLeave(key, nil); err == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
 			_ = conn.Write(ctx, websocket.MessageBinary, sealed)

@@ -222,7 +222,7 @@ func (q *QUIC) Park() error {
 
 // Close sends CmdLeave and closes the QUIC connection.
 func (q *QUIC) Close() error {
-	if q.stream != nil && len(q.key) > 0 {
+	if holdOwner(q.holdGen) && q.stream != nil && len(q.key) > 0 {
 		if sealed, err := sealLeave(q.key, nil); err == nil {
 			_ = q.stream.SetWriteDeadline(time.Now().Add(800 * time.Millisecond))
 			_ = writeMsg(q.stream, sealed)

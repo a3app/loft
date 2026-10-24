@@ -84,6 +84,15 @@ func takeClientHold() (*mux.Session, uint64) {
 	return clientHold.sess, clientHold.gen
 }
 
+// holdOwner is false after a newer front's Start has taken the hold.
+// That front's dialer is already on this mux. Leave from the old Close
+// would drop the server session under the live streams.
+func holdOwner(gen uint64) bool {
+	clientHoldMu.Lock()
+	defer clientHoldMu.Unlock()
+	return gen != 0 && clientHold.gen == gen
+}
+
 // releaseClientHold closes the parked mux only when gen is still the owner.
 // False means a newer front has taken the hold.
 func releaseClientHold(gen uint64) bool {

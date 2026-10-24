@@ -480,13 +480,16 @@ func (g *GET) Park() error {
 	return nil
 }
 
-// Close stops the pump, sends CmdLeave, and closes mux.
+// Close stops the pump. CmdLeave only if this front still owns the hold.
+// Holder.Set closes the previous dialer after the next Start.
 func (g *GET) Close() error {
 	if g.stop != nil {
 		g.stop()
 	}
 	g.closeAttach()
-	g.sendLeave()
+	if holdOwner(g.holdGen) {
+		g.sendLeave()
+	}
 	if releaseClientHold(g.holdGen) {
 		g.sess.Close()
 	}

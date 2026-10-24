@@ -492,6 +492,50 @@ func TestGETLeaveDropsSession(t *testing.T) {
 	t.Fatalf("GET session still live after leave: %d", n)
 }
 
+// TestGETCloseAfterHandoverSkipsLeave: Holder.Set closes the old front
+// after the next Start. Leave must not drop the server session.
+func TestGETCloseAfterHandoverSkipsLeave(t *testing.T) {
+	t.Cleanup(clearClientHold)
+	const token = "test-token-please-change"
+	gs := NewGETServer(token, "/static/v3/build")
+	gs.Info.Caps = wire.CapHold
+	ts := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
+	defer ts.Close()
+
+	g, err := NewGET(token, config.Outbound{
+		Type:         "get",
+		URL:          ts.URL,
+		Path:         "/static/v3/build",
+		Fingerprint:  "go",
+		HeaderBudget: 4096,
+		Inflight:     2,
+		Insecure:     true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := g.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	sess := g.sess
+	_, _ = takeClientHold()
+	if err := g.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if sess.Closed() {
+		t.Fatal("mux closed")
+	}
+	time.Sleep(200 * time.Millisecond)
+	gs.mu.Lock()
+	n := len(gs.sessions)
+	gs.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("sessions %d", n)
+	}
+}
+
 // TestGETXAuthAdoptsHeldMux reuses the server mux on a hold-gap handshake
 // (new GET HTTP sid) so inner TCP survives a hold gap.
 func TestGETXAuthAdoptsHeldMux(t *testing.T) {

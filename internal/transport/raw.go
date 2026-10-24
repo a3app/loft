@@ -50,7 +50,7 @@ func (r *rawSess) Park() error {
 
 // Close sends CmdLeave, then closes mux and the stream.
 func (r *rawSess) Close() error {
-	if r.conn != nil && len(r.key) > 0 {
+	if holdOwner(r.holdGen) && r.conn != nil && len(r.key) > 0 {
 		if sealed, err := sealLeave(r.key, nil); err == nil {
 			_ = r.conn.SetWriteDeadline(time.Now().Add(800 * time.Millisecond))
 			_ = writeMsg(r.conn, sealed)
