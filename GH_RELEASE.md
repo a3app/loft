@@ -10,14 +10,14 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-macos-arm64.dmg` | `loft-macos-x86_64.dmg` |
-| macOS CLI | `loft-darwin-arm64.tar.gz` | `loft-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-linux-arm64.tar.gz` | `loft-linux-amd64.tar.gz` |
-| Node | `loft-node-linux-arm64.tar.gz` · `loft-node_arm64.deb` | `loft-node-linux-amd64.tar.gz` · `loft-node_amd64.deb` |
-| Panel | `loft-panel-linux-arm64.tar.gz` · `loft-panel_arm64.deb` | `loft-panel-linux-amd64.tar.gz` · `loft-panel_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-android.apk` · `loft-android-tv.apk` | same fat APKs |
+| macOS app (10.13+, ad-hoc signed) | `loft-1.0.28-macos-arm64.dmg` | `loft-1.0.28-macos-x86_64.dmg` |
+| macOS CLI | `loft-1.0.28-darwin-arm64.tar.gz` | `loft-1.0.28-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-1.0.28-linux-arm64.tar.gz` | `loft-1.0.28-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.28-linux-arm64.tar.gz` · `loft-node_1.0.28_arm64.deb` | `loft-node-1.0.28-linux-amd64.tar.gz` · `loft-node_1.0.28_amd64.deb` |
+| Panel | `loft-panel-1.0.28-linux-arm64.tar.gz` · `loft-panel_1.0.28_arm64.deb` | `loft-panel-1.0.28-linux-amd64.tar.gz` · `loft-panel_1.0.28_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-1.0.28-android.apk` · `loft-1.0.28-android-tv.apk` | same fat APKs |
 
-Checksums: `loft-clients-SHA256SUMS.txt`, `loft-node-SHA256SUMS.txt`, `loft-panel-SHA256SUMS.txt`, `loft-android-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.28-SHA256SUMS.txt`, `loft-node-1.0.28-SHA256SUMS.txt`, `loft-panel-1.0.28-SHA256SUMS.txt`, `loft-android-1.0.28-SHA256SUMS.txt`.
 
 CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`.
 
@@ -38,7 +38,7 @@ Protocol stays **loft/1.0**.
 
 Android:
 
-- Dist publishes signed GitHub-channel APKs: phone `loft-android.apk` (`app.loft.android`) and TV `loft-android-tv.apk` (`app.loft.android.tv`). Flavor `github` has the in-app updater; `store` compiles it out.
+- Dist publishes signed GitHub-channel APKs: phone `loft-1.0.28-android.apk` (`app.loft.android`) and TV `loft-1.0.28-android-tv.apk` (`app.loft.android.tv`). Flavor `github` has the in-app updater; `store` compiles it out. Asset names include the version.
 
 GET / fronts:
 
@@ -167,7 +167,7 @@ macOS:
 
 В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV). iOS, Sailfish, Keenetic, MikroTik в этот Dist не входят.
 
-1.0.28: Dist публикует подписанные GitHub APK; GET вешает лишние фронты в фоне и не цепляет их на CDN; macOS — один GET outbound и `sstp://`; панель — Адаптеры / Внешние каналы. Протокол loft/1.0.
+1.0.28: Dist публикует подписанные GitHub APK, имена файлов с версией; GET вешает лишние фронты в фоне и не цепляет их на CDN; macOS — один GET outbound и `sstp://`; панель — Адаптеры / Внешние каналы. Протокол loft/1.0.
 
 ---
 
@@ -177,4 +177,4 @@ loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流
 
 本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）。iOS / Sailfish / Keenetic / MikroTik 不在这次包里。
 
-1.0.28：Dist 发布已签名 GitHub APK；GET 在后台挂额外前置、CDN 上不挂；macOS 单 GET outbound 和 `sstp://`；面板「适配器 / 外部通道」。协议仍是 loft/1.0。
+1.0.28：Dist 发布已签名 GitHub APK，文件名带版本；GET 在后台挂额外前置、CDN 上不挂；macOS 单 GET outbound 和 `sstp://`；面板「适配器 / 外部通道」。协议仍是 loft/1.0。

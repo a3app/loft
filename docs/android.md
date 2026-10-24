@@ -57,4 +57,4 @@ Two product flavors on the `channel` dimension, same `applicationId`, different 
 | Permission | `REQUEST_INSTALL_PACKAGES` | none |
 | Key | `secrets/android-github.p12` (`make -C clients/Android github-key`) | Play App Signing |
 
-`make -C clients/Android release` writes `loft-{ver}-android.apk`, `loft-{ver}-android-tv.apk`, and `loft-android-{ver}-SHA256SUMS.txt`. Dist uploads the same names on a `v*` tag when GitHub secrets `LOFT_ANDROID_KEYSTORE` (base64 of the p12) and `LOFT_ANDROID_KEYSTORE_PASSWORD` are set. Stable names: `loft-android.apk`, `loft-android-tv.apk`, `loft-android-SHA256SUMS.txt`. Debug builds can check; they refuse to install a release APK (different cert).
+`make -C clients/Android release` writes `loft-{ver}-android.apk`, `loft-{ver}-android-tv.apk`, and `loft-android-{ver}-SHA256SUMS.txt`. Dist uploads those names on a `v*` tag when GitHub secrets `LOFT_ANDROID_KEYSTORE` (base64 of the p12) and `LOFT_ANDROID_KEYSTORE_PASSWORD` are set. Debug builds can check; they refuse to install a release APK (different cert).

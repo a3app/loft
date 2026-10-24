@@ -57,4 +57,4 @@ Java-пакет `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketPr
 | Право | `REQUEST_INSTALL_PACKAGES` | нет |
 | Ключ | `secrets/android-github.p12` (`make -C clients/Android github-key`) | Play App Signing |
 
-`make -C clients/Android release` пишет `loft-{ver}-android.apk`, `loft-{ver}-android-tv.apk` и `loft-android-{ver}-SHA256SUMS.txt`. Dist заливает те же имена на тег `v*`, если заданы секреты `LOFT_ANDROID_KEYSTORE` (base64 от p12) и `LOFT_ANDROID_KEYSTORE_PASSWORD`. Стабильные имена: `loft-android.apk`, `loft-android-tv.apk`, `loft-android-SHA256SUMS.txt`. Debug-сборка умеет проверить и не ставит релизный APK (другой сертификат).
+`make -C clients/Android release` пишет `loft-{ver}-android.apk`, `loft-{ver}-android-tv.apk` и `loft-android-{ver}-SHA256SUMS.txt`. Dist заливает те же имена на тег `v*`, если заданы секреты `LOFT_ANDROID_KEYSTORE` (base64 от p12) и `LOFT_ANDROID_KEYSTORE_PASSWORD`. Debug-сборка умеет проверить и не ставит релизный APK (другой сертификат).

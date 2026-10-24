@@ -40,8 +40,7 @@ release: $(AAR)
 	cp $(DIST)/loft-$(VER)-android-tv.apk $(DIST)/loft-android-tv.apk
 	cp $(DIST)/loft-$(VER)-android.apk $(DIST)/app-release.apk
 	cp $(DIST)/loft-$(VER)-android-tv.apk $(DIST)/app-tv-release.apk
-	cd $(DIST) && (command -v sha256sum >/dev/null && sha256sum loft-$(VER)-android.apk loft-$(VER)-android-tv.apk loft-android.apk loft-android-tv.apk || shasum -a 256 loft-$(VER)-android.apk loft-$(VER)-android-tv.apk loft-android.apk loft-android-tv.apk) > loft-android-$(VER)-SHA256SUMS.txt
-	cp $(DIST)/loft-android-$(VER)-SHA256SUMS.txt $(DIST)/loft-android-SHA256SUMS.txt
+	cd $(DIST) && (command -v sha256sum >/dev/null && sha256sum loft-$(VER)-android.apk loft-$(VER)-android-tv.apk || shasum -a 256 loft-$(VER)-android.apk loft-$(VER)-android-tv.apk) > loft-android-$(VER)-SHA256SUMS.txt
 
 github-key:
 	mkdir -p $(ROOT)/secrets

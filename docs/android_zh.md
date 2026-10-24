@@ -57,4 +57,4 @@ Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProte
 | 权限 | `REQUEST_INSTALL_PACKAGES` | 无 |
 | 钥匙 | `secrets/android-github.p12`（`make -C clients/Android github-key`） | Play App Signing |
 
-`make -C clients/Android release` 写出 `loft-{ver}-android.apk`、`loft-{ver}-android-tv.apk` 和 `loft-android-{ver}-SHA256SUMS.txt`。Dist 在 `v*` 标签上传这些名字，前提是 GitHub secrets 里有 `LOFT_ANDROID_KEYSTORE`（p12 的 base64）和 `LOFT_ANDROID_KEYSTORE_PASSWORD`。稳定名：`loft-android.apk`、`loft-android-tv.apk`、`loft-android-SHA256SUMS.txt`。调试包可以检查，不会装正式 APK（证书不同）。
+`make -C clients/Android release` 写出 `loft-{ver}-android.apk`、`loft-{ver}-android-tv.apk` 和 `loft-android-{ver}-SHA256SUMS.txt`。Dist 在 `v*` 标签上传这些名字，前提是 GitHub secrets 里有 `LOFT_ANDROID_KEYSTORE`（p12 的 base64）和 `LOFT_ANDROID_KEYSTORE_PASSWORD`。调试包可以检查，不会装正式 APK（证书不同）。

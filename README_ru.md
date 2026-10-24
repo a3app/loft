@@ -29,17 +29,17 @@ loft — оверлей внутри TLS. Потоки мультиплекси�
 
 ## Скачать
 
-Сборки в [последнем релизе](https://github.com/a3app/loft/releases/latest). Dist на каждый тег `v*` заливает файлы с этими именами — ссылки всегда на текущий релиз.
+Сборки в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла — версия (`loft-1.0.28-macos-arm64.dmg`).
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS, приложение | [DMG](https://github.com/a3app/loft/releases/latest/download/loft-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/latest/download/loft-macos-x86_64.dmg) |
-| macOS, CLI | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-darwin-amd64.tar.gz) |
-| Linux, CLI | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-linux-amd64.tar.gz) |
-| Нода | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-node-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-node_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-node-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-node_amd64.deb) |
-| Панель | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-panel-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-panel_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/latest/download/loft-panel-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/latest/download/loft-panel_amd64.deb) |
+| macOS, приложение | [DMG](https://github.com/a3app/loft/releases/download/v1.0.28/loft-1.0.28-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.28/loft-1.0.28-macos-x86_64.dmg) |
+| macOS, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.28/loft-1.0.28-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.28/loft-1.0.28-darwin-amd64.tar.gz) |
+| Linux, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.28/loft-1.0.28-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.28/loft-1.0.28-linux-amd64.tar.gz) |
+| Нода | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.28/loft-node-1.0.28-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.28/loft-node_1.0.28_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.28/loft-node-1.0.28-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.28/loft-node_1.0.28_amd64.deb) |
+| Панель | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.28/loft-panel-1.0.28-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.28/loft-panel_1.0.28_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.28/loft-panel-1.0.28-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.28/loft-panel_1.0.28_amd64.deb) |
 
-Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/latest/download/loft-clients-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/latest/download/loft-node-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/latest/download/loft-panel-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/latest/download/loft-android-SHA256SUMS.txt). DMG — приложение в строке меню, подпись ad-hoc. В архивах CLI: `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub (sideload): [APK телефона](https://github.com/a3app/loft/releases/latest/download/loft-android.apk) · [APK TV](https://github.com/a3app/loft/releases/latest/download/loft-android-tv.apk). Сборка Play без обновления из приложения.
+Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.28/loft-clients-1.0.28-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.28/loft-node-1.0.28-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.28/loft-panel-1.0.28-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.28/loft-android-1.0.28-SHA256SUMS.txt). DMG — приложение в строке меню, подпись ad-hoc. В архивах CLI: `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub (sideload): [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.28/loft-1.0.28-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.28/loft-1.0.28-android-tv.apk). Сборка Play без обновления из приложения.
 
 ## Приложение
 

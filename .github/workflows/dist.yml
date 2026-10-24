@@ -227,49 +227,41 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Stable names for /releases/latest/download
+      - name: Versioned Dist names
         run: |
           set -eu
           ver=$(tr -d ' \n' < VERSION)
-          mkdir -p artifacts/latest
+          found() { find artifacts -type f -name "$1" | grep -q .; }
+          for need in \
+            "loft-${ver}-macos-arm64.dmg" "loft-${ver}-macos-x86_64.dmg" \
+            "loft-${ver}-darwin-arm64.tar.gz" "loft-${ver}-darwin-amd64.tar.gz" \
+            "loft-${ver}-linux-arm64.tar.gz" "loft-${ver}-linux-amd64.tar.gz" \
+            "loft-node-${ver}-linux-arm64.tar.gz" "loft-node-${ver}-linux-amd64.tar.gz" \
+            "loft-node_${ver}_arm64.deb" "loft-node_${ver}_amd64.deb" \
+            "loft-panel-${ver}-linux-arm64.tar.gz" "loft-panel-${ver}-linux-amd64.tar.gz" \
+            "loft-panel_${ver}_arm64.deb" "loft-panel_${ver}_amd64.deb" \
+            "loft-clients-${ver}-SHA256SUMS.txt" "loft-node-${ver}-SHA256SUMS.txt" "loft-panel-${ver}-SHA256SUMS.txt"
+          do
+            found "$need"
+          done
+          if found "loft-${ver}-android.apk"; then
+            found "loft-${ver}-android-tv.apk"
+            found "loft-android-${ver}-SHA256SUMS.txt"
+          fi
           find artifacts -type f \( \
             -name '*.tar.gz' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*SHA256SUMS.txt' \
-          \) | sort | while IFS= read -r f; do
-            base=$(basename "$f")
-            stable=$(printf '%s' "$base" | sed -e "s/-${ver}-/-/g" -e "s/_${ver}_/_/g")
-            if [ "$stable" != "$base" ]; then
-              cp "$f" "artifacts/latest/$stable"
-            fi
-          done
-          for need in \
-            loft-macos-arm64.dmg loft-macos-x86_64.dmg \
-            loft-darwin-arm64.tar.gz loft-darwin-amd64.tar.gz \
-            loft-linux-arm64.tar.gz loft-linux-amd64.tar.gz \
-            loft-node-linux-arm64.tar.gz loft-node-linux-amd64.tar.gz \
-            loft-node_arm64.deb loft-node_amd64.deb \
-            loft-panel-linux-arm64.tar.gz loft-panel-linux-amd64.tar.gz \
-            loft-panel_arm64.deb loft-panel_amd64.deb \
-            loft-clients-SHA256SUMS.txt loft-node-SHA256SUMS.txt loft-panel-SHA256SUMS.txt
-          do
-            test -f "artifacts/latest/$need"
-          done
-          if find artifacts -name 'loft-*-android.apk' | grep -q .; then
-            for need in loft-android.apk loft-android-tv.apk loft-android-SHA256SUMS.txt; do
-              test -f "artifacts/latest/$need"
-            done
-          fi
-          ls -l artifacts/latest
+          \) | sort
       - name: Publish GitHub Release
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
+          ver=$(tr -d ' \n' < VERSION)
           mapfile -t files < <(find artifacts -type f \( \
             -name '*.tar.gz' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*SHA256SUMS.txt' \
-          \) | sort)
+          \) | grep -E -- "-${ver}-|_${ver}_" | sort)
           [ "${#files[@]}" -gt 0 ]
-          ver=$(tr -d ' \n' < VERSION)
           notes=GH_RELEASE.md
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
