@@ -165,7 +165,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
-      - uses: android-actions/setup-android@v3
+      # v3 runs `sdkmanager tools`; Google no longer serves that package.
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
       - name: NDK
         run: |
           set -eu
