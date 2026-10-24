@@ -97,6 +97,40 @@ func TestChannelSaveWireGuard(t *testing.T) {
 	}
 }
 
+func TestChannelSaveSSTPConnecting(t *testing.T) {
+	o, f := chanOps(t)
+	ctx := context.Background()
+	if _, err := o.ChannelSave(ctx, wgChan("wg-nl")); err != nil {
+		t.Fatal(err)
+	}
+	f.ran = nil
+	v, err := o.ChannelSave(ctx, admproto.Channel{
+		Title: "Office", Type: admproto.ChanSSTP, On: true, Exit: true,
+		SSTP: &admproto.SSTPConf{Server: "vpn.example.org", User: "u", Password: "p"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := v.Channels[1]
+	if c.Name != "sstp0" || c.SSTP.Password != "" || !c.SSTP.HasPassword || c.SSTP.Server != "vpn.example.org:443" {
+		t.Fatalf("view %+v %+v", c, c.SSTP)
+	}
+	st := v.Status[1]
+	if st.Name != "sstp0" || st.State != "connecting" {
+		t.Fatalf("fresh status %+v", v.Status)
+	}
+	for _, line := range f.ran {
+		if strings.HasPrefix(line, "ip ") {
+			t.Fatalf("SSTP save ran reconcile: %v", f.ran)
+		}
+	}
+	os.WriteFile(filepath.Join(o.Dir, "egress-status.json"), []byte(`{"channels":[{"name":"sstp0","state":"up","ip":"10.1.0.2"}]}`), 0o644)
+	got := o.channelStatus(ctx, must(o.readChans()))
+	if got[1].State != "up" || len(got[1].Addrs) != 1 || got[1].Addrs[0] != "10.1.0.2" {
+		t.Fatalf("up %+v", got[1])
+	}
+}
+
 func TestChannelChecks(t *testing.T) {
 	o, _ := chanOps(t)
 	ctx := context.Background()

@@ -667,9 +667,29 @@ func (o *Ops) applyChans(ctx context.Context, have, want chanStore) error {
 			return err
 		}
 	}
-	o.dropSnap()
-	o.Reconcile(ctx)
+	// SSTP/proxy/Xray live in the node; kernel routes are unchanged, so a
+	// host snapshot (ZeroTier can sit for seconds) would only stall the save.
+	if kernelSide(have) != kernelSide(want) {
+		o.dropSnap()
+		o.Reconcile(ctx)
+	}
 	return nil
+}
+
+// kernelSide is the WireGuard / OpenVPN / ZeroTier set Reconcile owns.
+func kernelSide(s chanStore) string {
+	var b strings.Builder
+	for _, c := range s.Channels {
+		switch c.Type {
+		case admproto.ChanWG, admproto.ChanOVPN, admproto.ChanZT:
+			net := ""
+			if c.ZT != nil {
+				net = c.ZT.Network
+			}
+			fmt.Fprintf(&b, "%s %s %t %s %d %s\n", c.Name, c.Type, c.On, c.Dev, c.Table, net)
+		}
+	}
+	return b.String()
 }
 
 // putFile writes a file outside the helper's sandbox (/etc/wireguard,
@@ -1197,6 +1217,10 @@ func (o *Ops) channelStatus(ctx context.Context, s chanStore) []admproto.Channel
 				if n.IP != "" {
 					st.Addrs = []string{n.IP}
 				}
+			} else if c.On {
+				// Node writes egress-status.json on a tick; a just-saved SSTP
+				// is dialing, not down.
+				st.State = "connecting"
 			}
 		}
 		// The node's link check: the channel is up but carries nothing.

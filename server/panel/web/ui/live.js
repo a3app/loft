@@ -1241,7 +1241,28 @@
     const c = D, nw = !!c._nw, body = { name: nw ? '' : c.name, title: c.title || '', type: c.type, on: nw ? true : c.on, exit: !!c.exit, accept: !!c.accept, check: c.check || null, via: c.via || '' };
     body[c.type] = c[c.type];
     toast(nw ? 'Добавляю подключение…' : 'Сохраняю…');
-    try { L.ch = await api('POST', '/api/channels/save', body); closeDlg(); toast('Сохранено — нода перечитала каналы'); render(); } catch (e) { toast(e.message); }
+    const title = (body.title || '').replace(/\s+/g, ' ').trim();
+    const before = new Set((L.ch && L.ch.channels || []).map(x => x.name));
+    const landed = v => (v.channels || []).some(x => nw
+      ? x.type === body.type && !before.has(x.name) && (!title || x.title === title)
+      : x.name === body.name);
+    try {
+      L.ch = await api('POST', '/api/channels/save', body);
+    } catch (e) {
+      // Reload of the node can drop the HTTPS session; the helper still writes.
+      if (!nw || (!e.offline && e.status !== 0)) { toast(e.message); return; }
+      let got = null;
+      for (let i = 0; i < 10 && !got; i++) {
+        await sleep(500);
+        try { const v = await api('GET', '/api/channels'); if (landed(v)) got = v; } catch (_) {}
+      }
+      if (!got) { toast(e.message); return; }
+      L.ch = got;
+    }
+    chAt = Date.now();
+    closeDlg();
+    toast('Сохранено — нода перечитала каналы');
+    render();
   });
   L.chSwitch = async (n, on) => { const t = tt(chOf(n)); try { L.ch = await api('POST', '/api/channels/switch', { name: n, on }); toast(on ? `«${t}» включён` : `«${t}» выключен`); } catch (e) { toast(e.message); } render(); };
   L.chAskDel = n => dialog(`Удалить подключение «${esc(tt(chOf(n)))}»?`, 'Канал отключится и его настройки удалятся с сервера.', '', `<button class="btn danger" type="button" onclick="LIVE.chDel('${n}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
