@@ -310,6 +310,9 @@ func TestPrioParseRender(t *testing.T) {
 	if p := c.Prio("main"); p == nil || strings.Join(p.Use, ",") != "a,b" || p.Last != Direct {
 		t.Fatalf("prio %+v", p)
 	}
+	if _, err := Parse("prio p direct then block\ndefault via p\n"); err != nil {
+		t.Fatal(err)
+	}
 	c2, err := Parse(Render(c))
 	if err != nil || Render(c2) != Render(c) {
 		t.Fatalf("round trip: %v\n%s", err, Render(c2))
@@ -378,6 +381,22 @@ func TestPrioSkipsDeadAndNoLink(t *testing.T) {
 	if _, used, err := r.DialTCP(ctx, Who{Member: "dave"}, echo); err == nil || used != Block {
 		t.Fatalf("dave: %s %v", used, err)
 	}
+}
+
+func TestPrioDirectInUse(t *testing.T) {
+	echo := echoTCP(t)
+	conf := "channel gone socks5 127.0.0.1:1\nprio main direct gone then block\ndefault via main\n"
+	c, err := Parse(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := New(c, Options{SysNet: t.TempDir()})
+	defer r.Close()
+	conn, used, err := r.DialTCP(context.Background(), Who{Member: "bob"}, echo)
+	if err != nil || used != Direct {
+		t.Fatalf("direct in use: %s %v", used, err)
+	}
+	conn.Close()
 }
 
 func TestPrioMultiAndLimits(t *testing.T) {

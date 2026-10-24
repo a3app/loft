@@ -300,11 +300,19 @@ func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn,
 	}
 	var last error = errBlocked
 	route := r.Route(who, host)
-	for _, s := range r.steps(route, true) {
+	steps := r.steps(route, true)
+	for i, s := range steps {
 		switch s {
 		case Direct:
 			c, err := (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, "tcp4", target)
-			return c, Direct, err
+			if err == nil {
+				return c, Direct, nil
+			}
+			last = err
+			if i == len(steps)-1 {
+				return nil, Direct, err
+			}
+			continue
 		case Block:
 			return nil, Block, last
 		}

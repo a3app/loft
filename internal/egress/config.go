@@ -15,12 +15,13 @@
 //	channel px-office socks5 192.0.2.40:1080 user loft pass "s3cret" udp proxy via wg-nl check tcp probe example.com:443
 //	channel web http 192.0.2.41:3128 tls
 //	channel office sstp vpn.example.org:443 user office pass x auth mschapv2
+//	prio default direct wg-nl then block
 //	prio main wg-nl wg-fi then direct limit wg-fi 50/10
 //	prio de px-office web then block multi
 //	rule member bob via de
 //	rule tag office via main
 //	rule list blocked-ru via main
-//	default via main
+//	default via default
 package egress
 
 import (
@@ -78,9 +79,10 @@ type Check struct {
 }
 
 // Prio is a priority list: channels in order, then Last (direct or block).
-// Multi spreads new connections over the working channels in turn instead
-// of sending them all to the first one. Limits cap a channel's speed for
-// everyone who leaves by this list.
+// Use may include Direct for the host's own default route (the WAN
+// adapter). Multi spreads new connections over the working channels in turn
+// instead of sending them all to the first one. Limits cap a channel's
+// speed for everyone who leaves by this list.
 type Prio struct {
 	Name   string
 	Use    []string
@@ -419,7 +421,7 @@ func (c *Config) check() error {
 		}
 		seen := map[string]bool{}
 		for _, u := range p.Use {
-			if c.Channel(u) == nil {
+			if u != Direct && c.Channel(u) == nil {
 				return fmt.Errorf("prio %s: %q is no channel", p.Name, u)
 			}
 			if seen[u] {
