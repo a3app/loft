@@ -19,7 +19,7 @@ First working slice. Real today:
 - **Packages**: install, upgrade, switch off and remove packages from a closed catalog (Telegram MTProto proxy, WireGuard, OpenVPN, ZeroTier, fail2ban; the node, nginx and SSTP as the base), with the job log on the page;
 - **loft node**: node.conf from the screen (listen, fronts, web servers behind the node, masking, paths, relays, CDN ranges, shared token, session log), address lists, node token change, the service log; who is online, from the node’s status file;
 - **Users**: roles with a section × none/view/change matrix (checked on every request), invitations, API tokens (`Authorization: Bearer lpt_…`), sessions, a log of changes;
-- **Internet**: connections (WireGuard, SSTP, OpenVPN, ZeroTier, HTTP/HTTPS/SOCKS5 proxies, Xray) and exit rules; connection priorities — a default policy, no-access, and extra policies with consumers; server addresses and routes (a change is undone after 2 minutes unless confirmed);
+- **Internet**: connections (WireGuard, SSTP, OpenVPN, ZeroTier, HTTP/HTTPS/SOCKS5 proxies, Xray) and exit rules; connection priorities — a default policy, no-access, extra access policies and assignment; server addresses and routes (a change is undone after 2 minutes unless confirmed);
 - **Mail**: mail domains, mailboxes, DNS records and the certificate of mail.<domain> (when the mail package is installed);
 - **System**: fail2ban, encrypted backups and Linux accounts;
 - **Update from releases**: node and panel from GitHub Releases, checked against SHA256SUMS, rolled back if the services do not come up.

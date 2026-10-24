@@ -7,7 +7,7 @@
 (() => {
   const L = { csrf: '', me: null, sha: '', node: null, info: null, wz: null };
   window.LIVE = L;
-  const netRight = k => (k === 'prio' || k === 'channels' || k === 'addrs' || k === 'network') ? 'network' : k;
+  const netRight = k => (k === 'prio' || k === 'iface-priorities' || k === 'channels' || k === 'addrs' || k === 'network') ? 'network' : k;
 
   async function api(method, path, body) {
     const opt = { method, headers: { Accept: 'application/json' }, credentials: 'same-origin' };
@@ -263,6 +263,7 @@
     V.channels = channelsPage;
     V.addrs = addrsPage;
     V.prio = prioPage;
+    V['iface-priorities'] = prioPage;
     V.users = usersView;
     V.node = nodeView;
     V.domains = domainsView;
@@ -598,7 +599,7 @@
     if (location.hash === '#packages' && L.me) loadPackages().then(() => { if (S.route === 'packages') render(); });
     if ((S.route === 'channels' || S.route === 'network') && L.me) Promise.all([loadNet(), loadChannels()]).then(() => { if (S.route === 'channels' || S.route === 'network') render(); });
     if (S.route === 'addrs' && L.me) loadNet().then(() => { if (S.route === 'addrs') render(); });
-    if (S.route === 'prio' && L.me) loadChannels().then(() => { if (S.route === 'prio') render(); });
+    if (S.route === 'iface-priorities' && L.me) loadChannels().then(() => { if (S.route === 'iface-priorities') render(); });
     if (S.route === 'domains' && L.me) loadDomains().then(() => { if (S.route === 'domains') render(); });
     if (location.hash === '#node' && L.me) loadNode().then(() => { if (S.route === 'node') render(); });
     if (['#members', '#segments', '#main', ''].includes(location.hash) && L.me) loadPresence().then(() => render());
@@ -1021,7 +1022,7 @@
   const chUp = n => { const c = chOf(n); return !!(c && c.on && stOf(n).state === 'up'); };
   const prLive = use => use.find(chUp);
   const prChain = p => p.use.map(n => `<span class="${chUp(n) ? '' : 'mute'}">${esc(tt(chOf(n)) || n)}</span>`).concat(`<span class="mute">${lastT(p.last)}</span>`).join(' → ');
-  const prLink = id => prOf(id) ? `<span class="tail"><a href="#prio" onclick="event.stopPropagation();LIVE.toPrio('${esc(id)}')">${prChain(prOf(id))}</a></span>` : '';
+  const prLink = id => prOf(id) ? `<span class="tail"><a href="#iface-priorities" onclick="event.stopPropagation();LIVE.toPrio('${esc(id)}')">${prChain(prOf(id))}</a></span>` : '';
   function chState(c) {
     const st = stOf(c.name), [t, k] = STW[st.state] || [st.state, ''];
     return `<span class="sub ${st.state === 'up' ? 'okt' : ''}"><span class="mono">${esc(c.name)}</span> · ${esc(t)}${st.detail ? ' · ' + esc(ru(st.detail)) : ''}</span>`;
@@ -1269,13 +1270,13 @@
   const prioSys = id => id === 'direct' || id === 'block';
   const primaryDev = () => ((L.net && L.net.addrs.find(a => a.primary)) || {}).dev || '';
   function prioPage() {
-    if (!L.ch) { loadChannels().then(() => { if (S.route === 'prio') render(); }); return pageHead('Приоритеты подключений', '') + '<p class="mute">Загружаю…</p>'; }
-    if (!L.net) loadNet().then(() => { if (S.route === 'prio') render(); });
+    if (!L.ch) { loadChannels().then(() => { if (S.route === 'iface-priorities') render(); }); return pageHead('Приоритеты подключений', '') + '<p class="mute">Загружаю…</p>'; }
+    if (!L.net) loadNet().then(() => { if (S.route === 'iface-priorities') render(); });
     const t = S.tab.prio || 'lists';
     const P = L.ch.prios || [];
     if (!prioSys(S.prio) && !P.some(p => p.id === S.prio)) S.prio = 'direct';
     return pageHead('Приоритеты подключений', 'Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию выходит напрямую с сервера. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.') +
-      `<div class="tabs" role="tablist">${[['lists', 'Политики', 'prio'], ['use', 'Потребители', 'prio/use']].map(([k, x, h]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>` +
+      `<div class="tabs" role="tablist">${[['lists', 'Политики доступа в интернет', 'iface-priorities'], ['use', 'Применение политик', 'iface-priorities/use']].map(([k, x, h]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>` +
       (t === 'use' ? prioUse() : prioLists());
   }
   function prioSide(own, count, dropId) {
@@ -1296,7 +1297,7 @@
     const own = L.can('network'), wrap = (main, extra) => `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>${prioSide(own)}<div class="pl-main">${main}${extra || ''}</div></div>`;
     if (S.prio === 'direct') {
       const def = L.ch.rules.default || 'direct', dev = primaryDev();
-      return wrap(`<div style="padding:16px 20px"><p>Члены без назначения выходят <b>${esc(prName(def))}</b>${def === 'direct' && dev ? ` через <span class="mono">${esc(dev)}</span>` : ''}. Каналы в эту политику не входят — для выхода через VPN добавьте политику и перетащите на неё потребителей.</p>
+      return wrap(`<div style="padding:16px 20px"><p>Члены без назначения выходят <b>${esc(prName(def))}</b>${def === 'direct' && dev ? ` через <span class="mono">${esc(dev)}</span>` : ''}. Каналы в эту политику не входят — для выхода через VPN добавьте политику и на вкладке «Применение политик» перетащите на неё членов.</p>
         ${own ? `<div class="fld" style="max-width:360px;margin-top:8px"><label for="pu1">Выход по умолчанию</label><select id="pu1" onchange="LIVE.useDefault(this.value)">${exits(def)}</select></div>` : ''}
         <p class="hint" style="margin:8px 0 0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p></div>`);
     }

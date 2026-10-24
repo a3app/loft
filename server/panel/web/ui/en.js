@@ -2244,5 +2244,10 @@ window.LOFT_EN = {
   "Политика сохранена": "Policy saved",
   "Политика добавлена": "Policy added",
   "Удалить политику «$": "Delete policy “$",
-  "Политика удалена": "Policy deleted"
+  "Политика удалена": "Policy deleted",
+  "Политики доступа в интернет": "Internet access policies",
+  "Применение политик": "Applying policies",
+  "Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию выходит напрямую.": "Internet access policies: which connections to try and who uses them. The default policy leaves directly.",
+  "Перетащить члена на политику на вкладке «Применение политик»": "Drag a member onto a policy on the “Applying policies” tab",
+  ". Каналы в эту политику не входят — для выхода через VPN добавьте политику и на вкладке «Применение политик» перетащите на неё членов.": ". Channels are not part of this policy — to leave through a VPN, add a policy and on the “Applying policies” tab drag members onto it."
 };

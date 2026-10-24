@@ -489,7 +489,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
 <script>
 const MENU=[
   {id:'status',ic:'i-status',t:'Статус',items:[['main','Обзор']]},
-  {id:'net',ic:'i-net',t:'Интернет',items:[['channels','Подключения'],['prio','Приоритеты подключений'],['addrs','Адреса сервера']]},
+  {id:'net',ic:'i-net',t:'Интернет',items:[['channels','Подключения'],['iface-priorities','Приоритеты подключений'],['addrs','Адреса сервера']]},
   {id:'loft',ic:'i-loft',t:'Сеть loft',items:[['node','Нода loft'],['members','Члены сети'],['segments','Сегменты сети']]},
   {id:'dom',ic:'i-dom',t:'Домены и почта',items:[['domains','Домены'],['mail','Почта','Почтовый сервер']]},
   {id:'adm',ic:'i-gear',t:'Управление',items:[['packages','Пакеты'],['users','Пользователи'],['system','Система'],['settings','Настройки']]}
@@ -626,18 +626,19 @@ function plList(sel,count){
    ${i===sel&&S.tab.prio!=='use'?`<span class="cell-acts"><button class="icb" type="button" aria-label="Изменить" onclick="event.stopPropagation();S.prioEdit=${i};render()">${ic('i-edit')}</button><button class="icb del" type="button" aria-label="Удалить политику" ${usedBy(i)?'disabled title="Выбрана в правилах выхода"':''} onclick="event.stopPropagation()">${ic('i-trash')}</button></span>`:''}</div>`;
  return `<div class="pl-side">${sysItem('direct','Политика по умолчанию',EXDEF==='direct'?'выход напрямую':'')}${sysItem('block','Без доступа в интернет','интернет закрыт')}${PRIO.map(item).join('')}<div class="pl-add"><button class="btn" type="button" onclick="openPrioNew()">${ic('i-plus')}Добавить политику</button></div></div>`;
 }
-V.prio=()=>{
+V['iface-priorities']=()=>{
  const t=S.tab.prio||'lists';
  if(t!=='use'&&!prioSys(S.prio)&&!PRIO[S.prio])S.prio='direct';
  return pageHead('Приоритеты подключений','Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию выходит напрямую с сервера. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.')+
- `<div class="tabs" role="tablist">${[['lists','Политики','prio'],['use','Потребители','prio/use']].map(([k,x,h])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>`+
+ `<div class="tabs" role="tablist">${[['lists','Политики доступа в интернет','iface-priorities'],['use','Применение политик','iface-priorities/use']].map(([k,x,h])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>`+
  (t==='use'?prioUse():prioLists());
 };
+V.prio=()=>V['iface-priorities']();
 function prioLists(){
  if(S.prio==='direct'){
   return `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>
    ${plList('direct')}
-   <div class="pl-main" style="padding:16px 20px"><p>Члены без назначения выходят <b>напрямую</b> через <span class="mono">eth0</span>. Каналы в эту политику не входят — для выхода через VPN добавьте политику и перетащите на неё потребителей.</p>
+   <div class="pl-main" style="padding:16px 20px"><p>Члены без назначения выходят <b>напрямую</b> через <span class="mono">eth0</span>. Каналы в эту политику не входят — для выхода через VPN добавьте политику и на вкладке «Применение политик» перетащите на неё членов.</p>
     <p class="hint" style="margin:0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p></div></div>`;
  }
  if(S.prio==='block'){
@@ -666,7 +667,7 @@ function openPrioLim(k){
   sel('pl1',l[0],'Входящий трафик (к членам)')+sel('pl2',l[1],'Исходящий трафик (от членов)'),
   `<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
 }
-// Потребители: члены и теги плашками, перетаскиваются между политиками.
+// Применение политик: члены и теги плашками, перетаскиваются между политиками.
 function prioUse(){
  const all=NETS.flatMap(n=>n.members.map(m=>m.id)),tags=[...new Set(NETS.flatMap(n=>n.members.flatMap(m=>m.tags)))];
  const of=(m,v)=>EXR.filter(r=>r[0]===m&&r[1]===v).map(r=>r[2])[0];
@@ -702,7 +703,7 @@ function netUp(){
   blk('Xray','Канал по ссылке vless://, trojan:// или ss://. «Через» — канал, через который Xray подключается к своему серверу.',add('xr','Добавить подключение')+chanTable('xr'))+
   blk('Правила выхода','Проверяются сверху вниз, срабатывает первое подходящее, и трафик уходит по выбранной политике. Сам сервер — панель, обновления, почта — всегда выходит напрямую.',
    `<div class="acts"><button class="btn" type="button" onclick="openExit(-1)">${ic('i-plus')}Добавить правило</button></div><div class="rules">
-   ${EXR.map(([m,v,c],i)=>`<div class="rule click" onclick="openExit(${i})"><span class="n">${i+1}</span><span>${what[m](v)} → <b>${esc(PRIO[c].t)}</b></span><span class="tail"><a href="#prio" onclick="event.stopPropagation();S.prio=${c};S.tab.prio='lists'">${prioChain(PRIO[c])}</a></span><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${i?'':'disabled'} onclick="event.stopPropagation()">↑</button><button class="icb" type="button" aria-label="Ниже" ${i<EXR.length-1?'':'disabled'} onclick="event.stopPropagation()">↓</button><button class="icb del" type="button" aria-label="Удалить правило" onclick="event.stopPropagation()">${ic('i-trash')}</button></span></div>`).join('')}
+   ${EXR.map(([m,v,c],i)=>`<div class="rule click" onclick="openExit(${i})"><span class="n">${i+1}</span><span>${what[m](v)} → <b>${esc(PRIO[c].t)}</b></span><span class="tail"><a href="#iface-priorities" onclick="event.stopPropagation();S.prio=${c};S.tab.prio='lists'">${prioChain(PRIO[c])}</a></span><span class="cell-acts"><button class="icb" type="button" aria-label="Выше" ${i?'':'disabled'} onclick="event.stopPropagation()">↑</button><button class="icb" type="button" aria-label="Ниже" ${i<EXR.length-1?'':'disabled'} onclick="event.stopPropagation()">↓</button><button class="icb del" type="button" aria-label="Удалить правило" onclick="event.stopPropagation()">${ic('i-trash')}</button></span></div>`).join('')}
    <div class="rule click" style="background:var(--bg)" onclick="openExitDefault()"><span class="n">∗</span><span>Политика по умолчанию → <b>напрямую</b> <span class="mono mute">eth0</span></span></div></div>
    <p class="hint">ICMP (ping) и DNS-запросы к ноде идут напрямую.</p>`)+
   blk('Приём через канал','Внешний IP канала становится адресом сервера; ответы уходят тем же каналом. Только для каналов со своим внешним IP.',
@@ -1846,7 +1847,7 @@ const HELP={
  segments:['Сеть loft как свитч: VLAN, правила доступа между сегментами и текст network.conf.',['Создать VLAN и раздать в нём адреса','Разрешить или запретить доступ между VLAN','Править конфиг текстом — ошибку покажет сама нода'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
  channels:['Внешние подключения: WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
  addrs:['Адреса и маршруты самого сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
- prio:['Политики выхода: какие подключения пробовать и кто ими пользуется. Политика по умолчанию выходит напрямую.',['Создать политику и отметить подключения','Перетащить члена на политику на вкладке «Потребители»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике член','Все подключения не работают — сработает пункт «Если ни один не работает»']],
+ 'iface-priorities':['Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию выходит напрямую.',['Создать политику и отметить подключения','Перетащить члена на политику на вкладке «Применение политик»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике член','Все подключения не работают — сработает пункт «Если ни один не работает»']],
  domains:['Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.',['Добавить домен через DNS-провайдера — записи панель создаст сама','Выпустить сертификат Let’s Encrypt','Для ручной зоны — проверить, что записи внесены у регистратора'],['Namecheap отказывает — укажите имя аккаунта (не e-mail), ключ и белый IP сервера','Сертификат не выпускается — имя должно указывать на этот сервер, а для HTTP-01 нужен открытый порт 80']],
  mail:['Почтовый сервер: домены, ящики, псевдонимы и DNS-записи почты.',['Добавить почтовый домен и создать недостающие записи DNS','Завести ящик и выдать пароль','Посмотреть настройки для почтовой программы'],['Письма уходят в спам — проверьте SPF, DKIM, DMARC и PTR в «Записях DNS»','Применение не прошло — панель вернула прежние файлы, исправьте ошибку и нажмите «Применить снова»']],
  packages:['Что установлено на сервере и обновления. Пакеты ставятся заданием, ход виден здесь же.',['Выбрать пакеты и поставить их одним заданием','Настроить окно и режим обновлений','Открыть настройки пакета шестерёнкой'],['Задание упало — откройте его журнал','Раздел меню не появился — нужный пакет ещё не установлен']],
@@ -1940,7 +1941,8 @@ function setRoute(){
  const [r,...a]=location.hash.slice(1).split('/');
  S.route=r||'main';S.arg=decodeURIComponent(a.join('/'));
  if(S.route==='network'){S.route=S.arg==='addr'?'addrs':'channels';try{history.replaceState(null,'','#'+S.route)}catch(e){}}
- if(S.route==='prio')S.tab.prio=S.arg==='use'?'use':'lists';
+ if(S.route==='prio'){S.route='iface-priorities';try{history.replaceState(null,'','#'+(S.arg==='use'?'iface-priorities/use':'iface-priorities'))}catch(e){}}
+ if(S.route==='iface-priorities')S.tab.prio=S.arg==='use'?'use':'lists';
 }
 window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();closeHelp();render();const f=S.after;S.after=null;if(f)f();$('#main').scrollTop=0});
 $('#menuBtn').onclick=()=>setOpen(!S.open);
