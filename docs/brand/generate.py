@@ -281,13 +281,16 @@ def write_svgs() -> None:
     )
 
     def og_lockup(mark_fill: str, word_fill: str) -> str:
+        # Type from docs/brand/loft-lockup-readme.psd (1092×512).
+        # PSD word 487,353 size 370 tracking −40; tag 512,443 size 56 tracking −20.
+        # SVG = PSD/2 + crop origin (340, 188). Mark transform unchanged.
         return f'''  <g transform="translate(318 196) scale(2.58)">
     <path fill="{mark_fill}" d="{og_body}"/>
     <path fill="{LAMP}" d="{og_lamp}"/>
   </g>
-  <text x="590" y="365" font-family="{face}"
-        font-size="168" font-weight="600" letter-spacing="-0.04em" fill="{word_fill}">loft</text>
-  <text x="596" y="418" font-family="{face}"
+  <text x="583.5" y="364.5" font-family="{face}"
+        font-size="185" font-weight="600" letter-spacing="-0.04em" fill="{word_fill}">loft</text>
+  <text x="596" y="409.5" font-family="{face}"
         font-size="28" font-weight="400" letter-spacing="-0.02em" fill="{MUTE}">{tag}</text>
 '''
 
@@ -448,6 +451,37 @@ def save(img: Image.Image, path: Path) -> None:
     img.save(path, "PNG")
 
 
+def export_android_splash() -> None:
+    """Copy the README-on-dark lockup into the Android splash drawables.
+
+    Wide PNG is the pre-31 windowBackground. Square PNG is the API 31+
+    splash icon: the system center-crops the animated icon to a square.
+    """
+    dest_dir = (
+        ROOT.parent.parent
+        / "clients"
+        / "Android"
+        / "app"
+        / "src"
+        / "main"
+        / "res"
+        / "drawable-nodpi"
+    )
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    src = PNG / "loft-lockup-readme-on-dark.png"
+    shutil.copyfile(src, dest_dir / "splash_lockup.png")
+    im = Image.open(src).convert("RGBA")
+    # API 31+ splash icon is clipped to a circle. Scale the lockup to ~80% of
+    # the square so house + word + tagline sit inside the diameter.
+    side = max(im.size)
+    inner_w = int(side * 0.80)
+    inner_h = max(1, int(im.height * inner_w / im.width))
+    inner = im.resize((inner_w, inner_h), Image.Resampling.LANCZOS)
+    sq = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    sq.paste(inner, ((side - inner_w) // 2, (side - inner_h) // 2), inner)
+    sq.save(dest_dir / "splash_lockup_icon.png")
+
+
 def build_rasters() -> None:
     """Render PNG app icons, marks, Windows tray, and macOS menu bar assets."""
     # Chrome once at 1024 (filters + fonts), then downsample.
@@ -466,6 +500,7 @@ def build_rasters() -> None:
     chrome_shot(SVG / "loft-lockup-readme.svg", PNG / "loft-lockup-readme.png", 1092, 512)
     chrome_shot(SVG / "loft-lockup-readme-on-dark.svg", PNG / "loft-lockup-readme-on-dark.png", 1092, 512)
     chrome_shot(SVG / "loft-og.svg", PNG / "github-social-preview.png", 1280, 640)
+    export_android_splash()
 
     # Windows tray — pixel-hinted 16, scaled integer for 32; supersample for others
     on16 = paint_grid(PIX16, hex_rgba(COPPER), hex_rgba(LAMP), 1)
