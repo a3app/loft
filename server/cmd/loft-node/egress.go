@@ -25,6 +25,7 @@ func loadEgress(dir string, cfg *config.ServerConfig) error {
 		if old := transport.Egress.Swap(nil); old != nil {
 			old.Close()
 		}
+		dumpEgressStatus(dir)
 		return nil
 	}
 	if err != nil {
@@ -38,6 +39,7 @@ func loadEgress(dir string, cfg *config.ServerConfig) error {
 	if old := transport.Egress.Swap(r); old != nil {
 		old.Close()
 	}
+	dumpEgressStatus(dir)
 	log.Printf("egress: %d channels, %d rules", len(c.Channels), len(c.Rules))
 	return nil
 }
@@ -58,21 +60,26 @@ func dialSSTP(ctx context.Context, ch egress.Channel) (egress.SSTPConn, error) {
 	return n, nil
 }
 
+func dumpEgressStatus(dir string) {
+	path := filepath.Join(dir, "egress-status.json")
+	var st []egress.Status
+	if r := transport.Egress.Load(); r != nil {
+		st = r.Status()
+	}
+	b, _ := json.Marshal(struct {
+		At       time.Time       `json:"at"`
+		Channels []egress.Status `json:"channels"`
+	}{time.Now().UTC(), st})
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, b, 0o644) == nil {
+		os.Rename(tmp, path)
+	}
+}
+
 // writeEgressStatus keeps dir/egress-status.json fresh for the panel.
 func writeEgressStatus(dir string) {
-	path := filepath.Join(dir, "egress-status.json")
+	dumpEgressStatus(dir)
 	for range time.Tick(5 * time.Second) {
-		var st []egress.Status
-		if r := transport.Egress.Load(); r != nil {
-			st = r.Status()
-		}
-		b, _ := json.Marshal(struct {
-			At       time.Time       `json:"at"`
-			Channels []egress.Status `json:"channels"`
-		}{time.Now().UTC(), st})
-		tmp := path + ".tmp"
-		if os.WriteFile(tmp, b, 0o644) == nil {
-			os.Rename(tmp, path)
-		}
+		dumpEgressStatus(dir)
 	}
 }

@@ -96,7 +96,11 @@ func New(cfg *Config, opt Options) *Router {
 	}
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	for _, c := range cfg.Channels {
-		r.ch[c.Name] = &chanState{ch: c}
+		cs := &chanState{ch: c}
+		if c.Kind == KindSSTP && !c.Off {
+			cs.sstpState = "connecting"
+		}
+		r.ch[c.Name] = cs
 	}
 	// Start sessions and probes only once r.ch is whole: a probe through a
 	// proxy reads it for the via channel.

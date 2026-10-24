@@ -422,6 +422,19 @@ func TestPrioMultiAndLimits(t *testing.T) {
 	}
 }
 
+func TestSSTPStatusConnecting(t *testing.T) {
+	c, err := Parse("channel office sstp vpn.example.org:443 user office pass x\ndefault direct\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := New(c, Options{SysNet: t.TempDir()})
+	defer r.Close()
+	st := r.Status()
+	if len(st) != 1 || st[0].Name != "office" || st[0].State != "connecting" {
+		t.Fatalf("%+v", st)
+	}
+}
+
 func TestLimitedConn(t *testing.T) {
 	a, b := net.Pipe()
 	defer a.Close()
