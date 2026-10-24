@@ -7,7 +7,7 @@
 (() => {
   const L = { csrf: '', me: null, sha: '', node: null, info: null, wz: null };
   window.LIVE = L;
-  const netRight = k => (k === 'prio' || k === 'iface-priorities' || k === 'channels' || k === 'addrs' || k === 'network') ? 'network' : k;
+  const netRight = k => (k === 'prio' || k === 'iface-priorities' || k === 'channels' || k === 'addrs' || k === 'adapters' || k === 'network') ? 'network' : k;
 
   async function api(method, path, body) {
     const opt = { method, headers: { Accept: 'application/json' }, credentials: 'same-origin' };
@@ -261,6 +261,7 @@
     V.settings = settingsView;
     V.network = networkView;
     V.channels = channelsPage;
+    V.adapters = addrsPage;
     V.addrs = addrsPage;
     V.prio = prioPage;
     V['iface-priorities'] = prioPage;
@@ -309,7 +310,7 @@
         <section class="card"><div class="card-h"><h2>Члены сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
           <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${all.filter(m => m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${all.filter(m => (EXTRA[m.id] || [])[3]).length}</div><div class="mute">в сети</div></div><div><div class="big num">${all.filter(m => !m.authorized).length}</div><div class="mute">выключено</div></div></div>
           ${L.can('members') ? `<button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button>` : ''}</section>
-        <section class="card"><div class="card-h"><h2>Интернет</h2>${L.can('network', 1) ? '<a href="#addrs" style="margin-left:auto">Подробно</a>' : ''}</div>
+        <section class="card"><div class="card-h"><h2>Интернет</h2>${L.can('network', 1) ? '<a href="#adapters" style="margin-left:auto">Подробно</a>' : ''}</div>
           <dl class="kv">${kv('Основной IP', esc(main4 ? main4.ip : '—'), 'mono')}${more4.length ? kv('Доп. IP', esc(more4.map(a => a.ip).join(', ')), 'mono') : ''}${v6.length ? kv('IPv6', esc(v6.filter(a => !a.channel).map(a => a.ip).join(', ') || '—'), 'mono') : ''}${chans.map(a => kv('Канал «' + esc(a.channel) + '»', esc(a.ip), 'mono')).join('')}</dl></section>
         ${L.can('domains', 1) ? `<section class="card"><div class="card-h"><h2>Домены</h2><a href="#domains" style="margin-left:auto">Все</a></div>${domBody}</section>` : ''}
         <section class="card"><div class="card-h"><h2>Сервер</h2><span class="mute" style="margin-left:auto">${esc([sv.os, sv.arch].filter(Boolean).join(' · '))}</span></div>
@@ -342,7 +343,7 @@
       for (const g of MENU) for (const [k, t, pkg] of g.items) if ((!pkg || pkgOn(pkg)) && L.can(netRight(k), 1)) o.push({ g: 'Разделы', t, go: () => go(k) });
       o.push({ g: 'Разделы', t: 'Личный кабинет', go: () => go('me') });
       if (L.can('members', 1)) NETS.forEach(n => n.members.forEach(m => o.push({ g: 'Члены сети', t: m.id, s: m.name || '', go: () => goThen('members', () => openMember(m.id)) })));
-      if (L.ch) L.ch.channels.forEach(c => o.push({ g: 'Подключения', t: c.title || c.name, s: c.name, go: () => goThen('channels', () => L.openChan(c.name)) }));
+      if (L.ch) L.ch.channels.forEach(c => o.push({ g: 'Внешние каналы', t: c.title || c.name, s: c.name, go: () => goThen('channels', () => L.openChan(c.name)) }));
       if (L.dm) L.dm.zones.forEach(z => o.push({ g: 'Домены', t: z.name, go: () => go('domains/' + z.name) }));
       if (L.ml) L.ml.boxes.forEach((b, i) => o.push({ g: 'Почта', t: b.address, go: () => { L.mlDom = b.address.split('@')[1]; goThen('mail', () => L.openBox(i)); } }));
       if (L.us) L.us.users.forEach(u => o.push({ g: 'Пользователи', t: u.login, s: u.name || '', go: () => goThen('users', () => L.openUser(u.login)) }));
@@ -597,8 +598,8 @@
   // Opening Packages or Settings always reads the server again.
   window.addEventListener('hashchange', () => {
     if (location.hash === '#packages' && L.me) loadPackages().then(() => { if (S.route === 'packages') render(); });
-    if ((S.route === 'channels' || S.route === 'network') && L.me) Promise.all([loadNet(), loadChannels()]).then(() => { if (S.route === 'channels' || S.route === 'network') render(); });
-    if (S.route === 'addrs' && L.me) loadNet().then(() => { if (S.route === 'addrs') render(); });
+    if ((S.route === 'channels' || S.route === 'network') && L.me) loadChannels().then(() => { if (S.route === 'channels' || S.route === 'network') render(); });
+    if ((S.route === 'adapters' || S.route === 'addrs') && L.me) loadNet().then(() => { if (S.route === 'adapters' || S.route === 'addrs') render(); });
     if (S.route === 'iface-priorities' && L.me) loadChannels().then(() => { if (S.route === 'iface-priorities') render(); });
     if (S.route === 'domains' && L.me) loadDomains().then(() => { if (S.route === 'domains') render(); });
     if (location.hash === '#node' && L.me) loadNode().then(() => { if (S.route === 'node') render(); });
@@ -961,7 +962,7 @@
     pendTimer = setInterval(() => {
       const el = $('#npLeft'), left = Math.max(0, Math.round((new Date(p.deadline) - Date.now()) / 1000));
       if (el) el.textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
-      if (left === 0) { clearInterval(pendTimer); setTimeout(() => loadNet().then(() => { if (S.route === 'addrs' || S.route === 'network') render(); }), 3000); }
+      if (left === 0) { clearInterval(pendTimer); setTimeout(() => loadNet().then(() => { if (S.route === 'adapters' || S.route === 'addrs' || S.route === 'network') render(); }), 3000); }
     }, 1000);
   }
   const chgText = c => ({ 'add-addr': `добавлен адрес ${c.addr}`, 'del-addr': `убран адрес ${c.addr}`, 'add-route': `добавлен маршрут ${c.dst}`, 'del-route': `убран маршрут ${c.dst}` }[c.op] || c.op);
@@ -1005,11 +1006,27 @@
   L.ch = null;
   const CT = { wg: 'WireGuard', sstp: 'SSTP', ovpn: 'OpenVPN', zt: 'ZeroTier', px: 'Прокси', xr: 'Xray' };
   const STW = { up: ['работает', 'ok'], connecting: ['подключается…', 'busy'], down: ['не работает', 'warn'], nolink: ['нет связи', 'warn'], off: ['выключен', ''], denied: ['ждёт авторизации', 'warn'] };
+  let chPend = null, chAt = 0;
   async function loadChannels() {
-    const [c] = await Promise.allSettled([api('GET', '/api/channels'), L.pk ? null : loadPackages()]);
-    if (c.status === 'fulfilled') L.ch = c.value; else { toast('Каналы не прочитаны: ' + c.reason.message); L.ch = L.ch || { channels: [], status: [], rules: { rules: [], default: 'direct' }, prios: [], lists: [] }; }
+    if (L.ch && Date.now() - chAt < 5000) return;
+    if (chPend) return chPend;
+    chPend = (async () => {
+      try {
+        L.ch = await api('GET', '/api/channels');
+        chAt = Date.now();
+      } catch (e) {
+        toast('Каналы не прочитаны: ' + e.message);
+        L.ch = L.ch || { channels: [], status: [], rules: { rules: [], default: 'direct' }, prios: [], lists: [] };
+      } finally { chPend = null; }
+      if (!L.pk) loadPackages().then(() => {
+        if (S.route === 'channels' || S.route === 'network' || S.route === 'iface-priorities') render();
+      });
+    })();
+    return chPend;
   }
   const pkgHas = k => !!(L.pk && L.pk.packages.some(p => p.key === k && p.installed));
+  const chHas = t => !!(L.ch && L.ch.channels.some(c => c.type === t));
+  const showKind = (pkg, ...types) => pkgHas(pkg) || types.some(chHas);
   const chOf = n => L.ch.channels.find(c => c.name === n);
   const stOf = n => (L.ch.status || []).find(s => s.name === n) || { state: 'down' };
   const bytes = n => { n = n || 0; if (n < 1024) return n + ' Б'; const u = ['КБ', 'МБ', 'ГБ', 'ТБ']; let i = -1; do { n /= 1024; i++; } while (n >= 1024 && i < 3); return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i]; };
@@ -1046,13 +1063,13 @@
   function channelsView() {
     if (!L.ch) { loadChannels().then(() => { if (S.route === 'channels' || S.route === 'network') render(); }); return '<p class="mute">Загружаю…</p>'; }
     const add = (t, l, x = '') => L.can('network') ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openChan('new:${t}')">${ic('i-plus')}${l}</button>${x}</div>` : '';
-    const missing = [['wireguard', 'WireGuard'], ['openvpn', 'OpenVPN'], ['zerotier', 'ZeroTier'], ['xray', 'Xray']].filter(([k]) => !pkgHas(k)).map(x => x[1]);
+    const missing = L.pk ? [['wireguard', 'WireGuard'], ['openvpn', 'OpenVPN'], ['zerotier', 'ZeroTier'], ['xray', 'Xray']].filter(([k]) => !pkgHas(k)).map(x => x[1]) : [];
     let h = `<p class="blk-d">Разделы — по установленным VPN-клиентам. SSTP и прокси встроены в loft.${missing.length ? ` ${missing.join(', ')} появятся после установки пакета в <a href="#packages">Пакетах</a>.` : ''}</p>`;
-    if (pkgHas('wireguard')) h += blk('WireGuard', 'Канал к провайдеру VPN или своему серверу. Можно загрузить файл .conf от провайдера.', add('wg', 'Добавить подключение', L.can('network') ? `<label class="btn" style="cursor:pointer">${ic('i-up')}Загрузить из файла<input type="file" accept=".conf,text/plain" hidden onchange="LIVE.wgFile(this)"></label>` : '') + chTable(['wg']));
+    if (showKind('wireguard', 'wg')) h += blk('WireGuard', 'Канал к провайдеру VPN или своему серверу. Можно загрузить файл .conf от провайдера.', add('wg', 'Добавить подключение', L.can('network') ? `<label class="btn" style="cursor:pointer">${ic('i-up')}Загрузить из файла<input type="file" accept=".conf,text/plain" hidden onchange="LIVE.wgFile(this)"></label>` : '') + chTable(['wg']));
     h += blk('VPN-подключения', pkgHas('openvpn') ? 'Подключения к удалённым сетям по SSTP и OpenVPN.' : 'Подключения к удалённым сетям по SSTP.', add('vpn', 'Добавить подключение') + chTable(['sstp', 'ovpn']));
-    if (pkgHas('zerotier')) h += blk('Сети ZeroTier', 'Подключение к сети ZeroTier по 16-значному ID сети. Новому участнику может понадобиться авторизация у администратора сети.', add('zt', 'Добавить подключение') + chTable(['zt']));
+    if (showKind('zerotier', 'zt')) h += blk('Сети ZeroTier', 'Подключение к сети ZeroTier по 16-значному ID сети. Новому участнику может понадобиться авторизация у администратора сети.', add('zt', 'Добавить подключение') + chTable(['zt']));
     h += blk('Прокси-подключения', 'Выход через прокси-сервер по HTTP, HTTPS или SOCKS5. Можно пользоваться само по себе или как первым звеном цепочки для Xray.', add('px', 'Добавить подключение') + chTable(['px']));
-    if (pkgHas('xray')) h += blk('Xray', 'Канал по ссылке vless://, trojan:// или ss://. «Через» — канал, через который Xray подключается к своему серверу.', add('xr', 'Добавить подключение') + chTable(['xr']));
+    if (showKind('xray', 'xr')) h += blk('Xray', 'Канал по ссылке vless://, trojan:// или ss://. «Через» — канал, через который Xray подключается к своему серверу.', add('xr', 'Добавить подключение') + chTable(['xr']));
     h += rulesBlock() + acceptBlock();
     return h;
   }
@@ -1319,7 +1336,7 @@
     const now = p.multi ? 'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.' : live ? `Сейчас трафик идёт через <b>${esc(tt(chOf(live)))}</b>.` : `Ни один канал не работает — трафик ${p.last === 'block' ? 'блокируется' : 'идёт напрямую'}.`;
     return wrap(rows, `<div class="pl-foot"><label class="chk"><input type="checkbox" ${p.auto ? 'checked' : ''} ${own ? '' : 'disabled'} onchange="LIVE.prioSet({auto:this.checked})">Добавлять новые подключения автоматически</label>
         <div class="fld" style="max-width:360px"><label for="pr2">Если ни один не работает</label><select id="pr2" ${own ? '' : 'disabled'} onchange="LIVE.prioSet({last:this.value})"><option value="direct" ${p.last === 'direct' ? 'selected' : ''}>Выходить напрямую</option><option value="block" ${p.last === 'block' ? 'selected' : ''}>Блокировать</option></select></div>
-        <p class="hint" style="margin:0">${now} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне подключения в «Подключениях».</p></div>`);
+        <p class="hint" style="margin:0">${now} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».</p></div>`);
   }
   // Every change goes to the server at once, the whole list.
   const prioPost = async (body, msg) => {
@@ -1385,7 +1402,7 @@
       <div class="pl-main" style="padding:16px 20px">
        <div class="pl-sec">Члены сети</div><div class="m-chips">${m.length ? m.map(x => chip('member', x)).join('') : '<span class="mute">—</span>'}</div>
        <div class="pl-sec">Теги</div><div class="m-chips">${t.length ? t.map(x => chip('tag', x)).join('') : '<span class="mute">—</span>'}</div>
-       <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — в «Подключениях» → «Правила выхода».</p>
+       <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
       </div></div>`;
   }
   L.chipDrag = (kind, v) => { dragChip = [kind, v]; };
@@ -1405,13 +1422,12 @@
   L.useDefault = v => saveRules(L.ch.rules.rules, v);
 
   function addrsPage() {
-    if (!L.net) { loadNet().then(() => { if (S.route === 'addrs') render(); }); return pageHead('Адреса сервера', '') + '<p class="mute">Загружаю…</p>'; }
-    return pageHead('Адреса сервера', 'Адреса и маршруты самого сервера. Сети loft — в Сегментах, внешние каналы — в Подключениях.') + netAddrLive();
+    if (!L.net) { loadNet().then(() => { if (S.route === 'adapters' || S.route === 'addrs') render(); }); return pageHead('Адаптеры', '') + '<p class="mute">Загружаю…</p>'; }
+    return pageHead('Адаптеры', 'Сетевые адаптеры сервера, их адреса и маршруты. Сети loft — в Сегментах, туннели — во Внешних каналах.') + netAddrLive();
   }
   function channelsPage() {
-    if (!L.ch) { loadChannels().then(() => { if (S.route === 'channels') render(); }); return pageHead('Подключения', '') + '<p class="mute">Загружаю…</p>'; }
-    if (!L.net) loadNet().then(() => { if (S.route === 'channels') render(); });
-    return pageHead('Подключения', 'Внешние VPN-каналы для выхода в интернет и приёма. SSTP и прокси встроены в loft, остальные — пакетами.') + channelsView();
+    if (!L.ch) { loadChannels().then(() => { if (S.route === 'channels') render(); }); return pageHead('Внешние каналы', '') + '<p class="mute">Загружаю…</p>'; }
+    return pageHead('Внешние каналы', 'VPN-каналы и прокси для выхода в интернет и приёма. SSTP и прокси встроены в loft, остальные — пакетами.') + channelsView();
   }
   function networkView() { return channelsPage(); }
 
@@ -1737,7 +1753,7 @@
   function ndLists() {
     const lists = L.nd.lists || {}, own = L.can('node');
     const names = Object.keys(lists).sort();
-    return blk('Списки', 'Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода в «Подключениях» тоже на них ссылаются.',
+    return blk('Списки', 'Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода во «Внешних каналах» тоже на них ссылаются.',
       (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openList('')">${ic('i-plus')}Создать список</button><label class="btn" style="cursor:pointer">${ic('i-up')}Загрузить из файла<input type="file" accept=".txt,.list,text/plain" hidden onchange="LIVE.listFile(this)"></label></div>` : '') +
       table(['Список', 'Записей', 'Что внутри'], names.map(n => `<tr class="click" onclick="LIVE.openList('${esc(n)}')"><td class="mono"><b>${esc(n)}</b></td><td class="num">${lists[n].length.toLocaleString(LOC())}</td><td class="mono mute">${esc(lists[n].slice(0, 3).join(', '))}${lists[n].length > 3 ? ', …' : ''}</td></tr>`).join('') || `<tr><td colspan="3" class="mute">Списков нет.</td></tr>`) +
       '<p class="hint">Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24).</p>');

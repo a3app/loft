@@ -488,7 +488,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
 <script>
 const MENU=[
   {id:'status',ic:'i-status',t:'Статус',items:[['main','Обзор']]},
-  {id:'net',ic:'i-net',t:'Интернет',items:[['channels','Подключения'],['iface-priorities','Приоритеты подключений'],['addrs','Адреса сервера']]},
+  {id:'net',ic:'i-net',t:'Интернет',items:[['adapters','Адаптеры'],['channels','Внешние каналы'],['iface-priorities','Приоритеты подключений']]},
   {id:'loft',ic:'i-loft',t:'Сеть loft',items:[['node','Нода loft'],['members','Члены сети'],['segments','Сегменты сети']]},
   {id:'dom',ic:'i-dom',t:'Домены и почта',items:[['domains','Домены'],['mail','Почта','Почтовый сервер']]},
   {id:'adm',ic:'i-gear',t:'Управление',items:[['packages','Пакеты'],['users','Пользователи'],['system','Система'],['settings','Настройки']]}
@@ -521,7 +521,7 @@ V.main=()=>pageHead('Обзор','Состояние сервера и ноды 
   <section class="card"><div class="card-h"><h2>Члены сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
     <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${NETS.flatMap(n=>n.members).filter(m=>m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${Object.values(EXTRA).filter(x=>x[3]).length}</div><div class="mute">в сети</div></div><div><div class="big num">${NETS.flatMap(n=>n.members).filter(m=>!m.authorized).length}</div><div class="mute">выключено</div></div></div>
     <button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button></section>
-  <section class="card"><div class="card-h"><h2>Интернет</h2><a href="#addrs" style="margin-left:auto">Подробно</a></div>
+  <section class="card"><div class="card-h"><h2>Интернет</h2><a href="#adapters" style="margin-left:auto">Подробно</a></div>
     <dl class="kv"><div><dt>Основной IP</dt><dd class="mono">203.0.113.10</dd></div><div><dt>Доп. IP</dt><dd class="mono">203.0.113.11</dd></div>
     <div><dt>IPv6</dt><dd class="mono">2001:db8::10</dd></div><div><dt>Канал «Нидерланды»</dt><dd class="mono">198.51.100.77</dd></div></dl></section>
   <section class="card"><div class="card-h"><h2>Домены</h2><a href="#domains" style="margin-left:auto">Все</a></div>
@@ -546,8 +546,9 @@ V.members=()=>{
    <td>${who(`<label class="sw" onclick="event.stopPropagation()"><input type="checkbox" ${m.authorized?'checked':''} aria-label="Включён" onchange="setMemberAuth('${m.id}',this.checked)"><i></i></label>`,esc(m.name),`<span class="sub mono">${esc(m.id)}</span>`)}</td>
    <td><span class="sq" style="background:${vcol(n,m.vlan)}"></span>${n.id}${v?' · '+v.id+' '+esc(v.name):''}</td><td class="mono">${m.ip||'—'}</td><td>${x[0]}</td><td class="num">${m.multi?x[1].split(' / ')[0]+' / '+(m.multi_limit||8):x[1].split(' / ')[0]+' / 1'}</td><td><span class="dot ${x[3]?'on':''}"></span>${x[2]}</td></tr>`}).join('')));
 };
-V.addrs=()=>pageHead('Адреса сервера','Адреса и маршруты самого сервера. Сети loft — в Сегментах, внешние каналы — в Подключениях.')+netAddr();
-V.channels=()=>pageHead('Подключения','Внешние VPN-каналы для выхода в интернет и приёма. SSTP и прокси встроены в loft, остальные — пакетами.')+netUp();
+V.adapters=()=>pageHead('Адаптеры','Сетевые адаптеры сервера, их адреса и маршруты. Сети loft — в Сегментах, туннели — во Внешних каналах.')+netAddr();
+V.addrs=()=>V.adapters();
+V.channels=()=>pageHead('Внешние каналы','VPN-каналы и прокси для выхода в интернет и приёма. SSTP и прокси встроены в loft, остальные — пакетами.')+netUp();
 V.network=()=>V.channels();
 function netAddr(){
   const del=`<button class="icb del" type="button" aria-label="Удалить" onclick="toast('Применено — подтвердите в течение 2 минут');S.npend=1;render()">${ic('i-trash')}</button>`;
@@ -656,7 +657,7 @@ function prioLists(){
   <div class="pl-main">${rows}
    <div class="pl-foot"><label class="chk"><input type="checkbox" ${p.auto?'checked':''}>Добавлять новые подключения автоматически</label>
     <div class="fld" style="max-width:360px"><label for="pr2">Если ни один не работает</label><select id="pr2"><option ${p.last==='direct'?'selected':''}>Выходить напрямую</option><option ${p.last==='block'?'selected':''}>Блокировать</option></select></div>
-    <p class="hint" style="margin:0">${p.multi?'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.':live?`Сейчас трафик идёт через <b>${chT(live)}</b>.`:`Ни один канал не работает — трафик ${p.last==='block'?'блокируется':'идёт напрямую'}.`} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне подключения в «Подключениях».</p></div>
+    <p class="hint" style="margin:0">${p.multi?'Многопутевая передача: новые соединения раскладываются по работающим каналам по очереди.':live?`Сейчас трафик идёт через <b>${chT(live)}</b>.`:`Ни один канал не работает — трафик ${p.last==='block'?'блокируется':'идёт напрямую'}.`} Порядок — перетаскиванием, изменения применяются сразу. Проверка связи — в окне канала во «Внешних каналах».</p></div>
   </div></div>`;
 }
 function openPrioLim(k){
@@ -681,7 +682,7 @@ function prioUse(){
   <div class="pl-main" style="padding:16px 20px">
    <div class="pl-sec">Члены сети</div><div class="m-chips">${m.length?m.map(x=>chip(x)).join(''):'<span class="mute">—</span>'}</div>
    <div class="pl-sec">Теги</div><div class="m-chips">${t.length?t.map(x=>chip('# '+x,'tag')).join(''):'<span class="mute">—</span>'}</div>
-   <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — в «Подключениях» → «Правила выхода».</p>
+   <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
   </div></div>`;
 }
 function openPrioNew(){
@@ -969,9 +970,9 @@ const PKG=[
  ['Сервер Trojan','Trojan поверх TLS на том же Xray-core, свой вход trojan.example.net.','none','—','443 · SNI','—'],
  ['Сервер Shadowsocks','Shadowsocks 2022 на том же Xray-core, на своём порту.','none','—','8388','—'],
  ['VPN-клиенты · вышестоящие каналы'],
- ['WireGuard-клиент','Канал WireGuard по .conf. Сами каналы — в «Подключениях».','run','1.0.20210914','—','1 MB',{tool:1}],
+ ['WireGuard-клиент','Канал WireGuard по .conf. Сами каналы — во «Внешних каналах».','run','1.0.20210914','—','1 MB',{tool:1}],
  ['AmneziaWG-клиент','WireGuard с обфускацией рукопожатия.','none','—','—','≈ 3 MB'],
- ['OpenVPN-клиент','Канал по файлу .ovpn. Подключения — в «Подключениях» → VPN-подключения.','run','2.6.12','—','2 MB',{tool:1}],
+ ['OpenVPN-клиент','Канал по файлу .ovpn. Сами каналы — во «Внешних каналах» → VPN-подключения.','run','2.6.12','—','2 MB',{tool:1}],
  ['SSTP-клиент','Встроен в loft: ставится вместе с нодой, отдельно не удаляется.','run','1.0.22','—','—',{base:1,tool:1}],
  ['ZeroTier-клиент','Подключение к сети ZeroTier по Network ID.','run','1.14.2','9993 udp','9 MB'],
  ['loft-клиент','Другая нода loft как вышестоящий канал.','none','—','—','—'],
@@ -1684,7 +1685,7 @@ function openListMock(n){
   `<button class="btn pri" type="button" onclick="closeDlg()">${n?'Сохранить':'Создать'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${n?`<button class="icb del" type="button" aria-label="Удалить список" style="margin-left:auto">${ic('i-trash')}</button>`:''}`);
 }
 function nodeLists(){
- return blk('Списки','Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода в «Подключениях» тоже на них ссылаются.',
+ return blk('Списки','Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода во «Внешних каналах» тоже на них ссылаются.',
   `<div class="acts"><button class="btn" type="button" onclick="openListMock('')">${ic('i-plus')}Создать список</button><button class="btn" type="button">${ic('i-up')}Загрузить из файла</button></div>`+
   table(['Список','Записей','Что внутри'],LISTS.map(r=>`<tr class="click" onclick="openListMock('${r[0]}')"><td class="mono"><b>${r[0]}</b></td><td class="num">${r[1]}</td><td class="mono mute">${r[2]}</td></tr>`).join(''))+
   '<p class="hint">Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24).</p>');
@@ -1844,8 +1845,9 @@ const HELP={
  node:['Настройки ноды loft: роль, фронты, маскировка, ретрансляторы, списки и доступ. Переключатели сразу идут на ноду.',['Включить нужные фронты (GET, WebSocket, HTTP/2, QUIC)','Добавить ретранслятор или CDN','Подождать секунду — нода перезапустится сама'],['После смены фронтов нода не поднялась — откройте журнал службы на вкладке «Основное»','Клиенты не подключаются — проверьте адрес для клиентов и сертификат']],
  members:['Устройства и люди, которые подключаются к серверу. У каждого свой ключ и профиль.',['Добавить члена — панель выдаст ссылку loft://, QR-код и файл .loft','Перевыпустить ключ, если устройство потеряно','Выключить члена, не удаляя его'],['Член не в сети — проверьте, что профиль на устройстве свежий','Выключатель сразу действует на ноде']],
  segments:['Сеть loft как свитч: VLAN, правила доступа между сегментами и текст network.conf.',['Создать VLAN и раздать в нём адреса','Разрешить или запретить доступ между VLAN','Править конфиг текстом — ошибку покажет сама нода'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
- channels:['Внешние подключения: WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
- addrs:['Адреса и маршруты самого сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
+ channels:['Каналы WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
+ adapters:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
+ addrs:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
  'iface-priorities':['Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию выходит напрямую.',['Создать политику и отметить подключения','Перетащить члена на политику на вкладке «Применение политик»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике член','Все подключения не работают — сработает пункт «Если ни один не работает»']],
  domains:['Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.',['Добавить домен через DNS-провайдера — записи панель создаст сама','Выпустить сертификат Let’s Encrypt','Для ручной зоны — проверить, что записи внесены у регистратора'],['Namecheap отказывает — укажите имя аккаунта (не e-mail), ключ и белый IP сервера','Сертификат не выпускается — имя должно указывать на этот сервер, а для HTTP-01 нужен открытый порт 80']],
  mail:['Почтовый сервер: домены, ящики, псевдонимы и DNS-записи почты.',['Добавить почтовый домен и создать недостающие записи DNS','Завести ящик и выдать пароль','Посмотреть настройки для почтовой программы'],['Письма уходят в спам — проверьте SPF, DKIM, DMARC и PTR в «Записях DNS»','Применение не прошло — панель вернула прежние файлы, исправьте ошибку и нажмите «Применить снова»']],
@@ -1874,7 +1876,7 @@ function searchItems(){
  const o=MENU.flatMap(g=>g.items).map(([k,t])=>({g:'Разделы',t,go:()=>go(k)}));
  o.push({g:'Разделы',t:'Личный кабинет',go:()=>go('me')});
  NETS.forEach(n=>n.members.forEach(m=>o.push({g:'Члены сети',t:m.id,s:m.name||'',go:()=>goThen('members',()=>openMember(m.id))})));
- Object.entries(CH).forEach(([k,c])=>o.push({g:'Подключения',t:c.title,s:k,go:()=>goThen('channels',()=>openChan(k))}));
+ Object.entries(CH).forEach(([k,c])=>o.push({g:'Внешние каналы',t:c.title,s:k,go:()=>goThen('channels',()=>openChan(k))}));
  ZONES.forEach(z=>o.push({g:'Домены',t:z.z,go:()=>go('domains/'+z.z)}));
  BOXES.forEach((b,i)=>o.push({g:'Почта',t:b[0],go:()=>goThen('mail',()=>openBox(i))}));
  PUSERS.forEach((u,i)=>o.push({g:'Пользователи',t:u[0],s:u[1],go:()=>goThen('users',()=>openPUser(i))}));
@@ -1939,7 +1941,8 @@ function setOpen(v){S.open=v;$('#app').classList.toggle('menu-open',v);$('#menuB
 function setRoute(){
  const [r,...a]=location.hash.slice(1).split('/');
  S.route=r||'main';S.arg=decodeURIComponent(a.join('/'));
- if(S.route==='network'){S.route=S.arg==='addr'?'addrs':'channels';try{history.replaceState(null,'','#'+S.route)}catch(e){}}
+ if(S.route==='network'){S.route=S.arg==='addr'?'adapters':'channels';try{history.replaceState(null,'','#'+S.route)}catch(e){}}
+ if(S.route==='addrs'){S.route='adapters';try{history.replaceState(null,'','#adapters')}catch(e){}}
  if(S.route==='prio'){S.route='iface-priorities';try{history.replaceState(null,'','#'+(S.arg==='use'?'iface-priorities/use':'iface-priorities'))}catch(e){}}
  if(S.route==='iface-priorities')S.tab.prio=S.arg==='use'?'use':'lists';
 }
