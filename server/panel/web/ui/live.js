@@ -490,7 +490,15 @@
   afterNet('bulkAuth');
   afterNet('bulkVlan');
   afterNet('cellVlan');
+  afterNet('joinSeg');
   afterNet('setMemberAuth');
+  const delVlan0 = window.delVlan;
+  window.delVlan = function (id) {
+    delVlan0(id);
+    if (!L.ch || !L.ch.rules) return;
+    const R = L.ch.rules.rules.filter(r => !(r.match === 'vlan' && String(r.value) === String(id)));
+    if (R.length !== L.ch.rules.rules.length) saveRules(R);
+  };
   window.applyAll = async () => {
     closeDlg();
     toast('Применяю…');
@@ -1085,7 +1093,7 @@
     return h;
   }
   function ruleText(r) {
-    const what = { member: `Член <b>${esc(r.value)}</b>`, tag: `Члены с тегом <b>${esc(r.value)}</b>`, list: `Адреса из списка <b class="mono">${esc(r.value)}</b>` }[r.match];
+    const what = { member: `Член <b>${esc(r.value)}</b>`, tag: `Члены с тегом <b>${esc(r.value)}</b>`, vlan: `Сегмент <b>${esc(segTitle(r.value))}</b>`, list: `Адреса из списка <b class="mono">${esc(r.value)}</b>` }[r.match];
     return `${what} → <b>${esc(prName(r.via))}</b>`;
   }
   function rulesBlock() {
@@ -1284,18 +1292,19 @@
   L.ruleMove = (i, d) => { const r = L.ch.rules.rules.slice(); [r[i], r[i + d]] = [r[i + d], r[i]]; saveRules(r); };
   L.ruleDel = i => { const r = L.ch.rules.rules.slice(); r.splice(i, 1); saveRules(r); };
   const exits = cur => `<option value="direct" ${cur === 'direct' ? 'selected' : ''}>Напрямую</option>${(L.ch.prios || []).map(p => `<option value="${esc(p.id)}" ${cur === p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}<option value="block" ${cur === 'block' ? 'selected' : ''}>Блокировать</option>`;
-  function ruleValues(m, cur) {
-    if (m === 'member') return [...new Set(NETS.flatMap(n => n.members.map(x => x.id)))];
-    if (m === 'tag') return [...new Set(NETS.flatMap(n => n.members.flatMap(x => x.tags || [])))];
-    return L.ch.lists || [];
+  function ruleValues(m) {
+    if (m === 'member') return [...new Set(NETS.flatMap(n => n.members.map(x => x.id)))].map(v => [v, v]);
+    if (m === 'tag') return [...new Set(NETS.flatMap(n => n.members.flatMap(x => x.tags || [])))].map(v => [v, v]);
+    if (m === 'vlan') return segsOf().map(s => [String(s.id), s.id ? s.name + ' · VLAN ' + s.id : s.name]);
+    return (L.ch.lists || []).map(v => [v, v]);
   }
-  L.ruleMatch = m => { const vals = ruleValues(m); $('#ru2').innerHTML = vals.length ? vals.map(v => `<option>${esc(v)}</option>`).join('') : '<option value="">—</option>'; $('#ruH').textContent = m === 'list' && !vals.length ? 'В node.conf нет списков адресов (lists).' : m === 'tag' && !vals.length ? 'Ни у одного члена нет тегов.' : ''; };
+  L.ruleMatch = m => { const vals = ruleValues(m); $('#ru2').innerHTML = vals.length ? vals.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('') : '<option value="">—</option>'; $('#ruH').textContent = m === 'list' && !vals.length ? 'В node.conf нет списков адресов (lists).' : m === 'tag' && !vals.length ? 'Ни у одного члена нет тегов.' : m === 'vlan' && !vals.length ? 'Сегментов пока нет.' : ''; };
   L.openRule = i => {
     const r = i >= 0 ? L.ch.rules.rules[i] : { match: 'member', value: '', via: ((L.ch.prios || []).find(p => p.id !== 'default') || prOf('default') || {}).id || 'direct' };
     const vals = ruleValues(r.match);
     dialog(i >= 0 ? `Правило ${i + 1}` : 'Новое правило', 'Чей трафик и куда он выходит.',
-      `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1" onchange="LIVE.ruleMatch(this.value)">${[['member', 'Член сети'], ['tag', 'Члены с тегом'], ['list', 'Адреса из списка']].map(([k, l]) => `<option value="${k}" ${r.match === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-       <div><div class="fld"><label for="ru2">Кто или что</label><select id="ru2">${vals.map(v => `<option ${v === r.value ? 'selected' : ''}>${esc(v)}</option>`).join('') || '<option value="">—</option>'}</select></div><div class="hint" id="ruH"></div></div>
+      `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1" onchange="LIVE.ruleMatch(this.value)">${[['member', 'Член сети'], ['tag', 'Члены с тегом'], ['vlan', 'Сегмент'], ['list', 'Адреса из списка']].map(([k, l]) => `<option value="${k}" ${r.match === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+       <div><div class="fld"><label for="ru2">Кто или что</label><select id="ru2">${vals.map(([v, t]) => `<option value="${esc(v)}" ${v === r.value ? 'selected' : ''}>${esc(t)}</option>`).join('') || '<option value="">—</option>'}</select></div><div class="hint" id="ruH"></div></div>
        <div><div class="fld"><label for="ru3">Политика</label><select id="ru3">${exits(r.via)}</select></div>${(L.ch.prios || []).length ? '' : '<div class="hint">Политик пока нет — их создают в «Приоритетах подключений».</div>'}</div>`,
       `<button class="btn pri" type="button" onclick="LIVE.ruleSave(${i})">${i >= 0 ? 'Сохранить' : 'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   };
@@ -1319,6 +1328,7 @@
     const t = S.tab.prio || 'lists';
     const P = ownPrios();
     if (S.prio === 'default') S.prio = 'direct';
+    if (t !== 'use' && S.prio === 'block') S.prio = 'direct';
     if (!prioSys(S.prio) && !P.some(p => p.id === S.prio)) S.prio = 'direct';
     return pageHead('Приоритеты подключений', 'Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию включает адаптер сервера и все каналы с выходом; члены без назначения идут по ней. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.') +
       `<div class="tabs" role="tablist">${[['lists', 'Политики доступа в интернет', 'iface-priorities'], ['use', 'Применение политик', 'iface-priorities/use']].map(([k, x, h]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>` +
@@ -1335,14 +1345,12 @@
       : `<div class="pl-item ${p.id === S.prio ? 'on' : ''}" onclick="LIVE.prioPick('${esc(p.id)}')" ${drop(p.id)}><div><b>${esc(p.title)}${n(p.id)}</b><span class="sub">${modeT(p)}</span></div>
         ${p.id === S.prio && own && !dropId ? `<span class="cell-acts"><button class="icb" type="button" aria-label="Изменить" onclick="event.stopPropagation();S.prioEdit='${esc(p.id)}';render()">${ic('i-edit')}</button><button class="icb del" type="button" aria-label="Удалить политику" ${prUsed(p.id) ? 'disabled title="Выбрана в правилах выхода"' : ''} onclick="event.stopPropagation();LIVE.prioAskDel()">${ic('i-trash')}</button></span>` : ''}</div>`;
     const defP = prOf('default');
-    return `<div class="pl-side">${sys('direct', 'Политика по умолчанию', defP ? modeT(defP) : 'выход напрямую')}${sys('block', 'Без доступа в интернет', 'интернет закрыт')}${P.map(item).join('')}${own ? `<div class="pl-add"><button class="btn" type="button" onclick="LIVE.prioNew()">${ic('i-plus')}Добавить политику</button></div>` : ''}</div>`;
+    const block = (S.tab.prio || 'lists') === 'use' ? sys('block', 'Без доступа в интернет', 'интернет закрыт') : '';
+    return `<div class="pl-side">${sys('direct', 'Политика по умолчанию', defP ? modeT(defP) : 'выход напрямую')}${P.map(item).join('')}${block}${own ? `<div class="pl-add"><button class="btn" type="button" onclick="LIVE.prioNew()">${ic('i-plus')}Добавить политику</button></div>` : ''}</div>`;
   }
   const prUsed = id => L.ch.rules.rules.some(r => r.via === id) || (L.ch.rules.default || 'default') === id;
   function prioLists() {
     const own = L.can('network'), wrap = (main, extra) => `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>${prioSide(own)}<div class="pl-main">${main}${extra || ''}</div></div>`;
-    if (S.prio === 'block') {
-      return wrap(`<div style="padding:16px 20px"><p>Интернет закрыт. Члены в этой политике наружу не выходят. Подключения не используются.</p></div>`);
-    }
     const p = prCur();
     if (!p) return wrap('<p class="mute" style="padding:16px">Политика не найдена.</p>');
     const use = prUse(p);
@@ -1432,24 +1440,27 @@
     render();
   };
 
-  // Consumers: member and tag chips dragged onto a policy.
+  // Consumers: member, tag and segment chips dragged onto a policy.
   function prioUse() {
     const own = L.can('network'), R = L.ch.rules.rules;
-    const mems = [...new Set(NETS.flatMap(n => n.members.map(m => m.id)))], tags = [...new Set(NETS.flatMap(n => n.members.flatMap(m => m.tags || [])))];
+    const mems = [...new Set(NETS.flatMap(n => n.members.map(m => m.id)))], tags = [...new Set(NETS.flatMap(n => n.members.flatMap(m => m.tags || [])))], segs = segsOf();
     const ruleOf = (m, v) => (R.find(r => r.match === m && r.value === v) || {}).via;
     const tagsOf = id => NETS.flatMap(n => n.members.filter(m => m.id === id).flatMap(m => m.tags || []));
-    const leftover = m => !ruleOf('member', m) && !tagsOf(m).some(t => ruleOf('tag', t));
+    const vlanOf = id => (NETS.flatMap(n => n.members).find(m => m.id === id) || {}).vlan || 0;
+    const leftover = m => !ruleOf('member', m) && !tagsOf(m).some(t => ruleOf('tag', t)) && !ruleOf('vlan', String(vlanOf(m)));
     const memIn = id => mems.filter(m => id === 'direct' ? leftover(m) || ruleOf('member', m) === 'default' : ruleOf('member', m) === id);
     const tagIn = id => tags.filter(t => id === 'direct' ? !ruleOf('tag', t) || ruleOf('tag', t) === 'default' : ruleOf('tag', t) === id);
-    const count = id => memIn(id).length + tagIn(id).length;
-    const chip = (kind, v) => `<span class="m-chip ${kind === 'tag' ? 'tag' : ''}" ${own ? `draggable="true" ondragstart="LIVE.chipDrag('${kind}','${esc(v)}')"` : ''}>${own ? DRAG : ''}${kind === 'tag' ? '# ' : ''}${esc(v)}</span>`;
-    const m = memIn(S.prio), t = tagIn(S.prio);
+    const segIn = id => segs.filter(s => { const v = ruleOf('vlan', String(s.id)); return id === 'direct' ? !v || v === 'default' : v === id; });
+    const count = id => memIn(id).length + tagIn(id).length + segIn(id).length;
+    const chip = (kind, v, label) => `<span class="m-chip ${kind === 'tag' ? 'tag' : kind === 'vlan' ? 'seg' : ''}" ${own ? `draggable="true" ondragstart="LIVE.chipDrag('${kind}','${esc(v)}')"` : ''}>${own ? DRAG : ''}${kind === 'tag' ? '# ' : ''}${esc(label || v)}</span>`;
+    const m = memIn(S.prio), t = tagIn(S.prio), g = segIn(S.prio);
     return `<div class="pl-wrap use"><div class="pl-head"><span>Политика</span><span>Кто выходит по ней</span></div>
       ${prioSide(own, count, true)}
       <div class="pl-main" style="padding:16px 20px">
        <div class="pl-sec">Члены сети</div><div class="m-chips">${m.length ? m.map(x => chip('member', x)).join('') : '<span class="mute">—</span>'}</div>
        <div class="pl-sec">Теги</div><div class="m-chips">${t.length ? t.map(x => chip('tag', x)).join('') : '<span class="mute">—</span>'}</div>
-       <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
+       <div class="pl-sec">Сегменты</div><div class="m-chips">${g.length ? g.map(s => chip('vlan', String(s.id), s.name)).join('') : '<span class="mute">—</span>'}</div>
+       <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега, тег важнее сегмента. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
       </div></div>`;
   }
   L.chipDrag = (kind, v) => { dragChip = [kind, v]; };
@@ -1462,7 +1473,11 @@
     if (id && id !== 'direct' && id !== 'default') {
       const r = { match: kind, value: v, via: id };
       if (kind === 'member') R.unshift(r);
-      else { const k = R.findIndex(x => x.match === 'list'); R.splice(k < 0 ? R.length : k, 0, r); }
+      else {
+        const after = kind === 'tag' ? x => x.match === 'list' || x.match === 'vlan' : x => x.match === 'list';
+        const k = R.findIndex(after);
+        R.splice(k < 0 ? R.length : k, 0, r);
+      }
     }
     saveRules(R);
   };

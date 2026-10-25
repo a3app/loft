@@ -502,7 +502,7 @@ type XRConf struct {
 	Port int    `json:"port,omitempty"` // local SOCKS port, assigned by the helper
 }
 
-// ExitRule is one rule: Match member | tag | list, Value, Via a priority list ID, direct or block.
+// ExitRule is one rule: Match member | tag | vlan | list, Value, Via a priority list ID, direct or block.
 type ExitRule struct {
 	Match string `json:"match"`
 	Value string `json:"value"`

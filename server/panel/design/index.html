@@ -607,7 +607,7 @@ const PRIO=[
  {t:'Офис',use:['zt0','sstp0'],last:'direct',multi:1},
  {t:'Германия',use:['xr0','px0'],last:'block'}
 ];
-const EXR=[['member','bob',2],['tag','office',1],['list','blocked-ru',0],['member','guest-01',0]];
+const EXR=[['member','bob',2],['tag','office',1],['vlan','10',1],['list','blocked-ru',0],['member','guest-01',0]];
 const EXDEF='direct';
 const lastT=x=>x==='block'?'блокировать':'напрямую';
 const liveOf=p=>p.use.find(k=>CH[k].on&&CH[k].st==='up');
@@ -636,10 +636,12 @@ function plList(sel,count){
    <div class="acts" style="margin:0"><button class="btn sm pri" type="button" onclick="S.prioEdit=null;render()">Сохранить</button><button class="btn sm" type="button" onclick="S.prioEdit=null;render()">Отменить</button></div></div>`
   :`<div class="pl-item ${i===sel?'on':''}" onclick="S.prio=${i};S.prioEdit=null;render()"><div><b>${esc(p.t)}${count?` <span class="mute">(${count(i)})</span>`:''}</b><span class="sub">${modeT(p)}</span></div>
    ${i===sel&&S.tab.prio!=='use'?`<span class="cell-acts"><button class="icb" type="button" aria-label="Изменить" onclick="event.stopPropagation();S.prioEdit=${i};render()">${ic('i-edit')}</button><button class="icb del" type="button" aria-label="Удалить политику" ${usedBy(i)?'disabled title="Выбрана в правилах выхода"':''} onclick="event.stopPropagation()">${ic('i-trash')}</button></span>`:''}</div>`;
- return `<div class="pl-side">${sysItem('direct','Политика по умолчанию','Режим резервирования')}${sysItem('block','Без доступа в интернет','интернет закрыт')}${PRIO.map(item).join('')}<div class="pl-add"><button class="btn" type="button" onclick="openPrioNew()">${ic('i-plus')}Добавить политику</button></div></div>`;
+ const block=(S.tab.prio||'lists')==='use'?sysItem('block','Без доступа в интернет','интернет закрыт'):'';
+ return `<div class="pl-side">${sysItem('direct','Политика по умолчанию','Режим резервирования')}${PRIO.map(item).join('')}${block}<div class="pl-add"><button class="btn" type="button" onclick="openPrioNew()">${ic('i-plus')}Добавить политику</button></div></div>`;
 }
 V['iface-priorities']=()=>{
  const t=S.tab.prio||'lists';
+ if(t!=='use'&&S.prio==='block')S.prio='direct';
  if(t!=='use'&&!prioSys(S.prio)&&!PRIO[S.prio])S.prio='direct';
  return pageHead('Приоритеты подключений','Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию включает адаптер сервера и все каналы с выходом; члены без назначения идут по ней. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.')+
  `<div class="tabs" role="tablist">${[['lists','Политики доступа в интернет','iface-priorities'],['use','Применение политик','iface-priorities/use']].map(([k,x,h])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>`+
@@ -665,11 +667,6 @@ function prioLists(){
      <p class="hint" style="margin:0">Сам сервер — панель, обновления, почта — всегда выходит напрямую.</p>${prioSaveBar()}</div>
    </div></div>`;
  }
- if(S.prio==='block'){
-  return `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>
-   ${plList('block')}
-   <div class="pl-main" style="padding:16px 20px"><p>Интернет закрыт. Члены в этой политике наружу не выходят. Подключения не используются.</p></div></div>`;
- }
  const p=PRIO[S.prio],use=prioUseNow(),live=use.find(k=>CH[k]&&CH[k].on&&CH[k].st==='up');
  const order=use.concat(Object.keys(CH).filter(k=>!use.includes(k)));
  const rows=order.map(k=>{const c=CH[k],on=use.includes(k),st=c.on?c.st:'off';
@@ -692,22 +689,25 @@ function openPrioLim(k){
   sel('pl1',l[0],'Входящий трафик (к членам)')+sel('pl2',l[1],'Исходящий трафик (от членов)'),
   `<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
 }
-// Применение политик: члены и теги плашками, перетаскиваются между политиками.
+// Применение политик: члены, теги и сегменты плашками, перетаскиваются между политиками.
 function prioUse(){
- const all=NETS.flatMap(n=>n.members.map(m=>m.id)),tags=[...new Set(NETS.flatMap(n=>n.members.flatMap(m=>m.tags)))];
+ const all=NETS.flatMap(n=>n.members.map(m=>m.id)),tags=[...new Set(NETS.flatMap(n=>n.members.flatMap(m=>m.tags)))],segs=segsOf();
  const of=(m,v)=>EXR.filter(r=>r[0]===m&&r[1]===v).map(r=>r[2])[0];
  const sel=S.prio;
  const tagsOf=m=>NETS.flatMap(n=>n.members.filter(x=>x.id===m).flatMap(x=>x.tags));
- const memIn=i=>all.filter(m=>i==='direct'?of('member',m)==null&&!tagsOf(m).some(t=>of('tag',t)!=null):i==='block'?of('member',m)==='block':of('member',m)===i);
+ const vlanOf=m=>(NETS.flatMap(n=>n.members).find(x=>x.id===m)||{}).vlan||0;
+ const memIn=i=>all.filter(m=>i==='direct'?of('member',m)==null&&!tagsOf(m).some(t=>of('tag',t)!=null)&&of('vlan',String(vlanOf(m)))==null:i==='block'?of('member',m)==='block':of('member',m)===i);
  const tagIn=i=>tags.filter(t=>i==='direct'?of('tag',t)==null:i==='block'?of('tag',t)==='block':of('tag',t)===i);
+ const segIn=i=>segs.filter(s=>i==='direct'?of('vlan',String(s.id))==null:i==='block'?of('vlan',String(s.id))==='block':of('vlan',String(s.id))===i);
  const chip=(x,cls)=>`<span class="m-chip ${cls||''}" draggable="true">${DRAG}${esc(x)}</span>`;
- const m=memIn(sel),t=tagIn(sel);
+ const m=memIn(sel),t=tagIn(sel),g=segIn(sel);
  return `<div class="pl-wrap use"><div class="pl-head"><span>Политика</span><span>Кто выходит по ней</span></div>
-  ${plList(sel,i=>memIn(i).length+tagIn(i).length)}
+  ${plList(sel,i=>memIn(i).length+tagIn(i).length+segIn(i).length)}
   <div class="pl-main" style="padding:16px 20px">
    <div class="pl-sec">Члены сети</div><div class="m-chips">${m.length?m.map(x=>chip(x)).join(''):'<span class="mute">—</span>'}</div>
    <div class="pl-sec">Теги</div><div class="m-chips">${t.length?t.map(x=>chip('# '+x,'tag')).join(''):'<span class="mute">—</span>'}</div>
-   <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
+   <div class="pl-sec">Сегменты</div><div class="m-chips">${g.length?g.map(s=>chip(s.name,'seg')).join(''):'<span class="mute">—</span>'}</div>
+   <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега, тег важнее сегмента. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
   </div></div>`;
 }
 function openPrioNew(){
@@ -719,7 +719,7 @@ function openPrioNew(){
 }
 function netUp(){
   const add=(t,l,x='')=>`<div class="acts"><button class="btn" type="button" onclick="openChan('new:${t}')">${ic('i-plus')}${l}</button>${x}</div>`;
-  const what={member:v=>`Член <b>${v}</b>`,tag:v=>`Члены с тегом <b>${v}</b>`,list:v=>`Адреса из списка <b class="mono">${v}</b>`};
+  const what={member:v=>`Член <b>${v}</b>`,tag:v=>`Члены с тегом <b>${v}</b>`,vlan:v=>`Сегмент <b>${esc(segTitle(v))}</b>`,list:v=>`Адреса из списка <b class="mono">${v}</b>`};
   return `<p class="blk-d">Разделы — по установленным VPN-клиентам. SSTP и прокси встроены в loft.</p>`+
   blk('WireGuard','Канал к провайдеру VPN или своему серверу. Можно загрузить файл .conf от провайдера.',add('wg','Добавить подключение',`<button class="btn" type="button">${ic('i-up')}Загрузить из файла</button>`)+chanTable('wg'))+
   blk('VPN-подключения','Подключения к удалённым сетям по SSTP и OpenVPN.',add('vpn','Добавить подключение')+chanTable('vpn'))+
@@ -737,7 +737,7 @@ function netUp(){
 const exitTo=cur=>`<option ${cur==='direct'?'selected':''}>Напрямую</option>${PRIO.map((p,i)=>`<option ${i===cur?'selected':''}>${esc(p.t)}</option>`).join('')}<option ${cur==='block'?'selected':''}>Блокировать</option>`;
 function openExit(i){const r=i>=0?EXR[i]:['member','',0];
  dialog(i>=0?'Правило '+(i+1):'Новое правило','Чей трафик и куда он выходит.',
-  `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1">${[['member','Член сети'],['tag','Члены с тегом'],['list','Адреса из списка']].map(([k,l])=>`<option ${r[0]===k?'selected':''}>${l}</option>`).join('')}</select></div>
+  `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1">${[['member','Член сети'],['tag','Члены с тегом'],['vlan','Сегмент'],['list','Адреса из списка']].map(([k,l])=>`<option ${r[0]===k?'selected':''}>${l}</option>`).join('')}</select></div>
    <div class="fld"><label for="ru2">Кто или что</label><select id="ru2"><option>${r[1]||'alice-phone'}</option></select></div>
    <div class="fld"><label for="ru3">Политика</label><select id="ru3">${exitTo(r[2])}</select></div>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">${i>=0?'Сохранить':'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
@@ -1400,12 +1400,16 @@ function access(n,s,d){
 
 /* ── экран ── */
 S.net='main';S.tab.seg='ports';S.sel=new Set();
+const segsOf=(n)=>{n=n||curNet();if(!n)return[];return [{id:0,name:n.name||n.id,cidr:n.cidr,peers:n.peers}].concat((n.vlans||[]).map(v=>({id:v.id,name:v.name||('VLAN '+v.id),cidr:v.cidr||n.cidr,peers:v.peers||n.peers})));};
+const segTitle=id=>{const s=segsOf().find(x=>String(x.id)===String(id));return s?s.name:'VLAN '+id};
 V.segments=()=>{
- const n=curNet(),t=S.tab.seg,err=CFG[n.id]&&CFG[n.id].err;
- return pageHead('Сегменты сети','Каждая сеть loft устроена как управляемый свитч: член сети — порт, у порта свой VLAN и адрес, между VLAN — правила доступа. Править можно на схеме или текстом конфига: оба вида всегда показывают одно и то же.')+pendNet()+
+ const n=curNet();
+ if(S.arg)return segPage(S.arg);
+ const t=S.tab.seg,err=CFG[n.id]&&CFG[n.id].err;
+ return pageHead('Сегменты сети','Сеть loft — свитч: сегмент это мост, член сети — порт. Создайте сколько нужно сегментов и на странице сегмента задайте, как каждый порт в него входит. Править можно на схеме или текстом конфига.')+pendNet()+
  `<div class="netbar" role="tablist" aria-label="Сеть">${NETS.map(x=>`<button type="button" role="tab" aria-selected="${x.id===n.id}" class="netchip ${x.id===n.id?'on':''}" onclick="S.net='${x.id}';S.sel.clear();render()"><span class="dot ${x.enabled?'on':''}"></span><b>${esc(x.name||x.id)}</b><span class="mono">${x.cidr}</span></button>`).join('')}
   <button type="button" class="btn" onclick="openNet('new')">${ic('i-plus')}Сеть</button></div>`+
- `<div class="tabs" role="tablist">${[['ports','Порты и VLAN'],['acl','Правила доступа'],['set','Настройки сети'],['conf','Конфиг']].map(([k,x])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="S.tab.seg='${k}';render()">${x}${k==='conf'&&err?' <span class="pill warn">ошибка</span>':''}</button>`).join('')}</div>`+
+ `<div class="tabs" role="tablist">${[['ports','Сегменты'],['acl','Правила доступа'],['set','Настройки сети'],['conf','Конфиг']].map(([k,x])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="S.tab.seg='${k}';render()">${x}${k==='conf'&&err?' <span class="pill warn">ошибка</span>':''}</button>`).join('')}</div>`+
  (err&&t!=='conf'?`<div class="note bad"><span><b>В тексте конфига ошибка — строка ${err.line||'—'}.</b> <span class="mute">Здесь показана последняя верная версия; правки на схеме заменят текст с ошибкой.</span></span><span class="note-acts"><button class="btn sm" type="button" onclick="S.tab.seg='conf';render()">К конфигу</button></span></div>`:'')+
  ({ports:segPorts,acl:segACL,set:segSet,conf:segConf}[t])(n);
 };
@@ -1439,23 +1443,38 @@ function bulkVlan(v){if(v==='')return;const n=curNet();n.members.filter(m=>S.sel
 function bulkAuth(on){const n=curNet();n.members.filter(m=>S.sel.has(m.id)).forEach(m=>m.authorized=on);render()}
 function cellVlan(id,v){const n=curNet(),m=n.members.find(x=>x.id===id);if(m.vlan===v)return;moveVlan(n,m,v);render()}
 
+function joinSeg(mid,vlan){const n=curNet(),m=n.members.find(x=>x.id===mid);if(!m||(m.vlan||0)===vlan)return;moveVlan(n,m,vlan);render()}
+function segPage(arg){
+ const n=curNet(),back=`<a class="crumb" href="#segments">${ic('i-back',18)}Сегменты сети</a>`;
+ const id=+arg;
+ if(arg===''||!Number.isInteger(id)||id<0||(id!==0&&!n.vlans.some(v=>v.id===id)))
+  return back+pageHead(esc(arg),'')+`<div class="empty"><b>Такого сегмента нет</b><p>Его удалили или адрес набран с ошибкой.</p></div>`;
+ const s=segsOf(n).find(x=>x.id===id);
+ const inSeg=m=>(m.vlan||0)===id;
+ return back+pendNet()+pageHead(esc(s.name),id?'Порт входит ровно в один сегмент: «Входит в сегмент» переносит его сюда.':'Основной сегмент сети. Порты без VLAN. «Входит в сегмент» переносит порт сюда.')+
+  blk('Порты','Как порт входит в этот сегмент. Порт с тегом (trunk) нода пока не поддерживает.',
+   table(['Порт','Член','Вход','IP'],n.members.map((m,i)=>{
+    const on=inSeg(m);
+    const act=on?(id?`<button class="btn sm" type="button" onclick="joinSeg('${m.id}',0)">Убрать</button>`:pill('входит в сегмент','ok')):`<button class="btn sm" type="button" onclick="joinSeg('${m.id}',${id})">Входит в сегмент</button>`;
+    return `<tr><td><span class="sq" style="background:${vcol(n,m.vlan)}"></span><b class="num">${i+1}</b>${m.authorized?'':' <span class="pill">выкл.</span>'}</td>
+     <td><b>${esc(m.name)}</b><span class="sub mono">${esc(m.id)}</span></td>
+     <td>${on?pill('входит в сегмент','ok')+' ':''}${act}</td>
+     <td class="mono">${m.ip||'<span class="mute">из пула</span>'}</td></tr>`;
+   }).join('')))+
+  (id?`<div class="acts"><button class="btn" type="button" onclick="openVlan(${id})">Настроить сегмент</button><button class="btn danger" type="button" onclick="delVlan(${id})">Удалить сегмент</button></div>`
+   :'<p class="hint">Адрес, DHCP и режим между портами — на вкладке «Настройки сети».</p>');
+}
 function segPorts(n){
- const rows=[{id:0,name:'без VLAN',cidr:n.cidr}].concat(n.vlans);
- return blk('Лицевая панель','Цвет порта — VLAN, огонёк — член сейчас в сети. Шлюз — сама нода: через него члены выходят в интернет и к DNS.',faceplate(n)+selBar(n))+
- blk('Членство в VLAN','Порт входит ровно в один VLAN: нажмите клетку, чтобы перенести его. Адрес вне диапазона нового VLAN выдаётся заново.',
-  `<div class="tw"><table class="t vm"><thead><tr><th scope="col">VLAN</th>${n.members.map((m,i)=>`<th scope="col" class="c" title="${esc(m.id)}"><span class="num">${i+1}</span><span class="vm-n">${esc(m.id)}</span></th>`).join('')}</tr></thead>
-  <tbody>${rows.map(v=>`<tr><td><span class="sq" style="background:${vcol(n,v.id)}"></span><b class="num">${v.id||'—'}</b> ${esc(v.name)}<span class="sub mono">${v.cidr||'адрес из сети'}</span></td>
-   ${n.members.map(m=>`<td class="c"><button type="button" class="vc ${m.vlan===v.id?'on':''}" aria-label="${esc(m.id)} в ${v.id?'VLAN '+v.id:'без VLAN'}" aria-pressed="${m.vlan===v.id}" onclick="cellVlan('${m.id}',${v.id})">${m.vlan===v.id?'U':''}</button></td>`).join('')}</tr>`).join('')}</tbody></table></div>
-  <p class="hint">U — порт в этом VLAN. Порт с несколькими VLAN (как trunk) нода пока не поддерживает.</p>`)+
- blk('VLAN','',`<div class="acts"><button class="btn" type="button" onclick="openVlan('new')">${ic('i-plus')}Добавить VLAN</button></div>`+
-  (n.vlans.length?table(['VLAN','Диапазон','Между портами','Портов',{t:'',r:1}],n.vlans.map(v=>`<tr class="click" onclick="openVlan(${v.id})">
-   <td><span class="sq" style="background:${vcol(n,v.id)}"></span><b class="num">${v.id}</b> ${esc(v.name)}</td><td class="mono">${v.cidr||'<span class="mute">из сети</span>'}</td>
-   <td>${peersText(v.peers||n.peers,!v.peers)}</td><td class="num">${n.members.filter(m=>m.vlan===v.id).length}</td>
-   <td class="r"><div class="cell-acts"><button class="icb del" type="button" aria-label="Удалить VLAN" onclick="event.stopPropagation();delVlan(${v.id})">${ic('i-trash')}</button></div></td></tr>`).join('')):'<p class="mute">VLAN нет — все порты в одном сегменте.</p>'))+
- blk('Порты','Таблица тех же портов. Нажмите строку, чтобы открыть порт.',
-  table(['Порт','Член','VLAN','IP','Устройств','Теги'],n.members.map((m,i)=>`<tr class="click" onclick="openMember('${m.id}')"><td><span class="sq" style="background:${vcol(n,m.vlan)}"></span><b class="num">${i+1}</b>${m.authorized?'':' <span class="pill">выкл.</span>'}</td>
-   <td><b>${esc(m.name)}</b><span class="sub mono">${esc(m.id)}</span></td><td>${m.vlan?m.vlan+' '+esc((n.vlans.find(v=>v.id===m.vlan)||{name:'?'}).name):'<span class="mute">—</span>'}</td>
-   <td class="mono">${m.ip||'<span class="mute">из пула</span>'}</td><td class="num">${m.multi?'до '+(m.multi_limit||8):'1'}</td><td>${m.tags.map(x=>pill(esc(x))).join(' ')}</td></tr>`).join('')));
+ const segs=segsOf(n);
+ return blk('Лицевая панель','Цвет порта — сегмент, огонёк — член сейчас в сети. Шлюз — сама нода: через него члены выходят в интернет и к DNS.',faceplate(n)+selBar(n))+
+  blk('Сегменты','Сегмент — мост: порты в нём видят друг друга по правилам доступа. Откройте сегмент, чтобы задать, как порт в него входит.',
+   `<div class="acts"><button class="btn" type="button" onclick="openVlan('new')">${ic('i-plus')}Добавить сегмент</button></div>`+
+   table(['Сегмент','VLAN','Диапазон','Портов',{t:'',r:1}],segs.map(s=>`<tr class="click" onclick="go('segments/${s.id}')">
+    <td><span class="sq" style="background:${vcol(n,s.id)}"></span><b>${esc(s.name)}</b>${s.id?'':' <span class="mute">· без VLAN</span>'}</td>
+    <td class="mono">${s.id||'—'}</td>
+    <td class="mono">${s.cidr||'<span class="mute">из сети</span>'}</td>
+    <td class="num">${n.members.filter(m=>(m.vlan||0)===s.id).length}</td>
+    <td class="r mute">${ic('i-next',18)}</td></tr>`).join('')));
 }
 const peersText=(p,inh)=>({hub:'только через шлюз',mesh:'напрямую между собой',vlan:'внутри своего VLAN'}[p]||p)+(inh?' <span class="mute">· как в сети</span>':'');
 const peersHint='Только через шлюз — порты видят шлюз, друг друга не видят.<br>Напрямую — любой порт видит любой другой.<br>Внутри VLAN — порты видят только свой VLAN; между VLAN — правилами доступа.';
@@ -1558,13 +1577,13 @@ function addNet(){const g=i=>$('#'+i).value.trim(),n=parseConf(`network ${g('n2'
 function openVlan(id){
  const n=curNet(),v=n.vlans.find(x=>x.id===id),nw=!v;
  const free=[10,20,30,40,50,60,70,80,90].find(x=>!n.vlans.some(y=>y.id===x))||n.vlans.length+1;
- dialog(nw?'Новый VLAN':'VLAN '+v.id+' · '+esc(v.name),'Сеть '+n.id+' · '+n.cidr,`
+ dialog(nw?'Новый сегмент':'Сегмент «'+esc(v.name)+'»','Сеть '+n.id+' · '+n.cidr,`
   <div class="fld"><label for="v1">Номер</label><input id="v1" class="num" value="${nw?free:v.id}"></div>
   <div class="fld"><label for="v2">Название</label><input id="v2" value="${nw?'':esc(v.name)}"></div>
   <div><div class="fld"><label for="v3">Диапазон</label><input id="v3" class="mono" value="${nw?suggestVlanCIDR(n,free):v.cidr}"></div><div class="hint">Внутри ${n.cidr} (${cidrHosts(n.cidr)}) и без пересечения с другими VLAN. Пусто — адреса из диапазона сети.</div></div>
   <div><div class="fld"><label for="v4">Между портами</label><select id="v4"><option value="" ${v&&!v.peers?'selected':''}>как в сети</option><option value="mesh" ${v&&v.peers==='mesh'?'selected':''}>напрямую между собой</option><option value="hub" ${v&&v.peers==='hub'?'selected':''}>только через шлюз</option></select></div><div class="hint">Пусто — режим сети: ${peersText(n.peers)}<br>Напрямую — порты этого VLAN видят друг друга; через шлюз — нет.</div></div>
-  ${nw?'':`<p class="hint" style="margin:0">При удалении ${n.members.filter(m=>m.vlan===v.id).length} порт(а) останутся без VLAN.</p>`}`,
-  `<button class="btn pri" type="button" onclick="saveVlan(${nw?'null':v.id})">${nw?'Создать':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить VLAN" style="margin-left:auto" onclick="delVlan(${v.id})">${ic('i-trash')}</button>`}`);
+  ${nw?'':`<p class="hint" style="margin:0">При удалении ${n.members.filter(m=>m.vlan===v.id).length} порт(а) перейдут в основной сегмент.</p>`}`,
+  `<button class="btn pri" type="button" onclick="saveVlan(${nw?'null':v.id})">${nw?'Создать':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить сегмент" style="margin-left:auto" onclick="delVlan(${v.id})">${ic('i-trash')}</button>`}`);
 }
 function saveVlan(old){
  const n=curNet(),g=i=>$('#'+i).value.trim(),id=+g('v1');
@@ -1572,9 +1591,11 @@ function saveVlan(old){
  {const err=vlanCIDRErr(g('v3'),n,old);if(err){toast(err);return}}
  let v=old!=null?n.vlans.find(x=>x.id===old):null;if(!v){if(n.vlans.some(x=>x.id===id)){toast('VLAN '+id+' уже есть');return}v={id};n.vlans.push(v)}
  if(old!=null&&old!==id)n.members.forEach(m=>{if(m.vlan===old)m.vlan=id});
- Object.assign(v,{id,name:g('v2'),cidr:g('v3'),peers:g('v4')});n.vlans.sort((a,b)=>a.id-b.id);closeDlg();render();
+ Object.assign(v,{id,name:g('v2'),cidr:g('v3'),peers:g('v4')});n.vlans.sort((a,b)=>a.id-b.id);closeDlg();
+ if(old==null||(S.route==='segments'&&S.arg&&+S.arg!==id)){go('segments/'+id);return}
+ render();
 }
-function delVlan(id){const n=curNet();n.vlans=n.vlans.filter(v=>v.id!==id);n.members.forEach(m=>{if(m.vlan===id)moveVlan(n,m,0)});n.rules=n.rules.filter(r=>r.src_vlan!==id&&r.dst_vlan!==id);closeDlg();render()}
+function delVlan(id){const n=curNet();n.vlans=n.vlans.filter(v=>v.id!==id);n.members.forEach(m=>{if(m.vlan===id)moveVlan(n,m,0)});n.rules=n.rules.filter(r=>r.src_vlan!==id&&r.dst_vlan!==id);closeDlg();if(S.route==='segments'&&String(S.arg)===String(id)){go('segments');return}render()}
 function openRule(i){
  const n=curNet(),r=n.rules[i]||{action:'accept',proto:'',src:'',dst:'',dport:[],src_vlan:null,dst_vlan:null},nw=i<0;
  const vs=(id,cur)=>`<select id="${id}"><option value="">любой</option>${n.vlans.map(v=>`<option value="${v.id}" ${cur===v.id?'selected':''}>${v.id} ${esc(v.name)}</option>`).join('')}</select>`;
@@ -1870,11 +1891,11 @@ const HELP={
  main:['Сводка сервера: нода, члены сети, адреса, домены, нагрузка и последние события. Карточки ведут в свои разделы.',['Проверить, что нода работает и сертификат не истекает','Добавить члена сети прямо с обзора','Открыть журнал последних изменений'],['«нет данных» у ноды — служба loft-panel-adm не отвечает: перезапустите её на сервере','Сертификат помечен — продлите его в «Доменах»']],
  node:['Настройки ноды loft: роль, фронты, маскировка, ретрансляторы, списки и доступ. Переключатели сразу идут на ноду.',['Включить нужные фронты (GET, WebSocket, HTTP/2, QUIC)','Добавить ретранслятор или CDN','Подождать секунду — нода перезапустится сама'],['После смены фронтов нода не поднялась — откройте журнал службы на вкладке «Основное»','Клиенты не подключаются — проверьте адрес для клиентов и сертификат']],
  members:['Устройства и люди, которые подключаются к серверу. У каждого свой ключ и профиль.',['Добавить члена — панель выдаст ссылку loft://, QR-код и файл .loft','Перевыпустить ключ, если устройство потеряно','Выключить члена, не удаляя его'],['Член не в сети — проверьте, что профиль на устройстве свежий','Выключатель сразу действует на ноде']],
- segments:['Сеть loft как свитч: VLAN, правила доступа между сегментами и текст network.conf.',['Создать VLAN и раздать в нём адреса','Разрешить или запретить доступ между VLAN','Править конфиг текстом — ошибку покажет сама нода'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
+ segments:['Сеть loft как свитч: сегменты (мосты), как порт в них входит, правила доступа и текст network.conf.',['Создать сегмент и открыть его страницу','Задать, какие порты входят в сегмент','Разрешить или запретить доступ между сегментами'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
  channels:['Каналы WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
  adapters:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
  addrs:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
- 'iface-priorities':['Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию — адаптер сервера и все каналы с выходом.',['Создать политику и отметить подключения','Перетащить члена на политику на вкладке «Применение политик»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике член','Все подключения не работают — сработает пункт «Если ни один не работает»']],
+ 'iface-priorities':['Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию — адаптер сервера и все каналы с выходом.',['Создать политику и отметить подключения','Перетащить члена, тег или сегмент на политику на вкладке «Применение политик»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике член или сегмент','Все подключения не работают — сработает пункт «Если ни один не работает»']],
  domains:['Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.',['Добавить домен через DNS-провайдера — записи панель создаст сама','Выпустить сертификат Let’s Encrypt','Для ручной зоны — проверить, что записи внесены у регистратора'],['Namecheap отказывает — укажите имя аккаунта (не e-mail), ключ и белый IP сервера','Сертификат не выпускается — имя должно указывать на этот сервер, а для HTTP-01 нужен открытый порт 80']],
  mail:['Почтовый сервер: домены, ящики, псевдонимы и DNS-записи почты.',['Добавить почтовый домен и создать недостающие записи DNS','Завести ящик и выдать пароль','Посмотреть настройки для почтовой программы'],['Письма уходят в спам — проверьте SPF, DKIM, DMARC и PTR в «Записях DNS»','Применение не прошло — панель вернула прежние файлы, исправьте ошибку и нажмите «Применить снова»']],
  packages:['Что установлено на сервере и обновления. Пакеты ставятся заданием, ход виден здесь же.',['Выбрать пакеты и поставить их одним заданием','Настроить окно и режим обновлений','Открыть настройки пакета шестерёнкой'],['Задание упало — откройте его журнал','Раздел меню не появился — нужный пакет ещё не установлен']],

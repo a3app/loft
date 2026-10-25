@@ -208,12 +208,15 @@ func TestChannelRulesAndDelete(t *testing.T) {
 	if _, err := o.ChannelRules(ctx, admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "px"}}}); err == nil {
 		t.Fatal("a rule straight to a channel")
 	}
-	v, err = o.ChannelRules(ctx, admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "prio2"}, {Match: "tag", Value: "office", Via: "prio1"}}, Default: "prio1"})
+	v, err = o.ChannelRules(ctx, admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "member", Value: "bob", Via: "prio2"}, {Match: "tag", Value: "office", Via: "prio1"}, {Match: "vlan", Value: "10", Via: "prio1"}}, Default: "prio1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(v.Rules.Rules) != 2 || v.Channels[1].PX.Password != "" || !v.Channels[1].PX.HasPassword {
+	if len(v.Rules.Rules) != 3 || v.Channels[1].PX.Password != "" || !v.Channels[1].PX.HasPassword {
 		t.Fatalf("view %+v", v)
+	}
+	if _, err := o.ChannelRules(ctx, admproto.ExitRules{Rules: []admproto.ExitRule{{Match: "vlan", Value: "nope", Via: "prio1"}}, Default: "prio1"}); err == nil {
+		t.Fatal("vlan id accepted garbage")
 	}
 	eg, _ := os.ReadFile(o.egressFile())
 	cfg, err := egress.Parse(string(eg))

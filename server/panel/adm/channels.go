@@ -561,9 +561,17 @@ func (o *Ops) ChannelRules(ctx context.Context, r admproto.ExitRules) (admproto.
 		return admproto.ChannelsView{}, errors.New("at most 200 rules")
 	}
 	for i, x := range r.Rules {
-		if !slices.Contains([]string{"member", "tag", "list"}, x.Match) || x.Value == "" || strings.ContainsAny(x.Value, "\n\r\"") {
+		if !slices.Contains([]string{"member", "tag", "vlan", "list"}, x.Match) || x.Value == "" || strings.ContainsAny(x.Value, "\n\r\"") {
 			o.chanMu.Unlock()
-			return admproto.ChannelsView{}, fmt.Errorf("rule %d: match a member, a tag or a list", i+1)
+			return admproto.ChannelsView{}, fmt.Errorf("rule %d: match a member, a tag, a vlan or a list", i+1)
+		}
+		if x.Match == "vlan" {
+			id, err := strconv.Atoi(x.Value)
+			if err != nil || id < 0 || id > 4094 {
+				o.chanMu.Unlock()
+				return admproto.ChannelsView{}, fmt.Errorf("rule %d: vlan id 0…4094", i+1)
+			}
+			r.Rules[i].Value = strconv.Itoa(id)
 		}
 		if err := ok(x.Via); err != nil {
 			o.chanMu.Unlock()

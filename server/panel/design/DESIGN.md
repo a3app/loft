@@ -43,11 +43,11 @@ A screen or a checkbox that needs a package not installed is **hidden**, not dis
 
 ## 4. Segments: a network is a managed switch
 
-Each loft network looks like a switch. A member is a port. A port is in one VLAN (access); the node has no trunk. The model is `netconf.Network`; nothing is stored outside `network.conf`.
+Each loft network looks like a switch. A member is a port. A segment is a bridge (a VLAN, or the untagged default). A port is in one segment (access); the node has no trunk. `#segments` is the list, `#segments/<id>` the segment page: how each port joins it. The model is `netconf.Network`; nothing is stored outside `network.conf`. On policy application a segment can take an internet policy (`rule vlan N`).
 
 | Tab | What |
 |-----|------|
-| Ports and VLAN | Front panel: gateway port, then member ports. Colour = VLAN, LED = online, struck label = disabled. Multi-select → set VLAN, enable, disable. VLAN membership grid (VLAN × port, click to move). VLAN table. Port table |
+| Segments | Front panel and the segment list. Open a segment for per-port join. Add a segment |
 | Access rules | Effective access grid VLAN × VLAN after the ACL and `peers`; partial allows (proto/port/host) are noted in the cell. Ordered ACL list, ↑↓, rule dialog with a live config line |
 | Network settings | CIDR, gateway, pool, `peers` hub/mesh/vlan, p2p, DNS, MTU (default 1280), session timers, routes |
 | Config | `network.conf` in node syntax. Two-way: text edits update the switch, switch edits rewrite the text. Error shows the line number with the node's own message |
