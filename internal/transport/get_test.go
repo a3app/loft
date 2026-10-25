@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/a3app/loft/internal/cdn"
 	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
 	"github.com/a3app/loft/internal/mux"
@@ -1505,7 +1506,11 @@ func TestGETThroughput100ms(t *testing.T) {
 
 	const token = "test-token-please-change"
 	const rtt = 100 * time.Millisecond
-	gs := NewGETServer(token, "/static/v3/build")
+	// GenericGET advertises inflight 8. Status only lowers the client,
+	// so a server on that ceiling cannot exercise Inflight 48.
+	prof := cdn.GenericGET()
+	prof.Inflight = 48
+	gs := NewGETServerProfile(token, "/static/v3/build", prof)
 	var gets atomic.Int64
 	ts := startH2GET(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gets.Add(1)
