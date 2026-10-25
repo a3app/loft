@@ -93,6 +93,34 @@ func TestBootstrapRosterSkipsBootstrapOnNode(t *testing.T) {
 	}
 }
 
+func TestBootstrapRosterSkipsNodeWhenEdgeIsSet(t *testing.T) {
+	hang, hit := hangingManifest(t)
+	edge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(edge.Close)
+	node := "http://" + hang.Listener.Addr().String()
+	SetDirectNode(node)
+	t.Cleanup(func() { SetDirectNode("") })
+	t.Cleanup(resetRosterForTest)
+	resetRosterForTest()
+	cfg := &config.ClientConfig{
+		Outbounds: []config.Outbound{
+			{Name: "edge", Type: "get", CDN: "yandex", URL: edge.URL},
+			{Name: "node", Type: "get", CDN: "yandex", URL: node},
+			{Name: "ws", Type: "ws", CDN: "yandex", URL: node + "/api/v1/sync"},
+		},
+	}
+	start := time.Now()
+	BootstrapRoster(context.Background(), cfg)
+	if time.Since(start) > 500*time.Millisecond {
+		t.Fatalf("took %s", time.Since(start))
+	}
+	if hit.Load() {
+		t.Fatal("GET manifest on node")
+	}
+}
+
 func TestBootstrapRosterFetchesCDN(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

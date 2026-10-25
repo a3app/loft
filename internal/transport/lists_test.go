@@ -50,6 +50,37 @@ func TestLookupPriority(t *testing.T) {
 	}
 }
 
+func TestBootstrapListsSkipsNodeWhenEdgeIsSet(t *testing.T) {
+	var hit atomic.Bool
+	hang := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		hit.Store(true)
+		time.Sleep(time.Second)
+	}))
+	t.Cleanup(hang.Close)
+	edge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(edge.Close)
+	node := "http://" + hang.Listener.Addr().String()
+	SetDirectNode(node)
+	t.Cleanup(func() { SetDirectNode("") })
+	cfg := &config.ClientConfig{
+		Outbounds: []config.Outbound{
+			{Name: "edge", Type: "get", CDN: "yandex", URL: edge.URL},
+			{Name: "node", Type: "get", CDN: "yandex", URL: node},
+			{Name: "h2", Type: "h2", CDN: "yandex", URL: node + "/api/v1/tunnel"},
+		},
+	}
+	start := time.Now()
+	BootstrapLists(context.Background(), cfg)
+	if time.Since(start) > 500*time.Millisecond {
+		t.Fatalf("took %s", time.Since(start))
+	}
+	if hit.Load() {
+		t.Fatal("GET lists on node")
+	}
+}
+
 func TestBootstrapListsSkipsDirectNode(t *testing.T) {
 	var hit atomic.Bool
 	ts := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

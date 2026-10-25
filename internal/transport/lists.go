@@ -178,10 +178,15 @@ func BootstrapLists(ctx context.Context, cfg *config.ClientConfig) {
 			}
 		}
 	}
+	seen := map[string]struct{}{}
+	for _, u := range urls {
+		seen[u] = struct{}{}
+	}
 	for _, o := range cfg.Outbounds {
-		if o.CDN != "" && o.URL != "" {
-			urls = append(urls, strings.TrimRight(o.URL, "/")+path)
+		if o.CDN == "" || o.URL == "" {
+			continue
 		}
+		urls = appendPublicURL(urls, seen, strings.TrimRight(o.URL, "/")+path, decoy)
 	}
 	listSources.Store(urls)
 	for _, u := range urls {

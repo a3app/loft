@@ -111,6 +111,10 @@ func BootstrapRoster(ctx context.Context, cfg *config.ClientConfig) {
 		urls = append(urls, cfg.Bootstrap)
 	}
 	path := "/static/v3/manifest.json"
+	seen := map[string]struct{}{}
+	for _, u := range urls {
+		seen[u] = struct{}{}
+	}
 	for _, o := range cfg.Outbounds {
 		if o.CDN == "" || o.URL == "" {
 			continue
@@ -119,7 +123,7 @@ func BootstrapRoster(ctx context.Context, cfg *config.ClientConfig) {
 		if base == "" {
 			continue
 		}
-		urls = append(urls, strings.TrimRight(base, "/")+path)
+		urls = appendPublicURL(urls, seen, strings.TrimRight(base, "/")+path, decoy)
 	}
 	for _, u := range urls {
 		cctx, cancel := context.WithTimeout(ctx, 8*time.Second)
@@ -175,22 +179,47 @@ func originHostPort(raw string) string {
 	return net.JoinHostPort(host, port)
 }
 
-// decoyNodeHosts is host:port of non-CDN outbounds. Unauthenticated TLS to
-// those addresses is spliced to origin; a public GET times out.
+// decoyNodeHosts is host:port that must not take a sid-less GET.
+// CDN == "" is the node. -cdn stamped on the node URL is still the node
+// when another outbound (the edge) has a different host: directNodeURL
+// is skipped too. Unauthenticated TLS to the node is spliced to decoy
+// and the GET sits until the client timeout.
 func decoyNodeHosts(cfg *config.ClientConfig) map[string]struct{} {
 	m := map[string]struct{}{}
 	if cfg == nil {
 		return m
 	}
+	direct := originHostPort(directNodeURL())
+	other := false
 	for _, o := range cfg.Outbounds {
-		if o.CDN != "" || o.URL == "" {
+		hp := originHostPort(o.URL)
+		if hp == "" {
 			continue
 		}
-		if hp := originHostPort(o.URL); hp != "" {
+		if o.CDN == "" {
 			m[hp] = struct{}{}
 		}
+		if direct != "" && hp != direct {
+			other = true
+		}
+	}
+	if direct != "" && other {
+		m[direct] = struct{}{}
 	}
 	return m
+}
+
+// appendPublicURL adds raw unless it is empty, already listed, or a node origin.
+func appendPublicURL(urls []string, seen map[string]struct{}, raw string, decoy map[string]struct{}) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || skipPublicFetch(raw, decoy) {
+		return urls
+	}
+	if _, ok := seen[raw]; ok {
+		return urls
+	}
+	seen[raw] = struct{}{}
+	return append(urls, raw)
 }
 
 func skipPublicFetch(url string, decoy map[string]struct{}) bool {
