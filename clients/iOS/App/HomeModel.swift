@@ -9,7 +9,7 @@ struct HomeSnapshot: Equatable {
         case simple
     }
 
-    enum Kind: String, Equatable {
+    enum Kind: String, Equatable, Codable, CaseIterable {
         case loft, sstp, vless, trojan
     }
 

@@ -52,8 +52,9 @@ Apple Developer Program for the Packet Tunnel entitlement. App group `group.app.
 From the repository root (Xcode, Simulator SDK):
 
 ```bash
-make ios                 # dist/clients/iOS/loft.app
-make -C clients/iOS run  # install + launch on loft-ios
+make ios                 # dist/clients/iOS/loft.app + iphonesimulator/loft.app
+make -C clients/iOS run  # open the macOS wrapper
+make -C clients/iOS sim  # create Simulator loft-ios once
 ```
 
-Intermediates stay under `dist/clients/iOS/`, not in `clients/iOS/`. Unsigned Debug for Simulator. Device IPA / TestFlight is later.
+Writes macOS `loft.app` (double-click: boot `loft-ios`, install, launch) next to unsigned Simulator `iphonesimulator/loft.app`. Intermediates stay under `dist/clients/iOS/`, not in `clients/iOS/`. Device IPA / TestFlight is later. Log: `~/Library/Logs/loft-ios-simulator.log`.

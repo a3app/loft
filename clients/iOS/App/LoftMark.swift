@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// L-roof + lamp in the 96×96 brand space. On = snow body / lamp window; off = mute / slate.
 struct LoftMark: View {
@@ -25,6 +26,29 @@ struct LoftMarkLamp: Shape {
     func path(in rect: CGRect) -> Path {
         LoftMarkGeometry.scaled(LoftMarkGeometry.lamp, in: rect)
     }
+}
+
+/// A³ colophon: 7×6 lamp cells, nearest-neighbour. Same grid as macOS `HeartView`.
+struct LoftHeart: View {
+    var body: some View {
+        Image(uiImage: Self.bitmap)
+            .interpolation(.none)
+            .resizable()
+            .frame(width: 14, height: 12)
+            .accessibilityHidden(true)
+    }
+
+    private static let bitmap: UIImage = {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 7, height: 6), format: format).image { ctx in
+            UIColor(red: 232 / 255, green: 184 / 255, blue: 74 / 255, alpha: 1).setFill()
+            for c in [(1, 0, 2, 1), (4, 0, 2, 1), (0, 1, 7, 2), (1, 3, 5, 1), (2, 4, 3, 1), (3, 5, 1, 1)] as [(CGFloat, CGFloat, CGFloat, CGFloat)] {
+                ctx.fill(CGRect(x: c.0, y: c.1, width: c.2, height: c.3))
+            }
+        }
+    }()
 }
 
 private enum LoftMarkGeometry {

@@ -1,0 +1,47 @@
+#!/bin/bash
+# Create the loft-ios Simulator used by dist/clients/iOS/loft.app
+# (iPhone 16 if present, else 15/14; newest available iOS runtime).
+set -euo pipefail
+
+SIM=${LOFT_SIM:-loft-ios}
+
+command -v xcrun >/dev/null || { echo "error: Xcode not found (xcrun)" >&2; exit 1; }
+
+if xcrun simctl list devices available 2>/dev/null | grep -q "${SIM} ("; then
+	echo "simulator $SIM"
+	xcrun simctl list devices available | grep "${SIM} ("
+	exit 0
+fi
+
+devtype() {
+	local n id
+	for n in "iPhone 16" "iPhone 16 Plus" "iPhone 15" "iPhone 14"; do
+		id=$(xcrun simctl list devicetypes 2>/dev/null | awk -v n="$n (" '
+			index($0, n) {
+				gsub(/.*\(/, "")
+				gsub(/\)$/, "")
+				print
+				exit
+			}')
+		if [ -n "$id" ]; then
+			echo "$id"
+			return 0
+		fi
+	done
+	return 1
+}
+
+runtime() {
+	xcrun simctl list runtimes available 2>/dev/null | awk '
+		/iOS / {
+			id = $NF
+			gsub(/[()]/, "", id)
+		}
+		END { if (id != "") print id }
+	'
+}
+
+dt=$(devtype) || { echo "error: no iPhone Simulator device type" >&2; exit 1; }
+rt=$(runtime) || { echo "error: no iOS Simulator runtime" >&2; exit 1; }
+udid=$(xcrun simctl create "$SIM" "$dt" "$rt")
+echo "created $SIM $udid ($dt $rt)"

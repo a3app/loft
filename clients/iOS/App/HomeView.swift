@@ -6,11 +6,15 @@ struct LoftShell: View {
     @State private var home: HomeSnapshot
     @State private var prefs: LoftPrefs
     @State private var settingsPage: SettingsPage?
+    @StateObject private var tunnel = TunnelControl()
+    /// Canvas previews keep the snapshot. The live app follows Packet Tunnel status.
+    var followTunnel: Bool
 
-    init(initial: HomeSnapshot = .off, tab: LoftTab = .home, prefs: LoftPrefs? = nil) {
+    init(initial: HomeSnapshot = .off, tab: LoftTab = .home, prefs: LoftPrefs? = nil, followTunnel: Bool = true) {
         _home = State(initialValue: initial)
         _tab = State(initialValue: tab)
         _prefs = State(initialValue: prefs ?? LoftPrefs.load())
+        self.followTunnel = followTunnel
     }
 
     var body: some View {
@@ -18,7 +22,7 @@ struct LoftShell: View {
             Color.loftPhone.ignoresSafeArea()
             switch tab {
             case .home:
-                HomeView(snapshot: $home, prefs: prefs) { tab = .connections }
+                HomeView(snapshot: $home, prefs: prefs, tunnel: tunnel, followTunnel: followTunnel) { tab = .connections }
             case .connections:
                 LoftStubRoom(titleKey: "conns")
             case .settings:
@@ -30,14 +34,45 @@ struct LoftShell: View {
         }
         .environment(\.locale, prefs.locale)
         .preferredColorScheme(.dark)
-        .onChange(of: prefs) { p in p.save() }
+        .onChange(of: prefs) { p in
+            p.save()
+            if followTunnel {
+                Task { await tunnel.applyPolicy(p) }
+            }
+        }
+        .onChange(of: tunnel.up) { _ in syncHome() }
+        .onChange(of: tunnel.busy) { _ in syncHome() }
+        .onChange(of: tunnel.held) { _ in syncHome() }
+        .task {
+            if followTunnel {
+                prefs.save()
+                await tunnel.applyPolicy(prefs)
+                await tunnel.refresh()
+                syncHome()
+            }
+        }
+    }
+
+    private func syncHome() {
+        guard followTunnel else { return }
+        if tunnel.busy {
+            home.mode = .connecting
+        } else if tunnel.held {
+            home.mode = .off
+        } else if tunnel.up {
+            home.mode = prefs.simple ? .simple : .on
+        } else {
+            home.mode = .off
+        }
     }
 
     @ViewBuilder
     private var settingsRoom: some View {
         switch settingsPage {
         case .none:
-            SettingsView(prefs: $prefs) { settingsPage = $0 }
+            SettingsView(prefs: $prefs, onOpen: { settingsPage = $0 }, onResetRoutes: {
+                Task { await tunnel.resetRoutes() }
+            })
         case .lists:
             LoftBackChrome(titleKey: "split_lists", onBack: { settingsPage = nil }) {
                 LoftStubRoom(titleKey: "split_lists")
@@ -54,10 +89,12 @@ enum LoftTab: String, Hashable {
     case home, connections, settings
 }
 
-/// DESIGN Home. Connect toggles the snapshot; it does not start the Packet Tunnel.
+/// DESIGN Home. Live Connect talks to Packet Tunnel; Canvas previews keep the snapshot.
 struct HomeView: View {
     @Binding var snapshot: HomeSnapshot
     var prefs: LoftPrefs = .default
+    @ObservedObject var tunnel: TunnelControl
+    var followTunnel: Bool = true
     var onPill: () -> Void = {}
     @Environment(\.locale) private var locale
 
@@ -66,11 +103,7 @@ struct HomeView: View {
             VStack(spacing: 0) {
                 hero
                 LoftGoButton(title: actionTitle, kind: actionKind) {
-                    if snapshot.mode == .connecting {
-                        snapshot.cancel()
-                    } else {
-                        snapshot.tapPrimary()
-                    }
+                    tapPrimary()
                 }
                 .padding(.top, 14)
 
@@ -211,6 +244,24 @@ struct HomeView: View {
         case .connecting: return .ghost
         case .on, .simple: return .danger
         case .off: return .go
+        }
+    }
+
+    private func tapPrimary() {
+        if followTunnel {
+            if snapshot.mode == .connecting || tunnel.busy {
+                tunnel.disconnect()
+            } else if snapshot.isLive || tunnel.up {
+                tunnel.disconnect()
+            } else {
+                tunnel.connect()
+            }
+            return
+        }
+        if snapshot.mode == .connecting {
+            snapshot.cancel()
+        } else {
+            snapshot.tapPrimary()
         }
     }
 
@@ -387,27 +438,27 @@ struct LoftStubRoom: View {
 }
 
 #Preview("Home · off") {
-    LoftShell(initial: .off)
+    LoftShell(initial: .off, followTunnel: false)
 }
 
 #Preview("Home · on") {
-    LoftShell(initial: .on)
+    LoftShell(initial: .on, followTunnel: false)
 }
 
 #Preview("Home · simple") {
-    LoftShell(initial: .simple)
+    LoftShell(initial: .simple, followTunnel: false)
 }
 
 #Preview("Home · connecting") {
-    LoftShell(initial: .connecting)
+    LoftShell(initial: .connecting, followTunnel: false)
 }
 
 #Preview("Home · off · ru") {
-    LoftShell(initial: .off)
+    LoftShell(initial: .off, followTunnel: false)
         .environment(\.locale, Locale(identifier: "ru"))
 }
 
 #Preview("Home · on · zh") {
-    LoftShell(initial: .on)
+    LoftShell(initial: .on, followTunnel: false)
         .environment(\.locale, Locale(identifier: "zh-Hans"))
 }

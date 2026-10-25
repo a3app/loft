@@ -1,4 +1,4 @@
-# Unsigned Simulator loft.app → ../../dist/clients/iOS/
+# Unsigned Simulator payload + macOS loft.app wrapper → ../../dist/clients/iOS/
 # Intermediates stay under dist/clients/iOS/, not clients/iOS/.
 # Device IPA / TestFlight needs the Packet Tunnel entitlement; not this target.
 
@@ -6,14 +6,19 @@ ROOT := $(abspath ../..)
 DIST := $(ROOT)/dist/clients/iOS
 XCF := $(ROOT)/clients/mobile/build/Mobile.xcframework
 VER := $(shell tr -d ' \n' < $(ROOT)/VERSION)
+CODE := $(lastword $(subst ., ,$(VER)))
 DESTINATION ?= generic/platform=iOS Simulator
 SIM ?= loft-ios
 PROJ := Loft.xcodeproj
 SCHEME := loft
+EMU := emulator
+ICNS := $(ROOT)/clients/macOS/Resources/loft.icns
+IOSAPP := $(DIST)/iphonesimulator/loft.app
+WRAP := $(DIST)/loft.app
 
-.PHONY: all app bind run install open clean
+.PHONY: all app pack sim run install open clean
 
-all: app
+all: pack
 
 bind:
 	$(MAKE) -C ../mobile ios
@@ -22,7 +27,7 @@ $(XCF):
 	$(MAKE) -C ../mobile ios
 
 app: $(XCF)
-	mkdir -p $(DIST)/obj
+	mkdir -p $(DIST)/obj $(DIST)/iphonesimulator
 	xcodebuild -project $(PROJ) -scheme $(SCHEME) \
 		-destination '$(DESTINATION)' \
 		-configuration Debug \
@@ -30,26 +35,34 @@ app: $(XCF)
 		MARKETING_VERSION=$(VER) \
 		SYMROOT=$(DIST) OBJROOT=$(DIST)/obj \
 		build
-	rm -rf $(DIST)/loft.app
-	cp -R $(DIST)/Debug-iphonesimulator/loft.app $(DIST)/loft.app
-	@echo "built $(DIST)/loft.app  $(VER)"
+	rm -rf $(IOSAPP)
+	cp -R $(DIST)/Debug-iphonesimulator/loft.app $(IOSAPP)
+	@echo "built $(IOSAPP)  $(VER)"
 
-install: app
-	open -a Simulator
-	-xcrun simctl boot $(SIM)
-	@if xcrun simctl list devices available | grep -q '$(SIM) ('; then \
-		xcrun simctl install $(SIM) $(DIST)/loft.app; \
-	else \
-		xcrun simctl install booted $(DIST)/loft.app; \
-	fi
-	@echo "installed $(DIST)/loft.app"
+pack: app
+	rm -rf $(WRAP)
+	mkdir -p $(WRAP)/Contents/MacOS $(WRAP)/Contents/Resources
+	cp $(EMU)/loft $(WRAP)/Contents/MacOS/loft
+	chmod +x $(WRAP)/Contents/MacOS/loft
+	sed -e 's/__LOFT_BUNDLE_ID__/app.loft.ios.emulator/' \
+		-e 's/__LOFT_NAME__/loft/' \
+		-e 's/__LOFT_DISPLAY_NAME__/loft/' \
+		-e 's/__LOFT_VERSION__/$(VER)/' \
+		-e 's/__LOFT_CODE__/$(CODE)/' \
+		$(EMU)/Info.plist > $(WRAP)/Contents/Info.plist
+	printf 'APPL????' > $(WRAP)/Contents/PkgInfo
+	if [ -f "$(ICNS)" ]; then cp "$(ICNS)" $(WRAP)/Contents/Resources/loft.icns; fi
+	-xattr -cr $(WRAP)
+	@echo "built $(WRAP)  $(VER)  (macOS wrapper → $(SIM))"
+
+sim:
+	chmod +x $(EMU)/setup-sim
+	$(EMU)/setup-sim
+
+install: pack
+	open $(WRAP)
 
 run: install
-	@if xcrun simctl list devices available | grep -q '$(SIM) ('; then \
-		xcrun simctl launch $(SIM) app.loft.ios; \
-	else \
-		xcrun simctl launch booted app.loft.ios; \
-	fi
 
 open: bind
 	open $(PROJ)

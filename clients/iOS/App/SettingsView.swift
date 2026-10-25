@@ -4,10 +4,11 @@ enum SettingsPage: Hashable {
     case lists, journal, about
 }
 
-/// DESIGN Settings. Toggles write `LoftPrefs`; they do not change the Packet Tunnel yet.
+/// DESIGN Settings. Toggles write `LoftPrefs`; hold / demand / Reset routes go to TunnelControl.
 struct SettingsView: View {
     @Binding var prefs: LoftPrefs
     var onOpen: (SettingsPage) -> Void = { _ in }
+    var onResetRoutes: () -> Void = {}
     @Environment(\.locale) private var locale
     @State private var confirmDefaults = false
 
@@ -67,7 +68,11 @@ struct SettingsView: View {
                 .foregroundStyle(Color.loftSnow)
                 .tracking(-0.5)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button(L10n.t("reset", locale)) {}
+            Button(L10n.t("reset", locale)) {
+                prefs.hold = false
+                prefs.demand = false
+                onResetRoutes()
+            }
                 .font(LoftTheme.demi(10))
                 .foregroundStyle(Color.loftSnow)
                 .padding(.horizontal, 8)
@@ -354,11 +359,11 @@ struct JournalView: View {
 }
 
 #Preview("Settings") {
-    LoftShell(tab: .settings)
+    LoftShell(tab: .settings, followTunnel: false)
 }
 
 #Preview("Settings · ru") {
-    LoftShell(tab: .settings, prefs: LoftPrefs(lang: "ru"))
+    LoftShell(tab: .settings, prefs: LoftPrefs(lang: "ru"), followTunnel: false)
 }
 
 #Preview("About") {

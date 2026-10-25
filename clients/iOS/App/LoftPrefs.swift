@@ -4,7 +4,7 @@ enum SparkStyle: String, Codable, CaseIterable {
     case lines, bars
 }
 
-/// Settings snapshot. Canvas / sim; Packet Tunnel later reads `hold` from the app group.
+/// Settings snapshot. `save()` writes hold / demand / trusted Wi‑Fi into the app group.
 struct LoftPrefs: Equatable, Codable {
     var simple = false
     var bits = true
@@ -45,5 +45,7 @@ struct LoftPrefs: Equatable, Codable {
             Group.defaults.set(data, forKey: Self.storeKey)
         }
         Group.hold = hold
+        Group.demand = demand
+        Group.trustedWiFi = trustedWiFi
     }
 }

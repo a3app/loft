@@ -4,7 +4,7 @@
 
 Как loft работает на iPhone, позже Apple TV (tvOS 17+). Каталог: [clients/iOS/](../clients/iOS/). План: [clients/iOS/PLAN.md](../clients/iOS/PLAN.md) (Apple TV — фаза 6). Макет: [clients/iOS/design/index.html](../clients/iOS/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md). URI импорта: [share_ru.md](share_ru.md).
 
-Контейнер: [`clients/iOS/`](../clients/iOS/). `make ios` пишет unsigned Simulator `dist/clients/iOS/loft.app`. IPA на устройство — с entitlement Packet Tunnel.
+Контейнер: [`clients/iOS/`](../clients/iOS/). `make ios` пишет macOS `dist/clients/iOS/loft.app` (двойной клик поднимает Simulator `loft-ios`) и unsigned `iphonesimulator/loft.app`. IPA на устройство — с entitlement Packet Tunnel.
 
 ---
 

@@ -43,6 +43,8 @@ extension Color {
     /// Phone chrome in the mock (`#181512`), not the light paper token.
     static let loftPhone = Color(red: 24 / 255, green: 21 / 255, blue: 18 / 255)
     static let loftField = Color(red: 33 / 255, green: 28 / 255, blue: 25 / 255)
+    /// Card stroke in the Connections mock (`#2e2824`).
+    static let loftCardLine = Color(red: 46 / 255, green: 40 / 255, blue: 36 / 255)
     static let loftGhost = Color(red: 42 / 255, green: 36 / 255, blue: 32 / 255)
     static let loftLine = Color(red: 243 / 255, green: 237 / 255, blue: 228 / 255).opacity(0.12)
     static let loftErr = Color(red: 226 / 255, green: 75 / 255, blue: 75 / 255)

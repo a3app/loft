@@ -22,6 +22,9 @@
 		A10000000000000000000015 /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* L10n.swift */; };
 		A10000000000000000000017 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000023 /* SettingsView.swift */; };
 		A10000000000000000000018 /* LoftPrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024 /* LoftPrefs.swift */; };
+		A10000000000000000000019 /* ConnStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025 /* ConnStore.swift */; };
+		A10000000000000000000020 /* ConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* ConnectionsView.swift */; };
+		A10000000000000000000021 /* ConnEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* ConnEditView.swift */; };
 		A10000000000000000000007 /* PacketTunnel.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* PacketTunnel.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A10000000000000000000008 /* Mobile.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* Mobile.xcframework */; };
 		A10000000000000000000009 /* Mobile.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* Mobile.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -81,6 +84,9 @@
 		B10000000000000000000019 /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
 		B10000000000000000000023 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B10000000000000000000024 /* LoftPrefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoftPrefs.swift; sourceTree = "<group>"; };
+		B10000000000000000000025 /* ConnStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnStore.swift; sourceTree = "<group>"; };
+		B10000000000000000000026 /* ConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionsView.swift; sourceTree = "<group>"; };
+		B10000000000000000000027 /* ConnEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnEditView.swift; sourceTree = "<group>"; };
 		B10000000000000000000020 /* LoftBind.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LoftBind.h; sourceTree = "<group>"; };
 		B10000000000000000000021 /* LoftBind.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LoftBind.m; sourceTree = "<group>"; };
 		B10000000000000000000022 /* PacketTunnel-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PacketTunnel-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -130,6 +136,9 @@
 				B10000000000000000000019 /* L10n.swift */,
 				B10000000000000000000023 /* SettingsView.swift */,
 				B10000000000000000000024 /* LoftPrefs.swift */,
+				B10000000000000000000025 /* ConnStore.swift */,
+				B10000000000000000000026 /* ConnectionsView.swift */,
+				B10000000000000000000027 /* ConnEditView.swift */,
 				B10000000000000000000002 /* ContentView.swift */,
 				B10000000000000000000003 /* TunnelControl.swift */,
 				B10000000000000000000010 /* Info.plist */,
@@ -250,6 +259,9 @@
 				A10000000000000000000015 /* L10n.swift in Sources */,
 				A10000000000000000000017 /* SettingsView.swift in Sources */,
 				A10000000000000000000018 /* LoftPrefs.swift in Sources */,
+				A10000000000000000000019 /* ConnStore.swift in Sources */,
+				A10000000000000000000020 /* ConnectionsView.swift in Sources */,
+				A10000000000000000000021 /* ConnEditView.swift in Sources */,
 				A10000000000000000000002 /* ContentView.swift in Sources */,
 				A10000000000000000000003 /* TunnelControl.swift in Sources */,
 				A10000000000000000000004 /* Group.swift in Sources */,

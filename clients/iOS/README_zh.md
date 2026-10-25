@@ -52,8 +52,9 @@ Packet Tunnel 权限需要 Apple Developer Program。应用和 appex 之间的�
 在仓库根目录（Xcode，模拟器 SDK）：
 
 ```bash
-make ios                 # dist/clients/iOS/loft.app
-make -C clients/iOS run  # 装到 loft-ios 并启动
+make ios                 # dist/clients/iOS/loft.app + iphonesimulator/loft.app
+make -C clients/iOS run  # 打开 macOS 启动器
+make -C clients/iOS sim  # 创建一次 Simulator loft-ios
 ```
 
-中间文件在 `dist/clients/iOS/`，不进 `clients/iOS/`。模拟器 Unsigned Debug。真机 IPA / TestFlight 以后再说。
+写出 macOS `loft.app`（双击：启动 `loft-ios`、安装、打开）以及未签名的 Simulator `iphonesimulator/loft.app`。中间文件在 `dist/clients/iOS/`，不进 `clients/iOS/`。真机 IPA / TestFlight 以后再说。日志：`~/Library/Logs/loft-ios-simulator.log`。

@@ -52,8 +52,9 @@ Apple Developer Program для entitlement Packet Tunnel. App group `group.app.l
 Из корня репозитория (Xcode, SDK симулятора):
 
 ```bash
-make ios                 # dist/clients/iOS/loft.app
-make -C clients/iOS run  # поставить и запустить на loft-ios
+make ios                 # dist/clients/iOS/loft.app + iphonesimulator/loft.app
+make -C clients/iOS run  # открыть macOS-обёртку
+make -C clients/iOS sim  # один раз создать Simulator loft-ios
 ```
 
-Промежуточное — в `dist/clients/iOS/`, не в `clients/iOS/`. Unsigned Debug для симулятора. IPA на устройство / TestFlight — позже.
+Пишет macOS `loft.app` (двойной клик: boot `loft-ios`, install, launch) рядом с unsigned Simulator `iphonesimulator/loft.app`. Промежуточное — в `dist/clients/iOS/`, не в `clients/iOS/`. IPA на устройство / TestFlight — позже. Лог: `~/Library/Logs/loft-ios-simulator.log`.
