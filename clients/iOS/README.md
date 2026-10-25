@@ -6,7 +6,7 @@ iOS client: one **Packet Tunnel** that the system treats as a Personal VPN. The 
 
 Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/ios.md](../../docs/ios.md). Import URI: [docs/share.md](../../docs/share.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
 
-Thin host + Packet Tunnel are in this tree. Bind the Go engine first: `make -C ../mobile ios`.
+Home and Settings SwiftUI (`HomeView`, `SettingsView`, Xcode Canvas `#Preview`) + Packet Tunnel are in this tree. Bind the Go engine first: `make -C ../mobile ios`. YAML host remains in `ContentView`.
 
 ## Scope
 
@@ -29,7 +29,7 @@ clients/iOS/
   README.md          this file
   PLAN.md            build phases (Apple TV = phase 6)
   design/            UX spec and HTML mock
-  App/               thin SwiftUI host (Connect / Disconnect, YAML)
+  App/               SwiftUI host: HomeView + SettingsView (Canvas Previews) + YAML ContentView
   PacketTunnel/      Network Extension → clients/mobile
   Loft.xcodeproj
   ../mobile/         shared Go engine (iOS + Android)

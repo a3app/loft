@@ -4,7 +4,7 @@
 
 Phone app plus a Packet Tunnel. Mark, palette, and Avenir Next: [`brand/`](../../../docs/brand/). Interactive mock: [`index.html`](index.html); every state has its own link, e.g. `index.html#edit-sstp`, `#settings-route`, `#home-off` (the address changes as you click). Protocol: [docs/protocol.md](../../../docs/protocol.md). Import URI: [docs/share.md](../../../docs/share.md).
 
-The SwiftUI container will live in [`../App/`](../App/) later. A live session is Go inside the Network Extension, not `loft-front`.
+The SwiftUI container lives in [`../App/`](../App/). Home is `HomeView` with Xcode Canvas `#Preview` (`Home · off` / `on` / `simple`; also connecting, ru, zh). Settings is `SettingsView` (`Settings` / `Settings · ru` / `About`): General / Route / Connection, language chips apply at once via `LoftPrefs`. A live session is Go inside the Network Extension, not `loft-front`. The YAML host `ContentView` stays until profiles.
 
 This mock follows the **shipping macOS GUI** (`clients/macOS`, `L10n.swift`, status / list / edit / settings / onboard / journal / about) on a phone. Copy, fields, and IA match that client. iOS keeps one Packet Tunnel, camera scan, swipe/long-press on the list, and the system VPN row. It does not grow SOCKS inbound, Dock, login item, or several simultaneous tunnels.
 

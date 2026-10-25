@@ -6,7 +6,7 @@ iOS 客户端：一条 **Packet Tunnel**，系统当成 Personal VPN。容器应
 
 协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/ios_zh.md](../../docs/ios_zh.md)。导入 URI：[docs/share_zh.md](../../docs/share_zh.md)。计划：[PLAN.md](PLAN.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
 
-薄宿主和 Packet Tunnel 在这个目录。先 bind Go 引擎：`make -C ../mobile ios`。
+Home 和 Settings 的 SwiftUI（`HomeView`、`SettingsView`，Xcode Canvas `#Preview`）和 Packet Tunnel 在这个目录。先 bind Go 引擎：`make -C ../mobile ios`。YAML 宿主仍在 `ContentView`。
 
 ## 范围
 
@@ -29,7 +29,7 @@ clients/iOS/
   README.md          本文件
   PLAN.md            构建阶段（Apple TV = 第 6 阶段）
   design/            UX 说明和 HTML 模型
-  App/               薄 SwiftUI 宿主（打开 / 断开，YAML）
+  App/               SwiftUI 宿主：HomeView + SettingsView（Canvas Preview）+ YAML ContentView
   PacketTunnel/      Network Extension → clients/mobile
   Loft.xcodeproj
   ../mobile/         共用 Go 引擎（iOS + Android）

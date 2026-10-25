@@ -6,7 +6,7 @@
 
 Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/ios.md](../../docs/ios.md). URI импорта: [docs/share_ru.md](../../docs/share_ru.md). План: [PLAN.md](PLAN.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
 
-Тонкий хост и Packet Tunnel в этом дереве. Сначала bind движка: `make -C ../mobile ios`.
+Home и Settings на SwiftUI (`HomeView`, `SettingsView`, Xcode Canvas `#Preview`) и Packet Tunnel в этом дереве. Сначала bind движка: `make -C ../mobile ios`. YAML-хост остаётся в `ContentView`.
 
 ## Рамки
 
@@ -29,7 +29,7 @@ clients/iOS/
   README.md          этот файл
   PLAN.md            фазы сборки (Apple TV = фаза 6)
   design/            спецификация UX и HTML-макет
-  App/               тонкий хост SwiftUI (Connect / Disconnect, YAML)
+  App/               хост SwiftUI: HomeView + SettingsView (Canvas Preview) + YAML ContentView
   PacketTunnel/      Network Extension → clients/mobile
   Loft.xcodeproj
   ../mobile/         общий движок Go (iOS + Android)

@@ -4,7 +4,7 @@
 
 手机应用加一条 Packet Tunnel。标志、色板、Avenir Next：[`brand/`](../../../docs/brand/)。交互模型：[`index.html`](index.html)；每个状态都有自己的链接，比如 `index.html#edit-sstp`、`#settings-route`、`#home-off`（点到哪儿地址就跟到哪儿）。协议：[docs/protocol_zh.md](../../../docs/protocol_zh.md)。导入 URI：[docs/share_zh.md](../../../docs/share_zh.md)。
 
-SwiftUI 容器以后住在 [`../App/`](../App/)。活会话是 Network Extension 里的 Go，不是 `loft-front`。
+SwiftUI 容器在 [`../App/`](../App/)。Home 是 `HomeView`，用 Xcode Canvas `#Preview`（`Home · off` / `on` / `simple`；还有 connecting、ru、zh）。设置是 `SettingsView`（`Settings` / `Settings · ru` / `About`）：通用 / 路由 / 连接，语言芯片立刻通过 `LoftPrefs` 生效。活会话是 Network Extension 里的 Go，不是 `loft-front`。YAML 宿主 `ContentView` 留到有档案再换。
 
 这个模型跟着 **正在出货的 macOS GUI**（`clients/macOS`、`L10n.swift`，状态 / 列表 / 编辑 / 设置 / 引导 / 日志 / 关于）落到手机上。文案、字段和信息架构跟那个客户端对齐。iOS 留一条 Packet Tunnel、相机扫描、列表滑动/长按、系统 VPN 那一行。不长 SOCKS 入站、Dock、登录项、也不开几条并行隧道。
 

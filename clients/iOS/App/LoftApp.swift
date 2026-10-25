@@ -4,7 +4,7 @@ import SwiftUI
 struct LoftApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            LoftShell()
         }
     }
 }

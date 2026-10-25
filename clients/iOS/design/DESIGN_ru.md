@@ -4,7 +4,7 @@
 
 Приложение и Packet Tunnel. Марка, палитра и Avenir Next: [`brand/`](../../../docs/brand/). Интерактивный макет: [`index.html`](index.html); у каждого состояния своя ссылка, например `index.html#edit-sstp`, `#settings-route`, `#home-off` (адрес меняется по мере кликов). Протокол: [docs/protocol_ru.md](../../../docs/protocol_ru.md). URI импорта: [docs/share_ru.md](../../../docs/share_ru.md).
 
-Контейнер SwiftUI позже в [`../App/`](../App/). Живая сессия — Go внутри Network Extension, не `loft-front`.
+Контейнер SwiftUI в [`../App/`](../App/). Home — `HomeView` с Canvas `#Preview` (`Home · off` / `on` / `simple`; плюс connecting, ru, zh). Настройки — `SettingsView` (`Settings` / `Settings · ru` / `About`): Общие / Маршрут / Подключение, язык сразу через `LoftPrefs`. Живая сессия — Go внутри Network Extension, не `loft-front`. YAML-хост `ContentView` остаётся до профилей.
 
 Макет следует **живому GUI macOS** (`clients/macOS`, `L10n.swift`, статус / список / правка / настройки / онбординг / журнал / о программе) на телефоне. Тексты, поля и IA — как у того клиента. iOS держит один Packet Tunnel, сканер камеры, свайп и долгое нажатие в списке, системную строку VPN. Не появляется SOCKS-вход, Dock, login item и несколько туннелей сразу.
 

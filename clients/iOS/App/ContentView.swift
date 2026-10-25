@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Thin host: paste YAML or a share URI, Connect / Disconnect. No profile list.
+/// Live YAML host (Packet Tunnel). LoftApp shows `LoftShell` / Home; this stays for the session until profiles.
 struct ContentView: View {
     @StateObject private var tunnel = TunnelControl()
     @State private var draft = Group.yaml

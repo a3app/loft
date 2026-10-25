@@ -13,6 +13,15 @@
 		A10000000000000000000004 /* Group.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* Group.swift */; };
 		A10000000000000000000005 /* Group.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* Group.swift */; };
 		A10000000000000000000006 /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* PacketTunnelProvider.swift */; };
+		A10000000000000000000016 /* LoftBind.m in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* LoftBind.m */; };
+		A10000000000000000000010 /* LoftTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* LoftTheme.swift */; };
+		A10000000000000000000011 /* LoftMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* LoftMark.swift */; };
+		A10000000000000000000012 /* HomeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000016 /* HomeModel.swift */; };
+		A10000000000000000000013 /* SparkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* SparkView.swift */; };
+		A10000000000000000000014 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* HomeView.swift */; };
+		A10000000000000000000015 /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* L10n.swift */; };
+		A10000000000000000000017 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000023 /* SettingsView.swift */; };
+		A10000000000000000000018 /* LoftPrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024 /* LoftPrefs.swift */; };
 		A10000000000000000000007 /* PacketTunnel.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* PacketTunnel.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A10000000000000000000008 /* Mobile.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* Mobile.xcframework */; };
 		A10000000000000000000009 /* Mobile.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* Mobile.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -64,6 +73,17 @@
 		B10000000000000000000011 /* Loft.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Loft.entitlements; sourceTree = "<group>"; };
 		B10000000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10000000000000000000013 /* PacketTunnel.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PacketTunnel.entitlements; sourceTree = "<group>"; };
+		B10000000000000000000014 /* LoftTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoftTheme.swift; sourceTree = "<group>"; };
+		B10000000000000000000015 /* LoftMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoftMark.swift; sourceTree = "<group>"; };
+		B10000000000000000000016 /* HomeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeModel.swift; sourceTree = "<group>"; };
+		B10000000000000000000017 /* SparkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkView.swift; sourceTree = "<group>"; };
+		B10000000000000000000018 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		B10000000000000000000019 /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
+		B10000000000000000000023 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B10000000000000000000024 /* LoftPrefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoftPrefs.swift; sourceTree = "<group>"; };
+		B10000000000000000000020 /* LoftBind.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LoftBind.h; sourceTree = "<group>"; };
+		B10000000000000000000021 /* LoftBind.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LoftBind.m; sourceTree = "<group>"; };
+		B10000000000000000000022 /* PacketTunnel-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PacketTunnel-Bridging-Header.h"; sourceTree = "<group>"; };
 		C10000000000000000000001 /* loft.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = loft.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000002 /* PacketTunnel.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PacketTunnel.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -102,6 +122,14 @@
 			isa = PBXGroup;
 			children = (
 				B10000000000000000000001 /* LoftApp.swift */,
+				B10000000000000000000018 /* HomeView.swift */,
+				B10000000000000000000016 /* HomeModel.swift */,
+				B10000000000000000000017 /* SparkView.swift */,
+				B10000000000000000000015 /* LoftMark.swift */,
+				B10000000000000000000014 /* LoftTheme.swift */,
+				B10000000000000000000019 /* L10n.swift */,
+				B10000000000000000000023 /* SettingsView.swift */,
+				B10000000000000000000024 /* LoftPrefs.swift */,
 				B10000000000000000000002 /* ContentView.swift */,
 				B10000000000000000000003 /* TunnelControl.swift */,
 				B10000000000000000000010 /* Info.plist */,
@@ -114,6 +142,9 @@
 			isa = PBXGroup;
 			children = (
 				B10000000000000000000006 /* PacketTunnelProvider.swift */,
+				B10000000000000000000020 /* LoftBind.h */,
+				B10000000000000000000021 /* LoftBind.m */,
+				B10000000000000000000022 /* PacketTunnel-Bridging-Header.h */,
 				B10000000000000000000012 /* Info.plist */,
 				B10000000000000000000013 /* PacketTunnel.entitlements */,
 			);
@@ -211,6 +242,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000001 /* LoftApp.swift in Sources */,
+				A10000000000000000000014 /* HomeView.swift in Sources */,
+				A10000000000000000000012 /* HomeModel.swift in Sources */,
+				A10000000000000000000013 /* SparkView.swift in Sources */,
+				A10000000000000000000011 /* LoftMark.swift in Sources */,
+				A10000000000000000000010 /* LoftTheme.swift in Sources */,
+				A10000000000000000000015 /* L10n.swift in Sources */,
+				A10000000000000000000017 /* SettingsView.swift in Sources */,
+				A10000000000000000000018 /* LoftPrefs.swift in Sources */,
 				A10000000000000000000002 /* ContentView.swift in Sources */,
 				A10000000000000000000003 /* TunnelControl.swift in Sources */,
 				A10000000000000000000004 /* Group.swift in Sources */,
@@ -222,6 +261,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000006 /* PacketTunnelProvider.swift in Sources */,
+				A10000000000000000000016 /* LoftBind.m in Sources */,
 				A10000000000000000000005 /* Group.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -315,6 +355,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "app.loft.ios.packet-tunnel";
 				PRODUCT_NAME = PacketTunnel;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "PacketTunnel/PacketTunnel-Bridging-Header.h";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -334,6 +375,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "app.loft.ios.packet-tunnel";
 				PRODUCT_NAME = PacketTunnel;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "PacketTunnel/PacketTunnel-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;

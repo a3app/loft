@@ -5,7 +5,8 @@ import Mobile
 
 /// Thin Packet Tunnel: pumps IP, installs routes/DNS from Snapshot.
 /// Session is Go (clients/mobile). Call Start off the provider queue.
-final class PacketTunnelProvider: NEPacketTunnelProvider, MobilePacketSink {
+/// `LoftPacketSink` is the gomobile protocol; Swift cannot inherit the stub class.
+final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
     private var engine: MobileEngine?
     private let goQueue = DispatchQueue(label: "app.loft.ios.engine")
     private var pathMon: NWPathMonitor?
@@ -16,16 +17,19 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, MobilePacketSink {
             completionHandler(Self.err("empty session"))
             return
         }
-        let eng = MobileNewEngine()
+        guard let eng = MobileNewEngine() else {
+            completionHandler(Self.err("no engine"))
+            return
+        }
         engine = eng
-        eng.setSink(self)
+        LoftEngineSetSink(eng, self)
         goQueue.async {
             var yaml = body
             if !yaml.contains("\n"), yaml.lowercased().contains("://") {
-                do {
-                    yaml = try MobileParseShare(yaml)
-                } catch {
-                    completionHandler(error)
+                var parseErr: NSError?
+                yaml = MobileParseShare(yaml, &parseErr)
+                if let parseErr {
+                    completionHandler(parseErr)
                     return
                 }
             }
@@ -86,28 +90,28 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, MobilePacketSink {
         pathMon = mon
     }
 
-    private func apply(_ snap: MobileSnapshot, completion: @escaping (Error?) -> Void) {
-        let ip = snap.ip().trimmingCharacters(in: .whitespaces)
+    private func apply(_ snap: MobileSnapshot, completion: @escaping @Sendable (Error?) -> Void) {
+        let ip = snap.ip.trimmingCharacters(in: .whitespaces)
         if ip.isEmpty {
             completion(Self.err("no overlay ip"))
             return
         }
-        let gw = snap.gateway().isEmpty ? ip : snap.gateway()
+        let gw = snap.gateway.isEmpty ? ip : snap.gateway
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: gw)
         let v4 = NEIPv4Settings(addresses: [ip], subnetMasks: ["255.255.255.0"])
         v4.includedRoutes = [NEIPv4Route.default()]
         var excluded: [NEIPv4Route] = []
-        for part in snap.frontIPs().split(separator: ",") {
+        for part in snap.frontIPs.split(separator: ",") {
             let s = part.trimmingCharacters(in: .whitespaces)
             guard !s.isEmpty, s.contains(".") else { continue }
             excluded.append(NEIPv4Route(destinationAddress: s, subnetMask: "255.255.255.255"))
         }
         v4.excludedRoutes = excluded
         settings.ipv4Settings = v4
-        if snap.mtu() > 0 {
-            settings.mtu = NSNumber(value: snap.mtu())
+        if snap.mtu > 0 {
+            settings.mtu = NSNumber(value: snap.mtu)
         }
-        let dns = snap.dns().split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let dns = snap.dns.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if !dns.isEmpty {
             settings.dnsSettings = NEDNSSettings(servers: dns)
         }
