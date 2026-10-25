@@ -43,13 +43,13 @@ A screen or a checkbox that needs a package not installed is **hidden**, not dis
 
 ## 4. Segments: a network is a managed switch
 
-Each loft network looks like a switch. A member is a port. A segment is a bridge (a VLAN, or the untagged default). A port is in one segment (access); the node has no trunk. `#segments/<id>` is the segment (0 = untagged default); tabs across the top switch segments, plus adds one. The model is `netconf.Network`; nothing is stored outside `network.conf`. On policy application a segment can take an internet policy (`rule vlan N`).
+Each loft network looks like a switch. A member is a port. A segment is a bridge (Keenetic-style): its own CIDR, gateway, DHCP pool, DNS and `peers`. Empty VLAN CIDR is L2-only inside the default overlay. A port is in one segment (access). The faceplate dropdown is in / out / tagged; tagged is shown, the node has no trunk. `#segments/<id>` is the segment (0 = untagged default); tabs across the top switch segments, plus adds one. Segment CIDRs must not overlap. The model is `netconf.Network`; nothing is stored outside `network.conf`. On policy application a segment can take an internet policy (`rule vlan N`).
 
 | Tab | What |
 |-----|------|
-| Segments | Named tabs of segments and a plus. The open tab: name, how each port joins. Add a segment |
+| Segments | Named tabs of segments and a plus. The open tab: port faceplate (in / out / tagged), then IP settings. Add a segment |
 | Access rules | Effective access grid VLAN × VLAN after the ACL and `peers`; partial allows (proto/port/host) are noted in the cell. Ordered ACL list, ↑↓, rule dialog with a live config line |
-| Network settings | CIDR, gateway, pool, `peers` hub/mesh/vlan, p2p, DNS, MTU (default 1280), session timers, routes |
+| Network settings | Overlay id, MTU (default 1280), p2p, node DNS upstream, session timers, routes |
 | Config | `network.conf` in node syntax. Two-way: text edits update the switch, switch edits rewrite the text. Error shows the line number with the node's own message |
 
 The panel parser and renderer mirror `ParseCommands`, `RenderCommands` and `ParseACLLine` in `internal/netconf`. Output must round-trip through the Go code unchanged.

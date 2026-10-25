@@ -483,6 +483,8 @@
   afterNet('delMember', 'Член удалён');
   afterNet('saveNet');
   afterNet('saveVlan');
+  afterNet('addSeg');
+  afterNet('saveSeg');
   afterNet('delVlan');
   afterNet('saveRule');
   afterNet('mvRule');

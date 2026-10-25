@@ -346,6 +346,29 @@ tr.off td{color:var(--mute)}
 .legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--menu-line);font-size:12px;color:var(--menu-text)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.sg-wrap{overflow-x:auto;margin:0 -4px;padding:0 4px}
+.sg{display:grid;align-items:start;column-gap:8px;row-gap:10px;min-width:max-content}
+.sg-lab{min-width:128px;max-width:168px;padding:6px 8px 0 0;display:flex;flex-direction:column;justify-content:center;gap:2px;color:var(--snow)}
+.sg-lab b{font-size:14px;font-weight:600;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sg-lab .sub{font-size:12px;line-height:16px;color:var(--menu-mute)}
+.sg-wan{display:flex;flex-direction:column;align-items:center;align-self:stretch;padding:0 8px 8px;border:1px dashed var(--menu-line-strong);border-radius:6px;min-width:72px}
+.sg-globe{margin-top:auto;margin-bottom:auto;padding-top:12px;color:var(--menu-mute);opacity:.55}
+.sg .port{width:56px;padding-top:6px}
+.sg .port.gw{margin-right:0}
+.pj{width:36px;height:32px;margin:0 auto;display:inline-flex;align-items:center;justify-content:center;gap:3px;border:1px solid var(--menu-line-strong);border-radius:4px;background:transparent;color:var(--snow);cursor:pointer;font:inherit;padding:0}
+.pj:hover{border-color:var(--menu-mute)}
+.pj.on{border-color:var(--lamp);box-shadow:0 0 0 1px var(--lamp)}
+.pj .pj-ico{font-size:14px;font-weight:700;line-height:1;width:12px;text-align:center}
+.pj .chev{width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;border-top:4px solid currentColor;opacity:.55;margin-top:1px}
+.pj.on .chev{transform:rotate(180deg);margin-top:0;margin-bottom:1px}
+.pj-menu{position:fixed;z-index:80;min-width:248px;padding:6px 0;background:var(--menu);border:1px solid #3A332C;border-radius:6px;box-shadow:0 12px 28px rgba(0,0,0,.35)}
+.pj-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;border:0;background:none;color:var(--snow);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.pj-menu button:hover{background:var(--menu-hover)}
+.pj-menu button[aria-checked="true"]{background:var(--menu-on)}
+.pj-menu .pj-ico{width:16px;flex:0 0 16px;text-align:center;font-weight:700}
+.sg-more{margin-top:16px}
+.sg-vid{display:flex;align-items:center;gap:16px;margin-top:20px;max-width:420px}
+.sg-vid .fld{flex:0 0 180px;margin:0}
 .selbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:4px}
 .sq{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:0}
 .t .c{text-align:center;padding-left:6px;padding-right:6px}
@@ -380,7 +403,7 @@ pre.diff .dk{color:var(--mute)}
 pre.diff .da{background:var(--diff-a)}
 pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decoration-color:rgba(138,31,23,.4)}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:200;background:var(--ink);color:var(--snow);padding:10px 16px;border-radius:4px;box-shadow:0 6px 20px rgba(26,23,20,.35);max-width:calc(100% - 32px)}
-@media (max-width:599px){.face{padding:14px 12px}.port{width:56px}.port .jack{width:40px}.port.gw{margin-right:0}.face-st{display:none}.cfg{height:60vh}.selbar .fld{flex:1 1 100%}}
+@media (max-width:599px){.face{padding:14px 12px}.port{width:56px}.port .jack{width:40px}.port.gw{margin-right:0}.face-st{display:none}.sg-lab{min-width:100px}.cfg{height:60vh}.selbar .fld{flex:1 1 100%}}
 
 
 /* ── планшет ── */
@@ -1214,13 +1237,18 @@ function openRole(name){
    (internal/netconf/cli.go ParseCommands / RenderCommands, acl.go). */
 const hex=n=>Array.from({length:n},()=>'0123456789abcdef'[Math.random()*16|0]).join('');
 const mem=(id,name,ip,vlan,o={})=>({id,name,ip,vlan,key_sha256:o.k||hex(64),pubkey:'',tags:o.tags||[],authorized:o.off?false:true,multi:!!o.multi,multi_limit:o.multi||0});
+const vlanObj=(id,name)=>({id,name:name||'',cidr:'',gateway:'',pool_from:'',pool_to:'',dns:{enabled:null,servers:[],upstream:[]},peers:''});
 const NETS=[
- {id:'main',name:'Основная',enabled:true,cidr:'10.77.0.0/16',gateway:'10.77.0.1',pool_from:'',pool_to:'',mtu:1280,peers:'vlan',p2p:null,
-  dns:{enabled:true,servers:[],upstream:['https://1.1.1.1/dns-query']},listen:[],routes:[{dst:'192.168.10.0/24',via:'10.77.20.2',note:'офисная сеть за роутером'}],
-  vlans:[{id:10,name:'family',cidr:'10.77.10.0/24',peers:''},{id:20,name:'office',cidr:'10.77.20.0/24',peers:''},{id:30,name:'guest',cidr:'10.77.30.0/24',peers:'hub'}],
-  members:[mem('alice-phone','Alice','10.77.10.14',10,{multi:2}),mem('alice-laptop','Alice','10.77.10.15',10),mem('office-kn','Office router','10.77.20.2',20,{tags:['office']}),
-   mem('bob','Bob','10.77.20.21',20,{multi:3,tags:['office']}),mem('guest-01','Guest','10.77.30.40',30),mem('nas','NAS','10.77.10.5',10),mem('printer','Printer','10.77.20.9',20,{off:1})],
-  rules:[{action:'accept',proto:'tcp',src:'',dst:'',dport:[445,3389],src_vlan:20,dst_vlan:10},{action:'accept',proto:'',src:'',dst:'10.77.20.2',dport:[],src_vlan:10,dst_vlan:null},{action:'drop',proto:'',src:'',dst:'',dport:[],src_vlan:30,dst_vlan:null}],session:{}},
+ {id:'main',name:'Основная',enabled:true,cidr:'10.77.0.0/24',gateway:'10.77.0.1',pool_from:'10.77.0.10',pool_to:'10.77.0.200',mtu:1280,peers:'vlan',p2p:null,
+  dns:{enabled:true,servers:[],upstream:['https://1.1.1.1/dns-query']},listen:[],routes:[{dst:'192.168.10.0/24',via:'10.20.0.2',note:'офисная сеть за роутером'}],
+  vlans:[
+   Object.assign(vlanObj(10,'family'),{cidr:'10.10.0.0/24',gateway:'10.10.0.1',pool_from:'10.10.0.10',pool_to:'10.10.0.200'}),
+   Object.assign(vlanObj(20,'office'),{cidr:'10.20.0.0/24',gateway:'10.20.0.1',pool_from:'10.20.0.10',pool_to:'10.20.0.200'}),
+   Object.assign(vlanObj(30,'guest'),{cidr:'10.30.0.0/24',gateway:'10.30.0.1',pool_from:'10.30.0.10',pool_to:'10.30.0.200',peers:'hub'})
+  ],
+  members:[mem('alice-phone','Alice','10.10.0.14',10,{multi:2}),mem('alice-laptop','Alice','10.10.0.15',10),mem('office-kn','Office router','10.20.0.2',20,{tags:['office']}),
+   mem('bob','Bob','10.20.0.21',20,{multi:3,tags:['office']}),mem('guest-01','Guest','10.30.0.40',30),mem('nas','NAS','10.10.0.5',10),mem('printer','Printer','10.20.0.9',20,{off:1})],
+  rules:[{action:'accept',proto:'tcp',src:'',dst:'',dport:[445,3389],src_vlan:20,dst_vlan:10},{action:'accept',proto:'',src:'',dst:'10.20.0.2',dport:[],src_vlan:10,dst_vlan:null},{action:'drop',proto:'',src:'',dst:'',dport:[],src_vlan:30,dst_vlan:null}],session:{}},
  {id:'lab',name:'Лаборатория',enabled:false,cidr:'10.88.0.0/24',gateway:'10.88.0.1',pool_from:'10.88.0.10',pool_to:'10.88.0.200',mtu:1280,peers:'mesh',p2p:false,
   dns:{enabled:null,servers:[],upstream:[]},listen:[],routes:[],vlans:[],members:[mem('test-old','Test','10.88.0.41',0)],rules:[],session:{gap_hold_ms:3000}}
 ];
@@ -1247,7 +1275,8 @@ function renderConf(n){
  p('  mtu '+(n.mtu>0?n.mtu:1280));p('  peers '+(n.peers||'hub'));if(n.p2p!=null)p('  p2p '+(n.p2p?'enable':'disable'));
  if(n.dns.enabled!=null)p('  dns '+(n.dns.enabled?'enable':'disable'));n.dns.servers.forEach(x=>p('  dns '+x));n.dns.upstream.forEach(x=>p('  dns upstream '+x));
  n.listen.forEach(l=>p(`  listen ${l.ip||'0.0.0.0'} ${l.port}`+(l.front?' front '+l.front:'')+(l.domain?' domain '+l.domain:'')+(l.sni?' sni '+l.sni:'')));
- n.vlans.forEach(v=>{p(`create vlan ${v.id}`+(v.name?' name '+v.name:''));if(v.cidr)p(`config vlan ${v.id} cidr ${v.cidr}`);if(v.peers)p(`config vlan ${v.id} peers ${v.peers}`)});
+ n.vlans.forEach(v=>{p(`create vlan ${v.id}`+(v.name?' name '+v.name:''));if(v.cidr)p(`config vlan ${v.id} cidr ${v.cidr}`);if(v.gateway)p(`config vlan ${v.id} gateway ${v.gateway}`);if(v.pool_from&&v.pool_to)p(`config vlan ${v.id} pool ${v.pool_from} ${v.pool_to}`);
+  if(v.dns&&v.dns.enabled!=null)p(`config vlan ${v.id} dns ${v.dns.enabled?'enable':'disable'}`);(v.dns&&v.dns.servers||[]).forEach(x=>p(`config vlan ${v.id} dns ${x}`));(v.dns&&v.dns.upstream||[]).forEach(x=>p(`config vlan ${v.id} dns upstream ${x}`));if(v.peers)p(`config vlan ${v.id} peers ${v.peers}`)});
  n.members.forEach(m=>{const c=`config member ${m.id} `;p('create member '+m.id);if(m.name&&m.name!==m.id)p(c+'name '+m.name);if(m.ip)p(c+'ipaddress '+m.ip);
   if(m.vlan)p(c+'vlan '+m.vlan);if(m.key_sha256)p(c+'key_sha256 '+m.key_sha256);if(m.pubkey)p(c+'pubkey '+m.pubkey);
   if(m.multi)p(c+'multi enable'+(m.multi_limit>0?' '+m.multi_limit:''));if(m.tags.length)p(c+'tags '+m.tags.join(' '));p((m.authorized?'enable':'disable')+' member '+m.id)});
@@ -1305,11 +1334,15 @@ function parseConf(body){
    else if(c==='enable'||c==='disable'){if(t.length===1){n.enabled=c==='enable';return}if(t.length<3||W(t[1])!=='member')throw'want enable|disable member ID';ens(t[2]).authorized=c==='enable'}
    else if(c==='ipif'){if(t.length<3||W(t[1])!=='overlay')throw'want ipif overlay CIDR';n.cidr=t[2];ctx='ipif'}
    else if(c==='create'){if(t.length<3)throw'create wants a kind and an id';const k=W(t[1]);
-    if(k==='vlan'){const id=+t[2];if(!(id>0))throw'bad vlan id';n.vlans.push({id,name:W(t[3])==='name'&&t.length>=5?t.slice(4).join(' '):'',cidr:'',peers:''})}
+    if(k==='vlan'){const id=+t[2];if(!(id>0))throw'bad vlan id';n.vlans.push(Object.assign(vlanObj(id),{name:W(t[3])==='name'&&t.length>=5?t.slice(4).join(' '):''}))}
     else if(k==='member')ens(t[2]);else throw`create ${t[1]}: unknown`}
    else if(c==='config'){if(t.length<4)throw'config wants an object';const k=W(t[1]),key=W(t[3]),val=t[4];
-    if(k==='vlan'){const id=+t[2];if(isNaN(id))throw'bad vlan id';let v=vl(id);if(!v){v={id,name:'',cidr:'',peers:''};n.vlans.push(v)}
-     if(key==='name')v.name=t.slice(4).join(' ');else if(key==='cidr'){if(!val)throw'vlan cidr wants a network';v.cidr=val}else if(key==='peers'){if(!val)throw'vlan peers wants hub|mesh';v.peers=W(val)}else throw`config vlan: unknown "${t[3]}"`}
+    if(k==='vlan'){const id=+t[2];if(isNaN(id))throw'bad vlan id';let v=vl(id);if(!v){v=vlanObj(id);n.vlans.push(v)}if(!v.dns)v.dns={enabled:null,servers:[],upstream:[]};
+     if(key==='name')v.name=t.slice(4).join(' ');else if(key==='cidr'){if(!val)throw'vlan cidr wants a network';v.cidr=val}
+     else if(key==='gateway'){if(!val)throw'vlan gateway wants an IP';v.gateway=val}
+     else if(key==='pool'){if(t.length<6)throw'vlan pool wants FROM TO';v.pool_from=t[4];v.pool_to=t[5]}
+     else if(key==='dns'){if(!val)throw'vlan dns wants a value';const on=onoff(val);if(on!==null)v.dns.enabled=on;else if(W(val)==='upstream'){if(!t[5])throw'dns upstream wants a URL';v.dns.upstream.push(t[5])}else v.dns.servers.push(val)}
+     else if(key==='peers'){if(!val)throw'vlan peers wants hub|mesh';v.peers=W(val)}else throw`config vlan: unknown "${t[3]}"`}
     else if(k==='member'){const m=ens(t[2]);
      if(key==='name')m.name=t.slice(4).join(' ');else if(key==='ipaddress'||key==='ip'){if(!val)throw'member ipaddress wants an IP';m.ip=val}
      else if(key==='vlan'){if(!val)throw'member vlan wants an id';m.vlan=parseInt(val)||0}else if(key==='key_sha256'){if(!val)throw'member key_sha256 wants a hash';m.key_sha256=val}
@@ -1361,34 +1394,46 @@ function toast(t){let e=$('#toast');if(!e){e=document.createElement('div');e.id=
 const ip2n=s=>s.split('.').reduce((a,x)=>a*256+ +x,0),n2ip=n=>[n>>>24&255,n>>>16&255,n>>>8&255,n&255].join('.');
 function cidrRange(c){if(!c||!isCIDR(c)||c.includes(':'))return null;const [a,b]=c.split('/'),bits=+b,size=2**(32-bits),lo=Math.floor(ip2n(a)/size)*size;return[lo,lo+size-1]}
 function cidrHosts(c){const R=cidrRange(c);return R?n2ip(R[0])+'–'+n2ip(R[1]):''}
+function firstHost(c){const R=cidrRange(c);return R?n2ip(R[0]+1):''}
 function suggestVlanCIDR(n,vid){
- const P=cidrRange(n.cidr);if(!P)return'';
- const bits=+n.cidr.split('/')[1];if(!(bits>=0)||bits>=24)return'';
- const size=256;if(P[1]-P[0]+1<size)return'';
- const taken=n.vlans.map(v=>cidrRange(v.cidr)).filter(Boolean);
+ const taken=[cidrRange(n.cidr)].concat((n.vlans||[]).map(v=>cidrRange(v.cidr))).filter(Boolean);
  const busy=(lo,hi)=>taken.some(([a,b])=>lo<=b&&hi>=a);
- const cand=n.cidr.split('.')[0]+'.'+n.cidr.split('.')[1]+'.'+vid+'.0/24',R=cidrRange(cand);
- if(R&&R[0]>=P[0]&&R[1]<=P[1]&&!busy(R[0],R[1]))return cand;
- for(let lo=Math.ceil(P[0]/size)*size;lo+size-1<=P[1];lo+=size){if(!busy(lo,lo+size-1))return n2ip(lo)+'/24'}
+ const tryC=c=>{const R=cidrRange(c);return R&&!busy(R[0],R[1])?c:''};
+ const hit=tryC('10.'+vid+'.0.0/24')||tryC('192.168.'+(vid%256)+'.0/24')||tryC('172.16.'+(vid%256)+'.0/24');
+ if(hit)return hit;
+ for(let i=1;i<250;i++){const c=tryC('10.'+i+'.0.0/24');if(c)return c}
  return'';
 }
 function vlanCIDRErr(v,n,skip){
  if(!v)return'';
- const a=cidrRange(v),b=cidrRange(n.cidr);
+ const a=cidrRange(v);
  if(!isCIDR(v)||!a)return v+' — это не диапазон';
- if(!b||a[0]<b[0]||a[1]>b[1])return v+' ('+cidrHosts(v)+') не входит в '+n.cidr+' ('+cidrHosts(n.cidr)+')';
- const x=n.vlans.find(z=>z.id!==skip&&(()=>{const r=cidrRange(z.cidr);return r&&a[0]<=r[1]&&a[1]>=r[0]})());
- if(x)return v+' пересекается с VLAN '+x.id+' ('+x.cidr+')';
+ const segs=[{id:0,name:n.name||n.id,cidr:n.cidr}].concat((n.vlans||[]).map(z=>({id:z.id,name:z.name||('VLAN '+z.id),cidr:z.cidr})));
+ for(const s of segs){
+  if(s.id===skip||!s.cidr)continue;
+  const r=cidrRange(s.cidr);
+  if(r&&a[0]<=r[1]&&a[1]>=r[0])return v+' пересекается с VLAN '+s.id+' ('+s.cidr+')';
+ }
  return'';
 }
-function nextIP(n,vid){const v=n.vlans.find(x=>x.id===vid),R=cidrRange(v&&v.cidr||n.cidr);if(!R)return'';
- const used=new Set(n.members.map(m=>m.ip).concat(n.gateway));let from=R[0]+10;if(!v&&n.pool_from)from=ip2n(n.pool_from);
- for(let x=from;x<R[1];x++){const s=n2ip(x);if(!used.has(s))return s}return''}
+function segL3(n,vid){
+ if(!vid)return{cidr:n.cidr,gateway:n.gateway,pool_from:n.pool_from,pool_to:n.pool_to};
+ const v=(n.vlans||[]).find(x=>x.id===vid);
+ if(!v||!v.cidr)return{cidr:n.cidr,gateway:n.gateway,pool_from:n.pool_from,pool_to:n.pool_to};
+ return{cidr:v.cidr,gateway:v.gateway||firstHost(v.cidr),pool_from:v.pool_from,pool_to:v.pool_to};
+}
+function nextIP(n,vid){
+ const s=segL3(n,vid),R=cidrRange(s.cidr);if(!R)return'';
+ const used=new Set((n.members||[]).map(m=>m.ip).concat([n.gateway,...(n.vlans||[]).map(v=>v.gateway)].filter(Boolean)));
+ let from=R[0]+10;if(s.pool_from)from=ip2n(s.pool_from);
+ const to=s.pool_to?ip2n(s.pool_to):R[1]-1;
+ for(let x=from;x<=to;x++){const ip=n2ip(x);if(!used.has(ip))return ip}return'';
+}
 const inRange=(ip,c)=>{const R=cidrRange(c);if(!R||!isIP(ip)||ip.includes(':'))return false;const x=ip2n(ip);return x>=R[0]&&x<=R[1]};
 
 /* ── итог доступа VLAN → VLAN: правила сверху вниз, затем режим сети ── */
 function access(n,s,d){
- const sc=s?(n.vlans.find(v=>v.id===s)||{}).cidr:n.cidr,dc=d?(n.vlans.find(v=>v.id===d)||{}).cidr:n.cidr;
+ const sc=s?((n.vlans.find(v=>v.id===s)||{}).cidr||n.cidr):n.cidr,dc=d?((n.vlans.find(v=>v.id===d)||{}).cidr||n.cidr):n.cidr;
  const inV=A=>n.vlans.some(v=>{const R=cidrRange(v.cidr);return R&&A[0]>=R[0]&&A[1]<=R[1]});
  const cover=(addr,c,z)=>{if(!addr)return 2;const A=cidrRange(addr.includes('/')?addr:addr+'/32'),C=cidrRange(c);if(!A||!C)return 0;if(z&&inV(A))return 0;if(A[0]<=C[0]&&A[1]>=C[1])return 2;if(A[1]<C[0]||A[0]>C[1])return 0;return 1};
  const part=[];
@@ -1403,8 +1448,14 @@ function access(n,s,d){
 }
 
 /* ── экран ── */
-S.net='main';S.tab.seg='ports';S.sel=new Set();
-const segsOf=(n)=>{n=n||curNet();if(!n)return[];return [{id:0,name:n.name||n.id,cidr:n.cidr,peers:n.peers}].concat((n.vlans||[]).map(v=>({id:v.id,name:v.name||('VLAN '+v.id),cidr:v.cidr||n.cidr,peers:v.peers||n.peers})));};
+S.net='main';S.tab.seg='ports';S.sel=new Set();S.segMore=false;
+const segsOf=(n)=>{n=n||curNet();if(!n)return[];
+ const one=(id,name,cidr,gw,from,to,dns,peers)=>({id,name,cidr,gateway:gw,pool_from:from,pool_to:to,dns:dns||{enabled:null,servers:[],upstream:[]},peers});
+ return [one(0,n.name||n.id,n.cidr,n.gateway,n.pool_from,n.pool_to,n.dns,n.peers)].concat((n.vlans||[]).map(v=>{
+  const own=!!v.cidr,s=segL3(n,v.id);
+  return one(v.id,v.name||('VLAN '+v.id),s.cidr,s.gateway,s.pool_from,s.pool_to,own?(v.dns||n.dns):n.dns,v.peers||n.peers);
+ }));
+};
 const segTitle=id=>{const s=segsOf().find(x=>String(x.id)===String(id));return s?s.name:'VLAN '+id};
 V.segments=()=>{
  const n=curNet();
@@ -1418,27 +1469,74 @@ V.segments=()=>{
    return pageHead('Сегменты сети','')+`<div class="empty"><b>Такого сегмента нет</b><p>Его удалили или адрес набран с ошибкой.</p></div>`+segTabs(n,-1);
  }
  if(t==='ports'&&!named){try{history.replaceState(null,'','#segments/0')}catch(e){}S.arg='0';id=0}
- return pageHead('Сегменты сети','Сеть loft — свитч: сегмент это мост, член сети — порт. Вкладки сверху — сегменты, плюс добавляет новый. На вкладке сегмента задайте, как каждый порт в него входит. Править можно на схеме или текстом конфига.')+pendNet()+
- `<div class="netbar" role="tablist" aria-label="Сеть">${NETS.map(x=>`<button type="button" role="tab" aria-selected="${x.id===n.id}" class="netchip ${x.id===n.id?'on':''}" onclick="S.net='${x.id}';S.sel.clear();render()"><span class="dot ${x.enabled?'on':''}"></span><b>${esc(x.name||x.id)}</b><span class="mono">${x.cidr}</span></button>`).join('')}
-  <button type="button" class="btn" onclick="openNet('new')">${ic('i-plus')}Сеть</button></div>`+
+ return pageHead('Сегменты сети','Сеть loft — свитч: сегмент это мост со своим IP, DHCP, DNS и шлюзом. Член сети — порт. Вкладки сверху — сегменты, плюс добавляет новый.')+pendNet()+
+ (NETS.length>1?`<div class="netbar" role="tablist" aria-label="Сеть">${NETS.map(x=>`<button type="button" role="tab" aria-selected="${x.id===n.id}" class="netchip ${x.id===n.id?'on':''}" onclick="S.net='${x.id}';S.sel.clear();render()"><span class="dot ${x.enabled?'on':''}"></span><b>${esc(x.name||x.id)}</b><span class="mono">${x.cidr}</span></button>`).join('')}
+  <button type="button" class="btn" onclick="openNet('new')">${ic('i-plus')}Сеть</button></div>`:'')+
  `<div class="tabs" role="tablist">${[['ports','Сегменты'],['acl','Правила доступа'],['set','Настройки сети'],['conf','Конфиг']].map(([k,x])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="S.tab.seg='${k}';${k==='ports'?"S.arg?render():go('segments/0')":"S.arg?go('segments'):render()"}">${x}${k==='conf'&&err?' <span class="pill warn">ошибка</span>':''}</button>`).join('')}</div>`+
  (err&&t!=='conf'?`<div class="note bad"><span><b>В тексте конфига ошибка — строка ${err.line||'—'}.</b> <span class="mute">Здесь показана последняя верная версия; правки на схеме заменят текст с ошибкой.</span></span><span class="note-acts"><button class="btn sm" type="button" onclick="S.tab.seg='conf';S.arg?go('segments'):render()">К конфигу</button></span></div>`:'')+
  (t==='ports'?segPage(id):({acl:segACL,set:segSet,conf:segConf}[t])(n));
 };
 
-function faceplate(n){
- const on=n.members.filter(m=>(EXTRA[m.id]||[])[3]).length;
+function faceplate(n,id){
+ const segs=segsOf(n),more=!!S.segMore;
+ const rows=[segs.find(s=>s.id===id)].concat(more?segs.filter(s=>s.id!==id):[]).filter(Boolean);
+ const rspan=1+rows.length;
+ const gw=segL3(n,id).gateway||n.gateway||'';
+ const jack=(m,i)=>{const x=EXTRA[m.id]||[];
+  return `<button type="button" class="port ${m.authorized?'':'off'}" title="${esc(m.id)} · ${m.vlan?'VLAN '+m.vlan:'без VLAN'}${m.authorized?'':' · выключен'}" onclick="openMember('${m.id}')">
+   <i class="led ${x[3]&&m.authorized?'on':''}"></i><span class="jack" style="--vc:${vcol(n,m.vlan)}">${i+1}</span><span class="pn">${esc(m.id)}</span></button>`};
+ const pj=(m,seg)=>{const on=(m.vlan||0)===seg;
+  return `<button type="button" class="pj" aria-haspopup="menu" aria-label="${on?'Входит в сегмент':'Не входит в сегмент'}" onclick="event.stopPropagation();openJoin('${m.id}',${seg},this)"><span class="pj-ico">${on?'✓':'—'}</span><i class="chev"></i></button>`};
  return `<div class="face" aria-label="Порты сети ${esc(n.id)}">
-  <div class="face-id"><svg width="22" height="22" viewBox="0 0 96 96" aria-hidden="true"><path fill="#F3EDE4" d="M37.7640 6.7191 A0.9600 0.9600 0 0 1 39.0071 6.7437 L57.6000 29.5200 L57.6000 63.7600 A4.4000 4.4000 0 0 0 62.0000 68.1600 L84.8000 68.1600 A3.2000 3.2000 0 0 1 88.0000 71.3600 L88.0000 86.1600 A3.8400 3.8400 0 0 1 84.1600 90.0000 L21.4400 90.0000 A3.8400 3.8400 0 0 1 17.6000 86.1600 L17.6000 29.5200 Z"/><path fill="#E8B84A" d="M31.3600 36.2400 H43.8400 A2.5600 2.5600 0 0 1 46.4000 38.8000 V55.5200 A2.5600 2.5600 0 0 1 43.8400 58.0800 H31.3600 A2.5600 2.5600 0 0 1 28.8000 55.5200 V38.8000 A2.5600 2.5600 0 0 1 31.3600 36.2400 Z"/></svg>
-   <span><b>${esc(n.id)}</b><span class="mono">${n.cidr}</span></span><span class="face-st">${n.members.length} ${plural(n.members.length,'порт','порта','портов')} · ${on} в сети</span></div>
-  <div class="ports">
-   <div class="port gw" title="Шлюз ${n.gateway}"><i class="led on"></i><span class="jack">G</span><span class="pn">шлюз</span></div>
-   ${n.members.map((m,i)=>{const x=EXTRA[m.id]||[];return `<button type="button" class="port ${S.sel.has(m.id)?'sel':''} ${m.authorized?'':'off'}" aria-pressed="${S.sel.has(m.id)}" title="${esc(m.id)} · ${m.vlan?'VLAN '+m.vlan:'без VLAN'}${m.authorized?'':' · выключен'}" onclick="selPort('${m.id}')">
-    <i class="led ${x[3]&&m.authorized?'on':''}"></i><span class="jack" style="--vc:${vcol(n,m.vlan)}">${i+1}</span><span class="pn">${esc(m.id)}</span></button>`}).join('')}
+  <div class="sg-wrap"><div class="sg" style="grid-template-columns:minmax(120px,160px) 76px repeat(${n.members.length+1},56px)">
+   <div></div>
+   <div class="sg-wan" style="grid-column:2;grid-row:1 / span ${rspan}">
+    <div class="port gw" title="Шлюз ${esc(gw)}"><i class="led on"></i><span class="jack">G</span><span class="pn">шлюз</span></div>
+    <span class="sg-globe" title="Шлюз">${ic('i-net',20)}</span>
+   </div>
+   ${n.members.map(jack).join('')}
    <button type="button" class="port add" onclick="openMember('new')" aria-label="Добавить порт"><i class="led"></i><span class="jack">+</span><span class="pn">добавить</span></button>
-  </div>
+   ${rows.map(s=>`<div class="sg-lab"><b>${esc(s.name)}</b>${s.id?`<span class="sub">VLAN ${s.id}</span>`:''}</div>${n.members.map(m=>pj(m,s.id)).join('')}<div></div>`).join('')}
+  </div></div>
   <div class="legend">${n.vlans.map(v=>`<span><i style="background:${vcol(n,v.id)}"></i>${v.id} ${esc(v.name)}</span>`).join('')}<span><i style="background:var(--menu-line-strong)"></i>без VLAN</span><span><i class="led on" style="position:static"></i>в сети</span></div>
- </div>`;
+ </div>
+ ${segs.length>1?`<div class="sg-more"><button class="btn" type="button" onclick="S.segMore=!S.segMore;render()">${more?'Скрыть другие сегменты':'Показать другие сегменты'}</button></div>`:''}
+ <div class="sg-vid"><div class="fld"><label for="sgVid">VLAN ID</label><input id="sgVid" disabled></div><span class="mute">Не используется</span></div>`;
+}
+function closeJoin(){
+ document.querySelectorAll('.pj-menu').forEach(e=>e.remove());
+ document.querySelectorAll('.pj.on').forEach(e=>e.classList.remove('on'));
+}
+function openJoin(mid,seg,el){
+ const already=el.classList.contains('on');
+ closeJoin();
+ if(already)return;
+ el.classList.add('on');
+ const n=curNet(),m=n.members.find(x=>x.id===mid);
+ const cur=m&&(m.vlan||0)===seg?'in':'out';
+ const menu=document.createElement('div');
+ menu.className='pj-menu';
+ menu.setAttribute('role','menu');
+ menu.innerHTML=`<button type="button" role="menuitemradio" aria-checked="${cur==='out'}" onclick="setJoin('${mid}',${seg},'out')"><span class="pj-ico">—</span>Не входит в сегмент</button>
+<button type="button" role="menuitemradio" aria-checked="${cur==='in'}" onclick="setJoin('${mid}',${seg},'in')"><span class="pj-ico">✓</span>Входит в сегмент</button>
+<button type="button" role="menuitem" onclick="setJoin('${mid}',${seg},'tag')"><span class="pj-ico">T</span>Входит в сегмент с VLAN</button>`;
+ document.body.appendChild(menu);
+ const r=el.getBoundingClientRect();
+ let top=r.bottom+4,left=r.left;
+ const mw=menu.offsetWidth,mh=menu.offsetHeight;
+ if(left+mw>innerWidth-8)left=Math.max(8,innerWidth-mw-8);
+ if(top+mh>innerHeight-8)top=Math.max(8,r.top-mh-4);
+ menu.style.top=top+'px';menu.style.left=left+'px';
+}
+function setJoin(mid,seg,mode){
+ closeJoin();
+ if(mode==='tag'){toast('Порт с тегом (trunk) нода пока не поддерживает.');return}
+ const n=curNet(),m=n.members.find(x=>x.id===mid);if(!m)return;
+ const cur=m.vlan||0;
+ if(mode==='in'){joinSeg(mid,seg);return}
+ if(cur!==seg)return;
+ if(!seg){toast('Порт всегда в каком-то сегменте. Сначала включите его в другой.');return}
+ joinSeg(mid,0);
 }
 function selPort(id){S.sel.has(id)?S.sel.delete(id):S.sel.add(id);render()}
 function selBar(n){
@@ -1457,7 +1555,7 @@ function cellVlan(id,v){const n=curNet(),m=n.members.find(x=>x.id===id);if(m.vla
 
 function joinSeg(mid,vlan){const n=curNet(),m=n.members.find(x=>x.id===mid);if(!m||(m.vlan||0)===vlan)return;moveVlan(n,m,vlan);render()}
 function segTabs(n,id){
- return `<div class="tabs" role="tablist" aria-label="Сегменты">${segsOf(n).map(s=>`<button class="tab ${s.id===id?'on':''}" role="tab" aria-selected="${s.id===id}" type="button" onclick="go('segments/${s.id}')">${esc(s.name)}</button>`).join('')}<button class="tab plus" type="button" aria-label="Добавить сегмент" title="Добавить сегмент" onclick="openVlan('new')">${ic('i-plus')}</button></div>`;
+ return `<div class="tabs" role="tablist" aria-label="Сегменты">${segsOf(n).map(s=>`<button class="tab ${s.id===id?'on':''}" role="tab" aria-selected="${s.id===id}" type="button" onclick="go('segments/${s.id}')">${esc(s.name)}</button>`).join('')}<button class="tab plus" type="button" aria-label="Добавить сегмент" title="Добавить сегмент" onclick="addSeg()">${ic('i-plus')}</button></div>`;
 }
 function renameSeg(id,name){
  const n=curNet();
@@ -1467,23 +1565,62 @@ function renameSeg(id,name){
  else{const v=n.vlans.find(x=>x.id===id);if(v)v.name=name}
  render();
 }
+function addSeg(){
+ const n=curNet();
+ const used=new Set((n.vlans||[]).map(v=>v.id));
+ const id=[10,20,30,40,50,60,70,80,90].find(x=>!used.has(x))||((n.vlans||[]).reduce((m,v)=>Math.max(m,v.id),0)+10);
+ const cidr=suggestVlanCIDR(n,id),gw=firstHost(cidr),R=cidrRange(cidr);
+ const v=vlanObj(id);
+ v.cidr=cidr;v.gateway=gw;
+ if(R){v.pool_from=n2ip(R[0]+10);v.pool_to=n2ip(Math.min(R[0]+200,R[1]-1))}
+ n.vlans.push(v);n.vlans.sort((a,b)=>a.id-b.id);
+ go('segments/'+id);
+}
+function saveSeg(id){
+ const n=curNet(),g=i=>$('#'+i).value.trim();
+ let name=g('sgName'),cidr=g('sgCidr'),gw=g('sgGw'),from=g('sgFrom'),to=g('sgTo'),peers=g('sgPeers');
+ const dnsOn=g('sgDns')!=='0';
+ if(!id&&!cidr){toast('Диапазон');return}
+ {const err=vlanCIDRErr(cidr,n,id);if(err){toast(err);return}}
+ if(cidr&&!gw)gw=firstHost(cidr);
+ if(cidr&&gw&&!inRange(gw,cidr)){toast('Шлюз вне диапазона');return}
+ if((from&&!to)||(!from&&to)){toast('Пул: укажите оба конца или оставьте пустым');return}
+ if(!id){
+  n.name=name||n.name;n.cidr=cidr;n.gateway=gw;n.pool_from=from;n.pool_to=to;n.peers=peers||n.peers||'hub';
+  n.dns.enabled=dnsOn?null:false;
+ }else{
+  let v=n.vlans.find(x=>x.id===id);if(!v)return;
+  if(!v.dns)v.dns={enabled:null,servers:[],upstream:[]};
+  Object.assign(v,{name,cidr,gateway:gw,pool_from:from,pool_to:to,peers});
+  v.dns.enabled=dnsOn?null:false;
+ }
+ n.members.forEach(m=>{if((m.vlan||0)===id&&m.ip&&cidr&&!inRange(m.ip,cidr))m.ip=nextIP(n,id)});
+ toast('Сохранено');render();
+}
 function segPage(id){
  const n=curNet(),s=segsOf(n).find(x=>x.id===id);
  if(!s)return segTabs(n,-1)+`<div class="empty"><b>Такого сегмента нет</b><p>Его удалили или адрес набран с ошибкой.</p></div>`;
- const inSeg=m=>(m.vlan||0)===id;
+ const stored=id?n.vlans.find(x=>x.id===id):n;
+ const cidr=id?(stored&&stored.cidr)||'':n.cidr;
+ const gw=id?(stored&&stored.gateway)||'':n.gateway;
+ const from=id?(stored&&stored.pool_from)||'':n.pool_from;
+ const to=id?(stored&&stored.pool_to)||'':n.pool_to;
+ const dns=id?(stored&&stored.dns)||{enabled:null}:n.dns;
+ const peers=id?(stored&&stored.peers)||'':n.peers;
  return segTabs(n,id)+
-  `<div class="fld" style="max-width:420px;margin:0 0 28px"><label for="segName">Имя сегмента</label><input id="segName" value="${esc(s.name)}" onchange="renameSeg(${id},this.value)"></div>`+
-  blk('Порты',id?'Порт входит ровно в один сегмент: «Входит в сегмент» переносит его сюда.':'Основной сегмент сети. Порты без VLAN. «Входит в сегмент» переносит порт сюда.',
-   table(['Порт','Член','Вход','IP'],n.members.map((m,i)=>{
-    const on=inSeg(m);
-    const act=on?(id?`<button class="btn sm" type="button" onclick="joinSeg('${m.id}',0)">Убрать</button>`:pill('входит в сегмент','ok')):`<button class="btn sm" type="button" onclick="joinSeg('${m.id}',${id})">Входит в сегмент</button>`;
-    return `<tr><td><span class="sq" style="background:${vcol(n,m.vlan)}"></span><b class="num">${i+1}</b>${m.authorized?'':' <span class="pill">выкл.</span>'}</td>
-     <td><b>${esc(m.name)}</b><span class="sub mono">${esc(m.id)}</span></td>
-     <td>${on?pill('входит в сегмент','ok')+' ':''}${act}</td>
-     <td class="mono">${m.ip||'<span class="mute">из пула</span>'}</td></tr>`;
-   }).join('')))+
-  (id?`<div class="acts"><button class="btn" type="button" onclick="openVlan(${id})">Настроить сегмент</button><button class="btn danger" type="button" onclick="delVlan(${id})">Удалить сегмент</button></div>`
-   :'<p class="hint">Адрес, DHCP и режим между портами — на вкладке «Настройки сети».</p>');
+  blk('Порты и VLAN','Как порт входит в этот сегмент. Порт с тегом (trunk) нода пока не поддерживает.',
+   faceplate(n,id))+
+  blk('Параметры IP','Укажите параметры IP этого сегмента.',
+  `<form class="fgrid" onsubmit="event.preventDefault();saveSeg(${id})">
+   <div class="fld"><label for="sgName">Имя сегмента</label><input id="sgName" value="${esc(s.name)}"></div>
+   <div><div class="fld"><label for="sgCidr">Диапазон</label><input id="sgCidr" class="mono" value="${esc(cidr)}"></div><div class="hint">${id?'Свой диапазон, не пересекается с другими сегментами. Пусто — как в основном сегменте.':cidrHosts(cidr)}</div></div>
+   <div class="fld"><label for="sgGw">Шлюз</label><input id="sgGw" class="mono" value="${esc(gw)}"></div>
+   <div class="fld"><label for="sgFrom">Пул адресов, с</label><input id="sgFrom" class="mono" value="${esc(from)}" placeholder="авто"></div>
+   <div class="fld"><label for="sgTo">Пул адресов, по</label><input id="sgTo" class="mono" value="${esc(to)}" placeholder="авто"></div>
+   <div class="fld"><label for="sgDns">DNS для членов</label><select id="sgDns"><option value="1" ${dns.enabled!==false?'selected':''}>на адресе шлюза</option><option value="0" ${dns.enabled===false?'selected':''}>не давать</option></select></div>
+   <div style="grid-column:1/-1;max-width:640px"><div class="fld"><label for="sgPeers">Между портами</label><select id="sgPeers">${(id?[['','как в сети'],['hub','только через шлюз (hub)'],['mesh','напрямую между собой (mesh)']]:[['hub','только через шлюз (hub)'],['mesh','напрямую между собой (mesh)'],['vlan','внутри своего VLAN (vlan)']]).map(([p,l])=>`<option value="${p}" ${peers===p?'selected':''}>${l}</option>`).join('')}</select></div><div class="hint">${peersHint}</div></div>
+   <div class="acts" style="grid-column:1/-1;margin:0"><button class="btn pri" type="submit">Сохранить</button><button class="btn" type="button" onclick="render()">Отменить</button>${id?`<button class="btn danger" type="button" style="margin-left:auto" onclick="delVlan(${id})">Удалить сегмент</button>`:''}</div>
+  </form>`);
 }
 const peersText=(p,inh)=>({hub:'только через шлюз',mesh:'напрямую между собой',vlan:'внутри своего VLAN'}[p]||p)+(inh?' <span class="mute">· как в сети</span>':'');
 const peersHint='Только через шлюз — порты видят шлюз, друг друга не видят.<br>Напрямую — любой порт видит любой другой.<br>Внутри VLAN — порты видят только свой VLAN; между VLAN — правилами доступа.';
@@ -1512,17 +1649,10 @@ function setMemberAuth(id,on){const m=findMember(id)[1];if(m)m.authorized=on;ren
 
 function segSet(n){
  const s=n.session,T=[['handshake_ms','Рукопожатие'],['idle_ms','Простой до разрыва'],['keepalive_ms','Проверка связи'],['lease_hold_ms','Держать адрес после ухода'],['reconnect_min_ms','Переподключение, от'],['reconnect_max_ms','Переподключение, до'],['gap_hold_ms','Ждать пропавшие пакеты']];
- return blk('Сеть','',`<form class="fgrid" onsubmit="event.preventDefault();saveNet()">
-  <div class="fld"><label for="s1">Название</label><input id="s1" value="${esc(n.name)}"></div>
+ return blk('Сеть','Адрес, DHCP, DNS и шлюз каждого моста — на вкладке сегмента.',`<form class="fgrid" onsubmit="event.preventDefault();saveNet()">
   <div><div class="fld"><label for="s2">Идентификатор</label><input id="s2" class="mono" value="${esc(n.id)}"></div><div class="hint">Имя сети в конфиге: <span class="mono">network ${esc(n.id)}</span>.</div></div>
-  <div class="fld"><label for="s3">Диапазон</label><input id="s3" class="mono" value="${n.cidr}"></div>
-  <div class="fld"><label for="s4">Шлюз</label><input id="s4" class="mono" value="${n.gateway}"></div>
-  <div class="fld"><label for="s5">Пул адресов, с</label><input id="s5" class="mono" value="${n.pool_from}" placeholder="авто"></div>
-  <div class="fld"><label for="s6">Пул адресов, по</label><input id="s6" class="mono" value="${n.pool_to}" placeholder="авто"></div>
-  <div style="grid-column:1/-1;max-width:640px"><div class="fld"><label for="s7">Между портами</label><select id="s7">${['hub','mesh','vlan'].map(p=>`<option value="${p}" ${n.peers===p?'selected':''}>${peersText(p)} (${p})</option>`).join('')}</select></div><div class="hint">${peersHint}</div></div>
   <div class="fld"><label for="s8">MTU</label><input id="s8" class="num" value="${n.mtu}"></div>
   <div class="fld"><label for="s9">Прямые соединения</label><select id="s9"><option value="" ${n.p2p==null?'selected':''}>как в режиме (mesh, vlan — да)</option><option value="1" ${n.p2p===true?'selected':''}>разрешить</option><option value="0" ${n.p2p===false?'selected':''}>запретить</option></select></div>
-  <div class="fld"><label for="s10">DNS для членов</label><select id="s10"><option value="1" ${n.dns.enabled!==false?'selected':''}>на адресе шлюза</option><option value="0" ${n.dns.enabled===false?'selected':''}>не давать</option></select></div>
   <div class="fld"><label for="s11">Куда DNS спрашивает</label><input id="s11" class="mono" value="${n.dns.upstream.join(' ')}" placeholder="https://1.1.1.1/dns-query"></div>
   <label class="chk" style="align-self:center"><input id="s12" type="checkbox" ${n.enabled?'checked':''}>Сеть включена</label>
   <div style="grid-column:1/-1"><details class="adv"><summary>Таймеры сессии, мс</summary><div class="fgrid" style="margin-top:20px">${T.map(([k,l])=>`<div class="fld"><label for="t_${k}">${l}</label><input id="t_${k}" class="num" value="${s[k]||''}" placeholder="по умолчанию"></div>`).join('')}</div></details></div>
@@ -1533,8 +1663,8 @@ function segSet(n){
 }
 function saveNet(){
  const n=curNet(),g=id=>$('#'+id).value.trim(),old=n.id;
- n.name=g('s1');n.id=g('s2')||old;n.cidr=g('s3');n.gateway=g('s4');n.pool_from=g('s5');n.pool_to=g('s6');n.peers=g('s7');n.mtu=+g('s8')||1280;
- n.p2p=g('s9')===''?null:g('s9')==='1';n.dns.enabled=g('s10')==='0'?false:(n.dns.servers.length||g('s11')?true:null);n.dns.upstream=g('s11')?g('s11').split(/\s+/):[];n.enabled=$('#s12').checked;
+ n.id=g('s2')||old;n.mtu=+g('s8')||1280;
+ n.p2p=g('s9')===''?null:g('s9')==='1';n.dns.upstream=g('s11')?g('s11').split(/\s+/):[];n.enabled=$('#s12').checked;
  ['handshake_ms','idle_ms','keepalive_ms','lease_hold_ms','reconnect_min_ms','reconnect_max_ms','gap_hold_ms'].forEach(k=>{const v=+g('t_'+k);if(v)n.session[k]=v;else delete n.session[k]});
  if(old!==n.id){APPLIED[n.id]=APPLIED[old];delete APPLIED[old];S.net=n.id}
  delete CFG[n.id];toast('Сохранено');render();
@@ -1551,7 +1681,7 @@ function segConf(n){
   <div class="cfg-st" id="cfgSt" role="status">${err?`<span class="pill warn">ошибка</span> ${err.line?'строка '+err.line+': ':''}${esc(err.msg)}`:'<span class="pill ok">верно</span> Схема и текст совпадают.'}</div>`)+
  blk('Синтаксис','',`<div class="syn mono">${[
   ['network ID · name … · enable|disable','сеть'],['ipif overlay CIDR','диапазон; под ним с отступом:'],['  gateway IP · pool FROM TO · mtu N','шлюз, пул, MTU'],['  peers hub|mesh|vlan · p2p enable|disable','связь между портами'],
-  ['  dns enable|disable · dns IP · dns upstream URL','DNS'],['create vlan N [name …] · config vlan N cidr|peers|name …','VLAN'],
+  ['  dns enable|disable · dns IP · dns upstream URL','DNS'],['create vlan N [name …] · config vlan N cidr|gateway|pool|dns|peers|name …','сегмент'],
   ['create member ID · config member ID name|ipaddress|vlan|multi enable [N]|tags …','порт'],['enable|disable member ID','включить порт'],['ip route DST [VIA] [description …]','маршрут'],
   ['ip access-list overlay','правила; под ним с отступом:'],['  permit|deny ip|tcp|udp|icmp SRC DST [eq P…|range A B] [vlan S [D]]','SRC/DST: any, host IP, CIDR'],['session KEY MS','таймеры'],['# …','комментарий']
  ].map(([a,b])=>`<div><code>${esc(a)}</code><span>${b}</span></div>`).join('')}</div>`);
@@ -1567,7 +1697,7 @@ function cfgInput(el){
    if(e.line){const s=$('#cfgLn').children[e.line-1];s&&s.classList.add('e')}}
  },250);
 }
-function refreshPend(){const o=$('.page .note:not(.bad)'),h=pendNet();if(o)o.outerHTML=h||'';else if(h)$('.netbar').insertAdjacentHTML('beforebegin',h)}
+function refreshPend(){const o=$('.page .note:not(.bad)'),h=pendNet();if(o)o.outerHTML=h||'';else if(h){const a=$('.page .tabs')||$('.netbar');if(a)a.insertAdjacentHTML('beforebegin',h)}}
 function copyConf(){const t=$('#cfgTx');try{navigator.clipboard.writeText(t.value).then(()=>toast('Скопировано'),()=>{t.select();toast('Выделено — скопируйте вручную')})}catch(e){t.select()}}
 
 /* ── окна ── */
@@ -1583,27 +1713,7 @@ function openNet(id){
   `<button class="btn pri" type="button" onclick="addNet()">Создать</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
 }
 function addNet(){const g=i=>$('#'+i).value.trim(),n=parseConf(`network ${g('n2')||'net'}\n${g('n1')?'name '+g('n1')+'\n':''}enable\nipif overlay ${g('n3')}\n  gateway ${g('n4')}\n  peers ${g('n5')}\n`);NETS.push(n);APPLIED[n.id]='';S.net=n.id;closeDlg();render()}
-function openVlan(id){
- const n=curNet(),v=n.vlans.find(x=>x.id===id),nw=!v;
- const free=[10,20,30,40,50,60,70,80,90].find(x=>!n.vlans.some(y=>y.id===x))||n.vlans.length+1;
- dialog(nw?'Новый сегмент':'Сегмент «'+esc(v.name)+'»','Сеть '+n.id+' · '+n.cidr,`
-  <div class="fld"><label for="v1">Номер</label><input id="v1" class="num" value="${nw?free:v.id}"></div>
-  <div class="fld"><label for="v2">Название</label><input id="v2" value="${nw?'':esc(v.name)}"></div>
-  <div><div class="fld"><label for="v3">Диапазон</label><input id="v3" class="mono" value="${nw?suggestVlanCIDR(n,free):v.cidr}"></div><div class="hint">Внутри ${n.cidr} (${cidrHosts(n.cidr)}) и без пересечения с другими VLAN. Пусто — адреса из диапазона сети.</div></div>
-  <div><div class="fld"><label for="v4">Между портами</label><select id="v4"><option value="" ${v&&!v.peers?'selected':''}>как в сети</option><option value="mesh" ${v&&v.peers==='mesh'?'selected':''}>напрямую между собой</option><option value="hub" ${v&&v.peers==='hub'?'selected':''}>только через шлюз</option></select></div><div class="hint">Пусто — режим сети: ${peersText(n.peers)}<br>Напрямую — порты этого VLAN видят друг друга; через шлюз — нет.</div></div>
-  ${nw?'':`<p class="hint" style="margin:0">При удалении ${n.members.filter(m=>m.vlan===v.id).length} порт(а) перейдут в основной сегмент.</p>`}`,
-  `<button class="btn pri" type="button" onclick="saveVlan(${nw?'null':v.id})">${nw?'Создать':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить сегмент" style="margin-left:auto" onclick="delVlan(${v.id})">${ic('i-trash')}</button>`}`);
-}
-function saveVlan(old){
- const n=curNet(),g=i=>$('#'+i).value.trim(),id=+g('v1');
- if(!(id>0)){toast('Номер VLAN — целое больше нуля');return}
- {const err=vlanCIDRErr(g('v3'),n,old);if(err){toast(err);return}}
- let v=old!=null?n.vlans.find(x=>x.id===old):null;if(!v){if(n.vlans.some(x=>x.id===id)){toast('VLAN '+id+' уже есть');return}v={id};n.vlans.push(v)}
- if(old!=null&&old!==id)n.members.forEach(m=>{if(m.vlan===old)m.vlan=id});
- Object.assign(v,{id,name:g('v2'),cidr:g('v3'),peers:g('v4')});n.vlans.sort((a,b)=>a.id-b.id);closeDlg();
- if(old==null||(S.route==='segments'&&S.arg&&+S.arg!==id)){go('segments/'+id);return}
- render();
-}
+
 function delVlan(id){const n=curNet();n.vlans=n.vlans.filter(v=>v.id!==id);n.members.forEach(m=>{if(m.vlan===id)moveVlan(n,m,0)});n.rules=n.rules.filter(r=>r.src_vlan!==id&&r.dst_vlan!==id);closeDlg();if(S.route==='segments'&&String(S.arg)===String(id)){go('segments/0');return}render()}
 function openRule(i){
  const n=curNet(),r=n.rules[i]||{action:'accept',proto:'',src:'',dst:'',dport:[],src_vlan:null,dst_vlan:null},nw=i<0;
@@ -1957,7 +2067,7 @@ function searchKey(e){
 function searchGo(i){const x=SR[i];if(!x)return;closeDlg();x.go()}
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'&&!FULL[S.route]){e.preventDefault();openSearch()}});
 function userMenu(v){const m=$('#umenu'),on=v===undefined?m.hidden:v;m.hidden=!on;$('#userBtn').setAttribute('aria-expanded',on)}
-document.addEventListener('click',e=>{if(!e.target.closest('#userBtn,#umenu'))userMenu(false)});
+document.addEventListener('click',e=>{if(!e.target.closest('#userBtn,#umenu'))userMenu(false);if(!e.target.closest('.pj,.pj-menu'))closeJoin()});
 function goOut(){go('login')}
 const RIGHT=['нет','смотрит','меняет'];
 /* #me: the signed-in user's own sign-in */
@@ -1982,6 +2092,7 @@ V.about=()=>pageHead('О loft panel','')+`<div class="card"><div class="about">
   <p class="mute" style="margin:16px 0 0">Версия ${S.ver||'dev'}</p>
 </div></div>`;
 function render(){
+  closeJoin();
   const f=!!FULL[S.route];$('#app').hidden=f;$('#full').hidden=!f;
   if(f){renderFull();document.title=(S.route==='login'?'Вход':'Мастер установки')+' · loft-panel';return}
   renderMenu();
@@ -2005,7 +2116,7 @@ function setRoute(){
 window.addEventListener('hashchange',()=>{setRoute();setOpen(false);closeDlg();closeHelp();render();const f=S.after;S.after=null;if(f)f();$('#main').scrollTop=0});
 $('#menuBtn').onclick=()=>setOpen(!S.open);
 $('#foldBtn').onclick=()=>{S.rail=!S.rail;try{localStorage.setItem('lp-rail',S.rail?'1':'0')}catch(e){}renderMenu()};
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){userMenu(false);if($('#helpD')){closeHelp();return}if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeJoin();userMenu(false);if($('#helpD')){closeHelp();return}if($('#dlgRoot').innerHTML)closeDlg();else if(S.open)setOpen(false)}});
 setRoute();
 render();
 </script>
