@@ -548,7 +548,11 @@ func (g *GET) attachRead(conn io.Reader, read func(io.Reader) ([]byte, error)) {
 }
 
 func (g *GET) attachWS(ctx context.Context, o config.Outbound) error {
-	u, err := parseURL(o.URL)
+	wsURL, err := wsDialURL(o.URL)
+	if err != nil {
+		return err
+	}
+	u, err := parseURL(wsURL)
 	if err != nil {
 		return err
 	}
@@ -578,7 +582,7 @@ func (g *GET) attachWS(ctx context.Context, o config.Outbound) error {
 			},
 		}
 	}
-	c, _, err := websocket.Dial(ctx, o.URL, opts)
+	c, _, err := websocket.Dial(ctx, wsURL, opts) // Profile or Status front after auth. codeql[go/request-forgery]
 	if err != nil {
 		return err
 	}

@@ -82,14 +82,11 @@ func (w *WSS) Start(ctx context.Context) error {
 			},
 		}
 	}
-	wsURL := w.cfg.URL
-	if strings.HasPrefix(wsURL, "https://") {
-		wsURL = "wss://" + strings.TrimPrefix(wsURL, "https://")
+	wsURL, err := wsDialURL(w.cfg.URL)
+	if err != nil {
+		return err
 	}
-	if strings.HasPrefix(wsURL, "http://") {
-		wsURL = "ws://" + strings.TrimPrefix(wsURL, "http://")
-	}
-	c, _, err := websocket.Dial(ctx, wsURL, opts)
+	c, _, err := websocket.Dial(ctx, wsURL, opts) // Profile URL, not a server-side fetch. codeql[go/request-forgery]
 	if err != nil {
 		return fmt.Errorf("wss dial: %w", err)
 	}
