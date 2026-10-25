@@ -486,6 +486,21 @@
   afterNet('addSeg');
   afterNet('saveSeg');
   afterNet('delVlan');
+  const saveSeg0 = window.saveSeg;
+  window.saveSeg = function (id) {
+    const el = document.getElementById('sgVid');
+    const want = id && el ? +String(el.value || '').trim() : 0;
+    saveSeg0(id);
+    if (!id || !want || want === id || !L.ch || !L.ch.rules) return;
+    const n = NETS[0];
+    if (!n || !n.vlans.some(v => v.id === want) || n.vlans.some(v => v.id === id)) return;
+    const R = L.ch.rules.rules.map(r => (r.match === 'vlan' && String(r.value) === String(id))
+      ? Object.assign({}, r, { value: String(want) }) : r);
+    if (!R.some((r, i) => r.value !== L.ch.rules.rules[i].value)) return;
+    api('POST', '/api/channels/rules', { rules: R, default: L.ch.rules.default || 'direct' })
+      .then(ch => { L.ch = ch; })
+      .catch(e => toast(e.message));
+  };
   afterNet('saveRule');
   afterNet('mvRule');
   afterNet('dropRule');
@@ -1030,7 +1045,7 @@
         L.ch = L.ch || { channels: [], status: [], rules: { rules: [], default: 'direct' }, prios: [], lists: [] };
       } finally { chPend = null; }
       if (!L.pk) loadPackages().then(() => {
-        if (S.route === 'channels' || S.route === 'network' || S.route === 'iface-priorities') render();
+        if (S.route === 'channels' || S.route === 'network' || S.route === 'iface-priorities' || S.route === 'adapters' || S.route === 'addrs') render();
       });
     })();
     return chPend;
@@ -1053,12 +1068,17 @@
   const connState = n => {
     if (isNative(n)) {
       const d = nativeDev();
-      return `<span class="sub ${d ? 'okt' : ''}"><span class="mono">${esc(d || 'direct')}</span>${d ? ' · адаптер · работает' : ' · адаптер'}</span>`;
+      const st = (L.ch.status || []).find(s => s.name === 'direct');
+      const down = st && st.state === 'nolink';
+      return `<span class="sub ${d && !down ? 'okt' : ''}"><span class="mono">${esc(d || 'direct')}</span>${down ? ' · адаптер · нет связи' : d ? ' · адаптер · работает' : ' · адаптер'}</span>`;
     }
     const c = chOf(n);
     return c ? chState(c) : `<span class="sub"><span class="mono">${esc(n)}</span></span>`;
   };
-  const chUp = n => { if (isNative(n)) return true; const c = chOf(n); return !!(c && c.on && stOf(n).state === 'up'); };
+  const chUp = n => {
+    if (isNative(n)) { const st = (L.ch.status || []).find(s => s.name === 'direct'); return !(st && st.state === 'nolink'); }
+    const c = chOf(n); return !!(c && c.on && stOf(n).state === 'up');
+  };
   const prLive = use => use.find(chUp);
   const prChain = p => p.use.map(n => `<span class="${chUp(n) ? '' : 'mute'}">${esc(connTitle(n))}</span>`).concat(`<span class="mute">${lastT(p.last)}</span>`).join(' → ');
   const prLink = id => prOf(id) ? `<span class="tail"><a href="#iface-priorities" onclick="event.stopPropagation();LIVE.toPrio('${esc(id)}')">${prChain(prOf(id))}</a></span>` : '';
@@ -1121,12 +1141,15 @@
   // Link check: the node probes through the channel; while it fails, priority lists skip it.
   const chCheck = c => {
     const k = c.check || {}, kind = k.kind || 'off', ping = ['wg', 'ovpn', 'zt'].includes(c.type);
-    return `<div class="dlg-sec">Проверка связи</div>
-     <div><div class="fld"><label for="ck">Как проверять</label><select id="ck" onchange="$('#ckf').hidden=this.value==='off'"><option value="off" ${kind === 'off' ? 'selected' : ''}>Не проверять</option>${ping ? `<option value="ping" ${kind === 'ping' ? 'selected' : ''}>Ping (ICMP)</option>` : ''}<option value="tcp" ${kind === 'tcp' ? 'selected' : ''}>Подключение TCP</option></select></div><div class="hint">Нода проверяет связь через канал. Пока проверка не проходит, приоритеты его пропускают.</div></div>
+    const need = kind === 'ping' || kind === 'tcp' || kind === 'tls';
+    const modes = PC_MODES.filter(([v]) => v !== 'ping' || ping).map(([v, l]) => `<option value="${v}" ${kind === v ? 'selected' : ''}>${l}</option>`).join('');
+    return `<div class="dlg-sec">Проверка доступности интернета (Ping Check)</div>
+     <div class="fld"><label for="ck">Режим</label><select id="ck" onchange="$('#ckf').hidden=this.value==='off';$('#ckw').hidden=!(this.value==='ping'||this.value==='tcp'||this.value==='tls')">${modes}</select></div>
      <div id="ckf" ${kind === 'off' ? 'hidden' : ''} style="display:flex;flex-direction:column;gap:18px">
-      <div><div class="fld"><label for="cka">Адрес проверки</label><input id="cka" class="mono" value="${esc(k.probe || '')}" placeholder="1.1.1.1 или example.com:443"></div><div class="hint">Для TCP — адрес и порт.</div></div>
-      <div class="fld"><label for="ckb">Интервал, с</label><input id="ckb" class="num" value="${k.every || 10}"></div>
-      <div class="fld"><label for="ckc">Неудач подряд до «нет связи»</label><input id="ckc" class="num" value="${k.fails || 3}"></div>
+      <div class="fld"><label for="ckb">Периодичность проверки, сек</label><input id="ckb" class="num" value="${k.every || 10}"></div>
+      <div class="fld"><label for="ckc">Порог срабатывания</label><input id="ckc" class="num" value="${k.fails || 5}"></div>
+      <div id="ckw" ${need ? '' : 'hidden'}><div class="fld"><label for="cka">Проверять IP-адрес или домен</label><input id="cka" class="mono" value="${esc(k.probe || '')}" placeholder="1.1.1.1 или example.com"></div>
+       <div class="hint">Для TCP без порта берётся 80, для TLS — 443.</div></div>
      </div>`;
   };
   const chVia = (id, self, kinds, cur, hint) => `<div><div class="fld"><label for="${id}">Подключаться через</label><select id="${id}"><option value="">Любое интернет-подключение</option>${L.ch.channels.filter(c => c.name !== self && kinds.includes(c.type)).map(c => `<option value="${esc(c.name)}" ${cur === c.name ? 'selected' : ''}>${esc(tt(c))} · ${CT[c.type]}</option>`).join('')}</select></div>${hint ? `<div class="hint">${hint}</div>` : ''}</div>`;
@@ -1487,8 +1510,24 @@
 
   function addrsPage() {
     if (!L.net) { loadNet().then(() => { if (S.route === 'adapters' || S.route === 'addrs') render(); }); return pageHead('Адаптеры', '') + '<p class="mute">Загружаю…</p>'; }
-    return pageHead('Адаптеры', 'Сетевые адаптеры сервера, их адреса и маршруты. Сети loft — в Сегментах, туннели — во Внешних каналах.') + netAddrLive();
+    if (!L.ch) loadChannels().then(() => { if (S.route === 'adapters' || S.route === 'addrs') render(); });
+    const k = (L.ch && L.ch.direct_check) || { kind: 'off', every: 10, fails: 5, probe: '' };
+    const st = ((L.ch && (L.ch.status || []).find(s => s.name === 'direct')) || {}).state || (k.kind && k.kind !== 'off' ? 'up' : '');
+    return pageHead('Адаптеры', 'Сетевые адаптеры сервера, их адреса и маршруты. Сети loft — в Сегментах, туннели — во Внешних каналах.') + pingCheckBox(k, st, true, L.can('network')) + netAddrLive();
   }
+  window.pcSaved = () => {
+    const k = (L.ch && L.ch.direct_check) || { kind: 'off', every: 10, fails: 5, probe: '' };
+    return { kind: k.kind || 'off', probe: k.probe || '', every: k.every || 10, fails: k.fails || 5 };
+  };
+  L.pcSave = async () => {
+    if (!pcValid()) { pcTick(); return; }
+    const a = pcNow();
+    const body = a.kind === 'off' ? {} : a;
+    try { L.ch = await api('POST', '/api/channels/direct-check', body); toast('Проверка сохранена — нода перечитала её'); } catch (e) { toast(e.message); }
+    render();
+  };
+  window.pcSave = L.pcSave;
+  window.pcCancel = () => render();
   function channelsPage() {
     if (!L.ch) { loadChannels().then(() => { if (S.route === 'channels') render(); }); return pageHead('Внешние каналы', '') + '<p class="mute">Загружаю…</p>'; }
     return pageHead('Внешние каналы', 'VPN-каналы и прокси для выхода в интернет и приёма. SSTP и прокси встроены в loft, остальные — пакетами.') + channelsView();
@@ -1551,7 +1590,7 @@
     'POST /api/net/change': 'Изменил адрес или маршрут', 'POST /api/net/confirm': 'Подтвердил изменение сети', 'POST /api/net/revert': 'Откатил изменение сети',
     'POST /api/channels/save': 'Сохранил канал', 'POST /api/channels/delete': 'Удалил канал', 'POST /api/channels/switch': 'Включил или выключил канал', 'POST /api/channels/rules': 'Изменил правила выхода', 'POST /api/channels/wgkey': 'Создал пару ключей WireGuard',
     'POST /api/settings/panel': 'Изменил настройки панели', 'POST /api/settings/timezone': 'Сменил часовой пояс сервера', 'POST /api/settings/notify': 'Изменил уведомления', 'POST /api/settings/notify/test': 'Отправил пробное письмо',
-    'POST /api/channels/prio': 'Сохранил список приоритетов', 'POST /api/channels/prio/delete': 'Удалил список приоритетов',
+    'POST /api/channels/prio': 'Сохранил список приоритетов', 'POST /api/channels/prio/delete': 'Удалил список приоритетов', 'POST /api/channels/direct-check': 'Изменил проверку доступности интернета',
     'POST /api/domains/zone': 'Изменил зону', 'POST /api/domains/record': 'Изменил DNS-запись', 'POST /api/domains/provider': 'Изменил DNS-провайдера', 'POST /api/domains/cert': 'Выпустил сертификат', 'POST /api/domains/cert/upload': 'Загрузил сертификат', 'POST /api/domains/cert/delete': 'Удалил сертификат',
     'POST /api/mail/domain': 'Изменил почтовый домен', 'POST /api/mail/box': 'Изменил ящик', 'POST /api/mail/alias': 'Изменил псевдоним', 'POST /api/mail/apply': 'Применил настройки почты', 'POST /api/mail/dns': 'Создал записи почты в DNS', 'POST /api/mail/cert': 'Выпустил сертификат почты',
     'POST /api/nodecfg': 'Изменил настройки ноды', 'POST /api/nodecfg/lists': 'Изменил списки ноды', 'POST /api/nodecfg/token': 'Сменил токен ноды', 'POST /api/packages/mtproto': 'Изменил MTProto-прокси',

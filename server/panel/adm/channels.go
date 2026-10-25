@@ -42,10 +42,11 @@ const (
 )
 
 type chanStore struct {
-	Channels []admproto.Channel `json:"channels"`
-	Prios    []admproto.Prio    `json:"prios,omitempty"`
-	Rules    admproto.ExitRules `json:"rules"`
-	seeded   bool               `json:"-"` // ensureDefaultPrio just created the leftover list
+	Channels    []admproto.Channel  `json:"channels"`
+	Prios       []admproto.Prio     `json:"prios,omitempty"`
+	Rules       admproto.ExitRules  `json:"rules"`
+	DirectCheck *admproto.ChanCheck `json:"direct_check,omitempty"`
+	seeded      bool                `json:"-"` // ensureDefaultPrio just created the leftover list
 }
 
 func (o *Ops) chanFile() string {
@@ -396,7 +397,7 @@ func (o *Ops) Channels(ctx context.Context) (admproto.ChannelsView, error) {
 		}
 	}
 	o.chanMu.Unlock()
-	v := admproto.ChannelsView{Rules: s.Rules, Channels: []admproto.Channel{}, Prios: s.Prios}
+	v := admproto.ChannelsView{Rules: s.Rules, Channels: []admproto.Channel{}, Prios: s.Prios, DirectCheck: s.DirectCheck}
 	if v.Prios == nil {
 		v.Prios = []admproto.Prio{}
 	}
@@ -598,6 +599,9 @@ func (o *Ops) ChannelRules(ctx context.Context, r admproto.ExitRules) (admproto.
 // EgressConf is what the node gets from the channels and rules.
 func EgressConf(s chanStore) (string, error) {
 	c := &egress.Config{Default: s.Rules.Default}
+	if k := s.DirectCheck; k != nil {
+		c.DirectCheck = &egress.Check{Kind: k.Kind, Probe: k.Probe, Every: k.Every, Fails: k.Fails}
+	}
 	for _, ch := range s.Channels {
 		e := egress.Channel{Name: ch.Name, Off: !ch.On}
 		if k := ch.Check; k != nil {
@@ -1248,7 +1252,37 @@ func (o *Ops) channelStatus(ctx context.Context, s chanStore) []admproto.Channel
 		}
 		out = append(out, st)
 	}
+	if s.DirectCheck != nil {
+		st := admproto.ChannelStatus{Name: egress.Direct, State: "up"}
+		if n, ok := node[egress.Direct]; ok {
+			st.State, st.Detail = n.State, n.Error
+		}
+		out = append(out, st)
+	}
 	return out
+}
+
+// ChannelDirectCheck sets the WAN adapter's internet-availability probe.
+func (o *Ops) ChannelDirectCheck(ctx context.Context, k admproto.ChanCheck) (admproto.ChannelsView, error) {
+	o.chanMu.Lock()
+	s, err := o.readChans()
+	if err != nil {
+		o.chanMu.Unlock()
+		return admproto.ChannelsView{}, err
+	}
+	nk, err := normalizeCheck(&k, true)
+	if err != nil {
+		o.chanMu.Unlock()
+		return admproto.ChannelsView{}, err
+	}
+	next := s
+	next.DirectCheck = nk
+	err = o.applyChans(ctx, s, next)
+	o.chanMu.Unlock()
+	if err != nil {
+		return admproto.ChannelsView{}, err
+	}
+	return o.Channels(ctx)
 }
 
 func nowUnix() int64 { return time.Now().Unix() }

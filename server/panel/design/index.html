@@ -262,8 +262,15 @@ tr.off td{color:var(--mute)}
 .empty p{margin:0;color:var(--text-2)}
 /* поле пароля: «глаз» справа, проверка под полем */
 .fld .pw-eye{width:40px;height:40px}
-.fld.bad input{border-color:var(--bad)}
-.fld.bad input:focus{box-shadow:0 0 0 1px var(--bad)}
+.fld.bad input,.fld.bad select{border-color:var(--bad)}
+.fld.bad input:focus,.fld.bad select:focus{box-shadow:0 0 0 1px var(--bad)}
+.fld-err{color:var(--bad);font-size:12px;line-height:16px;margin:4px 0 0 14px}
+.pc-st{margin:0 0 16px}
+.pc-st .pill{height:28px;gap:8px;letter-spacing:.04em}
+.pc-flds{display:flex;flex-direction:column;gap:18px;max-width:520px}
+.pc-more{display:flex;flex-direction:column;gap:18px}
+.pc-more[hidden],.pc-flds [hidden]{display:none}
+.pc-acts{display:flex;flex-wrap:wrap;gap:12px;margin-top:4px}
 .hint.bad{color:var(--bad)}
 .hint.good{color:#4F6B33}
 
@@ -365,10 +372,13 @@ tr.off td{color:var(--mute)}
 .pj-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;border:0;background:none;color:var(--snow);font:inherit;font-size:14px;text-align:left;cursor:pointer}
 .pj-menu button:hover{background:var(--menu-hover)}
 .pj-menu button[aria-checked="true"]{background:var(--menu-on)}
+.pj-menu button:disabled{opacity:.45;cursor:not-allowed}
+.pj-menu button:disabled:hover{background:none}
 .pj-menu .pj-ico{width:16px;flex:0 0 16px;text-align:center;font-weight:700}
 .sg-more{margin-top:16px}
-.sg-vid{display:flex;align-items:center;gap:16px;margin-top:20px;max-width:420px}
+.sg-vid{display:flex;align-items:center;gap:16px;margin:0;max-width:560px}
 .sg-vid .fld{flex:0 0 180px;margin:0}
+.sg-vid .hint{margin:0;max-width:280px}
 .selbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:4px}
 .sq{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:0}
 .t .c{text-align:center;padding-left:6px;padding-right:6px}
@@ -573,10 +583,42 @@ V.members=()=>{
    <td>${who(`<label class="sw" onclick="event.stopPropagation()"><input type="checkbox" ${m.authorized?'checked':''} aria-label="Включён" onchange="setMemberAuth('${m.id}',this.checked)"><i></i></label>`,esc(m.name),`<span class="sub mono">${esc(m.id)}</span>`)}</td>
    <td><span class="sq" style="background:${vcol(n,m.vlan)}"></span>${n.id}${v?' · '+v.id+' '+esc(v.name):''}</td><td class="mono">${m.ip||'—'}</td><td>${x[0]}</td><td class="num">${m.multi?x[1].split(' / ')[0]+' / '+(m.multi_limit||8):x[1].split(' / ')[0]+' / 1'}</td><td><span class="dot ${x[3]?'on':''}"></span>${x[2]}</td></tr>`}).join('')));
 };
-V.adapters=()=>pageHead('Адаптеры','Сетевые адаптеры сервера, их адреса и маршруты. Сети loft — в Сегментах, туннели — во Внешних каналах.')+netAddr();
+V.adapters=()=>pageHead('Адаптеры','Сетевые адаптеры сервера, их адреса и маршруты. Сети loft — в Сегментах, туннели — во Внешних каналах.')+pingCheckBox(S.pc||{kind:'auto',every:10,fails:5,probe:''},'up',true)+netAddr();
 V.addrs=()=>V.adapters();
 V.channels=()=>pageHead('Внешние каналы','VPN-каналы и прокси для выхода в интернет и приёма. SSTP и прокси встроены в loft, остальные — пакетами.')+netUp();
 V.network=()=>V.channels();
+const PC_MODES=[['off','Не использовать'],['ping','ICMP-запросы (Ping)'],['tls','TLS-проверка порта TCP'],['tcp','Проверка порта TCP'],['auto','Автоматический']];
+function pingCheckBox(k,st,ping,own){
+  k=k||{};if(own===undefined)own=true;
+  const kind=k.kind||'off',probe=k.probe||'',every=k.every||10,fails=k.fails||5;
+  const need=kind==='ping'||kind==='tcp'||kind==='tls';
+  const pill=kind==='off'?'':st==='nolink'?`<span class="pill warn"><span class="dot"></span>НЕДОСТУПЕН</span>`:`<span class="pill ok"><span class="dot on"></span>ДОСТУПЕН</span>`;
+  const modes=PC_MODES.filter(([v])=>v!=='ping'||ping).map(([v,l])=>`<option value="${v}" ${kind===v?'selected':''}>${l}</option>`).join('');
+  const dis=own?'':'disabled';
+  return blk('Проверка доступности интернета (Ping Check)','Нода проверяет, есть ли интернет через адаптер с маршрутом по умолчанию. Пока проверка не проходит, приоритеты пропускают «напрямую» и берут следующий канал.',
+   (pill?`<div class="pc-st">${pill}</div>`:'')+
+   `<div class="pc-flds">
+     <div class="fld"><label for="pck">Режим</label><select id="pck" onchange="pcMode()" ${dis}>${modes}</select></div>
+     <div id="pcf" class="pc-more" ${kind==='off'?'hidden':''}>
+     <div class="fld"><label for="pcb">Периодичность проверки, сек</label><input id="pcb" class="num" value="${every}" oninput="pcTick()" ${dis}></div>
+     <div class="fld"><label for="pcc">Порог срабатывания</label><input id="pcc" class="num" value="${fails}" oninput="pcTick()" ${dis}></div>
+     <div id="pca-w" ${need?'':'hidden'}>
+      <div class="fld" id="pca-f"><label for="pca">Проверять IP-адрес или домен</label><input id="pca" class="mono" value="${esc(probe)}" placeholder="1.1.1.1 или example.com" oninput="pcTick()" ${dis}></div>
+      <div class="fld-err" id="pca-err" hidden>Заполните это поле</div>
+      <div class="hint">Для TCP без порта берётся 80, для TLS — 443. Автоматический режим сам опрашивает ya.ru, nic.ru и google.com по HTTPS.</div>
+     </div>
+     </div>
+     ${own?`<div class="pc-acts"><button class="btn pri" type="button" id="pcSave" disabled onclick="pcSave()">Сохранить</button><button class="btn" type="button" id="pcCancel" disabled onclick="pcCancel()">Отменить</button></div>`:''}
+    </div>`);
+}
+function pcSaved(){return S.pc||{kind:'auto',every:10,fails:5,probe:''}}
+function pcNow(){const e=$('#pck');if(!e)return pcSaved();return{kind:e.value,probe:($('#pca')&&$('#pca').value.trim())||'',every:parseInt($('#pcb').value,10)||0,fails:parseInt($('#pcc').value,10)||0}}
+function pcDirty(){const a=pcNow(),b=pcSaved();return a.kind!==(b.kind||'off')||a.probe!==(b.probe||'')||a.every!==(b.every||10)||a.fails!==(b.fails||5)}
+function pcValid(){const a=pcNow();if(a.kind==='ping'||a.kind==='tcp'||a.kind==='tls')return!!a.probe;return true}
+function pcMode(){const n=pcNow().kind,need=n==='ping'||n==='tcp'||n==='tls';if($('#pcf'))$('#pcf').hidden=n==='off';if($('#pca-w'))$('#pca-w').hidden=!need;pcTick()}
+function pcTick(){const bad=!pcValid();if($('#pca-f'))$('#pca-f').classList.toggle('bad',bad&&($('#pck').value==='ping'||$('#pck').value==='tcp'||$('#pck').value==='tls'));if($('#pca-err'))$('#pca-err').hidden=!bad||!($('#pck').value==='ping'||$('#pck').value==='tcp'||$('#pck').value==='tls');const d=pcDirty();if($('#pcSave'))$('#pcSave').disabled=!d||bad;if($('#pcCancel'))$('#pcCancel').disabled=!d}
+function pcSave(){if(!pcValid()){pcTick();return}S.pc=pcNow();toast('Проверка сохранена — нода перечитала её');render()}
+function pcCancel(){render()}
 function netAddr(){
   const del=`<button class="icb del" type="button" aria-label="Удалить" onclick="toast('Применено — подтвердите в течение 2 минут');S.npend=1;render()">${ic('i-trash')}</button>`;
   return (S.npend?`<div class="note" role="status"><span><b>Применено: добавлен адрес 203.0.113.12/32.</b> <span class="mute">Подтвердите, иначе через <b>1:54</b> изменение откатится само.</span></span><span class="note-acts"><button class="btn sm ghost" type="button" onclick="S.npend=0;toast('Изменение откачено');render()">Откатить сейчас</button><button class="btn sm pri" type="button" onclick="S.npend=0;toast('Изменение сохранено');render()">Подтвердить</button></span></div>`:'')+
@@ -1499,8 +1541,11 @@ function faceplate(n,id){
   </div></div>
   <div class="legend">${n.vlans.map(v=>`<span><i style="background:${vcol(n,v.id)}"></i>${v.id} ${esc(v.name)}</span>`).join('')}<span><i style="background:var(--menu-line-strong)"></i>без VLAN</span><span><i class="led on" style="position:static"></i>в сети</span></div>
  </div>
- ${segs.length>1?`<div class="sg-more"><button class="btn" type="button" onclick="S.segMore=!S.segMore;render()">${more?'Скрыть другие сегменты':'Показать другие сегменты'}</button></div>`:''}
- <div class="sg-vid"><div class="fld"><label for="sgVid">VLAN ID</label><input id="sgVid" disabled></div><span class="mute">Не используется</span></div>`;
+ ${segs.length>1?`<div class="sg-more"><button class="btn" type="button" onclick="S.segMore=!S.segMore;render()">${more?'Скрыть другие сегменты':'Показать другие сегменты'}</button></div>`:''}`;
+}
+function vlanIdRow(id){
+ if(!id) return `<div class="sg-vid"><div class="fld"><label for="sgVid">VLAN ID</label><input id="sgVid" disabled></div><span class="mute">Не используется</span></div>`;
+ return `<div class="sg-vid"><div class="fld"><label for="sgVid">VLAN ID</label><input id="sgVid" class="num" inputmode="numeric" value="${id}"></div><div class="hint">Номер VLAN этого моста, 1–4094. Уникален в сети.</div></div>`;
 }
 function closeJoin(){
  document.querySelectorAll('.pj-menu').forEach(e=>e.remove());
@@ -1518,7 +1563,7 @@ function openJoin(mid,seg,el){
  menu.setAttribute('role','menu');
  menu.innerHTML=`<button type="button" role="menuitemradio" aria-checked="${cur==='out'}" onclick="setJoin('${mid}',${seg},'out')"><span class="pj-ico">—</span>Не входит в сегмент</button>
 <button type="button" role="menuitemradio" aria-checked="${cur==='in'}" onclick="setJoin('${mid}',${seg},'in')"><span class="pj-ico">✓</span>Входит в сегмент</button>
-<button type="button" role="menuitem" onclick="setJoin('${mid}',${seg},'tag')"><span class="pj-ico">T</span>Входит в сегмент с VLAN</button>`;
+<button type="button" role="menuitem" disabled aria-disabled="true" title="Порт с тегом (trunk) нода пока не поддерживает."><span class="pj-ico">T</span>Входит в сегмент с VLAN</button>`;
  document.body.appendChild(menu);
  const r=el.getBoundingClientRect();
  let top=r.bottom+4,left=r.left;
@@ -1589,12 +1634,22 @@ function saveSeg(id){
   n.dns.enabled=dnsOn?null:false;
  }else{
   let v=n.vlans.find(x=>x.id===id);if(!v)return;
+  const raw=g('sgVid'),nid=+raw;
+  if(!/^[1-9]\d{0,3}$/.test(raw)||nid>4094){toast('VLAN ID — число 1–4094');return}
+  if(n.vlans.some(x=>x.id===nid&&x!==v)){toast('Такой VLAN ID уже есть');return}
   if(!v.dns)v.dns={enabled:null,servers:[],upstream:[]};
   Object.assign(v,{name,cidr,gateway:gw,pool_from:from,pool_to:to,peers});
   v.dns.enabled=dnsOn?null:false;
+  if(nid!==id){
+   n.members.forEach(m=>{if((m.vlan||0)===id)m.vlan=nid});
+   n.rules.forEach(r=>{if(r.src_vlan===id)r.src_vlan=nid;if(r.dst_vlan===id)r.dst_vlan=nid});
+   v.id=nid;n.vlans.sort((a,b)=>a.id-b.id);id=nid;
+  }
  }
  n.members.forEach(m=>{if((m.vlan||0)===id&&m.ip&&cidr&&!inRange(m.ip,cidr))m.ip=nextIP(n,id)});
- toast('Сохранено');render();
+ toast('Сохранено');
+ if(id&&String(S.arg)!==String(id)){S.arg=String(id);go('segments/'+id);return}
+ render();
 }
 function segPage(id){
  const n=curNet(),s=segsOf(n).find(x=>x.id===id);
@@ -1611,6 +1666,7 @@ function segPage(id){
    faceplate(n,id))+
   blk('Параметры IP','Укажите параметры IP этого сегмента.',
   `<form class="fgrid" onsubmit="event.preventDefault();saveSeg(${id})">
+   <div style="grid-column:1/-1">${vlanIdRow(id)}</div>
    <div class="fld"><label for="sgName">Имя сегмента</label><input id="sgName" value="${esc(s.name)}"></div>
    <div><div class="fld"><label for="sgCidr">Диапазон</label><input id="sgCidr" class="mono" value="${esc(cidr)}"></div><div class="hint">${id?'Свой диапазон, не пересекается с другими сегментами. Пусто — как в основном сегменте.':cidrHosts(cidr)}</div></div>
    <div class="fld"><label for="sgGw">Шлюз</label><input id="sgGw" class="mono" value="${esc(gw)}"></div>
@@ -1913,13 +1969,17 @@ const plusF=(id,l,v,ph='')=>`<div class="fld"><label for="${id}">${l}</label><in
 /* «Подключаться через»: интерфейсы и каналы сервера; прокси — только для тех, кто умеет TCP через прокси */
 const viaSel=(id,self,types,cur,hint)=>`<div><div class="fld"><label for="${id}">Подключаться через</label><select id="${id}"><option>Любое интернет-подключение</option>${Object.entries(CH).filter(([k,c])=>k!==self&&types.includes(c.t)).map(([k,c])=>`<option ${k===cur?'selected':''}>${c.title} · ${c.t==='vpn'?c.kind:CHT[c.t]}</option>`).join('')}</select></div>${hint?`<div class="hint">${hint}</div>`:''}</div>`;
 /* Link check: the node probes through the channel; failing probes take it out of priorities. */
-const chCheck=(id,c)=>{const k=(c.chk||['off'])[0];
- return `<div class="dlg-sec">Проверка связи</div>
-  <div><div class="fld"><label for="${id}">Как проверять</label><select id="${id}" onchange="$('#${id}f').hidden=this.value==='off'"><option value="off" ${k==='off'?'selected':''}>Не проверять</option><option value="ping" ${k==='ping'?'selected':''}>Ping (ICMP)</option><option value="tcp" ${k==='tcp'?'selected':''}>Подключение TCP</option></select></div><div class="hint">Нода проверяет связь через канал. Пока проверка не проходит, приоритеты его пропускают.</div></div>
+const chCheck=(id,c)=>{const k=(c.chk||['off'])[0],probe=(c.chk||[])[1]||'';
+ const ping=!c.t||c.t==='wg'||c.t==='zt'||(c.t==='vpn'&&c.kind!=='SSTP');
+ const need=k==='ping'||k==='tcp'||k==='tls';
+ const modes=PC_MODES.filter(([v])=>v!=='ping'||ping).map(([v,l])=>`<option value="${v}" ${k===v?'selected':''}>${l}</option>`).join('');
+ return `<div class="dlg-sec">Проверка доступности интернета (Ping Check)</div>
+  <div class="fld"><label for="${id}">Режим</label><select id="${id}" onchange="$('#${id}f').hidden=this.value==='off';$('#${id}w').hidden=!(this.value==='ping'||this.value==='tcp'||this.value==='tls')">${modes}</select></div>
   <div id="${id}f" ${k==='off'?'hidden':''} style="display:flex;flex-direction:column;gap:18px">
-   <div><div class="fld"><label for="${id}a">Адрес проверки</label><input id="${id}a" class="mono" value="${(c.chk||[])[1]||''}" placeholder="1.1.1.1 или example.com:443"></div><div class="hint">Для TCP — адрес и порт.</div></div>
-   <div class="fld"><label for="${id}b">Интервал, с</label><input id="${id}b" class="num" value="10"></div>
-   <div class="fld"><label for="${id}c">Неудач подряд до «нет связи»</label><input id="${id}c" class="num" value="3"></div>
+   <div class="fld"><label for="${id}b">Периодичность проверки, сек</label><input id="${id}b" class="num" value="10"></div>
+   <div class="fld"><label for="${id}c">Порог срабатывания</label><input id="${id}c" class="num" value="5"></div>
+   <div id="${id}w" ${need?'':'hidden'}><div class="fld"><label for="${id}a">Проверять IP-адрес или домен</label><input id="${id}a" class="mono" value="${probe}" placeholder="1.1.1.1 или example.com"></div>
+    <div class="hint">Для TCP без порта берётся 80, для TLS — 443.</div></div>
   </div>`};
 const advBlk=x=>`<details class="adv"><summary>Дополнительные настройки</summary><div style="display:flex;flex-direction:column;gap:18px;margin-top:16px">${x}</div></details>`;
 const pwOpt=(id,label,has)=>`<div><div class="fld"><label for="${id}">${label}</label><input id="${id}" type="password" autocomplete="new-password" placeholder="${has?'сохранён':''}" data-pw-optional></div>${has?'<div class="hint">Пусто — оставить сохранённый.</div>':''}</div>`;
@@ -2009,9 +2069,9 @@ const HELP={
  main:['Сводка сервера: нода, члены сети, адреса, домены, нагрузка и последние события. Карточки ведут в свои разделы.',['Проверить, что нода работает и сертификат не истекает','Добавить члена сети прямо с обзора','Открыть журнал последних изменений'],['«нет данных» у ноды — служба loft-panel-adm не отвечает: перезапустите её на сервере','Сертификат помечен — продлите его в «Доменах»']],
  node:['Настройки ноды loft: роль, фронты, маскировка, ретрансляторы, списки и доступ. Переключатели сразу идут на ноду.',['Включить нужные фронты (GET, WebSocket, HTTP/2, QUIC)','Добавить ретранслятор или CDN','Подождать секунду — нода перезапустится сама'],['После смены фронтов нода не поднялась — откройте журнал службы на вкладке «Основное»','Клиенты не подключаются — проверьте адрес для клиентов и сертификат']],
  members:['Устройства и люди, которые подключаются к серверу. У каждого свой ключ и профиль.',['Добавить члена — панель выдаст ссылку loft://, QR-код и файл .loft','Перевыпустить ключ, если устройство потеряно','Выключить члена, не удаляя его'],['Член не в сети — проверьте, что профиль на устройстве свежий','Выключатель сразу действует на ноде']],
- segments:['Сеть loft как свитч: сегменты вкладками сверху, плюс добавляет новый, как порт входит, правила доступа и текст network.conf.',['Создать сегмент плюсом в ряду вкладок','Задать, какие порты входят в сегмент','Разрешить или запретить доступ между сегментами'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
- channels:['Каналы WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
- adapters:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
+ segments:['Сеть loft как свитч: сегменты вкладками сверху, плюс добавляет новый, как порт входит, правила доступа и текст network.conf.',['Создать сегмент плюсом в ряду вкладок','Задать VLAN ID и какие порты входят в сегмент','Разрешить или запретить доступ между сегментами'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
+ channels:['Каналы WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка доступности интернета не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
+ adapters:['Адреса и маршруты сетевых адаптеров сервера и проверка, есть ли интернет через маршрут по умолчанию. Изменение адреса без подтверждения откатится через 2 минуты.',['Включить проверку доступности интернета','Добавить IP, выданный хостером','Подтвердить изменение адреса на плашке'],['Проверка «НЕДОСТУПЕН» — приоритеты пропускают «напрямую»','Сервер пропал из сети после правки адреса — подождите 2 минуты, изменение откатится само']],
  addrs:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
  'iface-priorities':['Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию — адаптер сервера и все каналы с выходом.',['Создать политику и отметить подключения','Перетащить члена, тег или сегмент на политику на вкладке «Применение политик»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике член или сегмент','Все подключения не работают — сработает пункт «Если ни один не работает»']],
  domains:['Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.',['Добавить домен через DNS-провайдера — записи панель создаст сама','Выпустить сертификат Let’s Encrypt','Для ручной зоны — проверить, что записи внесены у регистратора'],['Namecheap отказывает — укажите имя аккаунта (не e-mail), ключ и белый IP сервера','Сертификат не выпускается — имя должно указывать на этот сервер, а для HTTP-01 нужен открытый порт 80']],

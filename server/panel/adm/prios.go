@@ -145,26 +145,42 @@ func ensureDefaultPrio(s *chanStore) {
 
 // checkCheck validates and fills a channel's link probe.
 func checkCheck(c *admproto.Channel) error {
-	k := c.Check
-	if k == nil || k.Kind == "" {
-		c.Check = nil
-		return nil
+	k, err := normalizeCheck(c.Check, c.Type == admproto.ChanWG || c.Type == admproto.ChanOVPN || c.Type == admproto.ChanZT)
+	if err != nil {
+		return err
+	}
+	c.Check = k
+	return nil
+}
+
+// normalizeCheck fills defaults. pingOK is false for proxies and SSTP.
+func normalizeCheck(k *admproto.ChanCheck, pingOK bool) (*admproto.ChanCheck, error) {
+	if k == nil || k.Kind == "" || k.Kind == "off" {
+		return nil, nil
 	}
 	k.Probe = strings.TrimSpace(k.Probe)
 	switch k.Kind {
 	case "ping":
-		if c.Type != admproto.ChanWG && c.Type != admproto.ChanOVPN && c.Type != admproto.ChanZT {
-			return errors.New("link check: ping works for WireGuard, OpenVPN and ZeroTier; use a TCP connect")
+		if !pingOK {
+			return nil, errors.New("link check: ping works for WireGuard, OpenVPN, ZeroTier and the WAN adapter")
 		}
-		if k.Probe == "" || strings.ContainsAny(k.Probe, " :/\"") {
-			return errors.New("link check: an IP address or a host name to ping")
+		if k.Probe == "" || strings.ContainsAny(k.Probe, " /\"") {
+			return nil, errors.New("link check: an IP address or a host name to ping")
 		}
 	case "tcp":
+		k.Probe = withCheckPort(k.Probe, "80")
 		if h, _, err := net.SplitHostPort(k.Probe); err != nil || h == "" {
-			return errors.New("link check: host:port for the TCP connect")
+			return nil, errors.New("link check: a host or host:port for the TCP connect")
 		}
+	case "tls":
+		k.Probe = withCheckPort(k.Probe, "443")
+		if h, _, err := net.SplitHostPort(k.Probe); err != nil || h == "" {
+			return nil, errors.New("link check: a host or host:port for the TLS check")
+		}
+	case "auto":
+		k.Probe = ""
 	default:
-		return fmt.Errorf("link check: %q (ping, tcp)", k.Kind)
+		return nil, fmt.Errorf("link check: %q (off, ping, tcp, tls, auto)", k.Kind)
 	}
 	if k.Every == 0 {
 		k.Every = 10
@@ -173,12 +189,22 @@ func checkCheck(c *admproto.Channel) error {
 		k.Fails = 3
 	}
 	if k.Every < 1 || k.Every > 3600 {
-		return errors.New("link check: an interval from 1 to 3600 s")
+		return nil, errors.New("link check: an interval from 1 to 3600 s")
 	}
 	if k.Fails < 1 || k.Fails > 100 {
-		return errors.New("link check: from 1 to 100 failures in a row")
+		return nil, errors.New("link check: from 1 to 100 failures in a row")
 	}
-	return nil
+	return k, nil
+}
+
+func withCheckPort(s, def string) string {
+	if s == "" {
+		return s
+	}
+	if _, _, err := net.SplitHostPort(s); err == nil {
+		return s
+	}
+	return net.JoinHostPort(s, def)
 }
 
 func checkPrio(p *admproto.Prio, s chanStore) error {

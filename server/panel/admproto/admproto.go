@@ -68,6 +68,7 @@ const (
 	// OpChannelPrio adds (empty ID) or changes a priority list.
 	OpChannelPrio       = "channels.prio"        // Prio → ChannelsView
 	OpChannelPrioDelete = "channels.prio.delete" // ChannelName (the list ID) → ChannelsView
+	OpDirectCheck       = "channels.direct"      // ChanCheck → ChannelsView (empty kind = off)
 
 	OpMail       = "mail.get"    // → MailView
 	OpMailDomain = "mail.domain" // MailDomainSave → MailView
@@ -413,10 +414,11 @@ type Channel struct {
 	XR   *XRConf   `json:"xr,omitempty"`
 }
 
-// ChanCheck is a channel's link probe: while it fails, priority lists skip the channel.
+// ChanCheck is a link probe: while it fails, priority lists skip the channel
+// (or the host default route, for DirectCheck).
 type ChanCheck struct {
-	Kind  string `json:"kind"`            // ping (wg, ovpn, zt) | tcp
-	Probe string `json:"probe"`           // ping: IP or host; tcp: host:port
+	Kind  string `json:"kind"`            // ping | tcp | tls | auto; empty = off
+	Probe string `json:"probe"`           // ping: IP or host; tcp/tls: host or host:port
 	Every int    `json:"every,omitempty"` // seconds; 0 = 10
 	Fails int    `json:"fails,omitempty"` // failures in a row before "no link"; 0 = 3
 }
@@ -546,11 +548,12 @@ type ChannelStatus struct {
 
 // ChannelsView is everything the External channels tab shows.
 type ChannelsView struct {
-	Channels []Channel       `json:"channels"`
-	Status   []ChannelStatus `json:"status"`
-	Rules    ExitRules       `json:"rules"`
-	Prios    []Prio          `json:"prios"`
-	Lists    []string        `json:"lists"` // named lists in node.conf
+	Channels    []Channel       `json:"channels"`
+	Status      []ChannelStatus `json:"status"`
+	Rules       ExitRules       `json:"rules"`
+	Prios       []Prio          `json:"prios"`
+	Lists       []string        `json:"lists"`                  // named lists in node.conf
+	DirectCheck *ChanCheck      `json:"direct_check,omitempty"` // WAN ping-check; nil = off
 }
 
 // Relay is one allowlisted relay (enrol list).

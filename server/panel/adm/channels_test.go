@@ -149,7 +149,8 @@ func TestChannelChecks(t *testing.T) {
 		{Name: "px", Type: admproto.ChanPX, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4"}},
 		{Name: "px", Type: admproto.ChanPX, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80", UDP: "proxy"}},
 		{Name: "px", Type: admproto.ChanPX, Check: &admproto.ChanCheck{Kind: "ping", Probe: "1.1.1.1"}, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
-		{Name: "px", Type: admproto.ChanPX, Check: &admproto.ChanCheck{Kind: "tcp", Probe: "nohost"}, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
+		{Name: "px", Type: admproto.ChanPX, Check: &admproto.ChanCheck{Kind: "tcp", Probe: ""}, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
+		{Name: "px", Type: admproto.ChanPX, Check: &admproto.ChanCheck{Kind: "tls"}, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
 		{Name: "px", Type: admproto.ChanPX, Check: &admproto.ChanCheck{Kind: "tcp", Probe: "a.example:443", Every: 9999}, PX: &admproto.PXConf{Kind: "http", Addr: "1.2.3.4:80"}},
 		{Name: "zt", Type: admproto.ChanZT, ZT: &admproto.ZTConf{Network: "123"}},
 		{Name: "vpn", Type: admproto.ChanOVPN, OVPN: &admproto.OVPNConf{Config: "client\nremote a 1194\nup /bin/sh\n"}},
@@ -463,6 +464,39 @@ func TestDefaultPrioCannotDelete(t *testing.T) {
 	eg, _ := os.ReadFile(o.egressFile())
 	if !strings.Contains(string(eg), "prio default direct then block\n") || !strings.Contains(string(eg), "default via default\n") {
 		t.Fatalf("egress.conf:\n%s", eg)
+	}
+}
+
+func TestDirectCheck(t *testing.T) {
+	o, _ := chanOps(t)
+	ctx := context.Background()
+	if _, err := o.ChannelDirectCheck(ctx, admproto.ChanCheck{Kind: "tls"}); err == nil {
+		t.Fatal("tls without a host")
+	}
+	v, err := o.ChannelDirectCheck(ctx, admproto.ChanCheck{Kind: "auto", Every: 10, Fails: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.DirectCheck == nil || v.DirectCheck.Kind != "auto" || v.DirectCheck.Every != 10 || v.DirectCheck.Fails != 5 {
+		t.Fatalf("view %+v", v.DirectCheck)
+	}
+	eg, _ := os.ReadFile(o.egressFile())
+	if !strings.Contains(string(eg), "direct check auto every 10 fails 5\n") {
+		t.Fatalf("egress.conf:\n%s", eg)
+	}
+	v, err = o.ChannelDirectCheck(ctx, admproto.ChanCheck{Kind: "tls", Probe: "1.1.1.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.DirectCheck.Probe != "1.1.1.1:443" {
+		t.Fatalf("tls probe %q", v.DirectCheck.Probe)
+	}
+	v, err = o.ChannelDirectCheck(ctx, admproto.ChanCheck{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.DirectCheck != nil {
+		t.Fatalf("off left %+v", v.DirectCheck)
 	}
 }
 
