@@ -81,6 +81,10 @@ type GET struct {
 	attachLive   atomic.Bool
 	attachMu     sync.Mutex
 	attach       io.Closer
+	lanes        []*attachLane
+	nextLane     atomic.Int64
+	holdDispatch atomic.Bool
+	dispatchOn   atomic.Bool
 	attaching    atomic.Bool
 	attachOff    atomic.Bool
 	dropToGET    atomic.Bool
@@ -1690,6 +1694,9 @@ type serverSess struct {
 	dropReason string
 	bulk       string
 	att        *attachLink
+	links      []*attachLink
+	linkSeq    int
+	pumping    bool
 	seen       *ecrypto.Nonces
 }
 

@@ -110,6 +110,7 @@ func TestNodeInfoStatusFronts(t *testing.T) {
 }
 
 func TestAttachOutboundUsesStatusPath(t *testing.T) {
+	SetDirectNode("")
 	get := config.Outbound{Type: "get", URL: "https://huy.com"}
 	learned := []wire.FrontEP{
 		{Name: wire.FrontH2, Path: "/portal/api/tunnel"},
@@ -126,6 +127,20 @@ func TestAttachOutboundUsesStatusPath(t *testing.T) {
 	def := attachOutbound(get, wire.FrontH2, nil)
 	if def.Path != config.DefaultH2Path {
 		t.Fatalf("default %q", def.Path)
+	}
+}
+
+func TestAttachOutboundDirectNode(t *testing.T) {
+	SetDirectNode("https://loft.example:444")
+	t.Cleanup(func() { SetDirectNode("") })
+	get := config.Outbound{Type: "get", URL: "https://cdn.example", CDN: "yandex"}
+	h2 := attachOutbound(get, wire.FrontH2, nil)
+	if !strings.Contains(h2.URL, "loft.example:444") || strings.Contains(h2.URL, "cdn.example") {
+		t.Fatalf("h2 url %q", h2.URL)
+	}
+	ws := attachOutbound(get, wire.FrontWS, nil)
+	if !strings.Contains(ws.URL, "loft.example:444") || strings.Contains(ws.URL, "cdn.example") {
+		t.Fatalf("ws url %q", ws.URL)
 	}
 }
 

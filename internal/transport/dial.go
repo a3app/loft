@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -119,6 +120,9 @@ func startFront(ctx context.Context, token string, o config.Outbound, offer wire
 	if err != nil {
 		return nil, err
 	}
+	if !markReady(o) {
+		return nil, fmt.Errorf("%s: mask pub unknown", front)
+	}
 	if front == wire.FrontL3 {
 		offer |= wire.CapL3
 	} else {
@@ -134,8 +138,8 @@ func startFront(ctx context.Context, token string, o config.Outbound, offer wire
 		if err := y.Start(ctx); err != nil {
 			return nil, err
 		}
-		// Overlay STATUS is the GET session. Extra fronts attach in the
-		// background; a CDN GET URL does not speak ws/h2/quic/h3.
+		// Overlay STATUS is the GET session. Extra fronts attach to the
+		// node URL in the background and share this mux.
 		go y.attachExtras(ctx)
 		return y, nil
 	case "ws":
@@ -304,11 +308,26 @@ func StartSelected(ctx context.Context, cfg *config.ClientConfig) (Dialer, confi
 	}
 	offer := helloCaps(cfg)
 	var last error
-	try := func(o config.Outbound) (Dialer, error) {
-		return startWithOffer(ctx, cfg.Token, o, offer)
+	// First front gets a longer budget (CDN origin can sit ~5s). The rest
+	// must still fit in the GUI 25s watchdog: a stuck SYN used to hold
+	// DialTLS with no context until the OS gave up.
+	tryBudget := func(o config.Outbound, budget time.Duration) (Dialer, error) {
+		if !markReady(o) {
+			return nil, fmt.Errorf("%s: mask pub unknown", o.Type)
+		}
+		cctx, cancel := context.WithTimeout(ctx, budget)
+		defer cancel()
+		return startWithOffer(cctx, cfg.Token, o, offer)
 	}
-	for _, o := range list {
-		d, err := try(o)
+	try := func(o config.Outbound) (Dialer, error) {
+		return tryBudget(o, nextDialBudget)
+	}
+	for i, o := range list {
+		budget := nextDialBudget
+		if i == 0 {
+			budget = firstDialBudget
+		}
+		d, err := tryBudget(o, budget)
 		if err != nil {
 			log.Printf("loft dial %s: %v", o.Type, err)
 			last = fmt.Errorf("%s: %w", o.Name, err)
@@ -415,6 +434,32 @@ func replaceURLHost(raw, hostport string) string {
 		u.Host = net.JoinHostPort(host, port)
 	}
 	return u.String()
+}
+
+// First dial may wait out a slow CDN origin fetch. Later fronts stay short
+// so get, ws and h2 all fit under the macOS helper's 25s watchdog.
+const (
+	firstDialBudget = 8 * time.Second
+	nextDialBudget  = 5 * time.Second
+)
+
+// markReady is false for quic/h3 until mask_pub is known. A v2 Initial on a
+// mask node is spliced to decoy and the dial sits until HandshakeIdleTimeout.
+func markReady(o config.Outbound) bool {
+	switch strings.ToLower(strings.TrimSpace(o.Type)) {
+	case wire.FrontQUIC, wire.FrontH3:
+	default:
+		return true
+	}
+	if len(ParseMaskPub(o.MaskPub)) == 32 {
+		return true
+	}
+	addr, err := outboundAddr(o)
+	if err != nil {
+		return false
+	}
+	loadFrontCache(addr)
+	return len(CachedMaskPub(addr)) == 32
 }
 
 // normalizeType maps a front name to the wire token (get, ws, h2, quic, h3, l3).

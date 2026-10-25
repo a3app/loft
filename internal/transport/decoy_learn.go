@@ -287,6 +287,7 @@ func adoptDecoy(addr, usedSNI string, st wire.Status, apply bool) error {
 	RememberDecoy(addr, st.Decoy)
 	RememberFronts(addr, st.Caps)
 	RememberMaskPub(addr, st.MaskPub)
+	publishMask(st.MaskPub)
 	RememberReplicas(addr, st.Replicas)
 	RememberCanary(addr, st.CanaryFlags, st.CanaryPad)
 	RememberRoster(st.Roster)
@@ -294,6 +295,37 @@ func adoptDecoy(addr, usedSNI string, st wire.Status, apply bool) error {
 	RememberVis(st)
 	saveFrontCache(addr)
 	return nil
+}
+
+// peerAddrs are every outbound host:port of this process (CDN and node).
+// Status mask_pub is a property of the node, not of the dial that learned it.
+var peerAddrs sync.Map
+
+// NoteOutbound remembers o's host:port so a later Status mask_pub is stored
+// for every front, not only the address that completed the handshake.
+func NoteOutbound(o config.Outbound) {
+	addr, err := outboundAddr(o)
+	if err != nil || addr == "" {
+		return
+	}
+	peerAddrs.Store(addr, struct{}{})
+}
+
+// publishMask copies pub onto every noted outbound and the disk cache.
+// A GET through the CDN otherwise leaves quic/h3 on the node address unmarked.
+func publishMask(pub []byte) {
+	if len(pub) != 32 {
+		return
+	}
+	peerAddrs.Range(func(k, _ any) bool {
+		addr, _ := k.(string)
+		if addr == "" {
+			return true
+		}
+		RememberMaskPub(addr, pub)
+		saveFrontCache(addr)
+		return true
+	})
 }
 
 // DiscoverDecoy dials addr without a session HMAC so the node splices to its

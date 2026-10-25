@@ -136,7 +136,7 @@ func dialH2CONNECT(ctx context.Context, cfg config.Outbound, token []byte) (pare
 	// Own SNI stays on uTLS even after Status cached mask_pub. DialMask
 	// checks the leaf serial; the node certificate is not that leaf.
 	// dialTLS enters mask only when SNI is the decoy (maskOnDecoySNI).
-	c, err := dialTLS(addr, sni, cfg.Fingerprint, insecure, token)
+	c, err := dialTLSContext(ctx, addr, sni, cfg.Fingerprint, insecure, token)
 	if err != nil {
 		return nil, nil, "", "", err
 	}

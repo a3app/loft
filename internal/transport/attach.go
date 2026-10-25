@@ -5,7 +5,9 @@ package transport
 
 import (
 	"io"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	ecrypto "github.com/a3app/loft/internal/crypto"
@@ -14,24 +16,51 @@ import (
 )
 
 type attachLink struct {
+	id    int
 	front string
 	conn  io.Closer
+	write func([]byte) error
 	stop  func()
 	done  <-chan struct{}
+	dead  atomic.Bool
 }
 
-func (ss *serverSess) setAttach(front string, conn io.Closer, stop func(), done <-chan struct{}) *attachLink {
-	link := &attachLink{front: front, conn: conn, stop: stop, done: done}
+func (ss *serverSess) setAttach(front string, conn io.Closer, write func([]byte) error, stop func(), done <-chan struct{}) *attachLink {
 	ss.mu.Lock()
-	old := ss.att
+	ss.linkSeq++
+	link := &attachLink{id: ss.linkSeq, front: front, conn: conn, write: write, stop: stop, done: done}
+	ss.links = append(ss.links, link)
 	ss.att = link
-	ss.bulk = front
+	ss.bulk = joinBulk(ss.links)
+	start := !ss.pumping
+	ss.pumping = true
 	ss.mu.Unlock()
-	stopAttach(old)
 	if ss.cond != nil {
 		ss.cond.Broadcast()
 	}
+	if start {
+		go ss.dispatchAttach()
+	}
 	return link
+}
+
+func joinBulk(links []*attachLink) string {
+	var b strings.Builder
+	seen := map[string]bool{}
+	for _, l := range links {
+		if l == nil || l.front == "" || l.dead.Load() || seen[l.front] {
+			continue
+		}
+		seen[l.front] = true
+		if b.Len() > 0 {
+			b.WriteByte('+')
+		}
+		b.WriteString(l.front)
+	}
+	if b.Len() == 0 {
+		return wire.FrontGET
+	}
+	return b.String()
 }
 
 func stopAttach(att *attachLink) {
@@ -51,9 +80,20 @@ func stopAttach(att *attachLink) {
 
 func (ss *serverSess) clearAttach(link *attachLink) {
 	ss.mu.Lock()
-	if ss.att == link {
+	var left []*attachLink
+	for _, l := range ss.links {
+		if l == nil || l == link {
+			continue
+		}
+		left = append(left, l)
+	}
+	ss.links = left
+	if len(left) == 0 {
 		ss.att = nil
 		ss.bulk = wire.FrontGET
+	} else {
+		ss.att = left[len(left)-1]
+		ss.bulk = joinBulk(left)
 	}
 	ss.mu.Unlock()
 	if ss.cond != nil {
@@ -76,9 +116,81 @@ func (ss *serverSess) attachPulls() bool {
 
 func (ss *serverSess) closeAttach() {
 	ss.mu.Lock()
-	att := ss.att
+	links := ss.links
+	ss.links = nil
+	ss.att = nil
+	ss.bulk = wire.FrontGET
 	ss.mu.Unlock()
-	stopAttach(att)
+	for _, l := range links {
+		if l == nil {
+			continue
+		}
+		l.dead.Store(true)
+		stopAttach(l)
+	}
+	if ss.cond != nil {
+		ss.cond.Broadcast()
+	}
+}
+
+func (ss *serverSess) fanLanes() []fanLane {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	var out []fanLane
+	for _, l := range ss.links {
+		if l == nil || l.write == nil || l.dead.Load() {
+			continue
+		}
+		out = append(out, fanLane{id: l.id, dead: &l.dead, write: l.write})
+	}
+	return out
+}
+
+// dispatchAttach is the only server Puller for attached fronts. One stream
+// stays on one front. GET resumes when the last link is gone.
+func (ss *serverSess) dispatchAttach() {
+	fan := &attachFan{key: append([]byte(nil), ss.key...), bind: map[uint32]int{}}
+	for {
+		if ss.mux == nil || ss.mux.Closed() {
+			return
+		}
+		lanes := ss.fanLanes()
+		if len(lanes) == 0 {
+			ss.mu.Lock()
+			if ss.liveLinkCount() == 0 {
+				ss.pumping = false
+				ss.mu.Unlock()
+				return
+			}
+			ss.mu.Unlock()
+			continue
+		}
+		max, wait := wsPullBytes, 4*time.Millisecond
+		if ss.mux.PriQueued() > 0 {
+			max = wsPriBytes
+			wait = 0
+		}
+		var frames []wire.Frame
+		if DraftPaused() {
+			frames = ss.mux.PullPri(max, wait)
+		} else {
+			frames = ss.mux.Pull(max, wait)
+		}
+		if len(frames) == 0 {
+			continue
+		}
+		fan.send(lanes, frames)
+	}
+}
+
+func (ss *serverSess) liveLinkCount() int {
+	n := 0
+	for _, l := range ss.links {
+		if l != nil && !l.dead.Load() {
+			n++
+		}
+	}
+	return n
 }
 
 func (ss *serverSess) takeAttachNonce(nonce []byte) error {
@@ -126,18 +238,13 @@ func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
 		return
 	}
 	done := make(chan struct{})
-	pumpDone := make(chan struct{})
 	var once sync.Once
 	stop := func() { once.Do(func() { close(done) }) }
-	link := ss.setAttach(front, conn, stop, pumpDone)
-	go func() {
-		defer close(pumpDone)
-		pumpAttach(ss.mux, func(b []byte) error { return writeAttach(conn, b) }, ss.key, done)
-	}()
+	link := ss.setAttach(front, conn, func(b []byte) error { return writeAttach(conn, b) }, stop, done)
 	defer func() {
+		link.dead.Store(true)
 		stop()
 		_ = conn.Close()
-		<-pumpDone
 		ss.clearAttach(link)
 	}()
 	for {

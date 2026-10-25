@@ -7,9 +7,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/quic-go/quic-go"
@@ -35,13 +38,21 @@ func (p pairCloser) Close() error {
 
 func (g *GET) closeAttach() {
 	g.attachOff.Store(true)
+	g.holdDispatch.Store(false)
 	g.dropToGET.Store(true)
 	g.attachMu.Lock()
-	c := g.attach
+	lanes := g.lanes
+	g.lanes = nil
 	g.attach = nil
 	g.attachMu.Unlock()
-	if c != nil {
-		_ = c.Close()
+	for _, ln := range lanes {
+		if ln == nil {
+			continue
+		}
+		ln.dead.Store(true)
+		if ln.conn != nil {
+			_ = ln.conn.Close()
+		}
 	}
 	g.attachWG.Wait()
 	g.attachLive.Store(false)
@@ -68,29 +79,30 @@ func (g *GET) attachStopped() bool {
 
 func (g *GET) unbindAttach(c io.Closer) {
 	g.attachMu.Lock()
-	mine := g.attach == c
-	if mine {
-		g.attach = nil
+	for _, ln := range g.lanes {
+		if ln != nil && ln.conn == c {
+			ln.dead.Store(true)
+		}
 	}
-	if mine || g.attach == nil {
-		g.attachLive.Store(false)
-	}
+	left := g.liveCountLocked()
 	g.attachMu.Unlock()
-	if !mine || g.attachOff.Load() || g.attachStopped() {
+	if left > 0 || g.holdDispatch.Load() || g.attachOff.Load() || g.attachStopped() {
 		return
 	}
+	g.attachLive.Store(false)
+	g.dropToGET.Store(true)
 	go g.attachExtras(context.Background())
 }
 
-// attachExtras tries one extra front on the live GET session. Failures stay on GET.
+// attachExtras opens every mux front the node listed, on the node URL.
+// GET stays up. Bulk moves onto the fronts that stayed up. One stream
+// stays on one front. A CDN profile used to skip this because g.cfg.URL
+// is the CDN host, which does not speak ws/h2/quic/h3.
 func (g *GET) attachExtras(ctx context.Context) {
 	if g == nil || !g.caps.Has(wire.CapTicket) || len(g.ticket) == 0 || len(g.key) == 0 {
 		return
 	}
-	if strings.TrimSpace(g.cfg.CDN) != "" {
-		return
-	}
-	if g.attachStopped() || g.attachLive.Load() {
+	if g.attachStopped() {
 		return
 	}
 	if !g.attaching.CompareAndSwap(false, true) {
@@ -100,16 +112,43 @@ func (g *GET) attachExtras(ctx context.Context) {
 	if g.attachStopped() || g.attachLive.Load() {
 		return
 	}
+	g.holdDispatch.Store(true)
+	defer func() {
+		g.holdDispatch.Store(false)
+		g.finishAttach()
+	}()
 	for _, f := range g.attachNames() {
 		if !g.caps.Has(wire.CapForFront(f)) || !g.offer.Has(wire.CapForFront(f)) {
 			continue
 		}
-		if err := g.attachFront(ctx, f); err == nil {
+		o := attachOutbound(g.cfg, f, g.fronts)
+		if !markReady(o) {
+			continue
+		}
+		actx, cancel := context.WithTimeout(ctx, 4*time.Second)
+		err := g.attachFront(actx, f)
+		cancel()
+		if err != nil && g.attachStopped() {
 			return
 		}
-		if g.attachStopped() {
-			return
-		}
+	}
+	// A node that still keeps one 0x04 closes the previous link inside
+	// setAttach, after the new ack. Readers need a moment to see EOF
+	// before the dispatcher Pulls onto a conn the node already dropped.
+	if g.liveCount() > 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func (g *GET) finishAttach() {
+	if g.attachStopped() || g.attachOff.Load() || g.liveCount() == 0 {
+		return
+	}
+	g.attachLive.Store(true)
+	g.dropToGET.Store(false)
+	g.kickDispatch()
+	if names := g.liveFronts(); len(names) > 0 {
+		log.Printf("attach %s", strings.Join(names, ","))
 	}
 }
 
@@ -151,9 +190,25 @@ func (g *GET) attachFront(ctx context.Context, front string) error {
 	}
 }
 
+// directNode is the profile URL (-url). Edge GET's cfg.URL is the CDN host.
+var directNode atomic.Value // string
+
+// SetDirectNode is the node origin extra fronts dial. Empty keeps cfg.URL.
+func SetDirectNode(raw string) {
+	directNode.Store(strings.TrimSpace(raw))
+}
+
+func directNodeURL() string {
+	s, _ := directNode.Load().(string)
+	return s
+}
+
 func attachOutbound(get config.Outbound, front string, learned []wire.FrontEP) config.Outbound {
 	o := get
 	o.Type = front
+	if base := directNodeURL(); base != "" {
+		o.URL = base
+	}
 	path, rawURL := frontEP(learned, front)
 	if path == "" {
 		switch front {
@@ -174,7 +229,7 @@ func attachOutbound(get config.Outbound, front string, learned []wire.FrontEP) c
 		}
 		return o
 	}
-	u := strings.TrimSuffix(get.URL, "/")
+	u := strings.TrimSuffix(o.URL, "/")
 	switch front {
 	case wire.FrontH2, wire.FrontH3:
 		o.Path = path
@@ -245,33 +300,146 @@ func (g *GET) runAttach(ctx context.Context, conn io.ReadWriteCloser, front stri
 		conn.Close()
 		return fmt.Errorf("attach: closed")
 	}
+	if len(rest) > 0 {
+		g.sess.Push(rest)
+	}
+	g.arm(conn, func(b []byte) error { return writeMsg(conn, b) }, func() {
+		g.attachRead(conn, readMsg)
+	}, front)
+	return nil
+}
+
+type attachLane struct {
+	id    int
+	front string
+	conn  io.Closer
+	write func([]byte) error
+	dead  atomic.Bool
+}
+
+func (g *GET) arm(conn io.Closer, write func([]byte) error, read func(), front string) {
+	g.attachWG.Add(1)
+	go func() {
+		defer g.attachWG.Done()
+		read()
+		_ = conn.Close()
+		g.unbindAttach(conn)
+	}()
+	g.adoptLane(conn, write, front)
+}
+
+func (g *GET) adoptLane(conn io.Closer, write func([]byte) error, front string) {
+	ln := &attachLane{
+		id:    int(g.nextLane.Add(1)),
+		front: front,
+		conn:  conn,
+		write: write,
+	}
 	g.attachMu.Lock()
-	old := g.attach
+	g.lanes = append(g.lanes, ln)
 	g.attach = conn
 	g.attachMu.Unlock()
-	if old != nil {
-		_ = old.Close()
-		g.attachWG.Wait()
+	if g.holdDispatch.Load() {
+		return
 	}
 	g.attachOff.Store(false)
 	g.attachLive.Store(true)
 	g.dropToGET.Store(false)
-	if len(rest) > 0 {
-		g.sess.Push(rest)
+	g.kickDispatch()
+}
+
+func (g *GET) liveCount() int {
+	g.attachMu.Lock()
+	defer g.attachMu.Unlock()
+	return g.liveCountLocked()
+}
+
+func (g *GET) liveCountLocked() int {
+	n := 0
+	for _, ln := range g.lanes {
+		if ln != nil && !ln.dead.Load() {
+			n++
+		}
 	}
-	done := make(chan struct{})
+	return n
+}
+
+func (g *GET) liveFronts() []string {
+	g.attachMu.Lock()
+	defer g.attachMu.Unlock()
+	var out []string
+	seen := map[string]bool{}
+	for _, ln := range g.lanes {
+		if ln == nil || ln.dead.Load() || ln.front == "" || seen[ln.front] {
+			continue
+		}
+		seen[ln.front] = true
+		out = append(out, ln.front)
+	}
+	return out
+}
+
+func (g *GET) fanLanes() []fanLane {
+	g.attachMu.Lock()
+	defer g.attachMu.Unlock()
+	var out []fanLane
+	for _, ln := range g.lanes {
+		if ln == nil || ln.write == nil || ln.dead.Load() {
+			continue
+		}
+		out = append(out, fanLane{id: ln.id, dead: &ln.dead, write: ln.write})
+	}
+	return out
+}
+
+func (g *GET) kickDispatch() {
+	if g.attachOff.Load() || g.attachStopped() || g.liveCount() == 0 {
+		return
+	}
+	if !g.dispatchOn.CompareAndSwap(false, true) {
+		return
+	}
 	g.attachWG.Add(1)
 	go func() {
-		defer close(done)
-		g.attachRead(conn, readMsg)
-		_ = conn.Close()
-	}()
-	go func() {
 		defer g.attachWG.Done()
-		pumpAttach(g.sess, func(b []byte) error { return writeMsg(conn, b) }, g.key, done)
-		g.unbindAttach(conn)
+		g.dispatchLoop()
+		g.dispatchOn.Store(false)
+		if !g.attachOff.Load() && !g.attachStopped() && g.liveCount() > 0 {
+			g.kickDispatch()
+		}
 	}()
-	return nil
+}
+
+func (g *GET) dispatchLoop() {
+	fan := &attachFan{key: g.key, bind: map[uint32]int{}}
+	for {
+		if g.attachStopped() || g.attachOff.Load() {
+			return
+		}
+		lanes := g.fanLanes()
+		if len(lanes) == 0 {
+			if g.holdDispatch.Load() {
+				time.Sleep(5 * time.Millisecond)
+				continue
+			}
+			return
+		}
+		max, wait := wsPullBytes, 4*time.Millisecond
+		if g.sess.PriQueued() > 0 {
+			max = wsPriBytes
+			wait = 0
+		}
+		var frames []wire.Frame
+		if DraftPaused() {
+			frames = g.sess.PullPri(max, wait)
+		} else {
+			frames = g.sess.Pull(max, wait)
+		}
+		if len(frames) == 0 {
+			continue
+		}
+		fan.send(lanes, frames)
+	}
 }
 
 func (g *GET) attachRead(conn io.Reader, read func(io.Reader) ([]byte, error)) {
@@ -326,8 +494,8 @@ func (g *GET) attachWS(ctx context.Context, o config.Outbound) error {
 					InsecureSkipVerify: insecure,
 					NextProtos:         []string{"http/1.1"},
 				},
-				DialTLSContext: func(context.Context, string, string) (net.Conn, error) {
-					return dialTLSALPN(addr, sni, o.Fingerprint, insecure, g.token, []string{"http/1.1"})
+				DialTLSContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+					return dialTLSALPNContext(ctx, addr, sni, o.Fingerprint, insecure, g.token, []string{"http/1.1"})
 				},
 			},
 		}
@@ -379,34 +547,14 @@ func (g *GET) attachWS(ctx context.Context, o config.Outbound) error {
 		_ = wrap.Close()
 		return fmt.Errorf("attach: closed")
 	}
-	g.attachMu.Lock()
-	old := g.attach
-	g.attach = wrap
-	g.attachMu.Unlock()
-	if old != nil {
-		_ = old.Close()
-		g.attachWG.Wait()
-	}
-	g.attachOff.Store(false)
-	g.attachLive.Store(true)
-	g.dropToGET.Store(false)
 	if len(rest) > 0 {
 		g.sess.Push(rest)
 	}
-	done := make(chan struct{})
-	g.attachWG.Add(1)
-	go func() {
-		defer close(done)
+	g.arm(wrap, wrap.WriteBinary, func() {
 		g.attachRead(&wsReader{read: wrap.ReadBinary}, func(r io.Reader) ([]byte, error) {
 			return r.(*wsReader).read()
 		})
-		_ = wrap.Close()
-	}()
-	go func() {
-		defer g.attachWG.Done()
-		pumpAttach(g.sess, wrap.WriteBinary, g.key, done)
-		g.unbindAttach(wrap)
-	}()
+	}, wire.FrontWS)
 	return nil
 }
 

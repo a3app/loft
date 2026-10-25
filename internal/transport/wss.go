@@ -74,7 +74,7 @@ func (w *WSS) Start(ctx context.Context) error {
 					NextProtos:         []string{"http/1.1"},
 				},
 				DialTLSContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-					return dialTLSALPN(addr, sni, w.cfg.Fingerprint, insecure, w.token, []string{"http/1.1"})
+					return dialTLSALPNContext(ctx, addr, sni, w.cfg.Fingerprint, insecure, w.token, []string{"http/1.1"})
 				},
 			},
 		}

@@ -3,6 +3,7 @@ package transport
 // uTLS dial, session_id inject, ClientHello split, and HTTP/2 client.
 
 import (
+	"context"
 	"crypto/ecdh"
 	"crypto/tls"
 	"fmt"
@@ -94,16 +95,31 @@ func dialTLS(addr, sni, fingerprint string, insecure bool, token []byte) (net.Co
 	return dialTLSALPN(addr, sni, fingerprint, insecure, token, []string{"h2", "http/1.1"})
 }
 
+// dialTLSContext is dialTLS bound to ctx. A cancelled ctx aborts SYN and Handshake.
+func dialTLSContext(ctx context.Context, addr, sni, fingerprint string, insecure bool, token []byte) (net.Conn, error) {
+	return dialTLSALPNContext(ctx, addr, sni, fingerprint, insecure, token, []string{"h2", "http/1.1"})
+}
+
 // dialTLSALPN is dialTLS with an explicit ALPN list. WebSocket must offer
 // only http/1.1: the node prefers h2, and an h2 socket cannot HTTP Upgrade.
 func dialTLSALPN(addr, sni, fingerprint string, insecure bool, token []byte, alpn []string) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return dialTLSALPNContext(ctx, addr, sni, fingerprint, insecure, token, alpn)
+}
+
+// dialTLSALPNContext is dialTLSALPN bound to ctx.
+func dialTLSALPNContext(ctx context.Context, addr, sni, fingerprint string, insecure bool, token []byte, alpn []string) (net.Conn, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if len(alpn) == 0 {
 		alpn = []string{"h2", "http/1.1"}
 	}
 	if len(token) > 0 && maskOnDecoySNI(addr, sni) {
 		return dialMaskALPN(addr, sni, fingerprint, token, CachedMaskPub(addr), alpn)
 	}
-	raw, err := protect.Timeout("tcp4", addr, 10*time.Second)
+	raw, err := protect.DialContext(ctx, "tcp4", addr)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +142,7 @@ func dialTLSALPN(addr, sni, fingerprint string, insecure bool, token []byte, alp
 		raw.Close()
 		return nil, err
 	}
-	if err := u.Handshake(); err != nil {
+	if err := u.HandshakeContext(ctx); err != nil {
 		raw.Close()
 		if maskHandshake(err) && maskOnDecoySNI(addr, sni) {
 			return dialMaskALPN(addr, sni, fingerprint, token, CachedMaskPub(addr), alpn)
@@ -402,8 +418,8 @@ func httpClient(o config.Outbound, token string) (*http.Client, error) {
 		AllowHTTP:        false,
 		ReadIdleTimeout:  idlePing,
 		MaxReadFrameSize: 1 << 20,
-		DialTLS: func(network, _ string, _ *tls.Config) (net.Conn, error) {
-			return dialTLS(addr, sni, o.Fingerprint, insecure, tok)
+		DialTLSContext: func(ctx context.Context, network, _ string, _ *tls.Config) (net.Conn, error) {
+			return dialTLSContext(ctx, addr, sni, o.Fingerprint, insecure, tok)
 		},
 	}
 	return &http.Client{Transport: t2}, nil
