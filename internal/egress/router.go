@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -41,6 +42,7 @@ type Options struct {
 type Who struct {
 	Member string
 	Tags   []string
+	VLAN   int // overlay VLAN; 0 is the network's untagged segment
 }
 
 type chanState struct {
@@ -217,6 +219,8 @@ func (r *Router) Route(who Who, host string) string {
 			for _, t := range who.Tags {
 				ok = ok || strings.EqualFold(t, ru.Value)
 			}
+		case "vlan":
+			ok = who.Member != "" && ru.Value == strconv.Itoa(who.VLAN)
 		case "list":
 			ok = inList(r.opt.Lists[ru.Value], host)
 		}

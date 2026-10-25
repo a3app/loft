@@ -2,7 +2,7 @@
 // (the server's own route), through a kernel interface (a WireGuard,
 // OpenVPN or ZeroTier channel), through a SOCKS5 or HTTP(S) proxy, or
 // through an SSTP session the node holds itself. Rules pick a channel by
-// member, member tag or named address list and send it to a priority list:
+// member, member tag, overlay VLAN (segment) or named address list and send it to a priority list:
 // channels in order, the first one that works carries the traffic, then a
 // last step (direct or block). A channel can check its link; while the
 // check fails, priorities skip it. A rule may still name a channel; then its
@@ -20,6 +20,7 @@
 //	prio de px-office web then block multi
 //	rule member bob via de
 //	rule tag office via main
+//	rule vlan 10 via main
 //	rule list blocked-ru via main
 //	default via default
 package egress
@@ -99,7 +100,7 @@ type Limit struct {
 
 // Rule sends matching traffic to Via (a priority, a channel, direct or block).
 type Rule struct {
-	Match string // member | tag | list
+	Match string // member | tag | vlan | list
 	Value string
 	Via   string
 }
@@ -323,10 +324,17 @@ func (c *Config) line(t []string) error {
 		c.Prios = append(c.Prios, p)
 	case "rule":
 		if len(t) != 5 || t[3] != "via" {
-			return errors.New("rule member|tag|list VALUE via CHANNEL")
+			return errors.New("rule member|tag|vlan|list VALUE via CHANNEL")
 		}
-		if t[1] != "member" && t[1] != "tag" && t[1] != "list" {
+		if t[1] != "member" && t[1] != "tag" && t[1] != "vlan" && t[1] != "list" {
 			return fmt.Errorf("unknown rule match %q", t[1])
+		}
+		if t[1] == "vlan" {
+			id, err := strconv.Atoi(t[2])
+			if err != nil || id < 0 || id > 4094 {
+				return errors.New("rule vlan wants an id 0…4094")
+			}
+			t[2] = strconv.Itoa(id)
 		}
 		c.Rules = append(c.Rules, Rule{Match: t[1], Value: t[2], Via: t[4]})
 	case "default":

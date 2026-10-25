@@ -35,7 +35,7 @@ func dialOut(who egress.Who, target string) (net.Conn, error) {
 	return net.DialTimeout("tcp4", target, 10*time.Second)
 }
 
-// Who returns the member attached on sess and its tags.
+// Who returns the member attached on sess, its tags and overlay VLAN.
 func (o *Overlay) Who(sess *mux.Session) egress.Who {
 	if o == nil {
 		return egress.Who{}
@@ -48,8 +48,11 @@ func (o *Overlay) Who(sess *mux.Session) egress.Who {
 	}
 	o.mu.Unlock()
 	w := egress.Who{Member: member}
-	if m := o.N().MemberByID(member); member != "" && m != nil {
-		w.Tags = m.Tags
+	if n := o.N(); member != "" && n != nil {
+		if m := n.MemberByID(member); m != nil {
+			w.Tags = m.Tags
+			w.VLAN = m.VLAN
+		}
 	}
 	return w
 }

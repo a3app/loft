@@ -21,6 +21,7 @@ channel web http 127.0.0.1:2 tls fail block
 channel office sstp vpn.example.org:443 user office pass x auth mschapv2 insecure off
 rule member bob via px
 rule tag office via wg-nl
+rule vlan 10 via office
 rule list blocked via web
 default direct
 `
@@ -48,6 +49,8 @@ func TestParseRender(t *testing.T) {
 		"channel a dev x via b\nchannel b dev y", // only proxies via
 		"rule member bob via nowhere",
 		"rule host x via direct",
+		"rule vlan x via direct",
+		"rule vlan 4095 via direct",
 		"default via nowhere",
 		"frobnicate",
 	} {
@@ -67,7 +70,10 @@ func TestRoute(t *testing.T) {
 		want string
 	}{
 		{Who{Member: "bob"}, "a.com", "px"},
+		{Who{Member: "bob", VLAN: 10}, "a.com", "px"},
 		{Who{Member: "alice", Tags: []string{"Office"}}, "a.com", "wg-nl"},
+		{Who{Member: "carol", VLAN: 10}, "a.com", "office"},
+		{Who{Member: "dave"}, "a.com", Direct},
 		{Who{}, "www.example.ru", "web"},
 		{Who{}, "example.ru", "web"},
 		{Who{}, "198.51.100.9", "web"},
