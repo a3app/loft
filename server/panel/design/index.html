@@ -113,6 +113,9 @@ select.hdr-pill{color-scheme:dark;padding-right:8px}
 .tabs{display:flex;gap:24px;border-bottom:1px solid var(--line);margin:0 0 28px;overflow-x:auto;scrollbar-width:none}
 .tab{flex:0 0 auto;min-height:44px;padding:0;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:transparent;color:var(--mute);font-weight:500;cursor:pointer;white-space:nowrap}
 .tab.on{color:var(--text);border-bottom-color:var(--ink)}
+.tabs+.tabs{margin-top:-12px}
+.tab.plus{color:var(--link);min-width:44px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center}
+.tab.plus svg{width:20px;height:20px}
 
 .blk{margin-bottom:40px;min-width:0}
 .blk-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
@@ -1404,14 +1407,22 @@ const segsOf=(n)=>{n=n||curNet();if(!n)return[];return [{id:0,name:n.name||n.id,
 const segTitle=id=>{const s=segsOf().find(x=>String(x.id)===String(id));return s?s.name:'VLAN '+id};
 V.segments=()=>{
  const n=curNet();
- if(S.arg)return segPage(S.arg);
- const t=S.tab.seg,err=CFG[n.id]&&CFG[n.id].err;
- return pageHead('Сегменты сети','Сеть loft — свитч: сегмент это мост, член сети — порт. Создайте сколько нужно сегментов и на странице сегмента задайте, как каждый порт в него входит. Править можно на схеме или текстом конфига.')+pendNet()+
+ const err=CFG[n.id]&&CFG[n.id].err;
+ const named=S.arg!=='';
+ let t=named?'ports':(S.tab.seg||'ports');
+ let id=0;
+ if(named){
+  id=+S.arg;
+  if(!Number.isInteger(id)||id<0||(id!==0&&!(n.vlans||[]).some(v=>v.id===id)))
+   return pageHead('Сегменты сети','')+`<div class="empty"><b>Такого сегмента нет</b><p>Его удалили или адрес набран с ошибкой.</p></div>`+segTabs(n,-1);
+ }
+ if(t==='ports'&&!named){try{history.replaceState(null,'','#segments/0')}catch(e){}S.arg='0';id=0}
+ return pageHead('Сегменты сети','Сеть loft — свитч: сегмент это мост, член сети — порт. Вкладки сверху — сегменты, плюс добавляет новый. На вкладке сегмента задайте, как каждый порт в него входит. Править можно на схеме или текстом конфига.')+pendNet()+
  `<div class="netbar" role="tablist" aria-label="Сеть">${NETS.map(x=>`<button type="button" role="tab" aria-selected="${x.id===n.id}" class="netchip ${x.id===n.id?'on':''}" onclick="S.net='${x.id}';S.sel.clear();render()"><span class="dot ${x.enabled?'on':''}"></span><b>${esc(x.name||x.id)}</b><span class="mono">${x.cidr}</span></button>`).join('')}
   <button type="button" class="btn" onclick="openNet('new')">${ic('i-plus')}Сеть</button></div>`+
- `<div class="tabs" role="tablist">${[['ports','Сегменты'],['acl','Правила доступа'],['set','Настройки сети'],['conf','Конфиг']].map(([k,x])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="S.tab.seg='${k}';render()">${x}${k==='conf'&&err?' <span class="pill warn">ошибка</span>':''}</button>`).join('')}</div>`+
- (err&&t!=='conf'?`<div class="note bad"><span><b>В тексте конфига ошибка — строка ${err.line||'—'}.</b> <span class="mute">Здесь показана последняя верная версия; правки на схеме заменят текст с ошибкой.</span></span><span class="note-acts"><button class="btn sm" type="button" onclick="S.tab.seg='conf';render()">К конфигу</button></span></div>`:'')+
- ({ports:segPorts,acl:segACL,set:segSet,conf:segConf}[t])(n);
+ `<div class="tabs" role="tablist">${[['ports','Сегменты'],['acl','Правила доступа'],['set','Настройки сети'],['conf','Конфиг']].map(([k,x])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="S.tab.seg='${k}';${k==='ports'?"S.arg?render():go('segments/0')":"S.arg?go('segments'):render()"}">${x}${k==='conf'&&err?' <span class="pill warn">ошибка</span>':''}</button>`).join('')}</div>`+
+ (err&&t!=='conf'?`<div class="note bad"><span><b>В тексте конфига ошибка — строка ${err.line||'—'}.</b> <span class="mute">Здесь показана последняя верная версия; правки на схеме заменят текст с ошибкой.</span></span><span class="note-acts"><button class="btn sm" type="button" onclick="S.tab.seg='conf';S.arg?go('segments'):render()">К конфигу</button></span></div>`:'')+
+ (t==='ports'?segPage(id):({acl:segACL,set:segSet,conf:segConf}[t])(n));
 };
 
 function faceplate(n){
@@ -1444,15 +1455,24 @@ function bulkAuth(on){const n=curNet();n.members.filter(m=>S.sel.has(m.id)).forE
 function cellVlan(id,v){const n=curNet(),m=n.members.find(x=>x.id===id);if(m.vlan===v)return;moveVlan(n,m,v);render()}
 
 function joinSeg(mid,vlan){const n=curNet(),m=n.members.find(x=>x.id===mid);if(!m||(m.vlan||0)===vlan)return;moveVlan(n,m,vlan);render()}
-function segPage(arg){
- const n=curNet(),back=`<a class="crumb" href="#segments">${ic('i-back',18)}Сегменты сети</a>`;
- const id=+arg;
- if(arg===''||!Number.isInteger(id)||id<0||(id!==0&&!n.vlans.some(v=>v.id===id)))
-  return back+pageHead(esc(arg),'')+`<div class="empty"><b>Такого сегмента нет</b><p>Его удалили или адрес набран с ошибкой.</p></div>`;
- const s=segsOf(n).find(x=>x.id===id);
+function segTabs(n,id){
+ return `<div class="tabs" role="tablist" aria-label="Сегменты">${segsOf(n).map(s=>`<button class="tab ${s.id===id?'on':''}" role="tab" aria-selected="${s.id===id}" type="button" onclick="go('segments/${s.id}')">${esc(s.name)}</button>`).join('')}<button class="tab plus" type="button" aria-label="Добавить сегмент" title="Добавить сегмент" onclick="openVlan('new')">${ic('i-plus')}</button></div>`;
+}
+function renameSeg(id,name){
+ const n=curNet();
+ name=String(name||'').trim();
+ if(!name){render();return}
+ if(!id)n.name=name;
+ else{const v=n.vlans.find(x=>x.id===id);if(v)v.name=name}
+ render();
+}
+function segPage(id){
+ const n=curNet(),s=segsOf(n).find(x=>x.id===id);
+ if(!s)return segTabs(n,-1)+`<div class="empty"><b>Такого сегмента нет</b><p>Его удалили или адрес набран с ошибкой.</p></div>`;
  const inSeg=m=>(m.vlan||0)===id;
- return back+pendNet()+pageHead(esc(s.name),id?'Порт входит ровно в один сегмент: «Входит в сегмент» переносит его сюда.':'Основной сегмент сети. Порты без VLAN. «Входит в сегмент» переносит порт сюда.')+
-  blk('Порты','Как порт входит в этот сегмент. Порт с тегом (trunk) нода пока не поддерживает.',
+ return segTabs(n,id)+
+  `<div class="fld" style="max-width:420px;margin:0 0 28px"><label for="segName">Имя сегмента</label><input id="segName" value="${esc(s.name)}" onchange="renameSeg(${id},this.value)"></div>`+
+  blk('Порты',id?'Порт входит ровно в один сегмент: «Входит в сегмент» переносит его сюда.':'Основной сегмент сети. Порты без VLAN. «Входит в сегмент» переносит порт сюда.',
    table(['Порт','Член','Вход','IP'],n.members.map((m,i)=>{
     const on=inSeg(m);
     const act=on?(id?`<button class="btn sm" type="button" onclick="joinSeg('${m.id}',0)">Убрать</button>`:pill('входит в сегмент','ok')):`<button class="btn sm" type="button" onclick="joinSeg('${m.id}',${id})">Входит в сегмент</button>`;
@@ -1463,18 +1483,6 @@ function segPage(arg){
    }).join('')))+
   (id?`<div class="acts"><button class="btn" type="button" onclick="openVlan(${id})">Настроить сегмент</button><button class="btn danger" type="button" onclick="delVlan(${id})">Удалить сегмент</button></div>`
    :'<p class="hint">Адрес, DHCP и режим между портами — на вкладке «Настройки сети».</p>');
-}
-function segPorts(n){
- const segs=segsOf(n);
- return blk('Лицевая панель','Цвет порта — сегмент, огонёк — член сейчас в сети. Шлюз — сама нода: через него члены выходят в интернет и к DNS.',faceplate(n)+selBar(n))+
-  blk('Сегменты','Сегмент — мост: порты в нём видят друг друга по правилам доступа. Откройте сегмент, чтобы задать, как порт в него входит.',
-   `<div class="acts"><button class="btn" type="button" onclick="openVlan('new')">${ic('i-plus')}Добавить сегмент</button></div>`+
-   table(['Сегмент','VLAN','Диапазон','Портов',{t:'',r:1}],segs.map(s=>`<tr class="click" onclick="go('segments/${s.id}')">
-    <td><span class="sq" style="background:${vcol(n,s.id)}"></span><b>${esc(s.name)}</b>${s.id?'':' <span class="mute">· без VLAN</span>'}</td>
-    <td class="mono">${s.id||'—'}</td>
-    <td class="mono">${s.cidr||'<span class="mute">из сети</span>'}</td>
-    <td class="num">${n.members.filter(m=>(m.vlan||0)===s.id).length}</td>
-    <td class="r mute">${ic('i-next',18)}</td></tr>`).join('')));
 }
 const peersText=(p,inh)=>({hub:'только через шлюз',mesh:'напрямую между собой',vlan:'внутри своего VLAN'}[p]||p)+(inh?' <span class="mute">· как в сети</span>':'');
 const peersHint='Только через шлюз — порты видят шлюз, друг друга не видят.<br>Напрямую — любой порт видит любой другой.<br>Внутри VLAN — порты видят только свой VLAN; между VLAN — правилами доступа.';
@@ -1595,7 +1603,7 @@ function saveVlan(old){
  if(old==null||(S.route==='segments'&&S.arg&&+S.arg!==id)){go('segments/'+id);return}
  render();
 }
-function delVlan(id){const n=curNet();n.vlans=n.vlans.filter(v=>v.id!==id);n.members.forEach(m=>{if(m.vlan===id)moveVlan(n,m,0)});n.rules=n.rules.filter(r=>r.src_vlan!==id&&r.dst_vlan!==id);closeDlg();if(S.route==='segments'&&String(S.arg)===String(id)){go('segments');return}render()}
+function delVlan(id){const n=curNet();n.vlans=n.vlans.filter(v=>v.id!==id);n.members.forEach(m=>{if(m.vlan===id)moveVlan(n,m,0)});n.rules=n.rules.filter(r=>r.src_vlan!==id&&r.dst_vlan!==id);closeDlg();if(S.route==='segments'&&String(S.arg)===String(id)){go('segments/0');return}render()}
 function openRule(i){
  const n=curNet(),r=n.rules[i]||{action:'accept',proto:'',src:'',dst:'',dport:[],src_vlan:null,dst_vlan:null},nw=i<0;
  const vs=(id,cur)=>`<select id="${id}"><option value="">любой</option>${n.vlans.map(v=>`<option value="${v.id}" ${cur===v.id?'selected':''}>${v.id} ${esc(v.name)}</option>`).join('')}</select>`;
@@ -1891,7 +1899,7 @@ const HELP={
  main:['Сводка сервера: нода, члены сети, адреса, домены, нагрузка и последние события. Карточки ведут в свои разделы.',['Проверить, что нода работает и сертификат не истекает','Добавить члена сети прямо с обзора','Открыть журнал последних изменений'],['«нет данных» у ноды — служба loft-panel-adm не отвечает: перезапустите её на сервере','Сертификат помечен — продлите его в «Доменах»']],
  node:['Настройки ноды loft: роль, фронты, маскировка, ретрансляторы, списки и доступ. Переключатели сразу идут на ноду.',['Включить нужные фронты (GET, WebSocket, HTTP/2, QUIC)','Добавить ретранслятор или CDN','Подождать секунду — нода перезапустится сама'],['После смены фронтов нода не поднялась — откройте журнал службы на вкладке «Основное»','Клиенты не подключаются — проверьте адрес для клиентов и сертификат']],
  members:['Устройства и люди, которые подключаются к серверу. У каждого свой ключ и профиль.',['Добавить члена — панель выдаст ссылку loft://, QR-код и файл .loft','Перевыпустить ключ, если устройство потеряно','Выключить члена, не удаляя его'],['Член не в сети — проверьте, что профиль на устройстве свежий','Выключатель сразу действует на ноде']],
- segments:['Сеть loft как свитч: сегменты (мосты), как порт в них входит, правила доступа и текст network.conf.',['Создать сегмент и открыть его страницу','Задать, какие порты входят в сегмент','Разрешить или запретить доступ между сегментами'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
+ segments:['Сеть loft как свитч: сегменты вкладками сверху, плюс добавляет новый, как порт входит, правила доступа и текст network.conf.',['Создать сегмент плюсом в ряду вкладок','Задать, какие порты входят в сегмент','Разрешить или запретить доступ между сегментами'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
  channels:['Каналы WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка связи не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
  adapters:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
  addrs:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],

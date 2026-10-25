@@ -491,6 +491,7 @@
   afterNet('bulkVlan');
   afterNet('cellVlan');
   afterNet('joinSeg');
+  afterNet('renameSeg');
   afterNet('setMemberAuth');
   const delVlan0 = window.delVlan;
   window.delVlan = function (id) {
