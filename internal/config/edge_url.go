@@ -96,11 +96,8 @@ func PinEdgeGET(cfg *ClientConfig, edge string) error {
 		}
 		edged = &c
 	}
-	out := make([]Outbound, 0, 1+len(nodeGET)+len(rest))
-	out = append(out, *edged)
-	out = append(out, nodeGET...)
-	out = append(out, rest...)
-	cfg.Outbounds = out
+	out := append([]Outbound{*edged}, nodeGET...)
+	cfg.Outbounds = append(out, rest...)
 	if path != "" {
 		cfg.EdgeURL = origin + path
 	} else {
