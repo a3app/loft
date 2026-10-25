@@ -129,7 +129,7 @@ enum Priv {
 
     /// Spawns a held loft-priv: utun, overlay routes, optional 0/1 default.
     /// `key` is the profile id so several holders can stay up together.
-    static func upTUN(sock: String, ip: String, url: String, defaultRoute: Bool, dns: String = "", mtu: Int = 0, key: String = "default") throws {
+    static func upTUN(sock: String, ip: String, url: String, defaultRoute: Bool, dns: String = "", mtu: Int = 0, key: String = "default", extra: [String] = []) throws {
         try ensureSetuid()
         let peer = peer4(ip)
         refreshGateway()
@@ -141,7 +141,7 @@ enum Priv {
         if defaultRoute { args.append("--default") }
         if !gw.isEmpty { args += ["--gw", gw] }
         if defaultRoute {
-            let excl = excludeHosts(url: url, overlayIP: ip)
+            let excl = excludeHosts(url: url, overlayIP: ip, extra: extra)
             if !excl.isEmpty { args += ["--exclude", excl.joined(separator: ",")] }
         }
         let dnsCSV = dns.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -220,7 +220,7 @@ enum Priv {
     }
 
     /// One-shot --set-default / --clear-default on the live utun.
-    static func setDefaultRoute(_ on: Bool, url: String, overlayIP: String = "", ifname: String = "") {
+    static func setDefaultRoute(_ on: Bool, url: String, overlayIP: String = "", ifname: String = "", extra: [String] = []) {
         guard isSetuidRoot(installedPriv()) else { return }
         refreshGateway()
         if on, !isUsableGW(origGW) {
@@ -232,7 +232,7 @@ enum Priv {
         }
         let gw = savedGW()
         let ip = overlayIP.isEmpty ? rememberedIP() : overlayIP
-        let excl = excludeHosts(url: url, overlayIP: ip)
+        let excl = excludeHosts(url: url, overlayIP: ip, extra: extra)
         LoftLog.shared.snapshot(on ? "default-on-before" : "default-off-before")
         if on {
             let name = ifname.isEmpty ? tunName : ifname
@@ -596,12 +596,12 @@ enum Priv {
 
     /// Host-route the front and DNS via any on-link hop, before handshake.
     /// Needed when 0/1 still points at a dead utun after sleep.
-    static func pinFront(url: String, overlayIP: String = "") {
+    static func pinFront(url: String, overlayIP: String = "", extra: [String] = []) {
         guard isSetuidRoot(installedPriv()) else { return }
         refreshGateway()
         let gw = physicalGateway()
         let ip = overlayIP.isEmpty ? rememberedIP() : overlayIP
-        var ips = excludeHosts(url: url, overlayIP: ip)
+        var ips = excludeHosts(url: url, overlayIP: ip, extra: extra)
         for old in liveExcludeIPs() {
             if !ips.contains(old) { ips.append(old) }
         }
@@ -851,7 +851,7 @@ enum Priv {
     }
 
     /// Front IPs plus machine DNS, skipping the overlay /24.
-    static func excludeHosts(url: String, overlayIP: String) -> [String] {
+    static func excludeHosts(url: String, overlayIP: String, extra: [String] = []) -> [String] {
         var seen = Set<String>()
         var out: [String] = []
         /// Dedupes `raw` unless it shares /24 with the overlay.
@@ -866,9 +866,13 @@ enum Priv {
             if isPrivateV4(t) { return }
             if seen.insert(t).inserted { out.append(t) }
         }
-        let host = frontHost(url)
-        let resolved = resolve(host)
-        if resolved.isEmpty { add(host) } else { resolved.forEach(add) }
+        func addURL(_ rawURL: String) {
+            let host = frontHost(rawURL)
+            let resolved = resolve(host)
+            if resolved.isEmpty { add(host) } else { resolved.forEach(add) }
+        }
+        addURL(url)
+        for u in extra { addURL(u) }
         dnsIPs().forEach(add)
         return out
     }

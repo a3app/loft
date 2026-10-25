@@ -15,6 +15,8 @@ final class FrontHelper {
     private(set) var overlayRoutes: [String] = []
     /// Compact Status front map (`get=/static/v3/build,ws=/api/v1/sync,quic`).
     private(set) var overlayFronts = ""
+    /// mask_pub from the session line, hex. Never logged.
+    private(set) var overlayPBK = ""
     /// Live bulk front from STATUS `front=` (Supervise `o.Type`).
     private(set) var overlayFront = ""
     private(set) var tunLive = false
@@ -212,6 +214,7 @@ final class FrontHelper {
         overlayRoutes = []
         overlayFronts = ""
         overlayFront = ""
+        overlayPBK = ""
         tunLive = false
         lastError = ""
         lastStage = ""
@@ -394,8 +397,21 @@ final class FrontHelper {
         ingest(rest, err: err, sem: nil)
     }
 
+    /// Pulls `pbk=<64 hex>` off a session line before it hits the log.
+    private func peelPBK(_ line: String) -> String {
+        guard let r = line.range(of: #"pbk=[0-9a-fA-F]{64}"#, options: .regularExpression) else { return line }
+        let hex = String(line[r]).dropFirst(4).lowercased()
+        if hex.count == 64, overlayPBK.isEmpty, hex.allSatisfy(\.isHexDigit) {
+            overlayPBK = String(hex)
+        }
+        var s = line
+        s.replaceSubrange(r, with: "pbk=-")
+        return s
+    }
+
     /// Logs a loft-front line, updates STATUS fields, and signals handshake waiters.
-    private func ingest(_ line: String, err: Bool, sem: DispatchSemaphore?) {
+    private func ingest(_ raw: String, err: Bool, sem: DispatchSemaphore?) {
+        let line = peelPBK(raw)
         if line.hasPrefix("tun up") || line.hasPrefix("tun fd ") {
             tunLive = true
             tunSem.signal()

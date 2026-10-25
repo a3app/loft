@@ -189,6 +189,14 @@ final class SessionController {
         Priv.applySplit(via: via, direct: direct, ifname: ifname, gw: gw)
     }
 
+    /// CDN URL pinned beside the node so 0/1 does not swallow the first GET.
+    private func edgeExtra(_ id: String) -> [String] {
+        let e = store.profiles.first(where: { $0.id == id })?.edge
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if e.isEmpty { return [] }
+        return [e]
+    }
+
     /// Host pins for live/connecting/error sessions. Empty list clears leftover /32s.
     private func rebuildPins(except: String? = nil) {
         var ips: [String] = []
@@ -204,7 +212,7 @@ final class SessionController {
                 return store.profiles.first(where: { $0.id == s.id })?.url ?? ""
             }()
             if url.isEmpty { continue }
-            for ip in Priv.excludeHosts(url: url, overlayIP: s.overlayIP) {
+            for ip in Priv.excludeHosts(url: url, overlayIP: s.overlayIP, extra: edgeExtra(s.id)) {
                 if seen.insert(ip).inserted { ips.append(ip) }
             }
         }
@@ -475,7 +483,7 @@ final class SessionController {
                 }
                 let advertised = self.store.socksBind(for: p, taken: self.takenSocks(except: p.id))
                 let socksAddr = advertised.isEmpty ? self.internalSocks(taken: self.takenSocks(except: p.id)) : advertised
-                Priv.pinFront(url: p.url)
+                Priv.pinFront(url: p.url, extra: self.edgeExtra(p.id))
                 try s.helper.start(profile: p, socksBind: socksAddr, instanceFile: self.store.instanceFile(for: p.id))
                 if ticket != s.generation { return }
                 s.frontName = s.helper.overlayFront.isEmpty ? p.kind : s.helper.overlayFront
@@ -494,11 +502,15 @@ final class SessionController {
                 if !learned.isEmpty {
                     self.store.applyLearnedFronts(id: p.id, raw: learned)
                 }
+                let learnedPBK = s.helper.overlayPBK
+                if !learnedPBK.isEmpty {
+                    self.store.applyLearnedMask(id: p.id, hex: learnedPBK)
+                }
                 if p.tun, !ip.isEmpty, !s.helper.tunSock.isEmpty {
                     do {
                         let takeDefault = self.store.defaultRoute
                         let dns = p.dnsSystem ? p.systemDNSCSV(overlay: s.helper.overlayDNS) : ""
-                        try Priv.upTUN(sock: s.helper.tunSock, ip: ip, url: p.url, defaultRoute: false, dns: dns, mtu: s.helper.overlayMTU, key: p.id)
+                        try Priv.upTUN(sock: s.helper.tunSock, ip: ip, url: p.url, defaultRoute: false, dns: dns, mtu: s.helper.overlayMTU, key: p.id, extra: self.edgeExtra(p.id))
                         s.helper.waitTun(seconds: 8)
                         if ticket != s.generation { return }
                         let tunName = Priv.tunName(for: p.id)
@@ -527,7 +539,7 @@ final class SessionController {
                                             if ticket != s.generation || !s.tunArmed { return }
                                             if ok {
                                                 for o in self.lives.values where o.id != p.id { o.defaultArmed = false }
-                                                Priv.setDefaultRoute(true, url: p.url, overlayIP: ip, ifname: ifname)
+                                                Priv.setDefaultRoute(true, url: p.url, overlayIP: ip, ifname: ifname, extra: self.edgeExtra(p.id))
                                                 s.defaultArmed = true
                                                 LoftLog.shared.add("loft", "tun default on id=\(p.id) if=\(ifname)")
                                                 self.applySplitRoutes()
@@ -698,7 +710,7 @@ final class SessionController {
         s.muxDown = true
         if store.hold { return }
         if !s.defaultArmed { return }
-        Priv.setDefaultRoute(false, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName)
+        Priv.setDefaultRoute(false, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName, extra: edgeExtra(s.id))
         s.defaultArmed = false
         LoftLog.shared.add("loft", "tun default off mux-down id=\(s.id)")
         applySplitRoutes()
@@ -725,6 +737,7 @@ final class SessionController {
         let url = s.tunURL
         let ip = s.overlayIP
         let id = s.id
+        let extra = self.edgeExtra(id)
         Priv.netQueue.async {
             let ok = Priv.loftCarriesTCP(socks)
             self.queue.async {
@@ -735,7 +748,7 @@ final class SessionController {
                 }
                 s.muxDown = false
                 for o in self.lives.values where o.id != id { o.defaultArmed = false }
-                Priv.setDefaultRoute(true, url: url, overlayIP: ip, ifname: ifname)
+                Priv.setDefaultRoute(true, url: url, overlayIP: ip, ifname: ifname, extra: extra)
                 s.defaultArmed = true
                 LoftLog.shared.add("loft", "tun default on mux-up id=\(id) if=\(ifname)")
                 self.applySplitRoutes()
@@ -766,11 +779,11 @@ final class SessionController {
                     LoftLog.shared.add("loft", L10n.t("err_no_tcp"))
                 } else {
                     for o in self.lives.values where o.id != id { o.defaultArmed = false }
-                    Priv.setDefaultRoute(true, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName)
+                    Priv.setDefaultRoute(true, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName, extra: self.edgeExtra(id))
                     s.defaultArmed = true
                 }
             } else if s.defaultArmed {
-                Priv.setDefaultRoute(false, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName)
+                Priv.setDefaultRoute(false, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName, extra: self.edgeExtra(id))
                 s.defaultArmed = false
             }
             self.applySplitRoutes()
@@ -995,7 +1008,7 @@ final class SessionController {
             if s.defaultArmed, others, store.failover, store.defaultRoute {
                 if let other = previousLive(besides: s.id, tunOnly: true) {
                     if !other.socksDisplay.isEmpty, Priv.loftCarriesTCP(other.socksDisplay) {
-                        Priv.setDefaultRoute(true, url: other.tunURL, overlayIP: other.overlayIP, ifname: other.tunName)
+                        Priv.setDefaultRoute(true, url: other.tunURL, overlayIP: other.overlayIP, ifname: other.tunName, extra: self.edgeExtra(other.id))
                         other.defaultArmed = true
                     }
                 }
@@ -1144,7 +1157,7 @@ final class SessionController {
             }()
             if url.isEmpty { continue }
             if s.state == .on || s.state == .connecting || s.state == .error || s.tunArmed {
-                Priv.pinFront(url: url, overlayIP: s.overlayIP)
+                Priv.pinFront(url: url, overlayIP: s.overlayIP, extra: self.edgeExtra(s.id))
             }
         }
         applySplitRoutes()
@@ -1172,7 +1185,7 @@ final class SessionController {
                     s.defaultArmed = false
                     LoftLog.shared.snapshot("default-skip")
                 } else {
-                    Priv.setDefaultRoute(on, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName)
+                    Priv.setDefaultRoute(on, url: s.tunURL, overlayIP: s.overlayIP, ifname: s.tunName, extra: self.edgeExtra(s.id))
                     s.defaultArmed = on
                     for o in self.lives.values where o.id != s.id { o.defaultArmed = false }
                 }

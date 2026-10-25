@@ -741,6 +741,18 @@ final class ProfileStore {
         if changed { saveEdited(p) }
     }
 
+    /// Stores the node mask_pub learned after handshake so the next spawn passes -pbk.
+    func applyLearnedMask(id: String, hex: String) {
+        let h = hex.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard h.count == 64, h.allSatisfy(\.isHexDigit) else { return }
+        guard let i = profiles.firstIndex(where: { $0.id == id }) else { return }
+        var p = profiles[i]
+        if p.isSSTP || p.isVLESS || p.isTrojan { return }
+        if p.maskPub.lowercased() == h { return }
+        p.maskPub = h
+        saveEdited(p)
+    }
+
     /// Active profile, or the first if the id is missing.
     func active() -> LoftProfile? {
         profiles.first(where: { $0.id == activeID }) ?? profiles.first
