@@ -160,12 +160,15 @@ func TestDNSOverHTTPS(t *testing.T) {
 	}
 }
 
-// TestOverlayIsDNS matches only the overlay gateway address.
+// TestOverlayIsDNS matches any segment gateway address.
 func TestOverlayIsDNS(t *testing.T) {
-	n := &netconf.Network{ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Enabled: true}
+	n := &netconf.Network{
+		ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Enabled: true,
+		VLANs: []netconf.VLAN{{ID: 10, CIDR: "10.9.0.0/24", Gateway: "10.9.0.1"}},
+	}
 	o := NewOverlay(n)
-	if !o.IsDNS("10.8.0.1") || o.IsDNS("10.8.0.2") || o.IsDNS("8.8.8.8") {
-		t.Fatal("gateway only")
+	if !o.IsDNS("10.8.0.1") || !o.IsDNS("10.9.0.1") || o.IsDNS("10.8.0.2") || o.IsDNS("8.8.8.8") {
+		t.Fatal("segment gateways")
 	}
 }
 

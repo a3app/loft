@@ -252,14 +252,9 @@ func dnsFail(q []byte) []byte {
 	return out
 }
 
-// IsDNS reports whether host is the overlay gateway (Status dns / :53).
+// IsDNS reports whether host is a segment gateway (Status dns / :53).
 func (o *Overlay) IsDNS(host string) bool {
-	if o == nil || o.N() == nil {
-		return false
-	}
-	ip := net.ParseIP(host)
-	gw := net.ParseIP(o.N().Gateway)
-	return ip != nil && gw != nil && ip.Equal(gw)
+	return o != nil && o.N() != nil && o.N().IsGateway(host)
 }
 
 // ResolveDNS answers a wire-format query via dns.upstream.

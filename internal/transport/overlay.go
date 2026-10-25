@@ -97,20 +97,25 @@ func stampOverlay(st *wire.Status, rest []byte, sess *mux.Session, remote net.Ad
 	stampOverlayAuth(st, rest, sess, remote, nil)
 }
 
-// Contains reports whether host is inside the overlay CIDR.
+// Contains reports whether host is inside a segment CIDR.
 func (o *Overlay) Contains(host string) bool {
 	if o == nil || o.N() == nil {
 		return false
 	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return false
+	return o.N().ContainsIP(net.ParseIP(host))
+}
+
+func (o *Overlay) stampL3(st *wire.Status, vlan int) {
+	n := o.N()
+	if n == nil {
+		return
 	}
-	_, cidr, err := net.ParseCIDR(o.N().CIDR)
-	if err != nil {
-		return false
+	s := n.Seg(vlan)
+	st.Gateway = s.Gateway
+	st.DNS = s.DNSServers()
+	if n.MTU > 0 {
+		st.MTU = wire.U16(n.MTU)
 	}
-	return cidr.Contains(ip)
 }
 
 // Bind admits the session, stamps overlay IP/VLAN/DNS on Status, and attaches the peer.
@@ -145,9 +150,7 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 			st.Code = wire.OK
 			st.IP = ip
 			st.InstanceID = inst2
-			st.Gateway = o.N().Gateway
-			st.MTU = wire.U16(o.N().MTU)
-			st.DNS = o.N().DNSServers()
+			o.stampL3(st, 0)
 			o.attachTo(ip, 0, sess, nil, remote, "", inst2)
 			st.PeerHints = o.hints(ip)
 			o.stampRoutes(st)
@@ -169,11 +172,7 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 	st.Code = code
 	st.IP = ip
 	st.InstanceID = inst2
-	st.Gateway = o.N().Gateway
-	if o.N().MTU > 0 {
-		st.MTU = wire.U16(o.N().MTU)
-	}
-	st.DNS = o.N().DNSServers()
+	o.stampL3(st, vlan)
 	o.attachTo(ip, vlan, sess, nil, remote, member, inst2)
 	st.PeerHints = o.hints(ip)
 	o.stampRoutes(st)
@@ -216,9 +215,7 @@ func (o *Overlay) BindL3(st *wire.Status, hello wire.Hello, sink l3Sink, remote 
 			st.Code = wire.OK
 			st.IP = ip
 			st.InstanceID = inst2
-			st.Gateway = o.N().Gateway
-			st.MTU = wire.U16(o.N().MTU)
-			st.DNS = o.N().DNSServers()
+			o.stampL3(st, 0)
 			o.attachTo(ip, 0, nil, sink, remote, "", inst2)
 			st.PeerHints = o.hints(ip)
 			o.stampRoutes(st)
@@ -238,11 +235,7 @@ func (o *Overlay) BindL3(st *wire.Status, hello wire.Hello, sink l3Sink, remote 
 	st.Code = code
 	st.IP = ip
 	st.InstanceID = inst2
-	st.Gateway = o.N().Gateway
-	if o.N().MTU > 0 {
-		st.MTU = wire.U16(o.N().MTU)
-	}
-	st.DNS = o.N().DNSServers()
+	o.stampL3(st, vlan)
 	o.attachTo(ip, vlan, nil, sink, remote, member, inst2)
 	st.PeerHints = o.hints(ip)
 	o.stampRoutes(st)
@@ -723,7 +716,7 @@ func (o *Overlay) packet(src *ovPeer, dstIP net.IP, dst *ovPeer, proto, port str
 		Routed: routed,
 	}
 	if o.N() != nil && dstIP != nil {
-		p.ToGW = dstIP.String() == o.N().Gateway
+		p.ToGW = o.N().IsGateway(dstIP.String())
 	}
 	if src != nil {
 		p.Src = net.ParseIP(src.ip)

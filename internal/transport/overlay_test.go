@@ -41,6 +41,43 @@ func TestOverlayMeshP2PDefault(t *testing.T) {
 	}
 }
 
+// TestOverlayBindVLANSegment stamps the member's segment gateway and DNS.
+func TestOverlayBindVLANSegment(t *testing.T) {
+	n := &netconf.Network{
+		ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Enabled: true,
+		VLANs: []netconf.VLAN{{
+			ID: 10, Name: "staff", CIDR: "10.9.0.0/24", Gateway: "10.9.0.1",
+			PoolFrom: "10.9.0.10", PoolTo: "10.9.0.200",
+		}},
+		Members: []netconf.Member{{ID: "alice", Authorized: true, VLAN: 10, IP: "10.9.0.14", Multi: true, MultiLimit: 2}},
+	}
+	if err := n.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	o := NewOverlay(n)
+	if !o.Contains("10.9.0.5") || !o.Contains("10.8.0.5") || o.Contains("10.7.0.1") {
+		t.Fatal("segment cidrs")
+	}
+	r := identity.NewRing()
+	r.Put("alice", "lt_alice")
+	old := AuthKeys
+	defer func() { AuthKeys = old }()
+	AuthKeys = r
+	st := wire.Status{}
+	o.Bind(&st, wire.Hello{MemberID: "alice"}, nil, nil)
+	if st.Code != wire.OK || st.IP != "10.9.0.14" || st.Gateway != "10.9.0.1" || int(st.VLAN) != 10 {
+		t.Fatalf("%+v", st)
+	}
+	if len(st.DNS) != 1 || st.DNS[0] != "10.9.0.1" {
+		t.Fatalf("dns %+v", st.DNS)
+	}
+	st = wire.Status{}
+	o.BindL3(&st, wire.Hello{MemberID: "alice", InstanceID: "l3"}, nil, nil)
+	if st.Code != wire.OK || st.Gateway != "10.9.0.1" || int(st.VLAN) != 10 {
+		t.Fatalf("l3 %+v", st)
+	}
+}
+
 // TestOverlayBindEphemeralOnlyWithoutKeys allocates a pool IP with no keys; named members need a key.
 func TestOverlayBindEphemeralOnlyWithoutKeys(t *testing.T) {
 	n := &netconf.Network{
