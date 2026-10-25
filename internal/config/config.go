@@ -120,7 +120,7 @@ type ServerConfig struct {
 	Token         string              `yaml:"token"`
 	CoverDir      string              `yaml:"cover_dir"`
 	GetPath       string              `yaml:"get_path"`
-	GetH2         int                 `yaml:"get_h2"` // GET HTTP/2 connections, 1–4; 0 = one
+	GetH2         int                 `yaml:"get_h2"` // GET HTTP/2 connections, 1–4; 0 = one, or four when edge is tight
 	WSPath        string              `yaml:"ws_path"`
 	H2Path        string              `yaml:"h2_path"`
 	H3Path        string              `yaml:"h3_path"`

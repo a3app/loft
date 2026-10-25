@@ -63,8 +63,8 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 	getFront.Edge = edge
 	getFront.Decoy = append([]string(nil), cfg.Decoy...)
 	getFront.Info = info
-	if cfg.GetH2 > 1 {
-		getFront.H2Conns = byte(cfg.GetH2)
+	if n := advertisedH2(cfg.GetH2, edge); n > 1 {
+		getFront.H2Conns = n
 	}
 	wss := &transport.WSSServer{Token: []byte(cfg.Token), Decoy: append([]string(nil), cfg.Decoy...), Info: info}
 	h2s := &transport.H2Server{Info: info, Path: cfg.H2Path}
@@ -101,6 +101,24 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 	})
 	transport.Hub = h
 	return h, nil
+}
+
+// advertisedH2 is the Status h2_conns byte. 0 leaves the client on one HTTP/2.
+// Tight with get_h2 unset asks for four. One TCP through Yandex sat upload
+// around 2–3 Mbit. Two TCPs at the same inflight 16 measured about 5–6 Mbit.
+// Inflight stays 16 across the pool; 32 requests on two TCPs did not go faster.
+// Explicit get_h2: 1 stays one. A set count above 1 is capped at 4.
+func advertisedH2(getH2 int, edge byte) byte {
+	if getH2 > 1 {
+		if getH2 > 4 {
+			getH2 = 4
+		}
+		return byte(getH2)
+	}
+	if getH2 == 0 && edge == wire.EdgeTight {
+		return 4
+	}
+	return 0
 }
 
 // nodeInfo fills Status fields shared by every front on this node.
