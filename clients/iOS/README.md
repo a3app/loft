@@ -46,3 +46,14 @@ The session is [`clients/mobile`](../mobile/) (`internal/` + inbound stack) link
 | Store upload | Xcode 26+, iOS 26 SDK. Deployment 15 is the toolchain minimum. |
 
 Apple Developer Program for the Packet Tunnel entitlement. App group `group.app.loft` for profiles between the app and the appex. Architectures: arm64 device, arm64 simulator.
+
+## Build
+
+From the repository root (Xcode, Simulator SDK):
+
+```bash
+make ios                 # dist/clients/iOS/loft.app
+make -C clients/iOS run  # install + launch on loft-ios
+```
+
+Intermediates stay under `dist/clients/iOS/`, not in `clients/iOS/`. Unsigned Debug for Simulator. Device IPA / TestFlight is later.

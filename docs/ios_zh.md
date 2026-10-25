@@ -4,7 +4,7 @@
 
 loft 在 iPhone 上怎么跑，以后是 Apple TV（tvOS 17+）。目录：[clients/iOS/](../clients/iOS/)。计划：[clients/iOS/PLAN.md](../clients/iOS/PLAN.md)（Apple TV 是第 6 阶段）。模型：[clients/iOS/design/index.html](../clients/iOS/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。导入 URI：[share_zh.md](share_zh.md)。
 
-应用还没做。这份文件是对接规格。
+容器在 [`clients/iOS/`](../clients/iOS/)。`make ios` 写出未签名的 Simulator `dist/clients/iOS/loft.app`。真机 IPA 需要 Packet Tunnel entitlement。
 
 ---
 

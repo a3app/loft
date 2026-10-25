@@ -4,7 +4,7 @@
 
 How loft runs on iPhone, later Apple TV (tvOS 17+). Catalog: [clients/iOS/](../clients/iOS/). Plan: [clients/iOS/PLAN.md](../clients/iOS/PLAN.md) (Apple TV is phase 6). Mock: [clients/iOS/design/index.html](../clients/iOS/design/index.html). Protocol: [protocol.md](protocol.md). Import URI: [share.md](share.md).
 
-The app is not built yet. This file is the integration specification.
+Container: [`clients/iOS/`](../clients/iOS/). `make ios` writes unsigned Simulator `dist/clients/iOS/loft.app`. Device IPA needs the Packet Tunnel entitlement.
 
 ---
 

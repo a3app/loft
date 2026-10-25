@@ -25,7 +25,7 @@ Docs, plan, HTML mock. Import URI [docs/share.md](../../docs/share.md). No Xcode
 
 ### 1. Container + empty tunnel
 
-Xcode: app `app.loft.ios` + appex `app.loft.ios.packet-tunnel`. Written (YAML host in `ContentView`; Home Canvas `HomeView` + `#Preview` off/on/simple; Settings Canvas `SettingsView` General/Route/Connection, language via `LoftPrefs`). Connections list later.
+Xcode: app `app.loft.ios` + appex `app.loft.ios.packet-tunnel`. Written (YAML host in `ContentView`; Home Canvas `HomeView` + `#Preview` off/on/simple; Settings Canvas `SettingsView` General/Route/Connection, language via `LoftPrefs`). `make ios` → `dist/clients/iOS/loft.app` (unsigned Simulator). Connections list later.
 
 ### 2. Session in the appex
 

@@ -46,3 +46,14 @@ clients/iOS/
 | Загрузка в Store | Xcode 26+, iOS 26 SDK. Deployment 15 — минимум toolchain. |
 
 Apple Developer Program для entitlement Packet Tunnel. App group `group.app.loft` для профилей между приложением и appex. Архитектуры: arm64 на устройстве, arm64 симулятор.
+
+## Сборка
+
+Из корня репозитория (Xcode, SDK симулятора):
+
+```bash
+make ios                 # dist/clients/iOS/loft.app
+make -C clients/iOS run  # поставить и запустить на loft-ios
+```
+
+Промежуточное — в `dist/clients/iOS/`, не в `clients/iOS/`. Unsigned Debug для симулятора. IPA на устройство / TestFlight — позже.

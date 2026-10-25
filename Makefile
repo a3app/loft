@@ -9,7 +9,7 @@ ARCH ?= amd64
 CLIENT_OSARCH := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64
 CLIENT_CMDS := loft loft-front loft-probe loft-bench
 
-.PHONY: test node client front probe bench macos macos-dmg macos-dmgs android dist dist-node dist-clients \
+.PHONY: test node client front probe bench macos macos-dmg macos-dmgs android ios dist dist-node dist-clients \
 	dist-clean-node dist-clean-legacy dist-debian dist-debian-amd64 dist-debian-arm64 \
 	dist-one dist-deb dist-deb-amd64 dist-deb-arm64 deb \
 	mobile-ios mobile-android mobile panel panel-ui panel-dev \
@@ -125,6 +125,9 @@ macos-dmgs:
 
 android:
 	$(MAKE) -C clients/Android
+
+ios:
+	$(MAKE) -C clients/iOS
 
 # Server packages + CLI archives. macOS .app/.dmg is make macos-dmg / macos-dmgs (needs Xcode).
 # Android github-channel APKs: make -C clients/Android release (Dist job when the key secret is set).

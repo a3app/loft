@@ -46,3 +46,14 @@ clients/iOS/
 | 上架 | Xcode 26+，iOS 26 SDK。Deployment 15 是工具链还能编的最低版本。 |
 
 Packet Tunnel 权限需要 Apple Developer Program。应用和 appex 之间的配置走 App Group `group.app.loft`。架构：真机 arm64，模拟器 arm64。
+
+## 编译
+
+在仓库根目录（Xcode，模拟器 SDK）：
+
+```bash
+make ios                 # dist/clients/iOS/loft.app
+make -C clients/iOS run  # 装到 loft-ios 并启动
+```
+
+中间文件在 `dist/clients/iOS/`，不进 `clients/iOS/`。模拟器 Unsigned Debug。真机 IPA / TestFlight 以后再说。
