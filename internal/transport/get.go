@@ -1777,24 +1777,6 @@ func (s *GETServer) Match(p string) bool {
 	return strings.HasPrefix(p, s.Path+"/")
 }
 
-// replyGETAuthReject writes a 200 woff2 AuthBadKey Status the client can open.
-func replyGETAuthReject(w http.ResponseWriter, r *http.Request, blob []byte, sid, ct string) bool {
-	hello, err := sealAuthReject(blob, []byte(sid))
-	if err != nil {
-		return false
-	}
-	if ct == "" {
-		ct = "font/woff2"
-	}
-	w.Header().Set("X-Session", sid)
-	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Content-Length", strconv.Itoa(len(hello)))
-	if r.Method != http.MethodHead {
-		_, _ = w.Write(hello)
-	}
-	return true
-}
-
 // ServeHTTP handles the first GET (auth) and later GETs (header uplink, exclusive Puller).
 func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -1814,10 +1796,8 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			ss = s.get(sid)
 			if ss == nil {
-				if replyGETAuthReject(w, r, blob, sid, s.contentType()) {
-					traceMISS(sid, seq, "auth", r)
-					return
-				}
+				// A wrong key is an ordinary miss (§3.4). A sealed reject
+				// lets a prober that chose eph_c confirm a loft node.
 				http.NotFound(w, r)
 				traceMISS(sid, seq, "auth", r)
 				return

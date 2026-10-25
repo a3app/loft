@@ -192,7 +192,7 @@ sequenceDiagram
 
 **GET 预设。** 握手 GET 是一次请求。Status `edge` 随其后，在客户端打开 inflight 泵之前。`0` 或省略为 `plain`：客户端保留那次首个 GET 的限额。`1` 为 `tight`：Cookie 预算 16 KiB、16 条未完成 GET、其后每条 GET 6 秒超时。预设 `1` 用于 origin 位于 CDN 或反向代理之后，而该代理会丢掉过胖的并发 HEADERS 突发。`header_budget` 与 `inflight` 非零时为该预设之下的上限。厂商名不是 Status 字段。*说明，非规范。* 节点配置把预设 `1` 写成 `edge: tight`。见 [guide_zh.md](guide_zh.md)。
 
-**GET 未完成。** 已启用其他 mux 前置的客户端，在 GET 握手未能产生会话时必须尝试那些前置。尝试顺序为已启用的 GET、WebSocket、HTTP/2、QUIC、HTTP/3 子集。若客户端另有边缘 URL，第一次 GET 使用它。下一次 GET 与其余前置使用节点主机。节点的密封认证失败在每个已试前置同样失败后使客户端停止。GET 封面的 HTTP 404 仅为 GET 的该失败；其本身不禁止下一个前置。
+**GET 未完成。** 已启用其他 mux 前置的客户端，在 GET 握手未能产生会话时必须尝试那些前置。尝试顺序为已启用的 GET、WebSocket、HTTP/2、QUIC、HTTP/3 子集。若客户端另有边缘 URL，第一次 GET 使用它。下一次 GET 与其余前置使用节点主机。节点不得密封认证失败：GET 与任何其他未命中一样返回 HTTP 404，`ws`、`h2`、`quic`、`h3` 不作回复直接关闭传输。密封的 Status 可被自选 `eph_c` 的探测者打开，从而确认 loft 节点。GET 握手上的 HTTP 404 仅对 GET 表示 `auth_bad_key`；其本身不禁止下一个前置。
 
 **更换套接字而不更换会话。** 客户端可以在本地 max-age 之后更换一条 HTTP/2 连接（省略或 0：保留到出错）。Mux 与 GET 会话标识不变。客户端也可以在本机出口变更后更换 HTTP/2 池：mux、GET 会话标识、序号与 AEAD 密钥留下，不再发新的 `0x02`。节点按 GET sid 识别会话，不按客户端地址。旧池上的 CONNECT 拼接随这些套接字结束。
 
@@ -630,7 +630,7 @@ CDN、反向代理或 TLS 终结器能观察到什么，以及握手依赖哪些
 
 没有有效 `session_id` 就打开 TLS 的扫描器拼接到已配置源站，包括自身 SNI（CT / 反向 DNS 主机名）、空 SNI，以及首包不是 TLS ClientHello 的情况。它收到源站的存活证书与字节。该 IP 上的 UDP 转发到同一源站，因此 QUIC 探测看到目的地，而不是 loft。例外是带标记的 loft QUIC v1 Initial。其源连接 ID 为 20 字节 `HKDF-SHA256(secret, salt = client_random, info = "loft-quic-v3")`，其中 client_random 为临时 X25519 公钥（最高位随机），secret 为 ECDH(该临时密钥, `mask_pub`)。没有 `mask_pub` 的客户端使用 info `loft-quic-v2`，以成员密钥为 secret。节点用公开 Initial 密钥打开 Initial（[RFC 9001](https://www.rfc-editor.org/rfc/rfc9001) §5.2），检查标记，将每个 client_random 单次持有 10 分钟，并把该客户端地址交给其 quic/h3 前置。TCP `client_random` 在同样的 10 分钟内单次使用；重复则拼接。伪装节点上的 QUIC 标记只有 v3（`quic_mark` / `h3_mark`）：v2 Initial 转发到源站。节点自身的连接 ID 携带 HMAC，因此来自新地址的短头分组仍留在 loft。此类节点宣告 `quic_mark` / `h3_mark` 而非 `quic` / `h3`；不打标记的客户端不得使用它们。构成 sid v3 需要 `mask_pub`；覆盖网 Hello 仍需要成员密钥。例外是 CDN 源站拉取：已配置的 `cdn_peers` CIDR 可以在自身 SNI 上以节点证书完成 TLS，无需 sid。
 
-没有有效 Cookie 的 GET 返回带 HTML 的 404。名册、列表与静态资源是普通 GET。
+没有有效 Cookie 的 GET 返回带 HTML 的 404。未知成员密钥下格式正确的 `0x02` 得到同样的 404。名册、列表与静态资源是普通 GET。
 
 ### 11.4 重放与时钟
 

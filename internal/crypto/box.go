@@ -308,28 +308,6 @@ func (n *Nonces) establish(nonce, ephC []byte) (ephN, key []byte, replay bool, e
 	return ephN, key, false, nil
 }
 
-// RejectAuth parses a well-formed 0x02 without HMAC and mints a session key
-// so the node can Seal AuthBadKey. Does not record the nonce: a later valid
-// proof of the same blob still works. Malformed blobs stay decoy/404.
-func RejectAuth(blob []byte) (Auth, error) {
-	var z Auth
-	if len(blob) < ProofLen || blob[0] != tagAuth {
-		return z, ErrAuth
-	}
-	nonce := blob[1:17]
-	ephC := blob[17 : 17+EphSize]
-	ephN, key, err := mintHandshake(ephC, nonce)
-	if err != nil {
-		return z, err
-	}
-	return Auth{
-		Nonce: append([]byte(nil), nonce...),
-		Rest:  blob[ProofLen:],
-		EphN:  ephN,
-		Key:   key,
-	}, nil
-}
-
 // FinishAuth verifies 0x02 (nonce || eph_c || HMAC). A wrong key does not
 // burn a valid blob.
 func FinishAuth(tokens [][]byte, blob []byte, seen *Nonces) (Auth, error) {
