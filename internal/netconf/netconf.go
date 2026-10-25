@@ -72,13 +72,18 @@ type Route struct {
 	Note   string `yaml:"note,omitempty" json:"note,omitempty"`
 }
 
-// VLAN is a broadcast domain inside the overlay. Membership comes from the
-// member's credentials, not from 802.1Q on the wire.
+// VLAN is a segment (a bridge) inside the overlay. Membership comes from the
+// member's credentials, not from 802.1Q on the wire. Empty CIDR is L2-only
+// isolation inside the default overlay; a CIDR is its own L3 (gateway, pool, DNS).
 type VLAN struct {
-	ID    int    `yaml:"id" json:"id"`
-	Name  string `yaml:"name" json:"name"`
-	CIDR  string `yaml:"cidr,omitempty" json:"cidr,omitempty"`
-	Peers string `yaml:"peers,omitempty" json:"peers,omitempty"` // override: hub | mesh
+	ID       int    `yaml:"id" json:"id"`
+	Name     string `yaml:"name" json:"name"`
+	CIDR     string `yaml:"cidr,omitempty" json:"cidr,omitempty"`
+	Gateway  string `yaml:"gateway,omitempty" json:"gateway,omitempty"`
+	PoolFrom string `yaml:"pool_from,omitempty" json:"pool_from,omitempty"`
+	PoolTo   string `yaml:"pool_to,omitempty" json:"pool_to,omitempty"`
+	DNS      DNS    `yaml:"dns,omitempty" json:"dns,omitempty"`
+	Peers    string `yaml:"peers,omitempty" json:"peers,omitempty"` // override: hub | mesh
 }
 
 // Member is a device identity. Auth is a key, not a password.
@@ -155,7 +160,7 @@ type Packet struct {
 	Proto   string
 	Sport   int
 	Dport   int
-	ToGW    bool // destination is the network gateway
+	ToGW    bool // destination is a segment gateway
 	Routed  bool // destination matches ip route via a member
 }
 
@@ -283,7 +288,10 @@ func (n *Network) Validate() error {
 			n.Rules[i].DstTag = r.DstTag
 		}
 	}
-	return n.validateDNS()
+	if err := n.validateDNS(); err != nil {
+		return err
+	}
+	return n.validateSegs()
 }
 
 // ValidTag is a member group name: letter, then letters, digits, _ or -.
@@ -308,27 +316,27 @@ func (m Member) HasTag(tag string) bool {
 }
 
 // RouteHop is the configured next hop overlay IP for r: Via, else the
-// member's sticky IP, else the first sticky IP with Tag. Empty or the
-// network gateway means the node itself.
+// member's sticky IP, else the first sticky IP with Tag. Empty or a
+// segment gateway means the node itself.
 func (n *Network) RouteHop(r Route) string {
 	if n == nil {
 		return ""
 	}
 	if ip := net.ParseIP(strings.TrimSpace(r.Via)); ip != nil {
 		s := ip.String()
-		if s == n.Gateway {
+		if n.IsGateway(s) {
 			return ""
 		}
 		return s
 	}
 	if r.Member != "" {
-		if m := n.MemberByID(r.Member); m != nil && m.IP != "" && m.IP != n.Gateway {
+		if m := n.MemberByID(r.Member); m != nil && m.IP != "" && !n.IsGateway(m.IP) {
 			return m.IP
 		}
 	}
 	if r.Tag != "" {
 		for _, m := range n.Members {
-			if m.HasTag(r.Tag) && m.IP != "" && m.IP != n.Gateway {
+			if m.HasTag(r.Tag) && m.IP != "" && !n.IsGateway(m.IP) {
 				return m.IP
 			}
 		}
@@ -398,14 +406,12 @@ func (n *Network) DNSUpstream() []string {
 
 // validateDNS requires DNS.Servers to be IPs and DNS.Upstream to pass CheckUpstream.
 func (n *Network) validateDNS() error {
-	for i, s := range n.DNS.Servers {
-		if net.ParseIP(strings.TrimSpace(s)) == nil {
-			return fmt.Errorf("dns.servers[%d]: want an IP address", i)
-		}
+	if err := n.DNS.check(); err != nil {
+		return err
 	}
-	for i, u := range n.DNS.Upstream {
-		if err := CheckUpstream(u); err != nil {
-			return fmt.Errorf("dns.upstream[%d]: %w", i, err)
+	for _, v := range n.VLANs {
+		if err := v.DNS.check(); err != nil {
+			return fmt.Errorf("vlan %d: %w", v.ID, err)
 		}
 	}
 	return nil

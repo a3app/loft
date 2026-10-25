@@ -124,10 +124,18 @@ func (r *Registry) onlineOf(memberID string) []*Lease {
 	return out
 }
 
-// pickIP prefers the member sticky IP when not held, else the next free pool address.
+// pickIP prefers the member sticky IP when not held and still in the
+// member's segment, else the next free address in that segment.
 func (r *Registry) pickIP(m *Member, online []*Lease) (ip string, sticky bool, err error) {
 	used := r.used()
 	stickyIP := m.StickyIP()
+	if stickyIP != "" {
+		s := r.net.Seg(m.VLAN)
+		_, cidr, e := net.ParseCIDR(s.CIDR)
+		if e != nil || !cidr.Contains(net.ParseIP(stickyIP)) {
+			stickyIP = ""
+		}
+	}
 	if stickyIP != "" {
 		holder := r.byIP[stickyIP]
 		taken := holder != nil && (holder.Online || r.now().Sub(holder.Seen) < r.hold(m))
@@ -135,14 +143,14 @@ func (r *Registry) pickIP(m *Member, online []*Lease) (ip string, sticky bool, e
 			return stickyIP, true, nil
 		}
 	}
-	ip, err = r.net.nextFree(used)
+	ip, err = r.net.nextFreeIn(m.VLAN, used)
 	return ip, false, err
 }
 
-// used is IPs still reserved: gateway, online leases, and offline leases inside Hold.
+// used is IPs still reserved: segment gateways, online leases, and offline leases inside Hold.
 func (r *Registry) used() map[string]bool {
 	u := map[string]bool{}
-	if gw := r.net.Gateway; gw != "" {
+	for _, gw := range r.net.Gateways() {
 		u[gw] = true
 	}
 	hold := DefaultSession().Merge(r.net.Session).Hold()
@@ -178,24 +186,33 @@ func (r *Registry) gc() {
 	}
 }
 
-// AllocateIP is nextFree with an optional used set (gateway is always reserved).
+// AllocateIP is nextFree with an optional used set (gateways are always reserved).
 func (n *Network) AllocateIP(used map[string]bool) (string, error) {
-	if used == nil {
-		used = map[string]bool{}
-	}
-	return n.nextFree(used)
+	return n.AllocateIPIn(0, used)
 }
 
-// nextFree scans CIDR from network+1 (or PoolFrom) through PoolTo, skipping used and broadcast.
-// Prefixes shorter than /16 return errWide.
-func (n *Network) nextFree(used map[string]bool) (string, error) {
+// AllocateIPIn is AllocateIP for a segment (0 = default overlay).
+func (n *Network) AllocateIPIn(vlan int, used map[string]bool) (string, error) {
 	if used == nil {
 		used = map[string]bool{}
 	}
-	if n.Gateway != "" {
-		used[n.Gateway] = true
+	return n.nextFreeIn(vlan, used)
+}
+
+func (n *Network) nextFree(used map[string]bool) (string, error) {
+	return n.nextFreeIn(0, used)
+}
+
+// nextFreeIn scans the segment CIDR from network+1 (or PoolFrom) through PoolTo.
+func (n *Network) nextFreeIn(vlan int, used map[string]bool) (string, error) {
+	if used == nil {
+		used = map[string]bool{}
 	}
-	ip, ipnet, err := parseCIDR4(n.CIDR)
+	for _, gw := range n.Gateways() {
+		used[gw] = true
+	}
+	s := n.Seg(vlan)
+	ip, ipnet, err := parseCIDR4(s.CIDR)
 	if err != nil {
 		return "", err
 	}
@@ -203,7 +220,7 @@ func (n *Network) nextFree(used map[string]bool) (string, error) {
 	if bits-ones > 16 {
 		return "", errWide
 	}
-	from, to, err := n.poolBounds(ipnet)
+	from, to, err := poolBounds(s.PoolFrom, s.PoolTo, ipnet)
 	if err != nil {
 		return "", err
 	}
@@ -216,9 +233,9 @@ func (n *Network) nextFree(used map[string]bool) (string, error) {
 		if to != nil && bytes.Compare(cur, to) > 0 {
 			break
 		}
-		s := cur.String()
-		if !used[s] && !isBroadcast(cur, ipnet) {
-			return s, nil
+		addr := cur.String()
+		if !used[addr] && !isBroadcast(cur, ipnet) {
+			return addr, nil
 		}
 		inc(cur)
 	}
@@ -226,16 +243,15 @@ func (n *Network) nextFree(used map[string]bool) (string, error) {
 }
 
 // SetNetwork points the registry at n (a reload). Leases of members that
-// are gone, and leases whose IP left the network, are dropped; the rest keep
+// are gone, and leases whose IP left every segment CIDR, are dropped; the rest keep
 // their IPs.
 func (r *Registry) SetNetwork(n *Network) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.net = n
-	_, cidr, err := net.ParseCIDR(n.CIDR)
 	for k, l := range r.leases {
 		gone := n.MemberByID(l.MemberID) == nil && l.MemberID != ""
-		out := err == nil && !cidr.Contains(net.ParseIP(l.IP))
+		out := !n.ContainsIP(net.ParseIP(l.IP))
 		if gone || out {
 			delete(r.leases, k)
 			if r.byIP[l.IP] == l {

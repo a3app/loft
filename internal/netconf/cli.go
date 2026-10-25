@@ -173,6 +173,26 @@ func applyConfig(n *Network, mem map[string]*Member, order *[]string, tok []stri
 				return fmt.Errorf("vlan cidr wants a network")
 			}
 			v.CIDR = tok[4]
+		case "gateway":
+			if len(tok) < 5 {
+				return fmt.Errorf("vlan gateway wants an IP")
+			}
+			v.Gateway = tok[4]
+		case "pool":
+			if len(tok) < 6 {
+				return fmt.Errorf("vlan pool wants FROM TO")
+			}
+			v.PoolFrom, v.PoolTo = tok[4], tok[5]
+		case "dns":
+			if len(tok) < 5 {
+				return fmt.Errorf("vlan dns wants a value")
+			}
+			if on, ok := startup.OnOff(tok[4]); ok {
+				v.DNS.Enabled = &on
+				return nil
+			}
+			dummy := true
+			return applyDNS(&v.DNS, &dummy, tok[3:])
 		case "peers":
 			if len(tok) < 5 {
 				return fmt.Errorf("vlan peers wants hub|mesh")
@@ -522,6 +542,21 @@ func RenderCommands(n Network) string {
 		}
 		if v.CIDR != "" {
 			fmt.Fprintf(&b, "config vlan %d cidr %s\n", v.ID, v.CIDR)
+		}
+		if v.Gateway != "" {
+			fmt.Fprintf(&b, "config vlan %d gateway %s\n", v.ID, v.Gateway)
+		}
+		if v.PoolFrom != "" && v.PoolTo != "" {
+			fmt.Fprintf(&b, "config vlan %d pool %s %s\n", v.ID, v.PoolFrom, v.PoolTo)
+		}
+		if v.DNS.Enabled != nil {
+			fmt.Fprintf(&b, "config vlan %d dns %s\n", v.ID, onOff(*v.DNS.Enabled))
+		}
+		for _, s := range v.DNS.Servers {
+			fmt.Fprintf(&b, "config vlan %d dns %s\n", v.ID, s)
+		}
+		for _, s := range v.DNS.Upstream {
+			fmt.Fprintf(&b, "config vlan %d dns upstream %s\n", v.ID, s)
 		}
 		if v.Peers != "" {
 			fmt.Fprintf(&b, "config vlan %d peers %s\n", v.ID, v.Peers)

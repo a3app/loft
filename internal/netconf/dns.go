@@ -43,6 +43,21 @@ func CheckUpstream(s string) error {
 	return nil
 }
 
+// check requires Servers to be IPs and Upstream to pass CheckUpstream.
+func (d DNS) check() error {
+	for i, s := range d.Servers {
+		if net.ParseIP(strings.TrimSpace(s)) == nil {
+			return fmt.Errorf("dns.servers[%d]: want an IP address", i)
+		}
+	}
+	for i, u := range d.Upstream {
+		if err := CheckUpstream(u); err != nil {
+			return fmt.Errorf("dns.upstream[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // hostnameOK is a DNS hostname: ASCII alphanumerics, dot, hyphen; length 1–253.
 func hostnameOK(s string) bool {
 	if s == "" || len(s) > 253 {

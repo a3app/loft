@@ -28,6 +28,31 @@ func (n *Network) NextIP() (string, error) {
 	return n.nextFree(used)
 }
 
+// NextIPIn is NextIP for a segment (0 = default overlay).
+func (n *Network) NextIPIn(vlan int) (string, error) {
+	used := map[string]bool{}
+	for _, m := range n.Members {
+		if m.IP != "" {
+			used[m.IP] = true
+		}
+	}
+	return n.nextFreeIn(vlan, used)
+}
+
+// firstHost is network+1 of cidr, or empty.
+func firstHost(cidr string) string {
+	ip, ipnet, err := parseCIDR4(cidr)
+	if err != nil {
+		return ""
+	}
+	cur := append(net.IP(nil), ip.Mask(ipnet.Mask)...)
+	inc(cur)
+	if !ipnet.Contains(cur) || isBroadcast(cur, ipnet) {
+		return ""
+	}
+	return cur.String()
+}
+
 // parseCIDR4 parses CIDR and canonicalizes IPv4 to 4-byte form.
 func parseCIDR4(cidr string) (net.IP, *net.IPNet, error) {
 	ip, ipnet, err := net.ParseCIDR(cidr)
@@ -53,26 +78,34 @@ func inc(ip net.IP) {
 
 // canonicalizePool expands last-octet pool bounds to full IPv4 strings on n.
 func (n *Network) canonicalizePool(ipnet *net.IPNet) error {
-	from, to, err := n.poolBounds(ipnet)
+	return canonicalizePool(ipnet, &n.PoolFrom, &n.PoolTo)
+}
+
+func canonicalizePool(ipnet *net.IPNet, poolFrom, poolTo *string) error {
+	from, to, err := poolBounds(*poolFrom, *poolTo, ipnet)
 	if err != nil {
 		return err
 	}
 	if from != nil {
-		n.PoolFrom = from.String()
+		*poolFrom = from.String()
 	}
 	if to != nil {
-		n.PoolTo = to.String()
+		*poolTo = to.String()
 	}
 	return nil
 }
 
 // poolBounds expands PoolFrom/PoolTo. Both must be set or both empty; from ≤ to.
 func (n *Network) poolBounds(ipnet *net.IPNet) (from, to net.IP, err error) {
-	from, err = expandPoolIP(n.PoolFrom, ipnet)
+	return poolBounds(n.PoolFrom, n.PoolTo, ipnet)
+}
+
+func poolBounds(poolFrom, poolTo string, ipnet *net.IPNet) (from, to net.IP, err error) {
+	from, err = expandPoolIP(poolFrom, ipnet)
 	if err != nil {
 		return nil, nil, fmt.Errorf("pool_from: %w", err)
 	}
-	to, err = expandPoolIP(n.PoolTo, ipnet)
+	to, err = expandPoolIP(poolTo, ipnet)
 	if err != nil {
 		return nil, nil, fmt.Errorf("pool_to: %w", err)
 	}

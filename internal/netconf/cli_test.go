@@ -58,7 +58,11 @@ ipif overlay 10.8.0.0/24
   dns upstream tls://1.1.1.1
   listen 0.0.0.0 443 front ws
 create vlan 10 name staff
-config vlan 10 cidr 10.8.10.0/24
+config vlan 10 cidr 10.9.0.0/24
+config vlan 10 gateway 10.9.0.1
+config vlan 10 pool 10.9.0.10 10.9.0.200
+config vlan 10 dns enable
+config vlan 10 dns 10.9.0.1
 config vlan 10 peers mesh
 create member operator
 config member operator key_sha256 deadbeef
@@ -112,6 +116,13 @@ config member operator rate_bps 2000000
 	}
 	if again.Routes[0].Note != "office" || again.VLANs[0].Name != "staff" || again.ACLDefault != "drop" {
 		t.Fatalf("roundtrip %+v", again)
+	}
+	v := again.VLANs[0]
+	if v.CIDR != "10.9.0.0/24" || v.Gateway != "10.9.0.1" || v.PoolFrom != "10.9.0.10" || v.PoolTo != "10.9.0.200" {
+		t.Fatalf("vlan l3 %+v", v)
+	}
+	if v.DNS.Enabled == nil || !*v.DNS.Enabled || len(v.DNS.Servers) != 1 || v.DNS.Servers[0] != "10.9.0.1" {
+		t.Fatalf("vlan dns %+v", v.DNS)
 	}
 	if !strings.Contains(RenderCommands(*n), "permit") && !strings.Contains(RenderCommands(*n), "deny") {
 		t.Fatal("acl missing")
