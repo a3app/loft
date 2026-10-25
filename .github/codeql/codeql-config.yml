@@ -1,18 +1,11 @@
 name: loft
 
-# Default suite, minus rules that fire on protocols loft implements as specified.
-# SSTP MS-CHAPv2 is MD4/DES (RFC 2759). Trojan hash is SHA224. Dest-shaped TLS
-# skips the origin CA (trust is lt_ / pbk). loft-probe prints probe status.
-# A new MD5 of a loft token is not these queries' usual hit; do not add more
-# excludes without a protocol reason.
-query-filters:
-  - exclude:
-      id: go/weak-cryptographic-algorithm
-  - exclude:
-      id: go/weak-sensitive-data-hashing
-  - exclude:
-      id: go/insecure-tls
-  - exclude:
-      id: go/disabled-certificate-check
-  - exclude:
-      id: go/clear-text-logging
+# Full default suite. Rules that fire on protocols loft implements as specified
+# are suppressed at the line, with the reason, by a `codeql[<rule-id>]` comment:
+# SSTP MS-CHAPv2 is MD4/DES (RFC 2759), CHAP is MD5 (RFC 1994), SSTP allows
+# TLS 1.0 for old Windows, Trojan hash is SHA224, dest-shaped TLS and the signed
+# roster do not trust the CA, loft-probe prints probe status. Add a suppression
+# only with a protocol reason; never exclude a rule here.
+packs:
+  go:
+    - codeql/go-queries:AlertSuppression.ql

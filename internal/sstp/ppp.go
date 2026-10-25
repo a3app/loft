@@ -407,9 +407,9 @@ func (p *ppp) handleCHAP(info []byte) error {
 		if !p.papCHAP {
 			return fmt.Errorf("chap failure")
 		}
-		// CHAP-MD5 (RFC 1994). codeql[go/weak-sensitive-data-hashing]
 		h := md5.New()
 		h.Write([]byte{id})
+		// CHAP-MD5 (RFC 1994). codeql[go/weak-sensitive-data-hashing]
 		h.Write([]byte(p.pass))
 		h.Write(chal)
 		sum := h.Sum(nil)

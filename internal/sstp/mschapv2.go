@@ -25,8 +25,8 @@ func ntPasswordHash(pass string) []byte {
 }
 
 func md4sum(b []byte) []byte {
-	// codeql[go/weak-sensitive-data-hashing]
 	h := md4.New()
+	// NT hash is MD4 of the password (RFC 2759). codeql[go/weak-sensitive-data-hashing]
 	h.Write(b)
 	return h.Sum(nil)
 }
