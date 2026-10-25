@@ -128,6 +128,18 @@ func TestAttachOutboundUsesStatusPath(t *testing.T) {
 	if def.Path != config.DefaultH2Path {
 		t.Fatalf("default %q", def.Path)
 	}
+	evil := attachOutbound(get, wire.FrontWS, []wire.FrontEP{
+		{Name: wire.FrontWS, Path: "/portal/api/sync", URL: "wss://evil.example/x"},
+	})
+	if evil.URL != "wss://huy.com/portal/api/sync" {
+		t.Fatalf("status url %q", evil.URL)
+	}
+	at := attachOutbound(get, wire.FrontWS, []wire.FrontEP{
+		{Name: wire.FrontWS, Path: "@evil.example/x"},
+	})
+	if at.URL != "wss://huy.com"+config.DefaultWSPath {
+		t.Fatalf("at-path %q", at.URL)
+	}
 }
 
 func TestAttachOutboundDirectNode(t *testing.T) {

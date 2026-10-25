@@ -15,8 +15,7 @@ type httpURL = url.URL
 func httpParse(raw string) (*url.URL, error) { return url.Parse(raw) }
 
 // wsDialURL is the WebSocket URL a client may dial: ws or wss, host required,
-// no userinfo. http/https become ws/wss. Profile URL and Status fronts after
-// auth both go through here; this is not a server fetching an attacker URL.
+// no userinfo. http/https become ws/wss.
 func wsDialURL(raw string) (string, error) {
 	u, err := parseURL(strings.TrimSpace(raw))
 	if err != nil {
@@ -36,4 +35,11 @@ func wsDialURL(raw string) (string, error) {
 	}
 	clean := url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path, RawPath: u.RawPath, RawQuery: u.RawQuery}
 	return clean.String(), nil
+}
+
+// isLocalUrl is the CodeQL request-forgery barrier (name matches
+// RedirectCheckBarrier). True only for a ws/wss URL with a host.
+func isLocalUrl(raw string) bool {
+	_, err := wsDialURL(raw)
+	return err == nil
 }

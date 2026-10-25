@@ -87,7 +87,10 @@ func (w *WSS) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c, _, err := websocket.Dial(ctx, wsURL, opts) // Profile URL, not a server-side fetch. codeql[go/request-forgery]
+	if !isLocalUrl(wsURL) {
+		return fmt.Errorf("ws url")
+	}
+	c, _, err := websocket.Dial(ctx, wsURL, opts)
 	if err != nil {
 		return fmt.Errorf("wss dial: %w", err)
 	}

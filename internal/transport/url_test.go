@@ -24,5 +24,11 @@ func TestWsDialURL(t *testing.T) {
 		if _, err := wsDialURL(in); err == nil {
 			t.Fatalf("%s: expected error", in)
 		}
+		if isLocalUrl(in) {
+			t.Fatalf("%s: isLocalUrl", in)
+		}
+	}
+	if !isLocalUrl("wss://node.example/api/v1/sync") {
+		t.Fatal("isLocalUrl wss")
 	}
 }

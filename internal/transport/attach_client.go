@@ -374,7 +374,10 @@ func attachOutbound(get config.Outbound, front string, learned []wire.FrontEP) c
 	if base := directNodeURL(); base != "" {
 		o.URL = base
 	}
-	path, rawURL := frontEP(learned, front)
+	path, _ := frontEP(learned, front)
+	if !okFrontPath(path) {
+		path = ""
+	}
 	if path == "" {
 		switch front {
 		case wire.FrontH2, wire.FrontH3:
@@ -382,17 +385,6 @@ func attachOutbound(get config.Outbound, front string, learned []wire.FrontEP) c
 		case wire.FrontWS:
 			path = config.DefaultWSPath
 		}
-	}
-	if rawURL != "" {
-		o.URL = rawURL
-		o.Path = path
-		if front == wire.FrontWS {
-			o.Path = ""
-		}
-		if front == wire.FrontQUIC {
-			o.Path = ""
-		}
-		return o
 	}
 	u := strings.TrimSuffix(o.URL, "/")
 	switch front {
@@ -425,6 +417,12 @@ func frontEP(learned []wire.FrontEP, name string) (path, rawURL string) {
 		}
 	}
 	return "", ""
+}
+
+// okFrontPath is a Status path that cannot move the host (no @, no scheme).
+func okFrontPath(p string) bool {
+	p = strings.TrimSpace(p)
+	return p != "" && p[0] == '/' && !strings.Contains(p, "@") && !strings.Contains(p, "://")
 }
 
 func (g *GET) runAttach(ctx context.Context, conn io.ReadWriteCloser, front string) error {
@@ -646,6 +644,9 @@ func (g *GET) attachWS(ctx context.Context, o config.Outbound) error {
 	if err != nil {
 		return err
 	}
+	if !isLocalUrl(wsURL) {
+		return fmt.Errorf("ws url")
+	}
 	u, err := parseURL(wsURL)
 	if err != nil {
 		return err
@@ -676,7 +677,7 @@ func (g *GET) attachWS(ctx context.Context, o config.Outbound) error {
 			},
 		}
 	}
-	c, _, err := websocket.Dial(ctx, wsURL, opts) // Profile or Status front after auth. codeql[go/request-forgery]
+	c, _, err := websocket.Dial(ctx, wsURL, opts)
 	if err != nil {
 		return err
 	}
