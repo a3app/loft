@@ -671,6 +671,10 @@ TLS-посредник, у которого уже есть ключ участ�
 
 ## 14. Тестовые векторы
 
+Все значения в hex, если не взяты в кавычки. Эталонная реализация проверяет каждый вектор ниже в `internal/crypto/vectors_test.go` и `internal/transport/vectors_test.go`. Скаляры X25519 — сырые 32 байта до clamping по RFC 7748.
+
+### 14.1 Кадры mux
+
 Ниже — полезные нагрузки кадров mux до Seal.
 
 Data, поток 1, полезная нагрузка `hi`:
@@ -689,6 +693,89 @@ Reset `stream_refused`: полезная нагрузка `05 01`.
 
 Форма ключа участника: `lt_` + 48 шестнадцатеричных символов в нижнем регистре. SHA-256 всей строки — то, что хранит нода.
 
+### 14.2 Аутентификация `0x02`
+
+Ключ участника `"lt_00112233445566778899aabbccddeeff0011223344556677"`. Ключ HMAC — ASCII-байты всей этой строки (51 байт). `nonce` — `00 01 … 0f`. Эфемерный скаляр клиента `sk_c` — `20 21 … 3f`.
+
+Hello: версия 1, пустой `member_id`, `instance_id` `"0123456789abcdef01234567"`, `proto_min` = `proto_max` = `0x0100`, caps `0x060077e0` (get, ws, status, timers, hello_caps, reset, dgram, clockless, ticket, resin, hold), program `"loft"`, software `"1.0.28"`, без байта шифра данных.
+
+```
+eph_c   358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd166254
+hello   0100183031323334353637383961626364656630313233343536370100010000000000060077e0046c6f667406312e302e3238
+mac     00dd255f82e8d3e9afb3a74294cfadd1
+auth    02000102030405060708090a0b0c0d0e0f358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd16625400dd255f82e8d3e9afb3a74294cfadd10100183031323334353637383961626364656630313233343536370100010000000000060077e0046c6f667406312e302e3238
+```
+
+Значение Cookie рукопожатия GET — base64url без паддинга:
+
+```
+AgABAgMEBQYHCAkKCwwNDg81gHLWNliA0a7qMprfkSE4OFHtIaKOO3XpZdDSzRZiVADdJV-C6NPpr7OnQpTPrdEBABgwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1NjcBAAEAAAAAAAYAd-AEbG9mdAYxLjAuMjg
+```
+
+### 14.3 Сессионный ключ и первое сообщение ноды
+
+Эфемерный скаляр ноды `sk_n` — `40 41 … 5f`. `X25519(sk_c, eph_n)` равно `X25519(sk_n, eph_c)`; ключ — HKDF от этого секрета с солью `nonce` из §14.2 (§4.3).
+
+Status: code `ok`, `lease_sec` 3600, `mtu` 1380, `vlan` 0, keepalive 15000, idle 120000, reconnect 200 / 8000, `reconnect_fast_n` 5, ip `"10.77.0.2"`, gateway `"10.77.0.1"`, `instance_id` из §14.2, `reconnect_fast_for_ms` 8000, протокол `0x0100` / `0x0100` / `0x0100`, caps `0x000063e0` (get, ws, status, timers, hello_caps, clockless, ticket), program `"loft-node"`, software `"1.0.28"`, ticket `"a1b2c3d4e5f60718293a4b5c"`, без decoy, mask, replicas, canary, roster и lists, peers hub, p2p 0, без peer hints, dns `"10.77.0.1"`, без необязательного хвоста.
+
+Рукопожатие идёт через GET, поэтому AAD — ASCII этого 24-символьного идентификатора сессии. Nonce Seal — `01020304 0000000000000001` (префикс и счётчик из §4.3).
+
+```
+eph_n   79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a
+key     864e5c505dde097ea873c026daa20d1ff565a2458ebee8bc49c58779b9a89920
+status  000000000e100564000000003a980001d4c0000000c800001f4000050931302e37372e302e320931302e37372e302e311830313233343536373839616263646566303132333435363700001f4001000100010000000000000063e0096c6f66742d6e6f646506312e302e323800186131623263336434653566363037313832393361346235630000000000000000000000000000000000000000010931302e37372e302e31
+first   79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a0102030400000000000000017e625678697eaa81d462a48e6d0d612023b3ce1eadd7fd76c1dc0b353685f4e25f2c2e0fdf2d68537a2f5f872446c0e56ae544da11a7a7ce353affc210c35c682006d4dcedb0ca3560368d1109b5fd47f76bb3fc2619e21c659d569ff56c1e5f923dc79fc23c013f2d7e891ad638e25868264abd03a0bea1dc10039fb1479e91b425195c1cacba02e3aae67d3d21864d545eecc4ff13b696ec480b713f8d74c0da3f40688299eae1690ffb44f887c1be108c566b59
+```
+
+`first` — это `eph_n || Seal(status)`.
+
+### 14.4 Необязательный хвост Status
+
+Status из §14.3 с `gap_hold_ms` 8000 и одним маршрутом `"192.168.10.0/24"` через `"10.77.0.5"`. Байты ниже идут после `dns`. Каждое необязательное поле до `routes` записано нулём или пустым: `ip6`, `gateway6`, `header_budget`, `inflight`, `h2_conns`, `uplink_enc`.
+
+```
+tail    0000000000000000001f40010f3139322e3136382e31302e302f32340931302e37372e302e35
+```
+
+### 14.5 Attach `0x04`
+
+Сессионный ключ из §14.3, `sid` — ticket из §14.3, `nonce` 16 × `33`, front `"ws"`.
+
+```
+attach  0418613162326333643465356636303731383239336134623563333333333333333333333333333333330277735ea380c409c8b53fa95ca96ea2cf9826
+```
+
+### 14.6 Roster и списки адресов
+
+Seed Ed25519 контроллера — 32 × `07`.
+
+Roster: serial 1, одна запись: id `"self"`, url `"https://loft.example.com"`, decoy `"origin.example"`, fronts `get` `ws`, drain 0, weight 0 (кодируется как 100), path `"/static/v3/build"`, `mask_pub` из §14.8.
+
+Lists: serial 1, один набор `"lan"`: kind 3 `"10.0.0.0/8"`, kind 2 `"example.com"`.
+
+```
+pub     ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c
+roster  0000000000000001010473656c66001868747470733a2f2f6c6f66742e6578616d706c652e636f6d0e6f726967696e2e6578616d706c6502036765740277730064102f7374617469632f76332f6275696c6420cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc0944320ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c004013bd9272db764ecd3aa9335db1c1aece3af0838f7df21a46e9b1d9391d52ecc48a19838063efcc622b3f7edb6e5d019c9f6d52d9ca3183e5b842178c80e1be0b
+lists   000000000000000101036c616e000203000a31302e302e302e302f3802000b6578616d706c652e636f6d20ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c0040541d93536cb973e7188e50ba6d12bf34bf9ed123f063d00c59135802a86699c44fc71673500af47eb1f675588b44587569bbb8fad4e96980cf8166bcf3f99802
+hash    eb289e3f96097285b9c703641b0467935938ca480af998847f2e3607e2348d25
+```
+
+`hash` — это `lists_hash` в Status: SHA-256 от `lists`. Документ roster по `roster_path` несёт base64url без паддинга:
+
+```
+{"v":1,"p":"AAAAAAAAAAEBBHNlbGYAGGh0dHBzOi8vbG9mdC5leGFtcGxlLmNvbQ5vcmlnaW4uZXhhbXBsZQIDZ2V0AndzAGQQL3N0YXRpYy92My9idWlsZCDMy1YzEfDenww90osUUNl4vav8Y8ptc89WHy_z7MCUQyDqSmxj4pxSCr71UHsTLsX5lUd2rr6-e5JCHuppFEbSLABAE72Sctt2Ts06qTNdscGuzjrwg4998hpG6bHZOR1S7MSKGYOAY-_MYis_fttuXQGcn21S2coxg-W4QheMgOG-Cw"}
+```
+
+### 14.7 Cookie Z85
+
+Кодировка uplink 1 для кадра Data из §14.1. `u16be length || blob` — 11 байт; дополняется одним нулевым байтом до 12, кратного 4. Декодер берёт длину из первых двух байтов и игнорирует дополнение.
+
+```
+~00@Sb0SSi20CDfE
+```
+
+### 14.8 Метка ClientHello и преамбула P2P
+
 sid v3, серийный номер сертификата и source connection ID QUIC v3. Секрет ноды — строка ASCII `loft-vector-node`. Скаляр X25519 клиента — `01 02 … 20` (32 байта). `R` — 32 байта `0x11`. SNI — `origin.example`. `client_random` QUIC — это X25519(скаляр, базовая точка), старший бит сброшен, а ключ HKDF — тот же ECDH, что у серийного номера.
 
 ```
@@ -697,6 +784,21 @@ X          07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c
 session_id 699f169d38b0f02b98ade7ad3234aab2006d7cb3da449842d3a0d791b12dfb87
 serial     46112462b0f8327be74b9dac22a7ce55
 quic scid  25b8c53ebe475334b474445e3ee3253691b18faa
+```
+
+Статический скаляр ноды — `HKDF-SHA256(ikm = секрет ноды, salt = пусто, info = "loft-mask-x25519", L = 32)`.
+
+sid v2 на том же ClientHello, с ключом участника из §14.2 в роли `token`:
+
+```
+sid v2  17b91ad703fd8239930f8dc0091830d956a0432cd72e90159ee4447a0f96ecd2
+```
+
+Преамбула P2P (§9). Локальный скаляр `60 61 … 7f`, скаляр пира `80 81 … 9f`, `ss` = X25519(local, peer_pub), `src_ipv4` 10.77.0.2, nonce 16 × `44`, `dest_port` 8080.
+
+```
+peer_pub  493e82fc74464a59268817623d2053c5eb8e2cc4a988b4fee179ec6b010d531d
+preface   4c4654000a4d0002a5faf9ab72c1285b6a6f9ab64d0a8e55444444444444444444444444444444441f90
 ```
 
 ---

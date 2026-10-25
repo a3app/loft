@@ -671,6 +671,10 @@ Auth `0x02` 为 nonce、临时 X25519 公钥，以及成员密钥下的 HMAC。�
 
 ## 14. 测试向量
 
+除加引号者外，所有值为 hex。参考实现在 `internal/crypto/vectors_test.go` 与 `internal/transport/vectors_test.go` 中校验下列每个向量。X25519 标量为 RFC 7748 clamping 之前的原始 32 字节。
+
+### 14.1 mux 帧
+
 以下为 Seal 之前的 mux 帧载荷。
 
 Data，流 1，载荷 `hi`：
@@ -689,6 +693,89 @@ Reset `stream_refused`：载荷 `05 01`。
 
 成员密钥形态：`lt_` + 48 个小写十六进制。节点存储的是整串的 SHA-256。
 
+### 14.2 认证 `0x02`
+
+成员密钥 `"lt_00112233445566778899aabbccddeeff0011223344556677"`。HMAC 密钥为整串的 ASCII 字节（51 字节）。`nonce` 为 `00 01 … 0f`。客户端临时标量 `sk_c` 为 `20 21 … 3f`。
+
+Hello：版本 1，空 `member_id`，`instance_id` `"0123456789abcdef01234567"`，`proto_min` = `proto_max` = `0x0100`，caps `0x060077e0`（get、ws、status、timers、hello_caps、reset、dgram、clockless、ticket、resin、hold），program `"loft"`，software `"1.0.28"`，无数据密码字节。
+
+```
+eph_c   358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd166254
+hello   0100183031323334353637383961626364656630313233343536370100010000000000060077e0046c6f667406312e302e3238
+mac     00dd255f82e8d3e9afb3a74294cfadd1
+auth    02000102030405060708090a0b0c0d0e0f358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd16625400dd255f82e8d3e9afb3a74294cfadd10100183031323334353637383961626364656630313233343536370100010000000000060077e0046c6f667406312e302e3238
+```
+
+GET 握手 Cookie 值为无填充的 base64url：
+
+```
+AgABAgMEBQYHCAkKCwwNDg81gHLWNliA0a7qMprfkSE4OFHtIaKOO3XpZdDSzRZiVADdJV-C6NPpr7OnQpTPrdEBABgwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1NjcBAAEAAAAAAAYAd-AEbG9mdAYxLjAuMjg
+```
+
+### 14.3 会话密钥与节点首条消息
+
+节点临时标量 `sk_n` 为 `40 41 … 5f`。`X25519(sk_c, eph_n)` 等于 `X25519(sk_n, eph_c)`；密钥为该秘密的 HKDF，盐为 §14.2 的 `nonce`（§4.3）。
+
+Status：code `ok`，`lease_sec` 3600，`mtu` 1380，`vlan` 0，keepalive 15000，idle 120000，reconnect 200 / 8000，`reconnect_fast_n` 5，ip `"10.77.0.2"`，gateway `"10.77.0.1"`，§14.2 的 `instance_id`，`reconnect_fast_for_ms` 8000，协议 `0x0100` / `0x0100` / `0x0100`，caps `0x000063e0`（get、ws、status、timers、hello_caps、clockless、ticket），program `"loft-node"`，software `"1.0.28"`，ticket `"a1b2c3d4e5f60718293a4b5c"`，无 decoy、mask、replicas、canary、roster、lists，peers hub，p2p 0，无 peer hints，dns `"10.77.0.1"`，无可选尾部。
+
+握手走 GET，因此 AAD 为该 24 字符会话标识的 ASCII。Seal nonce 为 `01020304 0000000000000001`（§4.3 的前缀与计数器）。
+
+```
+eph_n   79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a
+key     864e5c505dde097ea873c026daa20d1ff565a2458ebee8bc49c58779b9a89920
+status  000000000e100564000000003a980001d4c0000000c800001f4000050931302e37372e302e320931302e37372e302e311830313233343536373839616263646566303132333435363700001f4001000100010000000000000063e0096c6f66742d6e6f646506312e302e323800186131623263336434653566363037313832393361346235630000000000000000000000000000000000000000010931302e37372e302e31
+first   79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a0102030400000000000000017e625678697eaa81d462a48e6d0d612023b3ce1eadd7fd76c1dc0b353685f4e25f2c2e0fdf2d68537a2f5f872446c0e56ae544da11a7a7ce353affc210c35c682006d4dcedb0ca3560368d1109b5fd47f76bb3fc2619e21c659d569ff56c1e5f923dc79fc23c013f2d7e891ad638e25868264abd03a0bea1dc10039fb1479e91b425195c1cacba02e3aae67d3d21864d545eecc4ff13b696ec480b713f8d74c0da3f40688299eae1690ffb44f887c1be108c566b59
+```
+
+`first` 即 `eph_n || Seal(status)`。
+
+### 14.4 Status 可选尾部
+
+§14.3 的 Status，加 `gap_hold_ms` 8000 与一条路由 `"192.168.10.0/24"` 经 `"10.77.0.5"`。以下字节位于 `dns` 之后。`routes` 之前的每个可选字段都写出，取零或空：`ip6`、`gateway6`、`header_budget`、`inflight`、`h2_conns`、`uplink_enc`。
+
+```
+tail    0000000000000000001f40010f3139322e3136382e31302e302f32340931302e37372e302e35
+```
+
+### 14.5 Attach `0x04`
+
+§14.3 的会话密钥，`sid` 为 §14.3 的 ticket，`nonce` 16 × `33`，front `"ws"`。
+
+```
+attach  0418613162326333643465356636303731383239336134623563333333333333333333333333333333330277735ea380c409c8b53fa95ca96ea2cf9826
+```
+
+### 14.6 Roster 与地址列表
+
+控制器 Ed25519 种子为 32 × `07`。
+
+Roster：serial 1，一条记录：id `"self"`，url `"https://loft.example.com"`，decoy `"origin.example"`，fronts `get` `ws`，drain 0，weight 0（编码为 100），path `"/static/v3/build"`，`mask_pub` 见 §14.8。
+
+Lists：serial 1，一个集合 `"lan"`：kind 3 `"10.0.0.0/8"`，kind 2 `"example.com"`。
+
+```
+pub     ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c
+roster  0000000000000001010473656c66001868747470733a2f2f6c6f66742e6578616d706c652e636f6d0e6f726967696e2e6578616d706c6502036765740277730064102f7374617469632f76332f6275696c6420cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc0944320ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c004013bd9272db764ecd3aa9335db1c1aece3af0838f7df21a46e9b1d9391d52ecc48a19838063efcc622b3f7edb6e5d019c9f6d52d9ca3183e5b842178c80e1be0b
+lists   000000000000000101036c616e000203000a31302e302e302e302f3802000b6578616d706c652e636f6d20ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c0040541d93536cb973e7188e50ba6d12bf34bf9ed123f063d00c59135802a86699c44fc71673500af47eb1f675588b44587569bbb8fad4e96980cf8166bcf3f99802
+hash    eb289e3f96097285b9c703641b0467935938ca480af998847f2e3607e2348d25
+```
+
+`hash` 即 Status 的 `lists_hash`：`lists` 的 SHA-256。`roster_path` 上的 roster 文档携带无填充的 base64url：
+
+```
+{"v":1,"p":"AAAAAAAAAAEBBHNlbGYAGGh0dHBzOi8vbG9mdC5leGFtcGxlLmNvbQ5vcmlnaW4uZXhhbXBsZQIDZ2V0AndzAGQQL3N0YXRpYy92My9idWlsZCDMy1YzEfDenww90osUUNl4vav8Y8ptc89WHy_z7MCUQyDqSmxj4pxSCr71UHsTLsX5lUd2rr6-e5JCHuppFEbSLABAE72Sctt2Ts06qTNdscGuzjrwg4998hpG6bHZOR1S7MSKGYOAY-_MYis_fttuXQGcn21S2coxg-W4QheMgOG-Cw"}
+```
+
+### 14.7 Cookie Z85
+
+§14.1 Data 帧的 uplink 编码 1。`u16be length || blob` 为 11 字节；补一个零字节到 12（4 的倍数）。解码方从前两字节取长度并忽略填充。
+
+```
+~00@Sb0SSi20CDfE
+```
+
+### 14.8 ClientHello 标记与 P2P 前导
+
 sid v3、证书序列号与 QUIC v3 源连接 ID。节点秘密为 ASCII 串 `loft-vector-node`。客户端 X25519 标量为 `01 02 … 20`（32 字节）。`R` 为 32 字节 `0x11`。SNI 为 `origin.example`。QUIC `client_random` 为 X25519(标量, 基点)，最高位清零，HKDF 密钥与证书序列号同一 ECDH。
 
 ```
@@ -697,6 +784,21 @@ X          07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c
 session_id 699f169d38b0f02b98ade7ad3234aab2006d7cb3da449842d3a0d791b12dfb87
 serial     46112462b0f8327be74b9dac22a7ce55
 quic scid  25b8c53ebe475334b474445e3ee3253691b18faa
+```
+
+节点静态标量为 `HKDF-SHA256(ikm = 节点秘密, salt = 空, info = "loft-mask-x25519", L = 32)`。
+
+同一 ClientHello 上的 sid v2，以 §14.2 的成员密钥为 `token`：
+
+```
+sid v2  17b91ad703fd8239930f8dc0091830d956a0432cd72e90159ee4447a0f96ecd2
+```
+
+P2P 前导（§9）。本地标量 `60 61 … 7f`，对端标量 `80 81 … 9f`，`ss` = X25519(local, peer_pub)，`src_ipv4` 10.77.0.2，nonce 16 × `44`，`dest_port` 8080。
+
+```
+peer_pub  493e82fc74464a59268817623d2053c5eb8e2cc4a988b4fee179ec6b010d531d
+preface   4c4654000a4d0002a5faf9ab72c1285b6a6f9ab64d0a8e55444444444444444444444444444444441f90
 ```
 
 ---
