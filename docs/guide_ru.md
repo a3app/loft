@@ -2,7 +2,7 @@
 
 [English](guide.md) · **Русский** · [中文](guide_zh.md)
 
-ПО 1.0.28. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Устройство: [architecture_ru.md](architecture_ru.md).
+ПО 1.0.29. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Устройство: [architecture_ru.md](architecture_ru.md).
 
 Это эталонная реализация.
 
@@ -398,6 +398,6 @@ Push и pull request в `main` запускают `make test`.
 - архивы CLI (`loft`, `loft-front`, `loft-probe`, `loft-bench` для linux/darwin, amd64/arm64)
 - macOS DMG, ad-hoc подпись: `loft-*-macos-arm64.dmg` и `loft-*-macos-x86_64.dmg` (`BUMP=0`, CI не переписывает `clients/macOS/VERSION`). Раннер — Apple Silicon; Intel — кросс-сборка Swift/Go (`ARCH=x86_64`).
 
-и публикует GitHub Release. Dist ещё забирает тег в [proxy.golang.org](https://proxy.golang.org) и просит [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft) собрать страницу модуля под этот релиз. В имени файла — версия (`loft-1.0.28-macos-arm64.dmg`, `loft-node_1.0.28_amd64.deb`). Повторный прогон на том же теге заменяет файлы. Без тега Actions → Dist → Run workflow только кладёт артефакты.
+и публикует GitHub Release. Dist ещё забирает тег в [proxy.golang.org](https://proxy.golang.org) и просит [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft) собрать страницу модуля под этот релиз. В имени файла — версия (`loft-1.0.29-macos-arm64.dmg`, `loft-node_1.0.29_amd64.deb`). Повторный прогон на том же теге заменяет файлы. Без тега Actions → Dist → Run workflow только кладёт артефакты.
 
 Локальные пакеты: `make dist`. Локальный DMG без повышения маркетинговой версии macOS: `make macos-dmg BUMP=0`. Developer ID и нотаризация остаются на Маке со связкой; в Actions их нет.
