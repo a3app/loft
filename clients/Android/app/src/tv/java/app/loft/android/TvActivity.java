@@ -58,7 +58,6 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         pane.addView(home);
         pane.addView(conns);
         pane.addView(settings);
-        show(home);
 
         ImageButton rh = findViewById(R.id.rail_home);
         ImageButton rc = findViewById(R.id.rail_conns);
@@ -66,24 +65,31 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         rh.setOnClickListener(v -> show(home));
         rc.setOnClickListener(v -> show(conns));
         rs.setOnClickListener(v -> show(settings));
-        tintRail(rh);
 
         home.findViewById(R.id.go).setOnClickListener(v -> toggle());
         conns.findViewById(R.id.act_edit).setOnClickListener(v -> editSelected());
         conns.findViewById(R.id.act_share).setOnClickListener(v -> shareSelected());
         conns.findViewById(R.id.act_del).setOnClickListener(v -> deleteSelected());
         wireSettings();
+        if ("settings".equals(getIntent().getStringExtra("pane"))) {
+            show(settings);
+        } else {
+            show(home);
+        }
         handleIntent(getIntent());
         if (Prefs.autoConnect(this) && LoftApp.of(this).profiles().active() != null
                 && !LoftVpnService.running && !Live.on()) {
             connect();
         }
-        home.findViewById(R.id.go).requestFocus();
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
+        if ("settings".equals(intent.getStringExtra("pane"))) {
+            show(settings);
+        }
         handleIntent(intent);
     }
 
@@ -146,6 +152,11 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         if (v == home) {
             paintHome();
             home.findViewById(R.id.go).requestFocus();
+        }
+        if (v == settings) {
+            int i = Lang.index(this);
+            int[] ids = {R.id.lang_en, R.id.lang_ru, R.id.lang_zh};
+            settings.findViewById(ids[i]).requestFocus();
         }
     }
 
@@ -633,7 +644,31 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    private void wireLang() {
+        int cur = Lang.index(this);
+        int[] ids = {R.id.lang_en, R.id.lang_ru, R.id.lang_zh};
+        for (int i = 0; i < ids.length; i++) {
+            Button b = settings.findViewById(ids[i]);
+            boolean on = i == cur;
+            b.setBackgroundTintList(null);
+            b.setBackgroundResource(on ? R.drawable.tv_chip_on : R.drawable.tv_focus);
+            b.setTextColor(on ? 0xFF1A1714 : 0xFFF3EDE4);
+            final int idx = i;
+            b.setOnClickListener(v -> {
+                String tag = Lang.TAGS[idx];
+                if (tag.equals(Prefs.lang(this))) {
+                    return;
+                }
+                Prefs.p(this).edit().putString("lang", tag).apply();
+                Lang.apply(this);
+                getIntent().putExtra("pane", "settings");
+                recreate();
+            });
+        }
+    }
+
     private void wireSettings() {
+        wireLang();
         Switch d = settings.findViewById(R.id.sw_default);
         Switch lan = settings.findViewById(R.id.sw_lan);
         Switch auto = settings.findViewById(R.id.sw_auto);

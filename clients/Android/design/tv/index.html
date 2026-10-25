@@ -242,6 +242,7 @@
       font: 500 15px var(--ui); cursor: pointer; text-align: left;
     }
     .srow .s { color: var(--mute); font-size: 13px; font-weight: 400; margin-top: 2px; }
+    .srow .seg { margin: 0; }
     .toggle {
       width: 42px; height: 24px; border-radius: 12px; background: #3a332e; position: relative; flex-shrink: 0;
     }
@@ -844,9 +845,11 @@
     function paintSettings() {
       const row = (k, s, tog, extra) =>
         `<button type="button" class="srow f" ${extra || ""}><div><div>${T(k)}</div>${s ? `<div class="s">${T(s)}</div>` : ""}</div>${tog != null ? `<div class="toggle ${tog ? "on" : ""}"><i></i></div>` : ""}</button>`;
+      const chip = (id, label) =>
+        `<button type="button" class="${lang === id ? "on" : ""}" onclick="setLang('${id}')">${label}</button>`;
       document.getElementById("setBody").innerHTML =
         `<div class="grp">${T("general")}</div>` +
-        row("lang", null, null) +
+        `<div class="srow"><div>${T("lang")}</div><div class="seg">${chip("en", "English")}${chip("ru", "Русский")}${chip("zh", "中文")}</div></div>` +
         row("logExt", null, false) +
         `<div class="grp">${T("route")}</div>` +
         row("defRoute", "defRouteS", true) +
