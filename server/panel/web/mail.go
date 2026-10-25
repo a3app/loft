@@ -321,7 +321,7 @@ func mailNeeds(d admproto.MailDomain, ips []net.IP) []mailRec {
 }
 
 func lookupState(ctx context.Context, r *mailRec) {
-	rv := net.DefaultResolver
+	rv := publicDNS
 	var got []string
 	var err error
 	switch r.Type {
@@ -391,8 +391,12 @@ func (s *Server) mailDNS(w http.ResponseWriter, r *http.Request) {
 	s.dom.mu.Lock()
 	s.dom.load()
 	zone, api := "", false
+	var dns DNSProvider
 	if z := s.dom.zoneFor(d.Name); z != nil {
-		zone, api = z.Name, s.dom.prov(z.Provider) != nil
+		zone = z.Name
+		if p := s.dom.prov(z.Provider); p != nil {
+			api, dns = true, s.providerAPI(*p)
+		}
 	}
 	s.dom.mu.Unlock()
 	var wg sync.WaitGroup
@@ -401,7 +405,15 @@ func (s *Server) mailDNS(w http.ResponseWriter, r *http.Request) {
 		go func() { defer wg.Done(); lookupState(ctx, &recs[i]) }()
 	}
 	wg.Wait()
+	var have []Record
+	if dns != nil {
+		have, _ = dns.Records(ctx, zone)
+	}
 	for i := range recs {
+		if api && have != nil && !mailNeedWrite(have, recs[i], zone) {
+			recs[i].State, recs[i].Now, recs[i].Auto = "ok", "", false
+			continue
+		}
 		recs[i].Auto = mailAuto(api, recs[i])
 	}
 	var ptr []map[string]string
@@ -471,12 +483,8 @@ func recIDDesc(a, b Record) bool {
 	return a.ID > b.ID
 }
 
-// syncMailRec writes rec through the provider. Public DNS is not the source:
-// Namecheap forwarding MX lives outside setHosts, so lookup can say "differs"
-// while getHosts has no MX at all. SPF/DMARC/HELO with any own TXT stay.
-func (s *Server) syncMailRec(ctx context.Context, z *zoneRec, api DNSProvider, have []Record, rec mailRec) (int, error) {
-	dr := Record{Type: rec.Type, Name: relName(rec.Name, z.Name), Value: rec.Value, Priority: rec.Prio}
-	auto := rec.Key == "a"
+func mailNeedWrite(have []Record, rec mailRec, zone string) bool {
+	dr := Record{Type: rec.Type, Name: relName(rec.Name, zone), Value: rec.Value, Priority: rec.Prio}
 	same := sameNameType(have, dr)
 	switch rec.Key {
 	case "spf", "helo", "dmarc":
@@ -484,22 +492,26 @@ func (s *Server) syncMailRec(ctx context.Context, z *zoneRec, api DNSProvider, h
 		if rec.Key == "dmarc" {
 			prefix = "v=DMARC1"
 		}
-		if hasTXTPrefix(have, dr.Name, prefix) {
-			return 0, nil
-		}
+		return !hasTXTPrefix(have, dr.Name, prefix)
 	case "mx":
-		if len(same) == 1 && dnsValEq(same[0].Value, dr.Value) && same[0].Priority == dr.Priority {
-			return 0, nil
-		}
+		return !(len(same) == 1 && dnsValEq(same[0].Value, dr.Value) && same[0].Priority == dr.Priority)
 	case "dkim":
-		if slices.ContainsFunc(same, func(x Record) bool { return dnsValEq(x.Value, dr.Value) }) && len(same) == 1 {
-			return 0, nil
-		}
+		return !(len(same) == 1 && slices.ContainsFunc(same, func(x Record) bool { return dnsValEq(x.Value, dr.Value) }))
 	default: // A / AAAA: another address at the same name is kept
-		if slices.ContainsFunc(same, func(x Record) bool { return dnsValEq(x.Value, dr.Value) }) {
-			return 0, nil
-		}
+		return !slices.ContainsFunc(same, func(x Record) bool { return dnsValEq(x.Value, dr.Value) })
 	}
+}
+
+// syncMailRec writes rec through the provider. Public DNS is not the source:
+// Namecheap forwarding MX lives outside setHosts, so lookup can say "differs"
+// while getHosts has no MX at all. SPF/DMARC/HELO with any own TXT stay.
+func (s *Server) syncMailRec(ctx context.Context, z *zoneRec, api DNSProvider, have []Record, rec mailRec) (int, error) {
+	if !mailNeedWrite(have, rec, z.Name) {
+		return 0, nil
+	}
+	dr := Record{Type: rec.Type, Name: relName(rec.Name, z.Name), Value: rec.Value, Priority: rec.Prio}
+	auto := rec.Key == "a"
+	same := sameNameType(have, dr)
 	replace := rec.Key == "mx" || rec.Key == "dkim"
 	if replace && len(same) > 0 {
 		dr.ID = same[0].ID

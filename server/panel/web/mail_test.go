@@ -57,6 +57,25 @@ func TestMailAuto(t *testing.T) {
 	}
 }
 
+func TestMailNeedWrite(t *testing.T) {
+	mx := mailRec{Key: "mx", Name: "example.net", Type: "MX", Value: "mail.example.net", Prio: 10}
+	spf := mailRec{Key: "spf", Name: "example.net", Type: "TXT", Value: "v=spf1 mx -all"}
+	have := []Record{
+		{Type: "MX", Name: "@", Value: "eforward.example.com", Priority: 10},
+		{Type: "TXT", Name: "@", Value: "v=spf1 include:somewhere -all"},
+	}
+	if !mailNeedWrite(have, mx, "example.net") {
+		t.Fatal("foreign MX")
+	}
+	if mailNeedWrite(have, spf, "example.net") {
+		t.Fatal("own SPF")
+	}
+	have[0].Value, have[0].Priority = "mail.example.net", 10
+	if mailNeedWrite(have, mx, "example.net") {
+		t.Fatal("wanted MX already there")
+	}
+}
+
 func TestMailDNSCreateReplacesForeignMX(t *testing.T) {
 	e := newEnv(t)
 	e.srv.SetDomainsFile(t.TempDir())
@@ -108,5 +127,21 @@ func TestMailDNSCreateReplacesForeignMX(t *testing.T) {
 	}
 	if !dkim || !dmarc || !helo {
 		t.Fatalf("dkim=%v dmarc=%v helo=%v recs=%v", dkim, dmarc, helo, fd.recs["example.net"])
+	}
+	g := e.do("GET", "/api/mail/dns?domain=example.net", nil, c, "")
+	if g.code != 200 {
+		t.Fatalf("dns %d %v", g.code, g.body)
+	}
+	var mxState string
+	var mxAuto bool
+	for _, x := range g.body["records"].([]any) {
+		m := x.(map[string]any)
+		if m["key"] == "mx" {
+			mxState, _ = m["state"].(string)
+			mxAuto, _ = m["auto"].(bool)
+		}
+	}
+	if mxState != "ok" || mxAuto {
+		t.Fatalf("MX after create state=%q auto=%v body=%v", mxState, mxAuto, g.body["records"])
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -15,6 +16,12 @@ import (
 	"strings"
 	"time"
 )
+
+// publicDNS asks 1.1.1.1. The host stub (systemd-resolved) can keep an old
+// MX for the TTL of registrar forwarding after setHosts already replaced it.
+var publicDNS = &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+	return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "udp", "1.1.1.1:53")
+}}
 
 // DNS providers the Domains screen manages zones through. Names in records
 // are relative to the zone ("@" is the zone itself); TTL 0 is the

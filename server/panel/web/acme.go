@@ -386,9 +386,7 @@ func ipList(l []net.IP) string {
 
 // waitTXT waits until public resolvers see value at host (up to 3 minutes).
 func waitTXT(ctx context.Context, host, value string) error {
-	r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "udp", "1.1.1.1:53")
-	}}
+	r := publicDNS
 	deadline := time.Now().Add(3 * time.Minute)
 	for {
 		if txt, err := r.LookupTXT(ctx, host); err == nil {
