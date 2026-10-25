@@ -36,11 +36,25 @@ func NetDialer(timeout time.Duration) *net.Dialer {
 
 // Timeout dials with NetDialer.
 func Timeout(network, addr string, timeout time.Duration) (net.Conn, error) {
-	d := NetDialer(timeout)
+	ctx := context.Background()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	return DialContext(ctx, network, addr)
+}
+
+// DialContext dials through the protector. ctx cancel aborts a stuck SYN.
+func DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	d := NetDialer(0)
 	if ip := localIPv4(); ip != nil && strings.HasPrefix(network, "udp") {
 		d.LocalAddr = &net.UDPAddr{IP: ip}
 	}
-	return d.Dial(network, addr)
+	return d.DialContext(ctx, network, addr)
 }
 
 func resolverDial(ctx context.Context, network, address string) (net.Conn, error) {
