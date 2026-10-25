@@ -11,8 +11,6 @@ final class SocksRelay: NSObject {
     private var targetPort: UInt16 = 0
     private var running = false
     private var listenAddr = ""
-    private static let copies = DispatchQueue(label: "app.loft.socks-copy", qos: .userInitiated, attributes: .concurrent)
-    private static let copyGate = DispatchSemaphore(value: 32)
 
     /// True while the shared port is bound.
     var isListening: Bool {
@@ -102,10 +100,11 @@ final class SocksRelay: NSObject {
             let host = targetHost
             let port = targetPort
             lock.unlock()
-            Self.copies.async {
-                Self.copyGate.wait()
+            // Own thread. A 32-slot gate on the copy queue held every extra
+            // accept until a live splice ended, so Firefox hung in the SOCKS
+            // handshake and the dead fds stayed CLOSED.
+            Thread.detachNewThread {
                 self.splice(cfd, host: host, port: port)
-                Self.copyGate.signal()
             }
         }
     }
@@ -128,14 +127,18 @@ final class SocksRelay: NSObject {
         Self.tuneTCP(cfd)
         Self.tuneTCP(rfd)
         let sem = DispatchSemaphore(value: 0)
-        Self.copies.async {
+        Thread.detachNewThread {
             Self.copy(cfd, rfd)
             Darwin.shutdown(rfd, SHUT_WR)
             sem.signal()
         }
         Self.copy(rfd, cfd)
         Darwin.shutdown(cfd, SHUT_WR)
-        _ = sem.wait(timeout: .now() + 30)
+        if sem.wait(timeout: .now() + 30) == .timedOut {
+            Darwin.shutdown(cfd, SHUT_RDWR)
+            Darwin.shutdown(rfd, SHUT_RDWR)
+            sem.wait()
+        }
     }
 
     /// TCP_NODELAY + NOSIGPIPE on a splice fd (SOCKS handshake is tiny writes).
