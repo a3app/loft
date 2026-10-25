@@ -22,10 +22,19 @@ type attachFan struct {
 	mu   sync.Mutex
 	bind map[uint32]int
 	rr   int
+	seq  atomic.Uint32
+	qmu  sync.Mutex
+	qs   map[int]chan standWrite
 }
 
-func sealFrames(key []byte, frames []wire.Frame) ([]byte, error) {
-	raw, err := wire.EncodeBatch(frames)
+func sealFrames(key []byte, frames []wire.Frame, seqs []uint32) ([]byte, error) {
+	var raw []byte
+	var err error
+	if standFan() == "stripe" {
+		raw, err = stripePack(frames, seqs)
+	} else {
+		raw, err = wire.EncodeBatch(frames)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +51,7 @@ func (f *attachFan) send(lanes []fanLane, frames []wire.Frame) {
 		f.bind = map[uint32]int{}
 	}
 	groups := map[int][]wire.Frame{}
+	gseq := map[int][]uint32{}
 	var order []int
 	f.mu.Lock()
 	for _, fr := range frames {
@@ -53,6 +63,9 @@ func (f *attachFan) send(lanes []fanLane, frames []wire.Frame) {
 			order = append(order, i)
 		}
 		groups[i] = append(groups[i], fr)
+		if standFan() == "stripe" {
+			gseq[i] = append(gseq[i], f.seq.Add(1)-1)
+		}
 	}
 	f.mu.Unlock()
 	var wg sync.WaitGroup
@@ -60,21 +73,23 @@ func (f *attachFan) send(lanes []fanLane, frames []wire.Frame) {
 		wg.Add(1)
 		ln := lanes[i]
 		part := groups[i]
+		seqs := gseq[i]
 		go func() {
 			defer wg.Done()
-			blob, err := sealFrames(f.key, part)
+			blob, err := sealFrames(f.key, part, seqs)
 			if err != nil {
 				return
 			}
-			if err := ln.write(blob); err != nil && ln.dead != nil {
-				ln.dead.Store(true)
-			}
+			f.emit(ln, blob)
 		}()
 	}
 	wg.Wait()
 }
 
 func (f *attachFan) pickLocked(lanes []fanLane, fr wire.Frame) int {
+	if standSpread() {
+		return f.pickRR(lanes)
+	}
 	live := func(i int) bool {
 		ln := lanes[i]
 		return ln.write != nil && (ln.dead == nil || !ln.dead.Load())

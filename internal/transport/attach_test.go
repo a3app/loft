@@ -305,6 +305,7 @@ func TestWSTicketAttachesH2(t *testing.T) {
 	if err := w.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
+	cancel()
 	t.Cleanup(func() { _ = w.Close() })
 	if w.lanes == nil || !validGETSID(string(w.lanes.ticket)) {
 		t.Fatalf("ws ticket %q", ticketOf(w))

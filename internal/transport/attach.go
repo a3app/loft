@@ -172,7 +172,7 @@ func (ss *serverSess) dispatchAttach() {
 			ss.mu.Unlock()
 			continue
 		}
-		max, wait := wsPullBytes, 4*time.Millisecond
+		max, wait := standPull(), 4*time.Millisecond
 		if ss.mux.PriQueued() > 0 {
 			max = wsPriBytes
 			wait = 0
@@ -307,6 +307,10 @@ func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
 	if ss == nil || len(ss.key) == 0 || ss.mux == nil || ss.mux.Closed() {
 		return
 	}
+	// A clear session has one frame cipher. GET would show those frames to a CDN.
+	if front == wire.FrontGET && ecrypto.InnerOf(ss.key) == wire.InnerClear {
+		return
+	}
 	if _, _, nonce, err := ecrypto.FinishAttach(ss.key, blob); err != nil {
 		return
 	} else if err := ss.takeAttachNonce(nonce); err != nil {
@@ -346,6 +350,13 @@ func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
 		}
 		plain, err := ecrypto.Open(ss.key, raw, nil)
 		if err != nil {
+			continue
+		}
+		if isStripe(plain) {
+			stripeIngest(ss.mux, plain[1:])
+			if ss.mux.Closed() {
+				return
+			}
 			continue
 		}
 		frames, err := wire.DecodeBatch(plain)

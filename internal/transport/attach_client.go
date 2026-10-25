@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -114,6 +115,9 @@ func (g *GET) unbindAttach(c io.Closer) {
 // only the lane host: it does not speak HTTP. Owner socket joins the fan
 // once an extra front stays up, and the owner write loop pauses.
 func startBulkLanes(ctx context.Context, front string, cfg config.Outbound, token, key []byte, st wire.Status, offer wire.Cap, sess *mux.Session, done chan struct{}, arm func(*GET), down func()) *GET {
+	if standFan() == "off" {
+		return nil
+	}
 	if sess == nil || done == nil || !st.Caps.Has(wire.CapTicket) || !validGETSID(string(st.Ticket)) || len(key) == 0 {
 		return nil
 	}
@@ -131,8 +135,31 @@ func startBulkLanes(ctx context.Context, front string, cfg config.Outbound, toke
 		ownerArm:   arm,
 		ownerDown:  down,
 	}
-	go g.attachExtras(ctx)
+	// The dial budget is cancelled when Start returns. Lanes must outlive it
+	// and stop only with the session.
+	lctx := laneCtx(ctx, done)
+	go g.attachExtras(lctx)
 	return g
+}
+
+// laneCtx is ctx without the dial deadline. It ends when the session does.
+func laneCtx(ctx context.Context, done <-chan struct{}) context.Context {
+	base := context.Background()
+	if ctx != nil {
+		base = context.WithoutCancel(ctx)
+	}
+	out, cancel := context.WithCancel(base)
+	if done == nil {
+		return out
+	}
+	go func() {
+		select {
+		case <-done:
+			cancel()
+		case <-out.Done():
+		}
+	}()
+	return out
 }
 
 func noteLiveBulk(g *GET, s string) {
@@ -151,6 +178,15 @@ func noteLiveBulk(g *GET, s string) {
 func LiveBulk() string {
 	s, _ := liveBulk.Load().(string)
 	return s
+}
+
+// LiveLaneCount is how many sockets are in the fan. Zero before the fan is up.
+func LiveLaneCount() int {
+	g := liveOwner.Load()
+	if g == nil {
+		return 0
+	}
+	return g.liveCount()
 }
 
 var (
@@ -181,7 +217,13 @@ func (g *GET) attachExtras(ctx context.Context) {
 		g.holdDispatch.Store(false)
 		g.finishAttach()
 	}()
+	copies := standCopies()
 	for _, f := range g.attachNames() {
+		// Extra copies are all the owner's front. A second front kind in the
+		// round-robin makes reorder wait on the slow socket.
+		if copies > 1 && f != g.ownerFront {
+			continue
+		}
 		if !g.caps.Has(wire.CapForFront(f)) || !g.offer.Has(wire.CapForFront(f)) {
 			continue
 		}
@@ -196,6 +238,7 @@ func (g *GET) attachExtras(ctx context.Context) {
 			return
 		}
 	}
+	g.dialCopies(ctx, copies)
 	// A node that still keeps one 0x04 closes the previous link inside
 	// setAttach, after the new ack. Readers need a moment to see EOF
 	// before the dispatcher Pulls onto a conn the node already dropped.
@@ -203,6 +246,47 @@ func (g *GET) attachExtras(ctx context.Context) {
 		time.Sleep(100 * time.Millisecond)
 		g.armOwnerLane()
 	}
+}
+
+// dialCopies opens extra sockets of the owner front so one mux can fill a
+// path that gives each TCP only a slice of the rate. The owner socket counts
+// as the first copy. Dials run together; sequential handshakes on a 190 ms
+// path would still be in progress when the bench starts.
+func (g *GET) dialCopies(ctx context.Context, copies int) {
+	if g == nil || copies <= 1 || g.ownerFront == "" {
+		return
+	}
+	n := copies - 1
+	if g.ownerFront != wire.FrontWS && g.ownerFront != wire.FrontH2 {
+		return
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		if g.attachStopped() {
+			break
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			o := attachOutbound(g.cfg, g.ownerFront, g.fronts)
+			if !markReady(o) {
+				return
+			}
+			actx, cancel := context.WithTimeout(ctx, 8*time.Second)
+			defer cancel()
+			var err error
+			switch g.ownerFront {
+			case wire.FrontWS:
+				err = g.attachWS(actx, o)
+			default:
+				err = g.attachFront(actx, g.ownerFront)
+			}
+			if err != nil {
+				log.Printf("attach copy %s: %v", g.ownerFront, err)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // armOwnerLane pauses the owner write loop and puts that socket in the fan.
@@ -249,6 +333,9 @@ func (g *GET) attachNames() []string {
 }
 
 func (g *GET) attachFront(ctx context.Context, front string) error {
+	if front == wire.FrontGET && ecrypto.InnerOf(g.key) == wire.InnerClear {
+		return fmt.Errorf("get: inner clear")
+	}
 	o := attachOutbound(g.cfg, front, g.fronts)
 	switch front {
 	case wire.FrontH2:
@@ -502,7 +589,7 @@ func (g *GET) dispatchLoop() {
 			}
 			return
 		}
-		max, wait := wsPullBytes, 4*time.Millisecond
+		max, wait := standPull(), 4*time.Millisecond
 		if g.sess.PriQueued() > 0 {
 			max = wsPriBytes
 			wait = 0
@@ -528,6 +615,13 @@ func (g *GET) attachRead(conn io.Reader, read func(io.Reader) ([]byte, error)) {
 		}
 		plain, err := ecrypto.Open(g.key, raw, nil)
 		if err != nil {
+			continue
+		}
+		if isStripe(plain) {
+			stripeIngest(g.sess, plain[1:])
+			if g.sess.Closed() {
+				return
+			}
 			continue
 		}
 		frames, err := wire.DecodeBatch(plain)

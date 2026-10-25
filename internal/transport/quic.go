@@ -176,6 +176,7 @@ func (q *QUIC) Start(ctx context.Context) error {
 	}
 	RememberVis(status)
 	q.sess.SetHold(status.Caps.Has(wire.CapHold))
+	takeInner(wire.FrontQUIC, key, status)
 	if err := adoptDecoy(addr, sni, status, true); err != nil {
 		_ = conn.CloseWithError(0, "decoy")
 		return err
@@ -272,11 +273,7 @@ func (q *QUIC) readLoop() {
 		if err != nil {
 			continue
 		}
-		frames, err := wire.DecodeBatch(plain)
-		if err != nil {
-			continue
-		}
-		q.sess.Push(frames)
+		ingestPlain(q.sess, plain)
 	}
 }
 
@@ -345,10 +342,12 @@ func serveQUICStream(c *quic.Conn, st *quic.Stream, seen *ecrypto.Nonces, info N
 		status.Ticket = []byte(ss.id)
 		defer ss.releaseTicket()
 	}
+	applyInner(&status, wire.FrontQUIC, a.Rest)
 	sealed, err := ecrypto.Seal(key, status.Encode(), nil)
 	if err != nil {
 		return
 	}
+	commitInner(key, status)
 	if err := writeMsg(st, ecrypto.WrapHello(a.EphN, sealed)); err != nil {
 		return
 	}
@@ -367,10 +366,6 @@ func serveQUICStream(c *quic.Conn, st *quic.Stream, seen *ecrypto.Nonces, info N
 		if err != nil {
 			continue
 		}
-		frames, err := wire.DecodeBatch(plain)
-		if err != nil {
-			continue
-		}
-		ms.Push(frames)
+		ingestPlain(ms, plain)
 	}
 }

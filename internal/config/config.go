@@ -33,6 +33,7 @@ type ClientConfig struct {
 	P2P           *bool             `yaml:"p2p"`             // nil/true: try direct; false: only hub
 	Pause         string            `yaml:"pause,omitempty"` // empty | starlink — client draft pause, not on the wire
 	EdgeURL       string            `yaml:"edge,omitempty"`  // optional CDN URL; GET only. Not the node preset plain|tight
+	Inner         string            `yaml:"inner,omitempty"` // clear | chacha | aes. Empty omits the Hello byte (ChaCha)
 }
 
 // Published SOCKS5 (GUI / client.yaml). Debug CLI binds DebugSOCKS5 so the
@@ -146,7 +147,8 @@ type ServerConfig struct {
 	RosterPath    string              `yaml:"roster_path"`
 	ListsPath     string              `yaml:"lists_path"`
 	Lists         map[string][]string `yaml:"lists"`
-	Trace         string              `yaml:"trace"` // session event log path; empty = off
+	Trace         string              `yaml:"trace"`           // session event log path; empty = off
+	Inner         []string            `yaml:"inner,omitempty"` // extra data ciphers: clear, aes. Empty = ChaCha only
 }
 
 // RelayEntry is one controller allowlist row for enrol: list.
@@ -306,7 +308,57 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 	if _, err := c.EdgeByte(); err != nil {
 		return nil, err
 	}
+	if _, err := c.InnerIDs(); err != nil {
+		return nil, err
+	}
 	return c, nil
+}
+
+// InnerAsk is the Hello data-cipher byte. Empty and chacha omit the byte.
+func (c *ClientConfig) InnerAsk() (set bool, id byte, err error) {
+	if c == nil {
+		return false, wire.InnerChaCha, nil
+	}
+	s := strings.TrimSpace(c.Inner)
+	if s == "" {
+		return false, wire.InnerChaCha, nil
+	}
+	id, err = wire.ParseInnerName(s)
+	if err != nil {
+		return false, 0, err
+	}
+	if id == wire.InnerChaCha {
+		return false, id, nil
+	}
+	return true, id, nil
+}
+
+// InnerIDs is the node's extra allow-list (clear and/or aes). ChaCha is always
+// allowed and is not returned. Empty means ChaCha only.
+func (c *ServerConfig) InnerIDs() ([]byte, error) {
+	if c == nil || len(c.Inner) == 0 {
+		return nil, nil
+	}
+	var out []byte
+	seen := map[byte]bool{}
+	for _, w := range c.Inner {
+		for _, part := range strings.Split(w, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			id, err := wire.ParseInnerName(part)
+			if err != nil {
+				return nil, err
+			}
+			if id == wire.InnerChaCha || seen[id] {
+				continue
+			}
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 // EdgeByte is the Status edge preset. An empty edge with cdn yandex is tight.

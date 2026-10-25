@@ -24,6 +24,9 @@ final class YamlBuilder {
             line(b, "token", p.token);
         }
         b.append("select: auto\n");
+        if (p.isLoft() && p.inner != null && !p.inner.isEmpty()) {
+            line(b, "inner", p.inner);
+        }
         b.append("outbounds:\n");
         b.append("  - name: ").append(quote(p.name.isEmpty() ? p.host() : p.name)).append('\n');
         b.append("    type: ").append(p.kind.toLowerCase()).append('\n');

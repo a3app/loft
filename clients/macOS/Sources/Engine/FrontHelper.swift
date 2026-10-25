@@ -175,6 +175,10 @@ final class FrontHelper {
         }
         let edge = profile.edge.trimmingCharacters(in: .whitespacesAndNewlines)
         if !edge.isEmpty { args += ["-edge", edge] }
+        let inner = profile.inner.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !inner.isEmpty, !profile.isSSTP, !profile.isVLESS, !profile.isTrojan {
+            args += ["-inner", inner]
+        }
         let cdn = profile.cdn.trimmingCharacters(in: .whitespacesAndNewlines)
         if !cdn.isEmpty {
             args += ["-cdn", cdn]

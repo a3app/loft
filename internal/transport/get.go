@@ -296,6 +296,7 @@ func (g *GET) Start(ctx context.Context) error {
 		return wire.Fail(st.Code, st.Program)
 	}
 	RememberVis(st)
+	takeInner(wire.FrontGET, key, st)
 	g.caps = st.Caps
 	g.ticket = append([]byte(nil), st.Ticket...)
 	g.fronts = append([]wire.FrontEP(nil), st.Fronts...)
@@ -1872,11 +1873,13 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			st.Edge = s.Edge
 			st.UplinkEnc = wire.UplinkCookie85
 			st.H2Conns = s.H2Conns
+			applyInner(&st, wire.FrontGET, a.Rest)
 			sealed, err := ecrypto.Seal(ss.key, st.Encode(), []byte(ss.id))
 			if err != nil {
 				http.Error(w, "unavailable", http.StatusBadGateway)
 				return
 			}
+			commitInner(ss.key, st)
 			ss.hello = ecrypto.WrapHello(a.EphN, sealed)
 			s.mu.Lock()
 			s.hs[string(a.Nonce)] = ss

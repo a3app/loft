@@ -48,6 +48,10 @@ var clientMemberID string
 func newClientHello(caps wire.Cap) wire.Hello {
 	h := wire.Hello{Caps: caps, MemberID: clientMemberID, InstanceID: EnsureInstance()}
 	version.StampHello(&h)
+	if set, id := clientInnerAsk(); set {
+		h.InnerSet = true
+		h.Inner = id
+	}
 	return h
 }
 
@@ -139,8 +143,9 @@ func startFront(ctx context.Context, token string, o config.Outbound, offer wire
 			return nil, err
 		}
 		// Overlay STATUS is the GET session. Extra fronts attach to the
-		// node URL in the background and share this mux.
-		go y.attachExtras(ctx)
+		// node URL in the background and share this mux. The dial budget
+		// ends when Start returns; lanes stop with the session instead.
+		go y.attachExtras(laneCtx(ctx, y.done))
 		return y, nil
 	case "ws":
 		w := NewWSS(token, o)
@@ -193,6 +198,11 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 		if cfg.InstanceID != "" {
 			RememberInstance(cfg.InstanceID)
 		}
+		set, id, err := cfg.InnerAsk()
+		if err != nil {
+			return err
+		}
+		setClientInner(set, id)
 	}
 	EnsureInstance()
 	if cfg != nil {

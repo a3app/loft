@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/a3app/loft/internal/config"
@@ -19,6 +20,7 @@ import (
 	"github.com/a3app/loft/internal/netconf"
 	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/internal/version"
+	"github.com/a3app/loft/internal/wire"
 	"github.com/a3app/loft/server/origin"
 )
 
@@ -112,6 +114,18 @@ func main() {
 	// AuthShared: LOFT_TOKEN as client secret only when the ring is empty.
 	// Non-empty members.keys never mixes the node token, even if the flag is on.
 	transport.AuthShared = cfg.AuthShared
+	innerIDs, err := cfg.InnerIDs()
+	if err != nil {
+		log.Fatal(err)
+	}
+	transport.SetInnerAllow(innerIDs)
+	if len(innerIDs) > 0 {
+		names := make([]string, len(innerIDs))
+		for i, id := range innerIDs {
+			names[i] = wire.InnerName(id)
+		}
+		log.Printf("inner allow: chacha %s", strings.Join(names, " "))
+	}
 	if cfg.Token == "" && ring.Len() == 0 {
 		log.Fatal("LOFT_TOKEN or member keys required")
 	}

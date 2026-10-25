@@ -4,7 +4,6 @@ package transport
 // ctl:1 is fleet control. Member Open is overlay Handle or internet TCP.
 
 import (
-	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -77,8 +76,8 @@ func proxyStream(st *mux.Stream) {
 	}
 	tuneTCP(conn)
 	defer conn.Close()
-	go func() { _, _ = io.Copy(conn, st); conn.Close() }()
-	_, _ = io.Copy(st, conn)
+	go func() { standRelay(conn, st); conn.Close() }()
+	standRelay(st, conn)
 }
 
 // serveHub serves Hub on hub:2 as HTTP/2 or otherwise HTTP/1.1 over the stream.

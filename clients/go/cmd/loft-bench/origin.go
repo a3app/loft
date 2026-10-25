@@ -108,12 +108,23 @@ func originDownload(c net.Conn, n int) (time.Duration, error) {
 		return 0, err
 	}
 	t0 := time.Now()
-	got, err := io.CopyN(io.Discard, c, int64(n))
-	if err != nil {
-		return time.Since(t0), fmt.Errorf("down %d of %d: %w", got, n, err)
-	}
-	if int(got) != n {
-		return time.Since(t0), fmt.Errorf("down %d of %d", got, n)
+	buf := make([]byte, 32<<10)
+	got := 0
+	for got < n {
+		want := len(buf)
+		if want > n-got {
+			want = n - got
+		}
+		k, err := io.ReadFull(c, buf[:want])
+		got += k
+		if err != nil {
+			return time.Since(t0), fmt.Errorf("down %d of %d: %w", got, n, err)
+		}
+		for _, b := range buf[:k] {
+			if b != 0 {
+				return time.Since(t0), fmt.Errorf("down corrupt at %d", got-k)
+			}
+		}
 	}
 	return time.Since(t0), nil
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -125,6 +126,7 @@ func (w *WSS) Start(ctx context.Context) error {
 	}
 	RememberVis(st)
 	w.sess.SetHold(st.Caps.Has(wire.CapHold))
+	takeInner(wire.FrontWS, key, st)
 	if err := adoptDecoy(addr, sni, st, strings.TrimSpace(w.cfg.CDN) == ""); err != nil {
 		c.Close(websocket.StatusNormalClosure, "decoy")
 		return err
@@ -227,11 +229,7 @@ func (w *WSS) readLoop() {
 		if err != nil {
 			continue
 		}
-		frames, err := wire.DecodeBatch(plain)
-		if err != nil {
-			continue
-		}
-		w.sess.Push(frames)
+		ingestPlain(w.sess, plain)
 	}
 }
 
@@ -303,7 +301,7 @@ func pumpWS(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dea
 			if dead() {
 				return
 			}
-			max, wait := wsPullBytes, pullWait
+			max, wait := standPull(), pullWait
 			if sess.PriQueued() > 0 {
 				max = wsPriBytes
 				wait = 0
@@ -341,6 +339,14 @@ func pumpWS(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dea
 // pumpGated is pumpWS without the prefetch goroutine. The gate lock covers
 // Pull and write, so handover waits out an in-flight batch and then owns Pull.
 func pumpGated(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dead func() bool, seal func([]wire.Frame) ([]byte, error), write func([]byte) error, gate *pullGate) {
+	var last time.Time
+	var writes, nbytes int
+	var maxGap time.Duration
+	defer func() {
+		if standTrace() && writes > 0 {
+			log.Printf("stand pump writes=%d bytes=%d maxgap=%s", writes, nbytes, maxGap.Round(time.Millisecond))
+		}
+	}()
 	for {
 		if dead() {
 			return
@@ -360,7 +366,7 @@ func pumpGated(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, 
 			}
 			continue
 		}
-		max, wait := wsPullBytes, pullWait
+		max, wait := standPull(), pullWait
 		if sess.PriQueued() > 0 {
 			max = wsPriBytes
 			wait = 0
@@ -373,6 +379,7 @@ func pumpGated(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, 
 		}
 		if len(frames) > 0 {
 			if sealed, err := seal(frames); err == nil {
+				standWrote(len(sealed), &last, &writes, &nbytes, &maxGap)
 				_ = write(sealed)
 			}
 		}
@@ -453,10 +460,12 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		st.Ticket = []byte(ss.id)
 		defer ss.releaseTicket()
 	}
+	applyInner(&st, wire.FrontWS, a.Rest)
 	sealed, err := ecrypto.Seal(key, st.Encode(), nil)
 	if err != nil {
 		return
 	}
+	commitInner(key, st)
 	hello := ecrypto.WrapHello(a.EphN, sealed)
 	if err := c.Write(ctx, websocket.MessageBinary, hello); err != nil {
 		return
@@ -484,11 +493,7 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		frames, err := wire.DecodeBatch(plain)
-		if err != nil {
-			continue
-		}
-		ms.Push(frames)
+		ingestPlain(ms, plain)
 	}
 }
 

@@ -12,7 +12,7 @@ Operation of the reference node: [guide.md](guide.md). Source layout: [architect
 
 ## Abstract
 
-loft is a private overlay whose external path is TLS 1.3 on port 443 with a browser-shaped ClientHello and HTTPS application data. A CDN, reverse proxy, or TLS terminator MAY terminate that TLS session. Inner streams are multiplexed and sealed with ChaCha20-Poly1305, so a terminator of TLS does not obtain mux plaintext.
+loft is a private overlay whose external path is TLS 1.3 on port 443 with a browser-shaped ClientHello and HTTPS application data. A CDN, reverse proxy, or TLS terminator MAY terminate that TLS session. Inner streams are multiplexed. The default data seal is ChaCha20-Poly1305, so a terminator of TLS does not obtain mux plaintext. A direct front (`ws`, `h2`, `quic`, `h3`, `l3`) MAY negotiate no inner AEAD or AES-256-GCM after Status. Front `get` stays ChaCha20-Poly1305: a CDN MAY terminate TLS on that path.
 
 The inner protocol is one. The outer transfer — GET, WebSocket, HTTP/2 CONNECT, QUIC, HTTP/3 CONNECT, or optional L3 CONNECT — is selected per deployment and MAY change without a protocol-version increase. A node MAY present a configured HTTPS origin to peers that lack a member key, so a scanner or health check observes a website. Member keys, address leases, and the list of live fronts are held on a controller. Relays are replaceable TLS edges. Clients fetch a signed roster of fronts and named address lists and map those lists to local routing. Members of one network MAY be isolated at a hub, meshed through the node, or permitted a direct TCP attempt.
 
@@ -32,11 +32,13 @@ Typical deployments: laboratory LAN access from outside, a server fleet, site-to
 8. [Status codes](#8-status-codes)
 9. [Overlay](#9-overlay)
 10. [Controller and relays](#10-controller-and-relays)
-11. [Path compatibility](#11-path-compatibility)
-12. [Limits](#12-limits)
-13. [Versioning](#13-versioning)
-14. [Test vectors](#14-test-vectors)
-15. [References](#15-references)
+11. [Security Considerations](#11-security-considerations)
+12. [Privacy](#12-privacy)
+13. [Registries and extension](#13-registries-and-extension)
+14. [Limits](#14-limits)
+15. [Versioning](#15-versioning)
+16. [Test vectors](#16-test-vectors)
+17. [References](#17-references)
 
 ---
 
@@ -50,7 +52,7 @@ A front that stops answering is replaced from a signed roster without renumberin
 
 **Scope.** This document specifies framing, authentication, multiplex, overlay forwarding, the control plane (roster, fleet, address lists), and the observable path. SOCKS, TUN, and operating-system routing are local to a client and are not protocol capabilities.
 
-**Non-goals.** loft is not a mixnet. This specification does not claim confidentiality against a middlebox that already holds the member key, against a path on which no permitted destination exists, or against a TLS terminator that also holds the inner session key.
+**Non-goals.** loft is not a mixnet. This specification does not claim confidentiality against a middlebox that already holds the member key, against a path on which no permitted destination exists, or against a TLS terminator that also holds the inner session key. A direct front that negotiated clear shows mux plaintext to whoever terminates TLS on that front. Front `get` does not negotiate clear.
 
 ---
 
@@ -79,21 +81,21 @@ Integers are big-endian. String fields on Hello, Status, and most fleet records 
 | **Draft** | Mux frames sent once. |
 | **Canary** | Status flags for TLS path integrity (padded or split ClientHello). They do not hide SNI from a reassembling inspector. |
 | **Sid** | 32-byte TLS ClientHello `session_id` used as a member mark (v3 or v2). Distinct from the GET session identifier (24 hex in the URL path). |
-| **Seal** | `nonce[12] \|\| ChaCha20-Poly1305` as in [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439). |
+| **Seal** | Data framing after Status. Default and the handshake: `nonce[12] \|\| ChaCha20-Poly1305` ([RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)). Negotiated AES-256-GCM uses the same 12-byte nonce and 16-byte tag ([RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)). Negotiated clear is the plaintext, with no nonce and no tag. |
 
 ### 2.3 Layers
 
 ```
 application   TCP / UDP          (SOCKS and TUN are local)
     mux       Open Data Close Reset Ping Pong Pad Dgram Leave
-      AEAD    ChaCha20-Poly1305
+      AEAD    ChaCha20-Poly1305 (default)
         front get | ws | h2 | quic | h3 | l3
           TLS 1.3
             TCP/443 or UDP/443
 ```
 
 1. **TLS.** External. A CDN, load balancer, or origin MAY terminate it.
-2. **Authentication and AEAD.** Inner. Possession of the member key proves membership. ChaCha20-Poly1305 hides mux from the terminator of TLS.
+2. **Authentication and AEAD.** Inner. Possession of the member key proves membership. Handshake Status is always ChaCha20-Poly1305. Later data on a direct front MAY be clear or AES-256-GCM (§4.3). Front `get` stays ChaCha20-Poly1305, so a CDN that terminates TLS still does not obtain mux plaintext.
 3. **Mux.** Streams and datagrams between client and node, and through the node to the Internet or other members. Front `l3` carries IP datagrams here instead of mux.
 
 The TLS ClientHello SHOULD match a current browser (cipher list, extensions, JA3/JA4). CDN vendor names are deployment profiles. They MUST NOT appear as protocol capabilities.
@@ -188,7 +190,7 @@ sequenceDiagram
 
 **Budget and encoding.** Uplink MUST fit in one header. Status `header_budget` is encoded Cookie bytes; if omitted, 16 KiB of HTTP header. Status `uplink_enc` 1 is `~` plus Z85 of `u16be length || AEAD` (ZeroMQ Z85); 0 and omitted are base64url. The handshake Cookie remains base64url. A node MUST accept both. Status `h2_conns` (1–4) is the number of HTTP/2 connections to this front; 0 keeps one. Inflight is the total of outstanding GETs across those connections. Concurrent outstanding GETs are 2–8 (protocol default 4; Status `inflight` is a ceiling).
 
-**Edge preset.** The handshake GET is one request. Status `edge` follows it, before the client opens the inflight pump. `0` or omitted is `plain`: the client keeps the limits of that first GET. `1` is `tight`: Cookie budget 16 KiB, 16 outstanding GETs, and a 6 s trip on each later GET. The node config names this preset `edge: tight` when the origin sits behind an edge that drops a fat concurrent HEADERS burst. `header_budget` and `inflight`, when non-zero, are a ceiling below that preset. A vendor name is not a Status field.
+**Edge preset.** The handshake GET is one request. Status `edge` follows it, before the client opens the inflight pump. `0` or omitted is `plain`: the client keeps the limits of that first GET. `1` is `tight`: Cookie budget 16 KiB, 16 outstanding GETs, and a 6 s trip on each later GET. Preset `1` is for an origin behind a CDN or reverse proxy that drops a fat concurrent HEADERS burst. `header_budget` and `inflight`, when non-zero, are a ceiling below that preset. *Informative, not normative.* The node configuration spells preset `1` as `edge: tight`. See [guide.md](guide.md). A vendor name is not a Status field.
 
 **GET did not complete.** A client that enabled other mux fronts MUST try those fronts when the GET handshake does not produce a session. The try order is the enabled subset of GET, WebSocket, HTTP/2, QUIC, HTTP/3. A separate edge URL, when the client has one, is that first GET. The next GET and the other fronts use the node host. A sealed authentication failure from the node stops the client once every tried front has failed the same way. HTTP 404 on the GET cover is that failure for GET alone; it does not by itself forbid the next front.
 
@@ -198,7 +200,7 @@ sequenceDiagram
 
 **Idle and hold of a GET.** Empty idle uplink: wait at least `keepalive_ms / 2` and not less than 1 s. A GET that already carries mux Data, Open, Dgram, or Leave is not idle. The node SHOULD wait up to 250 ms for downlink and MUST NOT hold a GET longer than 1 s. When the uplink already contains CmdData, the node MAY return as soon as downlink Data is queued. When that uplink has ≥ 2 KiB CmdData, the node SHOULD cap that GET body at 96 KiB so the next Cookie recycles; download-only GETs keep 256 KiB (192 KiB with several streams).
 
-Dropping HTTP/2 without Leave does not end the session. Before process exit the client MUST send one last GET whose uplink batch contains CmdLeave. The node then closes the mux session, forgets the GET session identifier, Detaches the overlay peer, and Releases the lease. `lease_hold` still keeps the overlay IP for `ok_resumed`.
+Dropping HTTP/2 without Leave does not end the session. Before process exit the client MUST send one last GET whose uplink batch contains CmdLeave. The node then closes the mux session, forgets the GET session identifier, drops the overlay peer, and frees the lease. `lease_hold` still keeps the overlay IP for `ok_resumed`. *Informative, not normative.* One implementation names the drop Detach and the free Release.
 
 ### 3.5 HTTP/2 CONNECT (`h2`)
 
@@ -264,7 +266,15 @@ HKDF-SHA256(ikm=ss, salt=nonce, info="loft-v1", L=32)
 
 The first node message is `eph_n[32] || Seal(Status)`. Later mux messages are Seal only. `eph_n` is the node’s ephemeral X25519 public key for this handshake. HMAC covers `eph_c`, so a stolen Cookie cannot complete a session: the AEAD key requires `sk_c`, which never left the client.
 
-Seal: `nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad)` ([RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)). The nonce MUST be unique per session key. The reference implementation uses a 32-bit random prefix plus a 64-bit counter so a parked GET session continues the counter. GET uses AAD = session identifier; attached fronts (§4.4) and a 0x02 handshake on `ws`/`h2`/`quic`/`h3` use empty AAD. Attach shares the GET session key, so it shares that nonce counter.
+Handshake Seal of Status is always `nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad)` ([RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)). The nonce MUST be unique per session key for ChaCha20-Poly1305 and for AES-256-GCM. A later record MUST NOT reuse a nonce already used with that key and that algorithm. Clear records carry no nonce and no tag. GET uses AAD = session identifier; attached fronts (§4.4) and a `0x02` handshake on `ws`/`h2`/`quic`/`h3`/`l3` use empty AAD. Attach shares the session key. Clear ignores AAD.
+
+*Informative, not normative.* One implementation draws a 32-bit random prefix and a 64-bit counter so a parked GET session continues the same counter. The handshake Seal takes one value of that counter. Later AES-256-GCM records on that key continue it. A receiver accepts any unique nonce and does not require this layout.
+
+The data cipher after Status is one byte on Hello and on Status (§5.1, §5.2). An absent byte is ChaCha20-Poly1305. `0` is no inner AEAD: only the TLS of that front remains. `1` is ChaCha20-Poly1305, the same as an absent byte. `2` is AES-256-GCM: the 32-byte HKDF key, a 12-byte nonce, a 16-byte tag, and the same `nonce[12] || ciphertext` framing as ChaCha ([RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)). One session key has one data cipher.
+
+The client asks in Hello. The node confirms exactly one id in Status, or omits the byte. ChaCha20-Poly1305 is always acceptable and cannot be disabled. An unknown id, an id the node policy does not list, or any other disagreement leaves the session on ChaCha20-Poly1305. The session still comes up. Front `get` MUST NOT confirm `0` or `2`: a CDN MAY terminate TLS, and the inner AEAD is what hides mux from that CDN. Fronts `ws`, `h2`, `quic`, `h3`, and `l3` MAY confirm `0` or `2` when the client asked for that id and the node policy lists it. `connect` is a splice and has no data cipher. A session that selected `0` MUST NOT attach front `get` (§4.4). AES-256-GCM MAY attach `get`: the CDN still sees ciphertext. An old peer omits the byte and stays on ChaCha20-Poly1305. Both sides that omit the byte interoperate. This choice does not change protocol version `0x0100`.
+
+*Informative, not normative.* Operator spelling of the node policy and of the client ask is in [guide.md](guide.md). File names and flags are not part of the wire format.
 
 ### 4.4 Attach (`0x04`)
 
@@ -284,7 +294,7 @@ Old clients ignore a non-empty `ticket`. Old nodes leave `ticket` empty; the cli
 
 Attach is local to the node that holds the GET session. A relay does not attach a front on the controller for a GET that terminated on the relay.
 
-AEAD covers mux. TLS covers the path to the terminator. A CDN that terminates TLS sees mux ciphertext.
+AEAD covers mux when the data cipher is ChaCha20-Poly1305 or AES-256-GCM. TLS covers the path to the terminator. A CDN that terminates TLS on `get` sees mux ciphertext. A session whose data cipher is clear MUST NOT attach `get`. AES-256-GCM on an attached `get` stays ciphertext.
 
 ---
 
@@ -303,11 +313,12 @@ u16be proto_max
 u64be caps
 u8    program_len || program
 u8    software_len || software
+u8    inner            optional. One byte only when the client asks
 ```
 
 `instance_id` persists on the client. Empty means the node mints one in Status; the client MUST store it. Strings ≤ 64 bytes. Protocol version is `major<<8|minor` (`0x0100` = 1.0). Cap `relay` marks a relay trunk. Cap `p2p` marks a client that will announce a listen port.
 
-An old blob without proto/caps still decodes. Trailing unknown bytes MUST be ignored.
+An old blob without proto/caps still decodes. Trailing unknown bytes MUST be ignored. When one byte remains after `software`, it is the data-cipher ask (§4.3): `0` clear, `2` AES-256-GCM. Absence is not `0`. Further bytes MUST be ignored. An old decoder ignores the ask and stays on ChaCha20-Poly1305.
 
 ### 5.2 Status
 
@@ -348,6 +359,8 @@ Fields in order:
 | session_ttl_ms | optional after policy: u32be live-session maximum. 0 = off. Distinct from `lease_sec` (IP hold after disconnect). When this field is present without a policy, the encoder writes an empty policy first. Old clients ignore the extra bytes. |
 | rate_bps | optional after session_ttl_ms: u32be bulk `CmdData`/`CmdDgram` cap for this session, both directions, bytes per second. 0 = off. Control and small frames (Open, Ping, ACK ≤ 4 KiB, DNS/ICMP Dgram ≤ 512 B) are unshaped. The node enforces. When this field is present without `session_ttl_ms`, the encoder writes ttl 0 first. Old clients ignore the extra bytes. |
 | fronts | optional after rate_bps: u8 n ≤ 8, then n × (name, path, url) as u8 len \|\| bytes. Mux fronts this node accepts (`get` `ws` `h2` `h3` `quic`). Empty url is the host:port of the front that did `0x02`. `quic` has an empty path. Empty list = the client keeps URI/defaults. When this field is present without `rate_bps`, the encoder writes rate 0 first. Old clients ignore the extra bytes. After a successful Status the node map is source of truth; the client SHOULD persist it into the saved profile. |
+| edge | optional after fronts: u8 GET preset. `0` plain, omitted when `inner` is also absent. `1` tight. A present `inner` forces this byte even when it is `0`, and forces `fronts` (n MAY be 0) so the next byte is not read as `edge`. Old clients ignore the extra byte. |
+| inner | optional after edge: u8 data cipher for records after this Status. The node writes it only when Hello asked, the policy allows that id, and the front that completed `0x02` is not `get`. `0` no inner AEAD. `1` ChaCha20-Poly1305, the same as omitting the byte; a node MAY omit `1`. `2` AES-256-GCM. Absence, an unknown id, or a refused ask is ChaCha20-Poly1305, and the session still comes up. Handshake Seal of this Status is ChaCha20-Poly1305 either way. Old clients ignore the extra byte. |
 
 Selected protocol is the maximum of the intersection of the two ranges. Empty intersection yields code `protocol` (0x0203) and no mux.
 
@@ -386,7 +399,7 @@ Selected protocol is the maximum of the intersection of the two ranges. Empty in
 | 28 | h3_mark | h3 on a decoy node: the Initial MUST carry the loft mark (§11.3) |
 | 29 | l3 | HTTP/2 CONNECT carrying IP datagrams (no mux) |
 
-A node that disables a front MUST clear that bit. A client that will not use a front MUST clear it. SOCKS, TUN, CDN vendor, OS, git, and origin hostnames are not capabilities.
+A node that disables a front MUST clear that bit. A client that will not use a front MUST clear it. SOCKS, TUN, CDN vendor, OS, git, and origin hostnames are not capabilities. Bits 30–63 have no name in this revision (§13.1).
 
 Version negotiation: `max(intersection(client.min..client.max, node.min..node.max))`. Caps in Status are the node’s advertised set. The client decides which of those it uses.
 
@@ -429,7 +442,7 @@ One mux Pull becomes up to three GET sequences: control resin, draft Data, then 
 
 Open target: `u16be host_len || host || u16be port`. Dgram payload is that prefix plus the datagram.
 
-Leave ends the mux session. stream_id is 0. Payload is empty. The node MUST close the session, Detach the overlay peer, and Release the lease (`Online=false`). `lease_hold` still keeps the IP for the same `instance_id`. Frames after Leave in the same batch MAY be ignored. An implementation that does not yet handle Leave MUST ignore the command (unknown mux commands MUST be ignored and MUST NOT reset the session). CmdClose ends one stream; it does not end the session.
+Leave ends the mux session. stream_id is 0. Payload is empty. The node MUST close the mux session, drop the overlay peer, and free the lease. That peer is no longer online. `lease_hold` still keeps the IP for the same `instance_id`. Frames after Leave in the same batch MAY be ignored. An implementation that does not yet handle Leave MUST ignore the command (unknown mux commands MUST be ignored and MUST NOT reset the session, §13.2). *Informative, not normative.* One implementation names the drop Detach and the free Release, and clears a flag `Online`. CmdClose ends one stream; it does not end the session.
 
 Implementations MUST batch frames (about 1–16 KiB per AEAD plaintext). They MUST NOT drop Data under buffer pressure: they apply backpressure. Per-stream receive buffer is at least 64 KiB and at most 256 KiB. An Open that cannot be completed is Reset `stream_refused` (0x0501). Ping interval is `keepalive_ms`. Idle timeout is `idle_ms`. On `get`, Pad so plaintext before AEAD is about 400–600 bytes.
 
@@ -443,7 +456,7 @@ A member is a key. An instance is a client-generated identifier stored locally. 
 
 The same instance reconnecting receives `ok_resumed` and the same overlay IP. A second instance with `multi` off receives `auth_already_online`. With `multi` on, further instances receive pool addresses until `multi_limit` (default 8), then `auth_limit`. A sticky IP on the key is given to the first instance.
 
-After disconnect, `lease_hold_ms` (default 45 s) keeps the IP for that instance. Leave Releases `Online` immediately; the hold is only the IP reservation for resume. A GET session that vanishes without Leave stays `Online` until the node next sees that session.
+After disconnect, `lease_hold_ms` (default 45 s) keeps the IP for that instance. Leave marks that peer offline immediately; the hold is only the IP reservation for resume. A GET session that vanishes without Leave stays online until the node next sees that session.
 
 When both Hello and Status advertise `hold`, an unexpected front drop (radio gap, or a path change that Parks) MUST NOT close mux streams for `gap_hold_ms` (default 8 s). Replacing HTTP/2 on GET with the same sid is not a drop. The client that Parks redials with a fresh `0x02` and the same `instance_id`; the node reattaches the parked mux only for the member that matches the new proof. Inner TCP stays up. After `gap_hold_ms` with no resume, the node closes the mux. Leave still closes immediately.
 
@@ -482,7 +495,7 @@ Numeric values are stable. Names MAY grow. Numbers do not move.
 | 0x0501 | stream_refused | Open failed |
 | 0x0502 | stream_reset | peer Reset |
 
-A non-OK Status forbids mux. HTTP 404 on GET authentication is treated as `auth_bad_key`.
+A non-OK Status forbids mux. HTTP 404 on GET authentication is treated as `auth_bad_key`. Codes absent from the table have no name in this revision (§13.3).
 
 ---
 
@@ -516,7 +529,7 @@ Overlay ICMP echo is CmdDgram to `dst:1` (IP protocol ICMP) with the IPv4 packet
 
 ## 10. Controller and relays
 
-A controller holds keys, leases, ACLs, and signing. A relay terminates external TLS and copies HTTP after TLS onto a trunk session: Open `hub:1` or `hub:2`. Inner mux AEAD and FinishAuth stay on the controller; the relay does not decrypt overlay frames and does not store member keys. Only a Hello with cap `relay` MAY Open `hub:*` or `ctl:1`. Members MUST NOT set that bit (it is not a front). The reference client omits it from Hello; `loft-node` in role relay sets it via ExtraCaps. A node with `enrol: list` also requires the authenticated member id to be in `relays:` (empty Hello member id is the shared-token relay; `enrol_req` still checks the id). Cap `hold` and resume `0x02` are independent of this bit. Member authentication and overlay IP remain on the controller.
+A controller holds keys, leases, ACLs, and signing. A relay terminates external TLS and copies HTTP after TLS onto a trunk session: Open `hub:1` or `hub:2`. Inner mux AEAD and FinishAuth stay on the controller; the relay does not decrypt overlay frames and does not store member keys. Only a Hello with cap `relay` MAY Open `hub:*` or `ctl:1`. Members MUST NOT set that bit (it is not a front). A relay sets it. When the controller is in allowlist mode, the authenticated member id MUST be on the relay allowlist. An empty Hello member id is the shared-token relay; the enrol check still applies to that id. Cap `hold` and resume `0x02` are independent of this bit. *Informative, not normative.* One client omits the bit. The Go node in the relay role sets it with ExtraCaps. Allowlist mode is `enrol: list` and the list is `relays:`. See [guide.md](guide.md). Member authentication and overlay IP remain on the controller.
 
 ```
 client ──TLS──► relay ──trunk (mux hub:1|hub:2, ctl:1)──► controller
@@ -546,7 +559,7 @@ Then `u8 pub_len || pub || u16be sig_len || sig`. Signature is Ed25519 over the 
 
 The live roster is `advertise` (id `self`) plus heartbeating relays that are not drain. Three missed beats (default interval 10 s) or a dead `ctl` stream remove the relay and increment serial.
 
-Fetch after authentication: Status `roster`. Fetch before authentication: `GET {roster_path}` (default `/static/v3/manifest.json`), JSON `{"v":1,"p":"<base64url>"}`, `Cache-Control: public, max-age=60`. That GET succeeds on a CDN or a host with a real certificate. A decoy-spliced IP without session HMAC is forwarded to the origin. The document MUST NOT contain a member token. The reference client requires `controller_pub` to accept a roster. Trust-on-first-use (`tofu: true`) is an opt-in client flag, not the default.
+Fetch after authentication: Status `roster`. Fetch before authentication: `GET {roster_path}` (default `/static/v3/manifest.json`), JSON `{"v":1,"p":"<base64url>"}`, `Cache-Control: public, max-age=60`. That GET succeeds on a CDN or a host with a real certificate. A decoy-spliced IP without session HMAC is forwarded to the origin. The document MUST NOT contain a member token. A client MUST reject a roster whose signer does not match the pinned controller public key. Accepting an unknown signer is an operator opt-in and is off by default. *Informative, not normative.* One client spells the pin `controller_pub` and the opt-in `tofu`. See [guide.md](guide.md).
 
 ### 10.2 Fleet (`ctl:1`)
 
@@ -561,7 +574,7 @@ Each message `u32be length || u8 type || body`.
 | 5 | slice | signed slice |
 | 6 | drain | id, u8 |
 
-Slice (Ed25519 over the body): serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be, then pub and sig as in the roster. `enrol: list` requires the id in controller `relays:`. `enrol: open` accepts any authenticated trunk. YAML overrides URL, decoy, fronts, weight when set. Enrol deny: 1 unknown id, 2 bad form, 3 duplicate, 4 disabled.
+Slice (Ed25519 over the body): serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be, then pub and sig as in the roster. Allowlist mode requires the id on the controller’s relay allowlist. Open mode accepts any authenticated trunk. Enrol deny: 1 unknown id, 2 bad form, 3 duplicate, 4 disabled. *Informative, not normative.* Configuration names for allowlist mode, open mode, and per-relay overrides of URL, decoy, fronts, and weight are in [guide.md](guide.md).
 
 Provisioning of machines and certificates is outside this protocol.
 
@@ -582,17 +595,18 @@ repeat:
 
 Kind 1 exact domain, 2 suffix, 3 CIDR. Then public key and signature as in the roster.
 
-Status carries `lists_serial` and SHA-256 of the signed blob. The client fetches `GET {lists_path}` (default `/static/v3/lists.json`) when serial or hash is newer. Operator YAML: a leading `.` or `*.` is suffix; a CIDR string is kind 3. Matching is case-insensitive for names. SOCKS matches hostname. TUN matches IP (CIDR).
+Status carries `lists_serial` and SHA-256 of the signed blob. The client fetches `GET {lists_path}` (default `/static/v3/lists.json`) when serial or hash is newer. Matching is case-insensitive for names. *Informative, not normative.* How an operator file spells a suffix or a CIDR is in [guide.md](guide.md). SOCKS matches hostname. TUN matches IP (CIDR).
 
 ---
 
-## 11. Path compatibility
+## 11. Security Considerations
 
-This section classifies what a CDN, reverse proxy, or TLS terminator observes. loft is not a mixnet. Overlay IP, member key, and controller key are secrets of the deployment.
+What a CDN, reverse proxy, or TLS terminator can observe, and which checks the handshake relies on. Who else can read member keys, overlay addresses, and the roster is §12.
 
 | Observer | Sees |
 |----------|------|
-| TLS terminator without member key | HTTPS to the origin or a destination-shaped certificate (mask); mux is AEAD ciphertext |
+| TLS terminator without member key | HTTPS to the origin or a destination-shaped certificate (mask); mux is AEAD ciphertext on ChaCha20-Poly1305 and on AES-256-GCM |
+| TLS terminator on a direct front that negotiated clear | mux plaintext. Front `get` does not negotiate clear |
 | Middlebox without node private `P` | 32-byte `session_id` of Chrome length; sid v3 is not distinguishable without `P` |
 | Holder of a stolen member key | sid v2 ClientHellos; not sid v3 |
 | Active probe without valid sid | configured origin (live certificate and bytes) |
@@ -600,7 +614,7 @@ This section classifies what a CDN, reverse proxy, or TLS terminator observes. l
 
 ### 11.1 Handshake
 
-A ClientHello that matches a current browser passes the same JA3/JA4 filters already deployed in front of banks and portals. The reference client uses uTLS fingerprints. A private ALPN, a private GREASE pattern, or the Go default cipher list identifies a non-browser. QUIC ALPN is therefore `h3`.
+A ClientHello that matches a current browser passes the same JA3/JA4 filters already deployed in front of banks and portals. A private ALPN, a private GREASE pattern, or the Go default cipher list identifies a non-browser. QUIC ALPN is therefore `h3`. *Informative, not normative.* One client builds that ClientHello with uTLS. See [guide.md](guide.md).
 
 `session_id` is 32 random-looking bytes. sid v3 is HKDF under ECDH with the node’s static X25519; a middlebox needs that private key to mark those ClientHellos. A stolen member key marks only sid v2. A mask node does not admit sid v2 on a decoy SNI, so that key does not mark the ClientHello that carries the decoy name. A middlebox without either secret sees a string of the same length Chrome already sends.
 
@@ -624,7 +638,7 @@ Auth `0x02` is a nonce, an ephemeral X25519 public key, and HMAC under the membe
 
 ### 11.5 Roster and lists
 
-The signed roster is a public file on a CDN path. Anyone who can GET that path can read live fronts. The member key is absent. A client that pins `controller_pub` rejects a substituted key. Trust-on-first-use (`tofu`) is off: the reference client does not pin an unknown signer.
+The signed roster is a public file on a CDN path. Anyone who can GET that path can read live fronts. The member key is absent. A client that has a pinned controller public key rejects a substituted key. Trust-on-first-use is off: a client MUST NOT pin an unknown signer unless the operator turned that opt-in on (§10.1).
 
 ### 11.6 Overlay
 
@@ -632,11 +646,78 @@ Hub isolation is Reset `policy_drop` on member-to-member Open. Mesh splices thro
 
 ### 11.7 Outside this protocol
 
-A TLS middlebox that already holds the member key is not addressed. A path on which no permitted destination exists is not addressed. A TLS terminator that also holds the inner overlay key sees mux plaintext. Those cases are outside the protocol.
+A TLS middlebox that already holds the member key is not addressed. A path on which no permitted destination exists is not addressed. A TLS terminator that also holds the inner overlay key sees mux plaintext. A direct front that negotiated clear shows mux plaintext to its TLS terminator without that key. Those cases are outside the protocol.
 
 ---
 
-## 12. Limits
+## 12. Privacy
+
+loft is not a mixnet. The path sees a TLS 1.3 session. The controller sees members, leases, and overlay addresses. A relay that terminates TLS sees the client address and the HTTP bytes after TLS. It does not hold member keys and does not decrypt mux frames.
+
+| Data | Who can read it |
+|------|-----------------|
+| Member key | The member and the controller. The roster, the address lists, and a relay do not carry it. |
+| Controller signing key | The controller. A client that has the public key rejects a substituted signer. Pinning an unknown signer is off unless the operator turns that opt-in on (§10.1). |
+| Overlay IP, VLAN, lease | The controller. Another member learns an overlay IP when mesh or vlan forwards an Open to it. With `p2p` on, Status peer hints also carry that overlay IP, the TLS-observed host, the listen port, and an X25519 public key (§11.6). |
+| Mux plaintext | Holders of the session key. A TLS terminator without that key sees AEAD ciphertext on ChaCha20-Poly1305 and on AES-256-GCM (§11). Front `get` does not negotiate clear, so a CDN that terminates TLS on `get` does not obtain mux plaintext. A direct front that negotiated clear shows mux plaintext to that front’s TLS terminator. |
+| Roster and address lists | Anyone who can GET the public path. `Cache-Control: public`. Not a member directory. |
+| Sizes and timing on `get` | The CDN or reverse proxy that terminates that TLS, including Cookie length. The inner AEAD still hides mux plaintext. |
+
+The member key, the controller signing key, and the overlay addressing plan are deployment secrets. Publishing the roster does not publish them.
+
+---
+
+## 13. Registries and extension
+
+This specification is the registry for capability bits, multiplex commands, and status codes. A value this text has not assigned is either reserved for a later revision of this specification or experimental. A fork that uses a reserved value for its own meaning will collide with a later assignment. An experimental value is safe only between peers that agreed to that meaning out of band.
+
+The capability field is an unsigned 64-bit set. Bit 63 is not a sign bit.
+
+### 13.1 Capability bits
+
+| bits | class |
+|------|--------|
+| 0–29 | assigned (§5.3) |
+| 30–47 | reserved |
+| 48–63 | experimental |
+
+A reserved bit MUST NOT be set for a meaning this specification has not assigned. This specification assigns the next bits from 30 upward. An experimental bit MUST NOT be set toward a peer that did not agree to that meaning out of band. A receiver MUST ignore a bit it does not implement. An unknown bit does not fail the handshake. The receiver MUST NOT reset the session because of it.
+
+### 13.2 Multiplex commands
+
+The command is one byte.
+
+| cmd | class |
+|-----|--------|
+| 0 | reserved, unused |
+| 1–12 | assigned (§6) |
+| 13–191 | reserved |
+| 192–255 | experimental |
+
+A receiver that does not implement a command MUST ignore it and MUST NOT reset the session (§6). That rule covers reserved and experimental values. A sender MUST NOT use a reserved command. An experimental command MUST NOT be sent to a peer that did not agree to that meaning out of band.
+
+### 13.3 Status codes
+
+A code is `u16be`. The high byte is the class.
+
+| range | class |
+|-------|--------|
+| 0x0000–0x00FF | success. Assigned: `0x0000` ok, `0x0001` ok_resumed. The rest of this class is reserved. |
+| 0x0100–0x01FF | authentication. Assigned: `0x0101`–`0x0108` (§8). The rest is reserved. |
+| 0x0200–0x02FF | network and protocol. Assigned: `0x0201`–`0x0206`. The rest is reserved. |
+| 0x0300–0x03FF | address. Assigned: `0x0301`–`0x0303`. The rest is reserved. |
+| 0x0400–0x04FF | policy. Assigned: `0x0401`. The rest is reserved. |
+| 0x0500–0x05FF | stream. Assigned: `0x0501`, `0x0502`. The rest is reserved. |
+| 0x0600–0x7FFF | reserved. New classes are `0x06`–`0x7F`. |
+| 0x8000–0xFFFF | experimental |
+
+Only `0x0000` and `0x0001` are success. Any other code forbids mux (§8). That includes an unknown code in class `0x00` and an experimental code the receiver does not implement. A sender MUST NOT emit a reserved code. An experimental code MUST NOT be sent to a peer that did not agree to that meaning out of band.
+
+Numbers already assigned do not move. A later revision adds a name in a reserved slot. It does not take an experimental value for a standard meaning.
+
+---
+
+## 14. Limits
 
 | limit | value |
 |-------|-------|
@@ -659,9 +740,9 @@ A TLS middlebox that already holds the member key is not addressed. A path on wh
 
 ---
 
-## 13. Versioning
+## 15. Versioning
 
-Protocol version 1.0 (`0x0100`) does not change with the implementation version string. A major increase is incompatible framing or authentication. A minor increase adds capabilities; old clients still speak. The handshake selects the highest version in both ranges.
+Protocol version 1.0 (`0x0100`) does not change with the implementation version string. A major increase is incompatible framing or authentication. A minor increase adds capabilities; old clients still speak. The handshake selects the highest version in both ranges. The data-cipher byte (§4.3) is an optional tail. It does not increase `0x0100`. A minor increase assigns capability bits from the reserved range (§13.1). Experimental values (§13) are not how this specification extends itself.
 
 The implementation version is a string on Hello and Status. Git hashes are omitted. Program name and semver are enough on the path.
 
@@ -669,11 +750,11 @@ A client MUST implement at least `get` or `ws`, mux, and authentication. Roster 
 
 ---
 
-## 14. Test vectors
+## 16. Test vectors
 
-All values are hex unless quoted. The reference implementation checks every vector below in `internal/crypto/vectors_test.go` and `internal/transport/vectors_test.go`. X25519 scalars are the raw 32 bytes before RFC 7748 clamping.
+All values are hex unless quoted. *Informative, not normative.* One implementation checks the vectors below in `internal/crypto/vectors_test.go` and `internal/transport/vectors_test.go`. X25519 scalars are the raw 32 bytes before RFC 7748 clamping.
 
-### 14.1 Mux frames
+### 16.1 Mux frames
 
 These are mux-frame payloads before Seal.
 
@@ -693,7 +774,7 @@ Reset `stream_refused`: payload `05 01`.
 
 Member key shape: `lt_` + 48 lowercase hex. SHA-256 of the whole string is what the node stores.
 
-### 14.2 Authentication `0x02`
+### 16.2 Authentication `0x02`
 
 Member key `"lt_00112233445566778899aabbccddeeff0011223344556677"`. The HMAC key is the ASCII bytes of that whole string (51 bytes). `nonce` is `00 01 … 0f`. Client ephemeral scalar `sk_c` is `20 21 … 3f`.
 
@@ -712,11 +793,11 @@ The GET handshake Cookie value is base64url without padding:
 AgABAgMEBQYHCAkKCwwNDg81gHLWNliA0a7qMprfkSE4OFHtIaKOO3XpZdDSzRZiVADdJV-C6NPpr7OnQpTPrdEBABgwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1NjcBAAEAAAAAAAYAd-AEbG9mdAYxLjAuMjg
 ```
 
-### 14.3 Session key and first node message
+### 16.3 Session key and first node message
 
-Node ephemeral scalar `sk_n` is `40 41 … 5f`. `X25519(sk_c, eph_n)` equals `X25519(sk_n, eph_c)`; the key is HKDF of that secret with salt `nonce` of §14.2 (§4.3).
+Node ephemeral scalar `sk_n` is `40 41 … 5f`. `X25519(sk_c, eph_n)` equals `X25519(sk_n, eph_c)`; the key is HKDF of that secret with salt `nonce` of §16.2 (§4.3).
 
-Status: code `ok`, `lease_sec` 3600, `mtu` 1380, `vlan` 0, keepalive 15000, idle 120000, reconnect 200 / 8000, `reconnect_fast_n` 5, ip `"10.77.0.2"`, gateway `"10.77.0.1"`, the `instance_id` of §14.2, `reconnect_fast_for_ms` 8000, protocol `0x0100` / `0x0100` / `0x0100`, caps `0x000063e0` (get, ws, status, timers, hello_caps, clockless, ticket), program `"loft-node"`, software `"1.0.28"`, ticket `"a1b2c3d4e5f60718293a4b5c"`, no decoy, mask, replicas, canary, roster, or lists, peers hub, p2p 0, no peer hints, dns `"10.77.0.1"`, no optional tail.
+Status: code `ok`, `lease_sec` 3600, `mtu` 1380, `vlan` 0, keepalive 15000, idle 120000, reconnect 200 / 8000, `reconnect_fast_n` 5, ip `"10.77.0.2"`, gateway `"10.77.0.1"`, the `instance_id` of §16.2, `reconnect_fast_for_ms` 8000, protocol `0x0100` / `0x0100` / `0x0100`, caps `0x000063e0` (get, ws, status, timers, hello_caps, clockless, ticket), program `"loft-node"`, software `"1.0.28"`, ticket `"a1b2c3d4e5f60718293a4b5c"`, no decoy, mask, replicas, canary, roster, or lists, peers hub, p2p 0, no peer hints, dns `"10.77.0.1"`, no optional tail.
 
 The handshake is GET, so AAD is the ASCII of that 24-character session identifier. The Seal nonce is `01020304 0000000000000001` (prefix and counter of §4.3).
 
@@ -729,27 +810,27 @@ first   79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a01020304
 
 `first` is `eph_n || Seal(status)`.
 
-### 14.4 Status optional tail
+### 16.4 Status optional tail
 
-The Status of §14.3 with `gap_hold_ms` 8000 and one route `"192.168.10.0/24"` via `"10.77.0.5"`. The bytes below follow `dns`. Every optional field before `routes` is written, zero or empty: `ip6`, `gateway6`, `header_budget`, `inflight`, `h2_conns`, `uplink_enc`.
+The Status of §16.3 with `gap_hold_ms` 8000 and one route `"192.168.10.0/24"` via `"10.77.0.5"`. The bytes below follow `dns`. Every optional field before `routes` is written, zero or empty: `ip6`, `gateway6`, `header_budget`, `inflight`, `h2_conns`, `uplink_enc`.
 
 ```
 tail    0000000000000000001f40010f3139322e3136382e31302e302f32340931302e37372e302e35
 ```
 
-### 14.5 Attach `0x04`
+### 16.5 Attach `0x04`
 
-Session key of §14.3, `sid` the ticket of §14.3, `nonce` 16 × `33`, front `"ws"`.
+Session key of §16.3, `sid` the ticket of §16.3, `nonce` 16 × `33`, front `"ws"`.
 
 ```
 attach  0418613162326333643465356636303731383239336134623563333333333333333333333333333333330277735ea380c409c8b53fa95ca96ea2cf9826
 ```
 
-### 14.6 Roster and address lists
+### 16.6 Roster and address lists
 
 Controller Ed25519 seed is 32 × `07`.
 
-Roster: serial 1, one entry: id `"self"`, url `"https://loft.example.com"`, decoy `"origin.example"`, fronts `get` `ws`, drain 0, weight 0 (encoded as 100), path `"/static/v3/build"`, `mask_pub` of §14.8.
+Roster: serial 1, one entry: id `"self"`, url `"https://loft.example.com"`, decoy `"origin.example"`, fronts `get` `ws`, drain 0, weight 0 (encoded as 100), path `"/static/v3/build"`, `mask_pub` of §16.8.
 
 Lists: serial 1, one set `"lan"`: kind 3 `"10.0.0.0/8"`, kind 2 `"example.com"`.
 
@@ -766,15 +847,15 @@ hash    eb289e3f96097285b9c703641b0467935938ca480af998847f2e3607e2348d25
 {"v":1,"p":"AAAAAAAAAAEBBHNlbGYAGGh0dHBzOi8vbG9mdC5leGFtcGxlLmNvbQ5vcmlnaW4uZXhhbXBsZQIDZ2V0AndzAGQQL3N0YXRpYy92My9idWlsZCDMy1YzEfDenww90osUUNl4vav8Y8ptc89WHy_z7MCUQyDqSmxj4pxSCr71UHsTLsX5lUd2rr6-e5JCHuppFEbSLABAE72Sctt2Ts06qTNdscGuzjrwg4998hpG6bHZOR1S7MSKGYOAY-_MYis_fttuXQGcn21S2coxg-W4QheMgOG-Cw"}
 ```
 
-### 14.7 Cookie Z85
+### 16.7 Cookie Z85
 
-Uplink encoding 1 of the Data frame in §14.1. `u16be length || blob` is 11 bytes; it is padded with one zero byte to 12, a multiple of 4. A decoder takes the length from the first two bytes and ignores the padding.
+Uplink encoding 1 of the Data frame in §16.1. `u16be length || blob` is 11 bytes; it is padded with one zero byte to 12, a multiple of 4. A decoder takes the length from the first two bytes and ignores the padding.
 
 ```
 ~00@Sb0SSi20CDfE
 ```
 
-### 14.8 ClientHello mark and P2P preface
+### 16.8 ClientHello mark and P2P preface
 
 sid v3, cert serial, and the QUIC v3 source connection ID. Node secret is the ASCII string `loft-vector-node`. Client X25519 scalar is `01 02 … 20` (32 bytes). `R` is 32 bytes of `0x11`. SNI is `origin.example`. QUIC `client_random` is X25519(scalar, basepoint), top bit clear, and the HKDF key is the same ECDH as the cert serial.
 
@@ -788,7 +869,7 @@ quic scid  25b8c53ebe475334b474445e3ee3253691b18faa
 
 The node static scalar is `HKDF-SHA256(ikm = node secret, salt = empty, info = "loft-mask-x25519", L = 32)`.
 
-sid v2 on the same ClientHello, with the member key of §14.2 as `token`:
+sid v2 on the same ClientHello, with the member key of §16.2 as `token`:
 
 ```
 sid v2  17b91ad703fd8239930f8dc0091830d956a0432cd72e90159ee4447a0f96ecd2
@@ -803,7 +884,7 @@ preface   4c4654000a4d0002a5faf9ab72c1285b6a6f9ab64d0a8e554444444444444444444444
 
 ---
 
-## 15. References
+## 17. References
 
 1. [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119). Key words for use in RFCs to Indicate Requirement Levels.
 2. [RFC 5869](https://www.rfc-editor.org/rfc/rfc5869). HMAC-based Extract-and-Expand Key Derivation Function (HKDF).
@@ -817,4 +898,5 @@ preface   4c4654000a4d0002a5faf9ab72c1285b6a6f9ab64d0a8e554444444444444444444444
 10. [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455). The WebSocket Protocol.
 11. [RFC 1928](https://www.rfc-editor.org/rfc/rfc1928). SOCKS Protocol Version 5.
 12. ZeroMQ RFC 32. Z85 (ZeroMQ Base-85 Encoding).
-13. [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024). Hybrid key exchange in TLS 1.3 (X25519MLKEM768).
+13. [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024). Post-Quantum Traditional (PQ/T) Hybrid Key Agreement Mechanisms for TLS 1.3. August 2026. Group X25519MLKEM768 is 4588 (`0x11EC`).
+14. [RFC 5116](https://www.rfc-editor.org/rfc/rfc5116). An Interface and Algorithms for Authenticated Encryption. AES-256-GCM, 12-byte nonce, 16-byte tag.

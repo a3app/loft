@@ -1,9 +1,11 @@
-// Package crypto seals mux with ChaCha20-Poly1305, proves membership with
-// clockless HMAC (0x02) bound to a client X25519 pub, and derives the
-// session key from the DH secret (HKDF info "loft-v1").
+// Package crypto seals mux, proves membership with clockless HMAC (0x02)
+// bound to a client X25519 pub, and derives the session key from the DH
+// secret (HKDF info "loft-v1"). Data default is ChaCha20-Poly1305.
+// BindInner may select clear or AES-256-GCM after the handshake Status.
 package crypto
 
 import (
+	"crypto/cipher"
 	"crypto/ecdh"
 	"crypto/hmac"
 	"crypto/rand"
@@ -15,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/crypto/chacha20poly1305"
+	"github.com/a3app/loft/internal/wire"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -135,10 +137,24 @@ func nextNonce(key []byte) ([]byte, error) {
 	return nonce, nil
 }
 
-// Seal is nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad).
+// Seal is nonce[12] || AEAD(key, nonce, plaintext, aad).
+// The default AEAD is ChaCha20-Poly1305. BindInner selects clear or AES-256-GCM
+// for data frames; call it only after the handshake Status has been sealed.
 // Nonce is unique per key (prefix+counter), not a fresh 96-bit random.
+// LOFT_STAND_INNER=clear returns the plaintext for every key.
 func Seal(key, plaintext, aad []byte) ([]byte, error) {
-	aead, err := chacha20poly1305.New(key)
+	switch dataInner(key) {
+	case wire.InnerClear:
+		return append([]byte(nil), plaintext...), nil
+	case wire.InnerAES:
+		return sealWith(key, plaintext, aad, newAESGCM)
+	default:
+		return sealWith(key, plaintext, aad, standAEAD)
+	}
+}
+
+func sealWith(key, plaintext, aad []byte, newAEAD func([]byte) (cipher.AEAD, error)) ([]byte, error) {
+	aead, err := newAEAD(key)
 	if err != nil {
 		return nil, err
 	}
@@ -154,13 +170,25 @@ func Seal(key, plaintext, aad []byte) ([]byte, error) {
 }
 
 // Open decrypts a Seal blob. GET uses AAD = session id; other fronts use empty AAD.
+// The AEAD follows BindInner. LOFT_STAND_INNER=clear returns the blob.
 func Open(key, blob, aad []byte) ([]byte, error) {
+	switch dataInner(key) {
+	case wire.InnerClear:
+		return append([]byte(nil), blob...), nil
+	case wire.InnerAES:
+		return openWith(key, blob, aad, newAESGCM)
+	default:
+		return openWith(key, blob, aad, standAEAD)
+	}
+}
+
+func openWith(key, blob, aad []byte, newAEAD func([]byte) (cipher.AEAD, error)) ([]byte, error) {
 	if len(blob) < NonceSize+aeadOverhead() {
 		return nil, ErrAuth
 	}
-	aead, err := chacha20poly1305.New(key)
+	aead, err := newAEAD(key)
 	if err != nil {
-		return nil, err
+		return nil, ErrAuth
 	}
 	nonce := blob[:NonceSize]
 	return aead.Open(nil, nonce, blob[NonceSize:], aad)

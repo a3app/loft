@@ -77,6 +77,11 @@ func applyNode(c *ServerConfig, tok []string) error {
 		c.Mask = on
 	case "fronts":
 		c.Fronts = append([]string(nil), tok[1:]...)
+	case "inner":
+		if len(tok) < 2 {
+			return fmt.Errorf("inner wants clear, chacha, aes")
+		}
+		c.Inner = append([]string(nil), tok[1:]...)
 	case "decoy":
 		if len(tok) < 2 {
 			return fmt.Errorf("decoy wants host:port")
@@ -309,6 +314,9 @@ func RenderCommands(c ServerConfig, keepKeys bool) string {
 	fmt.Fprintf(&b, "mask %s\n", onOff(c.Mask))
 	if len(c.Fronts) > 0 {
 		fmt.Fprintf(&b, "fronts %s\n", strings.Join(c.Fronts, " "))
+	}
+	if len(c.Inner) > 0 {
+		fmt.Fprintf(&b, "inner %s\n", strings.Join(c.Inner, " "))
 	}
 	fmt.Fprintf(&b, "keep_keys %s\n", onOff(keepKeys))
 	fmt.Fprintf(&b, "canary fat_hello %s\n", onOff(c.Canary.Fat()))

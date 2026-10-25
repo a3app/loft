@@ -713,9 +713,11 @@ func (st *Stream) Read(p []byte) (int, error) {
 }
 
 // streamParkMax is extra Data a full stream may hold before Reset.
-// in cap 64 × 12 KiB plus this is about 1 MiB, one BDP of slack, then RST
-// so one hog cannot stall mux ingest / kernel rcvbuf.
-const streamParkMax = 256 << 10
+// in cap 64 × 12 KiB plus this. 256 KiB is about 20 ms at 100 Mbit/s, and a
+// short stall then Reset a live download (one stream died around 39 Mbit/s).
+// 8 MiB is about 0.6 s at 100 Mbit/s. Push still never blocks; a real hog is
+// Reset so mux ingest keeps reading the front.
+const streamParkMax = 8 << 20
 
 // full is true when in and the park are both at cap (next Data Resets).
 func (st *Stream) full() bool {

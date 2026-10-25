@@ -351,6 +351,7 @@ func l3Handshake(conn net.Conn, token []byte, offer wire.Cap, addr, sni string) 
 		conn.Close()
 		return nil, err
 	}
+	takeInner(wire.FrontL3, key, st)
 	return key, nil
 }
 
@@ -404,10 +405,12 @@ func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth) {
 	link := &l3Sess{conn: conn, key: a.Key, in: make(chan []byte, l3InCap), done: make(chan struct{})}
 	st := info.Status("l3")
 	finishStatusL3(&st, a.Token, a.Rest, link, conn.RemoteAddr())
+	applyInner(&st, wire.FrontL3, a.Rest)
 	sealed, err := ecrypto.Seal(a.Key, st.Encode(), nil)
 	if err != nil {
 		return
 	}
+	commitInner(a.Key, st)
 	if err := writeMsg(conn, ecrypto.WrapHello(a.EphN, sealed)); err != nil {
 		return
 	}

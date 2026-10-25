@@ -160,6 +160,8 @@ export LOFT_TOKEN='long-secret'
 | `get_path` `ws_path` `h2_path` `h3_path` | Пути фронтов |
 | `get_h2` | Число HTTP/2-соединений GET, 1–4 (по умолчанию 1). Inflight общий на все. |
 | `fronts` | Пусто = `get`. `ws`, `h2`, `quic`, `h3` — явно. `connect` — стыковка HTTP CONNECT без mux; выключена, пока не указана. `l3` — HTTP/2 CONNECT, затем IP-дейтаграммы; выключен, пока не указан |
+| `inner` | Дополнительные шифры данных, которые нода может подтвердить: `clear`, `aes`. Пусто = только ChaCha20-Poly1305. ChaCha20-Poly1305 всегда разрешён, выключить его нельзя. `get` не подтверждает `clear` и `aes`. Применяется после рестарта. SIGHUP `node.conf` не перечитывает. |
+| `edge` | Пресет GET: `plain` или `tight` (байт Status 0 или 1). `tight`: бюджет Cookie 16 КиБ, inflight 16, таймаут 6 с. Для origin за CDN или обратным прокси, который сбрасывает толстый одновременный всплеск HEADERS. По умолчанию `plain`. |
 | `decoy` | список `host:port`. Первая запись — личность ноды. Пусто = выкл |
 | `decoy_proxy` | `enable`: каждая TCP-стыковка начинается строкой PROXY v1 с адресом клиента. Только для своего веб-сервера (nginx `listen … proxy_protocol`); чужой сайт сломается. По умолчанию выкл. UDP не затрагивает |
 | `mask` | Рукопожатие ECDSA формы dest для клиентов loft; зонды по-прежнему стыкуются |
@@ -168,8 +170,8 @@ export LOFT_TOKEN='long-secret'
 | `roster_path` | Публичный GET, по умолчанию `/static/v3/manifest.json` |
 | `enrol` | `list`: id должен быть в `relays:`. `open`: любой транк `CapRelay` |
 | `auth shared` | `enable`: `LOFT_TOKEN` как секрет клиента при пустом `members.keys`. По умолчанию `disable`. |
-| `relays` | Список допущенных: id, url, decoy, fronts, weight, path |
-| `lists` | Имя → адреса (домен, `.suffix`, CIDR) |
+| `relays` | Список допущенных: id, url, decoy, fronts, weight, path. Заданные здесь поля перекрывают url, decoy, fronts и weight этого relay |
+| `lists` | Имя → адреса. Ведущая `.` или `*.` — суффикс; строка CIDR — kind 3; прочая строка — точный домен |
 | `lists_path` | Публичный GET, по умолчанию `/static/v3/lists.json` |
 | `canary` | Канарейка пути: `fat_hello`, `split_hello`, `pad` |
 | `cover_dir` | Корень статики. Пусто = встроенная страница |
@@ -247,6 +249,7 @@ make probe
 | `instance_id` | Экземпляр оверлея. Пусто: `{config}.instance` рядом с YAML, создаётся при первом запуске |
 | `select` | `auto` или имя исходящего |
 | `fronts` | Дополнительный фильтр. Пусто = типы исходящих (сток — GET) |
+| `inner` | Запрос шифра данных: `clear` или `aes`. Пусто или `chacha` — байт в Hello не пишется (ChaCha20-Poly1305). Нода подтверждает этот идентификатор или сессия остаётся на ChaCha20-Poly1305. `get` остаётся на ChaCha20-Poly1305. `loft-front -inner` — то же поле. |
 | `bootstrap` | HTTPS URL манифеста roster, до аутентификации |
 | `controller_pub` | 32 байта Ed25519 (64 hex). Нужен, чтобы принять roster |
 | `tofu` | `true` закрепляет первого действительного подписанта, если `controller_pub` пуст (по умолчанию выкл) |
@@ -265,6 +268,8 @@ make probe
 | `listen.uplink` | Имя WAN RouterOS для выхода контейнера (`ether1`, `lte1`) |
 
 Поля исходящего: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| пусто), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `h2_max_age_ms`, `insecure_skip_verify`.
+
+`fingerprint` `chrome` — ClientHello Chrome, который этот клиент собирает через uTLS. `firefox` — другая форма браузера. `go` — список шифров Go; фильтры JA3/JA4 уже отмечают его как не-браузер. Протокол на пути с такими фильтрами требует форму браузера. uTLS он не требует.
 
 Пропущенный `header_budget` — 16 КиБ HTTP-заголовка (профиль Yandex CDN фиксирует 12 КиБ). Пропущенный `inflight` в этом дереве — 8 (диапазон протокола 2–8, в спецификации по умолчанию 4). Пропущенный `h2_max_age_ms` — 0: HTTP/2 GET живёт, пока ребро само не оборвёт. Положительное значение (пол 15 с, потолок 1 ч) меняет этот TCP; mux и идентификатор GET-сессии остаются. Исходящий GET — Cookie `session=`; первый GET — тег `0x02`, идентификатор сессии уже в пути. ICMP оверлея — CmdDgram на `dst:1`; нода отвечает шлюзу и отправляет настоящий ICMP echo в интернет.
 
@@ -307,7 +312,7 @@ use:
 
 `session_id` — 32 байта. sid v3 — HKDF под ECDH с X25519 ноды (`mask_pub` / share-URI `pbk`). sid v2 (запасной) — HKDF под ключом участника. Украденный ключ участника маркирует только hello v2.
 
-При включённом mask hello на SNI decoy принимается только как sid v3 (`mask_pub` / `pbk`); sid v2 стыкуется с origin. Если ClientHello предлагает X25519MLKEM768, mask выбирает эту группу (RFC 10024). Лист по-прежнему не цепочка публичного УЦ. Повтор того же `client_random` в течение 10 минут стыкуется как зонд. На ноде с mask Initial QUIC принимается только с меткой v3.
+При включённом mask hello на SNI decoy принимается только как sid v3 (`mask_pub` / `pbk`); sid v2 стыкуется с origin. Если ClientHello предлагает X25519MLKEM768 (группа `0x11EC`), mask выбирает эту группу ([RFC 10024](https://www.rfc-editor.org/rfc/rfc10024), Post-Quantum Traditional (PQ/T) Hybrid Key Agreement Mechanisms for TLS 1.3). Лист по-прежнему не цепочка публичного УЦ. Повтор того же `client_random` в течение 10 минут стыкуется как зонд. На ноде с mask Initial QUIC принимается только с меткой v3.
 
 Имена origin в примерном YAML — примеры. Берите origin, чей публичный сайт путь не готов снять, и чей TLS нода умеет стыковать. В протокол они не компилируются.
 

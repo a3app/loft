@@ -22,6 +22,7 @@ final class Profile {
     String pass = "";
     String dns = "";
     String maskPub = "";
+    String inner = "";
     String fp = "chrome";
     String yaml = "";
     boolean mux = true;
@@ -127,6 +128,7 @@ final class Profile {
         o.put("pass", pass);
         o.put("dns", dns);
         o.put("maskPub", maskPub);
+        o.put("inner", inner);
         o.put("fp", fp);
         o.put("yaml", yaml);
         o.put("mux", mux);
@@ -150,6 +152,7 @@ final class Profile {
         p.pass = o.optString("pass");
         p.dns = o.optString("dns");
         p.maskPub = o.optString("maskPub");
+        p.inner = o.optString("inner");
         p.fp = o.optString("fp", "chrome");
         p.yaml = o.optString("yaml");
         p.mux = o.optBoolean("mux", true);
@@ -188,6 +191,7 @@ final class Profile {
             p.sni = Peek.get(yaml, "sni");
         }
         p.maskPub = Peek.outbound(yaml, "mask_pub");
+        p.inner = Peek.get(yaml, "inner");
         p.fp = Peek.outbound(yaml, "fingerprint");
         if (p.fp.isEmpty()) {
             p.fp = "chrome";

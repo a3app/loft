@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/a3app/loft/internal/wire"
 )
 
 // TestLoadServerTokenFromEnv leaves token empty (filled later from LOFT_TOKEN).
@@ -108,6 +110,70 @@ func TestAuthSharedCommand(t *testing.T) {
 	}
 	if _, err := ParseCommands("auth enable\n"); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestInnerCommand(t *testing.T) {
+	c, err := ParseCommands("listen :443\nrole controller\ninner clear aes\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := c.InnerIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 2 || ids[0] != wire.InnerClear || ids[1] != wire.InnerAES {
+		t.Fatalf("ids %v", ids)
+	}
+	out := RenderCommands(*c, true)
+	if !strings.Contains(out, "inner clear aes\n") {
+		t.Fatal(out)
+	}
+	if _, err := ParseCommands("listen :443\ninner nope\n"); err == nil {
+		t.Fatal("bad name")
+	}
+	if _, err := ParseCommands("inner\n"); err == nil {
+		t.Fatal("empty inner")
+	}
+	only, err := ParseCommands("listen :443\ninner chacha\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err = only.InnerIDs()
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("chacha %v %v", ids, err)
+	}
+	dir := t.TempDir()
+	p := filepath.Join(dir, "node.yaml")
+	if err := os.WriteFile(p, []byte("listen: \":443\"\nrole: controller\ninner: [clear, aes]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadServer(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err = loaded.InnerIDs()
+	if err != nil || len(ids) != 2 || ids[0] != wire.InnerClear || ids[1] != wire.InnerAES {
+		t.Fatalf("yaml %v %v", ids, err)
+	}
+	ask := &ClientConfig{Inner: "clear"}
+	set, id, err := ask.InnerAsk()
+	if err != nil || !set || id != wire.InnerClear {
+		t.Fatalf("ask %v %d %v", set, id, err)
+	}
+	ask.Inner = "chacha"
+	set, _, err = ask.InnerAsk()
+	if err != nil || set {
+		t.Fatalf("chacha ask %v %v", set, err)
+	}
+	ask.Inner = ""
+	set, _, err = ask.InnerAsk()
+	if err != nil || set {
+		t.Fatalf("empty ask %v %v", set, err)
+	}
+	ask.Inner = "nope"
+	if _, _, err := ask.InnerAsk(); err == nil {
+		t.Fatal("bad ask")
 	}
 }
 

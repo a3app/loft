@@ -55,6 +55,7 @@ func main() {
 	sni := flag.String("sni", "", "SSTP/VLESS/Trojan TLS ServerName")
 	socks := flag.String("socks", config.DebugSOCKS5, "SOCKS5 listen; empty/off to disable")
 	cdnName := flag.String("cdn", "", "edge profile: yandex | cloudflare")
+	innerName := flag.String("inner", "", "data cipher ask: clear | chacha | aes; empty = chacha")
 	edgeURL := flag.String("edge", "", "CDN URL for the first GET; other fronts use -url")
 	decoy := flag.String("decoy", "", "direct-path decoy SNI (dest hostname)")
 	pbk := flag.String("pbk", "", "node X25519 public, hex or base64url")
@@ -155,6 +156,11 @@ func main() {
 	status("connecting", "front", "", false)
 
 	cfg := frontConfig(*token, *rawURL, *kind, *path, *muxOn, *cdnName)
+	cfg.Inner = strings.TrimSpace(*innerName)
+	if _, _, err := cfg.InnerAsk(); err != nil {
+		fmt.Fprintf(os.Stderr, "loft-front: %v\n", err)
+		os.Exit(2)
+	}
 	if s := strings.TrimSpace(*helloFronts); s != "" {
 		cfg.Fronts = parseKindList(s)
 	}

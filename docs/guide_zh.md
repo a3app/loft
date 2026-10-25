@@ -160,6 +160,8 @@ export LOFT_TOKEN='long-secret'
 | `get_path` `ws_path` `h2_path` `h3_path` | 前置路径 |
 | `get_h2` | GET 的 HTTP/2 连接数，1–4（默认 1）。inflight 总数共用。 |
 | `fronts` | 空 = `get`。要 `ws`、`h2`、`quic`、`h3` 就列入。`connect` 是 mux-off 的 HTTP CONNECT 拼接；未列入则关。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报；未列入则关 |
+| `inner` | 节点可以确认的额外数据密码：`clear`、`aes`。空 = 仅 ChaCha20-Poly1305。ChaCha20-Poly1305 始终允许，不能关掉。`get` 不确认 `clear` 或 `aes`。重启后生效。SIGHUP 不重读 `node.conf`。 |
+| `edge` | GET 预设 `plain` 或 `tight`（Status 字节 0 或 1）。`tight`：Cookie 预算 16 KiB，inflight 16，单次 6 秒。用于 origin 位于会丢掉过胖并发 HEADERS 突发的 CDN 或反向代理之后。默认 `plain`。 |
 | `decoy` | `host:port` 列表。第一条是节点身份。空 = 关 |
 | `decoy_proxy` | `enable`：每个 TCP 拼接先发一行带客户端地址的 PROXY v1。只用于自己的网页服务器（nginx `listen … proxy_protocol`）；公共网站会出错。默认关。不影响 UDP |
 | `mask` | 给 loft 客户端 dest 形状的 ECDSA 握手；探测照样拼接 |
@@ -168,8 +170,8 @@ export LOFT_TOKEN='long-secret'
 | `roster_path` | 公开 GET，默认 `/static/v3/manifest.json` |
 | `enrol` | `list`：id 必须在 `relays:` 里。`open`：任何 `CapRelay` 干线 |
 | `auth shared` | `enable`：`members.keys` 空时把 `LOFT_TOKEN` 当客户端密钥。默认 `disable`。 |
-| `relays` | 允许名单：id、url、decoy、fronts、weight、path |
-| `lists` | 名字 → 地址（域名、`.suffix`、CIDR） |
+| `relays` | 允许名单：id、url、decoy、fronts、weight、path。这里写了的字段覆盖该中继的 url、decoy、fronts 和 weight |
+| `lists` | 名字 → 地址。前导 `.` 或 `*.` 是后缀；CIDR 字符串是 kind 3；其他字符串是精确域名 |
 | `lists_path` | 公开 GET，默认 `/static/v3/lists.json` |
 | `canary` | 路径金丝雀：`fat_hello`、`split_hello`、`pad` |
 | `cover_dir` | 静态站点根。空 = 内置页 |
@@ -247,6 +249,7 @@ make probe
 | `instance_id` | 覆盖网实例。空：YAML 旁边的 `{config}.instance`，第一次跑时创建 |
 | `select` | `auto` 或一条出站的名字 |
 | `fronts` | 额外过滤。空 = 出站类型（默认 GET） |
+| `inner` | 数据密码请求：`clear` 或 `aes`。空或 `chacha` 不写 Hello 字节（ChaCha20-Poly1305）。节点确认该标识，否则会话留在 ChaCha20-Poly1305。`get` 保持 ChaCha20-Poly1305。`loft-front -inner` 是同一字段。 |
 | `bootstrap` | 名册清单的 HTTPS URL，认证之前 |
 | `controller_pub` | 32 字节 Ed25519（64 hex）。接名册必须有 |
 | `tofu` | `true` 在 `controller_pub` 空时钉住第一个有效签名者（默认关） |
@@ -265,6 +268,8 @@ make probe
 | `listen.uplink` | 容器出口用的 RouterOS WAN 名（`ether1`、`lte1`） |
 
 出站字段：`name`、`type`（`get` \| `ws` \| `h2` \| `quic` \| `h3`）、`url`、`path`、`cdn`（`yandex` \| `cloudflare` \| 空）、`fingerprint`（`chrome` \| `firefox` \| `go`）、`header_budget`、`inflight`、`h2_max_age_ms`、`insecure_skip_verify`。
+
+`fingerprint` `chrome` 是这个客户端用 uTLS 构造的 Chrome ClientHello。`firefox` 是另一种浏览器形态。`go` 是 Go 自带密码套件列表；JA3/JA4 过滤器已经把它标成非浏览器。协议在有这类过滤器的路径上要求浏览器形态。它不要求 uTLS。
 
 没写 `header_budget` 就是 16 KiB HTTP 头（Yandex CDN 配置钉死 12 KiB）。没写 `inflight` 在这棵树是 8（协议范围 2–8，规范默认 4）。没写 `h2_max_age_ms` 就是 0：GET 的 HTTP/2 一直留到出错。大于 0（下限 15 秒，上限 1 小时）会换这条 TCP；mux 和 GET 会话 id 不变。GET 上行是 Cookie `session=`；第一次 GET 是标签 `0x02`，会话 id 已经在路径里。覆盖网 ICMP 是打到 `dst:1` 的 CmdDgram；节点答网关，并发互联网 echo。
 
@@ -307,7 +312,7 @@ use:
 
 `session_id` 是 32 字节。sid v3 是和节点 X25519 做 ECDH 再 HKDF（`mask_pub` / 分享链接 `pbk`）。sid v2（回退）是成员密钥上的 HKDF。偷到的成员密钥只标 v2 hello。
 
-伪装开启时，SNI 为诱饵名的 hello 只作为 sid v3 准入（`mask_pub` / `pbk`）；sid v2 拼接到源站。ClientHello 提供 X25519MLKEM768 时，伪装选择该群组（RFC 10024）。叶子仍不是公开 CA 链。10 分钟内重复同一 `client_random` 作为探测拼接。伪装节点上的 QUIC Initial 只在 v3 标记下准入。
+伪装开启时，SNI 为诱饵名的 hello 只作为 sid v3 准入（`mask_pub` / `pbk`）；sid v2 拼接到源站。ClientHello 提供 X25519MLKEM768（群组 `0x11EC`）时，伪装选择该群组（[RFC 10024](https://www.rfc-editor.org/rfc/rfc10024)，Post-Quantum Traditional (PQ/T) Hybrid Key Agreement Mechanisms for TLS 1.3）。叶子仍不是公开 CA 链。10 分钟内重复同一 `client_random` 作为探测拼接。伪装节点上的 QUIC Initial 只在 v3 标记下准入。
 
 例子 YAML 里的源站主机名是例子。选公网站点这条路径不愿意丢掉、节点又能拼接其 TLS 的源站。它们不编进协议。
 

@@ -42,6 +42,8 @@ struct LoftProfile {
     var listedFronts: [String] = []
     /// Optional CDN URL. GET dials it first. `url` stays the node. Empty = every front uses `url`.
     var edge: String = ""
+    /// Data cipher ask: clear, chacha, or aes. Empty omits the Hello byte (ChaCha).
+    var inner: String = ""
 
     /// Canonical SSTP DNS field: unique IPv4, comma-separated.
     static func normalizeDNS(_ raw: String) -> String {
@@ -691,7 +693,7 @@ final class ProfileStore {
         return """
         name: \(yamlQ(p.name))
         token: \(yamlQ(p.token))
-        instance_id: \(yamlQ(p.instanceID))\(p.edge.isEmpty ? "" : "\nedge: \(yamlQ(p.edge))")\(dnsYAML(p))
+        instance_id: \(yamlQ(p.instanceID))\(p.edge.isEmpty ? "" : "\nedge: \(yamlQ(p.edge))")\(p.inner.isEmpty ? "" : "\ninner: \(yamlQ(p.inner))")\(dnsYAML(p))
         select: auto\(frontsYAML(p))
         listen:
           socks5: \(p.socksOn ? yamlQ(p.socks) : "false")
@@ -959,6 +961,7 @@ final class ProfileStore {
         var inFronts = false
         var headFronts: [String] = []
         var headEdge = ""
+        var headInner = ""
         var items: [(name: String, type: String, url: String, path: String, cdn: String, user: String, maskPub: String)] = []
         var curName = ""
         var curType = ""
@@ -1055,6 +1058,7 @@ final class ProfileStore {
                     headFronts = parsed
                 }
             case "edge": headEdge = v
+            case "inner": headInner = v.lowercased()
             default: break
             }
         }
@@ -1122,6 +1126,11 @@ final class ProfileStore {
             )
         }
         var merged = mergeLoftFronts(mapped)
+        if !headInner.isEmpty {
+            for i in merged.indices {
+                merged[i].inner = headInner
+            }
+        }
         if !headEdge.isEmpty {
             let norm = ShareURI.normalizeEdge(headEdge)
             let eh = URL(string: norm)?.host?.lowercased() ?? ""

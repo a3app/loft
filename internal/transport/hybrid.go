@@ -1,6 +1,6 @@
 package transport
 
-// X25519MLKEM768 (RFC 10024, group 0x11EC) for the mask handshake.
+// X25519MLKEM768 (RFC 10024, PQ/T hybrid key agreement for TLS 1.3, group 0x11EC) for the mask handshake.
 //
 // Chrome and current TLS servers select this group when the ClientHello
 // offers it. The shared secret is ML-KEM-768 || X25519 (64 bytes) and is the
@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
-// x25519MLKEM768 is the TLS supported group (RFC 10024).
+// x25519MLKEM768 is TLS supported group 4588 (RFC 10024).
 const x25519MLKEM768 uint16 = 0x11ec
 
 // kexName is the ServerHello group for drive and bench lines.

@@ -18,6 +18,8 @@ type Hello struct {
 	Caps       Cap
 	Program    string // client binary name, e.g. loft
 	Software   string // client release, e.g. 1.0.22 — not the protocol
+	InnerSet   bool   // one trailing byte is present; false means the client did not ask
+	Inner      byte   // 0 clear, 1 ChaCha20-Poly1305, 2 AES-256-GCM. Meaningful when InnerSet
 }
 
 // Offer is this Hello's version range and caps. Max 0 is treated as 1.0.
@@ -76,6 +78,8 @@ type Status struct {
 	RateBPS      uint32    // bulk Data/Dgram cap, both ways; 0 = off
 	Fronts       []FrontEP // mux fronts this node accepts; empty = client keeps URI/defaults
 	Edge         byte      // 0 plain, 1 tight; 0 = client keeps its opening GET limits
+	InnerSet     bool      // inner byte is present. Absent means ChaCha20-Poly1305
+	Inner        byte      // 0 clear, 1 ChaCha20-Poly1305, 2 AES-256-GCM
 }
 
 // FrontEP is one Status front: name (get/ws/h2/h3/quic), HTTP path, optional URL.
@@ -164,7 +168,11 @@ func (h Hello) Encode() []byte {
 	binary.BigEndian.PutUint64(b[off+4:], uint64(h.Caps))
 	b = b[:off+12]
 	b = append(b, putStr(h.Program)...)
-	return append(b, putStr(h.Software)...)
+	b = append(b, putStr(h.Software)...)
+	if h.InnerSet {
+		b = append(b, h.Inner)
+	}
+	return b
 }
 
 // DecodeHello reads a Hello. Trailing proto/caps are optional; unknown bytes are ignored.
@@ -190,8 +198,13 @@ func DecodeHello(b []byte) (Hello, error) {
 		h.Caps = Cap(binary.BigEndian.Uint64(rest[4:12]))
 		if extra := rest[12:]; len(extra) >= 2 {
 			var n int
+			var m int
 			h.Program, n = getStr(extra)
-			h.Software, _ = getStr(extra[n:])
+			h.Software, m = getStr(extra[n:])
+			if end := n + m; end < len(extra) {
+				h.Inner = extra[end]
+				h.InnerSet = true
+			}
 		}
 	}
 	return h, nil
@@ -313,7 +326,8 @@ func (s Status) Encode() []byte {
 	needRoutes := len(s.Routes) > 0
 	needPolicy := s.Policy.Present || len(s.Policy.OwnTags) > 0 || s.Policy.ACLDefault > 0 || len(s.Policy.Rules) > 0 || len(s.Policy.Peers) > 0
 	needTTL := s.SessionTTLMS > 0
-	needFronts := len(s.Fronts) > 0 || s.Edge > 0
+	needInner := s.InnerSet
+	needFronts := len(s.Fronts) > 0 || s.Edge > 0 || needInner
 	needRate := s.RateBPS > 0 || needFronts
 	needAfterGap := needRoutes || needPolicy || needTTL || needRate
 	if s.IP6 != "" || s.Gateway6 != "" || s.HeaderBudget > 0 || s.Inflight > 0 || s.H2Conns > 0 || s.UplinkEnc > 0 || s.GapHoldMS > 0 || needAfterGap {
@@ -352,8 +366,11 @@ func (s Status) Encode() []byte {
 									tail = append(tail, rb[:]...)
 									if needFronts {
 										tail = append(tail, encodeFronts(s.Fronts)...)
-										if s.Edge > 0 {
+										if s.Edge > 0 || needInner {
 											tail = append(tail, s.Edge)
+											if needInner {
+												tail = append(tail, s.Inner)
+											}
 										}
 									}
 								}
@@ -605,6 +622,11 @@ func DecodeStatus(b []byte) (Status, error) {
 											if off < len(b) {
 												s.Edge = b[off]
 												off++
+												if off < len(b) {
+													s.Inner = b[off]
+													s.InnerSet = true
+													off++
+												}
 											}
 										}
 									}

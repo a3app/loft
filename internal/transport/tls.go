@@ -44,18 +44,22 @@ func helloID(fp string) utls.ClientHelloID {
 // tlsSess is the uTLS session cache.
 var tlsSess = utls.NewLRUClientSessionCache(64)
 
-// tcpBuf is the front/origin socket buffer. 256 KiB is ~16 Mbit of BDP at 128 ms;
-// 512 KiB–2 MiB queued a 0.5–2 s ping under load (speedtest loaded latency).
-const tcpBuf = 256 << 10
-
-// tuneTCP turns on TCP_NODELAY and grows the kernel buffers on the TCP conn
-// under c (TLS, prefixConn, and other wrappers are unwrapped).
+// tuneTCP turns on TCP_NODELAY and leaves the kernel buffers alone.
+// SetReadBuffer locks SO_RCVBUF. On a path that reorders packets the receive
+// window then sticks near 32 KiB (~1.6 Mbit/s at 160 ms) and does not grow.
+// Autotune opened that window to ~2.3 MB (11 Mbit/s down, 27 Mbit/s up).
+// TCP_NOTSENT_LOWAT at 16 KiB caps unsent data so a ping is not queued for
+// the 0.5–2 s a 512 KiB–2 MiB send buffer used to add. TLS, prefixConn, and
+// other wrappers are unwrapped.
 func tuneTCP(c net.Conn) {
 	for i := 0; i < 8 && c != nil; i++ {
 		if t, ok := c.(*net.TCPConn); ok {
 			_ = t.SetNoDelay(true)
-			_ = t.SetReadBuffer(tcpBuf)
-			_ = t.SetWriteBuffer(tcpBuf)
+			if n, pin := standTCP(); pin {
+				_ = t.SetReadBuffer(n)
+				_ = t.SetWriteBuffer(n)
+			}
+			standApplyLowat(t)
 			return
 		}
 		switch u := c.(type) {
@@ -72,7 +76,7 @@ func tuneTCP(c net.Conn) {
 // tcpTuneListener calls tuneTCP on every Accept.
 type tcpTuneListener struct{ net.Listener }
 
-// Accept returns the next conn with TCP_NODELAY and large buffers.
+// Accept returns the next conn with TCP_NODELAY and the autotuned socket limits.
 func (l tcpTuneListener) Accept() (net.Conn, error) {
 	c, err := l.Listener.Accept()
 	if err != nil {
@@ -82,7 +86,7 @@ func (l tcpTuneListener) Accept() (net.Conn, error) {
 	return c, nil
 }
 
-// TuneListener wraps ln so Accept sets TCP_NODELAY and tcpBuf (256 KiB) buffers.
+// TuneListener wraps ln so Accept sets TCP_NODELAY and the autotuned socket limits.
 func TuneListener(ln net.Listener) net.Listener {
 	if ln == nil {
 		return nil

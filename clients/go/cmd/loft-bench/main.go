@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -67,7 +68,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Fprintf(os.Stderr, "loft-bench url=%s origin=%s cdn=%s mux=%v live=%v switch=%v bytes=%d http=%d\n", *rawURL, *origin, *cdnName, *muxOn, *live, *switchOn, *bytesN, *httpN)
+	fmt.Fprintf(os.Stderr, "loft-bench url=%s origin=%s cdn=%s mux=%v live=%v switch=%v bytes=%d http=%d stand_inner=%s stand_fan=%s stand_dispatch=%s\n", *rawURL, *origin, *cdnName, *muxOn, *live, *switchOn, *bytesN, *httpN, os.Getenv("LOFT_STAND_INNER"), os.Getenv("LOFT_STAND_FAN"), os.Getenv("LOFT_STAND_DISPATCH"))
 	kinds := splitTypes(*types)
 	if strings.EqualFold(strings.TrimSpace(*cdnName), "yandex") {
 		var onlyGET []string
@@ -84,8 +85,9 @@ func main() {
 		kinds = onlyGET
 	}
 	var rows []row
-	direct := measureDirect(ctx, *httpN, *timeout)
-	rows = append(rows, direct...)
+	if os.Getenv("LOFT_STAND") != "1" {
+		rows = append(rows, measureDirect(ctx, *httpN, *timeout)...)
+	}
 
 	if *switchOn {
 		rs, err := runSwitch(ctx, *token, *rawURL, *path, *cdnName, *muxOn, kinds, *httpN, *timeout)
@@ -138,7 +140,29 @@ func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName strin
 	defer d.Close()
 	hsMS := float64(time.Since(t0).Milliseconds())
 	ip := transport.OverlayIP()
-	fmt.Fprintf(os.Stderr, "session type=%s front=%s overlay=%s mux=%v handshake=%.0fms %s\n", kind, front, ip, muxOn, hsMS, transport.SessionLine(raw))
+	bulk := ""
+	wantLanes := 0
+	if os.Getenv("LOFT_STAND") == "1" && os.Getenv("LOFT_STAND_FAN") != "off" {
+		if n, err := strconv.Atoi(os.Getenv("LOFT_STAND_COPIES")); err == nil && n > 1 {
+			wantLanes = n
+		}
+		dead := time.Now().Add(3 * time.Second)
+		if wantLanes > 1 {
+			dead = time.Now().Add(20 * time.Second)
+		}
+		for time.Now().Before(dead) {
+			bulk = transport.LiveBulk()
+			if wantLanes > 1 && transport.LiveLaneCount() >= wantLanes {
+				break
+			}
+			if wantLanes <= 1 && strings.Contains(bulk, "+") {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	bulk = transport.LiveBulk()
+	fmt.Fprintf(os.Stderr, "session type=%s front=%s bulk=%s lanes=%d overlay=%s mux=%v handshake=%.0fms %s\n", kind, front, bulk, transport.LiveLaneCount(), ip, muxOn, hsMS, transport.SessionLine(raw))
 
 	h := &transport.Holder{}
 	h.Set(d)
@@ -150,7 +174,7 @@ func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName strin
 	socksAddr := ln.Addr().String()
 
 	var rows []row
-	note := "overlay=" + ip + " front=" + front
+	note := "overlay=" + ip + " front=" + front + " bulk=" + bulk
 	if !muxOn {
 		note += " connect-splice"
 	}
@@ -167,7 +191,9 @@ func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName strin
 	}
 	rows = append(rows, pr)
 
-	if live {
+	if os.Getenv("LOFT_STAND") == "1" {
+		rows = append(rows, measureMux(ctx, d, origin, nbyte, timeout, kind)...)
+	} else if live {
 		cf, err := httpsThrough(ctx, socksAddr, httpN, timeout)
 		cr := row{Kind: kind, Path: "socks-https", Extra: "speed.cloudflare.com"}
 		if err != nil {

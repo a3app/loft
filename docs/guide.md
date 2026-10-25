@@ -160,6 +160,8 @@ export LOFT_TOKEN='long-secret'
 | `get_path` `ws_path` `h2_path` `h3_path` | Front paths |
 | `get_h2` | GET HTTP/2 connections, 1–4 (default 1). Total inflight is shared across them. |
 | `fronts` | Empty = `get`. List `ws`, `h2`, `quic`, `h3` to opt in. `connect` is mux-off HTTP CONNECT splice; off unless listed. `l3` is HTTP/2 CONNECT then IP datagrams; off unless listed |
+| `inner` | Extra data ciphers the node may confirm: `clear`, `aes`. Empty = ChaCha20-Poly1305 only. ChaCha20-Poly1305 stays allowed and cannot be disabled. `get` never confirms `clear` or `aes`. A restart applies it. SIGHUP does not re-read `node.conf`. |
+| `edge` | GET preset `plain` or `tight` (Status byte 0 or 1). `tight`: Cookie budget 16 KiB, 16 inflight, 6 s trip. For an origin behind a CDN or reverse proxy that drops a fat concurrent HEADERS burst. Default `plain`. |
 | `decoy` | `host:port` list. First entry is the node identity. Empty = off |
 | `decoy_proxy` | `enable`: each TCP splice starts with a PROXY v1 line carrying the client address. Only for your own web server (nginx `listen … proxy_protocol`); a public site would break. Default off. UDP is not affected |
 | `mask` | Dest-shaped ECDSA handshake for loft clients; probes still splice |
@@ -168,8 +170,8 @@ export LOFT_TOKEN='long-secret'
 | `roster_path` | Public GET, default `/static/v3/manifest.json` |
 | `enrol` | `list`: id must be in `relays:`. `open`: any `CapRelay` trunk |
 | `auth shared` | `enable`: `LOFT_TOKEN` as client secret when `members.keys` is empty. Default `disable`. |
-| `relays` | Allowlist: id, url, decoy, fronts, weight, path |
-| `lists` | Name → addresses (domain, `.suffix`, CIDR) |
+| `relays` | Allowlist: id, url, decoy, fronts, weight, path. Fields set here override that relay’s url, decoy, fronts, and weight |
+| `lists` | Name → addresses. A leading `.` or `*.` is a suffix; a CIDR is kind 3; any other string is an exact domain |
 | `lists_path` | Public GET, default `/static/v3/lists.json` |
 | `canary` | Path canary: `fat_hello`, `split_hello`, `pad` |
 | `cover_dir` | Static site root. Empty = built-in page |
@@ -247,6 +249,7 @@ make probe
 | `instance_id` | Overlay instance. Empty: `{config}.instance` next to the YAML, created on first run |
 | `select` | `auto` or an outbound name |
 | `fronts` | Extra filter. Empty = outbound types (stock is GET) |
+| `inner` | Data-cipher ask: `clear` or `aes`. Empty or `chacha` omits the Hello byte (ChaCha20-Poly1305). The node confirms that id or the session stays on ChaCha20-Poly1305. `get` stays ChaCha20-Poly1305. `loft-front -inner` is this field. |
 | `bootstrap` | HTTPS URL of the roster manifest, before auth |
 | `controller_pub` | 32-byte Ed25519 (64 hex). Required to accept a roster |
 | `tofu` | `true` pins the first valid signer when `controller_pub` is empty (default off) |
@@ -265,6 +268,8 @@ make probe
 | `listen.uplink` | RouterOS WAN name for container egress (`ether1`, `lte1`) |
 
 Outbound fields: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| empty), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `h2_max_age_ms`, `insecure_skip_verify`.
+
+`fingerprint` `chrome` is a uTLS Chrome ClientHello. `firefox` is the other browser shape. `go` is the stock Go cipher list; JA3/JA4 filters already mark it as a non-browser. The protocol requires the browser shape on a path that filters browsers. It does not require uTLS.
 
 Omitted `header_budget` is 16 KiB of HTTP header (Yandex CDN profile pins 12 KiB). Omitted `inflight` is 8 in this tree (protocol range 2–8, spec default 4). Omitted `h2_max_age_ms` is 0: keep the GET HTTP/2 connection until error. A positive value (floor 15 s, cap 1 h) replaces that TCP; mux and GET session id stay. GET uplink is Cookie `session=`; the first GET is tag `0x02` with the session id already in the path. Overlay ICMP is CmdDgram to `dst:1`; the node answers the gateway and emits internet echo.
 
@@ -307,7 +312,7 @@ Unauthorized TCP (any SNI, broken hello, plaintext) is spliced to `decoy:`. UDP 
 
 `session_id` is 32 bytes. sid v3 is HKDF under ECDH with the node X25519 (`mask_pub` / share-URI `pbk`). sid v2 (fallback) is HKDF under the member key. A stolen member key marks v2 hellos only.
 
-With mask on, a hello whose SNI is the decoy name is admitted only as sid v3 (`mask_pub` / `pbk`); sid v2 is spliced to the origin. If the ClientHello offers X25519MLKEM768, mask selects that group (RFC 10024). The leaf is still not a public CA chain. A repeat of the same `client_random` within 10 minutes is spliced as a probe. On a mask node a QUIC Initial is admitted only with the v3 mark.
+With mask on, a hello whose SNI is the decoy name is admitted only as sid v3 (`mask_pub` / `pbk`); sid v2 is spliced to the origin. If the ClientHello offers X25519MLKEM768 (group `0x11EC`), mask selects that group ([RFC 10024](https://www.rfc-editor.org/rfc/rfc10024), Post-Quantum Traditional (PQ/T) Hybrid Key Agreement Mechanisms for TLS 1.3). The leaf is still not a public CA chain. A repeat of the same `client_random` within 10 minutes is spliced as a probe. On a mask node a QUIC Initial is admitted only with the v3 mark.
 
 Origin hostnames in example YAML are examples. Choose origins whose public site the path is unwilling to drop, and whose TLS the node can splice. They are not compiled into the protocol.
 

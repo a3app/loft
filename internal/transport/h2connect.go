@@ -57,11 +57,18 @@ func h2ExtendedConnect(ctx context.Context, c net.Conn, sni, path string) (net.C
 	if err := bw.Flush(); err != nil {
 		return nil, err
 	}
-	if err := h2WaitSettings(ctx, c, fr, bw); err != nil {
+	streamWin, connWin := int32(65535), int32(65535)
+	if standH2Win() {
+		var err error
+		streamWin, connWin, err = h2WaitSettingsWin(ctx, c, fr, bw)
+		if err != nil {
+			return nil, err
+		}
+	} else if err := h2WaitSettings(ctx, c, fr, bw); err != nil {
 		return nil, err
 	}
 
-	st := &h2stream{c: c, fr: fr, bw: bw, br: br, sid: 1, win: 65535, cwin: 65535}
+	st := &h2stream{c: c, fr: fr, bw: bw, br: br, sid: 1, win: streamWin, cwin: connWin}
 	pr, pw := io.Pipe()
 	st.inR, st.inW = pr, pw
 	got := make(chan h2hs, 1)
@@ -117,6 +124,48 @@ func h2ExtendedConnect(ctx context.Context, c net.Conn, sni, path string) (net.C
 		st.mu.Unlock()
 	}
 	return st, nil
+}
+
+// h2WaitSettingsWin is h2WaitSettings that also applies the peer's initial
+// stream window and any connection WINDOW_UPDATE already in the preface.
+func h2WaitSettingsWin(ctx context.Context, c net.Conn, fr *http2.Framer, bw *bufio.Writer) (int32, int32, error) {
+	streamWin, connWin := int32(65535), int32(65535)
+	if dl, ok := ctx.Deadline(); ok {
+		_ = c.SetReadDeadline(dl)
+		defer c.SetReadDeadline(time.Time{})
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return 0, 0, err
+		}
+		f, err := fr.ReadFrame()
+		if err != nil {
+			return 0, 0, err
+		}
+		switch f := f.(type) {
+		case *http2.WindowUpdateFrame:
+			if f.StreamID == 0 {
+				connWin += int32(f.Increment)
+			}
+		case *http2.SettingsFrame:
+			if f.IsAck() {
+				continue
+			}
+			f.ForeachSetting(func(s http2.Setting) error {
+				if s.ID == http2.SettingInitialWindowSize && s.Val >= 65535 && s.Val < 1<<31 {
+					streamWin = int32(s.Val)
+				}
+				return nil
+			})
+			if err := fr.WriteSettingsAck(); err != nil {
+				return 0, 0, err
+			}
+			if err := bw.Flush(); err != nil {
+				return 0, 0, err
+			}
+			return streamWin, connWin, nil
+		}
+	}
 }
 
 func h2WaitSettings(ctx context.Context, c net.Conn, fr *http2.Framer, bw *bufio.Writer) error {

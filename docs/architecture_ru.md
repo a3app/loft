@@ -21,7 +21,7 @@ docs/                 протокол, архитектура, гайд
   brand/              марка и иконки
 internal/
   wire/               кадры, Hello, Status, roster, списки, флот, возможности, коды
-  crypto/             HKDF, ChaCha20-Poly1305, auth 0x02 + X25519, Ed25519 seed
+  crypto/             HKDF, ChaCha20-Poly1305, после Status по желанию AES-256-GCM или clear, auth 0x02 + X25519, Ed25519 seed
   identity/           ключ участника lt_ + 48 hex; SHA-256 в network.conf; открытый текст в members.keys
   mux/                потоки, обратное давление, CmdDgram, CmdLeave
   netconf/            network.conf, аренды, ACL, VLAN, DNS, таймеры сессии
@@ -79,7 +79,7 @@ client.Holder
 
 Запрос roster требует `controller_pub`. `tofu: true` закрепляет первого действительного подписанта и пишет `{instanceDir}/controller.pub`. Пустой ключ без этого флага roster не принимает; статические исходящие всё равно звонят.
 
-Nonce внутреннего AEAD уникален на ключ сессии (32-битный префикс + 64-битный счётчик). Park с тем же ключом продолжает счётчик. Новый `0x02` считает ключ из X25519; ikm HKDF — секрет DH.
+Nonce внутреннего AEAD уникален на ключ сессии (32-битный префикс + 64-битный счётчик). Park с тем же ключом продолжает счётчик. Новый `0x02` считает ключ из X25519; ikm HKDF — секрет DH. После Status прямой фронт может идти без внутреннего AEAD или на AES-256-GCM; `get` остаётся на ChaCha20-Poly1305. Seal(Status) рукопожатия всегда ChaCha20-Poly1305.
 
 Клиент decoy SNI не выбирает. Его даёт Status, roster или сертификат зонда. Исходящий CDN сохраняет hostname CDN.
 

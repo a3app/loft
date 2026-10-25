@@ -122,6 +122,7 @@ func startRaw(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, 
 	}
 	sess, gen := takeClientHold()
 	sess.SetHold(st.Caps.Has(wire.CapHold))
+	takeInner(front, key, st)
 	s := &rawSess{conn: conn, sess: sess, key: key, holdGen: gen, done: make(chan struct{})}
 	s.lanes = startBulkLanes(ctx, front, cfg, token, key, st, offer, sess, s.done, func(b *GET) {
 		s.gate.handover()
@@ -149,11 +150,7 @@ func (r *rawSess) readLoop() {
 		if err != nil {
 			continue
 		}
-		frames, err := wire.DecodeBatch(plain)
-		if err != nil {
-			continue
-		}
-		r.sess.Push(frames)
+		ingestPlain(r.sess, plain)
 	}
 }
 
@@ -245,10 +242,12 @@ func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string
 		st.Ticket = []byte(ss.id)
 		defer ss.releaseTicket()
 	}
+	applyInner(&st, front, a.Rest)
 	sealed, err := ecrypto.Seal(key, st.Encode(), nil)
 	if err != nil {
 		return
 	}
+	commitInner(key, st)
 	if err := writeMsg(conn, ecrypto.WrapHello(a.EphN, sealed)); err != nil {
 		return
 	}
@@ -269,10 +268,6 @@ func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string
 		if err != nil {
 			continue
 		}
-		frames, err := wire.DecodeBatch(plain)
-		if err != nil {
-			continue
-		}
-		ms.Push(frames)
+		ingestPlain(ms, plain)
 	}
 }

@@ -12,7 +12,7 @@
 
 ## 摘要
 
-loft 是私有覆盖网，其外部路径为端口 443 上的 TLS 1.3，ClientHello 呈浏览器形态，应用数据为 HTTPS。CDN、反向代理或 TLS 终结器可以终结该 TLS 会话。内部流经多路复用并以 ChaCha20-Poly1305 封装，因此 TLS 终结器得不到 mux 明文。
+loft 是私有覆盖网，其外部路径为端口 443 上的 TLS 1.3，ClientHello 呈浏览器形态，应用数据为 HTTPS。CDN、反向代理或 TLS 终结器可以终结该 TLS 会话。内部流经多路复用。默认数据封装是 ChaCha20-Poly1305，因此 TLS 终结器得不到 mux 明文。直连前置（`ws`、`h2`、`quic`、`h3`、`l3`）可以在 Status 之后协商不用内部 AEAD，或用 AES-256-GCM。前置 `get` 保持 ChaCha20-Poly1305：CDN 可以在这条路径上终结 TLS。
 
 内部协议只有一套。外部传输——GET、WebSocket、HTTP/2 CONNECT、QUIC、HTTP/3 CONNECT 或可选的 L3 CONNECT——按部署选择，可以变更而不提高协议版本。节点可以向没有成员密钥的对端出示已配置的 HTTPS 源站，使扫描器与健康检查观察到网站。成员密钥、地址租约与存活前置名单由控制器持有。中继是可替换的 TLS 边缘。客户端获取经签名的前置名册与具名地址列表，并将这些列表映射到本机路由。同一网络的成员可以在枢纽上隔离、经节点做 mesh，或允许直接尝试 TCP。
 
@@ -32,11 +32,13 @@ loft 是私有覆盖网，其外部路径为端口 443 上的 TLS 1.3，ClientHe
 8. [Status 码](#8-status-码)
 9. [覆盖网](#9-覆盖网)
 10. [控制器与中继](#10-控制器与中继)
-11. [路径兼容](#11-路径兼容)
-12. [限制](#12-限制)
-13. [版本](#13-版本)
-14. [测试向量](#14-测试向量)
-15. [参考文献](#15-参考文献)
+11. [安全考虑](#11-安全考虑)
+12. [隐私](#12-隐私)
+13. [登记与扩展](#13-登记与扩展)
+14. [限制](#14-限制)
+15. [版本](#15-版本)
+16. [测试向量](#16-测试向量)
+17. [参考文献](#17-参考文献)
 
 ---
 
@@ -50,7 +52,7 @@ loft 占据与 HTTPS 相同的外部位置，因此可以像站点一样部署�
 
 **范围。** 本文规定成帧、认证、多路复用、覆盖网转发、控制平面（名册、机群、地址列表）以及可观察路径。SOCKS、TUN 与操作系统路由属于客户端本机，不是协议能力。
 
-**非目标。** loft 不是 mixnet。本规范不主张对抗已持有成员密钥的中间盒的机密性，不主张对抗路径上不存在任何许可目的地的机密性，也不主张对抗同时持有内部会话密钥的 TLS 终结器的机密性。
+**非目标。** loft 不是 mixnet。本规范不主张对抗已持有成员密钥的中间盒的机密性，不主张对抗路径上不存在任何许可目的地的机密性，也不主张对抗同时持有内部会话密钥的 TLS 终结器的机密性。协商了 clear 的直连前置会把 mux 明文交给终结该前置 TLS 的一方。前置 `get` 不协商 clear。
 
 ---
 
@@ -79,21 +81,21 @@ loft 占据与 HTTPS 相同的外部位置，因此可以像站点一样部署�
 | **Draft** | 只发送一次的 mux 帧。 |
 | **金丝雀** | Status 中关于 TLS 路径完整性的标志（填充或拆分的 ClientHello）。不向会重组记录的检查器隐瞒 SNI。 |
 | **Sid** | TLS ClientHello 中 32 字节 `session_id`，用作成员标记（v3 或 v2）。有别于 GET 会话标识（URL 路径中的 24 hex）。 |
-| **Seal** | `nonce[12] \|\| ChaCha20-Poly1305`，见 [RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)。 |
+| **Seal** | Status 之后的数据格式。默认与握手：`nonce[12] \|\| ChaCha20-Poly1305`（[RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)）。协商的 AES-256-GCM 使用同样的 12 字节 nonce 与 16 字节标签（[RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)）。协商的 clear 是明文，没有 nonce，也没有标签。 |
 
 ### 2.3 层次
 
 ```
 application   TCP / UDP          （SOCKS 与 TUN 为本机）
     mux       Open Data Close Reset Ping Pong Pad Dgram Leave
-      AEAD    ChaCha20-Poly1305
+      AEAD    ChaCha20-Poly1305（默认）
         front get | ws | h2 | quic | h3 | l3
           TLS 1.3
             TCP/443 or UDP/443
 ```
 
 1. **TLS。** 外部。CDN、负载均衡或源站可以终结它。
-2. **认证与 AEAD。** 内部。持有成员密钥即证明成员身份。ChaCha20-Poly1305 对 TLS 终结器隐藏 mux。
+2. **认证与 AEAD。** 内部。持有成员密钥即证明成员身份。握手 Status 始终是 ChaCha20-Poly1305。此后直连前置上的数据可以是 clear 或 AES-256-GCM（§4.3）。前置 `get` 保持 ChaCha20-Poly1305，因此终结 TLS 的 CDN 仍然得不到 mux 明文。
 3. **Mux。** 客户端与节点之间、以及经节点到互联网或其他成员的流与数据报。前置 `l3` 在此承载 IP 数据报，而非 mux。
 
 TLS ClientHello 应该做成当下浏览器那样（密码套件、扩展、JA3/JA4）。CDN 厂商名是部署配置。它们不得作为协议能力出现。
@@ -188,7 +190,7 @@ sequenceDiagram
 
 **预算与编码。** 上行必须装进一个头。Status `header_budget` 为编码后 Cookie 字节；省略时为 16 KiB HTTP 头。Status `uplink_enc` 为 1 时是 `~` 加 `u16be length || AEAD` 的 Z85（ZeroMQ Z85）；0 与省略为 base64url。握手 Cookie 仍为 base64url。节点必须两种都收。Status `h2_conns`（1–4）为到该前置的 HTTP/2 连接数；0 保持一条。Inflight 为这些连接上未完成 GET 的总数。并发未完成 GET 为 2–8（协议默认 4；Status `inflight` 为上限）。
 
-**边缘预设。** 握手 GET 是一次请求。Status `edge` 随其后，在客户端打开 inflight 泵之前。`0` 或省略为 `plain`：客户端保留那次首个 GET 的限额。`1` 为 `tight`：Cookie 预算 16 KiB、16 条未完成 GET、其后每条 GET 6 秒超时。当 origin 位于会丢掉过胖并发 HEADERS 突发的边缘之后，节点配置将此预设名为 `edge: tight`。`header_budget` 与 `inflight` 非零时为该预设之下的上限。厂商名不是 Status 字段。
+**GET 预设。** 握手 GET 是一次请求。Status `edge` 随其后，在客户端打开 inflight 泵之前。`0` 或省略为 `plain`：客户端保留那次首个 GET 的限额。`1` 为 `tight`：Cookie 预算 16 KiB、16 条未完成 GET、其后每条 GET 6 秒超时。预设 `1` 用于 origin 位于 CDN 或反向代理之后，而该代理会丢掉过胖的并发 HEADERS 突发。`header_budget` 与 `inflight` 非零时为该预设之下的上限。厂商名不是 Status 字段。*说明，非规范。* 节点配置把预设 `1` 写成 `edge: tight`。见 [guide_zh.md](guide_zh.md)。
 
 **GET 未完成。** 已启用其他 mux 前置的客户端，在 GET 握手未能产生会话时必须尝试那些前置。尝试顺序为已启用的 GET、WebSocket、HTTP/2、QUIC、HTTP/3 子集。若客户端另有边缘 URL，第一次 GET 使用它。下一次 GET 与其余前置使用节点主机。节点的密封认证失败在每个已试前置同样失败后使客户端停止。GET 封面的 HTTP 404 仅为 GET 的该失败；其本身不禁止下一个前置。
 
@@ -198,7 +200,7 @@ sequenceDiagram
 
 **GET 的空闲与保持。** 空闲上行：至少等待 `keepalive_ms / 2`，且不少于 1 秒。已经携带 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点应该为下行等待至多 250 ms，不得将 GET 保持超过 1 秒。上行已含 CmdData 时，节点可以在下行 Data 入队后立即返回。该上行有 ≥ 2 KiB CmdData 时，节点应该将该 GET 体封顶 96 KiB，以便下一条 Cookie 周转；仅下载的 GET 仍为 256 KiB（多条流时 192 KiB）。
 
-HTTP/2 断开但没有 Leave，会话不结束。进程退出前，客户端必须再发一个 GET，上行批次含 CmdLeave。节点于是关闭 mux 会话，忘记 GET 会话标识，Detach 覆盖网对端，并 Release 租约。`lease_hold` 仍为 `ok_resumed` 保留覆盖网 IP。
+HTTP/2 断开但没有 Leave，会话不结束。进程退出前，客户端必须再发一个 GET，上行批次含 CmdLeave。节点于是关闭 mux 会话，忘记 GET 会话标识，卸下覆盖网对端，并释放租约。`lease_hold` 仍为 `ok_resumed` 保留覆盖网 IP。*说明，非规范。* 一种实现把卸下叫做 Detach，把释放租约叫做 Release。
 
 ### 3.5 HTTP/2 CONNECT (`h2`)
 
@@ -264,7 +266,15 @@ HKDF-SHA256(ikm=ss, salt=nonce, info="loft-v1", L=32)
 
 节点第一条消息为 `eph_n[32] || Seal(Status)`。其后 mux 消息只 Seal。`eph_n` 为节点本次握手的临时 X25519 公钥。HMAC 覆盖 `eph_c`，因此窃得的 Cookie 组不成会话：AEAD 密钥需要 `sk_c`，它从未离开客户端。
 
-Seal：`nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad)`（[RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)）。Nonce 必须对每个会话密钥唯一。参考实现使用 32 位随机前缀加 64 位计数器，使停着的 GET 会话继续计数。GET 使用 AAD = 会话标识；attach 的前置（§4.4）以及 `ws`/`h2`/`quic`/`h3` 上的 `0x02` 使用空 AAD。Attach 共用 GET 会话密钥，因此共用该 nonce 计数器。
+握手的 Seal(Status) 始终是 `nonce[12] || ChaCha20-Poly1305(key, nonce, plaintext, aad)`（[RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)）。对 ChaCha20-Poly1305 和 AES-256-GCM，nonce 都必须对每个会话密钥唯一。其后的记录不得复用已经与该密钥、该算法用过的 nonce。clear 记录不带 nonce，也不带标签。GET 使用 AAD = 会话标识；attach 的前置（§4.4）以及 `ws`/`h2`/`quic`/`h3`/`l3` 上的 `0x02` 使用空 AAD。Attach 共用会话密钥。clear 忽略 AAD。
+
+*说明，非规范。* 一种实现取 32 位随机前缀加 64 位计数器，使停着的 GET 会话继续同一个计数器。握手的 Seal 取该计数器的一个值。其后该密钥上的 AES-256-GCM 记录接着计数。接收方接受任何唯一 nonce，不要求这种布局。
+
+Status 之后的数据密码是 Hello 与 Status 上的一个字节（§5.1、§5.2）。没有该字节就是 ChaCha20-Poly1305。`0` 表示没有内部 AEAD，只剩该前置的 TLS。`1` 是 ChaCha20-Poly1305，与没有该字节相同。`2` 是 AES-256-GCM：32 字节 HKDF 密钥、12 字节 nonce、16 字节标签，成帧与 ChaCha 相同，为 `nonce[12] || ciphertext`（[RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)）。一把会话密钥只有一种数据密码。
+
+客户端在 Hello 里请求。节点在 Status 里确认恰好一个标识，或者不写该字节。ChaCha20-Poly1305 始终可以，不能关掉。未知标识、策略里没有的标识，或其他不一致，会话留在 ChaCha20-Poly1305。会话仍然建立。前置 `get` 不得确认 `0` 或 `2`：CDN 可以终结 TLS，内部 AEAD 就是对这个 CDN 隐藏 mux 的东西。前置 `ws`、`h2`、`quic`、`h3`、`l3` 可以在客户端请求了该标识且节点策略列出它时确认 `0` 或 `2`。`connect` 是拼接，没有数据密码。选定 `0` 的会话不得 attach 前置 `get`（§4.4）。AES-256-GCM 可以 attach `get`：CDN 看到的仍是密文。旧对端不写该字节，留在 ChaCha20-Poly1305。双方都省略该字节时可以互通。这个选择不改变协议版本 `0x0100`。
+
+*说明，非规范。* 运营方如何写下节点策略和客户端请求见 [guide_zh.md](guide_zh.md)。文件名和标志不是交换格式的一部分。
 
 ### 4.4 Attach（`0x04`）
 
@@ -284,7 +294,7 @@ GET 留在会话中做 keepalive、Leave 和 bulk 回退。Mux bulk 同一时刻
 
 Attach 只发生在持有该 GET 会话的节点上。
 
-AEAD 覆盖 mux。TLS 覆盖到终结器的路径。终结 TLS 的 CDN 看到的是 mux 密文。
+数据密码为 ChaCha20-Poly1305 或 AES-256-GCM 时，AEAD 覆盖 mux。TLS 覆盖到终结器的路径。在 `get` 上终结 TLS 的 CDN 看到的是 mux 密文。数据密码为 clear 的会话不得 attach `get`。attach 上的 AES-256-GCM `get` 仍是密文。
 
 ---
 
@@ -303,11 +313,12 @@ u16be proto_max
 u64be caps
 u8    program_len || program
 u8    software_len || software
+u8    inner            可选。仅当客户端请求时有一个字节
 ```
 
 `instance_id` 在客户端持久保存。空则节点在 Status 中签发一个；客户端必须存储它。字符串 ≤ 64 字节。协议版本为 `major<<8|minor`（`0x0100` = 1.0）。能力 `relay` 标记中继干线。能力 `p2p` 标记将宣告监听端口的客户端。
 
-没有 proto/caps 的旧块仍可解码。尾部未知字节必须忽略。
+没有 proto/caps 的旧块仍可解码。尾部未知字节必须忽略。`software` 之后若还剩一个字节，那是数据密码请求（§4.3）：`0` 为 clear，`2` 为 AES-256-GCM。没有该字节不是 `0`。再往后的字节必须忽略。旧解码器忽略该请求，留在 ChaCha20-Poly1305。
 
 ### 5.2 Status
 
@@ -348,6 +359,8 @@ u8    software_len || software
 | session_ttl_ms | policy 之后可选：u32be 存活会话上限。0 = 关。有别于 `lease_sec`（断开后的 IP 保留）。有本字段而无 policy 时，编码器先写空 policy。旧客户端忽略多余字节。 |
 | rate_bps | session_ttl_ms 之后可选：u32be 本会话双向批量 `CmdData`/`CmdDgram` 上限，字节每秒。0 = 关。控制与小帧（Open、Ping、ACK ≤ 4 KiB、DNS/ICMP Dgram ≤ 512 B）不整形。由节点执行。有本字段而无 `session_ttl_ms` 时，编码器先写 ttl 0。旧客户端忽略多余字节。 |
 | fronts | rate_bps 之后可选：u8 n ≤ 8，然后 n ×（name、path、url），各为 u8 len \|\| bytes。本节点接受的 mux 前置（`get` `ws` `h2` `h3` `quic`）。空 url 为完成 `0x02` 的前置的 host:port。`quic` 路径为空。空列表 = 客户端保留 URI/默认。有本字段而无 `rate_bps` 时，编码器先写 rate 0。旧客户端忽略多余字节。成功 Status 后节点地图为权威；客户端应写入已保存的配置。 |
+| edge | fronts 之后可选：u8，GET 预设。`0` 为 plain，`inner` 也不存在时省略。`1` 为 tight。出现 `inner` 时，即使该字节为 `0` 也必须写出，并写出 `fronts`（n 可以为 0），以免下一字节被读成 `edge`。旧客户端忽略多余字节。 |
+| inner | edge 之后可选：u8，此 Status 之后记录的数据密码。仅当 Hello 请求过、策略允许该标识、且完成 `0x02` 的前置不是 `get` 时，节点才写它。`0` 无内部 AEAD。`1` 为 ChaCha20-Poly1305，与省略该字节相同；节点可以不写 `1`。`2` 为 AES-256-GCM。没有该字节、未知标识或拒绝，都是 ChaCha20-Poly1305，会话仍然建立。此 Status 的握手 Seal 无论哪种都是 ChaCha20-Poly1305。旧客户端忽略多余字节。 |
 
 选定协议为两范围交集的最大值。交集为空则码为 `protocol`（0x0203），无 mux。
 
@@ -386,7 +399,7 @@ u8    software_len || software
 | 28 | h3_mark | 诱饵节点上的 h3：Initial 必须携带 loft 标记（§11.3） |
 | 29 | l3 | HTTP/2 CONNECT 承载 IP 数据报（无 mux） |
 
-节点关闭某前置必须清该位。客户端不使用某前置必须清该位。SOCKS、TUN、CDN 厂商、操作系统、git 与源站主机名不是能力。
+节点关闭某前置必须清该位。客户端不使用某前置必须清该位。SOCKS、TUN、CDN 厂商、操作系统、git 与源站主机名不是能力。第 30–63 位在本修订中没有名称（§13.1）。
 
 版本协商：`max(intersection(client.min..client.max, node.min..node.max))`。Status 中的 caps 为节点宣告集。客户端决定使用其中哪些。
 
@@ -429,7 +442,7 @@ bytes payload
 
 Open 目标：`u16be host_len || host || u16be port`。Dgram 载荷为该前缀加数据报。
 
-Leave 结束 mux 会话。stream_id 为 0。载荷为空。节点必须关闭会话、Detach 覆盖网对端，并 Release 租约（`Online=false`）。`lease_hold` 仍为同一 `instance_id` 保留 IP。同一批次中 Leave 之后的帧可以忽略。尚未处理 Leave 的实现必须忽略该命令（未知 mux 命令必须忽略，且不得复位会话）。CmdClose 结束一条流；它不结束会话。
+Leave 结束 mux 会话。stream_id 为 0。载荷为空。节点必须关闭 mux 会话、卸下覆盖网对端，并释放租约。该对端不再在线。`lease_hold` 仍为同一 `instance_id` 保留 IP。同一批次中 Leave 之后的帧可以忽略。尚未处理 Leave 的实现必须忽略该命令（未知 mux 命令必须忽略，且不得复位会话，§13.2）。*说明，非规范。* 一种实现把卸下叫做 Detach，把释放租约叫做 Release，并清掉标志 `Online`。CmdClose 结束一条流；它不结束会话。
 
 实现必须把帧打成批次（每份 AEAD 明文约 1–16 KiB）。缓冲压力下不得丢弃 Data：施加反压。每流接收缓冲至少 64 KiB、至多 256 KiB。无法完成的 Open 以 Reset `stream_refused`（0x0501）。Ping 间隔为 `keepalive_ms`。空闲超时为 `idle_ms`。在 `get` 上，Pad 使 AEAD 前明文约 400–600 字节。
 
@@ -443,7 +456,7 @@ Leave 结束 mux 会话。stream_id 为 0。载荷为空。节点必须关闭会
 
 同一实例重连得到 `ok_resumed` 与同一覆盖网 IP。`multi` 关闭时第二个实例得到 `auth_already_online`。`multi` 开启时，后续实例得到池地址，直至 `multi_limit`（默认 8），然后 `auth_limit`。密钥上的粘滞 IP 给第一个实例。
 
-断开后，`lease_hold_ms`（默认 45 s）为该实例保留 IP。Leave 立即 Release `Online`；保留的只是供续上的 IP 预订。没有 Leave 就消失的 GET 会话保持 `Online`，直至节点再次见到该会话。
+断开后，`lease_hold_ms`（默认 45 s）为该实例保留 IP。Leave 立即把该对端标为不在线；保留的只是供续上的 IP 预订。没有 Leave 就消失的 GET 会话保持在线，直至节点再次见到该会话。
 
 Hello 与 Status 都宣告 `hold` 时，意外丢失前置（无线电间隙，或导致 Park 的路径变更）在 `gap_hold_ms`（默认 8 s）内不得关闭 mux 流。在 GET 上以同一 sid 更换 HTTP/2 不算丢失。Park 的客户端以新的 `0x02` 与同一 `instance_id` 重拨；节点仅为匹配新证明的成员重新挂上停着的 mux。内部 TCP 保持。`gap_hold_ms` 内无续上，节点关闭 mux。Leave 仍立即关闭。
 
@@ -482,7 +495,7 @@ Hello 与 Status 都宣告 `hold` 时，意外丢失前置（无线电间隙，�
 | 0x0501 | stream_refused | Open 失败 |
 | 0x0502 | stream_reset | 对端 Reset |
 
-非 OK 的 Status 禁止 mux。GET 认证上的 HTTP 404 视为 `auth_bad_key`。
+非 OK 的 Status 禁止 mux。GET 认证上的 HTTP 404 视为 `auth_bad_key`。表中没有的码在本修订中没有名称（§13.3）。
 
 ---
 
@@ -516,7 +529,7 @@ ACL 规则为首次匹配，`accept` 或 `drop`。空规则仍应用 `peers`。�
 
 ## 10. 控制器与中继
 
-控制器持有密钥、租约、ACL 与签名。中继终结外部 TLS，并把 TLS 之后的 HTTP 复制到干线会话：Open `hub:1` 或 `hub:2`。内部 mux AEAD 与 FinishAuth 留在控制器上；中继不解密覆盖网帧，不存储成员密钥。只有带能力 `relay` 的 Hello 可以 Open `hub:*` 或 `ctl:1`。成员不得置该位（它不是前置）。参考客户端在 Hello 中省略它；角色为中继的 `loft-node` 经 ExtraCaps 置位。`enrol: list` 的节点还要求已认证成员 id 在 `relays:` 中（空的 Hello 成员 id 为共享令牌中继；`enrol_req` 仍检查 id）。能力 `hold` 与续上 `0x02` 独立于该位。成员认证与覆盖网 IP 仍在控制器上。
+控制器持有密钥、租约、ACL 与签名。中继终结外部 TLS，并把 TLS 之后的 HTTP 复制到干线会话：Open `hub:1` 或 `hub:2`。内部 mux AEAD 与 FinishAuth 留在控制器上；中继不解密覆盖网帧，不存储成员密钥。只有带能力 `relay` 的 Hello 可以 Open `hub:*` 或 `ctl:1`。成员不得置该位（它不是前置）。中继置该位。控制器处于允许名单模式时，已认证成员 id 必须在该名单上。空的 Hello 成员 id 是共享令牌中继；enrol 检查仍作用于该 id。能力 `hold` 与续上 `0x02` 独立于该位。*说明，非规范。* 一种客户端在 Hello 中省略该位。中继角色的 Go 节点经 ExtraCaps 置位。允许名单模式是 `enrol: list`，名单是 `relays:`。见 [guide_zh.md](guide_zh.md)。成员认证与覆盖网 IP 仍在控制器上。
 
 ```
 client ──TLS──► relay ──trunk (mux hub:1|hub:2, ctl:1)──► controller
@@ -546,7 +559,7 @@ repeat n:
 
 存活名册为 `advertise`（id `self`）加上未 drain、正在发心跳的中继。三次错过心跳（默认间隔 10 s）或死亡的 `ctl` 流移除该中继并递增序号。
 
-认证后获取：Status `roster`。认证前获取：`GET {roster_path}`（默认 `/static/v3/manifest.json`），JSON `{"v":1,"p":"<base64url>"}`，`Cache-Control: public, max-age=60`。该 GET 在 CDN 或持有真实证书的主机上成功。没有会话 HMAC 的诱饵拼接 IP 被转发到源站。文档不得包含成员令牌。参考客户端要求 `controller_pub` 才接受名册。首次使用信任（`tofu: true`）为可选客户端标志，不是默认。
+认证后获取：Status `roster`。认证前获取：`GET {roster_path}`（默认 `/static/v3/manifest.json`），JSON `{"v":1,"p":"<base64url>"}`，`Cache-Control: public, max-age=60`。该 GET 在 CDN 或持有真实证书的主机上成功。没有会话 HMAC 的诱饵拼接 IP 被转发到源站。文档不得包含成员令牌。客户端必须拒绝签名者与已钉控制器公钥不符的名册。接受未知签名者是运营方的选项，默认关闭。*说明，非规范。* 一种客户端把钉住写成 `controller_pub`，把该选项写成 `tofu`。见 [guide_zh.md](guide_zh.md)。
 
 ### 10.2 机群（`ctl:1`）
 
@@ -561,7 +574,7 @@ repeat n:
 | 5 | slice | 经签名的切片 |
 | 6 | drain | id, u8 |
 
-切片（体上的 Ed25519）：serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be，然后与名册相同的 pub 与 sig。`enrol: list` 要求 id 在控制器 `relays:` 中。`enrol: open` 接受任何已认证干线。YAML 在已设置时覆盖 URL、decoy、fronts、weight。登记拒绝：1 未知 id，2 格式错误，3 重复，4 停用。
+切片（体上的 Ed25519）：serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be，然后与名册相同的 pub 与 sig。允许名单模式要求 id 在控制器的中继名单上。开放模式接受任何已认证干线。登记拒绝：1 未知 id，2 格式错误，3 重复，4 停用。*说明，非规范。* 允许名单模式、开放模式，以及按中继覆盖 URL、decoy、fronts、weight 的配置名，见 [guide_zh.md](guide_zh.md)。
 
 机器与证书的置备在本协议之外。
 
@@ -582,17 +595,18 @@ repeat:
 
 Kind 1 精确域名，2 后缀，3 CIDR。然后公钥与签名同名册。
 
-Status 携带 `lists_serial` 与已签名块的 SHA-256。序号或散列更新时，客户端获取 `GET {lists_path}`（默认 `/static/v3/lists.json`）。运营 YAML：前导 `.` 或 `*.` 为后缀；CIDR 串为 kind 3。名称匹配不区分大小写。SOCKS 匹配主机名。TUN 匹配 IP（CIDR）。
+Status 携带 `lists_serial` 与已签名块的 SHA-256。序号或散列更新时，客户端获取 `GET {lists_path}`（默认 `/static/v3/lists.json`）。名称匹配不区分大小写。*说明，非规范。* 运营文件如何书写后缀或 CIDR，见 [guide_zh.md](guide_zh.md)。SOCKS 匹配主机名。TUN 匹配 IP（CIDR）。
 
 ---
 
-## 11. 路径兼容
+## 11. 安全考虑
 
-本节分类 CDN、反向代理或 TLS 终结器所观察到的内容。loft 不是 mixnet。覆盖网 IP、成员密钥与控制器密钥是部署的秘密。
+CDN、反向代理或 TLS 终结器能观察到什么，以及握手依赖哪些检查。还有谁能读到成员密钥、覆盖网地址和名册，见 §12。
 
 | 观察者 | 所见 |
 |--------|------|
-| 没有成员密钥的 TLS 终结器 | 到源站的 HTTPS，或目的地形态证书（伪装）；mux 为 AEAD 密文 |
+| 没有成员密钥的 TLS 终结器 | 到源站的 HTTPS，或目的地形态证书（伪装）；ChaCha20-Poly1305 与 AES-256-GCM 上 mux 为 AEAD 密文 |
+| 协商了 clear 的直连前置上的 TLS 终结器 | mux 明文。前置 `get` 不协商 clear |
 | 没有节点私钥 `P` 的中间盒 | Chrome 长度的 32 字节 `session_id`；没有 `P` 则 sid v3 不可区分 |
 | 窃得成员密钥的持有者 | sid v2 ClientHello；不是 sid v3 |
 | 没有有效 sid 的主动探测 | 已配置源站（存活证书与字节） |
@@ -600,7 +614,7 @@ Status 携带 `lists_serial` 与已签名块的 SHA-256。序号或散列更新�
 
 ### 11.1 握手
 
-与当下浏览器匹配的 ClientHello 通过银行与门户前已经部署的同一套 JA3/JA4 过滤器。参考客户端使用 uTLS 指纹。私有 ALPN、私有 GREASE 模式或 Go 默认密码套件列表会标出非浏览器。因此 QUIC ALPN 为 `h3`。
+与当下浏览器匹配的 ClientHello 通过银行与门户前已经部署的同一套 JA3/JA4 过滤器。私有 ALPN、私有 GREASE 模式或 Go 默认密码套件列表会标出非浏览器。因此 QUIC ALPN 为 `h3`。*说明，非规范。* 一种客户端用 uTLS 构造该 ClientHello。见 [guide_zh.md](guide_zh.md)。
 
 `session_id` 为 32 个看似随机的字节。sid v3 为与节点静态 X25519 的 ECDH 下的 HKDF；中间盒需要该私钥才能标出这些 ClientHello。窃得的成员密钥只标出 sid v2。伪装节点不在诱饵 SNI 上准入 sid v2，因此该密钥标不出携带诱饵名的 ClientHello。两种秘密都没有的中间盒看到的是 Chrome 已经发送的同长度串。
 
@@ -624,7 +638,7 @@ Auth `0x02` 为 nonce、临时 X25519 公钥，以及成员密钥下的 HMAC。�
 
 ### 11.5 名册与列表
 
-经签名的名册是 CDN 路径上的公开文件。能 GET 该路径者即可读存活前置。成员密钥不在其中。钉住 `controller_pub` 的客户端拒绝被替换的密钥。首次使用信任（`tofu`）关闭：参考客户端不钉未知签名者。
+经签名的名册是 CDN 路径上的公开文件。能 GET 该路径者即可读存活前置。成员密钥不在其中。钉住控制器公钥的客户端拒绝被替换的密钥。首次使用信任关闭：除非运营方打开该选项，客户端不得钉住未知签名者（§10.1）。
 
 ### 11.6 覆盖网
 
@@ -632,11 +646,78 @@ Auth `0x02` 为 nonce、临时 X25519 公钥，以及成员密钥下的 HMAC。�
 
 ### 11.7 本协议之外
 
-已持有成员密钥的 TLS 中间盒不在范围内。路径上不存在任何许可目的地的情形不在范围内。同时持有内部覆盖网密钥的 TLS 终结器看到 mux 明文。这些情形在本协议之外。
+已持有成员密钥的 TLS 中间盒不在范围内。路径上不存在任何许可目的地的情形不在范围内。同时持有内部覆盖网密钥的 TLS 终结器看到 mux 明文。协商了 clear 的直连前置会把 mux 明文交给它的 TLS 终结器，而不需要那把密钥。这些情形在本协议之外。
 
 ---
 
-## 12. 限制
+## 12. 隐私
+
+loft 不是 mixnet。路径看得到一条 TLS 1.3 会话。控制器看得到成员、租约和覆盖网地址。终结 TLS 的中继看得到客户端地址和 TLS 之后的 HTTP 字节。它不持有成员密钥，也不解密 mux 帧。
+
+| 数据 | 谁能读 |
+|------|--------|
+| 成员密钥 | 成员与控制器。名册、地址列表和中继都不携带它。 |
+| 控制器签名密钥 | 控制器。持有公钥的客户端拒绝被替换的签名者。钉住未知签名者默认关闭，除非运营方打开该选项（§10.1）。 |
+| 覆盖网 IP、VLAN、租约 | 控制器。mesh 或 vlan 把 Open 转到另一成员时，该成员得知对方的覆盖网 IP。`p2p` 开启时，Status 对等提示还携带该覆盖网 IP、TLS 观察到的主机、监听端口和 X25519 公钥（§11.6）。 |
+| mux 明文 | 会话密钥的持有者。没有该密钥的 TLS 终结器在 ChaCha20-Poly1305 和 AES-256-GCM 上看到的是 AEAD 密文（§11）。前置 `get` 不协商 clear，因此在 `get` 上终结 TLS 的 CDN 得不到 mux 明文。协商了 clear 的直连前置把 mux 明文交给该前置的 TLS 终结器。 |
+| 名册与地址列表 | 任何能 GET 该公开路径的人。`Cache-Control: public`。这不是成员目录。 |
+| `get` 上的大小与时序 | 终结该 TLS 的 CDN 或反向代理，包括 Cookie 长度。内部 AEAD 仍然隐藏 mux 明文。 |
+
+成员密钥、控制器签名密钥和覆盖网地址规划是部署秘密。公布名册并不公布它们。
+
+---
+
+## 13. 登记与扩展
+
+本文是能力位、mux 命令和 Status 码的登记处。本文尚未赋值的号码，要么保留给本规范的后续修订，要么是实验用。分叉若把保留值用作自己的含义，会与日后的赋值冲突。实验值只在双方于本协议之外另行约定该含义时才安全。
+
+能力字段是无符号 64 位集合。第 63 位不是符号位。
+
+### 13.1 能力位
+
+| 位 | 类别 |
+|----|------|
+| 0–29 | 已赋值（§5.3） |
+| 30–47 | 保留 |
+| 48–63 | 实验 |
+
+保留位不得用于本规范尚未赋值的含义。本规范从第 30 位向上赋值。实验位不得向未另行约定该含义的对端置位。接收方必须忽略自己未实现的位。未知位不使握手失败。接收方不得因此复位会话。
+
+### 13.2 mux 命令
+
+命令是一个字节。
+
+| cmd | 类别 |
+|-----|------|
+| 0 | 保留，不使用 |
+| 1–12 | 已赋值（§6） |
+| 13–191 | 保留 |
+| 192–255 | 实验 |
+
+接收方未实现的命令必须忽略，且不得因此复位会话（§6）。该规则覆盖保留值与实验值。发送方不得使用保留命令。实验命令不得发给未另行约定该含义的对端。
+
+### 13.3 Status 码
+
+码为 `u16be`。高字节是类别。
+
+| 范围 | 类别 |
+|------|------|
+| 0x0000–0x00FF | 成功。已赋值：`0x0000` ok、`0x0001` ok_resumed。该类其余保留。 |
+| 0x0100–0x01FF | 认证。已赋值：`0x0101`–`0x0108`（§8）。其余保留。 |
+| 0x0200–0x02FF | 网络与协议。已赋值：`0x0201`–`0x0206`。其余保留。 |
+| 0x0300–0x03FF | 地址。已赋值：`0x0301`–`0x0303`。其余保留。 |
+| 0x0400–0x04FF | 策略。已赋值：`0x0401`。其余保留。 |
+| 0x0500–0x05FF | 流。已赋值：`0x0501`、`0x0502`。其余保留。 |
+| 0x0600–0x7FFF | 保留。新类别为 `0x06`–`0x7F`。 |
+| 0x8000–0xFFFF | 实验 |
+
+只有 `0x0000` 和 `0x0001` 是成功。任何其他码都禁止 mux（§8）。这包括类别 `0x00` 中的未知码，以及接收方未实现的实验码。发送方不得发出保留码。实验码不得发给未另行约定该含义的对端。
+
+已经赋值的号码不挪动。后续修订在保留槽里增加名称。它不把实验值收作标准含义。
+
+---
+
+## 14. 限制
 
 | 限制 | 值 |
 |------|----|
@@ -659,9 +740,9 @@ Auth `0x02` 为 nonce、临时 X25519 公钥，以及成员密钥下的 HMAC。�
 
 ---
 
-## 13. 版本
+## 15. 版本
 
-协议版本 1.0（`0x0100`）不随实现版本字符串变化。主版本提高表示不兼容的成帧或认证。次版本提高增加能力；旧客户端仍能交谈。握手选择两范围中的最高版本。
+协议版本 1.0（`0x0100`）不随实现版本字符串变化。主版本提高表示不兼容的成帧或认证。次版本提高增加能力；旧客户端仍能交谈。握手选择两范围中的最高版本。数据密码字节（§4.3）是可选尾部。它不提高 `0x0100`。次版本提高从保留范围分配能力位（§13.1）。实验值（§13）不是本规范扩展自身的方式。
 
 实现版本是 Hello 与 Status 上的字符串。省略 git 散列。程序名与 semver 在路径上已足够。
 
@@ -669,11 +750,11 @@ Auth `0x02` 为 nonce、临时 X25519 公钥，以及成员密钥下的 HMAC。�
 
 ---
 
-## 14. 测试向量
+## 16. 测试向量
 
-除加引号者外，所有值为 hex。参考实现在 `internal/crypto/vectors_test.go` 与 `internal/transport/vectors_test.go` 中校验下列每个向量。X25519 标量为 RFC 7748 clamping 之前的原始 32 字节。
+除加引号者外，所有值为 hex。*说明，非规范。* 一种实现在 `internal/crypto/vectors_test.go` 与 `internal/transport/vectors_test.go` 中校验下列向量。X25519 标量为 RFC 7748 clamping 之前的原始 32 字节。
 
-### 14.1 mux 帧
+### 16.1 mux 帧
 
 以下为 Seal 之前的 mux 帧载荷。
 
@@ -693,7 +774,7 @@ Reset `stream_refused`：载荷 `05 01`。
 
 成员密钥形态：`lt_` + 48 个小写十六进制。节点存储的是整串的 SHA-256。
 
-### 14.2 认证 `0x02`
+### 16.2 认证 `0x02`
 
 成员密钥 `"lt_00112233445566778899aabbccddeeff0011223344556677"`。HMAC 密钥为整串的 ASCII 字节（51 字节）。`nonce` 为 `00 01 … 0f`。客户端临时标量 `sk_c` 为 `20 21 … 3f`。
 
@@ -712,11 +793,11 @@ GET 握手 Cookie 值为无填充的 base64url：
 AgABAgMEBQYHCAkKCwwNDg81gHLWNliA0a7qMprfkSE4OFHtIaKOO3XpZdDSzRZiVADdJV-C6NPpr7OnQpTPrdEBABgwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1NjcBAAEAAAAAAAYAd-AEbG9mdAYxLjAuMjg
 ```
 
-### 14.3 会话密钥与节点首条消息
+### 16.3 会话密钥与节点首条消息
 
-节点临时标量 `sk_n` 为 `40 41 … 5f`。`X25519(sk_c, eph_n)` 等于 `X25519(sk_n, eph_c)`；密钥为该秘密的 HKDF，盐为 §14.2 的 `nonce`（§4.3）。
+节点临时标量 `sk_n` 为 `40 41 … 5f`。`X25519(sk_c, eph_n)` 等于 `X25519(sk_n, eph_c)`；密钥为该秘密的 HKDF，盐为 §16.2 的 `nonce`（§4.3）。
 
-Status：code `ok`，`lease_sec` 3600，`mtu` 1380，`vlan` 0，keepalive 15000，idle 120000，reconnect 200 / 8000，`reconnect_fast_n` 5，ip `"10.77.0.2"`，gateway `"10.77.0.1"`，§14.2 的 `instance_id`，`reconnect_fast_for_ms` 8000，协议 `0x0100` / `0x0100` / `0x0100`，caps `0x000063e0`（get、ws、status、timers、hello_caps、clockless、ticket），program `"loft-node"`，software `"1.0.28"`，ticket `"a1b2c3d4e5f60718293a4b5c"`，无 decoy、mask、replicas、canary、roster、lists，peers hub，p2p 0，无 peer hints，dns `"10.77.0.1"`，无可选尾部。
+Status：code `ok`，`lease_sec` 3600，`mtu` 1380，`vlan` 0，keepalive 15000，idle 120000，reconnect 200 / 8000，`reconnect_fast_n` 5，ip `"10.77.0.2"`，gateway `"10.77.0.1"`，§16.2 的 `instance_id`，`reconnect_fast_for_ms` 8000，协议 `0x0100` / `0x0100` / `0x0100`，caps `0x000063e0`（get、ws、status、timers、hello_caps、clockless、ticket），program `"loft-node"`，software `"1.0.28"`，ticket `"a1b2c3d4e5f60718293a4b5c"`，无 decoy、mask、replicas、canary、roster、lists，peers hub，p2p 0，无 peer hints，dns `"10.77.0.1"`，无可选尾部。
 
 握手走 GET，因此 AAD 为该 24 字符会话标识的 ASCII。Seal nonce 为 `01020304 0000000000000001`（§4.3 的前缀与计数器）。
 
@@ -729,27 +810,27 @@ first   79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a01020304
 
 `first` 即 `eph_n || Seal(status)`。
 
-### 14.4 Status 可选尾部
+### 16.4 Status 可选尾部
 
-§14.3 的 Status，加 `gap_hold_ms` 8000 与一条路由 `"192.168.10.0/24"` 经 `"10.77.0.5"`。以下字节位于 `dns` 之后。`routes` 之前的每个可选字段都写出，取零或空：`ip6`、`gateway6`、`header_budget`、`inflight`、`h2_conns`、`uplink_enc`。
+§16.3 的 Status，加 `gap_hold_ms` 8000 与一条路由 `"192.168.10.0/24"` 经 `"10.77.0.5"`。以下字节位于 `dns` 之后。`routes` 之前的每个可选字段都写出，取零或空：`ip6`、`gateway6`、`header_budget`、`inflight`、`h2_conns`、`uplink_enc`。
 
 ```
 tail    0000000000000000001f40010f3139322e3136382e31302e302f32340931302e37372e302e35
 ```
 
-### 14.5 Attach `0x04`
+### 16.5 Attach `0x04`
 
-§14.3 的会话密钥，`sid` 为 §14.3 的 ticket，`nonce` 16 × `33`，front `"ws"`。
+§16.3 的会话密钥，`sid` 为 §16.3 的 ticket，`nonce` 16 × `33`，front `"ws"`。
 
 ```
 attach  0418613162326333643465356636303731383239336134623563333333333333333333333333333333330277735ea380c409c8b53fa95ca96ea2cf9826
 ```
 
-### 14.6 Roster 与地址列表
+### 16.6 Roster 与地址列表
 
 控制器 Ed25519 种子为 32 × `07`。
 
-Roster：serial 1，一条记录：id `"self"`，url `"https://loft.example.com"`，decoy `"origin.example"`，fronts `get` `ws`，drain 0，weight 0（编码为 100），path `"/static/v3/build"`，`mask_pub` 见 §14.8。
+Roster：serial 1，一条记录：id `"self"`，url `"https://loft.example.com"`，decoy `"origin.example"`，fronts `get` `ws`，drain 0，weight 0（编码为 100），path `"/static/v3/build"`，`mask_pub` 见 §16.8。
 
 Lists：serial 1，一个集合 `"lan"`：kind 3 `"10.0.0.0/8"`，kind 2 `"example.com"`。
 
@@ -766,15 +847,15 @@ hash    eb289e3f96097285b9c703641b0467935938ca480af998847f2e3607e2348d25
 {"v":1,"p":"AAAAAAAAAAEBBHNlbGYAGGh0dHBzOi8vbG9mdC5leGFtcGxlLmNvbQ5vcmlnaW4uZXhhbXBsZQIDZ2V0AndzAGQQL3N0YXRpYy92My9idWlsZCDMy1YzEfDenww90osUUNl4vav8Y8ptc89WHy_z7MCUQyDqSmxj4pxSCr71UHsTLsX5lUd2rr6-e5JCHuppFEbSLABAE72Sctt2Ts06qTNdscGuzjrwg4998hpG6bHZOR1S7MSKGYOAY-_MYis_fttuXQGcn21S2coxg-W4QheMgOG-Cw"}
 ```
 
-### 14.7 Cookie Z85
+### 16.7 Cookie Z85
 
-§14.1 Data 帧的 uplink 编码 1。`u16be length || blob` 为 11 字节；补一个零字节到 12（4 的倍数）。解码方从前两字节取长度并忽略填充。
+§16.1 Data 帧的 uplink 编码 1。`u16be length || blob` 为 11 字节；补一个零字节到 12（4 的倍数）。解码方从前两字节取长度并忽略填充。
 
 ```
 ~00@Sb0SSi20CDfE
 ```
 
-### 14.8 ClientHello 标记与 P2P 前导
+### 16.8 ClientHello 标记与 P2P 前导
 
 sid v3、证书序列号与 QUIC v3 源连接 ID。节点秘密为 ASCII 串 `loft-vector-node`。客户端 X25519 标量为 `01 02 … 20`（32 字节）。`R` 为 32 字节 `0x11`。SNI 为 `origin.example`。QUIC `client_random` 为 X25519(标量, 基点)，最高位清零，HKDF 密钥与证书序列号同一 ECDH。
 
@@ -788,7 +869,7 @@ quic scid  25b8c53ebe475334b474445e3ee3253691b18faa
 
 节点静态标量为 `HKDF-SHA256(ikm = 节点秘密, salt = 空, info = "loft-mask-x25519", L = 32)`。
 
-同一 ClientHello 上的 sid v2，以 §14.2 的成员密钥为 `token`：
+同一 ClientHello 上的 sid v2，以 §16.2 的成员密钥为 `token`：
 
 ```
 sid v2  17b91ad703fd8239930f8dc0091830d956a0432cd72e90159ee4447a0f96ecd2
@@ -803,7 +884,7 @@ preface   4c4654000a4d0002a5faf9ab72c1285b6a6f9ab64d0a8e554444444444444444444444
 
 ---
 
-## 15. 参考文献
+## 17. 参考文献
 
 1. [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119). Key words for use in RFCs to Indicate Requirement Levels.
 2. [RFC 5869](https://www.rfc-editor.org/rfc/rfc5869). HMAC-based Extract-and-Expand Key Derivation Function (HKDF).
@@ -817,4 +898,5 @@ preface   4c4654000a4d0002a5faf9ab72c1285b6a6f9ab64d0a8e554444444444444444444444
 10. [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455). The WebSocket Protocol.
 11. [RFC 1928](https://www.rfc-editor.org/rfc/rfc1928). SOCKS Protocol Version 5.
 12. ZeroMQ RFC 32. Z85 (ZeroMQ Base-85 Encoding).
-13. [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024). Hybrid key exchange in TLS 1.3 (X25519MLKEM768).
+13. [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024). Post-Quantum Traditional (PQ/T) Hybrid Key Agreement Mechanisms for TLS 1.3。2026 年 8 月。群组 X25519MLKEM768 为 4588（`0x11EC`）。
+14. [RFC 5116](https://www.rfc-editor.org/rfc/rfc5116). An Interface and Algorithms for Authenticated Encryption. AES-256-GCM，12 字节 nonce，16 字节标签。
