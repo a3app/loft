@@ -40,7 +40,7 @@ Clients emit and accept `loft://`.
 
 RFC 3986. Percent-encode `token` and `name` (`application/x-www-form-urlencoded` is wrong for the fragment). Default port **443**. IPv6 host in brackets.
 
-The scheme **is** the connection kind (`loft`). Host:port is the authority (`huy.com:443`). Front paths are query keys. Query `type` is the **transport** only in the old form. A list row shows `loft · get · cdn.example.com`.
+The scheme **is** the connection kind (`loft`). Host:port is the authority (`example.com:443`). Front paths are query keys. Query `type` is the **transport** only in the old form. A list row shows `loft · get · cdn.example.com`.
 
 | Part | Maps to `client.yaml` |
 |------|------------------------|
@@ -83,7 +83,7 @@ Unknown query keys MUST be ignored (forward compatible). An unknown `type` is an
 One connection, several fronts:
 
 ```
-loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
+loft://lt_change-me-long-random@example.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
 ```
 
 Node host, CDN only for GET:

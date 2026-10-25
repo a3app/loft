@@ -206,7 +206,7 @@ func TestMemberGet(t *testing.T) {
 	}
 }
 
-// TestMemberKeyReissueKeepsOldUntilApply is the us.iqos.help failure:
+// TestMemberKeyReissueKeepsOldUntilApply is a past field failure:
 // POST /api/members/key rewrote members.keys, a restart Filter'd by the
 // still-applied key_sha256, and the ring went to 0. The old token must
 // stay until apply prunes it.

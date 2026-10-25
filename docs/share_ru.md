@@ -40,7 +40,7 @@ loft://<token>@<host>[:port][/path][?query][#name]
 
 RFC 3986. `token` и `name` процентировать (`application/x-www-form-urlencoded` для фрагмента не подходит). Порт по умолчанию **443**. IPv6-хост в скобках.
 
-Схема **и есть** тип подключения (`loft`). Хост:порт — authority (`huy.com:443`). Пути фронтов — ключи query. Query `type` — **транспорт** только в старой форме. Строка списка: `loft · get · cdn.example.com`.
+Схема **и есть** тип подключения (`loft`). Хост:порт — authority (`example.com:443`). Пути фронтов — ключи query. Query `type` — **транспорт** только в старой форме. Строка списка: `loft · get · cdn.example.com`.
 
 | Часть | Куда в `client.yaml` |
 |-------|----------------------|
@@ -83,7 +83,7 @@ RFC 3986. `token` и `name` процентировать (`application/x-www-for
 Одно подключение, несколько фронтов:
 
 ```
-loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
+loft://lt_change-me-long-random@example.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
 ```
 
 Хост ноды, CDN только для GET:

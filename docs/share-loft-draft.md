@@ -16,8 +16,8 @@ Panel default download for a member is `.loft`. `.yaml` is the extra for operato
 UTF-8. Trim BOM. One connection per non-empty line. `#` starts a comment only at the beginning of a line (not a URI fragment). Blank lines ignored.
 
 ```
-loft://lt_…@api.iqos.help/static/v3/build?type=get&fp=chrome#bob-get
-loft://lt_…@api.iqos.help/api/v1/tunnel?type=h2&fp=chrome#bob-h2
+loft://lt_…@api.loft.cx/static/v3/build?type=get&fp=chrome#bob-get
+loft://lt_…@api.loft.cx/api/v1/tunnel?type=h2&fp=chrome#bob-h2
 sstp://alice:secret@vpn.example.com#Office
 vless://uuid@de1.example.com:443?security=reality&sni=www.example.com#Travel
 ```

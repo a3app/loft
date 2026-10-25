@@ -111,17 +111,17 @@ func TestNodeInfoStatusFronts(t *testing.T) {
 
 func TestAttachOutboundUsesStatusPath(t *testing.T) {
 	SetDirectNode("")
-	get := config.Outbound{Type: "get", URL: "https://huy.com"}
+	get := config.Outbound{Type: "get", URL: "https://example.com"}
 	learned := []wire.FrontEP{
 		{Name: wire.FrontH2, Path: "/portal/api/tunnel"},
 		{Name: wire.FrontWS, Path: "/portal/api/sync"},
 	}
 	h2 := attachOutbound(get, wire.FrontH2, learned)
-	if h2.Path != "/portal/api/tunnel" || h2.URL != "https://huy.com" {
+	if h2.Path != "/portal/api/tunnel" || h2.URL != "https://example.com" {
 		t.Fatalf("h2 %+v", h2)
 	}
 	ws := attachOutbound(get, wire.FrontWS, learned)
-	if ws.URL != "wss://huy.com/portal/api/sync" {
+	if ws.URL != "wss://example.com/portal/api/sync" {
 		t.Fatalf("ws %q", ws.URL)
 	}
 	def := attachOutbound(get, wire.FrontH2, nil)
@@ -131,13 +131,13 @@ func TestAttachOutboundUsesStatusPath(t *testing.T) {
 	evil := attachOutbound(get, wire.FrontWS, []wire.FrontEP{
 		{Name: wire.FrontWS, Path: "/portal/api/sync", URL: "wss://evil.example/x"},
 	})
-	if evil.URL != "wss://huy.com/portal/api/sync" {
+	if evil.URL != "wss://example.com/portal/api/sync" {
 		t.Fatalf("status url %q", evil.URL)
 	}
 	at := attachOutbound(get, wire.FrontWS, []wire.FrontEP{
 		{Name: wire.FrontWS, Path: "@evil.example/x"},
 	})
-	if at.URL != "wss://huy.com"+config.DefaultWSPath {
+	if at.URL != "wss://example.com"+config.DefaultWSPath {
 		t.Fatalf("at-path %q", at.URL)
 	}
 }

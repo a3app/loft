@@ -94,7 +94,7 @@ func TestLoftOutboundInFile(t *testing.T) {
 func TestMemberLinkQueryFronts(t *testing.T) {
 	s := &Server{}
 	link, file := s.memberLink(admproto.NodeInfo{
-		Host: "huy.com", GetPath: "/static/v3/build", WSPath: "/api/v1/sync", H2Path: "/api/v1/tunnel",
+		Host: "example.com", GetPath: "/static/v3/build", WSPath: "/api/v1/sync", H2Path: "/api/v1/tunnel",
 		Fronts: []string{"get", "ws", "h2", "quic"},
 	}, "lt_abc", "bob", "bob")
 	if !strings.Contains(link, "get=/static/v3/build") || !strings.Contains(link, "ws=/api/v1/sync") || !strings.Contains(link, "h2=/api/v1/tunnel") || !strings.Contains(link, "quic") {
@@ -103,7 +103,7 @@ func TestMemberLinkQueryFronts(t *testing.T) {
 	if strings.Contains(link, "type=get") {
 		t.Fatalf("old type= in %s", link)
 	}
-	if !strings.HasPrefix(link, "loft://lt_abc@huy.com/?") || !strings.HasSuffix(link, "#bob") {
+	if !strings.HasPrefix(link, "loft://lt_abc@example.com/?") || !strings.HasSuffix(link, "#bob") {
 		t.Fatalf("shape %s", link)
 	}
 	if !strings.Contains(file, "type: get") || strings.Contains(file, "type: ws") {
@@ -112,15 +112,15 @@ func TestMemberLinkQueryFronts(t *testing.T) {
 	if !strings.Contains(file, "fronts: [get, ws, h2, quic]") {
 		t.Fatalf("hello fronts %s", file)
 	}
-	getOnly, getFile := s.memberLink(admproto.NodeInfo{Host: "huy.com", GetPath: "/static/js"}, "lt_abc", "bob", "bob")
-	if getOnly != "loft://lt_abc@huy.com/?get=/static/js&fp=chrome#bob" {
+	getOnly, getFile := s.memberLink(admproto.NodeInfo{Host: "example.com", GetPath: "/static/js"}, "lt_abc", "bob", "bob")
+	if getOnly != "loft://lt_abc@example.com/?get=/static/js&fp=chrome#bob" {
 		t.Fatalf("get-only %s", getOnly)
 	}
 	if strings.Contains(getFile, "fronts:") || strings.Contains(getFile, "mask_pub:") {
 		t.Fatalf("get-only file %s", getFile)
 	}
 	masked, maskedFile := s.memberLink(admproto.NodeInfo{
-		Host: "huy.com", GetPath: "/static/js", Mask: true, MaskPub: "cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc09443",
+		Host: "example.com", GetPath: "/static/js", Mask: true, MaskPub: "cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc09443",
 	}, "lt_abc", "bob", "bob")
 	if !strings.Contains(masked, "pbk=cccb563311f0de9f0c3dd28b1450d978bdabfc63ca6d73cf561f2ff3ecc09443") {
 		t.Fatalf("pbk %s", masked)

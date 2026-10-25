@@ -3,17 +3,17 @@ package store
 import "testing"
 
 func TestOutboundName(t *testing.T) {
-	host, member, front := "api.iqos.help:443", "bob", "get"
+	host, member, front := "api.loft.cx:443", "bob", "get"
 	cases := []struct {
 		o    *LoftOutbound
 		want string
 	}{
 		{nil, "bob-get"},
 		{&LoftOutbound{Member: true, Front: true}, "bob-get"},
-		{&LoftOutbound{Host: true, Front: true}, "api.iqos.help-get"},
-		{&LoftOutbound{Host: true, Member: true, Front: true}, "api.iqos.help-bob-get"},
+		{&LoftOutbound{Host: true, Front: true}, "api.loft.cx-get"},
+		{&LoftOutbound{Host: true, Member: true, Front: true}, "api.loft.cx-bob-get"},
 		{&LoftOutbound{Front: true}, "get"},
-		{&LoftOutbound{Host: true, Member: true}, "api.iqos.help-bob"},
+		{&LoftOutbound{Host: true, Member: true}, "api.loft.cx-bob"},
 		{&LoftOutbound{}, "get"},
 	}
 	for _, c := range cases {

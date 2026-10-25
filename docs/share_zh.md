@@ -40,7 +40,7 @@ loft://<token>@<host>[:port][/path][?query][#name]
 
 RFC 3986。`token` 和 `name` 要百分号编码（fragment 不能用 `application/x-www-form-urlencoded`）。默认端口 **443**。IPv6 主机加方括号。
 
-scheme **本身就是**连接类型（`loft`）。主机:端口是 authority（`huy.com:443`）。前置路径是 query 键。Query `type` 只在旧形式里表示传输。列表行：`loft · get · cdn.example.com`。
+scheme **本身就是**连接类型（`loft`）。主机:端口是 authority（`example.com:443`）。前置路径是 query 键。Query `type` 只在旧形式里表示传输。列表行：`loft · get · cdn.example.com`。
 
 | 部分 | 对应到 `client.yaml` |
 |------|----------------------|
@@ -83,7 +83,7 @@ scheme **本身就是**连接类型（`loft`）。主机:端口是 authority（`
 一条连接、多个前置：
 
 ```
-loft://lt_change-me-long-random@huy.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
+loft://lt_change-me-long-random@example.com:443/?get=/static/v3/build&ws=/api/v1/sync&h2=/api/v1/tunnel&quic&fp=chrome#bob
 ```
 
 节点主机，CDN 只给 GET：
