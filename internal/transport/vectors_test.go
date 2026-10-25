@@ -9,7 +9,7 @@ import (
 )
 
 // TestPublishedVectors locks the sid v3, cert serial, and QUIC v3 mark
-// printed in docs/protocol.md §14.
+// printed in docs/protocol.md §16.
 func TestPublishedVectors(t *testing.T) {
 	node := []byte("loft-vector-node")
 	var priv [32]byte
@@ -37,8 +37,8 @@ func TestPublishedVectors(t *testing.T) {
 	}
 }
 
-// TestSidV2Vector locks sid v2 in docs/protocol.md §14.8: same ClientHello
-// inputs as sid v3, member key of §14.2 as ikm.
+// TestSidV2Vector locks sid v2 in docs/protocol.md §16.8: same ClientHello
+// inputs as sid v3, member key of §16.2 as ikm.
 func TestSidV2Vector(t *testing.T) {
 	var priv [32]byte
 	for i := range priv {
@@ -49,21 +49,17 @@ func TestSidV2Vector(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := clientHello{Random: bytes.Repeat([]byte{0x11}, 32), SNI: "origin.example", KeyShare: pub}
-	got := hex.EncodeToString(sessionHMAC([]byte("lt_00112233445566778899aabbccddeeff0011223344556677"), h))
-	const want = "17b91ad703fd8239930f8dc0091830d956a0432cd72e90159ee4447a0f96ecd2"
+	got := hex.EncodeToString(sessionHMAC([]byte("lt_4576657279206c6574746572206973207072697661746521"), h))
+	const want = "d2953bbc3bcad53751c4eebc631d4a48425731080439c99eae5bcd148a79b9ca"
 	if got != want {
 		t.Fatalf("sid v2\n got %s\nwant %s", got, want)
 	}
 }
 
-// TestLFTVector locks the 42-byte P2P preface in docs/protocol.md §14.8.
+// TestLFTVector locks the 42-byte P2P preface in docs/protocol.md §16.8.
 func TestLFTVector(t *testing.T) {
-	local := make([]byte, 32)
-	peer := make([]byte, 32)
-	for i := range local {
-		local[i] = byte(0x60 + i)
-		peer[i] = byte(0x80 + i)
-	}
+	local := []byte("Privacy is necessary. Hughes '93")
+	peer := []byte("This is for everyone. TimBL 2012")
 	peerPub, err := curve25519.X25519(peer, curve25519.Basepoint)
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +69,7 @@ func TestLFTVector(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := []byte{10, 77, 0, 2}
-	nonce := bytes.Repeat([]byte{0x44}, 16)
+	nonce := []byte("Art.23 Konst. RF")
 	buf := make([]byte, lftSize)
 	copy(buf[0:4], lftMagic[:])
 	copy(buf[4:8], src)
@@ -81,7 +77,7 @@ func TestLFTVector(t *testing.T) {
 	copy(buf[24:40], nonce)
 	buf[40], buf[41] = 8080>>8, 8080&0xff
 	got := hex.EncodeToString(peerPub) + " " + hex.EncodeToString(buf)
-	const want = "493e82fc74464a59268817623d2053c5eb8e2cc4a988b4fee179ec6b010d531d 4c4654000a4d0002a5faf9ab72c1285b6a6f9ab64d0a8e55444444444444444444444444444444441f90"
+	const want = "2a4cd76bd42aaa397c78d84f0e3fa3643dfad73d128237b66e8572688fc8a306 4c4654000a4d00026986af299cbcb6931c57169b90268c704172742e3233204b6f6e73742e2052461f90"
 	if got != want {
 		t.Fatalf("lft\n got %s\nwant %s", got, want)
 	}
