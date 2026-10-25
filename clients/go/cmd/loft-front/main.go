@@ -165,6 +165,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "loft-front: %v\n", err)
 		os.Exit(2)
 	}
+	// -url is the node. Edge GET dials the CDN; ws/h2/quic/h3 and mask_pub
+	// stay on the node address.
+	transport.SetDirectNode(*rawURL)
+	for _, o := range cfg.Outbounds {
+		transport.NoteOutbound(o)
+	}
 	if *probe {
 		probeOutbounds(ctx, cfg, !multiKind(*kind))
 		return
