@@ -2,6 +2,7 @@ package egress
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -36,6 +37,7 @@ type Options struct {
 	SSTP   SSTPFunc
 	SysNet string // /sys/class/net (tests)
 	Log    func(string, ...any)
+	TLS    *tls.Config // nil = system roots; tests pass InsecureSkipVerify
 }
 
 // Who is the member a connection belongs to; empty for traffic without one.
@@ -70,6 +72,7 @@ type Router struct {
 	opt    Options
 	ch     map[string]*chanState
 	prio   map[string]*prioState
+	direct *chanState // host default route when DirectCheck is set
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -114,6 +117,10 @@ func New(cfg *Config, opt Options) *Router {
 		if c.Check != nil && !c.Off {
 			go r.probe(cs)
 		}
+	}
+	if k := cfg.DirectCheck; k != nil {
+		r.direct = &chanState{ch: Channel{Name: Direct, Kind: Direct, Check: k}}
+		go r.probe(r.direct)
 	}
 	return r
 }
@@ -308,6 +315,13 @@ func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn,
 	for i, s := range steps {
 		switch s {
 		case Direct:
+			if !r.directUp() {
+				last = errors.New("direct: no link")
+				if i == len(steps)-1 {
+					return nil, Direct, last
+				}
+				continue
+			}
 			c, err := (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, "tcp4", target)
 			if err == nil {
 				return c, Direct, nil
@@ -441,7 +455,24 @@ func (r *Router) Status() []Status {
 		cs.mu.Unlock()
 		out = append(out, st)
 	}
+	if cs := r.direct; cs != nil {
+		st := Status{Name: Direct, Kind: Direct, State: "up"}
+		cs.mu.Lock()
+		if cs.noLink {
+			st.State = "nolink"
+		}
+		st.Error = cs.lastErr
+		cs.mu.Unlock()
+		out = append([]Status{st}, out...)
+	}
 	return out
+}
+
+func (r *Router) directUp() bool {
+	if r.direct == nil {
+		return true
+	}
+	return !r.direct.noLinkNow()
 }
 
 func (cs *chanState) noLinkNow() bool {

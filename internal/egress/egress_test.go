@@ -3,10 +3,12 @@ package egress
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -325,8 +327,11 @@ func TestPrioParseRender(t *testing.T) {
 	}
 	for _, bad := range []string{
 		"channel a socks5 1.2.3.4:5 check ping probe 1.1.1.1", // ping needs an interface
-		"channel a dev x check tcp probe nohost",              // tcp needs host:port
+		"channel a dev x check tcp probe",                     // tcp needs a host
 		"channel a dev x check dns probe 1.1.1.1",
+		"direct check maybe",
+		"direct check tls", // tls needs a probe
+		"direct check ping",
 		"channel a dev x probe 1.1.1.1", // probe before check
 		"channel a dev x check ping probe 1.1.1.1 every 0",
 		"prio p nowhere then direct",
@@ -476,5 +481,103 @@ func TestLimitedConn(t *testing.T) {
 	}
 	if limiter(0) != nil {
 		t.Fatal("0 must mean no limit")
+	}
+}
+
+func TestDirectCheckParseRender(t *testing.T) {
+	c, err := Parse("direct check auto every 10 fails 5\ndefault direct\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := c.DirectCheck; k == nil || k.Kind != "auto" || k.Every != 10 || k.Fails != 5 {
+		t.Fatalf("direct %+v", k)
+	}
+	c2, err := Parse(Render(c))
+	if err != nil || Render(c2) != Render(c) {
+		t.Fatalf("round trip: %v\n%s", err, Render(c2))
+	}
+	c, err = Parse("direct check tls probe example.com every 10 fails 5\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := c.DirectCheck; k == nil || k.Probe != "example.com:443" {
+		t.Fatalf("tls probe %v", k)
+	}
+	c, err = Parse("channel a dev x check tls probe example.com:8443\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := c.Channel("a").Check; k == nil || k.Kind != "tls" || k.Probe != "example.com:8443" {
+		t.Fatalf("channel tls %+v", k)
+	}
+}
+
+func tlsListen(t *testing.T) string {
+	t.Helper()
+	s := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	t.Cleanup(s.Close)
+	return s.Listener.Addr().String()
+}
+
+func TestProbeTLSAndDirectNoLink(t *testing.T) {
+	live := tlsListen(t)
+	dead := "127.0.0.1:1"
+	old := autoProbes
+	autoProbes = []string{dead, live}
+	t.Cleanup(func() { autoProbes = old })
+	opt := Options{SysNet: t.TempDir(), TLS: &tls.Config{InsecureSkipVerify: true}}
+
+	c, err := Parse("direct check tls probe " + live + " every 1 fails 1\nprio main direct then block\ndefault via main\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := New(c, opt)
+	defer r.Close()
+	deadline := time.Now().Add(3 * time.Second)
+	for r.direct == nil || r.direct.noLinkNow() {
+		if time.Now().After(deadline) {
+			t.Fatal("live tls never came up")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	echo := echoTCP(t)
+	conn, used, err := r.DialTCP(context.Background(), Who{Member: "bob"}, echo)
+	if err != nil || used != Direct {
+		t.Fatalf("live direct: %s %v", used, err)
+	}
+	conn.Close()
+
+	c, err = Parse("direct check tcp probe " + dead + " every 1 fails 1\nchannel px socks5 127.0.0.1:1\nprio main direct px then block\ndefault via main\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2 := New(c, opt)
+	defer r2.Close()
+	deadline = time.Now().Add(3 * time.Second)
+	for r2.direct == nil || !r2.direct.noLinkNow() {
+		if time.Now().After(deadline) {
+			t.Fatal("dead direct never lost its link")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if st := r2.Status(); len(st) == 0 || st[0].Name != Direct || st[0].State != "nolink" {
+		t.Fatalf("status %+v", st)
+	}
+	if _, used, err := r2.DialTCP(context.Background(), Who{}, echo); err == nil || used == Direct {
+		t.Fatalf("skipped direct: %s %v", used, err)
+	}
+
+	c, err = Parse("direct check auto every 1 fails 1\ndefault direct\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r3 := New(c, opt)
+	defer r3.Close()
+	deadline = time.Now().Add(3 * time.Second)
+	for r3.direct == nil || r3.direct.noLinkNow() {
+		if time.Now().After(deadline) {
+			t.Fatal("auto never came up")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

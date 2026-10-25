@@ -2,6 +2,7 @@ package egress
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +12,9 @@ import (
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 )
+
+// autoProbes are HTTPS hosts Automatic mode tries; any one success is enough.
+var autoProbes = []string{"ya.ru:443", "nic.ru:443", "google.com:443"}
 
 // probe runs a channel's link check until the router closes. Fails probes
 // in a row mark the channel "no link"; one success clears it.
@@ -61,21 +65,67 @@ func (r *Router) probe(cs *chanState) {
 	}
 }
 
-// probeOnce is one check. TCP goes the way traffic would (through the
-// proxy, SSTP or interface); ping is ICMP out of the channel's interface.
+// probeOnce is one check. TCP and TLS go the way traffic would (through the
+// proxy, SSTP or interface, or the host default route for direct); ping is
+// ICMP out of the channel's interface (or the default route when Dev is empty).
 func (r *Router) probeOnce(ctx context.Context, cs *chanState) error {
 	k := cs.ch.Check
 	switch k.Kind {
 	case "tcp":
-		c, err := r.dialOn(ctx, cs, k.Probe)
+		c, err := r.probeDial(ctx, cs, k.Probe)
 		if err != nil {
 			return err
 		}
 		return c.Close()
+	case "tls":
+		return r.probeTLS(ctx, cs, k.Probe)
+	case "auto":
+		var last error
+		for _, addr := range autoProbes {
+			if err := r.probeTLS(ctx, cs, addr); err == nil {
+				return nil
+			} else {
+				last = err
+			}
+		}
+		if last == nil {
+			return errors.New("no auto probes")
+		}
+		return last
 	case "ping":
 		return pingDev(ctx, cs.ch.Dev, k.Probe)
 	}
 	return fmt.Errorf("unknown check %q", k.Kind)
+}
+
+func (r *Router) probeDial(ctx context.Context, cs *chanState, addr string) (net.Conn, error) {
+	if cs == r.direct {
+		return (&net.Dialer{}).DialContext(ctx, "tcp4", addr)
+	}
+	return r.dialOn(ctx, cs, addr)
+}
+
+func (r *Router) probeTLS(ctx context.Context, cs *chanState, addr string) error {
+	c, err := r.probeDial(ctx, cs, addr)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	cfg := &tls.Config{ServerName: host}
+	if r.opt.TLS != nil {
+		cfg = r.opt.TLS.Clone()
+		if cfg.ServerName == "" {
+			cfg.ServerName = host
+		}
+	}
+	if d, ok := ctx.Deadline(); ok {
+		_ = c.SetDeadline(d)
+	}
+	return tls.Client(c, cfg).HandshakeContext(ctx)
 }
 
 // pingDev sends one ICMP echo out of dev and waits for the reply.
@@ -85,7 +135,10 @@ func pingDev(ctx context.Context, dev, host string) error {
 		return fmt.Errorf("resolve %s: %v", host, err)
 	}
 	dst := &net.IPAddr{IP: ips[0]}
-	lc := net.ListenConfig{Control: bindDev(dev)}
+	lc := net.ListenConfig{}
+	if dev != "" {
+		lc.Control = bindDev(dev)
+	}
 	pc, err := lc.ListenPacket(ctx, "ip4:icmp", "0.0.0.0")
 	if err != nil {
 		return err

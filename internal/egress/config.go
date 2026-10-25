@@ -5,8 +5,9 @@
 // member, member tag, overlay VLAN (segment) or named address list and send it to a priority list:
 // channels in order, the first one that works carries the traffic, then a
 // last step (direct or block). A channel can check its link; while the
-// check fails, priorities skip it. A rule may still name a channel; then its
-// fail chain (another channel, direct, block) is the order, as before.
+// check fails, priorities skip it. The host default route (direct) can check
+// too. A rule may still name a channel; then its fail chain (another channel,
+// direct, block) is the order, as before.
 //
 // egress.conf, next to network.conf:
 //
@@ -15,6 +16,7 @@
 //	channel px-office socks5 192.0.2.40:1080 user loft pass "s3cret" udp proxy via wg-nl check tcp probe example.com:443
 //	channel web http 192.0.2.41:3128 tls
 //	channel office sstp vpn.example.org:443 user office pass x auth mschapv2
+//	direct check auto every 10 fails 5
 //	prio default direct wg-nl then block
 //	prio main wg-nl wg-fi then direct limit wg-fi 50/10
 //	prio de px-office web then block multi
@@ -71,10 +73,12 @@ type Channel struct {
 	Check *Check
 }
 
-// Check is a link probe: ping (kernel-interface channels only) or a TCP connect.
+// Check is a link probe. ping is ICMP (kernel-interface channels and direct);
+// tcp is a connect; tls is a TLS handshake after the connect; auto probes
+// well-known HTTPS hosts (any one is enough).
 type Check struct {
-	Kind  string // ping | tcp
-	Probe string // ping: an IP or host; tcp: host:port
+	Kind  string // ping | tcp | tls | auto
+	Probe string // ping: an IP or host; tcp/tls: host or host:port (tcp :80, tls :443)
 	Every int    // seconds between probes; 0 = 10
 	Fails int    // failures in a row before "no link"; 0 = 3
 }
@@ -107,10 +111,11 @@ type Rule struct {
 
 // Config is a parsed egress.conf.
 type Config struct {
-	Channels []Channel
-	Prios    []Prio
-	Rules    []Rule
-	Default  string // a priority, a channel, direct or block; empty = direct
+	Channels    []Channel
+	Prios       []Prio
+	Rules       []Rule
+	Default     string // a priority, a channel, direct or block; empty = direct
+	DirectCheck *Check // probe of the host default route; nil = none
 }
 
 // Prio returns the priority list called name.
@@ -346,10 +351,107 @@ func (c *Config) line(t []string) error {
 		default:
 			return errors.New("default direct | default block | default via PRIO|CHANNEL")
 		}
+	case Direct:
+		if len(t) < 3 || t[1] != "check" {
+			return errors.New("direct check KIND [probe ADDR] [every N] [fails M]")
+		}
+		if c.DirectCheck != nil {
+			return errors.New("direct check twice")
+		}
+		k := &Check{Kind: t[2]}
+		rest, err := takeCheckOpts(k, t[3:])
+		if err != nil {
+			return err
+		}
+		if len(rest) > 0 {
+			return fmt.Errorf("direct check: unknown option %q", rest[0])
+		}
+		c.DirectCheck = k
 	default:
 		return fmt.Errorf("unknown command %q", t[0])
 	}
 	return nil
+}
+
+// takeCheckOpts reads probe/every/fails into k and returns the unused words.
+func takeCheckOpts(k *Check, rest []string) ([]string, error) {
+	for len(rest) >= 2 {
+		switch rest[0] {
+		case "probe":
+			k.Probe = rest[1]
+		case "every", "fails":
+			n, err := strconv.Atoi(rest[1])
+			if err != nil || n < 1 {
+				return nil, fmt.Errorf("%s %q: a positive number", rest[0], rest[1])
+			}
+			if rest[0] == "every" {
+				k.Every = n
+			} else {
+				k.Fails = n
+			}
+		default:
+			return rest, nil
+		}
+		rest = rest[2:]
+	}
+	return rest, nil
+}
+
+// withPort adds def if s has no port. IPv6 without brackets is accepted.
+func withPort(s, def string) string {
+	if s == "" {
+		return s
+	}
+	if _, _, err := net.SplitHostPort(s); err == nil {
+		return s
+	}
+	return net.JoinHostPort(s, def)
+}
+
+func (k *Check) valid(pingOK bool) error {
+	switch k.Kind {
+	case "ping":
+		if !pingOK {
+			return errors.New("ping checks need a kernel interface; use check tcp")
+		}
+		if k.Probe == "" {
+			return errors.New("check ping needs probe ADDRESS")
+		}
+	case "tcp":
+		k.Probe = withPort(k.Probe, "80")
+		if _, _, err := net.SplitHostPort(k.Probe); err != nil {
+			return errors.New("check tcp needs probe HOST[:PORT]")
+		}
+	case "tls":
+		k.Probe = withPort(k.Probe, "443")
+		if _, _, err := net.SplitHostPort(k.Probe); err != nil {
+			return errors.New("check tls needs probe HOST[:PORT]")
+		}
+	case "auto":
+		k.Probe = ""
+	default:
+		return fmt.Errorf("check %q (ping, tcp, tls, auto)", k.Kind)
+	}
+	if k.Every > 3600 || k.Fails > 100 {
+		return errors.New("every is up to 3600 s, fails up to 100")
+	}
+	return nil
+}
+
+func writeCheck(b *strings.Builder, k *Check) {
+	if k == nil {
+		return
+	}
+	fmt.Fprintf(b, " check %s", k.Kind)
+	if k.Probe != "" {
+		fmt.Fprintf(b, " probe %s", Quote(k.Probe))
+	}
+	if k.Every > 0 {
+		fmt.Fprintf(b, " every %d", k.Every)
+	}
+	if k.Fails > 0 {
+		fmt.Fprintf(b, " fails %d", k.Fails)
+	}
 }
 
 func (c *Config) target(s string) bool {
@@ -374,23 +476,8 @@ func (c *Config) check() error {
 			return fmt.Errorf("channel %s: auth %q (auto, mschapv2, pap)", ch.Name, ch.Auth)
 		}
 		if k := ch.Check; k != nil {
-			switch k.Kind {
-			case "ping":
-				if ch.Kind != KindDev {
-					return fmt.Errorf("channel %s: ping checks need a kernel interface; use check tcp", ch.Name)
-				}
-				if k.Probe == "" {
-					return fmt.Errorf("channel %s: check ping needs probe ADDRESS", ch.Name)
-				}
-			case "tcp":
-				if _, _, err := net.SplitHostPort(k.Probe); err != nil {
-					return fmt.Errorf("channel %s: check tcp needs probe HOST:PORT", ch.Name)
-				}
-			default:
-				return fmt.Errorf("channel %s: check %q (ping, tcp)", ch.Name, k.Kind)
-			}
-			if k.Every > 3600 || k.Fails > 100 {
-				return fmt.Errorf("channel %s: every is up to 3600 s, fails up to 100", ch.Name)
+			if err := k.valid(ch.Kind == KindDev); err != nil {
+				return fmt.Errorf("channel %s: %v", ch.Name, err)
 			}
 		}
 		if c.Prio(ch.Name) != nil {
@@ -454,6 +541,11 @@ func (c *Config) check() error {
 	if c.Default != "" && !c.target(c.Default) {
 		return fmt.Errorf("default: %q is no channel", c.Default)
 	}
+	if k := c.DirectCheck; k != nil {
+		if err := k.valid(true); err != nil {
+			return fmt.Errorf("direct: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -488,15 +580,19 @@ func Render(c *Config) string {
 		opt("udp", ch.UDP)
 		opt("via", ch.Via)
 		opt("fail", ch.Fail)
-		if k := ch.Check; k != nil {
-			opt("check", k.Kind)
-			opt("probe", k.Probe)
-			if k.Every > 0 {
-				fmt.Fprintf(&b, " every %d", k.Every)
-			}
-			if k.Fails > 0 {
-				fmt.Fprintf(&b, " fails %d", k.Fails)
-			}
+		writeCheck(&b, ch.Check)
+		b.WriteByte('\n')
+	}
+	if k := c.DirectCheck; k != nil {
+		fmt.Fprintf(&b, "direct check %s", k.Kind)
+		if k.Probe != "" {
+			fmt.Fprintf(&b, " probe %s", Quote(k.Probe))
+		}
+		if k.Every > 0 {
+			fmt.Fprintf(&b, " every %d", k.Every)
+		}
+		if k.Fails > 0 {
+			fmt.Fprintf(&b, " fails %d", k.Fails)
 		}
 		b.WriteByte('\n')
 	}

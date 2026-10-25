@@ -51,6 +51,9 @@ func (u *UDP) Send(target string, data []byte) {
 		if s == Block {
 			return
 		}
+		if s == Direct && !u.r.directUp() {
+			continue
+		}
 		if s != Direct {
 			cs := u.r.ch[s]
 			if cs == nil || !u.r.up(cs) {
