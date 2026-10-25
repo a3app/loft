@@ -24,7 +24,7 @@ func TestCanonSOCKSHost(t *testing.T) {
 	}{
 		{"example.com", "example.com", true},
 		{"1.2.3.4", "1.2.3.4", true},
-		{"::ffff:188.40.167.81", "188.40.167.81", true},
+		{"::ffff:203.0.113.10", "203.0.113.10", true},
 		{"::FFFF:8.8.8.8", "8.8.8.8", true},
 		{"2001:db8::1", "", false},
 		{"::1", "", false},
