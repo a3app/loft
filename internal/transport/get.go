@@ -78,6 +78,13 @@ type GET struct {
 	applied      atomic.Uint64 // CmdReport applied-through GET seq
 	ticket       []byte
 	fronts       []wire.FrontEP
+	// ownerFront is set when this GET value is only the lane host for a
+	// ws/h2/quic/h3 session (not an HTTP GET). Empty on a real GET: the CDN
+	// socket is not a bulk lane.
+	ownerFront   string
+	ownerArm     func(*GET)
+	ownerDown    func()
+	ownerOnce    atomic.Bool
 	attachLive   atomic.Bool
 	attachMu     sync.Mutex
 	attach       io.Closer
@@ -1698,12 +1705,19 @@ type serverSess struct {
 	linkSeq    int
 	pumping    bool
 	seen       *ecrypto.Nonces
+	// Owner socket of a non-GET 0x02. The write loop pauses when the first
+	// 0x04 lands and this socket becomes a lane, so one dispatcher Pulls.
+	ownerFront string
+	ownerWrite func([]byte) error
+	ownerOn    atomic.Bool
+	gate       *pullGate
+	relOnce    sync.Once
 }
 
 var ticketTab sync.Map // GET sid → *serverSess
 
-// sessionBulkFront is the live bulk mux front for sess (GET sid ticket table).
-// Empty: not a GET-born session (WS/H2 0x02, or unbound).
+// sessionBulkFront is the live bulk mux front for sess (ticket table).
+// Empty when the session has no ticket. A fan is "ws+h2".
 func sessionBulkFront(sess *mux.Session) string {
 	if sess == nil {
 		return ""
@@ -2067,6 +2081,7 @@ func (s *GETServer) spawnWant(key, rest, token []byte, wantID string) *serverSes
 	s.sessions[ss.id] = ss
 	s.mu.Unlock()
 	ticketTab.Store(ss.id, ss)
+	rememberMuxTicket(ss)
 	if !reused {
 		ss.once.Do(func() {
 			go serveMux(ss.mux)
@@ -2094,6 +2109,7 @@ func (s *GETServer) takeByInstance(owner, inst string) *serverSess {
 		}
 		delete(s.sessions, id)
 		ticketTab.Delete(id)
+		forgetMuxTicket(cur)
 		ss = cur
 		break
 	}
@@ -2479,6 +2495,7 @@ func (s *GETServer) drop(id string) {
 	delete(s.sessions, id)
 	s.mu.Unlock()
 	ticketTab.Delete(id)
+	forgetMuxTicket(ss)
 	if ss != nil {
 		ss.closeAttach()
 		ss.mu.Lock()

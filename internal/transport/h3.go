@@ -168,7 +168,7 @@ func (h *H3) Start(ctx context.Context) error {
 		_ = pw.Close()
 		return resp.Body.Close()
 	}}
-	inner, err := startRaw(ctx, conn, h.token, h.offer, addr, sni)
+	inner, err := startRaw(ctx, conn, h.token, h.offer, addr, sni, h.cfg, wire.FrontH3)
 	if err != nil {
 		_ = tr.Close()
 		return err

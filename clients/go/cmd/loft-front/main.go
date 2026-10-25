@@ -978,6 +978,9 @@ func statusMTU(state, msg, ip string, tun bool, dns string, mtu int, up, down ui
 	statusFrontMu.Lock()
 	front := statusFront
 	statusFrontMu.Unlock()
+	if fan := transport.LiveBulk(); fan != "" {
+		front = fan
+	}
 	if front != "" {
 		routeKV += " front=" + front
 	}

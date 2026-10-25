@@ -1,6 +1,6 @@
 package crypto
 
-// 0x04 attaches a second front to an existing GET session.
+// 0x04 attaches another front to the live session (the 0x02 that holds the mux).
 // HMAC uses the session AEAD key, not the member token. No new ECDH.
 
 import (

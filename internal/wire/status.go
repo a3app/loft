@@ -50,7 +50,7 @@ type Status struct {
 	Caps         Cap      // what this node implements
 	Program      string   // node binary name, e.g. loft-node
 	Software     string   // node release — not the protocol
-	Ticket       []byte   // GET sid; other fronts present it in 0x04 to attach
+	Ticket       []byte   // session sid; other fronts present it in 0x04 to attach
 	Decoy        []string // this node's splice origins; first is identity (SNI); empty = off
 	MaskPub      []byte   // 32-byte X25519 public for decoy mask; empty = mask off
 	Replicas     []string // extra node host:port for failover; empty = this addr only

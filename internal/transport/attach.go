@@ -1,7 +1,10 @@
 package transport
 
-// 0x04 attach: a second front joins a live GET session without a new 0x02.
-// GET stays up. Bulk mux runs on the attached front until it dies, then GET.
+// 0x04 attach: a second front joins the live session without a new 0x02.
+// The front that finished 0x02 keeps the mux. Other fronts are lanes on that
+// sid. One dispatcher Pulls. When the owner is GET, bulk leaves GET (the CDN
+// cookie path) and rides the lanes. When the owner is ws/h2/quic/h3, that
+// socket stays a lane too.
 
 import (
 	"io"
@@ -131,6 +134,10 @@ func (ss *serverSess) closeAttach() {
 	if ss.cond != nil {
 		ss.cond.Broadcast()
 	}
+	ss.ownerOn.Store(false)
+	if ss.gate != nil {
+		ss.gate.resume()
+	}
 }
 
 func (ss *serverSess) fanLanes() []fanLane {
@@ -210,6 +217,85 @@ func lookupTicket(sid string) *serverSess {
 	return nil
 }
 
+// muxTickets is the live ticket for a mux. A new 0x02 on the same mux
+// retires the previous sid so lanes sealed under the old key die.
+var muxTickets sync.Map // *mux.Session → *serverSess
+
+func rememberMuxTicket(ss *serverSess) {
+	if ss == nil || ss.mux == nil {
+		return
+	}
+	muxTickets.Store(ss.mux, ss)
+}
+
+func forgetMuxTicket(ss *serverSess) {
+	if ss == nil || ss.mux == nil {
+		return
+	}
+	if cur, ok := muxTickets.Load(ss.mux); ok && cur == ss {
+		muxTickets.Delete(ss.mux)
+	}
+}
+
+type noopCloser struct{}
+
+func (noopCloser) Close() error { return nil }
+
+// bindTicket registers mux under a fresh 24-hex sid and this 0x02 key.
+// Status.Ticket carries the sid. 0x04 on any other front looks it up.
+func bindTicket(ms *mux.Session, key []byte, front string, write func([]byte) error, gate *pullGate) *serverSess {
+	if ms == nil || len(key) == 0 {
+		return nil
+	}
+	if v, ok := muxTickets.Load(ms); ok {
+		if old, _ := v.(*serverSess); old != nil {
+			old.releaseTicket()
+		}
+	}
+	ss := &serverSess{
+		id:         ecrypto.RandomID(),
+		key:        append([]byte(nil), key...),
+		mux:        ms,
+		held:       map[uint64][]wire.Frame{},
+		skipPull:   map[uint64]struct{}{},
+		replies:    map[uint64][]byte{},
+		ownerFront: front,
+		ownerWrite: write,
+		gate:       gate,
+		seen:       ecrypto.NewNonces(),
+	}
+	ss.cond = sync.NewCond(&ss.mu)
+	ticketTab.Store(ss.id, ss)
+	rememberMuxTicket(ss)
+	return ss
+}
+
+func (ss *serverSess) releaseTicket() {
+	if ss == nil {
+		return
+	}
+	ss.relOnce.Do(func() {
+		ticketTab.Delete(ss.id)
+		forgetMuxTicket(ss)
+		ss.closeAttach()
+	})
+}
+
+// armOwner pauses the owner write loop and puts that socket in the fan.
+// GET has no ownerWrite: bulk stays off the CDN socket.
+func (ss *serverSess) armOwner() {
+	if ss == nil || ss.ownerWrite == nil || ss.ownerFront == "" || ss.ownerFront == wire.FrontGET {
+		return
+	}
+	if ss.gate != nil {
+		ss.gate.handover()
+	}
+	if !ss.ownerOn.CompareAndSwap(false, true) {
+		return
+	}
+	ss.setAttach(ss.ownerFront, noopCloser{}, ss.ownerWrite, func() {}, nil)
+}
+
 // serveAttach binds conn to the GET session in blob (0x04).
 func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
 	defer conn.Close()
@@ -226,6 +312,7 @@ func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
 	} else if err := ss.takeAttachNonce(nonce); err != nil {
 		return
 	}
+	ss.armOwner()
 	ack, err := wire.EncodeBatch([]wire.Frame{wire.FrontFrame(front)})
 	if err != nil {
 		return
@@ -293,7 +380,7 @@ func pumpAttach(ms *mux.Session, write func([]byte) error, key []byte, done <-ch
 			return nil, err
 		}
 		return ecrypto.Seal(key, raw, nil)
-	}, write)
+	}, write, nil)
 }
 
 func writeAttach(w io.Writer, b []byte) error {

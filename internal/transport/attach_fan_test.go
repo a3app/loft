@@ -65,4 +65,13 @@ func TestAttachFanStreamAffinity(t *testing.T) {
 			t.Fatalf("stream %d on %d lanes: %+v", sid, n, ids)
 		}
 	}
+
+	dead1.Store(true)
+	got = map[int][][]byte{}
+	fan.send(lanes, []wire.Frame{
+		{Cmd: wire.CmdData, StreamID: 1, Payload: []byte("z")},
+	})
+	if len(got[20]) != 1 || len(got[10]) != 0 {
+		t.Fatalf("dead lane kept stream: %+v", got)
+	}
 }

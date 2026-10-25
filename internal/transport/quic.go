@@ -96,6 +96,8 @@ type QUIC struct {
 	done    chan struct{}
 	dead    sync.Once
 	offer   wire.Cap
+	lanes   *GET
+	gate    pullGate
 }
 
 // NewQUIC builds a QUIC client that has not yet dialed.
@@ -180,6 +182,10 @@ func (q *QUIC) Start(ctx context.Context) error {
 	}
 	q.conn, q.stream, q.key = conn, st, key
 	noteQUICKEX(conn)
+	q.lanes = startBulkLanes(ctx, wire.FrontQUIC, q.cfg, q.token, key, status, q.offer, q.sess, q.done, func(b *GET) {
+		q.gate.handover()
+		b.adoptLane(noopCloser{}, func(p []byte) error { return writeMsg(st, p) }, wire.FrontQUIC)
+	}, func() { q.gate.resume() })
 	go q.readLoop()
 	go q.writeLoop()
 	return nil
@@ -212,6 +218,9 @@ func (q *QUIC) Open(target string) (net.Conn, error) {
 
 // Park drops QUIC without Leave or mux.Close.
 func (q *QUIC) Park() error {
+	if q.lanes != nil {
+		q.lanes.closeAttach()
+	}
 	parkClient(q.sess, "", nil, 0)
 	q.die()
 	if q.conn != nil {
@@ -222,6 +231,9 @@ func (q *QUIC) Park() error {
 
 // Close sends CmdLeave and closes the QUIC connection.
 func (q *QUIC) Close() error {
+	if q.lanes != nil {
+		q.lanes.closeAttach()
+	}
 	if holdOwner(q.holdGen) && q.stream != nil && len(q.key) > 0 {
 		if sealed, err := sealLeave(q.key, nil); err == nil {
 			_ = q.stream.SetWriteDeadline(time.Now().Add(800 * time.Millisecond))
@@ -278,7 +290,7 @@ func (q *QUIC) writeLoop() {
 		return ecrypto.Seal(q.key, raw, nil)
 	}, func(sealed []byte) error {
 		return writeMsg(q.stream, sealed)
-	})
+	}, &q.gate)
 	q.die()
 }
 
@@ -326,19 +338,25 @@ func serveQUICStream(c *quic.Conn, st *quic.Stream, seen *ecrypto.Nonces, info N
 	ms, reused := adoptServerMux(a.Rest, a.Token)
 	status := info.Status("quic")
 	finishStatus(&status, a.Token, "quic", a.Rest, ms, c.RemoteAddr())
-	sealed, err := ecrypto.Seal(a.Key, status.Encode(), nil)
+	key := a.Key
+	gate := &pullGate{}
+	ss := bindTicket(ms, key, wire.FrontQUIC, func(b []byte) error { return writeMsg(st, b) }, gate)
+	if ss != nil {
+		status.Ticket = []byte(ss.id)
+		defer ss.releaseTicket()
+	}
+	sealed, err := ecrypto.Seal(key, status.Encode(), nil)
 	if err != nil {
 		return
 	}
 	if err := writeMsg(st, ecrypto.WrapHello(a.EphN, sealed)); err != nil {
 		return
 	}
-	key := a.Key
 	if !reused {
 		go serveMux(ms)
 		go serveDgrams(ms)
 	}
-	go pumpMux(ms, st, key, ctx.Done())
+	go pumpMux(ms, st, key, ctx.Done(), gate)
 	for {
 		raw, err := readMsg(st)
 		if err != nil {

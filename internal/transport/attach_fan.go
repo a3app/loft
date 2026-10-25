@@ -33,7 +33,7 @@ func sealFrames(key []byte, frames []wire.Frame) ([]byte, error) {
 }
 
 // send seals frames per lane. A stream's later frames stay on the lane that
-// took the first one. A dead lane is not a place to resume that stream.
+// took the first one. A lane that is gone releases the stream onto a live one.
 func (f *attachFan) send(lanes []fanLane, frames []wire.Frame) {
 	if f == nil || len(lanes) == 0 || len(frames) == 0 {
 		return
@@ -86,7 +86,7 @@ func (f *attachFan) pickLocked(lanes []fanLane, fr wire.Frame) int {
 					return i
 				}
 			}
-			return -1
+			delete(f.bind, fr.StreamID)
 		}
 	}
 	if len(lanes) == 0 {

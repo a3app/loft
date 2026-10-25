@@ -281,6 +281,94 @@ func TestAttachWSSameSession(t *testing.T) {
 	pingEcho(t, g, echo.Addr().String(), "ping-ws")
 }
 
+// TestWSTicketAttachesH2 is a WS 0x02 that owns the mux. Status.ticket is a
+// fresh sid. H2 joins with 0x04. Echo stays up after the H2 lane drops.
+func TestWSTicketAttachesH2(t *testing.T) {
+	echo := echoTCP(t)
+	const token = "test-token-please-change"
+	caps := wire.CapWS | wire.CapH2 | wire.CapTicket | wire.CapStatus | wire.CapHold
+	info := NodeInfo{Token: []byte(token), Caps: caps}
+	seen := ecrypto.NewNonces()
+	hs := httptest.NewServer(&WSSServer{Token: []byte(token), Info: info, Seen: seen})
+	t.Cleanup(hs.Close)
+	h2url := startH2L3(t, &H2Server{Info: info, Path: "/api/v1/tunnel", Seen: seen})
+	SetDirectNode(h2url)
+	t.Cleanup(func() { SetDirectNode("") })
+
+	w := NewWSS(token, config.Outbound{
+		Type: "ws", URL: "ws" + strings.TrimPrefix(hs.URL, "http"),
+		Fingerprint: "go", Insecure: true,
+	})
+	w.offer = caps
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := w.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	if w.lanes == nil || !validGETSID(string(w.lanes.ticket)) {
+		t.Fatalf("ws ticket %q", ticketOf(w))
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && (w.lanes == nil || !w.lanes.attachLive.Load()) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if w.lanes == nil || !w.lanes.attachLive.Load() {
+		t.Fatal("h2 lane did not attach")
+	}
+	if !strings.Contains(LiveBulk(), "h2") || !strings.Contains(LiveBulk(), "ws") {
+		t.Fatalf("bulk %q", LiveBulk())
+	}
+	c, err := w.Open(echo.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if _, err := c.Write([]byte("ping-ws")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 7)
+	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, err := io.ReadFull(c, buf); err != nil || string(buf) != "ping-ws" {
+		t.Fatalf("echo %q %v", buf, err)
+	}
+
+	w.lanes.attachMu.Lock()
+	var h2 io.Closer
+	for _, ln := range w.lanes.lanes {
+		if ln != nil && ln.front == wire.FrontH2 {
+			h2 = ln.conn
+		}
+	}
+	w.lanes.attachMu.Unlock()
+	if h2 == nil {
+		t.Fatal("no h2 lane")
+	}
+	_ = h2.Close()
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && strings.Contains(LiveBulk(), "h2") {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if strings.Contains(LiveBulk(), "h2") || !strings.Contains(LiveBulk(), "ws") {
+		t.Fatalf("after h2 drop bulk %q", LiveBulk())
+	}
+	if _, err := c.Write([]byte("ping-go")); err != nil {
+		t.Fatal(err)
+	}
+	buf = make([]byte, 7)
+	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, err := io.ReadFull(c, buf); err != nil || string(buf) != "ping-go" {
+		t.Fatalf("echo after drop %q %v", buf, err)
+	}
+}
+
+func ticketOf(w *WSS) string {
+	if w == nil || w.lanes == nil {
+		return ""
+	}
+	return string(w.lanes.ticket)
+}
+
 func TestAttachExtrasSkippedWithoutCapTicket(t *testing.T) {
 	const token = "test-token-please-change"
 	g, _, _ := attachGET(t, token, wire.CapGET|wire.CapH2|wire.CapStatus)

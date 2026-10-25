@@ -1,6 +1,8 @@
 package transport
 
-// Client attach: after GET Status.ticket, open h2/ws/quic/h3 with 0x04.
+// Client attach: after Status.ticket, open the other mux fronts with 0x04.
+// The front that finished 0x02 owns the mux. Extra fronts are lanes. The
+// owner socket joins the fan once a lane stays up, except a real GET.
 
 import (
 	"context"
@@ -20,6 +22,7 @@ import (
 
 	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
+	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/wire"
 )
 
@@ -40,6 +43,7 @@ func (g *GET) closeAttach() {
 	g.attachOff.Store(true)
 	g.holdDispatch.Store(false)
 	g.dropToGET.Store(true)
+	g.ownerOnce.Store(false)
 	g.attachMu.Lock()
 	lanes := g.lanes
 	g.lanes = nil
@@ -56,6 +60,10 @@ func (g *GET) closeAttach() {
 	}
 	g.attachWG.Wait()
 	g.attachLive.Store(false)
+	noteLiveBulk(g, "")
+	if g.ownerDown != nil {
+		g.ownerDown()
+	}
 }
 
 func (g *GET) ticketSID() string {
@@ -87,12 +95,68 @@ func (g *GET) unbindAttach(c io.Closer) {
 	left := g.liveCountLocked()
 	g.attachMu.Unlock()
 	if left > 0 || g.holdDispatch.Load() || g.attachOff.Load() || g.attachStopped() {
+		if left > 0 {
+			noteLiveBulk(g, strings.Join(g.liveFronts(), "+"))
+		}
 		return
 	}
 	g.attachLive.Store(false)
 	g.dropToGET.Store(true)
+	g.ownerOnce.Store(false)
+	noteLiveBulk(g, "")
+	if g.ownerDown != nil {
+		g.ownerDown()
+	}
 	go g.attachExtras(context.Background())
 }
+
+// startBulkLanes opens 0x04 lanes after a non-GET 0x02. The shadow GET is
+// only the lane host: it does not speak HTTP. Owner socket joins the fan
+// once an extra front stays up, and the owner write loop pauses.
+func startBulkLanes(ctx context.Context, front string, cfg config.Outbound, token, key []byte, st wire.Status, offer wire.Cap, sess *mux.Session, done chan struct{}, arm func(*GET), down func()) *GET {
+	if sess == nil || done == nil || !st.Caps.Has(wire.CapTicket) || !validGETSID(string(st.Ticket)) || len(key) == 0 {
+		return nil
+	}
+	g := &GET{
+		cfg:        cfg,
+		token:      append([]byte(nil), token...),
+		sess:       sess,
+		key:        append([]byte(nil), key...),
+		ticket:     append([]byte(nil), st.Ticket...),
+		caps:       st.Caps,
+		offer:      offer,
+		fronts:     append([]wire.FrontEP(nil), st.Fronts...),
+		done:       done,
+		ownerFront: front,
+		ownerArm:   arm,
+		ownerDown:  down,
+	}
+	go g.attachExtras(ctx)
+	return g
+}
+
+func noteLiveBulk(g *GET, s string) {
+	if s == "" {
+		if liveOwner.Load() == g {
+			liveOwner.Store(nil)
+			liveBulk.Store("")
+		}
+		return
+	}
+	liveOwner.Store(g)
+	liveBulk.Store(s)
+}
+
+// LiveBulk is the fan riding the mux ("ws+h2"), or empty when one front Pulls.
+func LiveBulk() string {
+	s, _ := liveBulk.Load().(string)
+	return s
+}
+
+var (
+	liveBulk  atomic.Value
+	liveOwner atomic.Pointer[GET]
+)
 
 // attachExtras opens every mux front the node listed, on the node URL.
 // GET stays up. Bulk moves onto the fronts that stayed up. One stream
@@ -137,7 +201,20 @@ func (g *GET) attachExtras(ctx context.Context) {
 	// before the dispatcher Pulls onto a conn the node already dropped.
 	if g.liveCount() > 0 {
 		time.Sleep(100 * time.Millisecond)
+		g.armOwnerLane()
 	}
+}
+
+// armOwnerLane pauses the owner write loop and puts that socket in the fan.
+// A real GET leaves ownerArm nil so the CDN socket stays off the fan.
+func (g *GET) armOwnerLane() {
+	if g == nil || g.ownerArm == nil || g.liveCount() == 0 {
+		return
+	}
+	if !g.ownerOnce.CompareAndSwap(false, true) {
+		return
+	}
+	g.ownerArm(g)
 }
 
 func (g *GET) finishAttach() {
@@ -148,6 +225,7 @@ func (g *GET) finishAttach() {
 	g.dropToGET.Store(false)
 	g.kickDispatch()
 	if names := g.liveFronts(); len(names) > 0 {
+		noteLiveBulk(g, strings.Join(names, "+"))
 		log.Printf("attach %s", strings.Join(names, ","))
 	}
 }
@@ -161,7 +239,7 @@ func (g *GET) attachNames() []string {
 	seen := map[string]bool{}
 	for _, e := range g.fronts {
 		n := e.Name
-		if n == wire.FrontGET || n == wire.FrontConnect || n == wire.FrontL3 || seen[n] {
+		if n == wire.FrontGET || n == g.ownerFront || n == wire.FrontConnect || n == wire.FrontL3 || seen[n] {
 			continue
 		}
 		seen[n] = true

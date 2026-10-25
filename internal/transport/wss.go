@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -34,6 +35,8 @@ type WSS struct {
 	mu      sync.Mutex
 	closed  bool
 	offer   wire.Cap
+	lanes   *GET
+	gate    pullGate
 }
 
 // NewWSS builds a WebSocket client that has not yet dialed.
@@ -131,6 +134,12 @@ func (w *WSS) Start(ctx context.Context) error {
 	}
 	w.conn = c
 	w.key = key
+	w.lanes = startBulkLanes(ctx, wire.FrontWS, w.cfg, w.token, key, st, w.offer, w.sess, w.done, func(b *GET) {
+		w.gate.handover()
+		b.adoptLane(noopCloser{}, func(p []byte) error {
+			return c.Write(context.Background(), websocket.MessageBinary, p)
+		}, wire.FrontWS)
+	}, func() { w.gate.resume() })
 	go w.readLoop()
 	go w.writeLoop()
 	return nil
@@ -160,6 +169,9 @@ func (w *WSS) Open(target string) (net.Conn, error) {
 
 // Park drops the WebSocket without Leave or mux.Close. Streams stay for gap_hold.
 func (w *WSS) Park() error {
+	if w.lanes != nil {
+		w.lanes.closeAttach()
+	}
 	w.mu.Lock()
 	w.closed = true
 	conn := w.conn
@@ -175,6 +187,9 @@ func (w *WSS) Park() error {
 
 // Close sends CmdLeave and closes the WebSocket.
 func (w *WSS) Close() error {
+	if w.lanes != nil {
+		w.lanes.closeAttach()
+	}
 	w.mu.Lock()
 	w.closed = true
 	conn := w.conn
@@ -246,13 +261,44 @@ func (w *WSS) writeLoop() {
 		return ecrypto.Seal(w.key, raw, nil)
 	}, func(sealed []byte) error {
 		return w.conn.Write(ctx, websocket.MessageBinary, sealed)
-	})
+	}, &w.gate)
 	w.die()
+}
+
+// pullGate hands Pull from the owner write loop to the lane dispatcher.
+// handover blocks until the owner is outside Pull and write.
+type pullGate struct {
+	mu    sync.Mutex
+	pause atomic.Bool
+}
+
+func (g *pullGate) handover() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	g.pause.Store(true)
+	g.mu.Unlock()
+}
+
+func (g *pullGate) resume() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	g.pause.Store(false)
+	g.mu.Unlock()
 }
 
 // pumpWS prefetches a few sealed WS messages. Control/small Data is pulled
 // into its own short message so a loaded ping is not stuck behind bulk.
-func pumpWS(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dead func() bool, seal func([]wire.Frame) ([]byte, error), write func([]byte) error) {
+// A non-nil gate runs pull and write on one goroutine under the gate lock
+// so 0x04 can take the Puller without a second writer.
+func pumpWS(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dead func() bool, seal func([]wire.Frame) ([]byte, error), write func([]byte) error, gate *pullGate) {
+	if gate != nil {
+		pumpGated(sess, pullWait, done, dead, seal, write, gate)
+		return
+	}
 	out := make(chan []byte, wsPrefetch)
 	go func() {
 		defer close(out)
@@ -292,6 +338,48 @@ func pumpWS(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dea
 		if err := write(sealed); err != nil {
 			return
 		}
+	}
+}
+
+// pumpGated is pumpWS without the prefetch goroutine. The gate lock covers
+// Pull and write, so handover waits out an in-flight batch and then owns Pull.
+func pumpGated(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dead func() bool, seal func([]wire.Frame) ([]byte, error), write func([]byte) error, gate *pullGate) {
+	for {
+		if dead() {
+			return
+		}
+		select {
+		case <-done:
+			return
+		default:
+		}
+		gate.mu.Lock()
+		if gate.pause.Load() {
+			gate.mu.Unlock()
+			select {
+			case <-done:
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+			continue
+		}
+		max, wait := wsPullBytes, pullWait
+		if sess.PriQueued() > 0 {
+			max = wsPriBytes
+			wait = 0
+		}
+		var frames []wire.Frame
+		if DraftPaused() {
+			frames = sess.PullPri(max, wait)
+		} else {
+			frames = sess.Pull(max, wait)
+		}
+		if len(frames) > 0 {
+			if sealed, err := seal(frames); err == nil {
+				_ = write(sealed)
+			}
+		}
+		gate.mu.Unlock()
 	}
 }
 
@@ -359,7 +447,16 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		st = withDecoy(netconf.DefaultSession().Status(wire.OK, "", "", "", 1280, 0), s.Decoy)
 	}
 	finishStatus(&st, a.Token, "ws", a.Rest, ms, remoteAddr(r.RemoteAddr))
-	sealed, err := ecrypto.Seal(a.Key, st.Encode(), nil)
+	key := a.Key
+	gate := &pullGate{}
+	ss := bindTicket(ms, key, wire.FrontWS, func(b []byte) error {
+		return c.Write(context.Background(), websocket.MessageBinary, b)
+	}, gate)
+	if ss != nil {
+		st.Ticket = []byte(ss.id)
+		defer ss.releaseTicket()
+	}
+	sealed, err := ecrypto.Seal(key, st.Encode(), nil)
 	if err != nil {
 		return
 	}
@@ -367,7 +464,6 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := c.Write(ctx, websocket.MessageBinary, hello); err != nil {
 		return
 	}
-	key := a.Key
 	if !reused {
 		go serveMux(ms)
 		go serveDgrams(ms)
@@ -380,7 +476,7 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return ecrypto.Seal(key, raw, nil)
 	}, func(sealed []byte) error {
 		return c.Write(ctx, websocket.MessageBinary, sealed)
-	})
+	}, gate)
 	for {
 		_, data, err := c.Read(ctx)
 		if err != nil {

@@ -112,7 +112,7 @@ func (h *H2) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	inner, err := startRaw(ctx, stream, h.token, h.offer, addr, sni)
+	inner, err := startRaw(ctx, stream, h.token, h.offer, addr, sni, h.cfg, wire.FrontH2)
 	if err != nil {
 		_ = stream.Close()
 		_ = c.Close()
