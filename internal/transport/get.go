@@ -276,7 +276,7 @@ func (g *GET) Start(ctx context.Context) error {
 	body, _, err := g.roundTrip(ctx, auth, nil)
 	if err != nil {
 		if status404(err) {
-			return wire.Fail(wire.AuthBadKey, "")
+			return refused()
 		}
 		return fmt.Errorf("get handshake: %w", err)
 	}

@@ -317,7 +317,7 @@ func StartSelected(ctx context.Context, cfg *config.ClientConfig) (Dialer, confi
 		return nil, config.Outbound{}, fmt.Errorf("no outbound named %q", cfg.Select)
 	}
 	offer := helloCaps(cfg)
-	var last error
+	var last, other error
 	// First front gets a longer budget (CDN origin can sit ~5s). The rest
 	// must still fit in the GUI 25s watchdog: a stuck SYN used to hold
 	// DialTLS with no context until the OS gave up.
@@ -341,6 +341,9 @@ func StartSelected(ctx context.Context, cfg *config.ClientConfig) (Dialer, confi
 		if err != nil {
 			log.Printf("loft dial %s: %v", o.Type, err)
 			last = fmt.Errorf("%s: %w", o.Name, err)
+			if !inferredRefusal(err) {
+				other = last
+			}
 			if d, o2, err2 := tryReplicas(ctx, try, o); err2 == nil {
 				return d, o2, nil
 			}
@@ -350,6 +353,10 @@ func StartSelected(ctx context.Context, cfg *config.ClientConfig) (Dialer, confi
 			continue
 		}
 		return d, o, nil
+	}
+	if other != nil {
+		// A close after 0x02 is auth_bad_key only when every front closed (§3.4).
+		last = other
 	}
 	if last == nil {
 		last = fmt.Errorf("no outbound connected")

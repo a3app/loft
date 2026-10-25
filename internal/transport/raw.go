@@ -96,7 +96,7 @@ func startRaw(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, 
 	raw, err := readMsg(conn)
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return nil, afterProof(err)
 	}
 	key, plain, err := ecrypto.OpenHello(sk, nonce, raw, nil)
 	if err != nil {

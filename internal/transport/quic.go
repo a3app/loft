@@ -155,7 +155,7 @@ func (q *QUIC) Start(ctx context.Context) error {
 		if strings.Contains(es, "HEADERS") || strings.Contains(es, "0x105") {
 			return fmt.Errorf("quic mux: node is HTTP/3 (use type h3)")
 		}
-		return err
+		return afterProof(err)
 	}
 	key, plain, err := ecrypto.OpenHello(sk, nonce, raw, nil)
 	if err != nil {

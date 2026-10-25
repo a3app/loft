@@ -282,7 +282,7 @@ func (s *h2stream) readLoop(got chan h2hs) {
 				return
 			}
 		case *http2.RSTStreamFrame:
-			err := fmt.Errorf("rst %v", f.ErrCode)
+			err := h2Reset{f.ErrCode}
 			send(h2hs{err: err})
 			_ = s.inW.CloseWithError(err)
 			return
@@ -294,6 +294,12 @@ func (s *h2stream) readLoop(got chan h2hs) {
 		}
 	}
 }
+
+// h2Reset is RST_STREAM from the peer. Inside TLS only the node or its
+// terminator can send it.
+type h2Reset struct{ code http2.ErrCode }
+
+func (e h2Reset) Error() string { return fmt.Sprintf("rst %v", e.code) }
 
 func (s *h2stream) Read(p []byte) (int, error) { return s.inR.Read(p) }
 

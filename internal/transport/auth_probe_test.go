@@ -2,7 +2,9 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,7 +12,9 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/quic-go/quic-go"
 
+	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
 	"github.com/a3app/loft/internal/wire"
 )
@@ -86,4 +90,99 @@ func TestWSWrongKeyNoStatus(t *testing.T) {
 	if _, b, err := c.Read(ctx); err == nil {
 		t.Fatalf("node answered a foreign key with %d bytes", len(b))
 	}
+}
+
+func wantRefused(t *testing.T, err error) {
+	t.Helper()
+	var we wire.Error
+	if !errors.As(err, &we) || we.Code != wire.AuthBadKey || !fatalFront(err) {
+		t.Fatalf("want inferred auth_bad_key, got %v", err)
+	}
+}
+
+// TestWSWrongKeyIsAuthBadKey: the ws client reads the close after 0x02 as a
+// key problem although the node sent no Status.
+func TestWSWrongKeyIsAuthBadKey(t *testing.T) {
+	gs := NewGETServer("test-token-please-change", "/static/v3/build")
+	hs := httptest.NewServer(&WSSServer{Token: gs.Token, Info: gs.Info, Seen: gs.Seen})
+	t.Cleanup(hs.Close)
+	w := NewWSS("revoked-key", config.Outbound{
+		Type: "ws", URL: "ws" + strings.TrimPrefix(hs.URL, "http"), Fingerprint: "go", Insecure: true,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	wantRefused(t, w.Start(ctx))
+}
+
+// TestH2WrongKeyIsAuthBadKey: same for HTTP/2 CONNECT.
+func TestH2WrongKeyIsAuthBadKey(t *testing.T) {
+	gs := NewGETServer("test-token-please-change", "/static/v3/build")
+	url := startH2L3(t, &H2Server{Info: gs.Info, Path: "/api/v1/tunnel", Seen: gs.Seen})
+	h := NewH2("revoked-key", config.Outbound{
+		Type: "h2", URL: url, Path: "/api/v1/tunnel", Fingerprint: "go", Insecure: true,
+	}, wire.MemberCaps)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	wantRefused(t, h.Start(ctx))
+}
+
+type timeoutErr struct{}
+
+func (timeoutErr) Error() string   { return "i/o timeout" }
+func (timeoutErr) Timeout() bool   { return true }
+func (timeoutErr) Temporary() bool { return true }
+
+// TestAfterProofKeepsNetworkErrors: only a clean close is a refusal.
+func TestAfterProofKeepsNetworkErrors(t *testing.T) {
+	var _ net.Error = timeoutErr{}
+	for _, err := range []error{
+		context.DeadlineExceeded,
+		timeoutErr{},
+		errors.New("read tcp: connection reset by peer"),
+		&quic.ApplicationError{Remote: false, ErrorCode: 0},
+		&quic.ApplicationError{Remote: true, ErrorCode: 7},
+	} {
+		if inferredRefusal(afterProof(err)) {
+			t.Fatalf("%v read as a key refusal", err)
+		}
+	}
+	for _, err := range []error{io.EOF, io.ErrUnexpectedEOF, &quic.ApplicationError{Remote: true}} {
+		if !inferredRefusal(afterProof(err)) {
+			t.Fatalf("%v not read as a key refusal", err)
+		}
+	}
+}
+
+// TestStartSelectedRefusalNeedsEveryFront: one front refuses, another is
+// unreachable; that is not a key problem, so Supervise keeps retrying.
+func TestStartSelectedRefusalNeedsEveryFront(t *testing.T) {
+	gs := NewGETServer("test-token-please-change", "/static/v3/build")
+	live := httptest.NewServer(http.HandlerFunc(gs.ServeHTTP))
+	t.Cleanup(live.Close)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := "ws://" + ln.Addr().String()
+	ln.Close()
+	rotateN.Store(0)
+	off := false
+	cfg := &config.ClientConfig{
+		Token:  "revoked-key",
+		Select: "auto",
+		P2P:    &off,
+		Outbounds: []config.Outbound{
+			{Name: "node", Type: "get", URL: live.URL, Path: "/static/v3/build", Fingerprint: "go", HeaderBudget: 4096, Inflight: 2, Insecure: true},
+			{Name: "down", Type: "ws", URL: dead, Fingerprint: "go", Insecure: true},
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	_, _, err = StartSelected(ctx, cfg)
+	if err == nil || fatalFront(err) {
+		t.Fatalf("mixed failure must stay retryable, got %v", err)
+	}
+	cfg.Outbounds = cfg.Outbounds[:1]
+	_, _, err = StartSelected(ctx, cfg)
+	wantRefused(t, err)
 }

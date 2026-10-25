@@ -109,7 +109,7 @@ func (w *WSS) Start(ctx context.Context) error {
 	_, stRaw, err := c.Read(ctx)
 	if err != nil {
 		c.Close(websocket.StatusInternalError, "status")
-		return err
+		return afterProof(err)
 	}
 	key, plain, err := ecrypto.OpenHello(sk, nonce, stRaw, nil)
 	if err != nil {
