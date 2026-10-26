@@ -630,6 +630,9 @@
     <button type="button" data-go="split" data-list="clear" data-i="nSplitClr">Маршруты · очистка зоны</button>
     <button type="button" data-go="split" data-list="undo" data-i="nSplitUndo">Маршруты · отмена</button>
     <button type="button" data-go="splitexcl" data-i="nExcl">Маршруты · исключения</button>
+    <button type="button" data-go="profiles" data-i="nProfs">Маршруты · профили</button>
+    <button type="button" data-go="split" data-list="op" data-i="nProfOp">Маршруты · профиль оператора</button>
+    <button type="button" data-go="profimp" data-i="nProfImp">Маршруты · импорт профиля</button>
     <button type="button" data-go="splitsvc" data-i="nSvc">Маршруты · сеть</button>
     <button type="button" data-go="zones" data-i="nZones">Маршруты · зоны</button>
     <button type="button" data-go="zone" data-i="nZone">Маршруты · зона</button>
@@ -1305,6 +1308,16 @@ hold  armed</pre>
         <div class="scroll dyn" id="split-body"></div>
       </div>
 
+      <div class="screen hidden" id="profiles">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="profiles-body"></div>
+      </div>
+
+      <div class="screen hidden" id="profimp">
+        <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
+        <div class="scroll dyn" id="profimp-body"></div>
+      </div>
+
       <div class="screen hidden" id="splitexcl">
         <div class="navbar"><button type="button" data-back data-i="backGen">‹ Назад</button></div>
         <div class="scroll dyn" id="splitexcl-body"></div>
@@ -1557,6 +1570,25 @@ hold  armed</pre>
         "split.zone": "Зона",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "prof": "Профиль",
+        "prof.title": "Профили маршрутов",
+        "prof.sub": "Активен один профиль. Профиль оператора приходит с ноды внутри сессии и обновляется сам; чтобы изменить его, сделайте копию.",
+        "prof.own": "Свой",
+        "prof.src.own": "свой",
+        "prof.src.op": "от оператора · %s · обновлён сегодня",
+        "prof.src.link": "из ссылки",
+        "prof.active": "активен",
+        "prof.copy": "Сделать копию",
+        "prof.copyName": "%s (копия)",
+        "prof.ro": "Профиль оператора — только чтение: он обновляется с ноды.",
+        "prof.imp": "Импорт профиля",
+        "prof.imp.sub": "Ссылка loft://routes/… или файл .loft с профилем маршрутов. Профиль добавится к списку, ваши правила останутся.",
+        "prof.imp.go": "Добавить",
+        "prof.op.name": "RU напрямую",
+        "split.src.op": "оператор",
+        "nProfs": "Маршруты · профили",
+        "nProfOp": "Маршруты · профиль оператора",
+        "nProfImp": "Маршруты · импорт профиля",
         "localDns": "Местный DNS",
         "localDnsD": "Резолвит домены зон «в обход loft». Остальные имена — через DNS ноды, домены зоны Block не резолвятся.",
         "ldnsSys": "Системный",
@@ -1902,6 +1934,25 @@ hold  armed</pre>
         "split.zone": "Zone",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "prof": "Profile",
+        "prof.title": "Route profiles",
+        "prof.sub": "One profile is active. The operator’s profile comes from the node inside the session and updates itself; to change it, make a copy.",
+        "prof.own": "Mine",
+        "prof.src.own": "mine",
+        "prof.src.op": "from the operator · %s · updated today",
+        "prof.src.link": "from a link",
+        "prof.active": "active",
+        "prof.copy": "Make a copy",
+        "prof.copyName": "%s (copy)",
+        "prof.ro": "The operator’s profile is read-only: it updates from the node.",
+        "prof.imp": "Import profile",
+        "prof.imp.sub": "A loft://routes/… link or a .loft file with a route profile. It is added to the list; your rules stay.",
+        "prof.imp.go": "Add",
+        "prof.op.name": "RU direct",
+        "split.src.op": "operator",
+        "nProfs": "Routes · profiles",
+        "nProfOp": "Routes · operator profile",
+        "nProfImp": "Routes · import profile",
         "localDns": "Local DNS",
         "localDnsD": "Resolves the domains of “bypass loft” zones. Other names go through the node’s DNS; Block zone domains don’t resolve.",
         "ldnsSys": "System",
@@ -2247,6 +2298,25 @@ hold  armed</pre>
         "split.zone": "区域",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "prof": "配置文件",
+        "prof.title": "路由配置文件",
+        "prof.sub": "同一时间只有一个配置文件生效。运营方的配置文件在会话内由节点下发并自动更新；要修改请先复制一份。",
+        "prof.own": "我的",
+        "prof.src.own": "我的",
+        "prof.src.op": "来自运营方 · %s · 今天已更新",
+        "prof.src.link": "来自链接",
+        "prof.active": "生效中",
+        "prof.copy": "复制一份",
+        "prof.copyName": "%s（副本）",
+        "prof.ro": "运营方的配置文件只读：它由节点更新。",
+        "prof.imp": "导入配置文件",
+        "prof.imp.sub": "loft://routes/… 链接或带路由配置文件的 .loft 文件。它会加入列表，你的规则保留。",
+        "prof.imp.go": "添加",
+        "prof.op.name": "RU 直连",
+        "split.src.op": "运营方",
+        "nProfs": "路由 · 配置文件",
+        "nProfOp": "路由 · 运营方配置文件",
+        "nProfImp": "路由 · 导入配置文件",
         "localDns": "本地 DNS",
         "localDnsD": "解析「绕过 loft」区域的域名。其他名称经节点 DNS；Block 区域的域名不解析。",
         "ldnsSys": "系统",
@@ -2713,11 +2783,11 @@ hold  armed</pre>
     }
     // Tabs are the three rooms; Journal and About are pushed from Settings.
     // Edit, Scanner and QR are modal: Cancel / Close returns where they came from.
-    const SPLIT_SCREENS = ["split", "splitexcl", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
+    const SPLIT_SCREENS = ["profiles", "profimp", "split", "splitexcl", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
     const TAB_OF = { home: "home", list: "list", settings: "settings", journal: "settings", about: "settings" };
     SPLIT_SCREENS.forEach((id) => { TAB_OF[id] = "settings"; });
     const PARENT = { edit: "list", scan: "list", share: "list", journal: "settings", about: "settings",
-      split: "settings", splitexcl: "split", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
+      split: "settings", splitexcl: "split", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" , profiles: "split", profimp: "profiles" };
     let cur = "home";
     const from = {};
     // Every mock state has its own address: #edit-sstp, #settings-route, #home-off.
@@ -2800,6 +2870,7 @@ hold  armed</pre>
         paintEdit();
       }
       if (!SPLIT_SCREENS.includes(id)) hideSnack();
+      if (id === "split" && extra.list === "op") useProfile("op");
       if (id === "split") {
         sel = extra.list === "select" ? new Set(["yt", "nf"]) : null;
         if (extra.list) zoneTab = "global";
@@ -3111,7 +3182,54 @@ hold  armed</pre>
         </div></div>`).join("");
       return rows || `<p class="hint">${T("split.excl.empty")}</p>`;
     }
+    /* Route profiles: one is active. The operator's comes from the node inside
+       the session (CmdLists) and is read-only; "Make a copy" turns it into one
+       of the user's own. Switching swaps the zones and services in place. */
+    const OP_DATA = {
+      zones: [
+        { id: "local", builtin: true, def: false, repo: "", auto: true },
+        { id: "global", builtin: true, def: true, repo: "", auto: true },
+        { id: "block", builtin: true, def: "block", repo: "", auto: true },
+      ],
+      routes: [
+        { id: "op-ru", en: "Russia", ru: "Россия", zh: "俄罗斯", zone: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24", "213.59.200.0/22"], domains: ["yandex.ru", "gosuslugi.ru", "sberbank.ru"], src: "op" },
+        { id: "op-lan", en: "LAN", ru: "Локальная сеть", zh: "局域网", zone: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "op" },
+        { id: "op-ads", en: "Ads", ru: "Реклама", zh: "广告", zone: "block", cidrs: [], domains: ["doubleclick.net", "adfox.ru"], src: "op" },
+      ],
+    };
+    const PROFS = [{ id: "own", src: "own" }, { id: "op", src: "op", conn: "Home", data: OP_DATA }];
+    let activeProf = "own", profSeq = 0;
+    const curProf = () => PROFS.find((x) => x.id === activeProf);
+    const ro = () => curProf().src === "op";
+    const profName = (pr) => (pr.id === "own" ? T("prof.own") : pr.id === "op" ? T("prof.op.name") : pr.name);
+    const cloneData = () => ({ zones: ZONES.map((z) => Object.assign({}, z)), routes: ROUTES.map((r) => Object.assign({}, r)) });
+    function useProfile(id) {
+      if (id === activeProf) return;
+      curProf().data = cloneData();
+      activeProf = id;
+      const d = curProf().data;
+      ZONES.splice(0, ZONES.length, ...d.zones.map((z) => Object.assign({}, z)));
+      ROUTES.splice(0, ROUTES.length, ...d.routes.map((r) => Object.assign({}, r)));
+      if (!zoneById(zoneTab)) zoneTab = "global";
+    }
+    function copyProfile() {
+      const src = curProf();
+      const pr = { id: "copy" + ++profSeq, src: "own", name: T("prof.copyName").replace("%s", profName(src)) };
+      pr.data = cloneData();
+      pr.data.routes.forEach((r) => { if (r.src === "op") r.src = "me"; });
+      PROFS.push(pr);
+      useProfile(pr.id);
+    }
     const SPLIT_PAINT = {
+      profiles: () => head(T("prof.title"), T("prof.sub")) + PROFS.map((pr) => `
+          <div class="rrow ${pr.id === activeProf ? "live" : ""}" data-prof="${pr.id}">
+            <div class="grow"><div class="n">${esc(profName(pr))}</div><div class="m">${pr.src === "op" ? T("prof.src.op").replace("%s", esc(pr.conn)) : T("prof.src." + (pr.link ? "link" : "own"))}</div></div>
+            <div class="meta">${pr.id === activeProf ? "✓ " + T("prof.active") : ""}</div>
+          </div>${pr.src === "op" ? `<button type="button" class="ghost-sm" data-profcopy="${pr.id}" style="margin:-2px 0 8px">${T("prof.copy")}</button>` : ""}`).join("") +
+        `<button type="button" class="ghost-sm" data-go="profimp">+ ${T("prof.imp")}</button>`,
+      profimp: () => head(T("prof.imp"), T("prof.imp.sub")) + `
+          <label class="field"><input class="mono" placeholder="loft://routes/…" /></label>
+          <div class="btns"><button type="button" class="ghost">${T("fromFile")}</button><button type="button" class="go" data-profadd>${T("prof.imp.go")}</button></div>`,
       split: () => {
         const z = zoneById(zoneTab);
         document.getElementById("split").classList.toggle("selecting", !!sel);
@@ -3127,18 +3245,20 @@ hold  armed</pre>
         const nx = exclIn(zoneTab).length;
         return `<div class="head"><div class="title">${T("split")}</div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>
           <p class="subline">${splitOn ? T("split.sub") : T("split.sub.off")}</p>
-          <div class="zhead"><span class="lbl">${T("split.zone")}</span><button type="button" class="ghost-sm" data-go="zones">${T("split.zones")}</button></div>
+          <div class="rrow prow" data-go="profiles"><div class="grow"><div class="n">${T("prof")}</div><div class="m">${esc(profName(curProf()))}</div></div><div class="meta">${curProf().src === "op" ? T("split.src.op") : ""} ›</div></div>
+          ${ro() ? `<p class="hint" style="margin:0 0 8px">${T("prof.ro")}</p><button type="button" class="ghost-sm" data-profcopy style="margin:-4px 0 6px">${T("prof.copy")}</button>` : ""}
+          <div class="zhead"><span class="lbl">${T("split.zone")}</span>${ro() ? "" : `<button type="button" class="ghost-sm" data-go="zones">${T("split.zones")}</button>`}</div>
           <div class="ztabs">${ZONES.map((x) => `<button type="button" class="${x.id === zoneTab ? "on" : ""}" data-ztab="${x.id}">${esc(zoneName(x.id))} <span>${routesIn(x.id).length}</span></button>`).join("")}</div>
           <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}${z.def === "block" ? `<br>${T("split.block.d")}` : ""}</div>
           <label class="field"><input type="search" data-sq value="${esc(splitQ)}" placeholder="${esc(T("split.search"))}" /></label>
           <div class="rlist ${splitOn ? "" : "dim"}" id="splitRows">${splitRows()}</div>
           <div class="rrow xrow" data-go="splitexcl"><div class="grow"><div class="n">${T("split.excl")}</div></div><div class="meta">${nx} ›</div></div>
-          <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>
+          ${ro() ? "" : `<button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>`}
           <div class="row-3"><button type="button" class="ghost" data-go="splitin">${T("import")}</button><button type="button" class="ghost" data-go="splitout">${T("export")}</button><button type="button" class="ghost" data-go="splitrepo">${T("split.repo")}</button></div>`;
       },
       splitexcl: () => head(esc(zoneName(zoneTab)) + " · " + T("split.excl"), T("split.excl.sub")) + `
           <div class="rlist" id="exclRows">${exclRows()}</div>
-          <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>
+          ${ro() ? "" : `<button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>`}
           ${exclIn(zoneTab).length ? `<div class="end-row"><span></span><button type="button" class="danger" data-exclclear>${T("split.excl.clear")}</button></div>` : ""}`,
       splitsvc: () => {
         const r = svcId && ROUTES.find((x) => x.id === svcId);
@@ -3206,6 +3326,12 @@ hold  armed</pre>
     function paintSplitScreen(id) {
       const el = document.getElementById(id + "-body");
       if (el && SPLIT_PAINT[id]) el.innerHTML = SPLIT_PAINT[id]();
+      document.querySelectorAll("[data-splitmenu], #splitsvc [data-svcdel], #splitMore, #split .pull-menu [data-go='splitin'], #split .popmenu [data-go='splitin']").forEach((b) => b.classList.toggle("hidden", ro()));
+      // An operator profile can be looked at, not changed.
+      if (el && ro() && ["split", "splitsvc", "zones", "zone", "splitrepo", "splitexcl"].includes(id)) {
+        el.querySelectorAll(".behind, .ictx, .btns, .end-row, [data-zone='new'], [data-svc='new'], [data-lists], [data-go='splitin']").forEach((x) => x.remove());
+        el.querySelectorAll("input:not([data-sq]), textarea, select, .seg button").forEach((x) => { x.disabled = true; });
+      }
     }
 
     /* Removal is immediate; the snackbar offers Undo for five seconds.
@@ -3309,6 +3435,15 @@ hold  armed</pre>
         paintSplitScreen("split");
         return;
       }
+      if ((el = at("[data-prof]"))) { useProfile(el.getAttribute("data-prof")); paintSplitScreen("profiles"); return; }
+      if (at("[data-profcopy]")) { if (!ro()) useProfile("op"); copyProfile(); paintSplitScreen(cur); return; }
+      if (at("[data-profadd]")) {
+        const pr = { id: "link" + ++profSeq, src: "own", link: true, name: "loft-routes" };
+        pr.data = { zones: OP_DATA.zones.map((z) => Object.assign({}, z)), routes: OP_DATA.routes.map((r) => Object.assign({}, r, { src: "me" })) };
+        PROFS.push(pr);
+        goBack();
+        return;
+      }
       if ((el = at("[data-split]"))) {
         splitOn = !splitOn;
         document.getElementById("setSplit").classList.toggle("on", splitOn);
@@ -3343,6 +3478,7 @@ hold  armed</pre>
       else if (at("[data-back]")) { goBack(); }
     });
     phoneEl.addEventListener("pointerdown", (e) => {
+      if (ro()) return;
       const row = e.target.closest(".rsw");
       swallow = false;
       closeSwipes(row);

@@ -781,6 +781,9 @@
     <button data-scene="export" data-i18n="nav.export">Export</button>
     <button data-scene="set" data-i18n="nav.set">Settings</button>
     <button data-scene="split" data-i18n="nav.split">Routes</button>
+    <button data-scene="profiles" data-i18n="nav.profiles">Route profiles</button>
+    <button data-scene="splitop" data-i18n="nav.splitop">Routes · operator profile</button>
+    <button data-scene="profimp" data-i18n="nav.profimp">Import route profile</button>
     <button data-scene="splitin" data-i18n="nav.splitin">Import routes</button>
     <button data-scene="splitout" data-i18n="nav.splitout">Export routes</button>
     <button data-scene="splitrepo" data-i18n="nav.splitrepo">Repository</button>
@@ -1056,6 +1059,46 @@
       }
       return z;
     };
+    /* Route profiles: one is active. The operator's comes from the node inside
+       the session (CmdLists) and is read-only; "Make a copy" turns it into one
+       of the user's own. Switching swaps the zones and services in place. */
+    const OP_DATA = {
+      zones: [
+        { id: "local", builtin: true, def: false, repo: "", auto: true },
+        { id: "global", builtin: true, def: true, repo: "", auto: true },
+        { id: "block", builtin: true, def: "block", repo: "", auto: true },
+      ],
+      routes: [
+        { id: "op-ru", ru: "Россия", en: "Russia", de: "Russland", fr: "Russie", pt: "Rússia", zh: "俄罗斯", it: "Russia", ja: "ロシア", ko: "러시아", vi: "Nga", region: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24", "213.59.200.0/22"], domains: ["yandex.ru", "gosuslugi.ru", "sberbank.ru"], src: "op" },
+        { id: "op-lan", ru: "Локальная сеть", en: "LAN", zh: "局域网", ko: "로컬 네트워크", region: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "op" },
+        { id: "op-ads", ru: "Реклама", en: "Ads", de: "Werbung", fr: "Publicité", pt: "Publicidade", zh: "广告", it: "Pubblicità", ja: "広告", ko: "광고", vi: "Quảng cáo", region: "block", cidrs: [], domains: ["doubleclick.net", "adfox.ru"], src: "op" },
+      ],
+    };
+    const PROFS = [{ id: "own", src: "own" }, { id: "op", src: "op", conn: "Office", data: OP_DATA }];
+    let activeProf = params.get("prof") === "op" ? "op" : "own", profSeq = 0;
+    const curProf = () => PROFS.find((x) => x.id === activeProf) || PROFS[0];
+    const ro = () => curProf().src === "op";
+    const profName = (pr) => (pr.id === "own" ? t("prof.own") : pr.id === "op" ? t("prof.op.name") : pr.name);
+    const cloneData = () => ({ zones: ZONES.map((z) => Object.assign({}, z)), routes: ROUTES.map((r) => Object.assign({}, r)) });
+    function loadProfile(pr) {
+      ZONES.splice(0, ZONES.length, ...pr.data.zones.map((z) => Object.assign({}, z)));
+      ROUTES.splice(0, ROUTES.length, ...pr.data.routes.map((r) => Object.assign({}, r)));
+      if (!zoneById(regionTab)) regionTab = "global";
+    }
+    function useProfile(id) {
+      if (id === activeProf) return;
+      curProf().data = cloneData();
+      activeProf = id;
+      loadProfile(curProf());
+    }
+    function copyProfile() {
+      const pr = { id: "copy" + ++profSeq, src: "own", name: t("prof.copyName").replace("%@", profName(curProf())) };
+      pr.data = cloneData();
+      pr.data.routes.forEach((r) => { if (r.src === "op") r.src = "me"; });
+      PROFS.push(pr);
+      useProfile(pr.id);
+    }
+    if (activeProf === "op") { PROFS[0].data = cloneData(); loadProfile(PROFS[1]); }
     const routesVia = () => ROUTES.filter((r) => zoneDef(r.region) === true);
     const routesBypass = () => ROUTES.filter((r) => zoneDef(r.region) === false);
     const routesIn = (region) => ROUTES.filter((r) => r.region === region);
@@ -1537,7 +1580,7 @@ outbounds:
           const nd = (r.domains || []).length;
           return `<div class="rrow" data-go="splitadd">
             <div><div class="n">${rname(r)}</div><div class="u">${n ? r.cidrs.slice(0, 2).join(" ") + (n > 2 ? " …" : "") : r.domains.slice(0, 2).join(" ")}</div></div>
-            <div class="meta">${[n ? n + " " + net : "", nd ? nd + " " + domWord(nd) : ""].filter(Boolean).join(" · ")}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div></div>
+            <div class="meta">${[n ? n + " " + net : "", nd ? nd + " " + domWord(nd) : ""].filter(Boolean).join(" · ")}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : r.src === "op" ? t("split.src.op") : t("split.src.me")}</div></div>
           </div>`;
         }).join("");
         return `
@@ -1550,19 +1593,21 @@ outbounds:
             </div>
             <div class="split-sub">${splitOn ? t("split.sub") : t("split.sub.off")}</div>
             ${splitOn ? `<div class="split-native">${t("split.native")}</div>` : ""}
+            <div class="rrow prow" data-go="profiles"><div><div class="n">${t("prof")}</div><div class="u">${profName(curProf())}</div></div><div class="meta">${ro() ? t("split.src.op") + " " : ""}›</div></div>
+            ${ro() ? `<div class="split-sub" style="margin-top:6px">${t("prof.ro")} <button type="button" class="ghost-sm" data-profcopy style="display:inline;padding:0">${t("prof.copy")}</button></div>` : ""}
             <div class="split-zone">
               <div class="split-zone-head">
                 <div class="label">${t("split.zone")}</div>
-                <button type="button" class="ghost-sm" data-go="zones">${t("split.zones")}</button>
+                ${ro() ? "" : `<button type="button" class="ghost-sm" data-go="zones">${t("split.zones")}</button>`}
               </div>
               ${zoneTabs()}
             </div>
             <div class="split-policy">${policy}</div>
             <input class="field sm split-search" data-sq type="search" value="${splitQ.replace(/"/g, "&quot;")}" placeholder="${t("split.search")}" spellcheck="false" />
             <div class="split-list ${splitOn ? "" : "dim"}">${rows || `<div class="split-sub">${t("split.empty")}</div>`}</div>
-            <button class="ghost-sm" data-go="splitadd" style="align-self:flex-start;margin:8px 0 4px">+ ${t("split.add")}</button>
+            ${ro() ? "" : `<button class="ghost-sm" data-go="splitadd" style="align-self:flex-start;margin:8px 0 4px">+ ${t("split.add")}</button>`}
             <div class="actions">
-              <button class="btn" data-go="splitin">${t("import")}</button>
+              ${ro() ? "" : `<button class="btn" data-go="splitin">${t("import")}</button>`}
               <button class="btn" data-go="splitout">${t("export")}</button>
               <button class="btn" data-go="splitrepo">${t("split.repo")}</button>
             </div>
@@ -1662,6 +1707,36 @@ outbounds:
             <button class="btn back" data-go="split">${t("back")}</button>
           </div>
         </div>`,
+      profiles: () => {
+        const rows = PROFS.map((pr) => `<div class="rrow ${pr.id === activeProf ? "live" : ""}" data-prof="${pr.id}">
+            <div><div class="n">${profName(pr)}</div><div class="u">${pr.src === "op" ? t("prof.src.op").replace("%@", pr.conn) : t(pr.link ? "prof.src.link" : "prof.src.own")}</div></div>
+            <div class="meta">${pr.id === activeProf ? "✓ " + t("prof.active") : ""}${pr.src === "op" ? `<div><button type="button" class="ghost-sm" data-profcopy="${pr.id}" style="padding:2px 0">${t("prof.copy")}</button></div>` : ""}</div>
+          </div>`).join("");
+        return `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("prof.title")}</h1>
+            <p>${t("prof.sub")}</p>
+            <div class="split-list">${rows}</div>
+            <button class="ghost-sm" data-go="profimp" style="align-self:flex-start;margin:8px 0 4px">+ ${t("prof.imp")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      profimp: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("prof.imp")}</h1>
+            <p>${t("prof.imp.sub")}</p>
+            <div class="drop">${t("prof.imp.drop")}</div>
+            <input class="field sm" style="margin-top:12px" placeholder="loft://routes/…" spellcheck="false" />
+            <button class="btn connect on" style="margin-top:16px" data-profadd>${t("prof.imp.go")}</button>
+            <button class="btn back" data-go="profiles">${t("back")}</button>
+          </div>
+        </div>`,
+      splitop: () => { useProfile("op"); current = "split"; return scenes.split(); },
       zones: () => {
         const rows = zoneIds().map((id) => {
           const z = zoneById(id) || { id, builtin: false, def: zoneDef(id) };
@@ -2111,6 +2186,20 @@ outbounds:
           });
         };
       });
+      sceneEl.querySelectorAll("[data-prof]").forEach((el) => {
+        el.onclick = (ev) => { ev.stopPropagation(); useProfile(el.dataset.prof); show("profiles", true); };
+      });
+      sceneEl.querySelectorAll("[data-profcopy]").forEach((el) => {
+        el.onclick = (ev) => { ev.stopPropagation(); if (!ro()) useProfile("op"); copyProfile(); show(current, true); };
+      });
+      sceneEl.querySelectorAll("[data-profadd]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          PROFS.push({ id: "link" + ++profSeq, src: "own", link: true, name: "loft-routes", data: { zones: OP_DATA.zones.map((z) => Object.assign({}, z)), routes: OP_DATA.routes.map((r) => Object.assign({}, r, { src: "me" })) } });
+          show("profiles", true);
+        };
+      });
+      if (ro() && current === "splitadd") sceneEl.querySelectorAll(".win input, .win select, .win .seg button").forEach((x) => { x.disabled = true; });
       sceneEl.querySelectorAll("[data-sfmt]").forEach((el) => {
         el.onclick = (ev) => {
           ev.stopPropagation();
@@ -2338,6 +2427,7 @@ outbounds:
         u.searchParams.set("simple", simpleOn ? "1" : "0");
         u.searchParams.set("dock", dockMode);
         u.searchParams.set("ldns", localDns);
+        u.searchParams.set("prof", activeProf === "op" ? "op" : "own");
         u.searchParams.set("reconnect", reconnectOn ? "1" : "0");
         u.searchParams.set("settab", setTab);
         u.searchParams.set("extip", extIPOn ? "1" : "0");
