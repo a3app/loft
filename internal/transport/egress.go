@@ -1,5 +1,10 @@
 package transport
 
+// Egress is the node's road to the internet: the exit rules choose, per
+// member, whether a connection goes out directly, through another interface,
+// or through an upstream proxy (SOCKS5, HTTP, SSTP). This file also answers
+// "who is behind this session" for those rules and for the status file.
+
 import (
 	"context"
 	"net"

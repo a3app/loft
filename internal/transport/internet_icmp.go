@@ -2,6 +2,11 @@ package transport
 
 // Internet ICMP: CmdDgram dest:1 outside the overlay CIDR is emitted as a
 // real echo from the node; the reply returns as CmdDgram session-ip:1, async.
+//
+// This makes "ping 8.8.8.8" work for a member: the client puts the ICMP echo
+// packet in a Dgram frame, the node sends a real echo from its own address,
+// and wraps the reply in a fresh IPv4 header addressed to the member's
+// overlay IP. Only echo requests are sent, never other ICMP types.
 
 import (
 	"encoding/binary"
@@ -19,10 +24,15 @@ var (
 	internetICMPPing = pingInternetEcho
 )
 
+// internetICMPWait is how long one echo waits for its reply.
 const internetICMPWait = 3 * time.Second
 
 // DeliverInternetICMP emits a real ICMP echo from the node and returns the
 // reply to the session as CmdDgram dst:1. Overlay dests stay in DeliverICMP.
+// Local-only destinations and addresses the lists drop are ignored. The
+// reply goes to the session's overlay IP, not to the source written in the
+// packet, so a member cannot aim replies at someone else. When 16 echoes are
+// already in flight, new ones are dropped rather than queued.
 func DeliverInternetICMP(from *mux.Session, pkt []byte) {
 	if from == nil || len(pkt) < 28 || pkt[0]>>4 != 4 || pkt[9] != ipProtoICMP {
 		return
@@ -90,6 +100,8 @@ func encapsulateIPv4(src, dst net.IP, proto byte, payload []byte) []byte {
 }
 
 // pingInternetEcho writes echo on ip4:icmp (or UDP ICMP) and reads one reply.
+// A raw ip4:icmp socket needs root; the udp4 "ping socket" is the
+// unprivileged fallback on Linux.
 func pingInternetEcho(dst net.IP, echo []byte) ([]byte, net.IP, error) {
 	c, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
 	if err != nil {
@@ -115,6 +127,8 @@ func pingInternetEcho(dst net.IP, echo []byte) ([]byte, net.IP, error) {
 	return buf[:n], src, nil
 }
 
+// restoreICMPIdent puts the client's original identifier and sequence
+// number back into the reply and recomputes the checksum.
 // Linux SOCK_DGRAM IPPROTO_ICMP overwrites the identifier. The client's
 // ping socket (and Darwin utun NAT) match on the original id+seq.
 func restoreICMPIdent(reply, echo []byte) []byte {

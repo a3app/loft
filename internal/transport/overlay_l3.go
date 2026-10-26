@@ -1,6 +1,11 @@
 package transport
 
 // L3 overlay switch: gateway ICMP, member IP, internet NAT.
+//
+// An L3 session carries whole IP packets instead of mux streams. The node
+// switches each packet: a ping to the gateway is answered here, a packet to
+// another member's overlay IP is passed to that member, and anything else
+// leaves through the node's NAT to the internet (l3inet.go).
 
 import (
 	"encoding/binary"
@@ -9,6 +14,11 @@ import (
 )
 
 // DeliverL3 switches one IPv4 datagram from an L3 session.
+// The source address is forced to the session's lease, so a member cannot
+// send packets as another overlay IP. Inside the overlay CIDR the same ACL
+// as for mux streams applies; the routed-subnet lookup is done only for
+// destinations inside the overlay CIDR. Outside it, local-only addresses
+// and addresses the lists drop are discarded before NAT.
 func (o *Overlay) DeliverL3(from l3Sink, pkt []byte) {
 	if o == nil || o.N() == nil || from == nil || len(pkt) < 20 {
 		return
@@ -91,6 +101,8 @@ func (o *Overlay) l3Reply(ip string) func([]byte) error {
 	}
 }
 
+// l3ProtoPort is the protocol name and destination port of pkt, for ACL
+// checks. ICMP uses the pseudo-port 1, as Dgram frames do.
 func l3ProtoPort(pkt []byte, ihl int) (proto, dport string) {
 	switch pkt[9] {
 	case 1:
@@ -108,6 +120,9 @@ func l3ProtoPort(pkt []byte, ihl int) (proto, dport string) {
 	return proto, dport
 }
 
+// l3Emit hands pkt to a member session. An L3 peer gets the packet as is.
+// A mux peer can take only ICMP (as a Dgram to port 1); other packets to a
+// mux peer are dropped here.
 func l3Emit(p *ovPeer, pkt []byte) {
 	if p == nil {
 		return

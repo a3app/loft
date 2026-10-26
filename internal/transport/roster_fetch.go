@@ -1,6 +1,14 @@
 package transport
 
 // Client roster fetch: GET public manifest, verify Ed25519, pin controller_pub.
+//
+// The roster is the controller-signed list of live fronts and relays. A
+// client normally gets it inside Status, but a fresh client has no session
+// yet. So the roster is also published as a plain JSON file ("manifest") on
+// a public URL, typically behind a CDN. Trust comes from the signature, not
+// from TLS: the client accepts only a roster signed by the pinned controller
+// key (controller_pub), or, with tofu: true, by the first valid signer it
+// sees (trust on first use).
 
 import (
 	"context"
@@ -135,6 +143,8 @@ func BootstrapRoster(ctx context.Context, cfg *config.ClientConfig) {
 	}
 }
 
+// httpOriginURL is the scheme://host[:port] of raw, with ws/wss mapped to
+// http/https, or "" when raw has no host.
 func httpOriginURL(raw string) string {
 	s := strings.TrimSpace(raw)
 	switch {
@@ -222,6 +232,7 @@ func appendPublicURL(urls []string, seen map[string]struct{}, raw string, decoy 
 	return append(urls, raw)
 }
 
+// skipPublicFetch reports whether url points at a node origin from decoy.
 func skipPublicFetch(url string, decoy map[string]struct{}) bool {
 	hp := originHostPort(url)
 	if hp == "" {
@@ -233,6 +244,10 @@ func skipPublicFetch(url string, decoy map[string]struct{}) bool {
 
 // applyRosterIdentity copies decoy SNI and mask_pub from a matching roster
 // relay onto addr so the first ClientHello is dest-shaped.
+// "Dest-shaped" means the ClientHello uses the decoy site's name as SNI and
+// carries the sid v3 mark for that node's mask key, so to the network it
+// looks like a visit to the decoy site. With no host match, the first entry
+// that has a decoy or mask key (or the controller itself, id "self") is used.
 func applyRosterIdentity(addr, urlHost string) {
 	urlHost = strings.ToLower(strings.TrimSpace(urlHost))
 	var fallback wire.RelayInfo
@@ -256,6 +271,7 @@ func applyRosterIdentity(addr, urlHost string) {
 	}
 }
 
+// applyRelayIdentity remembers e's decoy name and mask key for addr.
 func applyRelayIdentity(addr string, e wire.RelayInfo) {
 	if e.Decoy != "" {
 		RememberDecoy(addr, []string{e.Decoy})

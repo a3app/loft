@@ -5,6 +5,12 @@ package transport
 // same request). dest:1 elsewhere is internet ICMP (async). gateway:53 is
 // DNS (FilterDgram starts DeliverDNS so GET does not wait on ReadDgram).
 // Remaining datagrams are internet UDP.
+//
+// A Dgram frame carries one datagram inside the mux, addressed "host:port".
+// UDP is the normal case. Port 1 is borrowed to mean "this payload is an
+// ICMP packet" (1 is the IP protocol number of ICMP), so ping works through
+// fronts that can only carry datagrams. The overlay gateway on port 53 is
+// the node's DNS resolver for members.
 
 import (
 	"net"
@@ -52,6 +58,9 @@ func hookServerDgrams(ms *mux.Session) {
 // serveDgrams is the node's UDP relay: each CmdDgram is one UDP packet.
 // dst:1 inside the overlay CIDR is switched ICMP. dst:1 elsewhere is a
 // real ICMP echo from the node, not internet UDP port 1.
+// Without exit rules, all of a session's internet UDP goes out of one node
+// socket and replies come back on it; with exit rules, an egress.UDP is
+// made for the member and remade when the rules are reloaded.
 func serveDgrams(ms *mux.Session) {
 	hookServerDgrams(ms)
 	pc, err := net.ListenPacket("udp", ":0")

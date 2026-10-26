@@ -5,6 +5,11 @@ package transport
 // next to the primary) otherwise sends from the primary; NAT that
 // dialed the secondary drops the reply. TCP does not: the stack copies
 // the SYN dest.
+//
+// The fix: read each datagram with its destination address (IP_PKTINFO /
+// IPV6_PKTINFO control message), remember it per remote address, and set it
+// as the source when replying to that remote. Used by the UDP listeners
+// (QUIC/HTTP/3 front and the decoy UDP splice).
 
 import (
 	"net"
@@ -16,6 +21,8 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
+// listenUDPSticky listens on addr and replies from the address each peer
+// wrote to.
 func listenUDPSticky(addr string) (net.PacketConn, error) {
 	pc, err := net.ListenPacket("udp", addr)
 	if err != nil {
@@ -24,6 +31,8 @@ func listenUDPSticky(addr string) (net.PacketConn, error) {
 	return newStickyUDP(pc), nil
 }
 
+// stickyUDP is a PacketConn that remembers, per remote address, which local
+// IP the remote sent to (src), and uses that IP as the reply source.
 type stickyUDP struct {
 	uc  *net.UDPConn
 	p4  *ipv4.PacketConn
@@ -32,6 +41,8 @@ type stickyUDP struct {
 	src map[string]net.IP
 }
 
+// newStickyUDP turns on destination-address control messages; pc is
+// returned as is when it is not a UDPConn.
 func newStickyUDP(pc net.PacketConn) net.PacketConn {
 	uc, ok := pc.(*net.UDPConn)
 	if !ok {
@@ -44,6 +55,7 @@ func newStickyUDP(pc net.PacketConn) net.PacketConn {
 	return &stickyUDP{uc: uc, p4: p4, oob: make([]byte, 128), src: map[string]net.IP{}}
 }
 
+// udpConnOf is the UDPConn under pc (plain or sticky), or nil.
 func udpConnOf(pc net.PacketConn) *net.UDPConn {
 	switch c := pc.(type) {
 	case *net.UDPConn:
@@ -55,6 +67,7 @@ func udpConnOf(pc net.PacketConn) *net.UDPConn {
 	}
 }
 
+// ReadFrom reads one datagram and records its destination IP for addr.
 func (s *stickyUDP) ReadFrom(p []byte) (int, net.Addr, error) {
 	n, oobn, _, addr, err := s.uc.ReadMsgUDP(p, s.oob)
 	if err != nil {
@@ -68,6 +81,8 @@ func (s *stickyUDP) ReadFrom(p []byte) (int, net.Addr, error) {
 	return n, addr, nil
 }
 
+// WriteTo replies from the recorded IP for addr, or as a plain write when
+// none is known.
 func (s *stickyUDP) WriteTo(p []byte, addr net.Addr) (int, error) {
 	ip := s.lookup(addr)
 	ua, _ := addr.(*net.UDPAddr)
@@ -102,6 +117,7 @@ func (s *stickyUDP) SyscallConn() (syscall.RawConn, error) {
 	return s.uc.SyscallConn()
 }
 
+// dstFromOOB extracts the destination IP from a control message.
 func dstFromOOB(oob []byte) net.IP {
 	if len(oob) == 0 {
 		return nil
@@ -117,6 +133,7 @@ func dstFromOOB(oob []byte) net.IP {
 	return nil
 }
 
+// srcOOB builds a control message that sets the source IP of a send.
 func srcOOB(ip net.IP) []byte {
 	if ip == nil {
 		return nil

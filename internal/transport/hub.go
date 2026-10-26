@@ -2,6 +2,12 @@ package transport
 
 // Controller hub: relay trunks Open hub:1 (HTTP/1.1) or hub:2 (HTTP/2);
 // ctl:1 is fleet control. Member Open is overlay Handle or internet TCP.
+//
+// Every stream a client opens inside the mux names a target "host:port".
+// On the node that target decides where the stream goes: to another member
+// on the overlay, to the controller's own service addresses (only for a relay
+// trunk), or out to the internet. hub and ctl are not real hosts; they are
+// names reserved inside the mux between a relay and the controller.
 
 import (
 	"net"
@@ -16,6 +22,10 @@ import (
 )
 
 // Hub is the controller HTTP handler that serves member fronts over a relay trunk.
+// A relay does not run a member's loft session itself: it removes the public
+// TLS and forwards the plain HTTP bytes to the controller through a hub:*
+// stream, and the controller serves them with this handler as if they came
+// in directly.
 var Hub http.Handler
 
 // FleetCtl is the controller fleet (nil if this node is not a controller).
@@ -42,6 +52,10 @@ func attachHello(ms *mux.Session, rest []byte) {
 }
 
 // proxyStream routes one Open: overlay Handle, ctl:1, hub:*, or internet TCP.
+// The overlay gets the first look, so overlay addresses never leak to the
+// internet path. ctl and hub are refused on a session that is not a relay
+// trunk. Internet TCP follows the egress rules for the member behind the
+// session and is then copied both ways until either side ends.
 func proxyStream(st *mux.Stream) {
 	defer st.Close()
 	target := st.Target()

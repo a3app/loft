@@ -2,6 +2,11 @@ package transport
 
 // Overlay DNS stub: the node answers gateway:53 (UDP CmdDgram and TCP Open)
 // from dns.upstream (DoH, DoT, or UDP). quic:// is reserved, not served.
+//
+// Members' devices use the overlay gateway as their DNS server. The node
+// does not resolve names itself: it forwards each query to the configured
+// upstreams (Cloudflare DoH when none is set). The query rides the tunnel to
+// the node, so the member's local network never sees the names.
 
 import (
 	"bytes"
@@ -90,6 +95,7 @@ func parseDNSUp(s string) (dnsUp, error) {
 	return dnsUp{kind: "udp", addr: net.JoinHostPort(host, port)}, nil
 }
 
+// dnsTypeAAAA is the DNS query type for IPv6 addresses.
 const dnsTypeAAAA = 28
 
 // Resolve tries each upstream and returns SERVFAIL if none answer.

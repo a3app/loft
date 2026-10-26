@@ -1,6 +1,13 @@
 package transport
 
 // Named address lists: controller-signed sets mapped by the client to via/direct/drop.
+//
+// Lists are named sets of domains and subnets, signed by the controller.
+// The node only publishes them; the client decides what each
+// name means in client.yaml use: (via = through loft, direct = bypass loft,
+// drop = refuse), with default: for anything unmatched. This way a list can
+// be updated centrally without touching each client's policy. Status carries
+// the lists serial and hash, so a client refetches only when they change.
 
 import (
 	"context"
@@ -39,6 +46,7 @@ func ParseAction(s string) Action {
 }
 
 // book is the live named-list snapshot: signed sets plus client use map.
+// It is replaced as a whole (copy on write), so LookupAddr needs no lock.
 type book struct {
 	sets map[string][]wire.Addr
 	use  map[string]Action
@@ -81,6 +89,9 @@ func RememberLists(l wire.Lists) {
 }
 
 // LookupAddr applies drop, then direct, then via on matching mapped lists; else default.
+// Drop wins over everything so a blocking list cannot be bypassed by a host
+// that also sits in a wider via or direct list. Sets with no use: entry are
+// ignored. Without any lists the answer is via.
 func LookupAddr(host string, ip net.IP) Action {
 	b := liveBook.Load()
 	if b == nil {
@@ -160,6 +171,8 @@ func FetchLists(ctx context.Context, url string) error {
 }
 
 // BootstrapLists applies use: then fetches lists.json from ListsURL, bootstrap, or CDN URLs.
+// The URLs it tried are kept, so maybeRefreshLists can refetch from them
+// later when Status announces a newer serial.
 // Direct node origins are skipped the same way as BootstrapRoster.
 func BootstrapLists(ctx context.Context, cfg *config.ClientConfig) {
 	SetUse(cfg)
@@ -199,6 +212,7 @@ func BootstrapLists(ctx context.Context, cfg *config.ClientConfig) {
 	}
 }
 
+// listSources holds the URLs BootstrapLists built, for later refreshes.
 var listSources atomic.Value // []string
 
 // maybeRefreshLists refetches when Status lists serial/hash is newer than the live book.

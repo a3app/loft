@@ -2,6 +2,12 @@ package transport
 
 // CONNECT splice dials host:port without inner mux. Overlay IPs stay on mux.
 // Origin mounts this only when fronts lists connect. Every CONNECT carries 0x02.
+//
+// The connect front is the simplest one: one HTTP CONNECT request carries one
+// TCP connection to the internet, with no mux and no extra frame encryption
+// inside TLS. It costs a full 0x02 check per connection but has no framing
+// overhead. Addresses inside the overlay are refused here because overlay
+// traffic needs the mux (member identity, switch rules).
 
 import (
 	"errors"
@@ -25,6 +31,7 @@ var spliceDial func(network, addr string, d time.Duration) (net.Conn, error)
 // spliceLookup is LookupIP; tests stub it.
 var spliceLookup = net.LookupIP
 
+// spliceOpen opens the outbound TCP connection for one CONNECT.
 func spliceOpen(target string) (net.Conn, error) {
 	if spliceDial != nil {
 		return spliceDial("tcp4", target, 10*time.Second)
@@ -51,7 +58,11 @@ func (s *SpliceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // ServeSplice is HTTP CONNECT without inner mux. Overlay member IPs stay on mux.
-// Failed 0x02 is 404. Loopback, link-local, multicast, and unspecified are 403.
+// Failed 0x02 is 404, the same answer an ordinary site gives, so a prober
+// learns nothing. Loopback, link-local, multicast, and unspecified are 403.
+// The target is also checked against the lists (an ActDrop entry is 403).
+// After 200 the connection is hijacked and bytes are copied both ways; any
+// bytes the client already sent after the request are forwarded first.
 func ServeSplice(w http.ResponseWriter, r *http.Request, token []byte, seen *ecrypto.Nonces) {
 	if r.Method != http.MethodConnect {
 		http.NotFound(w, r)
@@ -125,7 +136,9 @@ var LoopbackOpen bool
 var errDenied = errors.New("drop")
 
 // spliceDenied is loopback, link-local (includes 169.254.169.254), multicast,
-// unspecified, localhost, and cloud metadata names.
+// unspecified, localhost, and cloud metadata names. It keeps members from
+// reaching the node's own services and the cloud metadata endpoint. A name
+// that does not resolve is denied too.
 func spliceDenied(host string) bool {
 	h := strings.ToLower(strings.TrimSuffix(strings.Trim(host, "[]"), "."))
 	if denied, known := spliceNameDenied(h); known {
@@ -156,6 +169,8 @@ func spliceNameDenied(h string) (denied, known bool) {
 	return false, false
 }
 
+// spliceIPDenied is the address check itself; loopback is allowed only
+// when LoopbackOpen is set (tests).
 func spliceIPDenied(ip net.IP) bool {
 	if ip != nil && ip.IsLoopback() {
 		return !LoopbackOpen
@@ -207,6 +222,8 @@ func closeWrite(c net.Conn) {
 
 // openConnect issues HTTP CONNECT :authority target on a live GET HTTP/2
 // client from the pool (same pick as mux GETs, including h2_max_age recycle).
+// This is the client side of the connect front: each call makes a fresh
+// 0x02 and sends it in the Cookie header, the same place GET uses.
 func (g *GET) openConnect(target string) (net.Conn, error) {
 	cl := g.pickClient()
 	if cl == nil {

@@ -1,6 +1,14 @@
 package transport
 
 // Auth helpers verify member keys and stamp overlay identity into Status.
+//
+// A member is a device or person holding an lt_… key. The node checks a
+// client twice: first by the TLS ClientHello session id (a "sid" mark that
+// only loft clients produce, so the decoy listener can tell loft from a
+// browser), then by the 0x02 handshake (nonce, ephemeral X25519 key and an
+// HMAC that proves the member key). After that, the member's Hello is bound
+// to the overlay: it gets its virtual address and the node learns which
+// member it is.
 
 import (
 	"net"
@@ -33,13 +41,16 @@ func clientTokens(fallback []byte) [][]byte {
 	return nil
 }
 
-// frontAuth checks 0x02 (nonce || eph_c || HMAC).
+// frontAuth checks 0x02 (nonce || eph_c || HMAC) against every accepted
+// client secret. seen rejects a replayed nonce.
 func frontAuth(fallback, blob []byte, seen *ecrypto.Nonces) (ecrypto.Auth, error) {
 	return ecrypto.FinishAuth(clientTokens(fallback), blob, seen)
 }
 
 // verifyAny reports whether hello.SessionID is loft: sid v3 under the node
 // X25519 (fallback is LOFT_TOKEN), then sid v2 under a member key.
+// sid v3 needs the node's private key to check, so a stolen member key cannot
+// forge it; sid v2 is kept for clients that have not learned mask_pub yet.
 // The decoy listener does not use this for a mask node's decoy SNI: there
 // only sid v3 is admitted.
 func verifyAny(fallback []byte, h clientHello) bool {
@@ -60,6 +71,9 @@ func verifyMemberV2(fallback []byte, h clientHello) bool {
 }
 
 // stampOverlayAuth binds the session to the overlay after Hello decode.
+// With a member keyring, the member id comes from the key that passed 0x02,
+// not from what the client wrote in Hello, so a member cannot claim another
+// member's identity. An unknown key turns Status into AuthBadKey.
 func stampOverlayAuth(st *wire.Status, rest []byte, sess *mux.Session, remote net.Addr, token []byte) {
 	ov := NetSwitch()
 	if ov == nil || st == nil {
@@ -109,7 +123,10 @@ func finishStatusL3(st *wire.Status, token []byte, rest []byte, sink l3Sink, rem
 	}
 }
 
-// finishStatus stamps overlay identity onto st.
+// finishStatus stamps overlay identity onto st. It runs once per session,
+// after 0x02 passed and Hello was read. If the overlay gave no address, the
+// fallback client IP and gateway are used so the client still has a
+// working TUN.
 func finishStatus(st *wire.Status, token []byte, sid string, rest []byte, sess *mux.Session, remote net.Addr) {
 	if st == nil {
 		return
@@ -126,6 +143,10 @@ func finishStatus(st *wire.Status, token []byte, sid string, rest []byte, sess *
 }
 
 // applyRelayRole sets mux.SetRelay only for a real relay trunk.
+// A relay is an extra loft node that forwards its members to the controller
+// over one mux (the trunk). A relay mux may open the service addresses
+// hub:* and ctl:1, so the bit is granted only to a Hello with CapRelay that
+// passes the enrol rules.
 // Hold / instance_id are not touched: a gap still parks the mux.
 func applyRelayRole(ms *mux.Session, rest, token []byte) {
 	if ms == nil {

@@ -2,6 +2,15 @@ package transport
 
 // Relay edge: terminate public TLS (decoy/mask) and pipe TLS-plaintext HTTP
 // to the controller hub. Inner mux AEAD stays on the controller.
+//
+// A relay is an extra public entry point for the same network. It owns a
+// public address, a TLS certificate and a decoy site, but no member keys and
+// no overlay: it only peels off the outer TLS and passes the HTTP bytes on.
+// It reaches the controller as an ordinary loft client whose Hello carries
+// CapRelay; that one mux is the trunk. Each member connection becomes one
+// hub:1 (HTTP/1.1) or hub:2 (HTTP/2) stream on the trunk, so the
+// controller's member keys, leases and frame encryption never leave the
+// controller.
 
 import (
 	"context"
@@ -33,6 +42,8 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 		Fingerprint: "chrome",
 		Insecure:    true,
 	}
+	// The controller URL scheme picks the trunk front: http(s) → get,
+	// wss → ws (the default, with certificate checks off for a bare host).
 	if len(cfg.Controller) >= 8 && (cfg.Controller[:7] == "http://" || (len(cfg.Controller) >= 6 && cfg.Controller[:4] == "http" && cfg.Controller[4] != 's')) {
 		o.Type = "get"
 	}
@@ -44,6 +55,8 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 		o.Type = "ws"
 		o.Insecure = false
 	}
+	// The Holder keeps the current trunk; Supervise replaces it on every
+	// reconnect, so pipeHub always opens hub streams on a live mux.
 	h := &Holder{}
 	rt := &relayRuntime{started: time.Now()}
 	go func() {
@@ -65,6 +78,10 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 	if cfg.Mask && len(cfg.Decoy) > 0 {
 		mask = NewMask([]byte(cfg.Token), cfg.Decoy[0])
 	}
+	// Non-loft ClientHellos go to the decoy site. A loft one (recognised by
+	// the sid mark) on a mask relay finishes the mask TLS handshake inside
+	// the decoy listener and comes here; without mask it is returned by
+	// Accept and terminated with the relay's own certificate below.
 	pipe := func(c net.Conn, hello clientHello) {
 		if rt.drain.Load() {
 			c.Close()
@@ -114,6 +131,8 @@ func wrapRelayDecoy(ln net.Listener, token []byte, origins []string, mask *Mask,
 }
 
 // pipeHub Opens hub:1 or hub:2 on the trunk (ALPN h2 → hub:2) and copies c.
+// It waits up to 15 s for a trunk, so a member that connects while the relay
+// is still reaching the controller is not dropped at once.
 func pipeHub(h *Holder, rt *relayRuntime, c net.Conn) {
 	defer c.Close()
 	if rt != nil {

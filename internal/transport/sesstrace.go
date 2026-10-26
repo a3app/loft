@@ -3,6 +3,16 @@ package transport
 // Node session trace: GET seq, puller, 404, silence. Off unless SetSessTrace.
 // No payloads, no member keys; sid is 8 hex. Join with a client drive log on
 // seq + UTC. Does not change status codes or body lengths.
+//
+// This is the node-side partner of the client drive log. The GET front
+// carries the mux in many numbered HTTP requests (seq). Each GET carries
+// uplink frames and is answered with downlink frames, and only one GET at a
+// time, the Puller, may take frames out of the mux. When a session stalls,
+// the trace shows which seq the node saw, which one it was waiting for, and
+// how long the client was silent. Event kinds: HS (handshake), MISS (unknown
+// or failed sid), GET (one request answered), GAP (2 s or more without a
+// GET), and DROP. It only writes lines; what the client sees on the wire
+// is the same with tracing on or off.
 
 import (
 	"fmt"
@@ -92,6 +102,7 @@ func (t *SessTrace) Event(kind string, kv ...string) {
 	}
 }
 
+// sessEvent writes to the installed tracer, if any.
 func sessEvent(kind string, kv ...string) {
 	if t := sessTrace.Load(); t != nil {
 		t.Event(kind, kv...)
@@ -100,6 +111,8 @@ func sessEvent(kind string, kv ...string) {
 
 func tracing() bool { return sessTrace.Load() != nil }
 
+// shortSID cuts a sid to 8 characters, enough to join lines without
+// logging the whole session id.
 func shortSID(id string) string {
 	if id == "" {
 		return "-"
@@ -138,6 +151,7 @@ var cmdName = [...]string{
 	wire.CmdReport: "report",
 }
 
+// traceCmds lists the distinct frame commands in frames, e.g. "open,data".
 func traceCmds(frames []wire.Frame) string {
 	if len(frames) == 0 {
 		return ""
@@ -178,6 +192,11 @@ func traceMISS(sid string, seq uint64, reason string, r *http.Request) {
 	sessEvent("MISS", "sid="+shortSID(sid), fmt.Sprintf("seq=%d", seq), "reason="+reason, "h2="+h2flag(r), remoteKV(r))
 }
 
+// traceGET logs one answered GET with the session's sequence state:
+// next is the next uplink seq the node will apply, down is the seq whose
+// turn it is to pull downlink, held counts uplink requests that came early
+// and wait for a gap to fill, skip counts seqs that gave up their pull turn.
+// A GAP line comes first when the client was silent for 2 s or more.
 func traceGET(ss *serverSess, r *http.Request, seq uint64, frames []wire.Frame, via string, pulled bool, wait time.Duration) {
 	if !tracing() {
 		return
@@ -224,6 +243,10 @@ func traceGET(ss *serverSess, r *http.Request, seq uint64, frames []wire.Frame, 
 	sessEvent("GET", kv...)
 }
 
+// viaAfterPull labels how a GET ended for the trace: ingest (it pulled
+// downlink), replay (a cached reply was resent), old (its seq is already
+// behind the downlink turn), skip (it gave up its turn), held (its uplink
+// waits for an earlier seq), or wait.
 func viaAfterPull(ss *serverSess, seq uint64, pulled bool, replayAfter bool) string {
 	if pulled {
 		return "ingest"

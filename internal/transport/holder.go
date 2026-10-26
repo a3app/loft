@@ -1,6 +1,12 @@
 package transport
 
 // Holder swaps the live dialer without tearing SOCKS/TUN (metro / LTE).
+//
+// The local inbounds (SOCKS5, TUN) are given a Holder instead of a concrete
+// front. Supervise reconnects and calls Set with each new front; the
+// inbounds keep calling Open on the same Holder, so they never see the swap.
+// "metro" in comments here means a subway ride: the link drops for seconds
+// at every tunnel and comes back on another path.
 
 import (
 	"errors"

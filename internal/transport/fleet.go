@@ -1,6 +1,14 @@
 package transport
 
 // Controller fleet: enrol and beat on ctl:1, silent-evict, signed roster and slices.
+//
+// The controller is the main node; relays are extra entry points that
+// forward their members to it. The fleet is the controller's view of which
+// relays are alive. From it the controller builds the roster: a list of
+// live fronts and relays signed with the controller's ed25519 key, sent to
+// clients in Status so they know where to fail over. Each relay also gets a
+// signed slice: its own config (URL, decoy, fronts, drain, weight), valid
+// for 24 hours.
 
 import (
 	"crypto/ed25519"
@@ -33,6 +41,8 @@ type Fleet struct {
 }
 
 // liveRelay is one enrolled edge: last beat, load, and ctl closer.
+// gen tells apart two ctl sessions of the same relay id: when a relay
+// re-enrols, the old session's late cleanup must not remove the new one.
 type liveRelay struct {
 	info     wire.RelayInfo
 	beatMS   uint32
@@ -186,6 +196,8 @@ func (f *Fleet) ServeCtl(st *mux.Stream) {
 }
 
 // admit replaces any previous session for id, YAML-overrides URL/decoy/fronts, and signs a slice.
+// The relays: rows in the controller config win over what the relay
+// reported about itself, so the operator decides what clients are told.
 func (f *Fleet) admit(req wire.EnrolReq, closer func()) (wire.Slice, uint64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -290,6 +302,8 @@ func (f *Fleet) SetDrain(id string, drain bool) {
 }
 
 // resign rebuilds cached roster bytes: advertise as id self, plus non-drain live relays.
+// serial starts at the start time and grows with each change, so clients
+// can tell a newer roster from an older one. Without a signing key there is no roster.
 func (f *Fleet) resign() {
 	r := wire.Roster{Serial: f.serial}
 	if f.cfg != nil && f.cfg.Advertise != "" {

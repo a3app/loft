@@ -1,6 +1,13 @@
 package transport
 
 // Userspace IPv4 NAT for L3 internet destinations: ICMP echo, UDP, TCP.
+//
+// An L3 client sends raw IP packets, but the node does not forward them as
+// packets. Instead it plays the far end itself: for each TCP or UDP flow it opens an ordinary
+// socket to the destination, and builds the reply packets by hand. The TCP
+// part is a minimal stack: handshake, ACKs, window-limited sending and
+// FIN/RST. It has no retransmission or reordering; the link between client
+// and node is a reliable HTTP/2 stream.
 
 import (
 	"crypto/rand"
@@ -13,6 +20,10 @@ import (
 	"github.com/a3app/loft/internal/egress"
 )
 
+// IP protocol numbers, TCP flag bits, and NAT limits: at most l3FlowCap
+// flows of each kind (TCP, UDP) node-wide, UDP flows close after l3UDPIdle
+// without a reply, and the SYN-ACK offers MSS l3MSS and window scale
+// l3WScale.
 const (
 	ipProtoTCP = 6
 	ipProtoUDP = 17
@@ -28,11 +39,18 @@ const (
 	l3TCPChunk = 1240
 )
 
+// l3Tuple identifies one NAT flow: member overlay address and port, and the
+// internet address and port.
 type l3Tuple struct {
 	src, dst     [4]byte
 	sport, dport uint16
 }
 
+// l3TCPFlow is one proxied TCP connection. iss is the node's initial
+// sequence number, snd the next sequence number to send, rcv the next one
+// expected from the client, una the last byte the client acknowledged, and
+// cwin the client's advertised window (scaled by wshift). pend holds data
+// the client sent before the outbound connection was up.
 type l3TCPFlow struct {
 	src, dst      net.IP
 	sport, dport  uint16
@@ -48,6 +66,7 @@ type l3TCPFlow struct {
 	ack           chan struct{}
 }
 
+// l3UDPFlow is one proxied UDP flow with its own node socket.
 type l3UDPFlow struct {
 	src, dst     net.IP
 	sport, dport uint16
@@ -62,6 +81,7 @@ var (
 	l3UDP   = map[l3Tuple]*l3UDPFlow{}
 )
 
+// l3FlowKey builds the flow key; ok is false for non-IPv4 addresses.
 func l3FlowKey(src, dst net.IP, sport, dport uint16) (k l3Tuple, ok bool) {
 	s, d := src.To4(), dst.To4()
 	if s == nil || d == nil {
@@ -96,6 +116,8 @@ func l3Inet(reply func([]byte) error, src net.IP, pkt []byte) {
 	}
 }
 
+// l3InetICMP sends a real echo from the node and returns the reply as an
+// IPv4 packet to src; it shares the 16-echo limit with DeliverInternetICMP.
 func l3InetICMP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 	if len(pkt) < ihl+8 || pkt[ihl] != icmpEcho {
 		return
@@ -123,6 +145,8 @@ func l3InetICMP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) 
 	}()
 }
 
+// l3InetUDP sends the UDP payload from the flow's node socket, opening the
+// socket (and its reader) on the first packet of a flow.
 func l3InetUDP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 	if len(pkt) < ihl+8 {
 		return
@@ -158,6 +182,8 @@ func l3InetUDP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 	_, _ = f.pc.WriteTo(payload, &net.UDPAddr{IP: dst, Port: int(dport)})
 }
 
+// l3UDPRead wraps each reply from the internet into a UDP/IPv4 packet back
+// to the member, and removes the flow after l3UDPIdle of silence.
 func l3UDPRead(key l3Tuple, f *l3UDPFlow) {
 	defer func() {
 		_ = f.pc.Close()
@@ -179,6 +205,7 @@ func l3UDPRead(key l3Tuple, f *l3UDPFlow) {
 	}
 }
 
+// encapsulateIPv4UDP builds an IPv4 UDP packet with a valid checksum.
 func encapsulateIPv4UDP(src, dst net.IP, sport, dport uint16, payload []byte) []byte {
 	udp := make([]byte, 8+len(payload))
 	binary.BigEndian.PutUint16(udp[0:2], sport)
@@ -195,6 +222,11 @@ func encapsulateIPv4UDP(src, dst net.IP, sport, dport uint16, payload []byte) []
 	return pkt
 }
 
+// l3InetTCP handles one TCP segment from the member. A bare SYN starts a
+// flow and an outbound dial; RST ends the flow; ACK updates the send window;
+// FIN half-closes the outbound connection; payload is written to it (or
+// buffered until the dial completes) and acknowledged at once. Segments are
+// taken in arrival order; sequence numbers are not checked.
 func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 	if len(pkt) < ihl+20 {
 		return
@@ -292,6 +324,12 @@ func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 	f.mu.Unlock()
 }
 
+// l3TCPDial connects to the destination and only then answers the SYN, so
+// a refused dial reaches the member as RST, like a real host would. It then
+// copies data from the internet into TCP segments, never sending more than
+// the member's window allows; when the window is full it waits for an ACK
+// (or 50 ms) and tries again. The outbound dial uses the default exit rule
+// (no member identity).
 func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 	c, err := dialOut(egress.Who{}, net.JoinHostPort(f.dst.String(), strconv.Itoa(int(f.dport))))
 	if err != nil {
@@ -360,6 +398,7 @@ func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 	}
 }
 
+// close closes the outbound connection once.
 func (f *l3TCPFlow) close() {
 	f.once.Do(func() {
 		if f.conn != nil {
@@ -368,6 +407,9 @@ func (f *l3TCPFlow) close() {
 	})
 }
 
+// l3TCPPacket builds one TCP/IPv4 segment from the destination to the
+// member, with the flow's current sequence and ack numbers. A SYN carries
+// the MSS and window scale options.
 func l3TCPPacket(f *l3TCPFlow, flags byte, payload []byte) []byte {
 	hdr := 20
 	var opts []byte
@@ -431,6 +473,8 @@ func tcpWScale(th []byte, dataOff int) uint8 {
 	return 0
 }
 
+// transportChecksum is the TCP/UDP checksum over the IPv4 pseudo-header
+// (addresses, protocol, length) and the segment.
 func transportChecksum(src, dst net.IP, proto byte, payload []byte) uint16 {
 	s4, d4 := src.To4(), dst.To4()
 	if s4 == nil || d4 == nil {

@@ -1,6 +1,9 @@
 package transport
 
 // Overlay ICMP echo helpers: swap request to reply, rewrite Darwin utun dummy src.
+// On macOS the utun interface sends overlay pings from a dummy link-local
+// address (169.254.8.1), so the node puts the session's real overlay IP in
+// the source before switching the packet.
 
 import (
 	"encoding/binary"
@@ -39,7 +42,8 @@ func icmpEchoSwap(pkt []byte) ([]byte, bool) {
 }
 
 // rewriteIPv4Src stamps the session overlay IP and fixes the IP checksum.
-// ICMP checksum does not cover addresses.
+// ICMP checksum does not cover addresses. TCP and UDP checksums do (through
+// the pseudo-header), and this function does not update them.
 func rewriteIPv4Src(pkt []byte, src net.IP) []byte {
 	ip4 := src.To4()
 	if ip4 == nil || len(pkt) < 20 {

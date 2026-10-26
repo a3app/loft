@@ -1,6 +1,13 @@
 package transport
 
 // Relay ctl:1 enrol and heartbeat; signed slice applies drain and decoy.
+//
+// ctl:1 is the control channel between a relay and its controller, carried
+// as one stream on the trunk. The relay enrols (sends its id, public URL,
+// decoy and fronts), the controller answers with a signed slice (this
+// relay's config: drain, decoy, heartbeat interval), and then the relay
+// sends a heartbeat (beat) with its connection count and uptime. A relay that
+// stops beating is dropped from the roster, so clients stop using it.
 
 import (
 	"context"
@@ -17,6 +24,8 @@ import (
 )
 
 // relayRuntime is live relay state: conn count, drain, and the decoy listener.
+// Drain means "accept no new member connections": the controller sets it to
+// take a relay out of service without cutting the connections it carries.
 type relayRuntime struct {
 	started time.Time
 	conns   atomic.Int32
@@ -76,6 +85,8 @@ func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *r
 }
 
 // relayCtlSession sends enrol_req, applies enrol_ok/slice, then beats.
+// It returns when the stream fails or ctx ends; runRelayCtl then enrols
+// again, so a controller restart is picked up without restarting the relay.
 func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, rt *relayRuntime, beatMS *uint32) error {
 	st, err := sess.Open(net.JoinHostPort(wire.CtlHost, wire.CtlPort))
 	if err != nil {

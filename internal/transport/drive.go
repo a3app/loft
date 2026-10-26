@@ -3,6 +3,18 @@ package transport
 // Drive-debug log: handshake, radio, overlay ping, stalls, path, resumes.
 // iPhone hotspot keeps 172.20.10.7 across tower hops; WatchPath misses those
 // stalls, so WatchStall redials when mux ping or radio TCP dies.
+//
+// The "drive log" is a field-test tool: run the client in a moving car or
+// train and get one line per second about the network path, the radio, the
+// node and the mux. The same sampling also feeds WatchStall, which is a
+// second trigger for reconnects next to WatchPath: it catches a link that
+// keeps the same IP address but stops carrying traffic.
+//
+// Words used here: "radio" is the local link (gateway or a public anycast
+// address answering a TCP SYN); "node" is a TCP SYN to the loft node's
+// front address; "ping" is a mux Ping frame through the live session; HOL is
+// head-of-line blocking, when one stuck request holds up everything behind
+// it in the same connection.
 
 import (
 	"context"
@@ -23,6 +35,8 @@ import (
 )
 
 // Drive writes one-line events to a writer (file + stderr).
+// It also keeps the state WatchStall needs between ticks: the last path,
+// consecutive stall count, time of the last fire, and mux byte counters.
 type Drive struct {
 	mu       sync.Mutex
 	w        io.Writer
@@ -119,6 +133,7 @@ func (d *Drive) Event(kind string, kv ...string) {
 	}
 }
 
+// driveEvent writes to the installed drive log, if any.
 func driveEvent(kind string, kv ...string) {
 	if d := driveLog.Load(); d != nil {
 		d.Event(kind, kv...)
@@ -132,6 +147,7 @@ func driveMs(d time.Duration) string {
 	return fmt.Sprintf("%dms", d.Milliseconds())
 }
 
+// driveErr is err on one line, cut to 180 characters.
 func driveErr(err error) string {
 	if err == nil {
 		return ""
@@ -143,6 +159,8 @@ func driveErr(err error) string {
 	return s
 }
 
+// frontHostPort is host:port of an outbound URL (ws/wss as http/https,
+// default ports 80/443), for the node TCP probe.
 func frontHostPort(raw string) string {
 	s := strings.TrimSpace(raw)
 	s = strings.Replace(s, "wss://", "https://", 1)
@@ -168,6 +186,9 @@ func frontHostPort(raw string) string {
 	return host
 }
 
+// Stall detection: stallNeed bad samples in a row fire a reconnect, then
+// stallCool must pass before the next one. stallQuiet is how long without
+// mux bytes before a dead ping counts. The probe timeouts bound one tick.
 const (
 	stallNeed   = 3
 	stallCool   = 8 * time.Second
@@ -208,6 +229,10 @@ func WatchStall(ctx context.Context, h *Holder, d *Drive) <-chan struct{} {
 	return ch
 }
 
+// tick takes one sample: path, then radio, node and mux ping probes in
+// parallel. It logs a TICK line and decides whether the link is stalled.
+// A closed mux fires at once (subject to cooldown); a stall fires only after
+// stallNeed samples in a row.
 func (d *Drive) tick(ctx context.Context, h *Holder, fire chan<- struct{}) {
 	p := SamplePath()
 	if p.Key() != d.last.Key() {
@@ -304,6 +329,7 @@ func (d *Drive) tick(ctx context.Context, h *Holder, fire chan<- struct{}) {
 	}
 }
 
+// fireStall signals Supervise to reconnect, as if the path had changed.
 func (d *Drive) fireStall(p PathInfo, fire chan<- struct{}, why string) {
 	if d == nil {
 		return
@@ -350,6 +376,7 @@ func (d *Drive) noteStall(stall bool) bool {
 	return true
 }
 
+// stallWhy names which probes were dead, for the STALL line.
 func stallWhy(radio, ping, node bool) string {
 	switch {
 	case radio && ping && node:
@@ -402,6 +429,8 @@ func btoi(v bool) int {
 	return 0
 }
 
+// probeRadio checks the local link: a TCP SYN to the gateway, then to
+// 1.1.1.1 and 8.8.8.8. Any answer, even a refusal, means the link is up.
 func probeRadio(ctx context.Context) (time.Duration, error) {
 	if g := defaultGateway(); g != "" {
 		dt, err := probeTCP(ctx, net.JoinHostPort(g, "80"), 400*time.Millisecond)
@@ -420,6 +449,8 @@ func probeRadio(ctx context.Context) (time.Duration, error) {
 	return dt, err
 }
 
+// radioUp treats "refused" and "reset" as success: the packet reached a
+// host that answered, so the link itself works.
 func radioUp(err error) bool {
 	if err == nil {
 		return true
@@ -428,6 +459,7 @@ func radioUp(err error) bool {
 	return strings.Contains(s, "refused") || strings.Contains(s, "reset")
 }
 
+// probeTCP times a TCP connect to addr outside the tunnel (protect dialer).
 func probeTCP(ctx context.Context, addr string, d time.Duration) (time.Duration, error) {
 	if addr == "" {
 		return 0, fmt.Errorf("empty")

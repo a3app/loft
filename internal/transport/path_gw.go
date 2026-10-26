@@ -1,6 +1,7 @@
 package transport
 
 // Default IPv4 gateway for drive-debug PATH samples.
+// The gateway is only logged; it does not drive reconnects (see WatchPath).
 
 import (
 	"context"
@@ -64,6 +65,7 @@ func darwinGatewayIf(name string) string {
 	return darwinRoute("route", "-n", "get", "-inet", "-ifscope", name, "default")
 }
 
+// darwinRoute runs route(8) and returns its "gateway:" value.
 func darwinRoute(args ...string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
 	defer cancel()
@@ -83,6 +85,8 @@ func darwinRoute(args ...string) string {
 	return ""
 }
 
+// linuxGateway reads the default route (destination 00000000) from
+// /proc/net/route, where addresses are little-endian hex.
 func linuxGateway() string {
 	b, err := os.ReadFile("/proc/net/route")
 	if err != nil {

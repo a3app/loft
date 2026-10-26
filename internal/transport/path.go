@@ -3,6 +3,14 @@ package transport
 // Path watch: physical IPv4 change (Wi-Fi / LTE). Supervise rebinds GET
 // HTTP/2 (same sid) and Parks other fronts. -if pins the key to that NIC:
 // a leftover TUN 0/1 is not a path change and must not RST the GET session.
+//
+// When a phone moves from Wi-Fi to LTE, the old TCP connection under the
+// front is dead, but the OS may take a long time to say so. Waiting for a
+// timeout would freeze the user's traffic. So the client samples which local
+// IPv4 address its traffic leaves from, and when that changes it reconnects
+// right away. -if is the client flag that binds loft to one network
+// interface; then only that interface's address counts. TUN 0/1 refers to
+// the default-route halves (0.0.0.0/1, 128.0.0.0/1) a TUN client installs.
 
 import (
 	"context"
@@ -29,6 +37,9 @@ func hostOnly(addr string) string {
 }
 
 // overlaySrc is a tunnel/link-local source: TUN 0/1 is not a physical path change.
+// While loft's own TUN holds the default route, the "egress" address is the
+// overlay address (10.8.x.x by default) or a utun/tun/ppp interface; such a
+// sample says nothing about the physical network and is ignored.
 func overlaySrc(ip string) bool {
 	p := net.ParseIP(ip)
 	if p == nil {
@@ -188,6 +199,8 @@ func MergePath(ctx context.Context, a, b <-chan struct{}) <-chan struct{} {
 }
 
 // WatchPath sends on the returned channel when the default IPv4 egress changes.
+// Empty and overlay samples are skipped, so losing the network for a moment
+// (no address) is not reported; only a move to a different address is.
 func WatchPath(ctx context.Context) <-chan struct{} {
 	ch := make(chan struct{}, 1)
 	go func() {

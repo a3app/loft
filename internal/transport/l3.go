@@ -2,6 +2,14 @@ package transport
 
 // L3 front: HTTP/2 CONNECT (same path and 0x02 as h2), then AEAD IP datagrams.
 // Corked 0x01 batches amortize Seal/Open; Rebind swaps CONNECT without dropping the IP pump.
+//
+// The l3 front is for clients that want a plain IP tunnel instead of the
+// mux: after the usual 0x02 handshake, the HTTP/2 CONNECT body carries
+// whole IPv4/IPv6 packets, each message encrypted with the session key. It
+// is opt-in (fronts: l3) and is not a mux front. "Corking" means holding
+// small packets for up to l3CorkWait (or until l3Cork bytes) so several go
+// out in one encrypted message; urgent packets (UDP, ICMP, TCP SYN/FIN/RST)
+// flush at once so handshakes and DNS are not delayed.
 
 import (
 	"context"
@@ -17,6 +25,8 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+// l3InCap is the inbound packet queue length; l3Cork and l3CorkWait bound
+// one batch by size and delay; l3Rebind limits one Rebind attempt.
 const (
 	l3InCap    = 256
 	l3Cork     = 16 << 10
@@ -143,6 +153,8 @@ func (l *L3) Rebind() error {
 }
 
 // l3Sess is the authenticated IP pump on one CONNECT stream.
+// The same type serves the client and the node side. mu guards conn and key
+// (swapped by adopt); wmu guards the cork batch and write error.
 type l3Sess struct {
 	mu   sync.Mutex
 	conn net.Conn
@@ -158,6 +170,7 @@ type l3Sess struct {
 	werr  error
 }
 
+// die flushes pending packets and closes done once.
 func (s *l3Sess) die() {
 	s.wmu.Lock()
 	if s.timer != nil {
@@ -219,6 +232,7 @@ func (s *l3Sess) WriteIP(p []byte) error {
 	return nil
 }
 
+// flushAsync is the cork timer: send what has gathered.
 func (s *l3Sess) flushAsync() {
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
@@ -226,6 +240,8 @@ func (s *l3Sess) flushAsync() {
 	_ = s.flushLocked()
 }
 
+// flushLocked sends the cork batch; a send error sticks in werr so later
+// writes fail fast. Caller holds wmu.
 func (s *l3Sess) flushLocked() error {
 	if s.timer != nil {
 		s.timer.Stop()
@@ -244,6 +260,8 @@ func (s *l3Sess) flushLocked() error {
 	return err
 }
 
+// sendLocked seals pkts as one message (one packet, or a batch) and writes
+// it on the current conn.
 func (s *l3Sess) sendLocked(pkts [][]byte) error {
 	var plain []byte
 	if len(pkts) == 1 {
@@ -274,6 +292,8 @@ func (s *l3Sess) ReadIP() ([]byte, error) {
 	}
 }
 
+// l3Urgent reports a packet that must not wait in the cork: ICMP, UDP, and
+// TCP control segments (SYN, FIN, RST).
 func l3Urgent(p []byte) bool {
 	if len(p) < 20 {
 		return false
@@ -292,6 +312,7 @@ func l3Urgent(p []byte) bool {
 	}
 }
 
+// l3Deliver splits one decrypted message into packets and emits each copy.
 func l3Deliver(plain []byte, emit func([]byte)) {
 	pkts, err := wire.SplitL3(plain)
 	if err != nil || len(pkts) == 0 {
@@ -367,6 +388,9 @@ func startL3(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, a
 	return s, nil
 }
 
+// readLoop decrypts messages from conn into the inbound queue. Messages
+// that fail to decrypt are skipped. When conn ends, the session dies only
+// if conn is still the live one; after a Rebind the old loop just exits.
 func (s *l3Sess) readLoop(conn net.Conn, key []byte) {
 	defer func() {
 		s.mu.Lock()
@@ -400,6 +424,10 @@ func (s *l3Sess) readLoop(conn net.Conn, key []byte) {
 }
 
 // serveL3 authenticates (already done), writes AEAD(Status), and switches IP.
+// This is the node side. Each packet from the client goes to
+// Overlay.DeliverL3; packets for this client come back through link, which
+// the overlay holds as this session's l3Sink. When the CONNECT ends, the
+// lease is released.
 func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth) {
 	defer conn.Close()
 	link := &l3Sess{conn: conn, key: a.Key, in: make(chan []byte, l3InCap), done: make(chan struct{})}

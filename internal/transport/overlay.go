@@ -1,6 +1,16 @@
 package transport
 
 // Overlay switch: leases, hub/mesh/vlan Forward, loft.peer announce, DNS, ICMP.
+//
+// The overlay is the members' private network. Each connected member
+// session gets an overlay IP (a lease from network.conf), and the node acts
+// as the switch between them: a stream or packet aimed at another member's
+// overlay IP is passed to that member's session instead of the internet.
+// The peers mode in network.conf decides who may reach whom: hub, mesh, or
+// vlan (only members of the same VLAN). On top of that, ACL rules (accept /
+// drop by address, tag, VLAN, protocol and port) are checked on every Open
+// and packet. Routes let a member publish a whole subnet behind it (for
+// example a lab LAN); traffic to that subnet goes through that member.
 
 import (
 	"io"
@@ -45,6 +55,9 @@ type l3Sink interface {
 }
 
 // ovPeer is one attached session: overlay IP, member, instance, VLAN, P2P listen.
+// A peer is either a mux session (sess) or an L3 session (l3), never both.
+// seen is the client's public address as the node saw it; together with
+// listen and p2pPub it lets other members try a direct P2P connection.
 type ovPeer struct {
 	ip     string
 	member string
@@ -92,7 +105,8 @@ func remoteAddr(s string) net.Addr {
 	return &net.TCPAddr{IP: ip, Port: int(wire.Port(port))}
 }
 
-// stampOverlay binds overlay from Hello without a member token.
+// stampOverlay binds overlay from Hello without a member token (the shared
+// token case: no key ring, so no member id).
 func stampOverlay(st *wire.Status, rest []byte, sess *mux.Session, remote net.Addr) {
 	stampOverlayAuth(st, rest, sess, remote, nil)
 }
@@ -105,6 +119,8 @@ func (o *Overlay) Contains(host string) bool {
 	return o.N().ContainsIP(net.ParseIP(host))
 }
 
+// stampL3 copies the segment's gateway, DNS servers and MTU onto Status.
+// Bind uses it for mux sessions too.
 func (o *Overlay) stampL3(st *wire.Status, vlan int) {
 	n := o.N()
 	if n == nil {
@@ -119,6 +135,12 @@ func (o *Overlay) stampL3(st *wire.Status, vlan int) {
 }
 
 // Bind admits the session, stamps overlay IP/VLAN/DNS on Status, and attaches the peer.
+// The registry leases the IP for member+instance, so the same install gets
+// the same address back after a reconnect (OKResumed). When the registry
+// refuses and the node runs on a shared token (no member keys), any free
+// pool address is handed out instead; with member keys the refusal stands.
+// Status also gets the peer hints, routes, ACL policy, session TTL and rate
+// cap for this member, and the TTL and rate are armed on the session.
 func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, remote net.Addr) {
 	if o == nil {
 		return
@@ -184,6 +206,8 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 }
 
 // BindL3 is Bind for an L3 IP pump instead of a mux session.
+// Unlike Bind it only stamps the TTL and rate onto Status; it does not arm
+// them, since armTTL and armRate work on a mux session.
 func (o *Overlay) BindL3(st *wire.Status, hello wire.Hello, sink l3Sink, remote net.Addr) {
 	if o == nil {
 		return
@@ -269,6 +293,9 @@ func (o *Overlay) stampRoutes(st *wire.Status) {
 }
 
 // stampPolicy copies compact ACL onto Status so P2P can use the same Allow.
+// A direct P2P connection between two members bypasses the node, so the
+// client must enforce the same rules itself. The policy carries the rules,
+// the member's own tags and the tags of other live peers (up to 32 each).
 func (o *Overlay) stampPolicy(st *wire.Status, member string) {
 	if o == nil || o.N() == nil || st == nil {
 		return
@@ -309,6 +336,7 @@ func (o *Overlay) stampPolicy(st *wire.Status, member string) {
 	st.Policy = p
 }
 
+// policyRuleOf converts a network.conf rule to its compact wire form.
 func policyRuleOf(r netconf.Rule) wire.PolicyRule {
 	pr := wire.PolicyRule{}
 	if r.Action == "accept" {
@@ -341,6 +369,8 @@ func policyRuleOf(r netconf.Rule) wire.PolicyRule {
 	return pr
 }
 
+// sessionOf is the session settings for member: built-in defaults, then the
+// network's, then the member's own overrides.
 func (o *Overlay) sessionOf(member string) netconf.SessionPolicy {
 	p := netconf.DefaultSession().Merge(o.N().Session)
 	if m := o.N().MemberByID(member); m != nil {
@@ -403,6 +433,10 @@ func (o *Overlay) armRate(sess *mux.Session, member string) {
 }
 
 // resolveVia is live overlay IP of Member/Tag, else sticky RouteHop.
+// A route names the member (or a tag) that owns the subnet, not an IP; the
+// IP is whatever that member holds now. When no such member is connected,
+// RouteHop falls back to the configured Via or the member's sticky
+// (reserved) IP.
 func (o *Overlay) resolveVia(r netconf.Route) string {
 	if o == nil {
 		return ""
@@ -423,6 +457,7 @@ func (o *Overlay) resolveVia(r netconf.Route) string {
 	return ""
 }
 
+// liveMember is the overlay IP of a connected session of member id.
 func (o *Overlay) liveMember(id string) string {
 	if o == nil || id == "" {
 		return ""
@@ -437,6 +472,7 @@ func (o *Overlay) liveMember(id string) string {
 	return ""
 }
 
+// liveTag is the overlay IP of a connected member that has tag.
 func (o *Overlay) liveTag(tag string) string {
 	if o == nil || tag == "" || o.N() == nil {
 		return ""
@@ -455,6 +491,7 @@ func (o *Overlay) liveTag(tag string) string {
 }
 
 // Routed is the overlay IP of the member that owns host, or empty.
+// With overlapping routes the most specific (longest prefix) wins.
 func (o *Overlay) Routed(host string) string {
 	if o == nil || o.N() == nil {
 		return ""
@@ -489,6 +526,9 @@ func (o *Overlay) attach(ip string, vlan int, sess *mux.Session, remote net.Addr
 }
 
 // attachTo records a mux session and/or L3 sink under overlay ip.
+// The new row replaces any previous row of this session and any other
+// session that held the same IP (for example the old session of a client
+// that just reconnected).
 func (o *Overlay) attachTo(ip string, vlan int, sess *mux.Session, sink l3Sink, remote net.Addr, member, inst string) {
 	if ip == "" || (sess == nil && sink == nil) {
 		return
@@ -660,6 +700,10 @@ func (o *Overlay) Forward(st *mux.Stream, host, port string) {
 }
 
 // forwardMember is overlay-IP Open: ACL, then splice as 127.0.0.1:port on the peer.
+// The node opens a stream on the destination member's mux with target
+// 127.0.0.1:port, which that member's client connects to its own local
+// port. A VLAN mismatch gets its own reset code so the client can tell it
+// from an ordinary ACL drop.
 func (o *Overlay) forwardMember(st *mux.Stream, host, port string) {
 	if o == nil {
 		st.Reset(wire.StreamRefused)
@@ -738,6 +782,8 @@ func (o *Overlay) tagsOf(id string) []string {
 	return o.tagsOfLocked(id)
 }
 
+// tagsOfLocked is tagsOf for callers that hold o.mu. It reads only the
+// config, not the session table.
 func (o *Overlay) tagsOfLocked(id string) []string {
 	if o.N() == nil || id == "" {
 		return nil
@@ -762,6 +808,7 @@ func (o *Overlay) splice(st *mux.Stream, dst *mux.Session, target string) {
 
 // DeliverICMP switches an overlay IPv4 ICMP packet.
 // Gateway address is answered here. Other members follow peers/ACL.
+// A destination inside a routed subnet goes to the member that owns it.
 func (o *Overlay) DeliverICMP(from *mux.Session, pkt []byte) {
 	if o == nil || o.N() == nil || from == nil || len(pkt) < 28 {
 		return
@@ -833,6 +880,10 @@ func parsePeerAnnounce(target string) (uint16, bool) {
 }
 
 // Handle is overlay Open: loft.peer announce, gateway:53 DNS TCP, or CIDR Forward.
+// It returns false when the target is not an overlay matter, so the caller
+// sends it to the internet. loft.peer:<port> is a pseudo-target a client
+// opens to announce its P2P listen port; it may be followed by a 32-byte
+// X25519 public key for the P2P handshake.
 func (o *Overlay) Handle(st *mux.Stream) bool {
 	if o == nil {
 		return false

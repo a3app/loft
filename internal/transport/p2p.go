@@ -1,6 +1,23 @@
 package transport
 
 // Mesh P2P: Status peer hints, loft.peer announce, LFT TCP preface, hub-splice fallback.
+//
+// Normally a connection from one member to another goes client → node →
+// client ("hub splice"). In mesh or vlan mode with p2p allowed, members can
+// also connect directly:
+//  1. Each client listens on a TCP port and announces it to the node by
+//     opening the pseudo-target loft.peer:<port> and writing its X25519
+//     public key.
+//  2. The node puts the live announcements into every Status as peer hints:
+//     overlay IP, public address as the node saw it, port, VLAN, key.
+//  3. To reach a member, a client first dials that member's hint directly
+//     and sends a 42-byte "LFT" preface: its overlay IP plus an HMAC keyed
+//     by X25519 between the two members' keys. The receiver checks the HMAC
+//     and the ACL, then connects the TCP to its own local port.
+//  4. If the direct dial fails, the stream goes through the node as usual.
+//
+// This file also keeps the client's view of the overlay from the last
+// Status (the vis* variables), which the rest of the client reads.
 
 import (
 	"crypto/ecdh"
@@ -25,7 +42,8 @@ import (
 )
 
 // p2pAllow and vis* are the client overlay view. LFT HMAC uses X25519
-// against the peer pub from Status hints.
+// against the peer pub from Status hints. vis* are written by RememberVis
+// after each OK handshake and read under visMu.
 var (
 	p2pAllow   atomic.Bool
 	visMu      sync.Mutex
@@ -57,6 +75,8 @@ func SetP2PClient(on bool) {
 }
 
 // EnsureP2PKey loads or mints a persistent X25519 seed next to client.instance.
+// The key must survive restarts, because other members learn it through
+// Status hints and use it to check this client's LFT preface.
 func EnsureP2PKey() (*ecdh.PrivateKey, error) {
 	p2pKeyMu.Lock()
 	defer p2pKeyMu.Unlock()
@@ -85,6 +105,7 @@ func EnsureP2PKey() (*ecdh.PrivateKey, error) {
 	return k, nil
 }
 
+// p2pPublic is this client's P2P X25519 public key.
 func p2pPublic() []byte {
 	k, err := EnsureP2PKey()
 	if err != nil || k == nil {
@@ -93,6 +114,8 @@ func p2pPublic() []byte {
 	return k.PublicKey().Bytes()
 }
 
+// p2pShared is the X25519 shared secret with a peer; both members compute
+// the same value, so it can key the LFT HMAC in either direction.
 func p2pShared(peerPub []byte) ([]byte, error) {
 	k, err := EnsureP2PKey()
 	if err != nil {
@@ -112,6 +135,7 @@ func resetP2PKeyForTest() {
 }
 
 // RememberVis caches overlay IP/DNS, peers mode, P2P flag, and peer hints from Status.
+// It also stores the hold settings and the instance_id the node assigned.
 func RememberVis(st wire.Status) {
 	visMu.Lock()
 	visMode = st.Peers
@@ -266,6 +290,8 @@ func sessionTTLMS() uint32 {
 
 // p2pPermit is Network.Allow reconstructed from Status policy. Old nodes
 // omit policy: Present is false and this returns true (hub splice still checks).
+// A direct connection never passes the node, so both ends run this check:
+// the dialer before it dials, the receiver before it connects locally.
 func p2pPermit(src, dst net.IP, proto string, dport, srcVLAN, dstVLAN int) bool {
 	if src == nil || dst == nil {
 		return false
@@ -314,6 +340,7 @@ func p2pPermit(src, dst net.IP, proto string, dport, srcVLAN, dstVLAN int) bool 
 	return n.Allow(p)
 }
 
+// visPeers maps the Status peers byte to the netconf mode name.
 func visPeers(mode byte) string {
 	switch mode {
 	case 1:
@@ -325,6 +352,7 @@ func visPeers(mode byte) string {
 	}
 }
 
+// peerTags is the tag list the policy carries for overlay ip.
 func peerTags(pol wire.Policy, ip string) []string {
 	for _, p := range pol.Peers {
 		if p.IP == ip {
@@ -342,6 +370,7 @@ func inVisCIDR(cidr string, ip net.IP) bool {
 	return n.Contains(ip)
 }
 
+// netconfRule is the reverse of policyRuleOf: wire rule back to netconf.
 func netconfRule(r wire.PolicyRule) netconf.Rule {
 	out := netconf.Rule{Src: r.Src, Dst: r.Dst, SrcTag: r.SrcTag, DstTag: r.DstTag}
 	if r.Action == 1 {
@@ -375,6 +404,9 @@ func netconfRule(r wire.PolicyRule) netconf.Rule {
 }
 
 // tryP2P dials a matching peer hint with the LFT preface; nil means use hub splice.
+// It is tried only for an IP-literal target, with p2p enabled on both the
+// client and the node, in mesh or vlan mode. The dial timeout is short
+// (800 ms) so a peer behind NAT costs little before the fallback.
 func tryP2P(target string) net.Conn {
 	if !p2pAllow.Load() {
 		return nil
@@ -417,6 +449,7 @@ const lftSize = 4 + 4 + 16 + 16 + 2 // "LFT\x00" || src_ipv4 || mac || nonce || 
 
 var lftMagic = [4]byte{'L', 'F', 'T', 0}
 
+// overlayIPv4 is this client's overlay IPv4, or nil.
 func overlayIPv4() net.IP {
 	visMu.Lock()
 	s := visIP
@@ -430,6 +463,7 @@ func visVLANOf() uint16 {
 	return visVLAN
 }
 
+// hintPub is the P2P public key in the hint for overlay ip, or nil.
 func hintPub(ip string) []byte {
 	if h := hintOf(ip); h != nil && len(h.Pub) == 32 {
 		return append([]byte(nil), h.Pub...)
@@ -449,6 +483,9 @@ func hintOf(ip string) *wire.PeerHint {
 	return nil
 }
 
+// lftMAC is the 16-byte HMAC-SHA256 that proves the LFT sender holds the
+// P2P key of the member at src4. It also covers the nonce and destination
+// port, so the port cannot be changed in transit.
 func lftMAC(shared, nonce, src4 []byte, port uint16) []byte {
 	var pb [2]byte
 	binary.BigEndian.PutUint16(pb[:], port)
@@ -488,6 +525,8 @@ func p2pWriteHello(c net.Conn, destPort string, peerPub []byte) error {
 }
 
 // p2pReadHello verifies LFT using the initiator pub from Status hints.
+// A sender that is not in this client's hints is refused, since there is no
+// key to check it against.
 func p2pReadHello(c net.Conn) (port uint16, src net.IP, ok bool) {
 	_ = c.SetDeadline(time.Now().Add(time.Second))
 	buf := make([]byte, lftSize)
@@ -516,6 +555,9 @@ func p2pReadHello(c net.Conn) (port uint16, src net.IP, ok bool) {
 }
 
 // acceptMember splices incoming overlay Open to the local target (hub splice).
+// These are streams the node opens on this client's mux on behalf of another
+// member (see Overlay.forwardMember): the target is 127.0.0.1:port, or a
+// host in a subnet this member routes.
 func acceptMember(d Dialer) {
 	sess := d.Session()
 	if sess == nil {
