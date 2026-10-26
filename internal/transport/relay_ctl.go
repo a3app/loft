@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -126,6 +127,14 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 		return err
 	}
 	defer st.Close()
+	// A relay that knows of a promotion shows it first: an old controller
+	// that sees it stops instead of running next to the new one.
+	known, epoch := pin.takeover()
+	if len(known) > 0 {
+		if err := writeMsg(st, wire.EncodeFlt(wire.FltTakeover, known)); err != nil {
+			return err
+		}
+	}
 	if err := writeMsg(st, wire.EncodeFlt(wire.FltEnrolReq, req.Encode())); err != nil {
 		return err
 	}
@@ -145,6 +154,22 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 		if kind, body, err = wire.DecodeFlt(raw); err != nil {
 			return err
 		}
+	}
+	var ctlEpoch uint64
+	if kind == wire.FltTakeover {
+		ctlEpoch = pin.learn(body)
+		if raw, err = readMsg(st); err != nil {
+			return err
+		}
+		if kind, body, err = wire.DecodeFlt(raw); err != nil {
+			return err
+		}
+	}
+	// A controller of an older generation than one already seen was
+	// replaced; the trunk is closed so the relay moves to the next one.
+	if ctlEpoch < epoch {
+		sess.Close()
+		return errEnrol(fmt.Sprintf("controller of generation %d was replaced (generation %d)", ctlEpoch, epoch))
 	}
 	if kind == wire.FltEnrolNo {
 		_, reason := wire.DecodeEnrolNo(body)
@@ -247,6 +272,49 @@ type relayPin struct {
 	cur  []byte
 	ser  uint64
 	path string
+	// take is the newest Takeover seen (its generation in epoch), kept in
+	// takePath. The relay shows it to every controller it reaches, so an
+	// old controller that comes back learns it was replaced.
+	take     []byte
+	epoch    uint64
+	takePath string
+}
+
+// loadTake reads the saved Takeover.
+func (p *relayPin) loadTake() {
+	b, err := os.ReadFile(p.takePath)
+	if err != nil {
+		return
+	}
+	if t, err := wire.DecodeTakeover(b); err == nil {
+		p.take, p.epoch = b, t.Epoch
+	}
+}
+
+// takeover is the newest Takeover seen and its generation (nil, 0 if none).
+func (p *relayPin) takeover() ([]byte, uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.take, p.epoch
+}
+
+// learn checks a controller's Takeover against the current key and keeps
+// it when it is newer. It returns its generation, 0 when it is not valid.
+func (p *relayPin) learn(raw []byte) uint64 {
+	t, err := wire.DecodeTakeover(raw)
+	if err != nil || t.Verify(p.key()) != nil {
+		return 0
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if t.Epoch > p.epoch {
+		p.take, p.epoch = append([]byte(nil), raw...), t.Epoch
+		if p.takePath != "" {
+			_ = os.WriteFile(p.takePath, raw, 0o600)
+		}
+		log.Printf("loft-relay: controller is now standby %s (generation %d)", t.By, t.Epoch)
+	}
+	return t.Epoch
 }
 
 func (p *relayPin) key() []byte {

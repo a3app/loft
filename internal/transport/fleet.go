@@ -42,6 +42,53 @@ type Fleet struct {
 	cached []byte
 	roll   []byte // encoded KeyRoll while the controller key changes
 	rollTo int64  // its NotAfter (unix seconds)
+	take   []byte // encoded Takeover of this controller's generation; nil before any promotion
+	epoch  uint64 // its Epoch
+}
+
+// FenceFn is called when a relay shows this controller a valid Takeover
+// newer than its own: a standby has taken over, and this node must stop
+// running as the controller. The node sets it; nil only logs.
+var FenceFn func(wire.Takeover)
+
+// SetTakeover installs this controller's own Takeover (from a promotion).
+// One not signed by this controller's key is ignored.
+func (f *Fleet) SetTakeover(raw []byte) {
+	t, err := wire.DecodeTakeover(raw)
+	if err != nil || t.Verify(f.priv.Public().(ed25519.PublicKey)) != nil {
+		return
+	}
+	f.mu.Lock()
+	f.take, f.epoch = append([]byte(nil), raw...), t.Epoch
+	f.mu.Unlock()
+}
+
+// Takeover is this controller's own Takeover, or nil.
+func (f *Fleet) Takeover() []byte {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]byte(nil), f.take...)
+}
+
+// seeTakeover handles a Takeover a relay brought. It reports whether it
+// is newer than this controller's generation, that is, whether this node
+// has been replaced.
+func (f *Fleet) seeTakeover(raw []byte) bool {
+	t, err := wire.DecodeTakeover(raw)
+	if err != nil || t.Verify(f.priv.Public().(ed25519.PublicKey)) != nil {
+		return false
+	}
+	f.mu.Lock()
+	newer := t.Epoch > f.epoch
+	f.mu.Unlock()
+	if !newer {
+		return false
+	}
+	log.Printf("loft-fleet: replaced by standby %s at %s (generation %d)", t.By, time.Unix(t.At, 0).UTC().Format(time.RFC3339), t.Epoch)
+	if FenceFn != nil {
+		FenceFn(t)
+	}
+	return true
 }
 
 // SetKeyRoll installs the KeyRoll to publish (nil for none).
@@ -180,6 +227,16 @@ func (f *Fleet) ServeCtl(st *mux.Stream) {
 		return
 	}
 	kind, body, err := wire.DecodeFlt(raw)
+	// A relay that knows of a promotion shows its Takeover first.
+	if err == nil && kind == wire.FltTakeover {
+		if f.seeTakeover(body) {
+			return
+		}
+		if raw, err = readMsg(st); err != nil {
+			return
+		}
+		kind, body, err = wire.DecodeFlt(raw)
+	}
 	if err != nil || kind != wire.FltEnrolReq {
 		_ = writeMsg(st, wire.EncodeFlt(wire.FltEnrolNo, wire.EncodeEnrolNo(wire.EnrolForm, "want enrol")))
 		return
@@ -199,6 +256,13 @@ func (f *Fleet) ServeCtl(st *mux.Stream) {
 	// from the old one, so it can check the slice that follows.
 	if roll := f.KeyRoll(); len(roll) > 0 {
 		if err := writeMsg(st, wire.EncodeFlt(wire.FltKeyRoll, roll)); err != nil {
+			return
+		}
+	}
+	// After a promotion relays learn this controller's generation, so they
+	// can refuse an older controller that comes back.
+	if take := f.Takeover(); len(take) > 0 {
+		if err := writeMsg(st, wire.EncodeFlt(wire.FltTakeover, take)); err != nil {
 			return
 		}
 	}
