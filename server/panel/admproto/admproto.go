@@ -569,6 +569,9 @@ type Relay struct {
 	Drain   bool     `json:"drain,omitempty"`
 	Key     bool     `json:"key,omitempty"`
 	Replica bool     `json:"replica,omitempty"` // a standby controller: it gets a copy of the controller's state
+	// AutoPromote lets a standby take over by itself when most relays lose
+	// the controller too.
+	AutoPromote bool `json:"auto_promote,omitempty"`
 }
 
 // CtlRoll replaces the controller key; pinned clients and relays follow the

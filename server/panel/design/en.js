@@ -2,6 +2,8 @@
    page's own strings (whole or the pieces a template is built from); the
    panel test fails when a Russian string has no entry here. */
 window.LOFT_EN = {
+  "Повышать автоматически": "Promote automatically",
+  "Только для резервного: он сам станет основным, если 5 минут не видит эту ноду и большинство ретрансляторов (не меньше двух) её тоже не видят.": "Standby only: it becomes the controller by itself when it has not reached this node for 5 minutes and most relays (at least two) cannot reach it either.",
   "копия": "state copy",
   "Резервный controller": "Standby controller",
   "Получает копию настроек и ключей этой ноды и может её заменить: на нём выполняют sudo loft-node -c /etc/loft/node.conf -promote и перезапускают loft-node.": "Gets a copy of this node's settings and keys and can replace it: run sudo loft-node -c /etc/loft/node.conf -promote on it and restart loft-node.",

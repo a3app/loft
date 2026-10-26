@@ -2086,6 +2086,7 @@
       <div><div class="dlg-sec" style="margin:0">Фронты</div><div class="chk-row">${FR.map(([k, l]) => `<label class="chk"><input type="checkbox" data-rf="${k}" ${rf.includes(k) ? 'checked' : ''}>${l}</label>`).join('')}</div></div>
       <div><div class="fld"><label for="ry3">Вес</label><input id="ry3" class="num" value="${r.weight || 100}"></div><div class="hint">Чем больше, тем чаще клиенты выбирают этот ретранслятор (1–255).</div></div>
       <label class="chk"><input id="ry5" type="checkbox" ${r.replica ? 'checked' : ''}>Резервный controller<span class="hint" style="display:block;margin:0">Получает копию настроек и ключей этой ноды и может её заменить: на нём выполняют sudo loft-node -c /etc/loft/node.conf -promote и перезапускают loft-node.</span></label>
+      <label class="chk"><input id="ry6" type="checkbox" ${r.auto_promote ? 'checked' : ''}>Повышать автоматически<span class="hint" style="display:block;margin:0">Только для резервного: он сам станет основным, если 5 минут не видит эту ноду и большинство ретрансляторов (не меньше двух) её тоже не видят.</span></label>
       <label class="chk"><input id="ry4" type="checkbox" ${r.drain ? 'checked' : ''}>Вывести<span class="hint" style="display:block;margin:0">Новые клиенты сюда не идут; подключение ретранслятора закрывается.</span></label>
       ${own ? `<div><div class="dlg-sec" style="margin:0 0 6px">Ключ и установка</div>${inst}</div>` : ''}`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.relaySave(${i})">${nw ? 'Добавить' : 'Готово'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить ретранслятор" style="margin-left:auto" onclick="LIVE.relayDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
@@ -2093,7 +2094,7 @@
   L.relaySave = i => {
     const fr = [...document.querySelectorAll('[data-rf]')].filter(x => x.checked).map(x => x.dataset.rf);
     if (!fr.length) { toast('Нужен хотя бы один фронт'); return; }
-    const r = { id: $('#ry1').value.trim(), url: $('#ry2').value.trim(), fronts: fr, weight: parseInt($('#ry3').value, 10) || 100, drain: $('#ry4').checked, replica: $('#ry5').checked };
+    const r = { id: $('#ry1').value.trim(), url: $('#ry2').value.trim(), fronts: fr, weight: parseInt($('#ry3').value, 10) || 100, drain: $('#ry4').checked, replica: $('#ry5').checked, auto_promote: $('#ry5').checked && $('#ry6').checked };
     if (!/^[a-z][a-z0-9-]{0,11}$/.test(r.id)) { toast('Имя: латинская буква, затем буквы, цифры или дефис'); return; }
     const all = L.ndDraft.relays.slice();
     if (i < 0) all.push(r); else all[i] = r;

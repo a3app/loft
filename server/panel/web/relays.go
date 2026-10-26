@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -37,6 +38,7 @@ type relayInstall struct {
 	Key            string   `json:"key"`
 	ControllerURL  string   `json:"controller_url"`
 	ControllerURLs []string `json:"controller_urls"` // the controller, then standby controllers
+	Witness        []string `json:"witness,omitempty"` // standbys' witness addresses this relay reports to
 	ControllerPub string `json:"controller_pub"`
 	Advertise     string `json:"advertise"`
 	Version       string `json:"version"`
@@ -112,6 +114,7 @@ func (s *Server) relayInstall(ctx context.Context, by, op, id string) (relayInst
 	// After a standby is promoted it serves the same paths at its own
 	// address, so every relay also learns where the standbys are.
 	in.ControllerURLs = append([]string{ctl}, standbyURLs(nc, id)...)
+	in.Witness = standbyWitness(nc, id)
 	in.Command = in.command()
 	in.Config = in.nodeConf(nc.Relays[i].Fronts)
 	return in, nil
@@ -147,10 +150,32 @@ func standbyURLs(nc admproto.NodeConfig, id string) []string {
 	return out
 }
 
+// witnessPort is where a standby takes relays' witness reports.
+const witnessPort = "4443"
+
+// standbyWitness are the witness addresses of the standbys other than id.
+func standbyWitness(nc admproto.NodeConfig, id string) []string {
+	var out []string
+	for _, r := range nc.Relays {
+		u, err := url.Parse(r.URL)
+		if r.Replica && r.ID != id && err == nil && u.Hostname() != "" {
+			out = append(out, net.JoinHostPort(u.Hostname(), witnessPort))
+		}
+	}
+	return out
+}
+
 // args are the installer flags for this relay.
 func (in relayInstall) args() string {
-	return fmt.Sprintf("--role %s --id %s --advertise %s --controller '%s' --controller-pub %s --relay-key %s",
+	a := fmt.Sprintf("--role %s --id %s --advertise %s --controller '%s' --controller-pub %s --relay-key %s",
 		in.Role, in.ID, in.Advertise, strings.Join(in.ControllerURLs, " "), in.ControllerPub, in.Key)
+	if len(in.Witness) > 0 {
+		a += " --witness '" + strings.Join(in.Witness, " ") + "'"
+	}
+	if in.Role == "replica" {
+		a += " --witness-listen :" + witnessPort
+	}
+	return a
 }
 
 // command downloads the release archive for the host's architecture and
@@ -173,10 +198,23 @@ func (in relayInstall) nodeConf(fronts []string) string {
 		"advertise " + in.Advertise + "\n" +
 		"controller " + strings.Join(in.ControllerURLs, " ") + "\n" +
 		"controller_pub " + in.ControllerPub + "\n" +
+		in.witnessConf() +
 		"cert /etc/loft/tls/fullchain.pem\n" +
 		"key /etc/loft/tls/privkey.pem\n" +
 		"mask disable\n" +
 		"fronts " + strings.Join(fronts, " ") + "\n"
+}
+
+// witnessConf is the witness lines of the relay's node.conf.
+func (in relayInstall) witnessConf() string {
+	s := ""
+	if len(in.Witness) > 0 {
+		s += "witness " + strings.Join(in.Witness, " ") + "\n"
+	}
+	if in.Role == "replica" {
+		s += "witness_listen :" + witnessPort + "\n"
+	}
+	return s
 }
 
 // relayBundle sends the loft-node release archive for one architecture with
