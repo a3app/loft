@@ -227,6 +227,8 @@
     .rrow .meta { text-align: right; font-size: 11px; color: var(--stone); flex-shrink: 0; }
     .rrow .meta .src { color: var(--mute); font-size: 10px; margin-top: 2px; }
     .rlist.dim { opacity: .5; }
+    .seg.seg3 button { padding-left: 4px; padding-right: 4px; font-size: 11.5px; }
+    .seg.seg3 + .hint { margin: 8px 0 12px; }
     .swipe.rsw { margin-bottom: 6px; }
     .swipe.rsw .rrow { margin: 0; position: relative; z-index: 1; transition: transform .18s ease; }
     .swipe.rsw.open-r .rrow { transform: translateX(-84px); }
@@ -1541,6 +1543,10 @@ hold  armed</pre>
         "split.zone": "Зона",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "split.zone.block": "Block",
+        "split.block": "Блокировать",
+        "split.blocked": "Блокируется",
+        "split.block.d": "Пока включён loft, соединения к сетям этой зоны сразу получают отказ.",
         "split.zones": "Зоны",
         "split.zones.add": "Добавить зону",
         "split.zones.add.body": "Имя, направление, необязательный адрес списка. Сервисы следуют за зоной.",
@@ -1872,6 +1878,10 @@ hold  armed</pre>
         "split.zone": "Zone",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "split.zone.block": "Block",
+        "split.block": "Block",
+        "split.blocked": "Blocked",
+        "split.block.d": "While loft is on, connections to this zone’s networks are refused at once.",
         "split.zones": "Zones",
         "split.zones.add": "Add Zone",
         "split.zones.add.body": "Name, direction, optional list URL. Services follow the zone.",
@@ -2203,6 +2213,10 @@ hold  armed</pre>
         "split.zone": "区域",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "split.zone.block": "Block",
+        "split.block": "阻止",
+        "split.blocked": "已阻止",
+        "split.block.d": "loft 开启时，到此区域网络的连接会被立即拒绝。",
         "split.zones": "区域",
         "split.zones.add": "添加区域",
         "split.zones.add.body": "名称、方向、可选列表地址。服务跟随此区域。",
@@ -2978,6 +2992,8 @@ hold  armed</pre>
     const ZONES = [
       { id: "local", builtin: true, def: false, repo: "", auto: true },
       { id: "global", builtin: true, def: true, repo: LIST_BASE + "global.bat", auto: true },
+      // def: true = through loft, false = around it, "block" = refused while loft is on.
+      { id: "block", builtin: true, def: "block", repo: "", auto: true },
     ];
     const ROUTES = [
       { id: "yt", en: "YouTube", zone: "global", cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
@@ -3004,12 +3020,13 @@ hold  armed</pre>
       if (lang === "ru") { const d = n % 10, h = n % 100; return n + " " + (d === 1 && h !== 11 ? T("split.net") : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "сети" : T("split.nets")); }
       return n + " " + (n === 1 ? T("split.net") : T("split.nets"));
     };
-    const dirOf = (def) => (def ? T("split.via") : T("split.bypass"));
+    const dirOf = (def) => (def === "block" ? T("split.blocked") : def ? T("split.via") : T("split.bypass"));
     const repoFile = (u) => String(u || "").split("?")[0].split("/").filter(Boolean).pop() || "";
     const zoneOpts = (sel) => ZONES.map((z) => `<option value="${z.id}" ${z.id === sel ? "selected" : ""}>${esc(zoneName(z.id))}</option>`).join("");
     const head = (title, sub) => `<div class="head"><div class="title">${title}</div></div>${sub ? `<p class="subline">${sub}</p>` : ""}`;
     const dirSeg = (def, attr) => `<label class="field"><span>${T("split.rdef")}</span></label>
-      <div class="seg"><button type="button" class="${def ? "on" : ""}" ${attr}="via">${T("split.via")}</button><button type="button" class="${def ? "" : "on"}" ${attr}="bypass">${T("split.bypass")}</button></div>`;
+      <div class="seg seg3"><button type="button" class="${def === true ? "on" : ""}" ${attr}="via">${T("split.via")}</button><button type="button" class="${def === false ? "on" : ""}" ${attr}="bypass">${T("split.bypass")}</button><button type="button" class="${def === "block" ? "on" : ""}" ${attr}="block">${T("split.block")}</button></div>
+      ${def === "block" ? `<p class="hint">${T("split.block.d")}</p>` : ""}`;
     function repoFields(url, auto, pull) {
       return `<label class="field"><span>${T("split.repo.url")}</span>
           <div class="repo-row"><input class="mono" data-zrepo value="${esc(url)}" placeholder="https://" /><button type="button" class="ghost" data-lists>${T("split.repo.pick")}</button></div>
@@ -3052,7 +3069,7 @@ hold  armed</pre>
               <div class="t">${T("split.sel.n").replace("%d", n)}</div>
               <button type="button" class="ghost-sm" data-selall>${T("split.sel.all")}</button>
               <button type="button" class="ghost-sm del" data-seldel ${n ? "" : "disabled"}>${T("split.del")}</button></div>
-            <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}</div>
+            <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}${z.def === "block" ? `<br>${T("split.block.d")}` : ""}</div>
             <div class="rlist" id="splitRows">${splitRows()}</div>`;
         }
         const nx = exclIn(zoneTab).length;
@@ -3060,7 +3077,7 @@ hold  armed</pre>
           <p class="subline">${splitOn ? T("split.sub") : T("split.sub.off")}</p>
           <div class="zhead"><span class="lbl">${T("split.zone")}</span><button type="button" class="ghost-sm" data-go="zones">${T("split.zones")}</button></div>
           <div class="ztabs">${ZONES.map((x) => `<button type="button" class="${x.id === zoneTab ? "on" : ""}" data-ztab="${x.id}">${esc(zoneName(x.id))} <span>${routesIn(x.id).length}</span></button>`).join("")}</div>
-          <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}</div>
+          <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}${z.def === "block" ? `<br>${T("split.block.d")}` : ""}</div>
           <label class="field"><input type="search" data-sq value="${esc(splitQ)}" placeholder="${esc(T("split.search"))}" /></label>
           <div class="rlist ${splitOn ? "" : "dim"}" id="splitRows">${splitRows()}</div>
           <div class="rrow xrow" data-go="splitexcl"><div class="grow"><div class="n">${T("split.excl")}</div></div><div class="meta">${nx} ›</div></div>
@@ -3254,7 +3271,8 @@ hold  armed</pre>
         zoneAddVia = true; zoneAddRepo = "";
         show("zone");
       } else if ((el = at("[data-zdef]"))) {
-        const via = el.getAttribute("data-zdef") === "via";
+        const v = el.getAttribute("data-zdef");
+        const via = v === "block" ? "block" : v === "via";
         const z = zoneId && zoneById(zoneId);
         if (z) z.def = via; else zoneAddVia = via;
         paintSplitScreen("zone");

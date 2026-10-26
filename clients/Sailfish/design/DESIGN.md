@@ -57,6 +57,8 @@ macOS-only chrome that this mock does not draw: menu-bar popover, SOCKS5 card an
 
 The macOS model (macOS DESIGN §5): a **zone** goes through loft or around it, a **service** (name + CIDRs) only belongs to a zone, an **exclusion** CIDR is never routed and survives list pulls. Built-in zones Local (bypass, LAN) and Global (through, `global.bat`); own zones come from the editor. On Sailfish “through loft” is the routes on the ConnMan Loft row and “bypass” stays on the system default route; with the tunnel off everything is direct anyway. There is no remembered direct hop as on macOS.
 
+**Block zone.** A third built-in zone next to Local and Global, with no list by default. A zone’s direction is one of three: **Through loft / Bypass loft / Block**; any own zone can block too. The zone’s networks are routed into the tunnel and the client refuses them itself at once: TCP with a reset, the rest with ICMP “unreachable”. Apps don’t wait for a timeout. Blocking works only while the tunnel is up, like all split routing. A zone’s exclusions are not blocked. The policy line and the zone list say “Blocked”, with the line “While loft is on, connections to this zone’s networks are refused at once.”
+
 Entry: Settings → Route → the toggle and the gold **Lists**. The screens are pushed on the Settings stack, with **‹** on top.
 
 | Screen | What |
@@ -66,7 +68,7 @@ Entry: Settings → Route → the toggle and the gold **Lists**. The screens are
 | Exclusions | “Global · Exclusions”: CIDR rows (monospace) with the service name on the right. Tap edits; touch and hold gives **Edit / Restore** (the exclusion goes, the network returns with the next list update). **+ Add** opens Network with “Exclusion” selected. Pulley: **Clear exclusions**. |
 | Clear zone | Page “Clear Global”, line “Exclusions stay.” Two rows: **Only mine** (own services go, list ones stay) and **Everything, including the list** (all go, the zone’s list is unlinked: address and auto-update are turned off); the service count on the right. A tap goes back to Lists and starts the remorse (`#splitclr`). |
 | Zones | Rows: name, network count · list file, direction, “Built-in”. **+ Add zone**. |
-| Zone | Name (locked on a built-in), direction Through loft / Bypass loft, list address + **Lists**, auto-update, Save; an own zone has Delete zone (services → Global). A new zone has the same fields. |
+| Zone | Name (locked on a built-in), direction Through loft / Bypass loft / Block, list address + **Lists**, auto-update, Save; an own zone has Delete zone (services → Global). A new zone has the same fields. |
 | Repository | List address of the open zone + **Lists**, auto-update, last pull, Update now. |
 | Catalog | loft-routes lists: World, Russia, China, Iran, Kazakhstan, Belarus; the current one is lit. A tap sets the address and goes back. |
 | Import | From file (Documents), detected format and line count, zone, Add. |

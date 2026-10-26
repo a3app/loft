@@ -903,7 +903,7 @@
     // Lists editing, Mac style: click selects, ⌘/⇧ extend, ⌫ deletes, ⌘Z undoes.
     let msel = new Set(), mselAnchor = null, mctx = null, mmore = false, mclear = null;
     let editRouteId = null, addBack = "split", mundo = null, mbanner = null, mbannerTimer = null, ignSeq = 0;
-    const ZONE_PRESETS = ["local", "global"];
+    const ZONE_PRESETS = ["local", "global", "block"];
     const LIST_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
     const LIST_CATALOG = [
       { id: "global", file: "global.bat", en: "World", ru: "Мир", de: "Welt", fr: "Monde", pt: "Mundo", zh: "全球", it: "Mondo", ja: "世界", ko: "세계", vi: "Thế giới" },
@@ -918,6 +918,8 @@
     const ZONES = [
       { id: "local", builtin: true, def: false, repo: "", auto: true },
       { id: "global", builtin: true, def: true, repo: REPO_GLOBAL, auto: true },
+      // def: true = through Loft, false = around it, "block" = refused while Loft is on.
+      { id: "block", builtin: true, def: "block", repo: "", auto: true },
     ];
     const zoneById = (id) => ZONES.find((z) => z.id === id);
     if (params.get("ldef") === "via" && zoneById("local")) zoneById("local").def = true;
@@ -1006,9 +1008,18 @@
     };
     const zoneDef = (id) => {
       const z = zoneById(id);
-      if (z) return !!z.def;
+      if (z) return z.def === "block" ? "block" : !!z.def;
       return id !== "local";
     };
+    const dirLabel = (d) => (d === "block" ? t("split.blocked") : d ? t("split.via") : t("split.bypass"));
+    const dirSeg = (d, attr) => `
+            <div class="seg">
+              <button type="button" class="${d === true ? "on" : ""}" ${attr}="via">${t("split.via")}</button>
+              <button type="button" class="${d === false ? "on" : ""}" ${attr}="bypass">${t("split.bypass")}</button>
+              <button type="button" class="${d === "block" ? "on" : ""}" ${attr}="block">${t("split.block")}</button>
+            </div>
+            ${d === "block" ? `<div class="hint" style="margin-top:8px">${t("split.block.d")}</div>` : ""}`;
+    const dirOfAttr = (v) => (v === "block" ? "block" : v === "via");
     const zoneSlug = (name) => {
       const ascii = String(name || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "").slice(0, 16);
       const taken = (id) => ZONES.some((z) => z.id === id);
@@ -1083,8 +1094,8 @@
       }
       return z;
     };
-    const routesVia = () => ROUTES.filter((r) => zoneDef(r.region));
-    const routesBypass = () => ROUTES.filter((r) => !zoneDef(r.region));
+    const routesVia = () => ROUTES.filter((r) => zoneDef(r.region) === true);
+    const routesBypass = () => ROUTES.filter((r) => zoneDef(r.region) === false);
     const routesIn = (region) => ROUTES.filter((r) => r.region === region && r.src !== "ignore");
     const ignoresIn = (region) => ROUTES.filter((r) => r.region === region && r.src === "ignore");
     const routeCount = (list) => list.reduce((n, r) => n + r.cidrs.length, 0);
@@ -1661,7 +1672,7 @@ outbounds:
         const q = splitQ.trim().toLowerCase();
         const list = routesIn(regionTab).filter((r) => !q || rname(r).toLowerCase().includes(q));
         const defVia = zoneDef(regionTab);
-        const policy = zoneLabel(regionTab) + " · " + (defVia ? t("split.via") : t("split.bypass"));
+        const policy = zoneLabel(regionTab) + " · " + dirLabel(defVia) + (defVia === "block" ? `<br>${t("split.block.d")}` : "");
         const rows = list.map((r) => {
           const n = r.cidrs.length;
           const net = netWord(n);
@@ -1832,7 +1843,7 @@ outbounds:
           const sub = file ? n + " " + net + " · " + file : n + " " + net;
           return `<div class="rrow" data-zid="${id}">
             <div><div class="n">${zoneLabel(id)}</div><div class="u">${sub}</div></div>
-            <div class="meta">${z.def ? t("split.via") : t("split.bypass")}${z.builtin ? `<div class="src">${t("split.zones.builtin")}</div>` : ""}</div>
+            <div class="meta">${dirLabel(z.def === "block" ? "block" : !!z.def)}${z.builtin ? `<div class="src">${t("split.zones.builtin")}</div>` : ""}</div>
           </div>`;
         }).join("");
         return `
@@ -1860,10 +1871,7 @@ outbounds:
             <div class="label">${t("split.zones.name")}</div>
             <input class="field sm" data-zname value="${zoneLabel(z.id).replace(/"/g, "&quot;")}" ${z.builtin ? "disabled" : ""} />
             <div class="label">${t("split.rdef")}</div>
-            <div class="seg">
-              <button type="button" class="${z.def ? "on" : ""}" data-zdef="via">${t("split.via")}</button>
-              <button type="button" class="${!z.def ? "on" : ""}" data-zdef="bypass">${t("split.bypass")}</button>
-            </div>
+            ${dirSeg(z.def === "block" ? "block" : !!z.def, "data-zdef")}
             ${zoneRepoFields(z, false)}
             <button class="btn connect on" style="margin-top:16px" data-zsave>${t("split.zones.save")}</button>
             ${z.builtin ? "" : `<button class="btn back" data-zdel style="color:var(--err)">${t("split.zones.del")}</button>
@@ -1881,10 +1889,7 @@ outbounds:
             <div class="label">${t("split.zones.name")}</div>
             <input class="field sm" data-zname value="${escAttr(addZoneName)}" placeholder="EU" />
             <div class="label">${t("split.rdef")}</div>
-            <div class="seg">
-              <button type="button" class="${addZoneVia ? "on" : ""}" data-zadddef="via">${t("split.via")}</button>
-              <button type="button" class="${!addZoneVia ? "on" : ""}" data-zadddef="bypass">${t("split.bypass")}</button>
-            </div>
+            ${dirSeg(addZoneVia === "block" ? "block" : !!addZoneVia, "data-zadddef")}
             ${zoneRepoFields({ repo: addZoneRepo, auto: addZoneAuto }, false)}
             <button class="btn connect on" style="margin-top:16px" data-zadd>${t("split.zones.add.go")}</button>
             <button class="btn back" data-go="zones">${t("back")}</button>
@@ -2205,7 +2210,7 @@ outbounds:
           ev.stopPropagation();
           applySceneZoneFields();
           const z = zoneById(editingZoneId);
-          if (z) z.def = el.dataset.zdef === "via";
+          if (z) z.def = dirOfAttr(el.dataset.zdef);
           show("zoneedit", true);
         };
       });
@@ -2213,7 +2218,7 @@ outbounds:
         el.onclick = (ev) => {
           ev.stopPropagation();
           applySceneZoneFields();
-          addZoneVia = el.dataset.zadddef === "via";
+          addZoneVia = dirOfAttr(el.dataset.zadddef);
           show("zoneadd", true);
         };
       });

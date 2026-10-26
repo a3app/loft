@@ -152,6 +152,8 @@ App Store, if it appears: the same Packet Tunnel (appex or sysex per store rules
 
 A client-wide mapping, not a per-profile list. Otherwise three TUN sessions argue over prefixes.
 
+**Block zone and the Block direction.** A zone’s direction is one of three: Through Loft / Around Loft / **Block**. The built-in Block zone (no list) blocks; an own zone can too. Its CIDRs go into utun and the client refuses them itself from the TUN at once: TCP with RST, the rest with ICMP “unreachable”. Apps don’t wait for a timeout. Only while the tunnel is up. The zone’s ignore rows are not blocked. The policy line and the zone editor say “Blocked”, with “While Loft is on, connections to this zone’s networks are refused at once.”
+
 **Product.** A **zone** is a policy: through Loft or around Loft, plus an optional list URL. A **service** (name + CIDRs) only belongs to a zone. Direction is not a field on the row. Built-in zones are Local (around Loft, empty repo, seed LAN) and Global (through Loft, `global.bat`). Extra zones come from the zone editor. Files `global.bat`, `ru.bat`, `cn.bat` from [a3app/loft-routes](https://github.com/a3app/loft-routes) are catalogs, not zones: the user attaches a file to a zone’s repository.
 
 **Kernel.** The system table has two CIDR bags, derived from `zone.def`: through Loft (`viaSets`) into utun, around Loft (`bypassSets`) onto the remembered native hop. loft-priv diffs them (`--apply-split` / `--clear-split`). Through-loft CIDRs stay installed even when 0/1 owns the default: a more-specific around-loft prefix (LAN `10/8`, a regional list) would otherwise steal Global destinations. Equal prefixes: through Loft wins. Ignore rows punch a hole in the other bag; they do not delete a covering prefix. While TUN is up, loft-priv rejects `2000::/3` so Happy Eyeballs uses IPv4 through Loft.
@@ -231,7 +233,7 @@ https://raw.githubusercontent.com/a3app/loft-routes/main/by.bat
 
 ### 5.3 Catalog
 
-The lists window is one catalog of named services, grouped by **zone**, not by direction. Built-in zones are Local and Global. Extra zones come only from the zone editor. Regional files do not create zones.
+The lists window is one catalog of named services, grouped by **zone**, not by direction. Built-in zones are Local, Global and Block. Extra zones come only from the zone editor. Regional files do not create zones.
 
 | Code | Meaning | Direction |
 |------|---------|-----------|

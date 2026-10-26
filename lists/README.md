@@ -14,7 +14,7 @@ https://raw.githubusercontent.com/a3app/loft-routes/main/kz.bat
 https://raw.githubusercontent.com/a3app/loft-routes/main/by.bat
 ```
 
-A zone has one URL. Direction lives on the zone, not on the file. `REM zone:` is a hint for import.
+A zone has one URL. Direction lives on the zone, not on the file: through loft, around loft, or block (the built-in Block zone, no list by default). `REM zone:` is a hint for import.
 
 | File | Typical zone |
 |------|----------------|
