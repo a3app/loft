@@ -9,12 +9,13 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -23,6 +24,7 @@ import com.google.android.material.button.MaterialButton;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,10 +52,14 @@ public final class ListsActivity extends LoftActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_lists);
         store = SplitStore.load(this);
-        Switch split = findViewById(R.id.sw_split);
+        ToggleView split = findViewById(R.id.sw_split);
         split.setChecked(Prefs.split(this));
         split.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("split", on).apply());
         findViewById(R.id.btn_back).setOnClickListener(v -> onBackPressed());
+        View more = findViewById(R.id.btn_more);
+        if (more != null) {
+            more.setVisibility(View.GONE);
+        }
         show("list");
     }
 
@@ -150,25 +156,52 @@ public final class ListsActivity extends LoftActivity {
         search.setHint(getString(R.string.search));
         search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
         root.addView(search);
-        LinearLayout list = col(false);
+        final List<SplitStore.Svc> rows = new ArrayList<>();
+        final BaseAdapter adapter = new BaseAdapter() {
+            @Override
+            public int getCount() {
+                return rows.size();
+            }
+
+            @Override
+            public Object getItem(int i) {
+                return rows.get(i);
+            }
+
+            @Override
+            public long getItemId(int i) {
+                return i;
+            }
+
+            @Override
+            public View getView(int i, View conv, ViewGroup parent) {
+                if (conv == null) {
+                    conv = makeSvcRow();
+                }
+                bindSvcRow(conv, rows.get(i));
+                return conv;
+            }
+        };
+        TextView empty = hint(getString(R.string.empty_zone));
+        empty.setVisibility(View.GONE);
+        root.addView(empty);
+        ListView lv = new ListView(this);
+        lv.setAdapter(adapter);
+        lv.setDivider(new android.graphics.drawable.ColorDrawable(0));
+        lv.setDividerHeight(dp(6));
+        lv.setSelector(new android.graphics.drawable.ColorDrawable(0));
+        lv.setNestedScrollingEnabled(true);
         Runnable paint = () -> {
-            list.removeAllViews();
-            List<SplitStore.Svc> rows = store.in(zoneId, search.getText().toString());
-            if (rows.isEmpty()) {
-                list.addView(hint(getString(R.string.empty_zone)));
-                return;
-            }
-            for (SplitStore.Svc s : rows) {
-                list.addView(svcRow(s));
-            }
+            rows.clear();
+            rows.addAll(store.in(zoneId, search.getText().toString()));
+            empty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
+            adapter.notifyDataSetChanged();
         };
         search.addTextChangedListener(new SimpleWatch(paint));
         paint.run();
-        ScrollView sc = new ScrollView(this);
-        sc.addView(list);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
-        root.addView(sc, lp);
+        root.addView(lv, lp);
         Button add = ghostSm("+ " + getString(R.string.add), v -> new AlertDialog.Builder(this)
                 .setItems(new CharSequence[]{getString(R.string.add_service), getString(R.string.add_ignore)},
                         (d, w) -> {
@@ -215,35 +248,44 @@ public final class ListsActivity extends LoftActivity {
         return root;
     }
 
-    private View svcRow(SplitStore.Svc s) {
+    private View makeSvcRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setLayoutParams(new android.widget.AbsListView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         row.setBackgroundResource(R.drawable.bg_card);
         row.setPadding(dp(12), dp(10), dp(12), dp(10));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(6);
-        row.setLayoutParams(lp);
         LinearLayout grow = col(false);
         TextView n = new TextView(this);
-        n.setText(s.name);
+        n.setTag("n");
         n.setTextColor(getColor(R.color.snow));
         n.setTextSize(13.5f);
         TextView m = new TextView(this);
-        m.setText(SplitStore.join(s.cidrs));
+        m.setTag("m");
         m.setTextColor(getColor(R.color.mute));
         m.setTextSize(10.5f);
         m.setTypeface(android.graphics.Typeface.MONOSPACE);
+        m.setMaxLines(1);
+        m.setEllipsize(TextUtils.TruncateAt.END);
         grow.addView(n);
         grow.addView(m);
         row.addView(grow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        row.addView(meta(s.ignore ? getString(R.string.ignore)
-                : "repo".equals(s.src) ? getString(R.string.from_repo) : getString(R.string.mine)));
+        TextView src = meta("");
+        src.setTag("src");
+        row.addView(src);
+        return row;
+    }
+
+    private void bindSvcRow(View row, SplitStore.Svc s) {
+        ((TextView) row.findViewWithTag("n")).setText(s.name);
+        ((TextView) row.findViewWithTag("m")).setText(SplitStore.preview(s.cidrs));
+        ((TextView) row.findViewWithTag("src")).setText(s.ignore ? getString(R.string.ignore)
+                : "repo".equals(s.src) ? getString(R.string.from_repo) : getString(R.string.mine));
         row.setOnClickListener(v -> {
             editing = s.id;
             show("svc");
         });
-        return row;
     }
 
     /**

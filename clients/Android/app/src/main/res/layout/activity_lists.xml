@@ -6,12 +6,13 @@
     android:orientation="vertical">
 
     <LinearLayout
+        android:id="@+id/head"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingLeft="4dp"
-        android:paddingRight="12dp">
+        android:paddingRight="8dp">
 
         <ImageButton
             android:id="@+id/btn_back"
@@ -29,19 +30,114 @@
             android:layout_weight="1"
             android:fontFamily="sans-serif-medium"
             android:letterSpacing="-0.03"
-            android:text="@string/lists"
+            android:text="@string/split"
             android:textColor="@color/snow"
             android:textSize="20sp" />
 
-        <Switch
+        <app.loft.android.ToggleView
             android:id="@+id/sw_split"
+            style="@style/Widget.Loft.Toggle"
+            android:layout_width="42dp"
+            android:layout_height="26dp" />
+
+        <ImageButton
+            android:id="@+id/btn_more"
+            style="@style/Widget.Loft.IconBtn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:contentDescription="@string/menu_more"
+            android:src="@drawable/ic_more" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/selbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="4dp"
+        android:paddingRight="8dp"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/btn_sel_x"
+            style="@style/Widget.Loft.IconBtn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginRight="4dp"
+            android:contentDescription="@string/cancel"
+            android:src="@drawable/ic_close" />
+
+        <TextView
+            android:id="@+id/sel_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="@color/snow"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/btn_sel_all"
+            style="@style/Widget.Loft.GhostSm"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:text="@string/split_sel_all" />
+
+        <Button
+            android:id="@+id/btn_sel_del"
+            style="@style/Widget.Loft.GhostSm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="8dp"
+            android:text="@string/delete"
+            android:textColor="@color/danger_fg" />
     </LinearLayout>
 
     <FrameLayout
-        android:id="@+id/body"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <FrameLayout
+            android:id="@+id/body"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <LinearLayout
+            android:id="@+id/snack"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginLeft="12dp"
+            android:layout_marginRight="12dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_snack"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="14dp"
+            android:paddingTop="8dp"
+            android:paddingRight="8dp"
+            android:paddingBottom="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/snack_t"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:lineSpacingMultiplier="1.35"
+                android:textColor="@color/snow"
+                android:textSize="12.5sp" />
+
+            <Button
+                android:id="@+id/snack_undo"
+                style="@style/Widget.Loft.GhostSm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingLeft="8dp"
+                android:paddingRight="8dp"
+                android:text="@string/split_undo" />
+        </LinearLayout>
+    </FrameLayout>
 </LinearLayout>

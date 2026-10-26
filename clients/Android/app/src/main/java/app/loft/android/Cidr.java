@@ -39,10 +39,10 @@ final class Cidr {
                 return null;
             }
         }
-        InetAddress a;
-        try {
-            a = InetAddress.getByName(ip);
-        } catch (UnknownHostException e) {
+        // Numeric only. getByName does DNS and, after a VPN teardown, can
+        // block the UI thread inside netd (ANR / crash on the lists screen).
+        InetAddress a = numeric(ip);
+        if (a == null) {
             return null;
         }
         byte[] raw = a.getAddress();
@@ -238,6 +238,15 @@ final class Cidr {
         }
         try {
             if (s.indexOf(':') >= 0) {
+                for (int i = 0; i < s.length(); i++) {
+                    char c = s.charAt(i);
+                    if (c != ':' && c != '.'
+                            && (c < '0' || c > '9')
+                            && (c < 'a' || c > 'f')
+                            && (c < 'A' || c > 'F')) {
+                        return null;
+                    }
+                }
                 return InetAddress.getByName(s);
             }
             String[] p = s.split("\\.");

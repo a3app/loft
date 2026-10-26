@@ -7,6 +7,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public final class CidrTest {
@@ -33,6 +34,13 @@ public final class CidrTest {
         assertNotNull(c);
         assertTrue(c.v6);
         assertEquals(64, c.bits);
+    }
+
+    @Test
+    public void parseDropsHostnames() {
+        assertNull(Cidr.parse("youtube.com"));
+        assertNull(Cidr.parse("youtube.com/32"));
+        assertNull(Cidr.parse("http://example.com"));
     }
 
     @Test

@@ -120,9 +120,9 @@ final class SplitStore {
                     JSONArray cidrs = s.optJSONArray("cidrs");
                     if (cidrs != null) {
                         for (int j = 0; j < cidrs.length(); j++) {
-                            String x = cidrs.optString(j);
+                            String x = cidrs.optString(j).trim();
                             if (Cidr.parse(x) != null) {
-                                svc.cidrs.add(Cidr.parse(x).display());
+                                svc.cidrs.add(x);
                             }
                         }
                     }
@@ -271,8 +271,7 @@ final class SplitStore {
             if (!zoneId.equals(s.zone)) {
                 continue;
             }
-            if (!needle.isEmpty() && !s.name.toLowerCase(Locale.US).contains(needle)
-                    && !join(s.cidrs).toLowerCase(Locale.US).contains(needle)) {
+            if (!needle.isEmpty() && !hit(s, needle)) {
                 continue;
             }
             out.add(s);
@@ -417,6 +416,29 @@ final class SplitStore {
             b.append(x);
         }
         return b.toString();
+    }
+
+    /** First prefix plus remaining count. List rows must not join every CIDR. */
+    static String preview(List<String> cidrs) {
+        if (cidrs == null || cidrs.isEmpty()) {
+            return "";
+        }
+        if (cidrs.size() == 1) {
+            return cidrs.get(0);
+        }
+        return cidrs.get(0) + " +" + (cidrs.size() - 1);
+    }
+
+    private static boolean hit(Svc s, String needle) {
+        if (s.name.toLowerCase(Locale.US).contains(needle)) {
+            return true;
+        }
+        for (String x : s.cidrs) {
+            if (x.toLowerCase(Locale.US).contains(needle)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** True when the zone has auto-update on, a list URL, and no pull in AUTO_MS. */

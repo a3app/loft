@@ -43,6 +43,23 @@ public final class BatTest {
     }
 
     @Test
+    public void previewDoesNotJoinEveryCidr() {
+        SplitStore.Svc s = new SplitStore.Svc();
+        s.cidrs.add("1.1.1.1/32");
+        assertEquals("1.1.1.1/32", SplitStore.preview(s.cidrs));
+        s.cidrs.add("1.0.0.1/32");
+        assertEquals("1.1.1.1/32 +1", SplitStore.preview(s.cidrs));
+        s.name = "Cloud";
+        s.zone = SplitStore.GLOBAL;
+        SplitStore st = new SplitStore();
+        st.seed();
+        st.services.add(s);
+        assertEquals(1, st.in(SplitStore.GLOBAL, "1.0.0.1").size());
+        assertEquals(0, st.in(SplitStore.GLOBAL, "9.9.9.9").size());
+        assertEquals(1, st.in(SplitStore.GLOBAL, "cloud").size());
+    }
+
+    @Test
     public void autoDueWhenNeverPulled() {
         SplitStore st = new SplitStore();
         st.seed();
