@@ -126,7 +126,24 @@ func run(dir string) bool {
 	ttype, _ := syscall.UTF16PtrFromString("Loft")
 	// A fixed GUID: a second run reuses the same adapter instead of adding another.
 	guid := [16]byte{0x6c, 0x6f, 0x66, 0x74, 0x2d, 0x77, 0x69, 0x6e, 0x74, 0x75, 0x6e, 0x2d, 0x63, 0x68, 0x6b, 0x01}
-	adapter, _, err := w.createAdapter.Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(ttype)), uintptr(unsafe.Pointer(&guid)))
+	create := func() uintptr {
+		a, _, e := w.createAdapter.Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(ttype)), uintptr(unsafe.Pointer(&guid)))
+		err = e
+		return a
+	}
+	adapter := create()
+	if adapter == 0 {
+		step("Создание адаптера (установка драйвера)", false, err.Error())
+		return false
+	}
+	// Windows keeps a static address per adapter GUID and puts it back on the
+	// new adapter a moment later. Remove what an earlier run left, then delete
+	// the adapter and create it again, so the test starts clean.
+	if idx, e := adapterIndex(w, adapter); e == nil {
+		unaddr(idx)
+	}
+	w.closeAdapter.Call(adapter)
+	adapter = create()
 	if adapter == 0 {
 		step("Создание адаптера (установка драйвера)", false, err.Error())
 		return false
@@ -143,26 +160,19 @@ func run(dir string) bool {
 	step("Создание адаптера (установка драйвера)", true, fmt.Sprintf("драйвер %d.%d", (ver>>16)&0xffff, ver&0xffff))
 
 	// ── 4. Address ──
-	var luid uint64
-	w.adapterLUID.Call(adapter, uintptr(unsafe.Pointer(&luid)))
-	idx, err := luidToIndex(luid)
+	idx, err := adapterIndex(w, adapter)
 	if err != nil {
 		step("Номер интерфейса", false, err.Error())
 		return false
 	}
-	defer func() {
-		clearAddress(luid, localIP, 24)
-		// Older versions of this test set the address with netsh, which also
-		// saves it in the registry for the adapter's GUID. Wipe that copy too.
-		exec.Command("netsh", "interface", "ipv4", "delete", "address",
-			fmt.Sprintf("name=%d", idx), "address="+localIP, "store=persistent").Run()
-	}()
-	note, err := setAddress(luid, localIP, 24)
-	if err != nil {
-		step("Адрес "+localIP+"/24", false, fmt.Sprintf("%v %s", err, note))
+	defer unaddr(idx)
+	cmd := exec.Command("netsh", "interface", "ipv4", "set", "address",
+		fmt.Sprintf("name=%d", idx), "source=static", "address="+localIP, "mask=255.255.255.0")
+	if b, err := cmd.CombinedOutput(); err != nil {
+		step("Адрес "+localIP+"/24", false, fmt.Sprintf("%v %s", err, oem(b)))
 		return false
 	}
-	step("Адрес "+localIP+"/24", true, fmt.Sprintf("интерфейс %d %s", idx, note))
+	step("Адрес "+localIP+"/24", true, fmt.Sprintf("интерфейс %d", idx))
 
 	// ── 5. Session and ping ──
 	session, _, err := w.startSession.Call(adapter, 0x400000)
@@ -372,6 +382,20 @@ func relaunchAsAdmin(exe string) bool {
 	file, _ := syscall.UTF16PtrFromString(exe)
 	r, _, _ := shell32.NewProc("ShellExecuteW").Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(file)), 0, 0, 1)
 	return r > 32
+}
+
+// adapterIndex returns the Windows interface number of a Wintun adapter.
+func adapterIndex(w *wintun, adapter uintptr) (uint32, error) {
+	var luid uint64
+	w.adapterLUID.Call(adapter, uintptr(unsafe.Pointer(&luid)))
+	return luidToIndex(luid)
+}
+
+// unaddr removes the test address from the interface, both the live copy and
+// the one netsh saves in the registry. An error just means there was none.
+func unaddr(idx uint32) {
+	exec.Command("netsh", "interface", "ipv4", "delete", "address",
+		fmt.Sprintf("name=%d", idx), "address="+localIP).Run()
 }
 
 func luidToIndex(luid uint64) (uint32, error) {
