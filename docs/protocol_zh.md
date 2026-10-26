@@ -270,7 +270,7 @@ HKDF-SHA256(ikm=ss, salt=nonce, info="loft-v1", L=32)
 
 *说明，非规范。* 一种实现取 32 位随机前缀加 64 位计数器，使停着的 GET 会话继续同一个计数器。握手的 Seal 取该计数器的一个值。其后该密钥上的 AES-256-GCM 记录接着计数。接收方接受任何唯一 nonce，不要求这种布局。
 
-Status 之后的数据密码是 Hello 与 Status 上的一个字节（§5.1、§5.2）。没有该字节就是 ChaCha20-Poly1305。`0` 表示没有内部 AEAD，只剩该前置的 TLS。`1` 是 ChaCha20-Poly1305，与没有该字节相同。`2` 是 AES-256-GCM：32 字节 HKDF 密钥、12 字节 nonce、16 字节标签，成帧与 ChaCha 相同，为 `nonce[12] || ciphertext`（[RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)）。一把会话密钥只有一种数据密码。
+Status 之后的数据密码是 Hello 与 Status 上的一个字节（§5.1、§5.2）。没有该字节就是 ChaCha20-Poly1305。`0` 表示没有内部 AEAD，只剩该前置的 TLS。`1` 是 ChaCha20-Poly1305，与没有该字节相同。`2` 是 AES-256-GCM：32 字节 HKDF 密钥、12 字节 nonce、16 字节标签，成帧与 ChaCha 相同，为 `nonce[12] || ciphertext`（[RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)）。`3` 保留给一种额外的数据密码；在本规范定义它之前，它是未知 id。`4`–`255` 未分配。一把会话密钥只有一种数据密码。
 
 客户端在 Hello 里请求。节点在 Status 里确认恰好一个标识，或者不写该字节。ChaCha20-Poly1305 始终可以，不能关掉。未知标识、策略里没有的标识，或其他不一致，会话留在 ChaCha20-Poly1305。会话仍然建立。前置 `get` 不得确认 `0` 或 `2`：CDN 可以终结 TLS，内部 AEAD 就是对这个 CDN 隐藏 mux 的东西。前置 `ws`、`h2`、`quic`、`h3`、`l3` 可以在客户端请求了该标识且节点策略列出它时确认 `0` 或 `2`。`connect` 是拼接，没有数据密码。选定 `0` 的会话不得 attach 前置 `get`（§4.4）。AES-256-GCM 可以 attach `get`：CDN 看到的仍是密文。旧对端不写该字节，留在 ChaCha20-Poly1305。双方都省略该字节时可以互通。这个选择不改变协议版本 `0x0100`。
 
@@ -517,12 +517,12 @@ Hello 与 Status 都宣告 `hold` 时，意外丢失前置（无线电间隙，�
 
 ```
 initiator → e_pub[32] || Seal(k1, head, aad = e_pub) || pad
-            head = src_ipv4[4] || dest_port u16be || at u64be || proof[16] || pad_len u8
-responder → r_pub[32] || Seal(k2, pad_len u8, aad = r_pub) || pad
+            head = src_ipv4[4] || dest_port u16be || at u64be || proof[16] || cipher u8 || pad_len u8
+responder → r_pub[32] || Seal(k2, cipher u8 || pad_len u8, aad = r_pub) || pad
 each way  → Seal(k, len u16be) || Seal(k, data[len])        len ≤ 16384
 ```
 
-`e` 与 `r` 是每个连接新生成的 X25519 密钥。线上 `e_pub` 与 `r_pub` 的最高位是随机的；X25519 忽略该位。`s` 是通过 `loft.peer` 宣告的成员 P2P 密钥。`ss` = X25519(s_发起方, s_应答方)，`es` = X25519(e, s_应答方)，`ee` = X25519(e, r)。`k1` = HKDF-SHA256(ikm = es, salt = e_pub, info = "loft p2p hello", L = 32)，`k2` = HKDF-SHA256(es, salt = e_pub || r_pub, info = "loft p2p reply", L = 32)。数据密钥为 HKDF-SHA256(ee || es || ss, salt = e_pub || r_pub, info = "loft p2p data", L = 64)：前 32 字节用于发起方 → 应答方，其余用于反方向。AEAD 为 ChaCha20-Poly1305。握手中的封装使用全零 nonce，因为每个这样的密钥只封装一次；数据的 nonce 为每个方向一个 96 位小端计数器，从 0 开始，每封装一次加一。`proof` = HMAC-SHA256(ss, "loft p2p proof" || e_pub || src_ipv4 || dest_port || at)[0:16]，`at` 为 unix 秒，`pad` 为 `pad_len` 个随机字节。
+`e` 与 `r` 是每个连接新生成的 X25519 密钥。线上 `e_pub` 与 `r_pub` 的最高位是随机的；X25519 忽略该位。`s` 是通过 `loft.peer` 宣告的成员 P2P 密钥。`ss` = X25519(s_发起方, s_应答方)，`es` = X25519(e, s_应答方)，`ee` = X25519(e, r)。`k1` = HKDF-SHA256(ikm = es, salt = e_pub, info = "loft p2p hello", L = 32)，`k2` = HKDF-SHA256(es, salt = e_pub || r_pub, info = "loft p2p reply", L = 32)。数据密钥为 HKDF-SHA256(ee || es || ss, salt = e_pub || r_pub, info = "loft p2p data", L = 64)：前 32 字节用于发起方 → 应答方，其余用于反方向。AEAD 为 ChaCha20-Poly1305。握手中的封装使用全零 nonce，因为每个这样的密钥只封装一次；数据的 nonce 为每个方向一个 96 位小端计数器，从 0 开始，每封装一次加一。`proof` = HMAC-SHA256(ss, "loft p2p proof" || e_pub || src_ipv4 || dest_port || at)[0:16]，`at` 为 unix 秒，`pad` 为 `pad_len` 个随机字节。头部中的 `cipher` 是发起方请求的数据密码，应答中的 `cipher` 是应答方选定的密码，id 与 Hello 的 `inner` 字节相同（§4.3）。本修订版对 P2P 只定义 `1`（ChaCha20-Poly1305）：应答方对任何请求都必须回答 `1`，且永远不选 `0`，因为直连之下没有 TLS；收到其他回答时发起方必须关闭连接。
 
 应答方打开头部，在其提示中查找 `src_ipv4` 并用该成员的密钥校验 `proof`，要求 `at` 与自身时钟相差不超过 60 秒，并拒绝过去 120 秒内已接受过的 `e_pub`（清除最高位后比较）。任何失败都关闭套接字；发起方随后使用枢纽拼接。`p2p: false` 的客户端必须只用枢纽拼接。经中继观察到的主机是中继；直接尝试于是失败，改用枢纽拼接。Status 携带 policy 时，发起方与应答方在拼接本机端口前必须应用与枢纽拼接相同的 Allow。没有 policy 的 Status（旧节点）跳过该检查。
 
@@ -901,12 +901,12 @@ quic scid  25b8c53ebe475334b474445e3ee3253691b18faa
 sid v2  d2953bbc3bcad53751c4eebc631d4a48425731080439c99eae5bcd148a79b9ca
 ```
 
-P2P 握手（§9）。发起方成员标量 `50726976616379206973206e65636573736172792e2048756768657320273933`，应答方成员标量 `5468697320697320666f722065766572796f6e652e2054696d424c2032303132`，发起方临时标量 `4172742e3233204b6f6e73742e2052462073656372656379206f66206d61696c`，应答方临时标量 `41727469636c6520313220554448523a206e6f20696e746572666572656e6365`，公钥以最高位清零发送，`src_ipv4` 10.77.0.2，`dest_port` 8080，`at` 2524608000，发起方 pad `706164`，应答方 pad 为空。`record` 是发起方 → 应答方的第一条数据记录，内容为 `ping`。
+P2P 握手（§9）。发起方成员标量 `50726976616379206973206e65636573736172792e2048756768657320273933`，应答方成员标量 `5468697320697320666f722065766572796f6e652e2054696d424c2032303132`，发起方临时标量 `4172742e3233204b6f6e73742e2052462073656372656379206f66206d61696c`，应答方临时标量 `41727469636c6520313220554448523a206e6f20696e746572666572656e6365`，公钥以最高位清零发送，`src_ipv4` 10.77.0.2，`dest_port` 8080，`at` 2524608000，`cipher` 双向均为 `1`，发起方 pad `706164`，应答方 pad 为空。`record` 是发起方 → 应答方的第一条数据记录，内容为 `ping`。
 
 ```
 peer_pub  2a4cd76bd42aaa397c78d84f0e3fa3643dfad73d128237b66e8572688fc8a306
-hello     1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acef59eae3000bdb7d97c5a83bbcb0f00b0f706164
-reply     24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543eca4bde80e88b6f53d067e8874af6450401
+hello     1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acedf68456d92f248fe6fa61b6abe0a6bb909c706164
+reply     24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543ecb44343ff260d15fdd3a7e12c2cc6e8592c9
 record    39b9fc9869bfe0580b40de9f12a7c1a3dd87f6469543822a1385ea6e9364ee21edd26e9e8d7b
 ```
 

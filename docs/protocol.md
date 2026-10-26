@@ -270,7 +270,7 @@ Handshake Seal of Status is always `nonce[12] || ChaCha20-Poly1305(key, nonce, p
 
 *Informative, not normative.* One implementation draws a 32-bit random prefix and a 64-bit counter so a parked GET session continues the same counter. The handshake Seal takes one value of that counter. Later AES-256-GCM records on that key continue it. A receiver accepts any unique nonce and does not require this layout.
 
-The data cipher after Status is one byte on Hello and on Status (§5.1, §5.2). An absent byte is ChaCha20-Poly1305. `0` is no inner AEAD: only the TLS of that front remains. `1` is ChaCha20-Poly1305, the same as an absent byte. `2` is AES-256-GCM: the 32-byte HKDF key, a 12-byte nonce, a 16-byte tag, and the same `nonce[12] || ciphertext` framing as ChaCha ([RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)). One session key has one data cipher.
+The data cipher after Status is one byte on Hello and on Status (§5.1, §5.2). An absent byte is ChaCha20-Poly1305. `0` is no inner AEAD: only the TLS of that front remains. `1` is ChaCha20-Poly1305, the same as an absent byte. `2` is AES-256-GCM: the 32-byte HKDF key, a 12-byte nonce, a 16-byte tag, and the same `nonce[12] || ciphertext` framing as ChaCha ([RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)). `3` is reserved for an additional data cipher; until this specification defines it, it is an unknown id. `4`–`255` are unassigned. One session key has one data cipher.
 
 The client asks in Hello. The node confirms exactly one id in Status, or omits the byte. ChaCha20-Poly1305 is always acceptable and cannot be disabled. An unknown id, an id the node policy does not list, or any other disagreement leaves the session on ChaCha20-Poly1305. The session still comes up. Front `get` MUST NOT confirm `0` or `2`: a CDN MAY terminate TLS, and the inner AEAD is what hides mux from that CDN. Fronts `ws`, `h2`, `quic`, `h3`, and `l3` MAY confirm `0` or `2` when the client asked for that id and the node policy lists it. `connect` is a splice and has no data cipher. A session that selected `0` MUST NOT attach front `get` (§4.4). AES-256-GCM MAY attach `get`: the CDN still sees ciphertext. An old peer omits the byte and stays on ChaCha20-Poly1305. Both sides that omit the byte interoperate. This choice does not change protocol version `0x0100`.
 
@@ -517,12 +517,12 @@ Hub splice: the receiving client accepts the stream and dials the local port.
 
 ```
 initiator → e_pub[32] || Seal(k1, head, aad = e_pub) || pad
-            head = src_ipv4[4] || dest_port u16be || at u64be || proof[16] || pad_len u8
-responder → r_pub[32] || Seal(k2, pad_len u8, aad = r_pub) || pad
+            head = src_ipv4[4] || dest_port u16be || at u64be || proof[16] || cipher u8 || pad_len u8
+responder → r_pub[32] || Seal(k2, cipher u8 || pad_len u8, aad = r_pub) || pad
 each way  → Seal(k, len u16be) || Seal(k, data[len])        len ≤ 16384
 ```
 
-`e` and `r` are fresh X25519 keys for each connection. On the wire the top bit of `e_pub` and `r_pub` is random; X25519 ignores it. `s` is the member P2P key announced with `loft.peer`. `ss` = X25519(s_initiator, s_responder), `es` = X25519(e, s_responder), `ee` = X25519(e, r). `k1` = HKDF-SHA256(ikm = es, salt = e_pub, info = "loft p2p hello", L = 32), `k2` = HKDF-SHA256(es, salt = e_pub || r_pub, info = "loft p2p reply", L = 32). The data keys are HKDF-SHA256(ee || es || ss, salt = e_pub || r_pub, info = "loft p2p data", L = 64): the first 32 bytes for initiator → responder, the rest for the way back. The AEAD is ChaCha20-Poly1305. Handshake seals use a zero nonce, since each of those keys seals once; data uses a 96-bit little-endian counter per direction, from 0, one step per seal. `proof` = HMAC-SHA256(ss, "loft p2p proof" || e_pub || src_ipv4 || dest_port || at)[0:16], `at` is unix seconds, `pad` is `pad_len` random bytes.
+`e` and `r` are fresh X25519 keys for each connection. On the wire the top bit of `e_pub` and `r_pub` is random; X25519 ignores it. `s` is the member P2P key announced with `loft.peer`. `ss` = X25519(s_initiator, s_responder), `es` = X25519(e, s_responder), `ee` = X25519(e, r). `k1` = HKDF-SHA256(ikm = es, salt = e_pub, info = "loft p2p hello", L = 32), `k2` = HKDF-SHA256(es, salt = e_pub || r_pub, info = "loft p2p reply", L = 32). The data keys are HKDF-SHA256(ee || es || ss, salt = e_pub || r_pub, info = "loft p2p data", L = 64): the first 32 bytes for initiator → responder, the rest for the way back. The AEAD is ChaCha20-Poly1305. Handshake seals use a zero nonce, since each of those keys seals once; data uses a 96-bit little-endian counter per direction, from 0, one step per seal. `proof` = HMAC-SHA256(ss, "loft p2p proof" || e_pub || src_ipv4 || dest_port || at)[0:16], `at` is unix seconds, `pad` is `pad_len` random bytes. `cipher` in the header is the data cipher the initiator asks for and in the reply the one the responder chose, with the ids of the Hello `inner` byte (§4.3). This revision defines only `1` (ChaCha20-Poly1305) for P2P: the responder MUST answer `1` to any ask, and `0` is never chosen since no TLS lies under a direct connection; the initiator MUST close on any other answer.
 
 The responder opens the header, looks up `src_ipv4` in its hints and checks `proof` against that member's key, requires `at` within 60 s of its own clock, and refuses an `e_pub` (top bit cleared) it has accepted in the last 120 s. Any failure closes the socket; the initiator then uses hub splice. A client with `p2p: false` MUST use hub splice only. Observed host through a relay is the relay; a direct attempt then fails and hub splice is used. When Status carries policy, both the initiator and the responder MUST apply the same Allow as hub splice before splicing local ports. A Status without policy (old node) skips that check.
 
@@ -901,12 +901,12 @@ sid v2 on the same ClientHello, with the member key of §16.2 as `token`:
 sid v2  d2953bbc3bcad53751c4eebc631d4a48425731080439c99eae5bcd148a79b9ca
 ```
 
-P2P handshake (§9). Initiator member scalar `50726976616379206973206e65636573736172792e2048756768657320273933`, responder member scalar `5468697320697320666f722065766572796f6e652e2054696d424c2032303132`, initiator fresh scalar `4172742e3233204b6f6e73742e2052462073656372656379206f66206d61696c`, responder fresh scalar `41727469636c6520313220554448523a206e6f20696e746572666572656e6365`, public keys sent with the top bit clear, `src_ipv4` 10.77.0.2, `dest_port` 8080, `at` 2524608000, initiator pad `706164`, responder pad empty. `record` is the first initiator → responder data record, carrying `ping`.
+P2P handshake (§9). Initiator member scalar `50726976616379206973206e65636573736172792e2048756768657320273933`, responder member scalar `5468697320697320666f722065766572796f6e652e2054696d424c2032303132`, initiator fresh scalar `4172742e3233204b6f6e73742e2052462073656372656379206f66206d61696c`, responder fresh scalar `41727469636c6520313220554448523a206e6f20696e746572666572656e6365`, public keys sent with the top bit clear, `src_ipv4` 10.77.0.2, `dest_port` 8080, `at` 2524608000, `cipher` `1` both ways, initiator pad `706164`, responder pad empty. `record` is the first initiator → responder data record, carrying `ping`.
 
 ```
 peer_pub  2a4cd76bd42aaa397c78d84f0e3fa3643dfad73d128237b66e8572688fc8a306
-hello     1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acef59eae3000bdb7d97c5a83bbcb0f00b0f706164
-reply     24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543eca4bde80e88b6f53d067e8874af6450401
+hello     1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acedf68456d92f248fe6fa61b6abe0a6bb909c706164
+reply     24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543ecb44343ff260d15fdd3a7e12c2cc6e8592c9
 record    39b9fc9869bfe0580b40de9f12a7c1a3dd87f6469543822a1385ea6e9364ee21edd26e9e8d7b
 ```
 
