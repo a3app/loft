@@ -230,6 +230,10 @@
     <string name="zone">Zone</string>
     <string name="repository">Repository</string>
     <string name="catalog">Catalog</string>
+    <string name="catalog_d">From the loft repository. You can still paste any URL.</string>
+    <string name="repo_d">A .bat file from GitHub or your host. Fills this zone. Your own rows stay.</string>
+    <string name="auto_update_d">Once a day. Leaves your own rows alone.</string>
+    <string name="no_list">No list yet</string>
     <string name="import_routes">Import</string>
     <string name="export_routes">Export</string>
     <string name="through_loft">Through loft</string>
@@ -244,7 +248,7 @@
     <string name="from_repo">repo</string>
     <string name="ignore">exclusion</string>
     <string name="auto_update">Auto-update</string>
-    <string name="pull">Pull</string>
+    <string name="pull">Update Now</string>
     <string name="delete_zone">Delete zone</string>
     <string name="zone_name">Name</string>
     <string name="list_url">List address</string>

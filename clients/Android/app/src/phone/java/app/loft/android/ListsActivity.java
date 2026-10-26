@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,6 +17,8 @@ import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.material.button.MaterialButton;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -37,6 +40,9 @@ public final class ListsActivity extends LoftActivity {
     private String page = "list";
     // Id of the zone or service the "zone" / "svc" page is editing.
     private String editing;
+    // Zone whose list URL the catalog writes; page to return to from catalog.
+    private String catalogZone = SplitStore.GLOBAL;
+    private String catalogBack = "repo";
     private final Handler main = new Handler(Looper.getMainLooper());
 
     @Override
@@ -53,6 +59,10 @@ public final class ListsActivity extends LoftActivity {
 
     @Override
     public void onBackPressed() {
+        if ("catalog".equals(page)) {
+            show(catalogBack);
+            return;
+        }
         if (!"list".equals(page)) {
             show("list");
             return;
@@ -109,10 +119,15 @@ public final class ListsActivity extends LoftActivity {
      */
     private View listPage() {
         LinearLayout root = col();
+        LinearLayout zhead = row();
+        zhead.addView(label(getString(R.string.zone)),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        zhead.addView(ghostSm(getString(R.string.zones), v -> show("zones")));
+        root.addView(zhead);
         LinearLayout chips = new LinearLayout(this);
         chips.setOrientation(LinearLayout.HORIZONTAL);
         for (SplitStore.Zone z : store.zones) {
-            Button b = chip(z.name + " " + store.count(z.id));
+            Button b = pill(z.name + " " + store.count(z.id));
             b.setSelected(z.id.equals(zoneId));
             b.setOnClickListener(v -> {
                 zoneId = z.id;
@@ -120,28 +135,27 @@ public final class ListsActivity extends LoftActivity {
             });
             chips.addView(b);
         }
-        Button zones = chip(getString(R.string.zones));
-        zones.setOnClickListener(v -> show("zones"));
-        chips.addView(zones);
         HorizontalScrollView hs = new HorizontalScrollView(this);
         hs.setHorizontalScrollBarEnabled(false);
         hs.addView(chips);
-        root.addView(hs);
+        LinearLayout.LayoutParams hsLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hsLp.bottomMargin = dp(8);
+        root.addView(hs, hsLp);
         SplitStore.Zone z = store.zone(zoneId);
-        TextView policy = mute(z != null && z.through
+        root.addView(policyLine(z != null && z.through
                 ? getString(R.string.policy_through, z.name)
-                : getString(R.string.policy_around, z == null ? zoneId : z.name));
-        root.addView(policy);
+                : getString(R.string.policy_around, z == null ? zoneId : z.name)));
         EditText search = field("");
         search.setHint(getString(R.string.search));
         search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
         root.addView(search);
-        LinearLayout list = col();
+        LinearLayout list = col(false);
         Runnable paint = () -> {
             list.removeAllViews();
             List<SplitStore.Svc> rows = store.in(zoneId, search.getText().toString());
             if (rows.isEmpty()) {
-                list.addView(mute(getString(R.string.empty_zone)));
+                list.addView(hint(getString(R.string.empty_zone)));
                 return;
             }
             for (SplitStore.Svc s : rows) {
@@ -155,12 +169,7 @@ public final class ListsActivity extends LoftActivity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
         root.addView(sc, lp);
-        Button add = go(getString(R.string.add));
-        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        addLp.topMargin = dp(8);
-        add.setLayoutParams(addLp);
-        add.setOnClickListener(v -> new AlertDialog.Builder(this)
+        Button add = ghostSm("+ " + getString(R.string.add), v -> new AlertDialog.Builder(this)
                 .setItems(new CharSequence[]{getString(R.string.add_service), getString(R.string.add_ignore)},
                         (d, w) -> {
                             SplitStore.Svc s = new SplitStore.Svc();
@@ -178,22 +187,30 @@ public final class ListsActivity extends LoftActivity {
                             show("svc");
                         })
                 .show());
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        addLp.topMargin = dp(6);
+        add.setLayoutParams(addLp);
         root.addView(add);
         LinearLayout foot = row();
-        foot.addView(ghost(getString(R.string.import_routes), v -> {
+        LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        footLp.topMargin = dp(10);
+        foot.setLayoutParams(footLp);
+        foot.addView(mini(getString(R.string.import_routes), v -> {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             i.addCategory(Intent.CATEGORY_OPENABLE);
             i.setType("*/*");
             startActivityForResult(i, REQ_IN);
-        }), weight());
-        foot.addView(ghost(getString(R.string.export_routes), v -> {
+        }), weight(0));
+        foot.addView(mini(getString(R.string.export_routes), v -> {
             Intent i = new Intent(Intent.ACTION_SEND);
             i.setType("text/plain");
             i.putExtra(Intent.EXTRA_TEXT, Bat.emit(store, zoneId));
             i.putExtra(Intent.EXTRA_SUBJECT, zoneId + ".bat");
             startActivity(Intent.createChooser(i, getString(R.string.export_routes)));
-        }), weight());
-        foot.addView(ghost(getString(R.string.repository), v -> show("repo")), weight());
+        }), weight(6));
+        foot.addView(mini(getString(R.string.repository), v -> show("repo")), weight(6));
         root.addView(foot);
         return root;
     }
@@ -207,7 +224,7 @@ public final class ListsActivity extends LoftActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = dp(6);
         row.setLayoutParams(lp);
-        LinearLayout grow = col();
+        LinearLayout grow = col(false);
         TextView n = new TextView(this);
         n.setText(s.name);
         n.setTextColor(getColor(R.color.snow));
@@ -220,9 +237,8 @@ public final class ListsActivity extends LoftActivity {
         grow.addView(n);
         grow.addView(m);
         row.addView(grow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        TextView src = mute(s.ignore ? getString(R.string.ignore)
-                : "repo".equals(s.src) ? getString(R.string.from_repo) : getString(R.string.mine));
-        row.addView(src);
+        row.addView(meta(s.ignore ? getString(R.string.ignore)
+                : "repo".equals(s.src) ? getString(R.string.from_repo) : getString(R.string.mine)));
         row.setOnClickListener(v -> {
             editing = s.id;
             show("svc");
@@ -279,8 +295,12 @@ public final class ListsActivity extends LoftActivity {
             svc.ignore = i == 1;
             svc.src = svc.ignore ? "ignore" : "me";
         });
+        LinearLayout.LayoutParams kindLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        kindLp.bottomMargin = dp(8);
+        kind.setLayoutParams(kindLp);
         root.addView(kind);
-        Button save = go(getString(R.string.save));
+        Button save = go(getString(R.string.save), 14);
         save.setOnClickListener(v -> {
             svc.name = name.getText().toString().trim();
             svc.cidrs.clear();
@@ -295,7 +315,7 @@ public final class ListsActivity extends LoftActivity {
         });
         root.addView(save);
         if (!svc.ignore) {
-            Button del = danger(getString(R.string.delete));
+            Button del = danger(getString(R.string.delete), 8);
             del.setOnClickListener(v -> {
                 store.services.remove(svc);
                 persist();
@@ -321,16 +341,20 @@ public final class ListsActivity extends LoftActivity {
             n.setText(z.name);
             n.setTextColor(getColor(R.color.snow));
             row.addView(n);
-            row.addView(mute((z.through ? getString(R.string.through_loft) : getString(R.string.around_loft))
-                    + " · " + store.count(z.id)));
+            TextView m = new TextView(this);
+            m.setText((z.through ? getString(R.string.through_loft) : getString(R.string.around_loft))
+                    + " · " + store.count(z.id));
+            m.setTextColor(getColor(R.color.mute));
+            m.setTextSize(10.5f);
+            m.setPadding(0, dp(2), 0, 0);
+            row.addView(m);
             row.setOnClickListener(v -> {
                 editing = z.id;
                 show("zone");
             });
             root.addView(row);
         }
-        Button add = go(getString(R.string.new_zone));
-        add.setOnClickListener(v -> {
+        root.addView(ghostSm("+ " + getString(R.string.new_zone), v -> {
             SplitStore.Zone z = new SplitStore.Zone();
             z.id = UUID.randomUUID().toString();
             z.name = getString(R.string.new_zone);
@@ -339,8 +363,7 @@ public final class ListsActivity extends LoftActivity {
             persist();
             editing = z.id;
             show("zone");
-        });
-        root.addView(add);
+        }));
         return scroll(root);
     }
 
@@ -360,35 +383,32 @@ public final class ListsActivity extends LoftActivity {
         dir.addView(chip(getString(R.string.through_loft)));
         dir.addView(chip(getString(R.string.around_loft)));
         Seg.bind(dir, z.through ? 0 : 1, i -> z.through = i == 0);
+        LinearLayout.LayoutParams dirLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dirLp.bottomMargin = dp(14);
+        dir.setLayoutParams(dirLp);
         root.addView(dir);
         root.addView(label(getString(R.string.list_url)));
-        LinearLayout urlRow = row();
-        EditText url = field(z.repo);
-        urlRow.addView(url, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Button lists = chip(getString(R.string.pick_list));
-        lists.setOnClickListener(v -> show("catalog"));
-        urlRow.addView(lists);
-        root.addView(urlRow);
-        LinearLayout auto = row();
-        TextView al = snow(getString(R.string.auto_update));
-        auto.addView(al, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Switch sw = new Switch(this);
-        sw.setChecked(z.auto);
-        auto.addView(sw);
-        root.addView(auto);
-        Button save = go(getString(R.string.save));
+        EditText url = urlField(z.repo);
+        root.addView(urlRow(url, v -> {
+            z.repo = url.getText().toString().trim();
+            persist();
+            openCatalog(z.id, "zone");
+        }));
+        root.addView(autoRow(z));
+        root.addView(hint(z.pulled == 0 ? getString(R.string.no_list) : getString(R.string.pulled)));
+        Button save = go(getString(R.string.save), 14);
         save.setOnClickListener(v -> {
             if (!z.builtin) {
                 z.name = name.getText().toString().trim();
             }
             z.repo = url.getText().toString().trim();
-            z.auto = sw.isChecked();
             persist();
             show("zones");
         });
         root.addView(save);
         if (!z.builtin) {
-            Button del = danger(getString(R.string.delete_zone));
+            Button del = danger(getString(R.string.delete_zone), 8);
             del.setOnClickListener(v -> {
                 store.deleteZone(z.id);
                 persist();
@@ -406,62 +426,80 @@ public final class ListsActivity extends LoftActivity {
         if (z == null) {
             return root;
         }
+        root.addView(subline(z.name + " · " + getString(R.string.repo_d)));
         root.addView(label(getString(R.string.list_url)));
-        LinearLayout urlRow = row();
-        EditText url = field(z.repo);
-        urlRow.addView(url, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Button lists = chip(getString(R.string.pick_list));
-        lists.setOnClickListener(v -> {
+        EditText url = urlField(z.repo);
+        url.addTextChangedListener(new SimpleWatch(() -> {
             z.repo = url.getText().toString().trim();
             persist();
-            show("catalog");
-        });
-        urlRow.addView(lists);
-        root.addView(urlRow);
-        LinearLayout auto = row();
-        auto.addView(snow(getString(R.string.auto_update)),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Switch sw = new Switch(this);
-        sw.setChecked(z.auto);
-        auto.addView(sw);
-        root.addView(auto);
-        Button pull = go(getString(R.string.pull));
+        }));
+        root.addView(urlRow(url, v -> {
+            z.repo = url.getText().toString().trim();
+            persist();
+            openCatalog(z.id, "repo");
+        }));
+        root.addView(autoRow(z));
+        root.addView(hint(z.pulled == 0 ? getString(R.string.no_list) : getString(R.string.pulled)));
+        Button pull = go(getString(R.string.pull), 14);
         pull.setOnClickListener(v -> {
             z.repo = url.getText().toString().trim();
-            z.auto = sw.isChecked();
             persist();
             pull(z);
         });
         root.addView(pull);
-        Button save = ghost(getString(R.string.save), v -> {
-            z.repo = url.getText().toString().trim();
-            z.auto = sw.isChecked();
-            persist();
-            show("list");
-        });
-        root.addView(save);
         return scroll(root);
+    }
+
+    private void openCatalog(String zone, String back) {
+        catalogZone = zone;
+        catalogBack = back;
+        show("catalog");
     }
 
     /** Ready-made lists from the loft-routes repository; picking one sets the zone's list URL. */
     private View catalogPage() {
         LinearLayout root = col();
+        root.addView(subline(getString(R.string.catalog_d)));
         String lang = Prefs.applyLang(this);
+        SplitStore.Zone cur = store.zone(catalogZone);
+        String current = cur != null ? cur.repo : "";
         for (String[] row : SplitStore.CATALOG) {
-            Button b = go(SplitStore.catalogLabel(row[0], lang));
-            b.setOnClickListener(v -> {
-                SplitStore.Zone z = store.zone(zoneId);
-                if (z != null) {
-                    z.repo = SplitStore.catalogUrl(row[0]);
-                    persist();
-                }
-                show("repo");
-            });
+            String id = row[0];
+            String url = SplitStore.catalogUrl(id);
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setBackgroundResource(url.equals(current) ? R.drawable.bg_card_live : R.drawable.bg_card);
+            card.setPadding(dp(12), dp(9), dp(12), dp(9));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lp.bottomMargin = dp(6);
-            b.setLayoutParams(lp);
-            root.addView(b);
+            card.setLayoutParams(lp);
+            LinearLayout grow = col(false);
+            TextView n = new TextView(this);
+            n.setText(SplitStore.catalogLabel(id, lang));
+            n.setTextColor(getColor(R.color.snow));
+            n.setTextSize(13.5f);
+            n.getPaint().setFakeBoldText(true);
+            TextView m = new TextView(this);
+            m.setText(id + ".bat");
+            m.setTextColor(getColor(R.color.mute));
+            m.setTextSize(10.5f);
+            m.setTypeface(android.graphics.Typeface.MONOSPACE);
+            m.setPadding(0, dp(2), 0, 0);
+            grow.addView(n);
+            grow.addView(m);
+            card.addView(grow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            card.addView(meta(getString(R.string.from_repo)));
+            card.setOnClickListener(v -> {
+                SplitStore.Zone z = store.zone(catalogZone);
+                if (z != null) {
+                    z.repo = url;
+                    persist();
+                }
+                show(catalogBack);
+            });
+            root.addView(card);
         }
         return scroll(root);
     }
@@ -527,10 +565,16 @@ public final class ListsActivity extends LoftActivity {
     }
 
     private LinearLayout col() {
+        return col(true);
+    }
+
+    private LinearLayout col(boolean pad) {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
-        int p = dp(16);
-        l.setPadding(p, p / 2, p, p);
+        if (pad) {
+            int p = dp(16);
+            l.setPadding(p, p / 2, p, p);
+        }
         return l;
     }
 
@@ -547,8 +591,19 @@ public final class ListsActivity extends LoftActivity {
         return s;
     }
 
+    private Button inflateBtn(int layout) {
+        return (Button) getLayoutInflater().inflate(layout, findViewById(R.id.body), false);
+    }
+
+    private LinearLayout.LayoutParams stack(int top) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(top);
+        return lp;
+    }
+
     private Button chip(String t) {
-        Button b = new Button(this, null, 0, R.style.Widget_Loft_Chip);
+        Button b = inflateBtn(R.layout.btn_chip);
         b.setText(t);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -557,22 +612,43 @@ public final class ListsActivity extends LoftActivity {
         return b;
     }
 
-    private Button go(String t) {
-        Button b = new Button(this, null, 0, R.style.Widget_Loft_Go);
+    private Button pill(String t) {
+        Button b = chip(t);
+        if (b instanceof MaterialButton) {
+            ((MaterialButton) b).setCornerRadius(dp(18));
+        }
+        return b;
+    }
+
+    private Button go(String t, int top) {
+        Button b = inflateBtn(R.layout.btn_go);
+        b.setText(t);
+        b.setLayoutParams(stack(top));
+        return b;
+    }
+
+    private Button danger(String t, int top) {
+        Button b = inflateBtn(R.layout.btn_danger);
+        b.setText(t);
+        b.setLayoutParams(stack(top));
+        return b;
+    }
+
+    private Button ghostSm(String t, View.OnClickListener l) {
+        Button b = inflateBtn(R.layout.btn_ghost_sm);
+        b.setText(t);
+        b.setOnClickListener(l);
+        return b;
+    }
+
+    private Button mini(String t) {
+        Button b = inflateBtn(R.layout.btn_mini);
         b.setText(t);
         return b;
     }
 
-    private Button danger(String t) {
-        Button b = new Button(this, null, 0, R.style.Widget_Loft_Danger);
-        b.setText(t);
-        return b;
-    }
-
-    private Button ghost(String t, View.OnClickListener l) {
-        Button b = new Button(this, null, 0, R.style.Widget_Loft_Ghost);
-        b.setText(t);
-        b.setTextSize(12);
+    private Button mini(String t, View.OnClickListener l) {
+        Button b = mini(t);
         b.setOnClickListener(l);
         return b;
     }
@@ -584,11 +660,68 @@ public final class ListsActivity extends LoftActivity {
         e.setHintTextColor(getColor(R.color.mute));
         e.setBackgroundResource(R.drawable.bg_field);
         e.setPadding(dp(12), dp(10), dp(12), dp(10));
+        e.setTextSize(14);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(10);
+        lp.topMargin = dp(4);
+        lp.bottomMargin = dp(12);
         e.setLayoutParams(lp);
         return e;
+    }
+
+    private EditText urlField(String v) {
+        EditText e = field(v);
+        e.setSingleLine(true);
+        e.setEllipsize(TextUtils.TruncateAt.END);
+        e.setTypeface(android.graphics.Typeface.MONOSPACE);
+        e.setTextSize(12);
+        e.setLayoutParams(new LinearLayout.LayoutParams(0, dp(40), 1));
+        return e;
+    }
+
+    private LinearLayout urlRow(EditText url, View.OnClickListener lists) {
+        LinearLayout row = row();
+        LinearLayout.LayoutParams wrap = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        wrap.topMargin = dp(4);
+        wrap.bottomMargin = dp(12);
+        row.setLayoutParams(wrap);
+        row.addView(url);
+        Button pick = mini(getString(R.string.pick_list));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
+        lp.leftMargin = dp(6);
+        pick.setLayoutParams(lp);
+        pick.setOnClickListener(lists);
+        row.addView(pick);
+        return row;
+    }
+
+    private LinearLayout autoRow(SplitStore.Zone z) {
+        LinearLayout auto = row();
+        auto.setPadding(0, dp(12), 0, dp(12));
+        auto.setBackgroundResource(R.drawable.bg_setrow);
+        LinearLayout text = col(false);
+        TextView k = snow(getString(R.string.auto_update));
+        k.setTextSize(14);
+        TextView s = new TextView(this);
+        s.setText(getString(R.string.auto_update_d));
+        s.setTextColor(getColor(R.color.mute));
+        s.setTextSize(11);
+        s.setPadding(0, dp(2), 0, 0);
+        text.addView(k);
+        text.addView(s);
+        auto.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        ToggleView sw = new ToggleView(this);
+        sw.setChecked(z.auto);
+        sw.setOnCheckedChangeListener((v, on) -> {
+            z.auto = on;
+            persist();
+        });
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(dp(42), dp(26));
+        tlp.leftMargin = dp(12);
+        auto.addView(sw, tlp);
+        return auto;
     }
 
     private TextView label(String t) {
@@ -599,12 +732,48 @@ public final class ListsActivity extends LoftActivity {
         return v;
     }
 
-    private TextView mute(String t) {
+    private TextView hint(String t) {
         TextView v = new TextView(this);
         v.setText(t);
         v.setTextColor(getColor(R.color.mute));
         v.setTextSize(12);
-        v.setPadding(0, dp(6), 0, dp(8));
+        v.setLineSpacing(0, 1.45f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(10);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    private TextView subline(String t) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTextColor(getColor(R.color.mute));
+        v.setTextSize(12.5f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(12);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    private TextView policyLine(String t) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTextColor(getColor(R.color.mute));
+        v.setTextSize(12);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(10);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    private TextView meta(String t) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTextColor(getColor(R.color.stone));
+        v.setTextSize(11);
         return v;
     }
 
@@ -615,8 +784,11 @@ public final class ListsActivity extends LoftActivity {
         return v;
     }
 
-    private LinearLayout.LayoutParams weight() {
-        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+    private LinearLayout.LayoutParams weight(int left) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        lp.leftMargin = dp(left);
+        return lp;
     }
 
     private int dp(int v) {

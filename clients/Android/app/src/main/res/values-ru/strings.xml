@@ -219,6 +219,10 @@
     <string name="zone">Зона</string>
     <string name="repository">Репозиторий</string>
     <string name="catalog">Каталог</string>
+    <string name="catalog_d">Из каталога loft-routes. Свой URL по-прежнему можно вставить.</string>
+    <string name="repo_d">Файл .bat с GitHub или своего хоста. Заполняет эту зону. Свои строки не трогает.</string>
+    <string name="auto_update_d">Раз в сутки. Свои записи не затирает.</string>
+    <string name="no_list">Списка пока нет</string>
     <string name="import_routes">Импорт</string>
     <string name="export_routes">Экспорт</string>
     <string name="through_loft">Через loft</string>
@@ -233,7 +237,7 @@
     <string name="from_repo">репо</string>
     <string name="ignore">исключение</string>
     <string name="auto_update">Автообновление</string>
-    <string name="pull">Обновить</string>
+    <string name="pull">Обновить сейчас</string>
     <string name="delete_zone">Удалить зону</string>
     <string name="zone_name">Имя</string>
     <string name="list_url">Адрес списка</string>

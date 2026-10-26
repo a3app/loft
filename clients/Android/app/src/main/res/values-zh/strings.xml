@@ -219,6 +219,10 @@
     <string name="zone">区域</string>
     <string name="repository">仓库</string>
     <string name="catalog">目录</string>
+    <string name="catalog_d">来自 loft 仓库。自定义地址仍可粘贴。</string>
+    <string name="repo_d">来自 GitHub 或自有主机的 .bat。填入此区域。你自己的行保留。</string>
+    <string name="auto_update_d">每天一次。不覆盖你自己的条目。</string>
+    <string name="no_list">还没有列表</string>
     <string name="import_routes">导入</string>
     <string name="export_routes">导出</string>
     <string name="through_loft">经 loft</string>
@@ -233,7 +237,7 @@
     <string name="from_repo">仓库</string>
     <string name="ignore">排除</string>
     <string name="auto_update">自动更新</string>
-    <string name="pull">拉取</string>
+    <string name="pull">立即更新</string>
     <string name="delete_zone">删除区域</string>
     <string name="zone_name">名称</string>
     <string name="list_url">列表地址</string>
