@@ -402,8 +402,9 @@ u8    cc || u32be cc_up || u32be cc_down   可选，位于 controller_pin 之后
 | 27 | quic_mark | 诱饵节点上的 quic：Initial 必须携带 loft 标记（§11.3） |
 | 28 | h3_mark | 诱饵节点上的 h3：Initial 必须携带 loft 标记（§11.3） |
 | 29 | l3 | HTTP/2 CONNECT 承载 IP 数据报（无 mux） |
+| 30 | lists_inline | 节点在会话内用 Lists 命令下发地址列表（§6、§10.3） |
 
-节点关闭某前置必须清该位。客户端不使用某前置必须清该位。SOCKS、TUN、CDN 厂商、操作系统、git 与源站主机名不是能力。第 30–63 位在本修订中没有名称（§13.1）。
+节点关闭某前置必须清该位。客户端不使用某前置必须清该位。SOCKS、TUN、CDN 厂商、操作系统、git 与源站主机名不是能力。第 31–63 位在本修订中没有名称（§13.1）。
 
 版本协商：`max(intersection(client.min..client.max, node.min..node.max))`。Status 中的 caps 为节点宣告集。客户端决定使用其中哪些。
 
@@ -444,11 +445,12 @@ bytes payload
 | 10 | Tune | 4 字节：`u8 event \|\| u8 inflight \|\| u16be header_budget`，可选第 5 字节 `h2_conns`。客户端 event ≠ 0 为一次前置中断（1 `ENHANCE_YOUR_CALM`，2 HTTP 413，3 HTTP 404，4 连接复位，5 HTTP 429，6 其他 GOAWAY），在下一条已经携带 mux 的 GET 上发送一次。节点 event 0 设定存活 GET 的 `header_budget` / `inflight` / `h2_conns`（字段为 0 = 保持不变）。仅当这些值变化时节点才回复。stream_id 必须为 0。 |
 | 11 | Report | `u64be applied`（节点已连续收下的最高 GET 序号）。stream_id 必须为 0。旧客户端忽略未知 mux 命令。 |
 | 12 | Front | 前置名（`get`、`ws`、`h2`、`quic`、`h3`）。stream_id 必须为 0。客户端：bulk mux 走该 attach 前置。节点：ack。`get` 把 bulk 交回 GET。 |
+| 13 | Lists | stream_id 必须为 0。客户端发：`u64be have \|\| u32be offset`——客户端已有列表的 serial（没有则 0）和要从哪个偏移开始应答。节点发：`u64be serial \|\| u32be total \|\| u32be offset \|\| bytes`——该成员已签名列表体（§10.3）的一段，`total` 为整个列表体的长度。`total` 为 0 表示节点没有比 `have` 更新的列表。仅在 `lists_inline` 位（§5.3）下使用。 |
 
 **Resin 与 draft。** mux 帧为 resin 或 draft。
 
-- **Resin** 持有至 Report 覆盖其 GET 序号，再在同一序号上重传：Open、Ping、Pong、Leave、Tune、Report、Front、Close、Reset，以及发往端口 53 的 Dgram。
-- **Draft** 只发送一次：Data、Pad、其他 Dgram。内部 TCP 或 UDP 在应用仍需要这些字节时产生新帧。
+- **Resin** 持有至 Report 覆盖其 GET 序号，再在同一序号上重传：Open、Ping、Pong、Leave、Tune、Report、Front、客户端发的 Lists、Close、Reset，以及发往端口 53 的 Dgram。
+- **Draft** 只发送一次：Data、Pad、节点发的 Lists、其他 Dgram。内部 TCP 或 UDP 在应用仍需要这些字节时产生新帧。缺少 Lists 某一段的客户端从第一个缺失字节的偏移重新请求。
 
 一次 mux Pull 最多变成三个 GET 序号：控制 resin、draft Data，然后 Close/Reset。Close 不得与同一流的 Data 共享 Cookie。HTTP 错误之后，客户端以仅 resin（若 Cookie 原为仅 draft 则以 Pad）重试同一序号，以填补序号空洞且不重放 draft。若干 inflight GET 上的首次 HTTP 404 为边缘噪声；同一 sid 上三次 **重试** 404 表示源站已丢失会话。对存活 stream_id 的重复 Open 必须忽略。
 
@@ -621,7 +623,13 @@ repeat:
 
 Kind 1 精确域名，2 后缀，3 CIDR。然后公钥与签名同名册。
 
-Status 携带 `lists_serial` 与已签名块的 SHA-256。序号或散列更新时，客户端获取 `GET {lists_path}`（默认 `/static/v3/lists.json`）。名称匹配不区分大小写。*说明，非规范。* 运营文件如何书写后缀或 CIDR，见 [guide_zh.md](guide_zh.md)。SOCKS 匹配主机名。TUN 匹配 IP（CIDR）。
+Kind 4–6 是配置文件元数据，永不匹配主机或 IP。4 `dir`：运营方给该集合的方向，`via`、`direct` 或 `drop`。5 `label`：集合的显示名（UTF-8）。6 `dns`：`direct` 集合中名称的本地解析器，IP 或 DoH URL。名称为空的集合是配置文件头：其中没有地址，kind 5 为配置文件名，kind 6 为 DNS 提示。接收方必须忽略未知 kind，且不得因此拒绝列表。把列表显示为运营方配置文件的客户端从 kind 4 取集合方向；没有 kind 4 的集合按上文自行映射。重叠时 drop、direct、via 的顺序不变。
+
+Status 携带 `lists_serial` 与已签名块的 SHA-256。节点可以给不同成员下发不同列表（成员配置文件）；此时 Status 中的 `lists_serial` 与散列指该成员的列表，它们都用同一个控制器密钥签名。
+
+节点声明了 `lists_inline` 时，序号或散列更新的客户端在会话内用 Lists 命令（§6）请求列表体，且不应再获取 `lists_path`。节点分段应答。客户端拼出 `total` 字节的列表体，必须用 Status 中的散列核对 SHA-256 并验证签名，之后才替换自己的列表。偏移不是客户端所请求的、或 serial 不同的分段一律丢弃。没有 `lists_inline` 时，序号或散列更新的客户端获取 `GET {lists_path}`（默认 `/static/v3/lists.json`）。带 `lists_inline` 的节点可以不再通过 GET 提供列表；此时该路径和其他路径一样交给源站。
+
+名称匹配不区分大小写。*说明，非规范。* 运营文件如何书写后缀或 CIDR，见 [guide_zh.md](guide_zh.md)。SOCKS 匹配主机名。TUN 匹配 IP（CIDR）。
 
 ### 10.4 控制器密钥更换
 
@@ -666,7 +674,7 @@ CDN、反向代理或 TLS 终结器能观察到什么，以及握手依赖哪些
 
 没有有效 `session_id` 就打开 TLS 的扫描器拼接到已配置源站，包括自身 SNI（CT / 反向 DNS 主机名）、空 SNI，以及首包不是 TLS ClientHello 的情况。它收到源站的存活证书与字节。该 IP 上的 UDP 转发到同一源站，因此 QUIC 探测看到目的地，而不是 loft。例外是带标记的 loft QUIC v1 Initial。其源连接 ID 为 20 字节 `HKDF-SHA256(secret, salt = client_random, info = "loft-quic-v3")`，其中 client_random 为临时 X25519 公钥（最高位随机），secret 为 ECDH(该临时密钥, `mask_pub`)。没有 `mask_pub` 的客户端使用 info `loft-quic-v2`，以成员密钥为 secret。节点用公开 Initial 密钥打开 Initial（[RFC 9001](https://www.rfc-editor.org/rfc/rfc9001) §5.2），检查标记，将每个 client_random 单次持有 10 分钟，并把该客户端地址交给其 quic/h3 前置。TCP `client_random` 在同样的 10 分钟内单次使用；重复则拼接。伪装节点上的 QUIC 标记只有 v3（`quic_mark` / `h3_mark`）：v2 Initial 转发到源站。节点自身的连接 ID 携带 HMAC，因此来自新地址的短头分组仍留在 loft。此类节点宣告 `quic_mark` / `h3_mark` 而非 `quic` / `h3`；不打标记的客户端不得使用它们。构成 sid v3 需要 `mask_pub`；覆盖网 Hello 仍需要成员密钥。例外是 CDN 源站拉取：已配置的 `cdn_peers` CIDR 可以在自身 SNI 上以节点证书完成 TLS，无需 sid。
 
-没有有效 Cookie 的 GET 返回带 HTML 的 404。未知成员密钥下格式正确的 `0x02` 得到同样的 404。名册、列表与静态资源是普通 GET。
+没有有效 Cookie 的 GET 返回带 HTML 的 404。未知成员密钥下格式正确的 `0x02` 得到同样的 404。名册与静态资源是普通 GET。列表也是，除非节点已把它们移入会话（`lists_inline`，§10.3）。
 
 ### 11.4 重放与时钟
 
@@ -675,6 +683,8 @@ Auth `0x02` 为 nonce、临时 X25519 公钥，以及成员密钥下的 HMAC。�
 ### 11.5 名册与列表
 
 经签名的名册是 CDN 路径上的公开文件。能 GET 该路径者即可读存活前置。成员密钥不在其中。钉住控制器公钥的客户端拒绝被替换的密钥。首次使用信任关闭：除非运营方打开该选项，客户端不得钉住未知签名者（§10.1）。
+
+通过 GET 下发的列表，任何知道路径的人都能读取，固定路径本身也是明显的特征。使用 `lists_inline` 时，列表体只在会话 AEAD 内发给已认证的成员，且每个成员可以拿到不同的列表。两种情况下，控制器签名都让节点、relay 或 CDN 无法替换决定哪些流量绕过隧道的规则。
 
 ### 11.6 覆盖网
 
@@ -698,7 +708,8 @@ loft 不是 mixnet。路径看得到一条 TLS 1.3 会话。控制器看得到�
 | 控制器签名密钥 | 控制器。持有公钥的客户端拒绝被替换的签名者。钉住未知签名者默认关闭，除非运营方打开该选项（§10.1）。 |
 | 覆盖网 IP、VLAN、租约 | 控制器。mesh 或 vlan 把 Open 转到另一成员时，该成员得知对方的覆盖网 IP。`p2p` 开启时，Status 对等提示还携带该覆盖网 IP、TLS 观察到的主机、监听端口和 X25519 公钥（§11.6）。 |
 | mux 明文 | 会话密钥的持有者。没有该密钥的 TLS 终结器在 ChaCha20-Poly1305 和 AES-256-GCM 上看到的是 AEAD 密文（§11）。前置 `get` 不协商 clear，因此在 `get` 上终结 TLS 的 CDN 得不到 mux 明文。协商了 clear 的直连前置把 mux 明文交给该前置的 TLS 终结器。 |
-| 名册与地址列表 | 任何能 GET 该公开路径的人。`Cache-Control: public`。这不是成员目录。 |
+| 名册 | 任何能 GET 该公开路径的人。`Cache-Control: public`。这不是成员目录。 |
+| 地址列表 | 通过 GET：任何知道路径的人（`Cache-Control: public`）。使用 `lists_inline` 时：只有节点在会话内下发给的那个成员（§10.3）。 |
 | `get` 上的大小与时序 | 终结该 TLS 的 CDN 或反向代理，包括 Cookie 长度。内部 AEAD 仍然隐藏 mux 明文。 |
 
 成员密钥、控制器签名密钥和覆盖网地址规划是部署秘密。公布名册并不公布它们。
@@ -715,11 +726,11 @@ loft 不是 mixnet。路径看得到一条 TLS 1.3 会话。控制器看得到�
 
 | 位 | 类别 |
 |----|------|
-| 0–29 | 已赋值（§5.3） |
-| 30–47 | 保留 |
+| 0–30 | 已赋值（§5.3） |
+| 31–47 | 保留 |
 | 48–63 | 实验 |
 
-保留位不得用于本规范尚未赋值的含义。本规范从第 30 位向上赋值。实验位不得向未另行约定该含义的对端置位。接收方必须忽略自己未实现的位。未知位不使握手失败。接收方不得因此复位会话。
+保留位不得用于本规范尚未赋值的含义。本规范从第 31 位向上赋值。实验位不得向未另行约定该含义的对端置位。接收方必须忽略自己未实现的位。未知位不使握手失败。接收方不得因此复位会话。
 
 ### 13.2 mux 命令
 
@@ -728,8 +739,8 @@ loft 不是 mixnet。路径看得到一条 TLS 1.3 会话。控制器看得到�
 | cmd | 类别 |
 |-----|------|
 | 0 | 保留，不使用 |
-| 1–12 | 已赋值（§6） |
-| 13–191 | 保留 |
+| 1–13 | 已赋值（§6） |
+| 14–191 | 保留 |
 | 192–255 | 实验 |
 
 接收方未实现的命令必须忽略，且不得因此复位会话（§6）。该规则覆盖保留值与实验值。发送方不得使用保留命令。实验命令不得发给未另行约定该含义的对端。
@@ -775,6 +786,8 @@ loft 不是 mixnet。路径看得到一条 TLS 1.3 会话。控制器看得到�
 | gap_hold_ms | 0–600000（默认 8000） |
 | rate_bps | 0 = 关；否则字节/秒，u32 |
 | fronts | n ≤ 8；name/path/url 各 ≤ 64 |
+| 列表体（Lists 中的 `total`） | ≤ 4 MiB |
+| 节点发的 Lists 分段 | ≤ 16368 字节 |
 
 ---
 
@@ -883,6 +896,22 @@ hash    647fe575001d7d8dd007eb04efebacb72b23881ad5ea241ec4440692b22fddc4
 
 ```
 {"v":1,"p":"AAAAAAEpQnoBBHNlbGYAGGh0dHBzOi8vbG9mdC5leGFtcGxlLmNvbQ5vcmlnaW4uZXhhbXBsZQIDZ2V0AndzAGQQL3N0YXRpYy92My9idWlsZCDMy1YzEfDenww90osUUNl4vav8Y8ptc89WHy_z7MCUQyAP0-yseNs2Cs6KuF5NktiX_rSl6FZUIe6dzG77r2OuBQBA067a3bx4v1yMKbflgCtOqK6ArMV0kM6Ki_wbxZb26hXIYUUTBCYvtrTAXdzw01rCz8b9zPtTEUG5hvOhLGhBDA"}
+```
+
+同一密钥下的运营方配置文件：serial 20261027，集合 `""`（kind 5 `"RU direct"`，kind 6 `"77.88.8.8"`）、`"ru"`（kind 4 `"direct"`，kind 5 `"Russia"`，kind 3 `"5.255.255.0/24"`，kind 2 `"yandex.ru"`）、`"ads"`（kind 4 `"drop"`，kind 2 `"doubleclick.net"`）。列表体 218 字节。
+
+```
+lists   00000000013528a30300000205000952552064697265637406000937372e38382e382e38027275000404000664697265637405000652757373696103000e352e3235352e3235352e302f323402000979616e6465782e727503616473000204000464726f7002000f646f75626c65636c69636b2e6e6574200fd3ecac78db360ace8ab85e4d92d897feb4a5e8565421ee9dcc6efbaf63ae05004035dbe6002c80709d7a5f7e7d8430bc17e8ec036925b7df8bfa99b85c4c2f6eb1dce5d661b66a8c779db891c5e922456c753daef8fce727c6b9c50a28256d3902
+hash    81f9f2e4ae1ef80c152c3ce7de200061c289268a348a95b45d670912e7802114
+```
+
+Lists 帧（cmd `0d`，stream 0）。没有列表的客户端从偏移 0 请求；节点用一段发回整个列表体；已有该 serial 的客户端请求，节点回答「没有更新的」（`total` 为 0）：
+
+```
+req     000c0d00000000000000000000000000000000
+resp    00ea0d0000000000000000013528a3000000da00000000 || lists
+have    000c0d0000000000000000013528a300000000
+none    00100d0000000000000000013528a30000000000000000
 ```
 
 ### 16.7 Cookie Z85

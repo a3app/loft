@@ -194,6 +194,54 @@ func TestSignedVectors(t *testing.T) {
 	vecCheck(t, "lists hash", vecHex(h[:]), "647fe575001d7d8dd007eb04efebacb72b23881ad5ea241ec4440692b22fddc4")
 }
 
+// TestProfileListsVector locks the operator profile of §16.6: a header set with
+// an empty name, kinds 4–6 as metadata, and the Lists frames that carry it.
+func TestProfileListsVector(t *testing.T) {
+	priv := ed25519.NewKeyFromSeed([]byte("Liberty Of Free Transmission 1.0"))
+	l := SignLists(priv, wire.Lists{Serial: 20261027, Sets: []wire.AddrList{
+		{Name: "", Entries: []wire.Addr{{Kind: 5, Val: "RU direct"}, {Kind: 6, Val: "77.88.8.8"}}},
+		{Name: "ru", Entries: []wire.Addr{{Kind: 4, Val: "direct"}, {Kind: 5, Val: "Russia"}, {Kind: 3, Val: "5.255.255.0/24"}, {Kind: 2, Val: "yandex.ru"}}},
+		{Name: "ads", Entries: []wire.Addr{{Kind: 4, Val: "drop"}, {Kind: 2, Val: "doubleclick.net"}}},
+	}})
+	if err := l.Verify(); err != nil {
+		t.Fatal(err)
+	}
+	blob := l.Encode()
+	h := l.Hash()
+	vecCheck(t, "profile lists", vecHex(blob), "00000000013528a30300000205000952552064697265637406000937372e38382e382e38027275000404000664697265637405000652757373696103000e352e3235352e3235352e302f323402000979616e6465782e727503616473000204000464726f7002000f646f75626c65636c69636b2e6e6574200fd3ecac78db360ace8ab85e4d92d897feb4a5e8565421ee9dcc6efbaf63ae05004035dbe6002c80709d7a5f7e7d8430bc17e8ec036925b7df8bfa99b85c4c2f6eb1dce5d661b66a8c779db891c5e922456c753daef8fce727c6b9c50a28256d3902")
+	vecCheck(t, "profile hash", vecHex(h[:]), "81f9f2e4ae1ef80c152c3ce7de200061c289268a348a95b45d670912e7802114")
+	// Metadata kinds never match a host or an IP.
+	for _, s := range l.Sets {
+		for _, e := range s.Entries {
+			if e.Kind >= 4 && (e.MatchHost("yandex.ru") || e.MatchHost(e.Val)) {
+				t.Errorf("kind %d %q matched a host", e.Kind, e.Val)
+			}
+		}
+	}
+	// Lists frames: cmd 13 on stream 0.
+	frame := func(p []byte) string {
+		b, err := wire.Frame{Cmd: 13, Payload: p}.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return vecHex(b)
+	}
+	resp := append(hexBytes(t, "00000000013528a3000000da00000000"), blob...)
+	vecCheck(t, "lists req", frame(make([]byte, 12)), "000c0d00000000000000000000000000000000")
+	vecCheck(t, "lists resp", frame(resp), "00ea0d00000000"+vecHex(resp))
+	vecCheck(t, "lists have", frame(hexBytes(t, "00000000013528a300000000")), "000c0d0000000000000000013528a300000000")
+	vecCheck(t, "lists none", frame(hexBytes(t, "00000000013528a30000000000000000")), "00100d0000000000000000013528a30000000000000000")
+}
+
+func hexBytes(t *testing.T, s string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 // TestCookie85Vector locks §16.7: Z85 pads u16be length || blob with zeros to a multiple of 4.
 func TestCookie85Vector(t *testing.T) {
 	frame, _ := hex.DecodeString("000202000000016869")

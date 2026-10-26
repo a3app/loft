@@ -402,8 +402,9 @@ Selected protocol is the maximum of the intersection of the two ranges. Empty in
 | 27 | quic_mark | quic on a decoy node: the Initial MUST carry the loft mark (§11.3) |
 | 28 | h3_mark | h3 on a decoy node: the Initial MUST carry the loft mark (§11.3) |
 | 29 | l3 | HTTP/2 CONNECT carrying IP datagrams (no mux) |
+| 30 | lists_inline | the node serves address lists inside the session with the Lists command (§6, §10.3) |
 
-A node that disables a front MUST clear that bit. A client that will not use a front MUST clear it. SOCKS, TUN, CDN vendor, OS, git, and origin hostnames are not capabilities. Bits 30–63 have no name in this revision (§13.1).
+A node that disables a front MUST clear that bit. A client that will not use a front MUST clear it. SOCKS, TUN, CDN vendor, OS, git, and origin hostnames are not capabilities. Bits 31–63 have no name in this revision (§13.1).
 
 Version negotiation: `max(intersection(client.min..client.max, node.min..node.max))`. Caps in Status are the node’s advertised set. The client decides which of those it uses.
 
@@ -444,11 +445,12 @@ Client stream identifiers are odd, starting at 1. Node identifiers are even, sta
 | 10 | Tune | 4 bytes: `u8 event \|\| u8 inflight \|\| u16be header_budget`, optional 5th byte `h2_conns`. Client event ≠ 0 is one front break (1 `ENHANCE_YOUR_CALM`, 2 HTTP 413, 3 HTTP 404, 4 connection reset, 5 HTTP 429, 6 other GOAWAY), sent once on the next GET that already carries mux. Node event 0 sets live GET `header_budget` / `inflight` / `h2_conns` (0 in a field = leave unchanged). The node replies only when those values change. stream_id MUST be 0. |
 | 11 | Report | `u64be applied` (highest contiguous GET sequence the node has ingested). stream_id MUST be 0. Old clients ignore unknown mux commands. |
 | 12 | Front | front name (`get`, `ws`, `h2`, `quic`, `h3`). stream_id MUST be 0. Client: bulk mux on this attached front. Node: ack. `get` returns bulk to GET. |
+| 13 | Lists | stream_id MUST be 0. From the client: `u64be have \|\| u32be offset` — the serial of the lists the client already holds (0 for none) and the body offset to answer from. From the node: `u64be serial \|\| u32be total \|\| u32be offset \|\| bytes` — a piece of this member's signed lists body (§10.3); `total` is the length of the whole body. `total` 0 means the node has nothing newer than `have`. Only with the `lists_inline` bit (§5.3). |
 
 **Resin and draft.** A mux frame is resin or draft.
 
-- **Resin** is held until a Report covers its GET sequence, then retransmitted on that same sequence: Open, Ping, Pong, Leave, Tune, Report, Front, Close, Reset, and Dgram to port 53.
-- **Draft** is sent once: Data, Pad, other Dgram. Inner TCP or UDP produces a new frame if the application still needs the bytes.
+- **Resin** is held until a Report covers its GET sequence, then retransmitted on that same sequence: Open, Ping, Pong, Leave, Tune, Report, Front, Lists from the client, Close, Reset, and Dgram to port 53.
+- **Draft** is sent once: Data, Pad, Lists from the node, other Dgram. Inner TCP or UDP produces a new frame if the application still needs the bytes. A client missing a piece of Lists asks again from the offset of the first missing byte.
 
 One mux Pull becomes up to three GET sequences: control resin, draft Data, then Close/Reset. Close MUST NOT share a Cookie with Data for the same stream. After an HTTP error the client retries the same sequence with resin only (or Pad if the Cookie was draft-only) so the sequence hole fills and draft is not replayed. A first-attempt HTTP 404 on several inflight GETs is edge noise; three **retry** 404s on the same sid mean the origin lost the session. A duplicate Open for a live stream_id MUST be ignored.
 
@@ -621,7 +623,13 @@ repeat:
 
 Kind 1 exact domain, 2 suffix, 3 CIDR. Then public key and signature as in the roster.
 
-Status carries `lists_serial` and SHA-256 of the signed blob. The client fetches `GET {lists_path}` (default `/static/v3/lists.json`) when serial or hash is newer. Matching is case-insensitive for names. *Informative, not normative.* How an operator file spells a suffix or a CIDR is in [guide.md](guide.md). SOCKS matches hostname. TUN matches IP (CIDR).
+Kinds 4–6 are profile metadata. They never match a host or an IP. 4 `dir` is the direction the operator gives the set: `via`, `direct` or `drop`. 5 `label` is the display name of the set (UTF-8). 6 `dns` is the local resolver for names in `direct` sets: an IP or a DoH URL. A set with an empty name is the profile header: it has no addresses, kind 5 is the profile name, kind 6 the DNS hint. A receiver MUST ignore an unknown kind and MUST NOT reject the lists because of it. A client that shows the lists as an operator profile takes a set's direction from kind 4; a set without kind 4 it maps itself, as above. The drop, direct, via order on overlap stays.
+
+Status carries `lists_serial` and SHA-256 of the signed blob. A node MAY serve different lists to different members (a member profile); then `lists_serial` and the hash in Status refer to this member's lists, and all of them are signed with the same controller key.
+
+When the node announced `lists_inline`, a client whose serial or hash is older asks for the body inside the session with the Lists command (§6) and SHOULD NOT fetch `lists_path`. The node answers in pieces. The client assembles the body up to `total` bytes, MUST check its SHA-256 against the hash in Status and verify the signature, and only then replaces its lists. A piece at an offset the client did not ask for, or with another serial, is dropped. Without `lists_inline` the client fetches `GET {lists_path}` (default `/static/v3/lists.json`) when serial or hash is newer. A node with `lists_inline` MAY stop serving lists over GET; that path then goes to the origin like any other.
+
+Matching is case-insensitive for names. *Informative, not normative.* How an operator file spells a suffix or a CIDR is in [guide.md](guide.md). SOCKS matches hostname. TUN matches IP (CIDR).
 
 ### 10.4 Controller key roll
 
@@ -666,7 +674,7 @@ A probe without a key sees the origin. Taking the origin hostname or IP out of s
 
 A scanner that opens TLS without a valid `session_id` is spliced to the configured origin, including own SNI (CT / reverse-DNS hostname), empty SNI, and a first packet that is not a TLS ClientHello. It receives the origin’s live certificate and bytes. UDP on that IP is forwarded to the same origin, so a QUIC probe sees the destination, not loft. The exception is a marked loft QUIC v1 Initial. Its source connection ID is 20 bytes of `HKDF-SHA256(secret, salt = client_random, info = "loft-quic-v3")`, where client_random is an ephemeral X25519 public key (top bit random) and secret is ECDH(that ephemeral, `mask_pub`). A client without `mask_pub` uses info `loft-quic-v2` with its member key as secret. The node opens the Initial with the public Initial keys ([RFC 9001](https://www.rfc-editor.org/rfc/rfc9001) §5.2), checks the mark, holds each client_random single-use for 10 minutes, and gives that client address to its quic/h3 fronts. A TCP `client_random` is single-use for the same 10 minutes; a repeat is spliced. On a mask node the QUIC mark is v3 only (`quic_mark` / `h3_mark`): a v2 Initial is forwarded to the origin. The node’s own connection IDs carry an HMAC, so a short-header packet from a new address stays on loft. Such a node advertises `quic_mark` / `h3_mark` instead of `quic` / `h3`; a client that does not mark MUST NOT use them. Forming sid v3 requires `mask_pub`; overlay Hello still requires the member key. CDN origin pull is the exception: configured `cdn_peers` CIDRs MAY complete TLS with the node certificate on own SNI without sid.
 
-GET without a valid Cookie returns 404 with HTML. A well-formed `0x02` under an unknown member key is the same 404. Roster, lists, and static assets are ordinary GET.
+GET without a valid Cookie returns 404 with HTML. A well-formed `0x02` under an unknown member key is the same 404. Roster and static assets are ordinary GET. So are lists, unless the node moved them into the session (`lists_inline`, §10.3).
 
 ### 11.4 Replay and clocks
 
@@ -675,6 +683,8 @@ Auth `0x02` is a nonce, an ephemeral X25519 public key, and HMAC under the membe
 ### 11.5 Roster and lists
 
 The signed roster is a public file on a CDN path. Anyone who can GET that path can read live fronts. The member key is absent. A client that has a pinned controller public key rejects a substituted key. Trust-on-first-use is off: a client MUST NOT pin an unknown signer unless the operator turned that opt-in on (§10.1).
+
+Lists served over GET can be read by anyone who knows the path, and a fixed path is a visible marker. With `lists_inline` the body goes only to an authenticated member, inside the session AEAD, and each member may get its own. Either way the controller signature keeps a node, relay or CDN from substituting the rules that send traffic around the tunnel.
 
 ### 11.6 Overlay
 
@@ -698,7 +708,8 @@ loft is not a mixnet. The path sees a TLS 1.3 session. The controller sees membe
 | Controller signing key | The controller. A client that has the public key rejects a substituted signer. Pinning an unknown signer is off unless the operator turns that opt-in on (§10.1). |
 | Overlay IP, VLAN, lease | The controller. Another member learns an overlay IP when mesh or vlan forwards an Open to it. With `p2p` on, Status peer hints also carry that overlay IP, the TLS-observed host, the listen port, and an X25519 public key (§11.6). |
 | Mux plaintext | Holders of the session key. A TLS terminator without that key sees AEAD ciphertext on ChaCha20-Poly1305 and on AES-256-GCM (§11). Front `get` does not negotiate clear, so a CDN that terminates TLS on `get` does not obtain mux plaintext. A direct front that negotiated clear shows mux plaintext to that front’s TLS terminator. |
-| Roster and address lists | Anyone who can GET the public path. `Cache-Control: public`. Not a member directory. |
+| Roster | Anyone who can GET the public path. `Cache-Control: public`. Not a member directory. |
+| Address lists | Over GET, anyone who knows the path (`Cache-Control: public`). With `lists_inline`, only the member the node served them to inside the session (§10.3). |
 | Sizes and timing on `get` | The CDN or reverse proxy that terminates that TLS, including Cookie length. The inner AEAD still hides mux plaintext. |
 
 The member key, the controller signing key, and the overlay addressing plan are deployment secrets. Publishing the roster does not publish them.
@@ -715,11 +726,11 @@ The capability field is an unsigned 64-bit set. Bit 63 is not a sign bit.
 
 | bits | class |
 |------|--------|
-| 0–29 | assigned (§5.3) |
-| 30–47 | reserved |
+| 0–30 | assigned (§5.3) |
+| 31–47 | reserved |
 | 48–63 | experimental |
 
-A reserved bit MUST NOT be set for a meaning this specification has not assigned. This specification assigns the next bits from 30 upward. An experimental bit MUST NOT be set toward a peer that did not agree to that meaning out of band. A receiver MUST ignore a bit it does not implement. An unknown bit does not fail the handshake. The receiver MUST NOT reset the session because of it.
+A reserved bit MUST NOT be set for a meaning this specification has not assigned. This specification assigns the next bits from 31 upward. An experimental bit MUST NOT be set toward a peer that did not agree to that meaning out of band. A receiver MUST ignore a bit it does not implement. An unknown bit does not fail the handshake. The receiver MUST NOT reset the session because of it.
 
 ### 13.2 Multiplex commands
 
@@ -728,8 +739,8 @@ The command is one byte.
 | cmd | class |
 |-----|--------|
 | 0 | reserved, unused |
-| 1–12 | assigned (§6) |
-| 13–191 | reserved |
+| 1–13 | assigned (§6) |
+| 14–191 | reserved |
 | 192–255 | experimental |
 
 A receiver that does not implement a command MUST ignore it and MUST NOT reset the session (§6). That rule covers reserved and experimental values. A sender MUST NOT use a reserved command. An experimental command MUST NOT be sent to a peer that did not agree to that meaning out of band.
@@ -775,6 +786,8 @@ Numbers already assigned do not move. A later revision adds a name in a reserved
 | gap_hold_ms | 0–600000 (default 8000) |
 | rate_bps | 0 = off; else bytes/s, u32 |
 | fronts | n ≤ 8; name/path/url each ≤ 64 |
+| lists body (`total` in Lists) | ≤ 4 MiB |
+| piece in Lists from the node | ≤ 16368 bytes |
 
 ---
 
@@ -883,6 +896,22 @@ hash    647fe575001d7d8dd007eb04efebacb72b23881ad5ea241ec4440692b22fddc4
 
 ```
 {"v":1,"p":"AAAAAAEpQnoBBHNlbGYAGGh0dHBzOi8vbG9mdC5leGFtcGxlLmNvbQ5vcmlnaW4uZXhhbXBsZQIDZ2V0AndzAGQQL3N0YXRpYy92My9idWlsZCDMy1YzEfDenww90osUUNl4vav8Y8ptc89WHy_z7MCUQyAP0-yseNs2Cs6KuF5NktiX_rSl6FZUIe6dzG77r2OuBQBA067a3bx4v1yMKbflgCtOqK6ArMV0kM6Ki_wbxZb26hXIYUUTBCYvtrTAXdzw01rCz8b9zPtTEUG5hvOhLGhBDA"}
+```
+
+An operator profile under the same key: serial 20261027, sets `""` (kind 5 `"RU direct"`, kind 6 `"77.88.8.8"`), `"ru"` (kind 4 `"direct"`, kind 5 `"Russia"`, kind 3 `"5.255.255.0/24"`, kind 2 `"yandex.ru"`), `"ads"` (kind 4 `"drop"`, kind 2 `"doubleclick.net"`). The body is 218 bytes.
+
+```
+lists   00000000013528a30300000205000952552064697265637406000937372e38382e382e38027275000404000664697265637405000652757373696103000e352e3235352e3235352e302f323402000979616e6465782e727503616473000204000464726f7002000f646f75626c65636c69636b2e6e6574200fd3ecac78db360ace8ab85e4d92d897feb4a5e8565421ee9dcc6efbaf63ae05004035dbe6002c80709d7a5f7e7d8430bc17e8ec036925b7df8bfa99b85c4c2f6eb1dce5d661b66a8c779db891c5e922456c753daef8fce727c6b9c50a28256d3902
+hash    81f9f2e4ae1ef80c152c3ce7de200061c289268a348a95b45d670912e7802114
+```
+
+Lists frames (cmd `0d`, stream 0). A client with no lists asks from offset 0; the node answers with the whole body in one piece; a client that already holds this serial asks, and the node answers "nothing newer" (`total` 0):
+
+```
+req     000c0d00000000000000000000000000000000
+resp    00ea0d0000000000000000013528a3000000da00000000 || lists
+have    000c0d0000000000000000013528a300000000
+none    00100d0000000000000000013528a30000000000000000
 ```
 
 ### 16.7 Cookie Z85
