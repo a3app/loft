@@ -511,6 +511,61 @@
     .rrow .u { font-size: 11.5px; color: var(--mute); font-family: var(--mono); }
     .rrow .meta { text-align: right; font-size: 11px; color: var(--mute); }
     .rrow .src { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--copper); }
+    .rrow.sel { background: rgba(232,184,74,.16); border-radius: 6px; margin: 0 -4px; padding-left: 8px; padding-right: 8px; border-bottom-color: transparent; }
+    .rrow .n.mono { font: 500 12.5px var(--mono); }
+    .win.split { overflow: visible; }
+    .split-bar { display: flex; align-items: center; gap: 12px; padding: 8px 0 4px; flex-shrink: 0; }
+    .split-bar .pm { display: flex; }
+    .split-bar .pm button {
+      width: 26px; height: 22px; border: 1px solid #3a332e; background: #211c19; color: var(--snow);
+      font: 500 14px/1 var(--ui); cursor: pointer; padding: 0;
+    }
+    .split-bar .pm button:first-child { border-radius: 6px 0 0 6px; }
+    .split-bar .pm button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+    .split-bar .pm button:disabled { color: var(--mute); opacity: .5; cursor: default; }
+    .split-bar .ign { margin-right: auto; }
+    .split-bar .more {
+      border: 1px solid #3a332e; background: #211c19; color: var(--snow); border-radius: 6px;
+      width: 28px; height: 22px; font: 600 13px/1 var(--ui); cursor: pointer; padding: 0;
+    }
+    .mmenu {
+      position: absolute; z-index: 30; min-width: 190px;
+      background: #2a2420; border: 1px solid #3a332e; border-radius: 8px;
+      padding: 5px 0; box-shadow: 0 12px 32px rgba(0,0,0,.45);
+    }
+    .mmenu button {
+      display: block; width: 100%; text-align: left; background: none; border: 0;
+      color: #f4efe8; font: 500 13px var(--ui); padding: 4px 14px; cursor: pointer;
+    }
+    .mmenu button:hover { background: var(--lamp); color: var(--ink); }
+    .mmenu button.danger { color: #f0a0a0; }
+    .mmenu button.danger:hover { color: var(--ink); }
+    .mmenu hr { border: 0; border-top: 1px solid #3a332e; margin: 4px 0; }
+    .msheet {
+      position: absolute; inset: 0; z-index: 35; border-radius: 12px;
+      background: rgba(10,9,8,.55); display: flex; justify-content: center; align-items: flex-start;
+    }
+    .msheet .alert {
+      margin-top: 28px; width: 300px; background: #2a2420; border: 1px solid #3a332e;
+      border-radius: 10px; padding: 18px 16px 14px; box-shadow: 0 18px 40px rgba(0,0,0,.5);
+      text-align: center;
+    }
+    .msheet .alert h2 { margin: 0 0 6px; font-size: 13.5px; font-weight: 600; }
+    .msheet .alert p { margin: 0 0 14px; font-size: 12px; color: var(--mute); line-height: 1.4; }
+    .msheet .alert button {
+      display: block; width: 100%; margin-top: 6px; border: 0; border-radius: 7px; padding: 6px 10px;
+      background: #3a332e; color: var(--snow); font: 500 13px var(--ui); cursor: pointer;
+    }
+    .msheet .alert button.danger { color: #f0a0a0; }
+    .mbanner {
+      position: absolute; left: 20px; right: 20px; bottom: 100px; z-index: 25;
+      display: flex; align-items: center; gap: 10px;
+      background: #3a332e; border-radius: 8px; padding: 8px 8px 8px 12px;
+      font: 500 12px var(--ui); box-shadow: 0 8px 20px rgba(0,0,0,.4);
+    }
+    .mbanner span { flex: 1; line-height: 1.35; }
+    .mbanner kbd { font: 500 11px var(--ui); color: var(--mute); }
+    .mbanner button { background: none; border: 0; color: var(--lamp); font: 600 12px var(--ui); cursor: pointer; padding: 4px 6px; }
     .split-def { margin: 0 0 8px; }
     .split-def .label { margin: 2px 0 6px; }
     .split-search { margin: 0 0 8px; padding: 8px 12px; font-size: 13px; }
@@ -769,6 +824,12 @@
     <button data-scene="export" data-i18n="nav.export">Export</button>
     <button data-scene="set" data-i18n="nav.set">Settings</button>
     <button data-scene="split" data-i18n="nav.split">Routes</button>
+    <button data-scene="splitsel" data-i18n="nav.splitsel">Routes · selection</button>
+    <button data-scene="splitctx" data-i18n="nav.splitctx">Routes · context menu</button>
+    <button data-scene="splitclear" data-i18n="nav.splitclear">Routes · clear zone</button>
+    <button data-scene="splitundo" data-i18n="nav.splitundo">Routes · undo</button>
+    <button data-scene="splitexcl" data-i18n="nav.splitexcl">Routes · ignore</button>
+    <button data-scene="splitedit" data-i18n="nav.splitedit">Routes · edit service</button>
     <button data-scene="splitin" data-i18n="nav.splitin">Import routes</button>
     <button data-scene="splitout" data-i18n="nav.splitout">Export routes</button>
     <button data-scene="splitrepo" data-i18n="nav.splitrepo">Repository</button>
@@ -839,6 +900,9 @@
     let heldNow = params.get("scene") === "hold";
     let regionTab = params.get("region") || "global";
     let splitQ = "";
+    // Lists editing, Mac style: click selects, ⌘/⇧ extend, ⌫ deletes, ⌘Z undoes.
+    let msel = new Set(), mselAnchor = null, mctx = null, mmore = false, mclear = null;
+    let editRouteId = null, addBack = "split", mundo = null, mbanner = null, mbannerTimer = null, ignSeq = 0;
     const ZONE_PRESETS = ["local", "global"];
     const LIST_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
     const LIST_CATALOG = [
@@ -1021,7 +1085,8 @@
     };
     const routesVia = () => ROUTES.filter((r) => zoneDef(r.region));
     const routesBypass = () => ROUTES.filter((r) => !zoneDef(r.region));
-    const routesIn = (region) => ROUTES.filter((r) => r.region === region);
+    const routesIn = (region) => ROUTES.filter((r) => r.region === region && r.src !== "ignore");
+    const ignoresIn = (region) => ROUTES.filter((r) => r.region === region && r.src === "ignore");
     const routeCount = (list) => list.reduce((n, r) => n + r.cidrs.length, 0);
     const pname = (p) => locName(p);
     const active = () => PROFILES.find((p) => p.id === activeId);
@@ -1160,6 +1225,124 @@
         else if (live) st = extIPOn ? "203.0.113.17" : t("pill_on");
         return `<button type="button" data-profile="${p.id}"><span>${selected ? "✓ " : ""}${pname(p)}${st ? "  ·  " + st : ""}</span></button>`;
       }).join("")}</div>`;
+    }
+
+    // The bar under a Lists table: + −, the zone's ignore list, and the ⋯ menu.
+    const splitBar = (main) => {
+      const n = ignoresIn(regionTab).length;
+      return `<div class="split-bar">
+        <div class="pm"><button type="button" data-mplus title="${escAttr(t("split.plus"))}">+</button><button type="button" data-mminus title="${escAttr(main ? t("split.minus") : t("split.back"))}" ${msel.size ? "" : "disabled"}>−</button></div>
+        ${main ? `<button type="button" class="ghost-sm ign" data-go="splitexcl">${t("split.ign.title")} · ${n} ›</button>` : `<span class="ign"></span>`}
+        <button type="button" class="more" data-mmore aria-label="⋯">⋯</button>
+      </div>`;
+    };
+    function splitOverlays() {
+      const main = current === "split";
+      let html = "";
+      if (mctx) {
+        const many = msel.size > 1;
+        html += `<div class="mmenu" style="left:${mctx.x}px;top:${mctx.y}px">
+          ${many ? "" : `<button type="button" data-mact="edit">${t("edit")}…</button><hr>`}
+          <button type="button" class="danger" data-mact="del">${main ? t("split.del") : t("split.back")}${many ? " (" + msel.size + ")" : ""}</button>
+        </div>`;
+      }
+      if (mmore) {
+        html += `<div class="mmenu" style="right:20px;bottom:${main ? 96 : 92}px">
+          <button type="button" data-mact="all">${t("split.sel.all")}</button><hr>
+          <button type="button" class="danger" data-mact="${main ? "clear" : "clearign"}">${main ? t("split.clear") : t("split.ign.clear")}</button>
+        </div>`;
+      }
+      if (mclear) {
+        const z = regionTab;
+        const svcs = routesIn(z), mine = svcs.filter((r) => r.src === "me").length, fromList = svcs.length - mine;
+        const b = (how, label) => `<button type="button" class="danger" data-mclr="${how}">${label}</button>`;
+        let h, p, btns;
+        if (mclear === "ign") {
+          h = t("split.ign.clear.t").replace("%@", zoneLabel(z));
+          p = t("split.ign.clear.sub");
+          btns = b("ign", t("split.ign.clear.go").replace("%d", ignoresIn(z).length));
+        } else {
+          h = t("split.clear.t").replace("%@", zoneLabel(z));
+          p = fromList ? t("split.clear.sub") : t("split.clear.sub1");
+          btns = fromList
+            ? (mine ? b("me", t("split.clear.me").replace("%d", mine)) : "") + b("all", t("split.clear.all").replace("%d", svcs.length))
+            : b("me", t("split.clear.n").replace("%d", mine));
+        }
+        html += `<div class="msheet"><div class="alert"><h2>${h}</h2><p>${p}</p>${btns}<button type="button" data-mclr="cancel">${t("cancel")}</button></div></div>`;
+      }
+      if (mbanner) html += `<div class="mbanner"><span>${mbanner}</span><kbd>⌘Z</kbd><button type="button" data-mundo>${t("split.undo")}</button></div>`;
+      return html;
+    }
+    const visibleRows = () => (current === "splitexcl" ? ignoresIn(regionTab) : routesIn(regionTab).filter((r) => !splitQ.trim() || rname(r).toLowerCase().includes(splitQ.trim().toLowerCase()))).map((r) => r.id);
+    function mpick(id, ev) {
+      if (ev.metaKey || ev.ctrlKey) {
+        if (msel.has(id)) msel.delete(id); else msel.add(id);
+        mselAnchor = id;
+      } else if (ev.shiftKey && mselAnchor) {
+        const ids = visibleRows();
+        const a = ids.indexOf(mselAnchor), b = ids.indexOf(id);
+        msel = new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1));
+      } else {
+        msel = new Set([id]);
+        mselAnchor = id;
+      }
+    }
+    /* Removal is immediate; a banner offers Undo (also ⌘Z) for five seconds.
+       A service from the zone's list leaves its networks behind as ignore
+       entries, or the next list update would bring it back. */
+    function mremember() {
+      mundo = { routes: ROUTES.map((r) => Object.assign({}, r)), zones: ZONES.map((z) => Object.assign({}, z)) };
+    }
+    function mshowBanner(text) {
+      mbanner = text;
+      clearTimeout(mbannerTimer);
+      mbannerTimer = setTimeout(() => {
+        mbanner = null;
+        mundo = null;
+        if (current === "split" || current === "splitexcl") show(current, true);
+      }, 5000);
+    }
+    function mremove(ids) {
+      const gone = ROUTES.filter((r) => ids.includes(r.id));
+      if (!gone.length) return;
+      mremember();
+      let toIgn = false;
+      gone.forEach((r) => {
+        ROUTES.splice(ROUTES.indexOf(r), 1);
+        if (r.src !== "repo") return;
+        toIgn = true;
+        r.cidrs.forEach((c) => ROUTES.push(Object.assign({}, r, { id: "ig" + ++ignSeq, cidrs: [c], src: "ignore" })));
+      });
+      const one = gone[0];
+      const what = gone.length > 1 ? t("split.gone.n").replace("%d", gone.length)
+        : one.src === "ignore" ? t("split.gone.back").replace("%@", one.cidrs[0]) : t("split.gone").replace("%@", rname(one));
+      msel = new Set();
+      mshowBanner(toIgn ? what + " · " + t("split.gone.excl") : what);
+    }
+    function mclearZone(how) {
+      mremember();
+      const z = regionTab;
+      const keep = (r) => r.region !== z || (how === "ign" ? r.src !== "ignore" : how === "me" ? r.src !== "me" : r.src === "ignore");
+      ROUTES.splice(0, ROUTES.length, ...ROUTES.filter(keep));
+      if (how === "all") { const zz = zoneById(z); if (zz) { zz.repo = ""; zz.auto = false; } }
+      msel = new Set();
+      mshowBanner(t("split.gone.clear").replace("%@", zoneLabel(z)));
+    }
+    function mundoNow() {
+      if (!mundo) return;
+      ROUTES.splice(0, ROUTES.length, ...mundo.routes);
+      mundo.zones.forEach((z, i) => { if (ZONES[i]) Object.assign(ZONES[i], z); });
+      mundo = null;
+      mbanner = null;
+      clearTimeout(mbannerTimer);
+    }
+    function meditRoute(id) {
+      const r = ROUTES.find((x) => x.id === id);
+      if (!r) return;
+      editRouteId = id;
+      addKind = r.src === "ignore" ? "ignore" : "route";
+      addBack = current;
+      show("splitadd", true);
     }
 
     const scenes = {
@@ -1482,7 +1665,7 @@ outbounds:
         const rows = list.map((r) => {
           const n = r.cidrs.length;
           const net = netWord(n);
-          return `<div class="rrow" data-go="splitadd">
+          return `<div class="rrow ${msel.has(r.id) ? "sel" : ""}" data-rid="${r.id}">
             <div><div class="n">${rname(r)}</div><div class="u">${r.cidrs.slice(0, 2).join(" ")}${n > 2 ? " …" : ""}</div></div>
             <div class="meta">${n} ${net}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div></div>
           </div>`;
@@ -1507,15 +1690,45 @@ outbounds:
             <div class="split-policy">${policy}</div>
             <input class="field sm split-search" data-sq type="search" value="${splitQ.replace(/"/g, "&quot;")}" placeholder="${t("split.search")}" spellcheck="false" />
             <div class="split-list ${splitOn ? "" : "dim"}">${rows || `<div class="split-sub">${t("split.empty")}</div>`}</div>
-            <button class="ghost-sm" data-go="splitadd" style="align-self:flex-start;margin:8px 0 4px">+ ${t("split.add")}</button>
+            ${splitBar(true)}
             <div class="actions">
               <button class="btn" data-go="splitin">${t("import")}</button>
               <button class="btn" data-go="splitout">${t("export")}</button>
               <button class="btn" data-go="splitrepo">${t("split.repo")}</button>
             </div>
           </div>
+          ${splitOverlays()}
         </div>`;
       },
+      splitexcl: () => {
+        const rows = ignoresIn(regionTab).map((r) => `<div class="rrow ${msel.has(r.id) ? "sel" : ""}" data-rid="${r.id}">
+            <div><div class="n mono">${r.cidrs.join(" ")}</div></div>
+            <div class="meta">${rname(r)}</div>
+          </div>`).join("");
+        return `
+        <div class="win split">
+          <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+          <div class="body">
+            <div class="head-row"><h1>${zoneLabel(regionTab)} · ${t("split.ign.title")}</h1></div>
+            <div class="split-sub">${t("split.ign.sub")}</div>
+            <div class="split-list">${rows || `<div class="split-sub">${t("split.ign.empty")}</div>`}</div>
+            ${splitBar(false)}
+            <div class="actions">
+              <button class="btn" data-go="split">${t("back")}</button>
+            </div>
+          </div>
+          ${splitOverlays()}
+        </div>`;
+      },
+      splitsel: () => { msel = new Set(["yt", "nf"]); mselAnchor = "yt"; current = "split"; return scenes.split(); },
+      splitctx: () => { msel = new Set(["cf"]); mselAnchor = "cf"; mctx = { x: 150, y: 330 }; current = "split"; return scenes.split(); },
+      splitclear: () => { mclear = "zone"; current = "split"; return scenes.split(); },
+      splitundo: () => {
+        if (ROUTES.some((r) => r.id === "yt")) mremove(["yt"]);
+        current = "split";
+        return scenes.split();
+      },
+      splitedit: () => { editRouteId = "cf"; addBack = "split"; addKind = "route"; current = "splitadd"; return scenes.splitadd(); },
       splitin: () => `
         <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
           <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
@@ -1585,7 +1798,9 @@ outbounds:
           </div>
         </div>`;
       },
-      splitadd: () => `
+      splitadd: () => {
+        const er = editRouteId && ROUTES.find((x) => x.id === editRouteId);
+        return `
         <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
           <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
           <div class="body" style="text-align:left;padding:8px 28px 18px">
@@ -1597,15 +1812,17 @@ outbounds:
               <button type="button" class="${addKind === "ignore" ? "on" : ""}" data-kind="ignore">${t("split.add.ignore")}</button>
             </div>
             <div class="label">${t("split.add.net")}</div>
-            <input class="field sm" placeholder="142.250.0.0/16" spellcheck="false" />
+            <input class="field sm" placeholder="142.250.0.0/16" spellcheck="false" value="${er ? escAttr(er.cidrs.join(" ")) : ""}" />
             <div class="label">${t("split.add.name")}</div>
-            <input class="field sm" placeholder="${addKind === "ignore" ? t("split.ignore") : "YouTube"}" />
+            <input class="field sm" placeholder="${addKind === "ignore" ? t("split.ignore") : "YouTube"}" value="${er ? escAttr(rname(er)) : ""}" />
             <div class="label">${t("split.zone")}</div>
             ${zoneSelect(false)}
-            <button class="btn connect on" style="margin-top:16px" data-go="split">${t("split.add.go")}</button>
-            <button class="btn back" data-go="split">${t("back")}</button>
+            <button class="btn connect on" style="margin-top:16px" data-go="${addBack}">${er ? t("split_add_save") : t("split.add.go")}</button>
+            ${er ? `<button class="btn back" data-msvcdel style="color:var(--err)">${er.src === "ignore" ? t("split.del.ign") : t("split.del.svc")}</button>` : ""}
+            <button class="btn back" data-go="${addBack}">${t("back")}</button>
           </div>
-        </div>`,
+        </div>`;
+      },
       zones: () => {
         const rows = zoneIds().map((id) => {
           const z = zoneById(id) || { id, builtin: false, def: zoneDef(id) };
@@ -1895,6 +2112,9 @@ outbounds:
         heldNow = name === "off" && holdOn;
       }
       if (name === "about" && !keep) aboutChecked = false;
+      if (!keep) { msel = new Set(); mctx = null; mmore = false; mclear = null; }
+      if (!keep && name === "splitadd") { editRouteId = null; addBack = "split"; }
+      if (name !== "split" && name !== "splitexcl" && name !== "splitundo" && name !== "splitadd") { mbanner = null; mundo = null; }
       sceneEl.innerHTML = scenes[name]();
       document.querySelectorAll("nav button[data-scene]").forEach((b) => b.classList.toggle("on", b.dataset.scene === name));
       mb.classList.toggle("open", name === "on" || name === "off" || name === "hero" || name === "switch" || name === "err" || name === "hold");
@@ -1967,6 +2187,7 @@ outbounds:
           ev.stopPropagation();
           const next = el.tagName === "SELECT" ? el.value : el.dataset.region;
           if (!next) return;
+          if (next !== regionTab) msel = new Set();
           regionTab = next;
           show(current, true);
         };
@@ -2077,6 +2298,74 @@ outbounds:
           });
         };
       });
+      const listScene = current === "split" || current === "splitexcl";
+      sceneEl.querySelectorAll("[data-rid]").forEach((el) => {
+        const id = el.dataset.rid;
+        el.onclick = (ev) => { ev.stopPropagation(); mctx = null; mmore = false; mpick(id, ev); show(current, true); };
+        el.ondblclick = (ev) => { ev.stopPropagation(); meditRoute(id); };
+        el.oncontextmenu = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (!msel.has(id)) { msel = new Set([id]); mselAnchor = id; }
+          const box = el.closest(".win").getBoundingClientRect();
+          mctx = { x: Math.round(ev.clientX - box.left), y: Math.round(ev.clientY - box.top) };
+          mmore = false;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-mplus]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          editRouteId = null;
+          addKind = current === "splitexcl" ? "ignore" : "route";
+          addBack = current;
+          show("splitadd", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-mminus]").forEach((el) => {
+        el.onclick = (ev) => { ev.stopPropagation(); mremove([...msel]); show(current, true); };
+      });
+      sceneEl.querySelectorAll("[data-mmore]").forEach((el) => {
+        el.onclick = (ev) => { ev.stopPropagation(); mmore = !mmore; mctx = null; show(current, true); };
+      });
+      sceneEl.querySelectorAll("[data-mact]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const a = el.dataset.mact;
+          mctx = null;
+          mmore = false;
+          if (a === "edit") { meditRoute([...msel][0]); return; }
+          if (a === "del") mremove([...msel]);
+          if (a === "all") msel = new Set(visibleRows());
+          if (a === "clear") mclear = "zone";
+          if (a === "clearign") mclear = "ign";
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-mclr]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const how = el.dataset.mclr;
+          mclear = null;
+          if (how !== "cancel") mclearZone(how);
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-mundo]").forEach((el) => {
+        el.onclick = (ev) => { ev.stopPropagation(); mundoNow(); show(current, true); };
+      });
+      sceneEl.querySelectorAll("[data-msvcdel]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          mremove([editRouteId]);
+          editRouteId = null;
+          show(addBack, true);
+        };
+      });
+      if (listScene) {
+        const list = sceneEl.querySelector(".split-list");
+        if (list) list.onclick = (ev) => { if (ev.target === list && msel.size) { msel = new Set(); show(current, true); } };
+      }
       sceneEl.querySelectorAll("[data-sfmt]").forEach((el) => {
         el.onclick = (ev) => {
           ev.stopPropagation();
@@ -2305,6 +2594,20 @@ outbounds:
     });
     document.addEventListener("click", () => {
       document.querySelectorAll(".menubar .app-menu").forEach((m) => m.classList.remove("open"));
+      if ((mctx || mmore) && (current === "split" || current === "splitexcl")) { mctx = null; mmore = false; show(current, true); }
+    });
+    // Lists keys: ⌫ deletes the selection, ⌘A selects all, ⌘Z undoes, Esc clears.
+    document.addEventListener("keydown", (ev) => {
+      if (current !== "split" && current !== "splitexcl") return;
+      if (ev.target.closest && ev.target.closest("input, textarea, select")) return;
+      const cmd = ev.metaKey || ev.ctrlKey;
+      if (mclear) { if (ev.key === "Escape") { mclear = null; show(current, true); } return; }
+      if ((ev.key === "Backspace" || ev.key === "Delete") && msel.size) { ev.preventDefault(); mremove([...msel]); }
+      else if (cmd && ev.key.toLowerCase() === "a") { ev.preventDefault(); msel = new Set(visibleRows()); }
+      else if (cmd && ev.key.toLowerCase() === "z" && mundo) { ev.preventDefault(); mundoNow(); }
+      else if (ev.key === "Escape") { msel = new Set(); mctx = null; mmore = false; }
+      else return;
+      show(current, true);
     });
 
     const qScene = params.get("scene");
