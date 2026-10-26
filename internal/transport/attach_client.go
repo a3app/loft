@@ -219,7 +219,14 @@ var (
 // stays on one front. A CDN profile used to skip this because g.cfg.URL
 // is the CDN host, which does not speak ws/h2/quic/h3.
 func (g *GET) attachExtras(ctx context.Context) {
-	if g == nil || !g.caps.Has(wire.CapTicket) || len(g.ticket) == 0 || len(g.key) == 0 {
+	if g == nil {
+		return
+	}
+	// dropLostSid clears key under g.mu while this goroutine is in startFront.
+	g.mu.Lock()
+	caps, ticket, key := g.caps, append([]byte(nil), g.ticket...), append([]byte(nil), g.key...)
+	g.mu.Unlock()
+	if !caps.Has(wire.CapTicket) || len(ticket) == 0 || len(key) == 0 {
 		return
 	}
 	if g.attachStopped() {
@@ -244,7 +251,7 @@ func (g *GET) attachExtras(ctx context.Context) {
 		if copies > 1 && f != g.ownerFront {
 			continue
 		}
-		if !g.caps.Has(wire.CapForFront(f)) || !g.offer.Has(wire.CapForFront(f)) {
+		if !caps.Has(wire.CapForFront(f)) || !g.offer.Has(wire.CapForFront(f)) {
 			continue
 		}
 		o := attachOutbound(g.cfg, f, g.fronts)
