@@ -406,19 +406,21 @@ func sstpYAML(raw string) (string, error) {
 }
 
 // yamlFile accepts a pasted YAML connection and normalises it through
-// decodeFile and marshalClient. Any YAML without token, password,
+// decodeFile and marshalClient. Any YAML without token, uuid, password,
 // outbounds or connections is refused, so ordinary text that happens to
-// parse as YAML is not taken for a connection.
+// parse as YAML is not taken for a connection. Mac VLESS files write uuid
+// instead of token.
 func yamlFile(s string) (string, error) {
 	var probe map[string]any
 	if err := yaml.Unmarshal([]byte(s), &probe); err != nil {
 		return "", err
 	}
 	_, tok := probe["token"]
+	_, id := probe["uuid"]
 	_, pass := probe["password"]
 	_, outs := probe["outbounds"]
 	_, cons := probe["connections"]
-	if !tok && !pass && !outs && !cons {
+	if !tok && !id && !pass && !outs && !cons {
 		return "", fmt.Errorf("yaml")
 	}
 	cfg, extra, err := decodeFile([]byte(s))

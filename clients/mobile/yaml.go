@@ -35,6 +35,7 @@ type fileYAML struct {
 	Name        string              `yaml:"name"`
 	Kind        string              `yaml:"kind,omitempty"`
 	Token       string              `yaml:"token"`
+	UUID        string              `yaml:"uuid,omitempty"`
 	Username    string              `yaml:"username"`
 	Password    string              `yaml:"password"`
 	InstanceID  string              `yaml:"instance_id"`
@@ -65,10 +66,11 @@ type fileYAML struct {
 // header budget and 8 requests in flight unless set; an outbound without
 // an SNI takes the top-level sni.
 //
-// The secret is looked up in order: token, password, then the user part of
-// a vless:// or trojan:// URL. Only an SSTP-only file may call it a
-// password (hence the two error texts). An edge URL (a CDN origin) is
-// turned into an extra GET outbound placed first, see config.PinEdgeGET.
+// The secret is looked up in order: token, uuid (Mac VLESS files), password,
+// then the user part of a vless:// or trojan:// URL. Only an SSTP-only file
+// may call it a password (hence the two error texts). An edge URL (a CDN
+// origin) is turned into an extra GET outbound placed first, see
+// config.PinEdgeGET.
 func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
 	var f fileYAML
 	if err := yaml.Unmarshal(raw, &f); err != nil {
@@ -80,7 +82,7 @@ func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
 		return nil, fileExtra{}, fmt.Errorf("kind: loft")
 	}
 	if len(f.Connections) > 0 {
-		if len(f.Outbounds) > 0 || strings.TrimSpace(f.Token) != "" {
+		if len(f.Outbounds) > 0 || strings.TrimSpace(f.Token) != "" || strings.TrimSpace(f.UUID) != "" {
 			return nil, fileExtra{}, fmt.Errorf("connections with top-level token/outbounds")
 		}
 		b, err := yaml.Marshal(f.Connections[0])
@@ -90,6 +92,9 @@ func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
 		return decodeFile(b)
 	}
 	token := strings.TrimSpace(f.Token)
+	if token == "" {
+		token = strings.TrimSpace(f.UUID)
+	}
 	if token == "" {
 		token = strings.TrimSpace(f.Password)
 	}
@@ -196,6 +201,9 @@ func marshalClient(cfg *config.ClientConfig, user, pass string, pap bool, tlsChe
 	}
 	if len(cfg.Outbounds) == 1 {
 		f.Name = cfg.Outbounds[0].Name
+	}
+	if kind == "vless" && f.UUID == "" {
+		f.UUID = cfg.Token
 	}
 	if f.Password == "" && primaryType(cfg) == "sstp" {
 		f.Password = cfg.Token

@@ -181,6 +181,28 @@ func TestParseShareVLESS(t *testing.T) {
 	if !strings.Contains(cfg.Outbounds[0].URL, "vless://") {
 		t.Fatalf("url %q", cfg.Outbounds[0].URL)
 	}
+	if !strings.Contains(y, "uuid:") {
+		t.Fatalf("want uuid in\n%s", y)
+	}
+}
+
+func TestParseShareVLESSYamlUUID(t *testing.T) {
+	raw := "kind: vless\nuuid: 550e8400-e29b-41d4-a716-446655440000\noutbounds:\n" +
+		"  - name: z\n    type: vless\n    url: vless://550e8400-e29b-41d4-a716-446655440000@de1.example.com:443?security=tls\n"
+	y, err := ParseShare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := decodeFile([]byte(y))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Token != "550e8400-e29b-41d4-a716-446655440000" || primaryType(cfg) != "vless" {
+		t.Fatalf("token=%q kind=%q", cfg.Token, primaryType(cfg))
+	}
+	if !strings.Contains(y, "uuid:") || !strings.Contains(y, "token:") {
+		t.Fatalf("want token and uuid in\n%s", y)
+	}
 }
 
 func TestParseShareTrojan(t *testing.T) {

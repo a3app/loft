@@ -636,8 +636,12 @@ func (e *Engine) pumpSSTP(ctx context.Context, sess *sstp.Session, pipe *packetP
 // The userspace stack turns OS packets into VLESS connections. It is
 // created once and re-attached to each new client, so apps keep their
 // sockets across reconnects. The loop waits until the context ends, a path
-// change arrives (close and redial at once), or the client dies. Failed
-// probes back off from 200 ms, doubling up to about 8 s.
+// change arrives (close and redial at once), or the client dies.
+//
+// The first Probe failure is returned to Start so the app sees the real
+// error (dest certificate, alpn, timeout) instead of a 30 s "timeout".
+// After the tunnel has been up, later Probe failures back off from 200 ms
+// doubling to 8 s, same as a dropped session.
 func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra fileExtra, pipe *packetPipe, path <-chan struct{}, ready chan<- error) {
 	o, ok := firstOutbound(cfg, "vless")
 	if !ok {
@@ -651,6 +655,7 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 	var once sync.Once
 	signal := func(err error) { once.Do(func() { ready <- err }) }
 	delay := time.Duration(0)
+	up := false
 	for {
 		if delay > 0 {
 			select {
@@ -676,6 +681,10 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 			_ = cli.Close()
 			if ctx.Err() != nil {
 				signal(ctx.Err())
+				return
+			}
+			if !up {
+				signal(err)
 				return
 			}
 			if delay == 0 {
@@ -708,6 +717,7 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 		} else {
 			st.Attach(cli)
 		}
+		up = true
 		signal(nil)
 		select {
 		case <-ctx.Done():
@@ -750,6 +760,7 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 	var once sync.Once
 	signal := func(err error) { once.Do(func() { ready <- err }) }
 	delay := time.Duration(0)
+	up := false
 	for {
 		if delay > 0 {
 			select {
@@ -775,6 +786,10 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 			_ = cli.Close()
 			if ctx.Err() != nil {
 				signal(ctx.Err())
+				return
+			}
+			if !up {
+				signal(err)
 				return
 			}
 			if delay == 0 {
@@ -807,6 +822,7 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 		} else {
 			st.Attach(cli)
 		}
+		up = true
 		signal(nil)
 		select {
 		case <-ctx.Done():
