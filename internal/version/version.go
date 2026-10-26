@@ -1,9 +1,9 @@
 // Package version holds the program release (injected from VERSION, currently
-// 1.0.29 when built) distinct from protocol 1.0 (0x0100). Handshake carries both.
+// 1.0.30 when built) distinct from protocol 1.0 (0x0100). Handshake carries both.
 //
 // Two numbers are easy to confuse. The protocol version (1.0) changes only
 // when the wire format changes, and the two sides negotiate it. The program
-// release (for example 1.0.29) changes with every release and is sent for
+// release (for example 1.0.30) changes with every release and is sent for
 // logs and support.
 package version
 
