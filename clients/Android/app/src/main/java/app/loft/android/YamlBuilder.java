@@ -24,14 +24,32 @@ final class YamlBuilder {
             line(b, "token", p.token);
         }
         b.append("select: auto\n");
+        if (p.isLoft() && p.edge != null && !p.edge.isEmpty()) {
+            line(b, "edge", p.edge);
+        }
         if (p.isLoft() && p.inner != null && !p.inner.isEmpty()) {
             line(b, "inner", p.inner);
         }
+        String[] mux = p.isLoft() ? p.muxFronts() : new String[0];
+        if (p.isLoft() && !p.isL3() && (mux.length > 1 || !Profile.nz(p.listedFronts).isEmpty())) {
+            b.append("fronts: [");
+            for (int i = 0; i < mux.length; i++) {
+                if (i > 0) {
+                    b.append(", ");
+                }
+                b.append(mux[i]);
+            }
+            b.append("]\n");
+        }
         b.append("outbounds:\n");
+        String obType = p.kind.toLowerCase();
+        if (p.isLoft() && contains(mux, "get")) {
+            obType = "get";
+        }
         b.append("  - name: ").append(quote(p.name.isEmpty() ? p.host() : p.name)).append('\n');
-        b.append("    type: ").append(p.kind.toLowerCase()).append('\n');
+        b.append("    type: ").append(obType).append('\n');
         b.append("    url: ").append(quote(p.url)).append('\n');
-        if (p.isLoft() && "get".equalsIgnoreCase(p.kind) && p.path != null && !p.path.isEmpty()) {
+        if (p.isLoft() && "get".equals(obType) && p.path != null && !p.path.isEmpty()) {
             b.append("    path: ").append(quote(p.path)).append('\n');
         }
         if (p.isLoft()) {
@@ -46,6 +64,7 @@ final class YamlBuilder {
             if (p.isL3() || !p.mux) {
                 b.append("    mux: false\n");
             }
+            appendExtraFronts(b, p);
         } else if (!p.sni.isEmpty()) {
             b.append("    sni: ").append(quote(p.sni)).append('\n');
         }
@@ -115,6 +134,13 @@ final class YamlBuilder {
             }
             q.append("cdn=").append(enc(p.cdn));
         }
+        if (!nz(p.edge).isEmpty()) {
+            if (q.length() > 0) {
+                q.append('&');
+            }
+            q.append("edge=").append(enc(p.edge));
+        }
+        appendFrontQuery(q, p);
         if (!nz(p.maskPub).isEmpty()) {
             if (q.length() > 0) {
                 q.append('&');
@@ -167,6 +193,96 @@ final class YamlBuilder {
             b.append('#').append(enc(p.name).replace("+", "%20"));
         }
         return b.toString();
+    }
+
+    private static void appendExtraFronts(StringBuilder b, Profile p) {
+        if (p.isCDN() || p.isL3()) {
+            return;
+        }
+        String origin = originURL(p);
+        String wss = origin.replace("https://", "wss://").replace("http://", "ws://");
+        String n = p.name.isEmpty() ? p.host() : p.name;
+        if (!nz(p.wsPath).isEmpty() && !Profile.DEF_WS.equals(p.wsPath)) {
+            b.append("  - name: ").append(quote(n + "-ws")).append('\n');
+            b.append("    type: ws\n");
+            b.append("    url: ").append(quote(wss + p.wsPath)).append('\n');
+        }
+        if (!nz(p.h2Path).isEmpty() && !Profile.DEF_H2.equals(p.h2Path)) {
+            b.append("  - name: ").append(quote(n + "-h2")).append('\n');
+            b.append("    type: h2\n");
+            b.append("    url: ").append(quote(origin)).append('\n');
+            b.append("    path: ").append(quote(p.h2Path)).append('\n');
+        }
+        if (!nz(p.h3Path).isEmpty() && !Profile.DEF_H2.equals(p.h3Path)) {
+            b.append("  - name: ").append(quote(n + "-h3")).append('\n');
+            b.append("    type: h3\n");
+            b.append("    url: ").append(quote(origin)).append('\n');
+            b.append("    path: ").append(quote(p.h3Path)).append('\n');
+        }
+    }
+
+    private static void appendFrontQuery(StringBuilder q, Profile p) {
+        if (p == null || !p.isLoft() || p.isL3()) {
+            return;
+        }
+        String[] mux = p.muxFronts();
+        boolean extra = mux.length > 1 || p.hasMuxExtras();
+        if (!extra) {
+            return;
+        }
+        if (contains(mux, "ws") || !nz(p.wsPath).isEmpty()) {
+            if (q.length() > 0) {
+                q.append('&');
+            }
+            q.append("ws=").append(enc(nz(p.wsPath).isEmpty() ? Profile.DEF_WS : p.wsPath));
+        }
+        if (contains(mux, "h2") || !nz(p.h2Path).isEmpty()) {
+            if (q.length() > 0) {
+                q.append('&');
+            }
+            q.append("h2=").append(enc(nz(p.h2Path).isEmpty() ? Profile.DEF_H2 : p.h2Path));
+        }
+        if (contains(mux, "h3") || !nz(p.h3Path).isEmpty()) {
+            if (q.length() > 0) {
+                q.append('&');
+            }
+            q.append("h3=").append(enc(nz(p.h3Path).isEmpty() ? Profile.DEF_H2 : p.h3Path));
+        }
+        if (contains(mux, "quic") || p.quic) {
+            if (q.length() > 0) {
+                q.append('&');
+            }
+            q.append("quic");
+        }
+    }
+
+    private static String originURL(Profile p) {
+        String sch = schemeOf(p.url, p.kind);
+        if ("ws".equals(sch) || "wss".equals(sch)) {
+            sch = "ws".equals(sch) ? "http" : "https";
+        }
+        if (!"http".equals(sch) && !"https".equals(sch)) {
+            sch = "https";
+        }
+        String host = p.host();
+        int port = portOf(p.url, sch);
+        int def = "http".equals(sch) ? 80 : 443;
+        if (host.indexOf(':') >= 0) {
+            host = "[" + host + "]";
+        }
+        return sch + "://" + host + (port > 0 && port != def ? ":" + port : "");
+    }
+
+    private static boolean contains(String[] a, String v) {
+        if (a == null) {
+            return false;
+        }
+        for (String x : a) {
+            if (v.equals(x)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void line(StringBuilder b, String k, String v) {

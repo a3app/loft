@@ -10,7 +10,6 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -37,6 +36,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     private static final int REQ_VPN = 1;
     private static final int REQ_FILE = 2;
 
+    private ViewGroup pane;
     private View home;
     private View conns;
     private View settings;
@@ -50,28 +50,23 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         setTheme(R.style.Theme_Loft_Tv);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_tv);
-        LayoutInflater inf = getLayoutInflater();
-        ViewGroup pane = findViewById(R.id.pane);
-        home = inf.inflate(R.layout.pane_tv_home, pane, false);
-        conns = inf.inflate(R.layout.pane_tv_conns, pane, false);
-        settings = inf.inflate(R.layout.pane_tv_settings, pane, false);
+        pane = findViewById(R.id.pane);
+        home = getLayoutInflater().inflate(R.layout.pane_tv_home, pane, false);
         pane.addView(home);
-        pane.addView(conns);
-        pane.addView(settings);
 
-        ImageButton rh = findViewById(R.id.rail_home);
-        ImageButton rc = findViewById(R.id.rail_conns);
-        ImageButton rs = findViewById(R.id.rail_settings);
-        rh.setOnClickListener(v -> show(home));
-        rc.setOnClickListener(v -> show(conns));
-        rs.setOnClickListener(v -> show(settings));
+        findViewById(R.id.rail_home).setOnClickListener(v -> show(home));
+        findViewById(R.id.rail_conns).setOnClickListener(v -> {
+            ensureConns();
+            show(conns);
+        });
+        findViewById(R.id.rail_settings).setOnClickListener(v -> {
+            ensureSettings();
+            show(settings);
+        });
 
         home.findViewById(R.id.go).setOnClickListener(v -> toggle());
-        conns.findViewById(R.id.act_edit).setOnClickListener(v -> editSelected());
-        conns.findViewById(R.id.act_share).setOnClickListener(v -> shareSelected());
-        conns.findViewById(R.id.act_del).setOnClickListener(v -> deleteSelected());
-        wireSettings();
         if ("settings".equals(getIntent().getStringExtra("pane"))) {
+            ensureSettings();
             show(settings);
         } else {
             show(home);
@@ -81,6 +76,33 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
                 && !LoftVpnService.running && !Live.on()) {
             connect();
         }
+        pane.post(() -> {
+            ensureConns();
+            ensureSettings();
+        });
+    }
+
+    private void ensureConns() {
+        if (conns != null) {
+            return;
+        }
+        conns = getLayoutInflater().inflate(R.layout.pane_tv_conns, pane, false);
+        conns.setVisibility(View.GONE);
+        pane.addView(conns);
+        conns.findViewById(R.id.act_edit).setOnClickListener(v -> editSelected());
+        conns.findViewById(R.id.act_share).setOnClickListener(v -> shareSelected());
+        conns.findViewById(R.id.act_del).setOnClickListener(v -> deleteSelected());
+        paintConns();
+    }
+
+    private void ensureSettings() {
+        if (settings != null) {
+            return;
+        }
+        settings = getLayoutInflater().inflate(R.layout.pane_tv_settings, pane, false);
+        settings.setVisibility(View.GONE);
+        pane.addView(settings);
+        wireSettings();
     }
 
     @Override
@@ -88,6 +110,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         super.onNewIntent(intent);
         setIntent(intent);
         if ("settings".equals(intent.getStringExtra("pane"))) {
+            ensureSettings();
             show(settings);
         }
         handleIntent(intent);
@@ -130,7 +153,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_MENU && conns.getVisibility() == View.VISIBLE) {
+        if (keyCode == KeyEvent.KEYCODE_MENU && conns != null && conns.getVisibility() == View.VISIBLE) {
             addSheet();
             return true;
         }
@@ -140,8 +163,12 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     private void show(View v) {
         hideOverlay();
         home.setVisibility(v == home ? View.VISIBLE : View.GONE);
-        conns.setVisibility(v == conns ? View.VISIBLE : View.GONE);
-        settings.setVisibility(v == settings ? View.VISIBLE : View.GONE);
+        if (conns != null) {
+            conns.setVisibility(v == conns ? View.VISIBLE : View.GONE);
+        }
+        if (settings != null) {
+            settings.setVisibility(v == settings ? View.VISIBLE : View.GONE);
+        }
         ImageButton rh = findViewById(R.id.rail_home);
         ImageButton rc = findViewById(R.id.rail_conns);
         ImageButton rs = findViewById(R.id.rail_settings);
@@ -190,7 +217,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
                     + uptime());
             go.setText(R.string.disconnect);
         } else if (!Live.err.isEmpty()) {
-            status.setText(Live.err);
+            status.setText(Explain.display(this, Live.err));
             go.setText(R.string.connect);
         } else {
             status.setText(getString(R.string.pill_off) + (name.isEmpty() ? "" : " · " + name));
@@ -223,10 +250,11 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         boolean bits = Prefs.rateBits(this);
         sr.setText("↓ " + Cidr.fmt(Live.rateDown, bits) + "   ↑ " + Cidr.fmt(Live.rateUp, bits));
         sip.setVisibility(on ? View.VISIBLE : View.GONE);
-        se.setVisibility(on ? View.VISIBLE : View.GONE);
+        boolean showExt = Prefs.showExtIP(this);
+        se.setVisibility(on && showExt ? View.VISIBLE : View.GONE);
         snet.setVisibility(on ? View.VISIBLE : View.GONE);
         sr.setVisibility(on ? View.VISIBLE : View.GONE);
-        if (on && Prefs.showExtIP(this) && Live.extIP.isEmpty()) {
+        if (on && showExt && Live.extIP.isEmpty()) {
             fetchExt();
         }
         View side = home.findViewById(R.id.side);
@@ -294,6 +322,9 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     }
 
     private void paintConns() {
+        if (conns == null) {
+            return;
+        }
         LinearLayout row = conns.findViewById(R.id.row);
         row.removeAllViews();
         List<Profile> all = LoftApp.of(this).profiles().all();
@@ -599,6 +630,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
 
     private void connect() {
         if (LoftApp.of(this).profiles().active() == null) {
+            ensureConns();
             show(conns);
             return;
         }
@@ -701,30 +733,34 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     }
 
     private void fetchExt() {
+        if (!Prefs.showExtIP(this) || !Live.on()) {
+            return;
+        }
         if (!extFetch.compareAndSet(false, true)) {
             return;
         }
         Live.extIP = "…";
-        String url = Prefs.extIPURL(this);
         new Thread(() -> {
-            String got = "—";
-            try {
-                java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-                c.setConnectTimeout(4000);
-                c.setReadTimeout(4000);
-                byte[] b = new byte[64];
-                int n = c.getInputStream().read(b);
-                if (n > 0) {
-                    String ip = new String(b, 0, n, StandardCharsets.US_ASCII).trim();
-                    if (!ip.isEmpty()) {
-                        got = ip;
-                    }
-                }
-            } catch (Exception ignored) {
+            String got = ExtIP.lookup(this, Prefs.extIPURL(this));
+            if (!got.isEmpty()) {
+                Live.extIP = got;
+                extFetch.set(false);
+                Bus.post();
+                return;
             }
-            Live.extIP = got;
+            Live.extIP = "—";
             extFetch.set(false);
             Bus.post();
+            View v = home;
+            if (v != null) {
+                v.postDelayed(() -> {
+                    if (Live.on() && Prefs.showExtIP(this)
+                            && ("—".equals(Live.extIP) || Live.extIP.isEmpty() || "…".equals(Live.extIP))) {
+                        Live.extIP = "";
+                        fetchExt();
+                    }
+                }, 2500);
+            }
         }, "loft-extip").start();
     }
 

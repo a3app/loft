@@ -13,7 +13,6 @@ import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -44,6 +43,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     private static final int REQ_VPN = 1;
     private static final int REQ_NOTE = 2;
 
+    private ViewGroup pane;
     private View home;
     private View conns;
     private View settings;
@@ -56,14 +56,9 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         setTheme(R.style.Theme_Loft);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        LayoutInflater inf = getLayoutInflater();
-        ViewGroup pane = findViewById(R.id.pane);
-        home = inf.inflate(R.layout.pane_home, pane, false);
-        conns = inf.inflate(R.layout.pane_conns, pane, false);
-        settings = inf.inflate(R.layout.pane_settings, pane, false);
+        pane = findViewById(R.id.pane);
+        home = getLayoutInflater().inflate(R.layout.pane_home, pane, false);
         pane.addView(home);
-        pane.addView(conns);
-        pane.addView(settings);
         show(home);
 
         BottomNavigationView nav = findViewById(R.id.nav);
@@ -72,8 +67,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             if (id == R.id.nav_home) {
                 show(home);
             } else if (id == R.id.nav_conns) {
+                ensureConns();
                 show(conns);
             } else {
+                ensureSettings();
                 show(settings);
             }
             return true;
@@ -83,16 +80,6 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         home.findViewById(R.id.pill).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_conns));
         home.findViewById(R.id.cards).setOnClickListener(v -> details());
 
-        adapter = new ConnAdapter();
-        RecyclerView list = conns.findViewById(R.id.list);
-        list.setLayoutManager(new LinearLayoutManager(this));
-        list.setAdapter(adapter);
-        ItemTouchHelper helper = new ItemTouchHelper(new SwipeCb());
-        helper.attachToRecyclerView(list);
-        FloatingActionButton fab = conns.findViewById(R.id.fab);
-        fab.setOnClickListener(v -> addSheet());
-
-        wireSettings();
         handleIntent(getIntent());
         if (LoftApp.of(this).profiles().all().isEmpty()
                 && !Prefs.p(this).getBoolean("onboard_done", false)) {
@@ -102,6 +89,38 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 && !LoftVpnService.running && !Live.on()) {
             connect();
         }
+        // Connections/Settings are heavy; inflate after the first Home frame so
+        // the emulator does not ANR ("system isn't responding") on cold start.
+        pane.post(() -> {
+            ensureConns();
+            ensureSettings();
+        });
+    }
+
+    private void ensureConns() {
+        if (conns != null) {
+            return;
+        }
+        conns = getLayoutInflater().inflate(R.layout.pane_conns, pane, false);
+        conns.setVisibility(View.GONE);
+        pane.addView(conns);
+        adapter = new ConnAdapter();
+        RecyclerView list = conns.findViewById(R.id.list);
+        list.setLayoutManager(new LinearLayoutManager(this));
+        list.setAdapter(adapter);
+        new ItemTouchHelper(new SwipeCb()).attachToRecyclerView(list);
+        conns.findViewById(R.id.fab).setOnClickListener(v -> addSheet());
+        adapter.reload();
+    }
+
+    private void ensureSettings() {
+        if (settings != null) {
+            return;
+        }
+        settings = getLayoutInflater().inflate(R.layout.pane_settings, pane, false);
+        settings.setVisibility(View.GONE);
+        pane.addView(settings);
+        wireSettings();
     }
 
     @Override
@@ -114,7 +133,9 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     protected void onResume() {
         super.onResume();
         Bus.watch(this);
-        adapter.reload();
+        if (adapter != null) {
+            adapter.reload();
+        }
         onLoft();
     }
 
@@ -127,14 +148,20 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     @Override
     public void onLoft() {
         paintHome();
-        adapter.notifyDataSetChanged();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
     }
 
     private void show(View v) {
         home.setVisibility(v == home ? View.VISIBLE : View.GONE);
-        conns.setVisibility(v == conns ? View.VISIBLE : View.GONE);
-        settings.setVisibility(v == settings ? View.VISIBLE : View.GONE);
-        if (v == conns) {
+        if (conns != null) {
+            conns.setVisibility(v == conns ? View.VISIBLE : View.GONE);
+        }
+        if (settings != null) {
+            settings.setVisibility(v == settings ? View.VISIBLE : View.GONE);
+        }
+        if (v == conns && adapter != null) {
             adapter.reload();
         }
         if (v == home) {
@@ -174,7 +201,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             go.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.danger_bg)));
             go.setTextColor(getColor(R.color.danger_fg));
         } else if (!Live.err.isEmpty()) {
-            pillT.setText(Live.err);
+            pillT.setText(Explain.display(this, Live.err));
             pillDot.setBackgroundResource(R.drawable.bg_dot_err);
             go.setText(R.string.connect);
             go.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.lamp)));
@@ -210,11 +237,14 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         } else {
             spark.clear();
         }
-        if (on && Prefs.showExtIP(this) && Live.extIP.isEmpty()) {
+        View extRow = home.findViewById(R.id.row_ext);
+        boolean showExt = Prefs.showExtIP(this);
+        ((View) extRow.getParent()).setVisibility(showExt ? View.VISIBLE : View.GONE);
+        if (on && showExt && Live.extIP.isEmpty()) {
             fetchExt();
         }
         String ext = Live.extIP;
-        ((TextView) home.findViewById(R.id.row_ext)).setText(ext.isEmpty() ? "—" : ext);
+        ((TextView) extRow).setText(ext.isEmpty() ? "—" : ext);
         String ov = Live.ip;
         if (!Live.ip6.isEmpty()) {
             ov = ov.isEmpty() ? Live.ip6 : ov + "  " + Live.ip6;
@@ -353,7 +383,9 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 .setMessage(R.string.confirm_delete)
                 .setPositiveButton(R.string.delete, (a, b) -> {
                     LoftApp.of(this).profiles().delete(pr.id);
-                    adapter.reload();
+                    if (adapter != null) {
+                        adapter.reload();
+                    }
                 })
                 .setNegativeButton(R.string.cancel, null)
                 .show();
@@ -452,6 +484,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             return;
         }
         LoftApp.of(this).profiles().addAll(got);
+        ensureConns();
         adapter.reload();
         Prefs.p(this).edit().putBoolean("onboard_done", true).apply();
         Toast.makeText(this, R.string.imported, Toast.LENGTH_SHORT).show();
@@ -481,7 +514,14 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         split.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("split", on).apply());
         auto.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("auto", on).apply());
         re.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("reconnect", on).apply());
-        ext.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("ext_ip", on).apply());
+        ext.setOnCheckedChangeListener((v, on) -> {
+            Prefs.p(this).edit().putBoolean("ext_ip", on).apply();
+            Live.extIP = "";
+            if (on && Live.on()) {
+                fetchExt();
+            }
+            paintHome();
+        });
         log.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("verbose", on).apply());
         Spinner rate = settings.findViewById(R.id.sp_rate);
         rate.setAdapter(spin(getString(R.string.rate_kbit), getString(R.string.rate_kb)));
@@ -533,31 +573,34 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     }
 
     private void fetchExt() {
+        if (!Prefs.showExtIP(this) || !Live.on()) {
+            return;
+        }
         if (!extFetch.compareAndSet(false, true)) {
             return;
         }
         Live.extIP = "…";
         new Thread(() -> {
-            String got = "—";
-            try {
-                java.net.URL u = new java.net.URL(Prefs.extIPURL(this));
-                java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
-                c.setConnectTimeout(4000);
-                c.setReadTimeout(4000);
-                try (InputStream in = c.getInputStream()) {
-                    String s = readAll(in).trim();
-                    if (s.length() > 64) {
-                        s = s.substring(0, 64);
-                    }
-                    if (!s.isEmpty()) {
-                        got = s;
-                    }
-                }
-            } catch (Exception ignored) {
+            String got = ExtIP.lookup(this, Prefs.extIPURL(this));
+            if (!got.isEmpty()) {
+                Live.extIP = got;
+                extFetch.set(false);
+                Bus.post();
+                return;
             }
-            Live.extIP = got;
+            Live.extIP = "—";
             extFetch.set(false);
             Bus.post();
+            View v = home;
+            if (v != null) {
+                v.postDelayed(() -> {
+                    if (Live.on() && Prefs.showExtIP(this)
+                            && ("—".equals(Live.extIP) || Live.extIP.isEmpty() || "…".equals(Live.extIP))) {
+                        Live.extIP = "";
+                        fetchExt();
+                    }
+                }, 2500);
+            }
         }, "loft-extip").start();
     }
 

@@ -57,6 +57,24 @@
     <string name="host">Host</string>
     <string name="port">Port</string>
     <string name="path">Path</string>
+    <string name="loft_edge">CDN</string>
+    <string name="loft_edge_hint" translatable="false">https://cdn.example.com</string>
+    <string name="front_ws" translatable="false">/api/v1/sync</string>
+    <string name="front_h2" translatable="false">/api/v1/tunnel</string>
+    <string name="front_h3" translatable="false">/api/v1/tunnel</string>
+    <string name="front_quic">QUIC</string>
+    <string name="err_auth_key">wrong credentials</string>
+    <string name="err_auth_denied">key is not authorized</string>
+    <string name="err_auth_expired">this key has expired</string>
+    <string name="err_auth_limit">connection limit on this key</string>
+    <string name="err_auth_online">this key is already online (multi is off)</string>
+    <string name="err_get_413">GET header too large</string>
+    <string name="err_get_405">this front does not accept GET</string>
+    <string name="err_need_mux">node has no CONNECT, mux required</string>
+    <string name="err_net_off">the node network is off</string>
+    <string name="err_ip_pool">the node address pool is empty</string>
+    <string name="err_policy">the node dropped this by policy</string>
+    <string name="err_stale">the session dropped</string>
     <string name="method">Method</string>
     <string name="method_auto">Auto</string>
     <string name="user">User</string>

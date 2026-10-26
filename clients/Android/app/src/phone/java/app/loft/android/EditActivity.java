@@ -110,6 +110,11 @@ public final class EditActivity extends LoftActivity {
         int port = YamlBuilder.portOf(p.url, YamlBuilder.schemeOf(p.url, p.kind));
         set(R.id.port, port > 0 ? String.valueOf(port) : "");
         set(R.id.path, p.path);
+        set(R.id.edge, p.edge);
+        set(R.id.ws_path, p.wsPath);
+        set(R.id.h2_path, p.h2Path);
+        set(R.id.h3_path, p.h3Path);
+        ((Switch) findViewById(R.id.sw_quic)).setChecked(p.quic);
         linkFull = YamlBuilder.emit(p);
         set(R.id.link, mask(linkFull));
         set(R.id.dns, p.dns);
@@ -133,6 +138,12 @@ public final class EditActivity extends LoftActivity {
         findViewById(R.id.lbl_method).setVisibility(manVis);
         findViewById(R.id.method_row).setVisibility(manVis);
         findViewById(R.id.path).setVisibility(manVis);
+        findViewById(R.id.edge).setVisibility(manVis);
+        int extraVis = loft && manual && Seg.selected(findViewById(R.id.method_seg)) != 6 ? View.VISIBLE : View.GONE;
+        findViewById(R.id.ws_path).setVisibility(extraVis);
+        findViewById(R.id.h2_path).setVisibility(extraVis);
+        findViewById(R.id.h3_path).setVisibility(extraVis);
+        findViewById(R.id.row_quic).setVisibility(extraVis);
         ((TextView) findViewById(R.id.lbl_token)).setText(vless ? R.string.uuid : R.string.key_title);
         findViewById(R.id.block_sstp).setVisibility(sstp || "trojan".equals(fam) ? View.VISIBLE : View.GONE);
         findViewById(R.id.user).setVisibility(sstp ? View.VISIBLE : View.GONE);
@@ -191,6 +202,20 @@ public final class EditActivity extends LoftActivity {
             p.kind = type;
             p.token = text(R.id.token);
             p.path = text(R.id.path);
+            p.edge = text(R.id.edge);
+            if (!"l3".equals(type)) {
+                p.wsPath = slash(text(R.id.ws_path));
+                p.h2Path = slash(text(R.id.h2_path));
+                p.h3Path = slash(text(R.id.h3_path));
+                p.quic = ((Switch) findViewById(R.id.sw_quic)).isChecked();
+                p.syncListedFronts();
+            } else {
+                p.wsPath = "";
+                p.h2Path = "";
+                p.h3Path = "";
+                p.quic = false;
+                p.listedFronts = "";
+            }
             p.mux = ((Switch) findViewById(R.id.sw_mux)).isChecked() && !"l3".equals(type);
             String host = text(R.id.host);
             int port = num(text(R.id.port), 443);
@@ -302,6 +327,17 @@ public final class EditActivity extends LoftActivity {
             return s;
         }
         return s.substring(0, a + 3) + "••••••" + s.substring(at);
+    }
+
+    private static String slash(String s) {
+        if (s == null) {
+            return "";
+        }
+        s = s.trim();
+        if (s.isEmpty()) {
+            return "";
+        }
+        return s.startsWith("/") ? s : "/" + s;
     }
 
     private static String hostOf(String u) {

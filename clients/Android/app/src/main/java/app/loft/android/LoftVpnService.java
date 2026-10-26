@@ -279,6 +279,16 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         Live.rates(snap.getBytesUp(), snap.getBytesDown());
         if ("on".equals(Live.state)) {
             Live.holding = false;
+            Profiles store = LoftApp.of(this).profiles();
+            String id = store.activeId();
+            String pbk = nz(snap.getMaskPub());
+            if (!pbk.isEmpty()) {
+                store.applyLearnedMask(id, pbk);
+            }
+            String fronts = nz(snap.getFronts());
+            if (!fronts.isEmpty()) {
+                store.applyLearnedFronts(id, fronts);
+            }
         }
         updateNote();
         Bus.post();
@@ -562,6 +572,12 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         if (!Live.ip.isEmpty()) {
             b.append(' ').append(Live.ip);
         }
+        if (!Live.err.isEmpty() && "error".equals(Live.state)) {
+            if (b.length() > 0) {
+                b.append(" · ");
+            }
+            b.append(Explain.display(this, Live.err));
+        }
         return b.length() == 0 ? getString(R.string.connected) : b.toString();
     }
 
@@ -599,7 +615,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         return s.contains("auth_bad_key") || s.contains("auth_revoked")
                 || s.contains("auth_expired") || s.contains("auth_not_authorized")
                 || s.contains("auth_clock") || s.contains("auth_instance")
-                || s.contains("net_disabled");
+                || s.contains("net_disabled")
+                || (s.contains("get handshake") && s.contains("404"));
     }
 
     private static String nz(String s) {

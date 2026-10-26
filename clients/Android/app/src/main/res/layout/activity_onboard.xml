@@ -203,6 +203,19 @@
                     android:padding="12dp"
                     android:textColor="@color/snow"
                     android:textColorHint="@color/mute" />
+
+                <EditText
+                    android:id="@+id/edge"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/loft_edge_hint"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
             </LinearLayout>
 
             <Button

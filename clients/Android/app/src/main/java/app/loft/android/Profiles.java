@@ -79,12 +79,50 @@ final class Profiles {
             if (p == null) {
                 continue;
             }
-            p.yaml = p.yaml == null || p.yaml.isEmpty() ? YamlBuilder.from(p) : p.yaml;
+            p.yaml = YamlBuilder.from(p);
             items.add(p);
             if (active.isEmpty()) {
                 active = p.id;
             }
         }
+        save();
+    }
+
+    /** Merges Status fronts= into the saved loft profile after handshake. */
+    synchronized void applyLearnedFronts(String id, String raw) {
+        Profile p = get(id);
+        if (p == null || !p.applyLearnedFronts(raw)) {
+            return;
+        }
+        p.yaml = YamlBuilder.from(p);
+        save();
+    }
+
+    /** Stores the node mask_pub learned after handshake so the next Start passes mask_pub. */
+    synchronized void applyLearnedMask(String id, String hex) {
+        if (hex == null) {
+            return;
+        }
+        String h = hex.trim().toLowerCase();
+        if (h.length() != 64) {
+            return;
+        }
+        for (int i = 0; i < 64; i++) {
+            char c = h.charAt(i);
+            if ((c < '0' || c > '9') && (c < 'a' || c > 'f')) {
+                return;
+            }
+        }
+        Profile p = get(id);
+        if (p == null || !p.isLoft()) {
+            return;
+        }
+        String cur = p.maskPub == null ? "" : p.maskPub.toLowerCase();
+        if (h.equals(cur)) {
+            return;
+        }
+        p.maskPub = h;
+        p.yaml = YamlBuilder.from(p);
         save();
     }
 

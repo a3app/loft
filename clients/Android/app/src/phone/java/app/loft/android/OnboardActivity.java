@@ -109,6 +109,7 @@ public final class OnboardActivity extends LoftActivity {
         }
         p.kind = type;
         p.path = text(R.id.path);
+        p.edge = text(R.id.edge);
         if (p.name.isEmpty()) {
             p.name = p.host();
         }

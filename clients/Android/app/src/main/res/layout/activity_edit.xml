@@ -331,6 +331,79 @@
                     android:padding="12dp"
                     android:textColor="@color/snow"
                     android:textColorHint="@color/mute" />
+
+                <EditText
+                    android:id="@+id/edge"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/loft_edge_hint"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+
+                <EditText
+                    android:id="@+id/ws_path"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/front_ws"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+
+                <EditText
+                    android:id="@+id/h2_path"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/front_h2"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+
+                <EditText
+                    android:id="@+id/h3_path"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="@string/front_h3"
+                    android:inputType="textUri"
+                    android:padding="12dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute" />
+
+                <LinearLayout
+                    android:id="@+id/row_quic"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/front_quic"
+                        android:textColor="@color/snow" />
+
+                    <Switch
+                        android:id="@+id/sw_quic"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
             </LinearLayout>
 
             <LinearLayout
