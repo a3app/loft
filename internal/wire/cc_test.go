@@ -40,7 +40,8 @@ func TestStatusCC(t *testing.T) {
 }
 
 func TestAgreeCC(t *testing.T) {
-	all := CCOffer{Allow: []byte{CCBBR, CCFixed}, TCP: true, QUIC: true, MaxDown: 50000}
+	tcp := CCOffer{Allow: []byte{CCBBR, CCFixed}, TCP: true, MaxDown: 50000}
+	all := CCOffer{Allow: []byte{CCBBR, CCFixed}, QUIC: true, MaxDown: 50000}
 	cases := []struct {
 		name     string
 		front    string
@@ -50,12 +51,13 @@ func TestAgreeCC(t *testing.T) {
 		id       byte
 		u, d     uint32
 	}{
-		{"no ask", FrontH2, CCDefault, 0, 0, all, CCDefault, 0, 0},
-		{"get never", FrontGET, CCBBR, 0, 0, all, CCDefault, 0, 0},
+		{"no ask", FrontH2, CCDefault, 0, 0, tcp, CCDefault, 0, 0},
+		{"get never", FrontGET, CCBBR, 0, 0, tcp, CCDefault, 0, 0},
 		{"node off", FrontH2, CCBBR, 0, 0, CCOffer{TCP: true}, CCDefault, 0, 0},
-		{"tcp bbr", FrontWS, CCBBR, 0, 0, all, CCBBR, 0, 0},
-		{"tcp cannot", FrontWS, CCBBR, 0, 0, CCOffer{Allow: all.Allow, QUIC: true}, CCDefault, 0, 0},
-		{"tcp fixed is bbr", FrontL3, CCFixed, 1, 1, all, CCBBR, 0, 0},
+		{"tcp bbr", FrontWS, CCBBR, 0, 0, tcp, CCBBR, 0, 0},
+		{"nothing to switch", FrontWS, CCBBR, 0, 0, CCOffer{Allow: tcp.Allow}, CCDefault, 0, 0},
+		{"tcp fixed is bbr", FrontL3, CCFixed, 1, 1, tcp, CCBBR, 0, 0},
+		{"l3 over h3 fixed", FrontL3, CCFixed, 1, 1, all, CCFixed, 1, 1},
 		{"quic fixed capped", FrontQUIC, CCFixed, 10000, 90000, all, CCFixed, 10000, 50000},
 		{"h3 fixed one way", FrontH3, CCFixed, 0, 30000, all, CCFixed, 0, 30000},
 		{"fixed without rates", FrontQUIC, CCFixed, 0, 0, all, CCBBR, 0, 0},

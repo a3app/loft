@@ -17,7 +17,7 @@ import (
 const (
 	CCDefault byte = 0
 	CCBBR     byte = 1 // BBR: paces by measured bandwidth and RTT
-	CCFixed   byte = 2 // sends at an agreed rate and ignores loss (QUIC only)
+	CCFixed   byte = 2 // sends at an agreed rate and ignores loss (over QUIC only)
 )
 
 // ParseCCName reads off, bbr, or fixed.
@@ -49,8 +49,8 @@ func CCName(id byte) string {
 // CCOffer is the node's side of the agreement.
 type CCOffer struct {
 	Allow   []byte // ids the node permits (bbr, fixed). Empty means off
-	TCP     bool   // the node can switch this TCP socket to BBR
-	QUIC    bool   // the node can switch this QUIC connection
+	TCP     bool   // the session runs on a TCP socket the node can switch to BBR
+	QUIC    bool   // the session runs on a QUIC connection the node can switch
 	MaxUp   uint32 // fixed: cap on the client's sending rate, kbit/s; 0 = none
 	MaxDown uint32 // fixed: cap on the node's sending rate, kbit/s; 0 = none
 }
@@ -59,18 +59,14 @@ type CCOffer struct {
 // for fixed, the two rates in kbit/s. Up is client to node, down is node to
 // client. Anything the node cannot or will not do is 0 (system default).
 // GET is always 0: it spreads over several connections, usually via a CDN.
-// Fixed is QUIC only; on TCP a fixed ask is answered with BBR when allowed.
-// A fixed ask without rates is answered with BBR as well. Under fixed a
-// rate of 0 leaves that direction on the system default.
+// Fixed needs QUIC under the session; on TCP a fixed ask is answered with
+// BBR when allowed. A fixed ask without rates is answered with BBR as well.
+// Under fixed a rate of 0 leaves that direction on the system default.
 func AgreeCC(front string, ask byte, up, down uint32, o CCOffer) (id byte, upOut, downOut uint32) {
-	if ask == CCDefault || front == "" || front == FrontGET {
+	if ask == CCDefault || front == "" || front == FrontGET || !o.TCP && !o.QUIC {
 		return CCDefault, 0, 0
 	}
-	quic := front == FrontQUIC || front == FrontH3
-	if quic && !o.QUIC || !quic && !o.TCP {
-		return CCDefault, 0, 0
-	}
-	if ask == CCFixed && quic && (up > 0 || down > 0) && allowsCC(o.Allow, CCFixed) {
+	if ask == CCFixed && o.QUIC && (up > 0 || down > 0) && allowsCC(o.Allow, CCFixed) {
 		return CCFixed, capRate(up, o.MaxUp), capRate(down, o.MaxDown)
 	}
 	if (ask == CCBBR || ask == CCFixed) && allowsCC(o.Allow, CCBBR) {
