@@ -236,6 +236,45 @@
     .rrow .meta { text-align: right; font-size: 11px; color: var(--stone); flex-shrink: 0; }
     .rrow .meta .src { color: var(--mute); font-size: 10px; margin-top: 2px; }
     .rlist.dim { opacity: .5; }
+    .swipe.rsw { margin-bottom: 6px; }
+    .swipe.rsw .rrow { margin: 0; position: relative; z-index: 1; transition: transform .18s ease; }
+    .swipe.rsw.open-r .rrow { transform: translateX(-84px); }
+    .swipe .act-back { background: var(--lamp); color: var(--ink); margin-left: auto; }
+    .swipe.rsw .behind { opacity: 0; }
+    .swipe.rsw.open-r .behind, .swipe.rsw.drag .behind { opacity: 1; }
+    .rrow .ck + .grow { flex: 1; }
+    .rrow .ck {
+      flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%;
+      border: 1.5px solid var(--mute); display: flex; align-items: center; justify-content: center;
+      font: 700 11px var(--ui); color: var(--ink);
+    }
+    .rrow.picked { border-color: rgba(232,184,74,.45); }
+    .rrow.picked .ck { background: var(--lamp); border-color: var(--lamp); }
+    .rrow.xrow .n { font-weight: 500; }
+    .rrow .n.mono { font: 500 12.5px var(--mono); }
+    .navbar .more { margin-left: auto; margin-right: -8px; font-size: 18px; }
+    .screen.selecting > .navbar { display: none; }
+    .selbar { display: flex; align-items: center; gap: 10px; min-height: 36px; margin: 0 0 10px; }
+    .selbar .x {
+      background: none; border: 0; color: var(--snow); font: 400 18px var(--ui);
+      cursor: pointer; width: 36px; height: 36px; margin-left: -8px; border-radius: 50%;
+    }
+    .selbar .t { flex: 1; font-size: 16px; font-weight: 600; }
+    .selbar .ghost-sm { padding: 6px 4px; }
+    .selbar .ghost-sm.del { color: #f0a0a0; }
+    .selbar .ghost-sm:disabled { opacity: .4; cursor: default; }
+    .snack {
+      position: absolute; left: 12px; right: 12px; bottom: 88px; z-index: 5;
+      display: flex; align-items: center; gap: 10px;
+      background: #3a332e; color: var(--snow); border-radius: 10px;
+      padding: 10px 8px 10px 14px; font: 500 12.5px var(--ui);
+      box-shadow: 0 8px 20px rgba(0,0,0,.4);
+    }
+    .snack span { flex: 1; line-height: 1.35; }
+    .snack button {
+      background: none; border: 0; color: var(--lamp); font: 600 12.5px var(--ui);
+      cursor: pointer; padding: 6px 8px; flex: 0 0 auto;
+    }
     .row-3 { display: flex; gap: 6px; margin-top: 10px; }
     .row-3 .ghost { flex: 1; font-size: 12px; padding: 10px 4px; }
     .repo-row { display: flex; gap: 6px; margin-top: 4px; }
@@ -656,6 +695,11 @@
     <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · подключение</button>
     <h4 data-i="hRoutes">Раздельная маршрутизация</h4>
     <button type="button" data-go="split" data-i="nSplit">Маршруты · списки</button>
+    <button type="button" data-go="split" data-list="swipe" data-i="nSplitSwipe">Маршруты · свайп</button>
+    <button type="button" data-go="split" data-list="select" data-i="nSplitSel">Маршруты · выбор</button>
+    <button type="button" data-go="split" data-list="clear" data-i="nSplitClr">Маршруты · очистка зоны</button>
+    <button type="button" data-go="split" data-list="undo" data-i="nSplitUndo">Маршруты · отмена</button>
+    <button type="button" data-go="splitexcl" data-i="nExcl">Маршруты · исключения</button>
     <button type="button" data-go="splitsvc" data-i="nSvc">Маршруты · сеть</button>
     <button type="button" data-go="zones" data-i="nZones">Маршруты · зоны</button>
     <button type="button" data-go="zone" data-i="nZone">Маршруты · зона</button>
@@ -1313,8 +1357,13 @@ hold  armed</pre>
       </div>
 
       <div class="screen hidden" id="split">
-        <div class="navbar"><button type="button" data-back aria-label="Назад">←</button></div>
+        <div class="navbar"><button type="button" data-back aria-label="Назад">←</button><button type="button" class="more" id="splitMore" aria-label="Ещё">⋮</button></div>
         <div class="scroll dyn" id="split-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitexcl">
+        <div class="navbar"><button type="button" data-back aria-label="Назад">←</button></div>
+        <div class="scroll dyn" id="splitexcl-body"></div>
       </div>
 
       <div class="screen hidden" id="splitsvc">
@@ -1434,6 +1483,26 @@ hold  armed</pre>
           <button type="button" class="cancel" data-close="delScrim" data-i="cancel">Отмена</button>
         </div>
       </div>
+      <div class="scrim hidden" id="splitMenuScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <button type="button" class="row" data-splitmenu="select"><span data-i="split.sel">Выбрать</span></button>
+            <button type="button" class="row danger" data-splitmenu="clear"><span data-i="split.clear">Очистить зону</span></button>
+          </div>
+          <button type="button" class="cancel" data-close="splitMenuScrim" data-i="cancel">Отмена</button>
+        </div>
+      </div>
+      <div class="scrim mid hidden" id="clrScrim">
+        <div style="width:100%">
+          <div class="sheet">
+            <h3 id="clrTitle"></h3>
+            <p class="sub" id="clrSub"></p>
+            <div id="clrRows"></div>
+          </div>
+          <button type="button" class="cancel" data-close="clrScrim" data-i="cancel">Отмена</button>
+        </div>
+      </div>
+      <div class="snack hidden" id="snack"><span id="snackT"></span><button type="button" data-undo data-i="split.undo">Отменить</button></div>
     </div>
 
     <div class="sys hidden" id="consent">
@@ -1644,6 +1713,32 @@ hold  armed</pre>
         "split.zones.add.title": "Новая зона",
         "split.zones.builtin": "Встроенная",
         "split.zones.del": "Удалить зону",
+        "split.sel": "Выбрать",
+        "split.sel.n": "Выбрано: %d",
+        "split.sel.all": "Все",
+        "split.del": "Удалить",
+        "split.del.svc": "Удалить сервис",
+        "split.del.excl": "Удалить исключение",
+        "split.back": "Вернуть",
+        "split.clear": "Очистить зону",
+        "split.clear.t": "Очистить %s?",
+        "split.clear.sub": "«Всё» отвязывает список зоны: адрес и автообновление отключатся. Исключения останутся.",
+        "split.clear.sub1": "Исключения останутся.",
+        "split.clear.me": "Только свои",
+        "split.clear.all": "Всё, включая список",
+        "split.clear.n": "Удалить все",
+        "split.excl": "Исключения",
+        "split.excl.sub": "Эти сети не ставятся и не возвращаются при обновлении списка. Свайп влево — вернуть.",
+        "split.excl.empty": "Исключений нет.",
+        "split.excl.clear": "Очистить исключения",
+        "split.excl.clear.t": "Очистить исключения %s?",
+        "split.excl.clear.sub": "Сети из списка вернутся при следующем обновлении.",
+        "split.gone": "Удалено: %s",
+        "split.gone.n": "Удалено: %d",
+        "split.gone.excl": "сети списка — в исключениях",
+        "split.gone.back": "Возвращено: %s",
+        "split.gone.clear": "Зона %s очищена",
+        "split.undo": "Отменить",
         "split.zones.edit.title": "Зона",
         "split.zones.move": "Сервисы перейдут в Global.",
         "split.zones.name": "Имя",
@@ -1659,6 +1754,11 @@ hold  armed</pre>
         nLists: "Маршруты · каталог",
         nSin: "Маршруты · импорт",
         nSout: "Маршруты · экспорт",
+        nSplitSwipe: "Маршруты · свайп",
+        nSplitSel: "Маршруты · выбор",
+        nSplitClr: "Маршруты · очистка зоны",
+        nSplitUndo: "Маршруты · отмена",
+        nExcl: "Маршруты · исключения",
         hRoutes: "Раздельная маршрутизация",
         navCap: "Макет приложения Android. Туннель — системный VpnService.",
         hApp: "Приложение",
@@ -1961,6 +2061,32 @@ hold  armed</pre>
         "split.zones.add.title": "New Zone",
         "split.zones.builtin": "Built-in",
         "split.zones.del": "Delete Zone",
+        "split.sel": "Select",
+        "split.sel.n": "%d selected",
+        "split.sel.all": "All",
+        "split.del": "Delete",
+        "split.del.svc": "Delete Service",
+        "split.del.excl": "Delete Exclusion",
+        "split.back": "Restore",
+        "split.clear": "Clear Zone",
+        "split.clear.t": "Clear %s?",
+        "split.clear.sub": "“Everything” unlinks the zone’s list: its address and auto-update are turned off. Exclusions stay.",
+        "split.clear.sub1": "Exclusions stay.",
+        "split.clear.me": "Only Mine",
+        "split.clear.all": "Everything, Including the List",
+        "split.clear.n": "Delete All",
+        "split.excl": "Exclusions",
+        "split.excl.sub": "These networks are never routed and don’t come back when the list updates. Swipe left to restore.",
+        "split.excl.empty": "No exclusions.",
+        "split.excl.clear": "Clear Exclusions",
+        "split.excl.clear.t": "Clear %s exclusions?",
+        "split.excl.clear.sub": "Networks from the list come back on the next update.",
+        "split.gone": "Deleted: %s",
+        "split.gone.n": "Deleted: %d",
+        "split.gone.excl": "list networks moved to exclusions",
+        "split.gone.back": "Restored: %s",
+        "split.gone.clear": "%s cleared",
+        "split.undo": "Undo",
         "split.zones.edit.title": "Zone",
         "split.zones.move": "Services move to Global.",
         "split.zones.name": "Name",
@@ -1976,6 +2102,11 @@ hold  armed</pre>
         nLists: "Routes · catalog",
         nSin: "Routes · import",
         nSout: "Routes · export",
+        nSplitSwipe: "Routes · swipe",
+        nSplitSel: "Routes · select",
+        nSplitClr: "Routes · clear zone",
+        nSplitUndo: "Routes · undo",
+        nExcl: "Routes · exclusions",
         hRoutes: "Split Routing",
         navCap: "Android app mock. The tunnel is the system VpnService.",
         hApp: "App",
@@ -2278,6 +2409,32 @@ hold  armed</pre>
         "split.zones.add.title": "新区域",
         "split.zones.builtin": "内置",
         "split.zones.del": "删除区域",
+        "split.sel": "选择",
+        "split.sel.n": "已选 %d 项",
+        "split.sel.all": "全选",
+        "split.del": "删除",
+        "split.del.svc": "删除服务",
+        "split.del.excl": "删除排除项",
+        "split.back": "恢复",
+        "split.clear": "清空区域",
+        "split.clear.t": "清空 %s？",
+        "split.clear.sub": "“全部”会解除区域的列表：地址和自动更新将关闭。排除项保留。",
+        "split.clear.sub1": "排除项保留。",
+        "split.clear.me": "仅自己添加的",
+        "split.clear.all": "全部，包括列表",
+        "split.clear.n": "全部删除",
+        "split.excl": "排除项",
+        "split.excl.sub": "这些网络不会加入路由，列表更新时也不会恢复。向左滑动可恢复。",
+        "split.excl.empty": "没有排除项。",
+        "split.excl.clear": "清空排除项",
+        "split.excl.clear.t": "清空 %s 的排除项？",
+        "split.excl.clear.sub": "列表中的网络将在下次更新时恢复。",
+        "split.gone": "已删除：%s",
+        "split.gone.n": "已删除：%d",
+        "split.gone.excl": "列表网络已移入排除项",
+        "split.gone.back": "已恢复：%s",
+        "split.gone.clear": "已清空 %s",
+        "split.undo": "撤销",
         "split.zones.edit.title": "区域",
         "split.zones.move": "服务将移到 Global。",
         "split.zones.name": "名称",
@@ -2293,6 +2450,11 @@ hold  armed</pre>
         nLists: "路由 · 目录",
         nSin: "路由 · 导入",
         nSout: "路由 · 导出",
+        nSplitSwipe: "路由 · 滑动",
+        nSplitSel: "路由 · 选择",
+        nSplitClr: "路由 · 清空区域",
+        nSplitUndo: "路由 · 撤销",
+        nExcl: "路由 · 排除项",
         hRoutes: "分流",
         navCap: "Android 应用模型。隧道是系统 VpnService。",
         hApp: "应用",
@@ -2677,18 +2839,18 @@ hold  armed</pre>
     }
     document.getElementById("onbAdvBtn").addEventListener("click", () => document.getElementById("onbAdv").classList.toggle("hidden"));
 
-    const SHEETS = ["ctxScrim", "exportScrim", "delScrim", "addScrim", "detScrim", "cfScrim", "menuScrim"];
+    const SHEETS = ["ctxScrim", "exportScrim", "delScrim", "addScrim", "detScrim", "cfScrim", "menuScrim", "splitMenuScrim", "clrScrim"];
     function hideSheets() {
       SHEETS.forEach((id) => document.getElementById(id).classList.add("hidden"));
       document.querySelectorAll(".swipe").forEach((s) => s.classList.remove("open-l", "open-r"));
     }
     // Tabs are the three rooms; Journal and About are pushed from Settings.
     // Edit, Scanner and QR are modal: Cancel / Close returns where they came from.
-    const SPLIT_SCREENS = ["split", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
+    const SPLIT_SCREENS = ["split", "splitexcl", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
     const TAB_OF = { home: "home", list: "list", settings: "settings", journal: "settings", about: "settings" };
     SPLIT_SCREENS.forEach((id) => { TAB_OF[id] = "settings"; });
     const PARENT = { edit: "list", scan: "list", share: "list", journal: "settings", about: "settings",
-      split: "settings", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
+      split: "settings", splitexcl: "split", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
     let cur = "home";
     const from = {};
     // Every mock state has its own address: #edit-sstp, #settings-route, #home-off.
@@ -2766,7 +2928,15 @@ hold  armed</pre>
         editNew = !!extra.isnew;
         paintEdit();
       }
+      if (!SPLIT_SCREENS.includes(id)) hideSnack();
+      if (id === "split") {
+        sel = extra.list === "select" ? new Set(["yt", "nf"]) : null;
+        if (extra.list) zoneTab = "global";
+      }
       if (SPLIT_SCREENS.includes(id)) paintSplitScreen(id);
+      if (id === "split" && extra.list === "swipe") { const r = document.querySelector("#split .rsw"); if (r) r.classList.add("open-r"); }
+      if (id === "split" && extra.list === "clear") openClear(false);
+      if (id === "split" && extra.list === "undo") { if (ROUTES.some((r) => r.id === "yt")) { removeSvcs(["yt"]); paintSplitScreen("split"); } }
       if (id === "settings") {
         if (extra.settab != null && extra.settab !== "") setTab = Number(extra.settab);
         paintSettings();
@@ -3006,15 +3176,19 @@ hold  armed</pre>
       { id: "yandex", en: "Yandex", ru: "Яндекс", zone: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "me" },
       { id: "lan", en: "LAN", ru: "Локальная сеть", zh: "局域网", zone: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
       { id: "ign", en: "Exclusion", ru: "Исключение", zh: "排除", zone: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
+      { id: "x-cf", en: "Cloudflare", zone: "global", cidrs: ["162.159.0.0/16"], src: "ignore" },
     ];
+    // sel: ids picked in selection mode (null when off); undo: the state before the last removal.
     let splitOn = true, zoneTab = "global", splitQ = "", svcId = null, svcKind = "route";
+    let sel = null, undo = null, snackTimer = null, xSeq = 0;
     let zoneId = "local", zoneAddVia = true, zoneAddRepo = "";
     const T = (k) => (I[lang][k] != null ? I[lang][k] : I.en[k] != null ? I.en[k] : k);
     const loc = (o) => o[lang] || o.en;
     const esc = (v) => String(v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
     const zoneById = (id) => ZONES.find((z) => z.id === id);
     const zoneName = (id) => { const z = zoneById(id); return (z && (z[lang] || z.en)) || T("split.zone." + id); };
-    const routesIn = (id) => ROUTES.filter((r) => r.zone === id);
+    const routesIn = (id) => ROUTES.filter((r) => r.zone === id && r.src !== "ignore");
+    const exclIn = (id) => ROUTES.filter((r) => r.zone === id && r.src === "ignore");
     const nets = (n) => {
       if (lang === "ru") { const d = n % 10, h = n % 100; return n + " " + (d === 1 && h !== 11 ? T("split.net") : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "сети" : T("split.nets")); }
       return n + " " + (n === 1 ? T("split.net") : T("split.nets"));
@@ -3033,18 +3207,44 @@ hold  armed</pre>
         <p class="hint">${repoFile(url) ? T("split.repo.last") : T("split.repo.none")}</p>
         ${pull ? `<div class="btns"><button type="button" class="go" data-back>${T("split.repo.pull")}</button></div>` : ""}`;
     }
-    function splitRows() {
-      const q = splitQ.trim().toLowerCase();
-      const rows = routesIn(zoneTab).filter((r) => !q || loc(r).toLowerCase().includes(q)).map((r) => `
-        <div class="rrow" data-svc="${r.id}">
+    // A service row slides left to show Delete; in selection mode it carries a check instead.
+    function svcRow(r) {
+      const picked = sel && sel.has(r.id);
+      const row = `<div class="rrow ${picked ? "picked" : ""}" data-svc="${r.id}">
+          ${sel ? `<span class="ck">${picked ? "✓" : ""}</span>` : ""}
           <div class="grow"><div class="n">${esc(loc(r))}</div><div class="m">${r.cidrs.slice(0, 2).join(" ")}${r.cidrs.length > 2 ? " …" : ""}</div></div>
           <div class="meta">${nets(r.cidrs.length)}<div class="src">${T("split.src." + r.src)}</div></div>
-        </div>`).join("");
+        </div>`;
+      if (sel) return row;
+      return `<div class="swipe rsw" data-rid="${r.id}"><div class="behind"><button type="button" class="act act-del" data-rdel="${r.id}">${T("split.del")}</button></div>${row}</div>`;
+    }
+    function splitRows() {
+      const q = splitQ.trim().toLowerCase();
+      const rows = routesIn(zoneTab).filter((r) => sel || !q || loc(r).toLowerCase().includes(q)).map(svcRow).join("");
       return rows || `<p class="hint">${T("split.empty")}</p>`;
+    }
+    function exclRows() {
+      const rows = exclIn(zoneTab).map((r) => `<div class="swipe rsw" data-rid="${r.id}"><div class="behind"><button type="button" class="act act-back" data-rdel="${r.id}">${T("split.back")}</button></div>
+        <div class="rrow" data-svc="${r.id}">
+          <div class="grow"><div class="n mono">${r.cidrs.join(" ")}</div></div>
+          <div class="meta">${esc(loc(r))}</div>
+        </div></div>`).join("");
+      return rows || `<p class="hint">${T("split.excl.empty")}</p>`;
     }
     const SPLIT_PAINT = {
       split: () => {
         const z = zoneById(zoneTab);
+        document.getElementById("split").classList.toggle("selecting", !!sel);
+        if (sel) {
+          const n = sel.size;
+          return `<div class="selbar"><button type="button" class="x" data-selx aria-label="${esc(T("cancel"))}">✕</button>
+              <div class="t">${T("split.sel.n").replace("%d", n)}</div>
+              <button type="button" class="ghost-sm" data-selall>${T("split.sel.all")}</button>
+              <button type="button" class="ghost-sm del" data-seldel ${n ? "" : "disabled"}>${T("split.del")}</button></div>
+            <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}</div>
+            <div class="rlist" id="splitRows">${splitRows()}</div>`;
+        }
+        const nx = exclIn(zoneTab).length;
         return `<div class="head"><div class="title">${T("split")}</div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>
           <p class="subline">${splitOn ? T("split.sub") : T("split.sub.off")}</p>
           <div class="zhead"><span class="lbl">${T("split.zone")}</span><button type="button" class="ghost-sm" data-go="zones">${T("split.zones")}</button></div>
@@ -3052,9 +3252,14 @@ hold  armed</pre>
           <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}</div>
           <label class="field"><input type="search" data-sq value="${esc(splitQ)}" placeholder="${esc(T("split.search"))}" /></label>
           <div class="rlist ${splitOn ? "" : "dim"}" id="splitRows">${splitRows()}</div>
+          <div class="rrow xrow" data-go="splitexcl"><div class="grow"><div class="n">${T("split.excl")}</div></div><div class="meta">${nx} ›</div></div>
           <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>
           <div class="row-3"><button type="button" class="ghost" data-go="splitin">${T("import")}</button><button type="button" class="ghost" data-go="splitout">${T("export")}</button><button type="button" class="ghost" data-go="splitrepo">${T("split.repo")}</button></div>`;
       },
+      splitexcl: () => head(esc(zoneName(zoneTab)) + " · " + T("split.excl"), T("split.excl.sub")) + `
+          <div class="rlist" id="exclRows">${exclRows()}</div>
+          <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>
+          ${exclIn(zoneTab).length ? `<div class="end-row"><span></span><button type="button" class="danger" data-exclclear>${T("split.excl.clear")}</button></div>` : ""}`,
       splitsvc: () => {
         const r = svcId && ROUTES.find((x) => x.id === svcId);
         const ign = svcKind === "ignore";
@@ -3066,7 +3271,8 @@ hold  armed</pre>
             : `<input class="mono" placeholder="142.250.0.0/16" />`}</label>
           <label class="field"><span>${T("split.add.name")}</span><input value="${esc(r ? loc(r) : "")}" placeholder="${esc(ign ? T("split.ignore") : "YouTube")}" /></label>
           <label class="field"><span>${T("split.zone")}</span><select>${zoneOpts(r ? r.zone : zoneTab)}</select></label>
-          <div class="btns"><button type="button" class="go" data-back>${r ? T("split_add_save") : T("split.add.go")}</button></div>`;
+          <div class="btns"><button type="button" class="go" data-back>${r ? T("split_add_save") : T("split.add.go")}</button></div>
+          ${r ? `<div class="end-row"><span></span><button type="button" class="danger" data-svcdel="${r.id}">${T(r.src === "ignore" ? "split.del.excl" : "split.del.svc")}</button></div>` : ""}`;
       },
       zones: () => head(T("split.zones"), T("split.zones.add.body")) + ZONES.map((z) => {
         const f = repoFile(z.repo);
@@ -3117,12 +3323,108 @@ hold  armed</pre>
       const el = document.getElementById(id + "-body");
       if (el && SPLIT_PAINT[id]) el.innerHTML = SPLIT_PAINT[id]();
     }
+
+    /* Removal is immediate; the snackbar offers Undo for five seconds.
+       A service from the zone's list leaves its networks behind as exclusions,
+       or the next list update would bring it back. */
+    function remember() {
+      undo = { routes: ROUTES.map((r) => Object.assign({}, r)), zones: ZONES.map((z) => Object.assign({}, z)) };
+    }
+    function hideSnack() {
+      clearTimeout(snackTimer);
+      document.getElementById("snack").classList.add("hidden");
+    }
+    function showSnack(text) {
+      document.getElementById("snackT").textContent = text;
+      document.getElementById("snack").classList.remove("hidden");
+      clearTimeout(snackTimer);
+      snackTimer = setTimeout(() => { hideSnack(); undo = null; }, 5000);
+    }
+    function removeSvcs(ids) {
+      const gone = ROUTES.filter((r) => ids.includes(r.id));
+      if (!gone.length) return;
+      remember();
+      let toExcl = false;
+      gone.forEach((r) => {
+        ROUTES.splice(ROUTES.indexOf(r), 1);
+        if (r.src !== "repo") return;
+        toExcl = true;
+        r.cidrs.forEach((c) => ROUTES.push({ id: "x" + ++xSeq, en: r.en, ru: r.ru, zh: r.zh, zone: r.zone, cidrs: [c], src: "ignore" }));
+      });
+      const what = gone.length === 1 ? T(gone[0].src === "ignore" ? "split.gone.back" : "split.gone").replace("%s", gone[0].src === "ignore" ? gone[0].cidrs[0] : loc(gone[0])) : T("split.gone.n").replace("%d", gone.length);
+      showSnack(toExcl ? what + " · " + T("split.gone.excl") : what);
+    }
+    function clearZone(how) {
+      remember();
+      const z = zoneById(zoneTab);
+      const keep = (r) => r.zone !== z.id || (how === "excl" ? r.src !== "ignore" : how === "me" ? r.src !== "me" : r.src === "ignore");
+      const left = ROUTES.filter(keep);
+      ROUTES.splice(0, ROUTES.length, ...left);
+      if (how === "all") { z.repo = ""; z.auto = false; }
+      showSnack(T("split.gone.clear").replace("%s", zoneName(z.id)));
+    }
+    function openClear(excl) {
+      const z = zoneById(zoneTab);
+      const svcs = routesIn(z.id);
+      const mine = svcs.filter((r) => r.src === "me").length;
+      const fromList = svcs.length - mine;
+      const row = (how, label, n) => `<button type="button" class="row danger" data-clr="${how}"><span>${label}</span><span class="s">${n}</span></button>`;
+      let rows;
+      if (excl) {
+        document.getElementById("clrTitle").textContent = T("split.excl.clear.t").replace("%s", zoneName(z.id));
+        document.getElementById("clrSub").textContent = T("split.excl.clear.sub");
+        rows = row("excl", T("split.excl.clear"), exclIn(z.id).length);
+      } else {
+        document.getElementById("clrTitle").textContent = T("split.clear.t").replace("%s", zoneName(z.id));
+        document.getElementById("clrSub").textContent = fromList ? T("split.clear.sub") : T("split.clear.sub1");
+        rows = fromList ? (mine ? row("me", T("split.clear.me"), mine) : "") + row("all", T("split.clear.all"), svcs.length) : row("me", T("split.clear.n"), mine);
+      }
+      document.getElementById("clrRows").innerHTML = rows;
+      openSheet("clrScrim");
+    }
+    // Swipe left on a list row reveals its action; holding a service row starts selection.
+    let sw = null, swallow = false;
+    function closeSwipes(except) {
+      document.querySelectorAll(".rsw.open-r").forEach((x) => { if (x !== except) x.classList.remove("open-r"); });
+    }
     const phoneEl = document.getElementById("phone");
     phoneEl.addEventListener("click", (e) => {
-      const at = (sel) => e.target.closest(sel);
+      const at = (q) => e.target.closest(q);
       let el;
+      if (swallow) { swallow = false; return; }
       if (at("#setSplit")) { splitOn = at("#setSplit").classList.contains("on"); return; }
+      if (at("[data-undo]")) {
+        if (undo) { ROUTES.splice(0, ROUTES.length, ...undo.routes); undo.zones.forEach((z, i) => Object.assign(ZONES[i], z)); undo = null; }
+        hideSnack();
+        if (SPLIT_SCREENS.includes(cur)) paintSplitScreen(cur);
+        return;
+      }
+      if (at("#splitMore")) { openSheet("splitMenuScrim"); return; }
+      if ((el = at("[data-splitmenu]"))) {
+        hideSheets();
+        if (el.getAttribute("data-splitmenu") === "select") { sel = new Set(); paintSplitScreen("split"); }
+        else openClear(false);
+        return;
+      }
+      if ((el = at("[data-clr]"))) { hideSheets(); clearZone(el.getAttribute("data-clr")); paintSplitScreen(cur); return; }
       if (!at(".dyn")) return;
+      if ((el = at("[data-rdel]"))) { removeSvcs([el.getAttribute("data-rdel")]); paintSplitScreen(cur); return; }
+      if ((el = at("[data-svcdel]"))) { removeSvcs([el.getAttribute("data-svcdel")]); goBack(); return; }
+      if (at("[data-exclclear]")) { openClear(true); return; }
+      if (at("[data-selx]")) { sel = null; paintSplitScreen("split"); return; }
+      if (at("[data-selall]")) {
+        const all = routesIn(zoneTab).map((r) => r.id);
+        sel = sel.size === all.length ? new Set() : new Set(all);
+        paintSplitScreen("split");
+        return;
+      }
+      if (at("[data-seldel]")) { const ids = [...sel]; sel = null; removeSvcs(ids); paintSplitScreen("split"); return; }
+      if (sel && (el = at("[data-svc]")) && el.getAttribute("data-svc") !== "new") {
+        const id = el.getAttribute("data-svc");
+        if (sel.has(id)) sel.delete(id); else sel.add(id);
+        paintSplitScreen("split");
+        return;
+      }
       if ((el = at("[data-split]"))) {
         splitOn = !splitOn;
         document.getElementById("setSplit").classList.toggle("on", splitOn);
@@ -3132,7 +3434,7 @@ hold  armed</pre>
         const id = el.getAttribute("data-svc");
         svcId = id === "new" ? null : id;
         const r = svcId && ROUTES.find((x) => x.id === svcId);
-        svcKind = r && r.src === "ignore" ? "ignore" : "route";
+        svcKind = (r ? r.src === "ignore" : cur === "splitexcl") ? "ignore" : "route";
         show("splitsvc");
       } else if ((el = at("[data-kind]"))) { svcKind = el.getAttribute("data-kind"); paintSplitScreen("splitsvc"); }
       else if ((el = at("[data-zone]"))) {
@@ -3155,6 +3457,46 @@ hold  armed</pre>
       else if ((el = at("[data-go]"))) { show(el.getAttribute("data-go"), attrsOf(el)); }
       else if (at("[data-back]")) { goBack(); }
     });
+    phoneEl.addEventListener("pointerdown", (e) => {
+      const row = e.target.closest(".rsw");
+      swallow = false;
+      closeSwipes(row);
+      if (!row || (e.button && e.button !== 0) || e.target.closest("button")) return;
+      sw = { row, card: row.querySelector(".rrow"), x0: e.clientX, y0: e.clientY, dx: 0, moved: false, hold: null };
+      if (cur === "split") {
+        sw.hold = setTimeout(() => {
+          const id = row.getAttribute("data-rid");
+          sw = null; swallow = true;
+          sel = new Set([id]);
+          paintSplitScreen("split");
+        }, 480);
+      }
+    });
+    phoneEl.addEventListener("pointermove", (e) => {
+      if (!sw) return;
+      sw.dx = e.clientX - sw.x0;
+      const dy = e.clientY - sw.y0;
+      if (Math.abs(sw.dx) > 8 || Math.abs(dy) > 8) { sw.moved = true; clearTimeout(sw.hold); }
+      if (Math.abs(sw.dx) > Math.abs(dy) && Math.abs(sw.dx) > 6) {
+        sw.row.classList.add("drag");
+        sw.card.style.transition = "none";
+        sw.card.style.transform = "translateX(" + Math.max(-84, Math.min(0, sw.dx)) + "px)";
+      }
+    });
+    function swipeEnd() {
+      if (!sw) return;
+      const { row, card, dx, moved } = sw;
+      clearTimeout(sw.hold);
+      sw = null;
+      card.style.transition = "";
+      card.style.transform = "";
+      row.classList.remove("drag");
+      if (dx < -THRESH) { row.classList.add("open-r"); swallow = true; }
+      else if (moved) { row.classList.remove("open-r"); swallow = true; }
+      else if (row.classList.contains("open-r")) { row.classList.remove("open-r"); swallow = true; }
+    }
+    phoneEl.addEventListener("pointerup", swipeEnd);
+    phoneEl.addEventListener("pointercancel", swipeEnd);
     phoneEl.addEventListener("input", (e) => {
       if (e.target.matches("[data-sq]")) { splitQ = e.target.value; document.getElementById("splitRows").innerHTML = splitRows(); }
     });

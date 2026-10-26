@@ -48,6 +48,17 @@ The macOS model (macOS DESIGN §5): a **zone** goes through loft or around it, a
 
 Entry: Settings → Route → the toggle and the gold **Lists**. The screens open inside the Settings tab with **←** on top. They are the iOS ones: Lists (toggle, zone tabs with service counts, `Global · Through loft`, search, service rows, **+ Add**, Import · Export · Repository), Network (Route / Exclusion, networks, service, zone), Zones, Zone (name, direction, list address + **Lists**, auto-update; an own zone has Delete zone, services → Global), Repository, Catalog (World, Russia, China, Iran, Kazakhstan, Belarus), Import (from a file via SAF), Export (all zones in one loft-routes file, share sheet).
 
+**Clearing.** Removal takes effect at once. A snackbar at the bottom shows “Deleted: YouTube · **Undo**” for 5 s and puts everything back. There is no confirmation dialog, except for clearing a zone or its exclusions.
+
+- **Swipe left** on a service row reveals a red **Delete**.
+- **Touch and hold** a row to start selection. A bar replaces the header: **✕**, “N selected”, **All** (every service in the open zone; tap again to clear), **Delete**. Rows get a check circle; a tap toggles the row.
+- On the **Network** screen an existing entry has **Delete Service** at the bottom (**Delete Exclusion** for an exclusion). The screen closes and the snackbar appears.
+- **⋮** in the Lists nav bar: **Select** (the same selection mode) and **Clear Zone**. The dialog “Clear Global?” offers **Only Mine (N)** and **Everything, Including the List (M)**. “Everything” unlinks the zone’s list: its address and auto-update are turned off, or the services would come back on the next update. Exclusions stay. A zone with no list services shows one row, **Delete All**.
+
+A list service (source “list”) does not vanish without a trace: its networks move to the zone’s exclusions, or the next update would bring them back (macOS §5 rule). The snackbar says so: “… · list networks moved to exclusions”. Own services are deleted for good.
+
+**Exclusions** have their own screen instead of sitting in the service list. Below the services is a row **Exclusions · N ›**. The screen “Global · Exclusions” (**←** on top): the line “These networks are never routed and don’t come back when the list updates”, CIDR rows (monospace) with the service name on the right; a tap edits it on the Network screen. **Swipe left** reveals **Restore**: the exclusion is deleted and the network returns with the next list update. **+ Add** opens Network with “Exclusion” selected. At the bottom, **Clear Exclusions** with a dialog.
+
 ## 3. Android chrome
 
 Do not repaint Settings → Network & internet → VPN. The mock shows how **loft** looks in *their* VPN list: status Connected, the switch is the system tunnel, not a second toggle in our app.
