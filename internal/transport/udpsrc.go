@@ -33,13 +33,29 @@ func listenUDPSticky(addr string) (net.PacketConn, error) {
 
 // stickyUDP is a PacketConn that remembers, per remote address, which local
 // IP the remote sent to (src), and uses that IP as the reply source.
+//
+// Any UDP packet adds an entry, before any key is checked, and a UDP source
+// address is easy to forge, so the table is bounded: an entry not refreshed
+// for stickyTTL is forgotten, and the table never holds more than stickyMax.
+// A forgotten peer only loses the source pinning until its next packet.
 type stickyUDP struct {
 	uc  *net.UDPConn
 	p4  *ipv4.PacketConn
 	oob []byte
 	mu  sync.Mutex
-	src map[string]net.IP
+	src map[string]stickySrc
 }
+
+// stickySrc is the local IP a remote wrote to and when it last did.
+type stickySrc struct {
+	ip net.IP
+	at time.Time
+}
+
+const (
+	stickyTTL = 5 * time.Minute
+	stickyMax = 65536
+)
 
 // newStickyUDP turns on destination-address control messages; pc is
 // returned as is when it is not a UDPConn.
@@ -52,7 +68,7 @@ func newStickyUDP(pc net.PacketConn) net.PacketConn {
 	if err := p4.SetControlMessage(ipv4.FlagDst, true); err != nil {
 		_ = ipv6.NewPacketConn(uc).SetControlMessage(ipv6.FlagDst, true)
 	}
-	return &stickyUDP{uc: uc, p4: p4, oob: make([]byte, 128), src: map[string]net.IP{}}
+	return &stickyUDP{uc: uc, p4: p4, oob: make([]byte, 128), src: map[string]stickySrc{}}
 }
 
 // udpConnOf is the UDPConn under pc (plain or sticky), or nil.
@@ -74,8 +90,12 @@ func (s *stickyUDP) ReadFrom(p []byte) (int, net.Addr, error) {
 		return n, addr, err
 	}
 	if ip := dstFromOOB(s.oob[:oobn]); ip != nil && addr != nil {
+		now := time.Now()
 		s.mu.Lock()
-		s.src[addr.String()] = ip
+		if len(s.src) >= stickyMax {
+			s.sweepLocked(now)
+		}
+		s.src[addr.String()] = stickySrc{ip: ip, at: now}
 		s.mu.Unlock()
 	}
 	return n, addr, nil
@@ -103,7 +123,24 @@ func (s *stickyUDP) lookup(addr net.Addr) net.IP {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.src[addr.String()]
+	e, ok := s.src[addr.String()]
+	if !ok || time.Since(e.at) > stickyTTL {
+		return nil
+	}
+	return e.ip
+}
+
+// sweepLocked drops entries older than stickyTTL; if the table is still
+// full (a flood of fresh forged sources), it starts empty. Caller holds mu.
+func (s *stickyUDP) sweepLocked(now time.Time) {
+	for k, e := range s.src {
+		if now.Sub(e.at) > stickyTTL {
+			delete(s.src, k)
+		}
+	}
+	if len(s.src) >= stickyMax {
+		s.src = map[string]stickySrc{}
+	}
 }
 
 func (s *stickyUDP) Close() error                       { return s.uc.Close() }
