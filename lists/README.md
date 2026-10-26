@@ -16,6 +16,8 @@ https://raw.githubusercontent.com/a3app/loft-routes/main/by.bat
 
 A zone has one URL. Direction lives on the zone, not on the file: through loft, around loft, or block (the built-in Block zone, no list by default). `REM zone:` is a hint for import.
 
+A service’s domains go on their own line with the same name in the comment: `REM domain: youtube.com googlevideo.com :: rem YouTube`. A domain covers its subdomains. A client without domain support skips these lines.
+
 | File | Typical zone |
 |------|----------------|
 | `global.bat` | Global (through loft) |

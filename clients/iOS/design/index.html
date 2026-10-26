@@ -229,6 +229,12 @@
     .rlist.dim { opacity: .5; }
     .seg.seg3 button { padding-left: 4px; padding-right: 4px; font-size: 11.5px; }
     .seg.seg3 + .hint { margin: 8px 0 12px; }
+    .set-row input.dns-x {
+      display: block; width: 100%; margin-top: 8px; box-sizing: border-box;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 10px; padding: 9px 12px; font: 400 12px var(--mono);
+    }
+    .set-row input.dns-x.hidden { display: none; }
     .swipe.rsw { margin-bottom: 6px; }
     .swipe.rsw .rrow { margin: 0; position: relative; z-index: 1; transition: transform .18s ease; }
     .swipe.rsw.open-r .rrow { transform: translateX(-84px); }
@@ -1086,6 +1092,14 @@
               </div>
               <div class="toggle on" id="setSplit"><i></i></div>
             </div>
+            <div class="set-row">
+              <div>
+                <div class="k" data-i="localDns">Местный DNS</div>
+                <div class="s" data-i="localDnsD">Резолвит домены зон «в обход loft». Остальные имена — через DNS ноды, домены зоны Block не резолвятся.</div>
+                <input class="mono dns-x hidden" id="dnsAddr" placeholder="77.88.8.8" />
+              </div>
+              <select id="dnsSel" onchange="var x=document.getElementById('dnsAddr');x.classList.toggle('hidden',this.value==='sys');x.placeholder=this.value==='doh'?'https://common.dot.dns.yandex.net/dns-query':'77.88.8.8'"><option value="sys" data-i="dnsSys">Системный</option><option value="ip" data-i="dnsCustom">Свой адрес</option><option value="doh" data-i="dnsDoh">DoH</option></select>
+            </div>
           </div>
           <div class="grp" id="grp-2" data-i="setClient">Подключение</div>
           <div id="set-2">
@@ -1543,10 +1557,20 @@ hold  armed</pre>
         "split.zone": "Зона",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "localDns": "Местный DNS",
+        "localDnsD": "Резолвит домены зон «в обход loft». Остальные имена — через DNS ноды, домены зоны Block не резолвятся.",
+        "dnsSys": "Системный",
+        "dnsCustom": "Свой адрес",
+        "dnsDoh": "DoH",
+        "split.add.dom": "Домены",
+        "split.add.dom.d": "По одному в строке; домен включает поддомены. Домены зоны «в обход» резолвит местный DNS, зоны Block — получают отказ (NXDOMAIN).",
+        "split.dom": "домен",
+        "split.doms": "доменов",
+        "split.doms.few": "домена",
         "split.zone.block": "Block",
         "split.block": "Блокировать",
         "split.blocked": "Блокируется",
-        "split.block.d": "Пока включён loft, соединения к сетям этой зоны сразу получают отказ.",
+        "split.block.d": "Пока включён loft, соединения к сетям этой зоны сразу получают отказ, а её домены не резолвятся.",
         "split.zones": "Зоны",
         "split.zones.add": "Добавить зону",
         "split.zones.add.body": "Имя, направление, необязательный адрес списка. Сервисы следуют за зоной.",
@@ -1878,10 +1902,20 @@ hold  armed</pre>
         "split.zone": "Zone",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "localDns": "Local DNS",
+        "localDnsD": "Resolves the domains of “bypass loft” zones. Other names go through the node’s DNS; Block zone domains don’t resolve.",
+        "dnsSys": "System",
+        "dnsCustom": "Own address",
+        "dnsDoh": "DoH",
+        "split.add.dom": "Domains",
+        "split.add.dom.d": "One per line; a domain covers its subdomains. Bypass zone domains resolve with the local DNS, Block zone domains are refused (NXDOMAIN).",
+        "split.dom": "domain",
+        "split.doms": "domains",
+        "split.doms.few": "domains",
         "split.zone.block": "Block",
         "split.block": "Block",
         "split.blocked": "Blocked",
-        "split.block.d": "While loft is on, connections to this zone’s networks are refused at once.",
+        "split.block.d": "While loft is on, connections to this zone’s networks are refused at once and its domains don’t resolve.",
         "split.zones": "Zones",
         "split.zones.add": "Add Zone",
         "split.zones.add.body": "Name, direction, optional list URL. Services follow the zone.",
@@ -2213,10 +2247,20 @@ hold  armed</pre>
         "split.zone": "区域",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "localDns": "本地 DNS",
+        "localDnsD": "解析「绕过 loft」区域的域名。其他名称经节点 DNS；Block 区域的域名不解析。",
+        "dnsSys": "系统",
+        "dnsCustom": "自定义地址",
+        "dnsDoh": "DoH",
+        "split.add.dom": "域名",
+        "split.add.dom.d": "每行一个；域名包括其子域名。绕过区域的域名用本地 DNS 解析，Block 区域的域名被拒绝（NXDOMAIN）。",
+        "split.dom": "个域名",
+        "split.doms": "个域名",
+        "split.doms.few": "个域名",
         "split.zone.block": "Block",
         "split.block": "阻止",
         "split.blocked": "已阻止",
-        "split.block.d": "loft 开启时，到此区域网络的连接会被立即拒绝。",
+        "split.block.d": "loft 开启时，到此区域网络的连接会被立即拒绝，其域名也不解析。",
         "split.zones": "区域",
         "split.zones.add": "添加区域",
         "split.zones.add.body": "名称、方向、可选列表地址。服务跟随此区域。",
@@ -2996,11 +3040,12 @@ hold  armed</pre>
       { id: "block", builtin: true, def: "block", repo: "", auto: true },
     ];
     const ROUTES = [
-      { id: "yt", en: "YouTube", zone: "global", cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
+      { id: "yt", en: "YouTube", zone: "global", cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], domains: ["youtube.com", "googlevideo.com", "ytimg.com"], src: "repo" },
       { id: "cf", en: "Cloudflare", zone: "global", cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
-      { id: "gpt", en: "ChatGPT", zone: "global", cidrs: ["104.18.32.0/24"], src: "me" },
+      { id: "gpt", en: "ChatGPT", zone: "global", cidrs: ["104.18.32.0/24"], domains: ["chatgpt.com", "openai.com"], src: "me" },
       { id: "nf", en: "Netflix", zone: "global", cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
-      { id: "yandex", en: "Yandex", ru: "Яндекс", zone: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "me" },
+      { id: "yandex", en: "Yandex", ru: "Яндекс", zone: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], domains: ["yandex.ru", "ya.ru", "yastatic.net"], src: "me" },
+      { id: "ads", en: "Ads", ru: "Реклама", zh: "广告", zone: "block", cidrs: [], domains: ["doubleclick.net", "adfox.ru"], src: "me" },
       { id: "lan", en: "LAN", ru: "Локальная сеть", zh: "局域网", zone: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
       { id: "ign", en: "Exclusion", ru: "Исключение", zh: "排除", zone: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
       { id: "x-cf", en: "Cloudflare", zone: "global", cidrs: ["162.159.0.0/16"], src: "ignore" },
@@ -3020,6 +3065,13 @@ hold  armed</pre>
       if (lang === "ru") { const d = n % 10, h = n % 100; return n + " " + (d === 1 && h !== 11 ? T("split.net") : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "сети" : T("split.nets")); }
       return n + " " + (n === 1 ? T("split.net") : T("split.nets"));
     };
+    const doms = (n) => {
+      if (lang === "ru") { const d = n % 10, h = n % 100; return n + " " + (d === 1 && h !== 11 ? T("split.dom") : d >= 2 && d <= 4 && (h < 12 || h > 14) ? T("split.doms.few") : T("split.doms")); }
+      return n + " " + (n === 1 ? T("split.dom") : T("split.doms"));
+    };
+    // What a service row says on the right: networks, then domains when it has any.
+    const svcMeta = (r) => [r.cidrs.length ? nets(r.cidrs.length) : "", (r.domains || []).length ? doms(r.domains.length) : ""].filter(Boolean).join(" · ");
+    const svcLine = (r) => (r.cidrs.length ? r.cidrs.slice(0, 2).join(" ") + (r.cidrs.length > 2 ? " …" : "") : (r.domains || []).slice(0, 2).join(" "));
     const dirOf = (def) => (def === "block" ? T("split.blocked") : def ? T("split.via") : T("split.bypass"));
     const repoFile = (u) => String(u || "").split("?")[0].split("/").filter(Boolean).pop() || "";
     const zoneOpts = (sel) => ZONES.map((z) => `<option value="${z.id}" ${z.id === sel ? "selected" : ""}>${esc(zoneName(z.id))}</option>`).join("");
@@ -3040,8 +3092,8 @@ hold  armed</pre>
       const picked = sel && sel.has(r.id);
       const row = `<div class="rrow ${picked ? "picked" : ""}" data-svc="${r.id}">
           ${sel ? `<span class="ck">${picked ? "✓" : ""}</span>` : ""}
-          <div class="grow"><div class="n">${esc(loc(r))}</div><div class="m">${r.cidrs.slice(0, 2).join(" ")}${r.cidrs.length > 2 ? " …" : ""}</div></div>
-          <div class="meta">${nets(r.cidrs.length)}<div class="src">${T("split.src." + r.src)}</div></div>
+          <div class="grow"><div class="n">${esc(loc(r))}</div><div class="m">${svcLine(r)}</div></div>
+          <div class="meta">${svcMeta(r)}<div class="src">${T("split.src." + r.src)}</div></div>
         </div>`;
       if (sel) return row;
       return `<div class="swipe rsw" data-rid="${r.id}"><div class="behind"><button type="button" class="act act-del" data-rdel="${r.id}">${T("split.del")}</button></div>${row}</div>`;
@@ -3097,6 +3149,10 @@ hold  armed</pre>
           <label class="field"><span>${T("split.add.net")}</span>${r
             ? `<textarea class="paste">${r.cidrs.join("\n")}</textarea>`
             : `<input class="mono" placeholder="142.250.0.0/16" />`}</label>
+          ${ign ? "" : `<label class="field"><span>${T("split.add.dom")}</span>${r
+            ? `<textarea class="paste">${(r.domains || []).join("\n")}</textarea>`
+            : `<input class="mono" placeholder="youtube.com" />`}</label>
+          <p class="hint" style="margin:-6px 0 12px">${T("split.add.dom.d")}</p>`}
           <label class="field"><span>${T("split.add.name")}</span><input value="${esc(r ? loc(r) : "")}" placeholder="${esc(ign ? T("split.ignore") : "YouTube")}" /></label>
           <label class="field"><span>${T("split.zone")}</span><select>${zoneOpts(r ? r.zone : zoneTab)}</select></label>
           <div class="btns"><button type="button" class="go" data-back>${r ? T("split_add_save") : T("split.add.go")}</button></div>

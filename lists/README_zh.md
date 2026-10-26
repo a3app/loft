@@ -16,6 +16,8 @@ https://raw.githubusercontent.com/a3app/loft-routes/main/by.bat
 
 一个区域一个 URL。方向在区域上，不在文件上：经 Loft、绕过 Loft 或阻止（内置的 Block 区域，默认没有列表）。`REM zone:` 是导入时的提示。
 
+服务的域名单独写一行，注释里是同一个名称：`REM domain: youtube.com googlevideo.com :: rem YouTube`。域名包括其子域名。不支持域名的客户端跳过这些行。
+
 | 文件 | 常用区域 |
 |------|----------------|
 | `global.bat` | Global（经 Loft） |

@@ -854,6 +854,8 @@
     let failoverOn = params.get("fail") !== "0";
     let heldNow = params.get("scene") === "hold";
     let regionTab = params.get("region") || "global";
+    // Local DNS for the names of bypass zones: the network's own, an address, or DoH.
+    let localDns = ["sys", "ip", "doh"].includes(params.get("ldns")) ? params.get("ldns") : "sys";
     let splitQ = "";
     const ZONE_PRESETS = ["local", "global", "block"];
     const LIST_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
@@ -928,17 +930,22 @@
       return String(socksPort);
     };
     const ROUTES = [
-      { id: "yt", ru: "YouTube", en: "YouTube", region: "global", cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
+      { id: "yt", ru: "YouTube", en: "YouTube", region: "global", cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], domains: ["youtube.com", "googlevideo.com", "ytimg.com"], src: "repo" },
       { id: "cf", ru: "Cloudflare", en: "Cloudflare", de: "Cloudflare", fr: "Cloudflare", pt: "Cloudflare", zh: "Cloudflare", it: "Cloudflare", ja: "Cloudflare", ko: "Cloudflare", region: "global", cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
-      { id: "gpt", ru: "ChatGPT", en: "ChatGPT", de: "ChatGPT", fr: "ChatGPT", pt: "ChatGPT", zh: "ChatGPT", it: "ChatGPT", ja: "ChatGPT", ko: "ChatGPT", region: "global", cidrs: ["104.18.32.0/24"], src: "me" },
+      { id: "gpt", ru: "ChatGPT", en: "ChatGPT", de: "ChatGPT", fr: "ChatGPT", pt: "ChatGPT", zh: "ChatGPT", it: "ChatGPT", ja: "ChatGPT", ko: "ChatGPT", region: "global", cidrs: ["104.18.32.0/24"], domains: ["chatgpt.com", "openai.com"], src: "me" },
       { id: "nf", ru: "Netflix", en: "Netflix", region: "global", cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
-      { id: "yandex", ru: "Яндекс", en: "Yandex", de: "Yandex", fr: "Yandex", pt: "Yandex", zh: "Yandex", it: "Yandex", ja: "Yandex", ko: "Yandex", region: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "me" },
+      { id: "yandex", ru: "Яндекс", en: "Yandex", de: "Yandex", fr: "Yandex", pt: "Yandex", zh: "Yandex", it: "Yandex", ja: "Yandex", ko: "Yandex", region: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], domains: ["yandex.ru", "ya.ru", "yastatic.net"], src: "me" },
+      { id: "ads", ru: "Реклама", en: "Ads", de: "Werbung", fr: "Publicité", pt: "Publicidade", zh: "广告", it: "Pubblicità", ja: "広告", ko: "광고", vi: "Quảng cáo", region: "block", cidrs: [], domains: ["doubleclick.net", "adfox.ru"], src: "me" },
       { id: "lan", ru: "Локальная сеть", en: "LAN", de: "LAN", fr: "LAN", pt: "LAN", zh: "局域网", it: "LAN", ja: "LAN", ko: "로컬 네트워크", region: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
       { id: "ign", ru: "Игнор", en: "Ignore", de: "Ignorieren", fr: "Ignorer", pt: "Ignorar", zh: "忽略", it: "Ignora", ja: "無視", ko: "무시", vi: "Bỏ qua", region: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
     ];
     const locName = (o) => o[lang] || o.en || o.ru || "";
     const rname = (r) => locName(r);
     // Russian has a few-form: 1 сеть, 2–4 сети, 5+ сетей.
+    const domWord = (n) => {
+      if (lang === "ru") { const d = n % 10, h = n % 100; if (d === 1 && h !== 11) return t("split.dom"); if (d >= 2 && d <= 4 && (h < 12 || h > 14)) return t("split.doms.few"); return t("split.doms"); }
+      return n === 1 ? t("split.dom") : t("split.doms");
+    };
     const netWord = (n) => {
       if (lang === "ru") { const d = n % 10, h = n % 100; if (d === 1 && h !== 11) return t("split.net"); if (d >= 2 && d <= 4 && (h < 12 || h > 14)) return t("split.nets.few"); return t("split.nets"); }
       return n === 1 ? t("split.net") : t("split.nets");
@@ -1484,7 +1491,8 @@ outbounds:
             <div class="pref"><div><div class="n">${t("default_route")}</div><div class="d">${t("default_route_d")}</div></div><div class="toggle ${defaultRouteOn ? "on" : ""}" data-defroute><i></i></div></div>
             <div class="pref"><div><div class="n">${t("failover")}</div><div class="d">${t("failover_d")}</div></div><div class="toggle ${failoverOn ? "on" : ""}" data-fail><i></i></div></div>
             <div class="pref"><div><div class="n">${t("hold")}</div><div class="d">${t("hold_d")}</div></div><div class="toggle ${holdOn ? "on" : ""}" data-hold><i></i></div></div>
-            <div class="pref"><div style="min-width:0;flex:1"><div class="n">${t("split")}</div><div class="d">${t("split_d")}</div><button type="button" class="ghost-sm" data-go="split">${t("split_lists")}</button></div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>`;
+            <div class="pref"><div style="min-width:0;flex:1"><div class="n">${t("split")}</div><div class="d">${t("split_d")}</div><button type="button" class="ghost-sm" data-go="split">${t("split_lists")}</button></div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>
+            <div class="pref"><div style="min-width:0;flex:1"><div class="n">${t("local_dns")}</div><div class="d">${t("local_dns_d")}</div>${localDns === "sys" ? "" : `<input class="field sm" style="margin-top:8px" spellcheck="false" placeholder="${localDns === "doh" ? "https://common.dot.dns.yandex.net/dns-query" : "77.88.8.8"}" />`}</div><select class="loft-select" data-ldns>${["sys", "ip", "doh"].map((id) => `<option value="${id}" ${localDns === id ? "selected" : ""}>${t("local_dns_" + id)}</option>`).join("")}</select></div>`;
         const client = `
             <div class="pref"><div><div class="n">${t("auto")}</div><div class="d">${t("auto_d")}</div></div><div class="toggle on"><i></i></div></div>
             <div class="pref"><div><div class="n">${t("reconnect")}</div><div class="d">${t("reconnect_d")}</div></div><div class="toggle ${reconnectOn ? "on" : ""}" data-reconnect><i></i></div></div>
@@ -1526,9 +1534,10 @@ outbounds:
         const rows = list.map((r) => {
           const n = r.cidrs.length;
           const net = netWord(n);
+          const nd = (r.domains || []).length;
           return `<div class="rrow" data-go="splitadd">
-            <div><div class="n">${rname(r)}</div><div class="u">${r.cidrs.slice(0, 2).join(" ")}${n > 2 ? " …" : ""}</div></div>
-            <div class="meta">${n} ${net}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div></div>
+            <div><div class="n">${rname(r)}</div><div class="u">${n ? r.cidrs.slice(0, 2).join(" ") + (n > 2 ? " …" : "") : r.domains.slice(0, 2).join(" ")}</div></div>
+            <div class="meta">${[n ? n + " " + net : "", nd ? nd + " " + domWord(nd) : ""].filter(Boolean).join(" · ")}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div></div>
           </div>`;
         }).join("");
         return `
@@ -1642,6 +1651,9 @@ outbounds:
             </div>
             <div class="label">${t("split.add.net")}</div>
             <input class="field sm" placeholder="142.250.0.0/16" spellcheck="false" />
+            ${addKind === "ignore" ? "" : `<div class="label">${t("split.add.dom")}</div>
+            <input class="field sm" placeholder="youtube.com" spellcheck="false" />
+            <div class="hint" style="margin-top:6px">${t("split.add.dom.d")}</div>`}
             <div class="label">${t("split.add.name")}</div>
             <input class="field sm" placeholder="${addKind === "ignore" ? t("split.ignore") : "YouTube"}" />
             <div class="label">${t("split.zone")}</div>
@@ -2146,6 +2158,13 @@ outbounds:
           show(current, true);
         };
       });
+      sceneEl.querySelectorAll("[data-ldns]").forEach((el) => {
+        el.onchange = (ev) => {
+          ev.stopPropagation();
+          localDns = el.value || "sys";
+          show(current, true);
+        };
+      });
       sceneEl.querySelectorAll("[data-dock]").forEach((el) => {
         el.onchange = (ev) => {
           ev.stopPropagation();
@@ -2318,6 +2337,7 @@ outbounds:
         u.searchParams.set("sport", String(socksPort));
         u.searchParams.set("simple", simpleOn ? "1" : "0");
         u.searchParams.set("dock", dockMode);
+        u.searchParams.set("ldns", localDns);
         u.searchParams.set("reconnect", reconnectOn ? "1" : "0");
         u.searchParams.set("settab", setTab);
         u.searchParams.set("extip", extIPOn ? "1" : "0");
