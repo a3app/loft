@@ -1,6 +1,6 @@
 package transport
 
-// Mesh P2P: Status peer hints, loft.peer announce, LFT TCP preface, hub-splice fallback.
+// Mesh P2P: Status peer hints, loft.peer announce, sealed direct TCP, hub-splice fallback.
 //
 // Normally a connection from one member to another goes client → node →
 // client ("hub splice"). In mesh or vlan mode with p2p allowed, members can
@@ -11,9 +11,10 @@ package transport
 //  2. The node puts the live announcements into every Status as peer hints:
 //     overlay IP, public address as the node saw it, port, VLAN, key.
 //  3. To reach a member, a client first dials that member's hint directly
-//     and sends a 42-byte "LFT" preface: its overlay IP plus an HMAC keyed
-//     by X25519 between the two members' keys. The receiver checks the HMAC
-//     and the ACL, then connects the TCP to its own local port.
+//     and runs a sealed handshake (p2pseal.go): its overlay IP and the port
+//     travel encrypted, proven with the X25519 secret between the two
+//     members' keys. The receiver checks the proof and the ACL, then
+//     connects the TCP to its own local port. Data on it is encrypted.
 //  4. If the direct dial fails, the stream goes through the node as usual.
 //
 // This file also keeps the client's view of the overlay from the last
@@ -21,10 +22,7 @@ package transport
 
 import (
 	"crypto/ecdh"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"io"
 	"net"
@@ -41,8 +39,8 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
-// p2pAllow and vis* are the client overlay view. LFT HMAC uses X25519
-// against the peer pub from Status hints. vis* are written by RememberVis
+// p2pAllow and vis* are the client overlay view. The P2P handshake uses
+// X25519 against the peer pub from Status hints. vis* are written by RememberVis
 // after each OK handshake and read under visMu.
 var (
 	p2pAllow   atomic.Bool
@@ -65,8 +63,8 @@ var (
 	p2pKey   *ecdh.PrivateKey
 )
 
-// SetP2PClient enables direct TCP attempts (LFT). HMAC is pairwise ECDH
-// with the peer pub from Status.
+// SetP2PClient enables direct TCP attempts, keyed by pairwise ECDH with
+// the peer pub from Status.
 func SetP2PClient(on bool) {
 	p2pAllow.Store(on)
 	if on {
@@ -76,7 +74,7 @@ func SetP2PClient(on bool) {
 
 // EnsureP2PKey loads or mints a persistent X25519 seed next to client.instance.
 // The key must survive restarts, because other members learn it through
-// Status hints and use it to check this client's LFT preface.
+// Status hints and use it to check this client's P2P handshake.
 func EnsureP2PKey() (*ecdh.PrivateKey, error) {
 	p2pKeyMu.Lock()
 	defer p2pKeyMu.Unlock()
@@ -115,7 +113,7 @@ func p2pPublic() []byte {
 }
 
 // p2pShared is the X25519 shared secret with a peer; both members compute
-// the same value, so it can key the LFT HMAC in either direction.
+// the same value, so it can key the P2P proof in either direction.
 func p2pShared(peerPub []byte) ([]byte, error) {
 	k, err := EnsureP2PKey()
 	if err != nil {
@@ -403,7 +401,8 @@ func netconfRule(r wire.PolicyRule) netconf.Rule {
 	return out
 }
 
-// tryP2P dials a matching peer hint with the LFT preface; nil means use hub splice.
+// tryP2P dials a matching peer hint and runs the sealed handshake; nil
+// means use hub splice.
 // It is tried only for an IP-literal target, with p2p enabled on both the
 // client and the node, in mesh or vlan mode. The dial timeout is short
 // (800 ms) so a peer behind NAT costs little before the fallback.
@@ -436,18 +435,15 @@ func tryP2P(target string) net.Conn {
 		if err != nil {
 			continue
 		}
-		if err := p2pWriteHello(c, port, h.Pub); err != nil {
+		sc, err := p2pDial(c, port, h.Pub)
+		if err != nil {
 			c.Close()
 			continue
 		}
-		return c
+		return sc
 	}
 	return nil
 }
-
-const lftSize = 4 + 4 + 16 + 16 + 2 // "LFT\x00" || src_ipv4 || mac || nonce || port
-
-var lftMagic = [4]byte{'L', 'F', 'T', 0}
 
 // overlayIPv4 is this client's overlay IPv4, or nil.
 func overlayIPv4() net.IP {
@@ -483,77 +479,6 @@ func hintOf(ip string) *wire.PeerHint {
 	return nil
 }
 
-// lftMAC is the 16-byte HMAC-SHA256 that proves the LFT sender holds the
-// P2P key of the member at src4. It also covers the nonce and destination
-// port, so the port cannot be changed in transit.
-func lftMAC(shared, nonce, src4 []byte, port uint16) []byte {
-	var pb [2]byte
-	binary.BigEndian.PutUint16(pb[:], port)
-	mac := hmac.New(sha256.New, shared)
-	mac.Write([]byte("lft"))
-	mac.Write(nonce)
-	mac.Write(pb[:])
-	mac.Write(src4)
-	return mac.Sum(nil)[:16]
-}
-
-// p2pWriteHello sends LFT || src_ipv4 || HMAC(ECDH, lft||nonce||port||src) || nonce || dest_port.
-func p2pWriteHello(c net.Conn, destPort string, peerPub []byte) error {
-	src := overlayIPv4()
-	if src == nil || len(peerPub) != 32 {
-		return io.ErrUnexpectedEOF
-	}
-	shared, err := p2pShared(peerPub)
-	if err != nil {
-		return err
-	}
-	_ = c.SetDeadline(time.Now().Add(time.Second))
-	p := wire.Port(destPort)
-	nonce := make([]byte, 16)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return err
-	}
-	buf := make([]byte, lftSize)
-	copy(buf[0:4], lftMagic[:])
-	copy(buf[4:8], src)
-	copy(buf[8:24], lftMAC(shared, nonce, src, p))
-	copy(buf[24:40], nonce)
-	binary.BigEndian.PutUint16(buf[40:42], p)
-	_, err = c.Write(buf)
-	_ = c.SetDeadline(time.Time{})
-	return err
-}
-
-// p2pReadHello verifies LFT using the initiator pub from Status hints.
-// A sender that is not in this client's hints is refused, since there is no
-// key to check it against.
-func p2pReadHello(c net.Conn) (port uint16, src net.IP, ok bool) {
-	_ = c.SetDeadline(time.Now().Add(time.Second))
-	buf := make([]byte, lftSize)
-	if _, err := io.ReadFull(c, buf); err != nil {
-		return 0, nil, false
-	}
-	_ = c.SetDeadline(time.Time{})
-	if string(buf[0:4]) != string(lftMagic[:]) {
-		return 0, nil, false
-	}
-	src = net.IP(append([]byte(nil), buf[4:8]...))
-	pub := hintPub(src.String())
-	if len(pub) != 32 {
-		return 0, nil, false
-	}
-	shared, err := p2pShared(pub)
-	if err != nil {
-		return 0, nil, false
-	}
-	port = binary.BigEndian.Uint16(buf[40:42])
-	want := lftMAC(shared, buf[24:40], buf[4:8], port)
-	if !hmac.Equal(want, buf[8:24]) {
-		return 0, nil, false
-	}
-	return port, src, true
-}
-
 // acceptMember splices incoming overlay Open to the local target (hub splice).
 // These are streams the node opens on this client's mux on behalf of another
 // member (see Overlay.forwardMember): the target is 127.0.0.1:port, or a
@@ -587,7 +512,8 @@ func handleIncoming(st *mux.Stream) {
 	_, _ = io.Copy(st, c)
 }
 
-// announceP2P listens on TCP, Opens loft.peer:<port>, writes the X25519 pub, and serves LFT inbound.
+// announceP2P listens on TCP, Opens loft.peer:<port>, writes the X25519
+// pub, and serves sealed P2P inbound.
 func announceP2P(d Dialer) {
 	if !p2pAllow.Load() {
 		return
@@ -617,10 +543,10 @@ func announceP2P(d Dialer) {
 }
 
 // serveP2P splices a verified P2P conn to 127.0.0.1:dest_port.
-func serveP2P(c net.Conn) {
-	defer c.Close()
-	port, src, ok := p2pReadHello(c)
-	if !ok {
+func serveP2P(raw net.Conn) {
+	defer raw.Close()
+	c, port, src, err := p2pAccept(raw)
+	if err != nil {
 		return
 	}
 	own := net.ParseIP(OverlayIP())

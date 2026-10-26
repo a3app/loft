@@ -2,8 +2,12 @@ package transport
 
 import (
 	"bytes"
+	"crypto/ecdh"
 	"encoding/hex"
+	"io"
+	"net"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/curve25519"
 )
@@ -56,29 +60,45 @@ func TestSidV2Vector(t *testing.T) {
 	}
 }
 
-// TestLFTVector locks the 42-byte P2P preface in docs/protocol.md §16.8.
-func TestLFTVector(t *testing.T) {
-	local := []byte("Privacy is necessary. Hughes '93")
-	peer := []byte("This is for everyone. TimBL 2012")
-	peerPub, err := curve25519.X25519(peer, curve25519.Basepoint)
-	if err != nil {
-		t.Fatal(err)
+// TestP2PVector locks the sealed P2P handshake in docs/protocol.md §16.8:
+// both messages with fixed keys, time and padding, and the first record.
+func TestP2PVector(t *testing.T) {
+	key := func(seed string) *ecdh.PrivateKey {
+		k, err := ecdh.X25519().NewPrivateKey([]byte(seed))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return k
 	}
-	shared, err := curve25519.X25519(local, peerPub)
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := []byte{10, 77, 0, 2}
-	nonce := []byte("Art.23 Konst. RF")
-	buf := make([]byte, lftSize)
-	copy(buf[0:4], lftMagic[:])
-	copy(buf[4:8], src)
-	copy(buf[8:24], lftMAC(shared, nonce, src, 8080))
-	copy(buf[24:40], nonce)
-	buf[40], buf[41] = 8080>>8, 8080&0xff
-	got := hex.EncodeToString(peerPub) + " " + hex.EncodeToString(buf)
-	const want = "2a4cd76bd42aaa397c78d84f0e3fa3643dfad73d128237b66e8572688fc8a306 4c4654000a4d00026986af299cbcb6931c57169b90268c704172742e3233204b6f6e73742e2052461f90"
+	local := key("Privacy is necessary. Hughes '93") // initiator member key
+	peer := key("This is for everyone. TimBL 2012")  // responder member key
+	e := key("Art.23 Konst. RF secrecy of mail")     // initiator fresh key
+	r := key("Article 12 UDHR: no interference")     // responder fresh key
+	ePub, rPub := e.PublicKey().Bytes(), r.PublicKey().Bytes()
+	static, _ := local.ECDH(peer.PublicKey())
+	es, _ := e.ECDH(peer.PublicKey())
+	ee, _ := e.ECDH(r.PublicKey())
+	hello := p2pHelloMsg(ePub, es, static, []byte{10, 77, 0, 2}, 8080, 2524608000, []byte("pad"))
+	reply := p2pReplyMsg(rPub, es, ePub, nil)
+	ir, _ := p2pDataKeys(ee, es, static, ePub, rPub)
+	var rec bytes.Buffer
+	pc := newP2PConn(&bufConn{&rec}, ir, ir)
+	pc.Write([]byte("ping"))
+	got := hex.EncodeToString(hello) + " " + hex.EncodeToString(reply) + " " + hex.EncodeToString(rec.Bytes())
+	const want = "1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acef59eae3000bdb7d97c5a83bbcb0f00b0f706164 24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543eca4bde80e88b6f53d067e8874af6450401 39b9fc9869bfe0580b40de9f12a7c1a3dd87f6469543822a1385ea6e9364ee21edd26e9e8d7b"
 	if got != want {
-		t.Fatalf("lft\n got %s\nwant %s", got, want)
+		t.Fatalf("p2p\n got %s\nwant %s", got, want)
 	}
 }
+
+// bufConn is a net.Conn that only writes into a buffer.
+type bufConn struct{ w *bytes.Buffer }
+
+func (b *bufConn) Read([]byte) (int, error)         { return 0, io.EOF }
+func (b *bufConn) Write(p []byte) (int, error)      { return b.w.Write(p) }
+func (b *bufConn) Close() error                     { return nil }
+func (b *bufConn) LocalAddr() net.Addr              { return nil }
+func (b *bufConn) RemoteAddr() net.Addr             { return nil }
+func (b *bufConn) SetDeadline(time.Time) error      { return nil }
+func (b *bufConn) SetReadDeadline(time.Time) error  { return nil }
+func (b *bufConn) SetWriteDeadline(time.Time) error { return nil }

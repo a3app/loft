@@ -1,124 +1,171 @@
 package transport
 
-// LFT pairwise ECDH: two member keys, one shared MAC, hub still the fallback.
+// Sealed direct P2P: handshake, records, refusals; hub stays the fallback.
 
 import (
 	"bytes"
 	"crypto/ecdh"
 	"crypto/rand"
-	"encoding/binary"
+	"io"
 	"net"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/a3app/loft/internal/wire"
 )
 
-func TestLftPairwiseMAC(t *testing.T) {
-	alice, err := ecdh.X25519().GenerateKey(rand.Reader)
+// recConn records what is written to it.
+type recConn struct {
+	net.Conn
+	mu  sync.Mutex
+	out []byte
+}
+
+func (r *recConn) Write(b []byte) (int, error) {
+	r.mu.Lock()
+	r.out = append(r.out, b...)
+	r.mu.Unlock()
+	return r.Conn.Write(b)
+}
+
+func p2pKeys(t *testing.T, n int) []*ecdh.PrivateKey {
+	var ks []*ecdh.PrivateKey
+	for i := 0; i < n; i++ {
+		k, err := ecdh.X25519().GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ks = append(ks, k)
+	}
+	return ks
+}
+
+// p2pPair runs the handshake between initiator key a (at 10.8.0.2) and
+// responder key b, whose hints name hinted as the key of 10.8.0.2.
+func p2pPair(t *testing.T, a, b *ecdh.PrivateKey, hinted []byte) (ic, rc net.Conn, port uint16, src net.IP, wire *recConn, err error) {
+	c1, c2 := net.Pipe()
+	t.Cleanup(func() { c1.Close(); c2.Close() })
+	wire = &recConn{Conn: c1}
+	type res struct {
+		c   net.Conn
+		err error
+	}
+	done := make(chan res, 1)
+	go func() {
+		c, err := p2pDialAs(wire, a, net.IPv4(10, 8, 0, 2).To4(), 22, b.PublicKey().Bytes())
+		if err != nil {
+			c1.Close()
+		}
+		done <- res{c, err}
+	}()
+	pubOf := func(ip string) []byte {
+		if ip == "10.8.0.2" {
+			return hinted
+		}
+		return nil
+	}
+	rc, port, src, err = p2pAcceptAs(c2, b, pubOf)
 	if err != nil {
-		t.Fatal(err)
+		c2.Close()
 	}
-	bob, err := ecdh.X25519().GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
+	r := <-done
+	if err == nil {
+		err = r.err
 	}
-	sa, err := alice.ECDH(bob.PublicKey())
-	if err != nil {
-		t.Fatal(err)
+	return r.c, rc, port, src, wire, err
+}
+
+func TestP2PSealedRoundTrip(t *testing.T) {
+	k := p2pKeys(t, 2)
+	ic, rc, port, src, w, err := p2pPair(t, k[0], k[1], k[0].PublicKey().Bytes())
+	if err != nil || port != 22 || src.String() != "10.8.0.2" {
+		t.Fatalf("port=%d src=%v err=%v", port, src, err)
 	}
-	sb, err := bob.ECDH(alice.PublicKey())
-	if err != nil {
-		t.Fatal(err)
+	big := bytes.Repeat([]byte("SSH-2.0-OpenSSH_9.6 "), 2000) // more than one record
+	go func() { ic.Write(big) }()
+	got := make([]byte, len(big))
+	if _, err := io.ReadFull(rc, got); err != nil || !bytes.Equal(got, big) {
+		t.Fatalf("initiator → responder: %v", err)
 	}
-	if !bytes.Equal(sa, sb) {
-		t.Fatal("ecdh mismatch")
+	go func() { rc.Write([]byte("pong")) }()
+	back := make([]byte, 4)
+	if _, err := io.ReadFull(ic, back); err != nil || string(back) != "pong" {
+		t.Fatalf("responder → initiator: %q %v", back, err)
 	}
-	src := net.IPv4(10, 8, 0, 2).To4()
-	nonce := bytes.Repeat([]byte{1}, 16)
-	if !bytes.Equal(lftMAC(sa, nonce, src, 22), lftMAC(sb, nonce, src, 22)) {
-		t.Fatal("mac mismatch")
+	w.mu.Lock()
+	out := append([]byte(nil), w.out...)
+	w.mu.Unlock()
+	if bytes.Contains(out, []byte("SSH-2.0")) || bytes.Contains(out, []byte{10, 8, 0, 2}) || bytes.Contains(out, []byte("LFT")) {
+		t.Fatal("plaintext on the wire")
 	}
 }
 
-func TestLFTReadHello(t *testing.T) {
-	t.Cleanup(resetP2PKeyForTest)
-	t.Cleanup(func() { RememberVis(wire.Status{}) })
-	alice, err := ecdh.X25519().GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
+// TestP2PHelloLooksRandom: two hellos share no prefix and differ in length
+// most of the time.
+func TestP2PHelloLooksRandom(t *testing.T) {
+	k := p2pKeys(t, 2)
+	lens := map[int]bool{}
+	var first [][]byte
+	for i := 0; i < 8; i++ {
+		_, _, _, _, w, err := p2pPair(t, k[0], k[1], k[0].PublicKey().Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.mu.Lock()
+		lens[len(w.out)] = true
+		first = append(first, append([]byte(nil), w.out[:4]...))
+		w.mu.Unlock()
 	}
-	bob, err := ecdh.X25519().GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
+	if len(lens) < 2 {
+		t.Fatal("hello length is fixed")
 	}
-	shared, err := alice.ECDH(bob.PublicKey())
-	if err != nil {
-		t.Fatal(err)
+	for i := 1; i < len(first); i++ {
+		if !bytes.Equal(first[i], first[0]) {
+			return
+		}
 	}
-	src := net.IPv4(10, 8, 0, 2).To4()
-	nonce := bytes.Repeat([]byte{7}, 16)
-	buf := make([]byte, lftSize)
-	copy(buf[0:4], lftMagic[:])
-	copy(buf[4:8], src)
-	copy(buf[8:24], lftMAC(shared, nonce, src, 22))
-	copy(buf[24:40], nonce)
-	binary.BigEndian.PutUint16(buf[40:42], 22)
-
-	p2pKeyMu.Lock()
-	p2pKey = bob
-	p2pKeyMu.Unlock()
-	RememberVis(wire.Status{PeerHints: []wire.PeerHint{{IP: "10.8.0.2", Pub: alice.PublicKey().Bytes()}}})
-
-	c1, c2 := net.Pipe()
-	defer c1.Close()
-	defer c2.Close()
-	go func() { _, _ = c1.Write(buf) }()
-	port, src, ok := p2pReadHello(c2)
-	if !ok || port != 22 || src.String() != "10.8.0.2" {
-		t.Fatalf("port=%d src=%v ok=%v", port, src, ok)
-	}
+	t.Fatal("hellos share a fixed prefix")
 }
 
-func TestLFTRejectsForeignKey(t *testing.T) {
-	t.Cleanup(resetP2PKeyForTest)
-	t.Cleanup(func() { RememberVis(wire.Status{}) })
-	alice, err := ecdh.X25519().GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bob, err := ecdh.X25519().GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	eve, err := ecdh.X25519().GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	shared, err := eve.ECDH(bob.PublicKey())
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := net.IPv4(10, 8, 0, 2).To4()
-	nonce := bytes.Repeat([]byte{3}, 16)
-	buf := make([]byte, lftSize)
-	copy(buf[0:4], lftMagic[:])
-	copy(buf[4:8], src)
-	copy(buf[8:24], lftMAC(shared, nonce, src, 22))
-	copy(buf[24:40], nonce)
-	binary.BigEndian.PutUint16(buf[40:42], 22)
-
-	p2pKeyMu.Lock()
-	p2pKey = bob
-	p2pKeyMu.Unlock()
-	RememberVis(wire.Status{PeerHints: []wire.PeerHint{{IP: "10.8.0.2", Pub: alice.PublicKey().Bytes()}}})
-
-	c1, c2 := net.Pipe()
-	defer c1.Close()
-	defer c2.Close()
-	go func() { _, _ = c1.Write(buf) }()
-	if _, _, ok := p2pReadHello(c2); ok {
+func TestP2PRejectsForeignKey(t *testing.T) {
+	k := p2pKeys(t, 3) // alice, bob, eve
+	// eve claims 10.8.0.2, whose key in bob's hints is alice's.
+	if _, _, _, _, _, err := p2pPair(t, k[2], k[1], k[0].PublicKey().Bytes()); err == nil {
 		t.Fatal("accepted eve")
 	}
+}
+
+func TestP2PRejectsReplayAndOldHello(t *testing.T) {
+	k := p2pKeys(t, 2)
+	_, _, _, _, w, err := p2pPair(t, k[0], k[1], k[0].PublicKey().Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.mu.Lock()
+	hello := append([]byte(nil), w.out...)
+	w.mu.Unlock()
+	pubOf := func(string) []byte { return k[0].PublicKey().Bytes() }
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	go func() { c1.Write(hello); io.Copy(io.Discard, c1) }()
+	if _, _, _, err := p2pAcceptAs(c2, k[1], pubOf); err == nil {
+		t.Fatal("a recorded hello was accepted again")
+	}
+	c2.Close()
+
+	// A correct hello made two minutes ago.
+	e := p2pKeys(t, 1)[0]
+	es, _ := e.ECDH(k[1].PublicKey())
+	static, _ := k[0].ECDH(k[1].PublicKey())
+	old := p2pHelloMsg(e.PublicKey().Bytes(), es, static, []byte{10, 8, 0, 2}, 22, uint64(time.Now().Add(-2*p2pSkew).Unix()), nil)
+	c3, c4 := net.Pipe()
+	defer c3.Close()
+	go func() { c3.Write(old); io.Copy(io.Discard, c3) }()
+	if _, _, _, err := p2pAcceptAs(c4, k[1], pubOf); err == nil {
+		t.Fatal("a hello from two minutes ago was accepted")
+	}
+	c4.Close()
 }
 
 func TestP2PPermitDefaultDeny(t *testing.T) {
@@ -168,23 +215,5 @@ func TestTryP2PHonorsPolicy(t *testing.T) {
 	if c := tryP2P("10.8.0.5:22"); c != nil {
 		c.Close()
 		t.Fatal("denied dial")
-	}
-}
-
-func TestLFTRejectsOldMagic(t *testing.T) {
-	for _, mag := range []string{"LFT2", "LFT3"} {
-		buf := make([]byte, lftSize)
-		copy(buf[0:4], mag)
-		c1, c2 := net.Pipe()
-		go func() { _, _ = c1.Write(buf) }()
-		ok := false
-		func() {
-			defer c1.Close()
-			defer c2.Close()
-			_, _, ok = p2pReadHello(c2)
-		}()
-		if ok {
-			t.Fatalf("accepted %s", mag)
-		}
 	}
 }
