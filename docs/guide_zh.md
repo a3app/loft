@@ -161,6 +161,8 @@ export LOFT_TOKEN='long-secret'
 | `get_h2` | GET 的 HTTP/2 连接数，1–4（默认 1）。inflight 总数共用。 |
 | `fronts` | 空 = `get`。要 `ws`、`h2`、`quic`、`h3` 就列入。`connect` 是 mux-off 的 HTTP CONNECT 拼接；未列入则关。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报；未列入则关 |
 | `inner` | 节点可以确认的额外数据密码：`clear`、`aes`。空 = 仅 ChaCha20-Poly1305。ChaCha20-Poly1305 始终允许，不能关掉。`get` 不确认 `clear` 或 `aes`。重启后生效。SIGHUP 不重读 `node.conf`。 |
+| `cc` | 允许客户端请求的拥塞控制：`bbr`、`fixed`（`off` 或空 = 所有会话保持系统默认）。是否请求由各客户端决定；节点只负责允许。TCP 前置上的 `bbr` 切换节点自身的套接字（Linux，内核模块 `tcp_bbr`）；内核拒绝时会话保持默认。`fixed` 仅限 QUIC（`quic`、`h3`）。不经中继，不用于 `get`。重启后生效。 |
+| `cc_max UP DOWN` | `fixed` 的上限，Mbit/s：客户端可发送多快、节点向它发送多快。`0` = 不设上限。 |
 | `edge` | GET 预设 `plain` 或 `tight`（Status 字节 0 或 1）。`tight`：Cookie 预算 16 KiB，inflight 16，单次 6 秒。用于 origin 位于会丢掉过胖并发 HEADERS 突发的 CDN 或反向代理之后。默认 `plain`。 |
 | `decoy` | `host:port` 列表。第一条是节点身份。空 = 关 |
 | `decoy_proxy` | `enable`：每个 TCP 拼接先发一行带客户端地址的 PROXY v1。只用于自己的网页服务器（nginx `listen … proxy_protocol`）；公共网站会出错。默认关。不影响 UDP |
@@ -265,6 +267,8 @@ make probe
 | `select` | `auto` 或一条出站的名字 |
 | `fronts` | 额外过滤。空 = 出站类型（默认 GET） |
 | `inner` | 数据密码请求：`clear` 或 `aes`。空或 `chacha` 不写 Hello 字节（ChaCha20-Poly1305）。节点确认该标识，否则会话留在 ChaCha20-Poly1305。`get` 保持 ChaCha20-Poly1305。`loft-front -inner` 是同一字段。 |
+| `cc` | 拥塞控制请求：`off`（默认）、`bbr`、`fixed`。在会挑出异常流量的网络上请保持关闭。节点答复双方使用的方式；不允许的节点保持默认。 |
+| `cc_up_mbps`、`cc_down_mbps` | 用于 `fixed`：本客户端发送多快、能接收多快，Mbit/s。请设为线路实际速度：固定速率在丢包时不会降速。`0` 使该方向保持默认。 |
 | `bootstrap` | 名册清单的 HTTPS URL，认证之前 |
 | `controller_pub` | 32 字节 Ed25519（64 hex）。接名册和地址列表必须有 |
 | `tofu` | `true` 在 `controller_pub` 空时钉住第一个有效签名者（默认关） |

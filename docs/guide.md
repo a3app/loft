@@ -161,6 +161,8 @@ export LOFT_TOKEN='long-secret'
 | `get_h2` | GET HTTP/2 connections, 1–4 (default 1). Total inflight is shared across them. |
 | `fronts` | Empty = `get`. List `ws`, `h2`, `quic`, `h3` to opt in. `connect` is mux-off HTTP CONNECT splice; off unless listed. `l3` is HTTP/2 CONNECT then IP datagrams; off unless listed |
 | `inner` | Extra data ciphers the node may confirm: `clear`, `aes`. Empty = ChaCha20-Poly1305 only. ChaCha20-Poly1305 stays allowed and cannot be disabled. `get` never confirms `clear` or `aes`. A restart applies it. SIGHUP does not re-read `node.conf`. |
+| `cc` | Congestion control clients may ask for: `bbr`, `fixed` (`off` or empty = every session stays on the system default). Each client decides whether to ask; the node only allows. `bbr` on TCP fronts switches the node's own socket (Linux, kernel module `tcp_bbr`); if the kernel refuses, the session stays on the default. `fixed` is QUIC only (`quic`, `h3`). Not through a relay, not on `get`. A restart applies it. |
+| `cc_max UP DOWN` | `fixed` caps in Mbit/s: how fast a client may send and how fast the node sends to it. `0` = no cap. |
 | `edge` | GET preset `plain` or `tight` (Status byte 0 or 1). `tight`: Cookie budget 16 KiB, 16 inflight, 6 s trip. For an origin behind a CDN or reverse proxy that drops a fat concurrent HEADERS burst. Default `plain`. |
 | `decoy` | `host:port` list. First entry is the node identity. Empty = off |
 | `decoy_proxy` | `enable`: each TCP splice starts with a PROXY v1 line carrying the client address. Only for your own web server (nginx `listen … proxy_protocol`); a public site would break. Default off. UDP is not affected |
@@ -265,6 +267,8 @@ make probe
 | `select` | `auto` or an outbound name |
 | `fronts` | Extra filter. Empty = outbound types (stock is GET) |
 | `inner` | Data-cipher ask: `clear` or `aes`. Empty or `chacha` omits the Hello byte (ChaCha20-Poly1305). The node confirms that id or the session stays on ChaCha20-Poly1305. `get` stays ChaCha20-Poly1305. `loft-front -inner` is this field. |
+| `cc` | Congestion control ask: `off` (default), `bbr`, `fixed`. Leave it off on a network that singles out unusual traffic. The node answers with what both sides use; a node that does not allow it keeps the default. |
+| `cc_up_mbps`, `cc_down_mbps` | For `fixed`: how fast this client sends and how fast it can receive, Mbit/s. Set them to the real line speed: fixed rate does not slow down on loss. `0` leaves that direction on the default. |
 | `bootstrap` | HTTPS URL of the roster manifest, before auth |
 | `controller_pub` | 32-byte Ed25519 (64 hex). Required to accept a roster and address lists |
 | `tofu` | `true` pins the first valid signer when `controller_pub` is empty (default off) |

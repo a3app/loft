@@ -315,11 +315,12 @@ u8    program_len || program
 u8    software_len || software
 u8    inner            optional. One byte only when the client asks
 u8    pin_len || controller_pin   optional after inner
+u8    cc || u32be cc_up || u32be cc_down   optional after controller_pin
 ```
 
 `instance_id` persists on the client. Empty means the node mints one in Status; the client MUST store it. Strings ≤ 64 bytes. Protocol version is `major<<8|minor` (`0x0100` = 1.0). Cap `relay` marks a relay trunk. Cap `p2p` marks a client that will announce a listen port.
 
-An old blob without proto/caps still decodes. Trailing unknown bytes MUST be ignored. When one byte remains after `software`, it is the data-cipher ask (§4.3): `0` clear, `2` AES-256-GCM. Absence is not `0`. `controller_pin` is the first 8 bytes of SHA-256 of the controller public key the client trusts now (§10.4); a client that sends it and asks no cipher writes `inner` = `1`. The node uses it only to count who has moved to a new key during a key roll; it grants nothing. Further bytes MUST be ignored. An old decoder ignores the ask and stays on ChaCha20-Poly1305.
+An old blob without proto/caps still decodes. Trailing unknown bytes MUST be ignored. When one byte remains after `software`, it is the data-cipher ask (§4.3): `0` clear, `2` AES-256-GCM. Absence is not `0`. `controller_pin` is the first 8 bytes of SHA-256 of the controller public key the client trusts now (§10.4); a client that sends it and asks no cipher writes `inner` = `1`. The node uses it only to count who has moved to a new key during a key roll; it grants nothing. `cc` is the congestion control ask (§5.4); a client that sends it writes `inner` and `pin_len` (0 when it pins nothing) first. Further bytes MUST be ignored. An old decoder ignores the ask and stays on ChaCha20-Poly1305.
 
 ### 5.2 Status
 
@@ -363,6 +364,7 @@ Fields in order:
 | edge | optional after fronts: u8 GET preset. `0` plain, omitted when `inner` is also absent. `1` tight. A present `inner` forces this byte even when it is `0`, and forces `fronts` (n MAY be 0) so the next byte is not read as `edge`. Old clients ignore the extra byte. |
 | inner | optional after edge: u8 data cipher for records after this Status. The node writes it only when Hello asked, the policy allows that id, and the front that completed `0x02` is not `get`. `0` no inner AEAD. `1` ChaCha20-Poly1305, the same as omitting the byte; a node MAY omit `1`. `2` AES-256-GCM. Absence, an unknown id, or a refused ask is ChaCha20-Poly1305, and the session still comes up. Handshake Seal of this Status is ChaCha20-Poly1305 either way. Old clients ignore the extra byte. |
 | key_roll | optional after inner: u16be len \|\| bytes, a KeyRoll (§10.4) while the controller signing key changes. When it is present and no data cipher was negotiated, `inner` is `1` (ChaCha20-Poly1305), which changes nothing. |
+| cc, cc_up, cc_down | optional after key_roll: u8, u32be, u32be. The congestion control both sides use (§5.4) and, for `2`, the two rates in kbit/s. Present only when `cc` is not `0`; `key_roll` is then written with length 0 when there is none. Old clients ignore the extra bytes. |
 
 Selected protocol is the maximum of the intersection of the two ranges. Empty intersection yields code `protocol` (0x0203) and no mux.
 
@@ -404,6 +406,14 @@ Selected protocol is the maximum of the intersection of the two ranges. Empty in
 A node that disables a front MUST clear that bit. A client that will not use a front MUST clear it. SOCKS, TUN, CDN vendor, OS, git, and origin hostnames are not capabilities. Bits 30–63 have no name in this revision (§13.1).
 
 Version negotiation: `max(intersection(client.min..client.max, node.min..node.max))`. Caps in Status are the node’s advertised set. The client decides which of those it uses.
+
+### 5.4 Congestion control
+
+Congestion control is how a sender paces its bytes when the path loses packets. It changes no byte on the wire, only the sender's timing, so each side applies it to what it sends. Ids: `0` system default (the kernel's on TCP, the QUIC implementation's on QUIC), `1` BBR, `2` fixed rate. Ids `3`–`255` are unassigned; an unknown ask is answered with `0`.
+
+The client asks in Hello; `cc_up` and `cc_down` are, for `2`, the rates it wants to send and can receive, in kbit/s, and are otherwise 0. The node answers in Status with the id both sides use. It MUST answer `0` when the client asked `0`, when its own policy does not allow the id, on `get`, and when it cannot switch the transport under this session (for example a session that reached it through a relay trunk). Fixed rate applies only to `quic` and `h3`; on any other front the node MAY answer an ask for `2` with `1`. For `2` the node MAY lower either rate to its own cap and MUST NOT raise it; a rate of `0` leaves that direction on `0`. A fixed-rate ask without rates MAY be answered with `1`.
+
+After Status, on `1` each side SHOULD pace what it sends with BBR where its platform allows; a side that cannot keeps its default, and the session is not affected. On `2` the node sends at `cc_down` and the client at `cc_up`, and neither reduces its rate on packet loss; flow control still holds. Off is the default on both sides. A client MAY keep it off on a network that treats unusual pacing as a signal (§11.7).
 
 ---
 
@@ -671,6 +681,8 @@ The signed roster is a public file on a CDN path. Anyone who can GET that path c
 Hub isolation is Reset `policy_drop` on member-to-member Open. Mesh splices through the node. P2P is an optional TCP attempt using the TLS-observed host; NAT and relays make that attempt fail, after which hub splice is used. Direct P2P uses Status policy for the same ACL as the node. The controller holds member key hashes, leases, and overlay addresses. Other members learn a peer’s overlay IP when they Open it (mesh/vlan). With `p2p` on, Status peer hints also carry the TLS-observed host, listen port, and X25519 public key. Direct TCP is sealed and authenticated with the pair secret (§9); none of its bytes is fixed. `session_ttl_ms` is a live-session maximum; `lease_sec` is IP hold after disconnect. A fresh `0x02` with the same `instance_id` starts a new TTL.
 
 ### 11.7 Outside this protocol
+
+Congestion control (§5.4) is visible in timing: a sender that keeps its rate under loss, or paces unlike the operating system around it, can stand out. Off is the default, and a client decides for itself whether to ask.
 
 A TLS middlebox that already holds the member key is not addressed. A path on which no permitted destination exists is not addressed. A TLS terminator that also holds the inner overlay key sees mux plaintext. A direct front that negotiated clear shows mux plaintext to its TLS terminator without that key. Those cases are outside the protocol.
 
