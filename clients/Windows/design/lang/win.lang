@@ -1,0 +1,58 @@
+// Windows strings that differ from the shared macOS packs (../../macOS/lang).
+// Lookup: WIN_PACKS[lang] → WIN_PACKS.en → macOS pack. A key that exists here
+// in English only shows English in the other languages until translated.
+var WIN_PACKS = {};
+
+WIN_PACKS["en"] = {
+  "board.sub": "Tray agent. Windows 7 and later, the same look on every version.",
+  "nav.off": "Tray · closed",
+  "nav.on": "Tray · open",
+  "nav.err": "Tray · error",
+  "nav.hold": "Tray · route",
+  "nav.switch": "Tray · switch",
+  "nav.traymenu": "Tray · menu",
+  "dock": "Taskbar button",
+  "dock_d": "The tray icon stays.",
+  "login": "Start with Windows",
+  "login_d": "In the tray, no window",
+  "diag_d": "Routes, DNS, the loft service. Rotating file.",
+  "upd.offer.body": "Download and run the installer.",
+  "win.min": "Minimize",
+  "win.close": "Close"
+};
+
+WIN_PACKS["ru"] = {
+  "board.sub": "Агент в трее. Windows 7 и новее, на всех версиях один вид.",
+  "nav.off": "Трей · закрыто",
+  "nav.on": "Трей · открыто",
+  "nav.err": "Трей · ошибка",
+  "nav.hold": "Трей · маршрут",
+  "nav.switch": "Трей · смена",
+  "nav.traymenu": "Трей · меню",
+  "dock": "Кнопка на панели задач",
+  "dock_d": "Значок в трее остаётся.",
+  "login": "Запускать вместе с Windows",
+  "login_d": "В трее, без окна",
+  "diag_d": "Маршруты, DNS, служба loft. Файл с ротацией.",
+  "upd.offer.body": "Скачать и запустить установщик.",
+  "win.min": "Свернуть",
+  "win.close": "Закрыть"
+};
+
+WIN_PACKS["zh"] = {
+  "board.sub": "托盘代理。Windows 7 及更高版本，各版本外观一致。",
+  "nav.off": "托盘 · 关闭",
+  "nav.on": "托盘 · 打开",
+  "nav.err": "托盘 · 错误",
+  "nav.hold": "托盘 · 路由",
+  "nav.switch": "托盘 · 切换",
+  "nav.traymenu": "托盘 · 菜单",
+  "dock": "任务栏按钮",
+  "dock_d": "托盘图标始终保留。",
+  "login": "随 Windows 启动",
+  "login_d": "在托盘中，不打开窗口",
+  "diag_d": "路由、DNS、loft 服务。轮转文件。",
+  "upd.offer.body": "下载并运行安装程序。",
+  "win.min": "最小化",
+  "win.close": "关闭"
+};

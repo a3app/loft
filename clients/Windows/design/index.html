@@ -1,0 +1,2331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — Windows client</title>
+  <script>if (/[?&]capture=/.test(location.search)) document.documentElement.classList.add("capture");</script>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --ink-2: #241f1b;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      --mono: Consolas, "SF Mono", ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      height: 100%;
+    }
+    html { scrollbar-width: none; }
+    html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; }
+    html.capture, html.capture body {
+      display: block; overflow: hidden; background: #1A1714; height: auto;
+    }
+    html.capture nav, html.capture .taskbar, html.capture .titlebar { display: none !important; }
+    html.capture .stage-wrap { padding: 0; display: block; }
+    html.capture .desktop {
+      width: auto; aspect-ratio: auto; max-height: none;
+      border-radius: 0; box-shadow: none; background: #1A1714; overflow: hidden;
+    }
+    html.capture .desktop-body { position: static; }
+    html.capture .win {
+      position: relative; left: auto; top: auto; transform: none;
+      border: 0; border-radius: 0; box-shadow: none; background: #1A1714;
+    }
+    html.capture .win.main { height: 476px; }
+    html.capture .win.conns { height: 496px; }
+    html.capture .win.main .body { padding-top: 16px; }
+    html.capture .win.conns .body { padding-top: 16px; }
+    html.capture .popover, html.capture .tray-menu { display: none; }
+
+    /* ── board chrome ── */
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+    }
+    nav::-webkit-scrollbar { width: 0; height: 0; }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 18px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav button {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 5px 10px; border-radius: 8px; cursor: pointer;
+    }
+    nav button:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang {
+      display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 8px 10px;
+    }
+    .lang button {
+      flex: 1 1 28%; min-width: 36px; text-align: center; padding: 6px 0; font-weight: 600;
+      letter-spacing: 0.04em; font-size: 11px;
+    }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage-wrap {
+      padding: 28px; display: flex; align-items: center; justify-content: center;
+      min-height: 0; overflow: hidden;
+    }
+    .desktop {
+      width: min(1080px, 100%);
+      aspect-ratio: 16 / 10;
+      max-height: calc(100vh - 56px);
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      background:
+        radial-gradient(1200px 500px at 70% -10%, #3a2a1c 0%, transparent 55%),
+        radial-gradient(800px 600px at 10% 120%, #1c1814 0%, transparent 50%),
+        linear-gradient(180deg, #2a221c 0%, #12100e 70%);
+      box-shadow: 0 40px 80px rgba(0,0,0,.45);
+    }
+    /* Taskbar of the host OS: only a backdrop for the tray icon. Neutral on purpose. */
+    .taskbar {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
+      display: flex; align-items: center; gap: 4px; padding: 0 6px;
+      background: rgba(14,12,11,.92);
+      border-top: 1px solid rgba(255,255,255,.06);
+      color: #f4efe8; font-size: 12px; user-select: none; z-index: 30;
+    }
+    .taskbar .tb-start, .taskbar .tb-app {
+      width: 40px; height: 32px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .taskbar .tb-start i { width: 16px; height: 16px; border-radius: 3px; background: #5a514a; display: block; }
+    .taskbar .tb-app i { width: 18px; height: 18px; border-radius: 4px; background: #3a332e; display: block; }
+    .taskbar .tb-app.loft { position: relative; background: rgba(255,255,255,.08); cursor: pointer; }
+    .taskbar .tb-app.loft::after {
+      content: ""; position: absolute; left: 12px; right: 12px; bottom: 1px;
+      height: 2px; border-radius: 1px; background: var(--lamp);
+    }
+    .taskbar .tb-app.loft svg { width: 20px; height: 20px; }
+    .taskbar .tray { margin-left: auto; display: flex; align-items: center; gap: 2px; height: 100%; }
+    .taskbar .tray > span {
+      height: 32px; min-width: 28px; padding: 0 6px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .taskbar .tray .tray-loft { cursor: pointer; }
+    .taskbar .tray > span:hover, .taskbar .tray .tray-loft.open { background: rgba(255,255,255,.1); }
+    .taskbar .tray svg { display: block; }
+    .taskbar .tray .clock { flex-direction: column; line-height: 1.25; font-size: 11.5px; text-align: center; padding: 0 8px; }
+    .taskbar .tray .kb { font-size: 11px; letter-spacing: .04em; }
+    .tray-mark .tb { fill: var(--copper); }
+    .tray-mark .tl { fill: var(--copper); }
+    .tray-mark.on .tl { fill: var(--lamp); }
+    .tray-mark.err .tl { fill: var(--err); }
+
+    /* tray context menu (right click) */
+    .tray-menu {
+      position: absolute; right: 96px; bottom: 8px; min-width: 232px;
+      background: #2a2420; border: 1px solid #3a332e; border-radius: 8px;
+      padding: 6px 0; z-index: 40; box-shadow: 0 12px 32px rgba(0,0,0,.4);
+      color: #f4efe8;
+    }
+    .tray-menu button {
+      display: flex; justify-content: space-between; align-items: center; gap: 24px;
+      width: 100%; text-align: left; background: none; border: 0;
+      color: #f4efe8; font: 500 13px var(--ui); padding: 6px 16px; cursor: pointer;
+    }
+    .tray-menu button:hover, .tray-menu .tm-sub.open > button { background: var(--lamp); color: var(--ink); }
+    .tray-menu button.tm-head { font-weight: 600; }
+    .tray-menu hr { border: 0; border-top: 1px solid #3a332e; margin: 4px 0; }
+    .tray-menu .mi-row { display: inline-flex; align-items: center; gap: 8px; }
+    .tray-menu .mi { width: 14px; height: 14px; flex: none; opacity: .9; }
+    .tray-menu .chk {
+      width: 14px; height: 14px; flex: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; line-height: 1;
+    }
+    .tray-menu .tm-sub { position: relative; }
+    .tray-menu .sub-arr { opacity: .45; font-size: 12px; }
+    .tray-menu .tm-sub > .tray-menu {
+      display: none; right: calc(100% + 2px); left: auto; bottom: auto; top: -6px; min-width: 200px;
+    }
+    .tray-menu .tm-sub:hover > .tray-menu, .tray-menu .tm-sub.open > .tray-menu { display: block; }
+    .tray-menu .st { color: var(--mute); font-size: 12px; }
+    .tray-menu button:hover .st { color: var(--ink); }
+
+    .desktop-body { position: absolute; inset: 0 0 40px 0; }
+
+    /* ── windows ── */
+    .win, .popover {
+      scrollbar-width: none;
+    }
+    .win::-webkit-scrollbar, .popover::-webkit-scrollbar { width: 0; height: 0; }
+    .win {
+      position: absolute;
+      background: var(--ink);
+      border: 1px solid #2e2824;
+      border-radius: 8px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04) inset;
+      overflow: hidden;
+      color: var(--snow);
+    }
+    .win.light {
+      background: #f6f1ea;
+      color: var(--ink);
+      border-color: #e2d8cc;
+    }
+    /* Own title bar: drawn by the app, so Windows 7, 10 and 11 look the same. */
+    .titlebar {
+      display: flex; align-items: center; height: 32px; padding-left: 12px;
+      user-select: none;
+    }
+    .titlebar .tmark { width: 16px; height: 16px; flex: none; }
+    .titlebar .ttl { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--stone); letter-spacing: -0.01em; }
+    .titlebar .caps { margin-left: auto; display: flex; align-self: stretch; }
+    .titlebar .caps button {
+      width: 46px; border: 0; background: none; color: var(--stone);
+      display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+    }
+    .titlebar .caps button:hover { background: rgba(255,255,255,.08); color: var(--snow); }
+    .titlebar .caps button.x:hover { background: #C42B1C; color: #fff; }
+    .titlebar .caps svg { width: 10px; height: 10px; }
+    /* Header buttons (Reset routes, QR) hug their label; the macOS mock stretches them. */
+    .head-row > .btn { width: auto; }
+    .win h1 {
+      margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.04em;
+    }
+    .muted { color: var(--mute); }
+    .win.light .muted { color: #8a7e72; }
+
+    /* popover */
+    .popover {
+      position: absolute;
+      bottom: 8px; right: 12px;
+      width: 300px;
+      z-index: 6;
+      background: #201c19;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.45);
+      color: var(--snow);
+      padding: 14px 14px 10px;
+    }
+    .popover.light {
+      background: rgba(246,241,234,.94);
+      color: var(--ink);
+      border-color: rgba(0,0,0,.06);
+    }
+    .pop-head { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .pop-head .mark { width: 36px; height: 36px; flex: none; }
+    .pop-head .who { min-width: 0; flex: 1; }
+    .pop-head .t { font-weight: 600; letter-spacing: -0.03em; font-size: 13px; }
+    .pop-head .s { font-size: 12px; color: var(--mute); display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .pop-head .s span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pop-rate { margin-left: auto; text-align: right; font-size: 11.5px; color: var(--mute); line-height: 1.35; flex: none; }
+    .lamp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mute); flex: none; }
+    .lamp-dot.on { background: var(--lamp); }
+    .lamp-dot.err { background: var(--err); }
+    .btn {
+      width: 100%; border: 0; border-radius: 10px;
+      padding: 11px 14px; font: 600 14px var(--ui);
+      letter-spacing: -0.02em; cursor: pointer;
+      transition: filter 0.08s ease, transform 0.08s ease;
+    }
+    .btn:active {
+      filter: brightness(0.78);
+      transform: scale(0.96);
+    }
+    .btn.connect { background: var(--slate); color: var(--snow); }
+    .btn.connect.on { background: var(--lamp); color: var(--ink); }
+    .btn.ghost { background: transparent; color: var(--mute); font-weight: 500; font-size: 12.5px; }
+    .rows { margin: 12px 0 4px; }
+    .row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12.5px; padding: 6px 2px;
+    }
+    .row .k { color: var(--mute); }
+    .row .v { font-family: var(--mono); font-size: 11.5px; }
+    .spark { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--mute); padding: 8px 2px 4px; }
+    .spark .err { color: var(--err); }
+    .pop-foot {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px;
+    }
+    .pop-foot a, .pop-foot button {
+      color: var(--stone); text-decoration: none; font: 500 12.5px var(--ui);
+      background: none; border: 0; padding: 4px 0; cursor: pointer;
+    }
+    .pop-foot .left { justify-self: start; }
+    .pop-foot .mid { justify-self: center; }
+    .pop-foot .right { justify-self: end; }
+    .row .k { display: inline-flex; align-items: center; gap: 6px; }
+    .conn-menu {
+      position: absolute;
+      right: 324px;
+      bottom: 8px;
+      min-width: 220px;
+      background: #2a2420;
+      border: 1px solid #3a332e;
+      border-radius: 8px;
+      padding: 6px 0;
+      z-index: 8;
+      box-shadow: 0 12px 32px rgba(0,0,0,.4);
+    }
+    .conn-menu button {
+      display: flex; justify-content: space-between; align-items: center; gap: 16px;
+      width: 100%; text-align: left; background: none; border: 0;
+      color: var(--snow); font: 500 13px var(--ui); padding: 6px 16px; cursor: pointer;
+    }
+    .conn-menu button:hover { background: var(--lamp); color: var(--ink); }
+    .win.journal {
+      width: 520px; height: 480px;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      display: flex; flex-direction: column;
+    }
+    .win.journal .body { padding: 8px 20px 0; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+    .win.journal h1 { text-align: center; margin: 0 0 4px; font-size: 1.25rem; }
+    .win.journal .sub { text-align: center; color: var(--mute); font-size: 12px; margin: 0 0 10px; line-height: 1.35; }
+    .win.journal .log {
+      flex: 1; min-height: 0; overflow: auto;
+      background: #211c19; border-radius: 12px;
+      padding: 10px 12px; font: 11px var(--mono); color: var(--snow);
+      white-space: pre-wrap; line-height: 1.45;
+    }
+    .win.journal .log.empty { color: var(--mute); }
+    .win.journal .jfoot {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 0 18px;
+    }
+    .win.journal .jfoot button {
+      background: none; border: 0; color: var(--mute);
+      font: 500 12.5px var(--ui); cursor: pointer; padding: 4px 8px;
+    }
+    .port-field {
+      width: 80px; text-align: center; margin: 0; padding: 7px 8px;
+    }
+    .url-field { width: 100%; margin: 8px 0 0; padding: 8px 12px; }
+    .head-plus {
+      width: 22px; height: 22px; border: 0; border-radius: 7px;
+      background: var(--lamp); color: var(--ink);
+      font: 700 16px var(--ui); line-height: 1; cursor: pointer; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex: none;
+    }
+    .head-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+    /* main window */
+    .main {
+      width: 400px; height: 500px;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+    }
+    .main.aside {
+      left: 38%;
+    }
+    .win.main.simple, .win.conns.simple {
+      height: auto;
+      max-height: calc(100% - 24px);
+    }
+    .win.main.simple .body { padding-bottom: 22px; }
+    .foot {
+      margin-top: 18px; font-size: 11.5px; color: var(--mute); text-align: center;
+    }
+    .win.main { display: flex; flex-direction: column; }
+    .win.main .body {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+      padding: 8px 22px 0;
+    }
+    .win.main .actions {
+      margin: auto -22px 0;
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--line);
+      flex-shrink: 0;
+      gap: 6px;
+    }
+    .win.main .actions .btn { flex: 1; padding: 8px 6px; font-size: 11.5px; }
+    .hero {
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; padding: 12px 0 18px;
+    }
+    .hero .mark { width: 72px; height: 72px; margin-bottom: 10px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11.5px; color: var(--mute);
+      background: #211c19; border-radius: 99px; padding: 4px 10px; margin-top: 8px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mute); }
+    .dot.on { background: var(--lamp); box-shadow: 0 0 8px var(--lamp); }
+    .dot.err { background: var(--err); box-shadow: 0 0 8px var(--err); }
+    .stats {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+      margin: 16px 0;
+    }
+    .stat {
+      background: #211c19; border-radius: 10px; padding: 10px 10px 8px;
+    }
+    .stat .k { font-size: 10.5px; color: var(--mute); text-transform: uppercase; letter-spacing: .06em; }
+    .stat .v { font-family: var(--mono); font-size: 12px; margin-top: 4px; }
+    .list { margin-top: 6px; }
+    .item {
+      display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
+      padding: 10px 10px; border-radius: 10px; cursor: pointer;
+    }
+    .item:hover { background: #211c19; }
+    .item .n { font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; }
+    .item .u { font-size: 11.5px; color: var(--mute); font-family: var(--mono); }
+    .item .tag { font-size: 10.5px; color: var(--stone); align-self: center; }
+    .item.live { background: #211c19; }
+    .item.live .tag { color: var(--lamp); }
+    .item.err .tag, .item .u.err { color: var(--err); }
+
+    /* onboarding */
+    .onb {
+      width: 440px; height: 520px;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+    }
+    .onb.tall { height: 580px; }
+    .onb .body { padding: 8px 36px 28px; text-align: center; }
+    .onb .mark { display: block; width: 64px; height: 64px; margin: 8px auto 12px; }
+    .onb p { color: var(--mute); font-size: 13.5px; line-height: 1.5; }
+    .field {
+      width: 100%; margin: 18px 0 8px;
+      background: #211c19; border: 1px solid #3a332e; border-radius: 10px;
+      padding: 12px 14px; color: var(--snow); font: 500 14px var(--mono);
+      outline: none;
+    }
+    .field:focus { border-color: var(--lamp); }
+    .hint { font-size: 12px; color: var(--mute); text-align: left; }
+    .steps { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); margin-bottom: 6px; }
+    .label { font-size: 11.5px; color: var(--mute); text-align: left; margin: 14px 0 6px; }
+    .seg { display: flex; gap: 6px; }
+    .seg button {
+      flex: 1; border: 1px solid #3a332e; background: #211c19; color: var(--stone);
+      border-radius: 9px; padding: 9px 8px; font: 600 12.5px var(--ui); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .seg button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
+    .rate-bits { display: flex; flex-direction: column; gap: 4px; }
+    .rate-bits button {
+      min-width: 72px; padding: 3px 8px; font: 600 11px var(--ui);
+      border-radius: 7px; border: 1px solid #3a332e; background: #211c19;
+      color: var(--stone); cursor: pointer;
+    }
+    .rate-bits button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
+    .loft-select {
+      appearance: none; -webkit-appearance: none;
+      min-width: 168px; max-width: 200px;
+      background: #211c19 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path fill='%238A7E72' d='M0 0l5 6 5-6z'/></svg>") no-repeat right 10px center;
+      color: var(--snow); border: 1px solid #3a332e; border-radius: 10px;
+      padding: 7px 28px 7px 12px; font: 600 12.5px var(--ui); cursor: pointer;
+    }
+    .loft-select.wide {
+      display: block; width: 100%; min-width: 0; max-width: none;
+      padding: 9px 28px 9px 12px; margin: 0;
+    }
+    .split-zone { margin: 0 0 8px; }
+    .split-zone .label { margin: 4px 0 6px; }
+    .split-zone-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .split-zone-head .label { margin: 4px 0 6px; }
+    .split-zone-head .ghost-sm { margin: 0; padding: 0; color: var(--lamp); font-weight: 600; }
+    .field.sm:disabled { opacity: .55; cursor: default; }
+    .field.sm { margin: 0; padding: 10px 12px; font-size: 13px; }
+    .repo-row { display: flex; gap: 8px; align-items: stretch; }
+    .repo-row .field { flex: 1; min-width: 0; width: auto; }
+    .repo-row .pick {
+      flex: 0 0 auto; margin: 0; padding: 0 14px;
+      border: 1px solid #3a332e; background: #211c19; color: var(--snow);
+      border-radius: 10px; font: 600 12.5px var(--ui); cursor: pointer;
+    }
+    .repo-row .pick:hover { border-color: var(--lamp); color: var(--lamp); }
+    .btn.back { background: transparent; color: var(--mute); font-weight: 500; margin-top: 8px; }
+
+    /* settings */
+    .sheet {
+      width: 440px; height: auto; max-height: calc(100% - 24px);
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .sheet .body { padding: 0 22px 12px; }
+    .sheet h1 { margin: 14px 0 8px; font-size: 1.2rem; }
+    .sheet .head-row { margin: 14px 0 8px; align-items: center; }
+    .sheet .head-row h1 { margin: 0; line-height: 28px; }
+    .sheet .head-row .btn { height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; }
+    .pref { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .pref .n { font-size: 13.5px; }
+    .pref .d { font-size: 11.5px; color: var(--mute); line-height: 1.3; max-width: 280px; }
+    .pref .ghost-sm { margin: 8px 0 0; padding: 0; color: var(--lamp); font-weight: 600; }
+    .pref-group {
+      font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--mute); font-weight: 600; margin: 8px 0 0;
+    }
+    .sheet-foot { padding-top: 10px; margin-top: 4px; }
+    .pref.pick { cursor: pointer; }
+    .pref .chev { color: var(--mute); font-size: 16px; }
+
+    .win.split {
+      width: 440px; height: 600px; max-height: calc(100% - 24px);
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      display: flex; flex-direction: column;
+    }
+    .win.split .body {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+      padding: 4px 20px 0;
+    }
+    .win.split h1 { margin: 4px 0 2px; font-size: 1.2rem; }
+    .split-sub { font-size: 12.5px; color: var(--mute); margin: 0 0 6px; }
+    .split-native { font: 500 11.5px var(--mono); color: var(--stone); margin: 0 0 10px; }
+    .split-policy { font-size: 12.5px; color: var(--mute); margin: 0 0 8px; }
+    .split-list.dim { opacity: .4; }
+    .split-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+    .split-tabs button {
+      flex: 1; border: 1px solid #3a332e; background: #211c19; color: var(--stone);
+      border-radius: 9px; padding: 7px 8px; font: 600 12px var(--ui); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 6px; line-height: 1;
+    }
+    .split-tabs button.on { background: var(--lamp); color: var(--ink); border-color: var(--lamp); }
+    .split-tabs button .n { font-weight: 500; opacity: .7; }
+    .split-list { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; }
+    .split-list::-webkit-scrollbar { width: 0; height: 0; }
+    .rrow {
+      display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
+      padding: 8px 4px; border-bottom: 1px solid var(--line);
+      align-items: center; cursor: pointer;
+    }
+    .rrow.live { background: #211c19; border-radius: 8px; margin: 0 -4px; padding-left: 8px; padding-right: 8px; }
+    .rrow.live .n { color: var(--lamp); }
+    .rrow .n { font-size: 13.5px; font-weight: 600; }
+    .rrow .u { font-size: 11.5px; color: var(--mute); font-family: var(--mono); }
+    .rrow .meta { text-align: right; font-size: 11px; color: var(--mute); }
+    .rrow .src { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--copper); }
+    .split-def { margin: 0 0 8px; }
+    .split-def .label { margin: 2px 0 6px; }
+    .split-search { margin: 0 0 8px; padding: 8px 12px; font-size: 13px; }
+    .win.split .actions {
+      margin: auto -20px 0;
+      padding: 12px 20px 14px;
+      border-top: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .fmt {
+      font-family: var(--mono); font-size: 11px; background: #211c19;
+      border-radius: 8px; padding: 10px 12px; margin: 10px 0; text-align: left;
+      white-space: pre-wrap; line-height: 1.45; color: var(--stone);
+    }
+    .route-tag {
+      display: inline-block; margin-left: 6px;
+      font-size: 10px; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--lamp); vertical-align: 1px;
+    }
+    .pop-badge {
+      display: inline-block; margin-left: 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--ink); background: var(--lamp);
+      border-radius: 3.5px; padding: 2px 7px; vertical-align: middle; line-height: 1.15;
+    }
+    .toggle { width: 36px; height: 22px; border-radius: 11px; background: #3a332e; position: relative; transition: background-color .2s ease; }
+    .toggle.on { background: var(--lamp); }
+    .toggle i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .2s ease; }
+    .toggle.on i { left: 16px; }
+
+    .about {
+      width: 360px; height: 448px; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      text-align: center; display: flex; flex-direction: column;
+    }
+    .about .body {
+      padding: 8px 32px 14px;
+      display: flex; flex-direction: column;
+      min-height: 0; flex: 1;
+    }
+    .about .mark { width: 72px; height: 72px; margin: 8px auto 10px; }
+    .about .ver { margin: 2px 0 0; font-size: 12.5px; color: var(--mute); }
+    .about .spec-cap {
+      margin: 24px 0 8px; font-size: 11px; line-height: 1.45; color: var(--mute); font-weight: 500;
+    }
+    .about .spec {
+      display: grid; grid-template-columns: auto 1fr; gap: 3px 10px;
+      width: 100%; margin: 0; box-sizing: border-box;
+      text-align: left; font-size: 12.5px;
+    }
+    .about .spec .k { color: var(--mute); text-align: right; }
+    .about .spec .v { font-family: var(--mono); font-size: 12px; }
+    .about .blurb {
+      margin: 16px 0 0; font-size: 13.5px; line-height: 1.45;
+      letter-spacing: -0.02em; color: var(--stone); font-weight: 500;
+    }
+    .about .upd-slot {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+    }
+    .about .upd { margin: 0; }
+    .about .madeby {
+      margin-top: 0; font-size: 12px; font-weight: 500;
+      color: var(--mute); letter-spacing: -0.01em;
+    }
+    .about .madeby .heart {
+      color: var(--lamp); vertical-align: -1px; margin: 0 3px;
+    }
+    .about .madeby sup { font-size: 0.65em; }
+
+    .offer {
+      width: 360px; height: auto;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .offer .body { padding: 8px 28px 22px; }
+    .offer h1 { margin: 8px 0 10px; font-size: 1.2rem; }
+    .offer p { color: var(--mute); font-size: 13.5px; line-height: 1.45; margin: 0 0 16px; }
+    .offer .btn.connect { margin: 0; }
+    .offer .btn.ghost { margin-top: 8px; }
+    .offer .quiet {
+      display: flex; gap: 10px; align-items: flex-start;
+      text-align: left; margin-top: 16px; cursor: pointer;
+    }
+    .offer .quiet .n { font-size: 13px; color: var(--snow); }
+    .offer .quiet .d { font-size: 11.5px; color: var(--mute); line-height: 1.3; }
+    .loft-check {
+      width: 18px; height: 18px; border-radius: 4px;
+      background: var(--slate); flex-shrink: 0; margin-top: 1px;
+      position: relative;
+    }
+    .loft-check.on { background: var(--lamp); }
+    .loft-check.on::after {
+      content: "";
+      position: absolute;
+      left: 5px; top: 3px;
+      width: 4px; height: 8px;
+      border-right: 1.6px solid var(--ink);
+      border-bottom: 1.6px solid var(--ink);
+      transform: rotate(40deg);
+    }
+
+    .hide { display: none !important; }
+
+    /* mark */
+    .mark .body { fill: #B7A99A; }
+    .mark .lamp { fill: #3A332E; }
+    .mark.on .lamp { fill: var(--lamp); }
+    .mark.err .lamp { fill: var(--err); }
+    .mark.ink .body { fill: var(--ink); }
+    .mark.ink.on .lamp { fill: var(--lamp); }
+    .mb-mark { color: #f4efe8; }
+    .mb-mark .body { fill: currentColor; }
+    .mb-mark .lamp { fill: #3a332e; }
+    .mb-mark.on .lamp { fill: var(--lamp); filter: drop-shadow(0 0 2px var(--lamp-hi)); }
+    .mb-mark.err .lamp { fill: var(--err); filter: drop-shadow(0 0 2px var(--err)); }
+    .btn.connect.err { background: var(--slate); color: var(--snow); }
+    .btn.reset {
+      background: var(--slate); color: var(--snow);
+      margin-top: 6px;
+    }
+    .popover .list + .btn.reset, .popover .btn.reset:first-of-type { margin-top: 0; margin-bottom: 10px; }
+
+    .pick { cursor: pointer; }
+    .pick .v { color: var(--stone); }
+    .chev { opacity: .5; margin-left: 4px; }
+    .actions { display: flex; gap: 8px; margin-top: 12px; }
+    .actions .btn { padding: 9px 10px; font-size: 12.5px; background: #211c19; color: var(--snow); }
+    .win.conns { display: flex; flex-direction: column; }
+    .win.conns .body {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+      padding: 8px 20px 0;
+    }
+    .win.conns .list { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; }
+    .win.conns .list::-webkit-scrollbar { width: 0; height: 0; }
+    .win.conns .actions {
+      margin: auto -20px 0;
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--line);
+    }
+    .drop {
+      margin-top: 16px; border: 1px dashed #3a332e; border-radius: 12px;
+      padding: 28px 16px; text-align: center; color: var(--mute); font-size: 13px; line-height: 1.45;
+    }
+    .drop strong { color: var(--stone); font-weight: 600; }
+    .file {
+      font-family: var(--mono); font-size: 11.5px; background: #211c19;
+      border-radius: 8px; padding: 12px 14px; margin-top: 14px; text-align: left;
+      white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; overflow: hidden;
+    }
+    .warn { font-size: 12px; color: var(--copper); text-align: left; margin-top: 12px; line-height: 1.45; }
+    .plist .item { grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 8px; }
+    .plist .item .mini { min-width: 72px; }
+    .plist .side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 52px; }
+    .plist .side-btns { display: flex; gap: 2px; align-items: center; }
+    .plist .side-btns:empty { display: none; }
+    .win.conns { width: 400px; height: 520px; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+    .win.conns h1 { margin: 8px 0 0; }
+    .win.conns.simple .head-row { margin-bottom: 8px; }
+    .subline { font-size: 12.5px; color: var(--mute); margin: 4px 0 12px; }
+    .head-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .multi-switch {
+      flex: 0 0 auto;
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 8px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .multi-cap {
+      font-size: 12.5px; font-weight: 500; color: var(--mute);
+      line-height: 1; white-space: nowrap;
+    }
+    .mini {
+      border: 0; border-radius: 8px; padding: 6px 10px; font: 600 11.5px var(--ui);
+      background: var(--slate); color: var(--snow); cursor: pointer; white-space: nowrap;
+    }
+    .mini.on { background: var(--lamp); color: var(--ink); }
+    .plist.sess .item { padding: 8px 6px; }
+    .others { margin: 4px 0 2px; border-top: 1px solid var(--line); padding-top: 6px; }
+    .other {
+      display: flex; align-items: center; gap: 8px; padding: 5px 2px;
+      font-size: 12.5px; cursor: pointer; border-radius: 8px;
+    }
+    .other .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .other .tm { color: var(--mute); font-size: 11.5px; }
+    .other .tm.err { color: var(--err); }
+    .other .mini { padding: 4px 9px; font-size: 11px; }
+    .win.main .others { margin: 0 0 12px; border-top: 0; padding-top: 0; display: grid; gap: 6px; }
+    .win.main .other { background: #211c19; border-radius: 10px; padding: 8px 10px; }
+    .pop-head .s.err { color: var(--err); }
+    .ghost-sm { background: none; border: 0; color: var(--mute); font: 500 11.5px var(--ui); cursor: pointer; padding: 4px 6px; }
+    .toggle { cursor: pointer; flex-shrink: 0; }
+    .plist .side-btns { flex-direction: column; align-items: flex-end; gap: 2px; }
+    .onb.edit {
+      height: auto; width: 440px; max-height: calc(100% - 24px);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .onb.edit .body {
+      padding: 2px 28px 14px;
+      display: flex; flex-direction: column; min-height: 0;
+    }
+    .onb.edit h1 { margin: 2px 0 8px; font-size: 1.2rem; }
+    .onb.edit .label { margin: 6px 0 3px; }
+    .onb.edit .field.sm { padding: 7px 12px; }
+    .onb.edit .seg button { padding: 8px 8px; }
+    .edit-status { display: flex; justify-content: space-between; align-items: center; margin: 0 0 4px; }
+    .edit-status .st { font-size: 12.5px; color: var(--mute); }
+    .edit-status .st.on { color: var(--lamp); }
+    .edit-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .edit-foot {
+      margin-top: 8px; padding-top: 10px;
+      border-top: 1px solid var(--line); flex-shrink: 0;
+    }
+    .edit-foot .btn.connect { margin: 0; }
+    .edit-alt { display: flex; justify-content: space-between; gap: 8px; }
+    .edit-alt .btn { width: auto; flex: 1; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" class="mark on"><path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/><path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/></svg>
+      loft · Windows
+    </div>
+    <p id="board-sub"></p>
+    <h4 id="board-lang">Language</h4>
+    <div class="lang">
+      <button type="button" data-lang="zh">中文</button>
+      <button type="button" data-lang="en" class="on">EN</button>
+      <button type="button" data-lang="fr">FR</button>
+      <button type="button" data-lang="de">DE</button>
+      <button type="button" data-lang="it">IT</button>
+      <button type="button" data-lang="ja">JA</button>
+      <button type="button" data-lang="ko">KO</button>
+      <button type="button" data-lang="pt">PT</button>
+      <button type="button" data-lang="ru">RU</button>
+      <button type="button" data-lang="vi">VI</button>
+    </div>
+    <h4 id="board-scenes">Scenes</h4>
+    <button class="on" data-scene="hero" data-i18n="nav.hero">Overview</button>
+    <button data-scene="onboard" data-i18n="nav.onboard">Key</button>
+    <button data-scene="url" data-i18n="nav.url">Address</button>
+    <button data-scene="off" data-i18n="nav.off">Popover · closed</button>
+    <button data-scene="on" data-i18n="nav.on">Popover · open</button>
+    <button data-scene="err" data-i18n="nav.err">Popover · error</button>
+    <button data-scene="hold" data-i18n="nav.hold">Popover · route</button>
+    <button data-scene="main" data-i18n="nav.main">Status</button>
+    <button data-scene="list" data-i18n="nav.list">Connections</button>
+    <button data-scene="journal" data-i18n="journal">Journal</button>
+    <button data-scene="edit" data-i18n="nav.edit">Edit</button>
+    <button data-scene="editvless" data-i18n="nav.editvless">Edit · VLESS</button>
+    <button data-scene="switch" data-i18n="nav.switch">Popover · switch</button>
+    <button data-scene="traymenu" data-i18n="nav.traymenu">Tray · menu</button>
+    <button data-scene="import" data-i18n="nav.import">Import</button>
+    <button data-scene="export" data-i18n="nav.export">Export</button>
+    <button data-scene="set" data-i18n="nav.set">Settings</button>
+    <button data-scene="split" data-i18n="nav.split">Routes</button>
+    <button data-scene="splitin" data-i18n="nav.splitin">Import routes</button>
+    <button data-scene="splitout" data-i18n="nav.splitout">Export routes</button>
+    <button data-scene="splitrepo" data-i18n="nav.splitrepo">Repository</button>
+    <button data-scene="splitlists" data-i18n="nav.splitlists">Lists</button>
+    <button data-scene="zones" data-i18n="nav.zones">Zones</button>
+    <button data-scene="zoneedit" data-i18n="nav.zoneedit">Edit zone</button>
+    <button data-scene="zoneadd" data-i18n="nav.zoneadd">Add zone</button>
+    <button data-scene="about" data-i18n="nav.about">About</button>
+    <button data-scene="upd" data-i18n="nav.upd">Update</button>
+  </nav>
+
+  <div class="stage-wrap">
+    <div class="desktop" id="desk">
+      <div class="desktop-body" id="scene"></div>
+      <div class="taskbar">
+        <span class="tb-start"><i></i></span>
+        <span class="tb-app"><i></i></span>
+        <span class="tb-app"><i></i></span>
+        <span class="tb-app loft hide" id="tb-loft"></span>
+        <div class="tray">
+          <span title="^"><svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 6.5 5 3l3.5 3.5"/></svg></span>
+          <span id="mb-loft" class="tray-loft open" title="Loft">
+            <!-- docs/brand/svg/loft-tray.svg, lamp fill switched by state -->
+            <svg viewBox="0 0 16 16" width="16" height="16" class="tray-mark" id="mb-svg">
+              <path class="tb" d="M6.2100 0.6270 A0.1680 0.1680 0 0 1 6.4249 0.6312 L9.6800 4.7000 L9.6800 10.8300 A0.7700 0.7700 0 0 0 10.4500 11.6000 L14.4400 11.6000 A0.5600 0.5600 0 0 1 15.0000 12.1600 L15.0000 14.8280 A0.6720 0.6720 0 0 1 14.3280 15.5000 L3.3520 15.5000 A0.6720 0.6720 0 0 1 2.6800 14.8280 L2.6800 4.7000 Z"/>
+              <path class="tl" d="M5.0880 5.9000 H7.2720 A0.4480 0.4480 0 0 1 7.7200 6.3480 V9.3520 A0.4480 0.4480 0 0 1 7.2720 9.8000 H5.0880 A0.4480 0.4480 0 0 1 4.6400 9.3520 V6.3480 A0.4480 0.4480 0 0 1 5.0880 5.9000 Z"/>
+            </svg>
+          </span>
+          <span><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 6.5a8.5 8.5 0 0 1 12 0M4.2 8.8a5.4 5.4 0 0 1 7.6 0M6.4 11.1a2.3 2.3 0 0 1 3.2 0"/></svg></span>
+          <span><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2.5 6h2.5l3.5-3v10L5 10H2.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5" stroke-linecap="round"/></svg></span>
+          <span class="kb" id="tb-kb">ENG</span>
+          <span class="clock"><span>21:14</span><span>26.10.2026</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>var L10N_PACKS = {};</script>
+  <script src="../../macOS/lang/en.lang"></script>
+  <script src="../../macOS/lang/ru.lang"></script>
+  <script src="../../macOS/lang/de.lang"></script>
+  <script src="../../macOS/lang/fr.lang"></script>
+  <script src="../../macOS/lang/pt.lang"></script>
+  <script src="../../macOS/lang/zh.lang"></script>
+  <script src="../../macOS/lang/it.lang"></script>
+  <script src="../../macOS/lang/ja.lang"></script>
+  <script src="../../macOS/lang/ko.lang"></script>
+  <script src="../../macOS/lang/vi.lang"></script>
+  <script src="lang/win.lang"></script>
+  <script>
+    const LANGS = ["en", "fr", "de", "it", "pt", "ru", "vi", "zh", "ja", "ko"];
+    const I18N = L10N_PACKS;
+    const params = new URLSearchParams(location.search);
+    let lang = LANGS.includes(params.get("lang")) ? params.get("lang") : "en";
+    let current = "hero";
+    // Windows strings first (WIN_PACKS[lang], then WIN_PACKS.en), then the shared macOS packs.
+    const WIN = typeof WIN_PACKS === "object" ? WIN_PACKS : {};
+    const t = (k) => (WIN[lang] && WIN[lang][k]) || (WIN.en && WIN.en[k]) || (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+    const PROFILES = [
+      { id: "office", ru: "Офис", en: "Office", de: "Büro", fr: "Bureau", pt: "Escritório", zh: "办公室", it: "Ufficio", ja: "オフィス", ko: "사무실", vi: "Văn phòng", host: "cdn.example.com", path: "/static/v3/build", kind: "get", file: "office.loft", socks: "1080", ip: "10.8.17.4", gw: "10.8.17.1", up: true, err: false, tun: true },
+      { id: "lab", ru: "Lab", en: "Lab", de: "Labor", fr: "Labo", pt: "Lab", zh: "实验室", it: "Lab", ja: "ラボ", ko: "랩", vi: "Lab", host: "app.example.com", path: "/api/v1/sync", kind: "ws", file: "lab.loft", socks: "1081", ip: "10.8.18.2", gw: "10.8.18.1", up: true, err: false, tun: true },
+      { id: "home", ru: "Дом", en: "Home", de: "Zuhause", fr: "Maison", pt: "Casa", zh: "家", it: "Casa", ja: "ホーム", ko: "집", vi: "Nhà", host: "edge.home.lan", path: "", kind: "get", file: "home.loft", socks: "1082", ip: "10.8.19.3", gw: "10.8.19.1", up: false, err: false, tun: false },
+    ];
+    let activeId = "office";
+    let multi = params.get("multi") === "1";
+    let editingId = "office";
+    let vlessMode = params.get("vless") === "manual" ? "manual" : "link";
+    let editTab = params.get("edittab") === "adv" ? "adv" : "main";
+    let holdOn = params.get("hold") === "1";
+    let defaultRouteOn = params.get("defroute") !== "0";
+    let failoverOn = params.get("fail") !== "0";
+    let heldNow = params.get("scene") === "hold";
+    let regionTab = params.get("region") || "global";
+    let splitQ = "";
+    const ZONE_PRESETS = ["local", "global"];
+    const LIST_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
+    const LIST_CATALOG = [
+      { id: "global", file: "global.bat", en: "World", ru: "Мир", de: "Welt", fr: "Monde", pt: "Mundo", zh: "全球", it: "Mondo", ja: "世界", ko: "세계", vi: "Thế giới" },
+      { id: "ru", file: "ru.bat", en: "Russia", ru: "Россия", de: "Russland", fr: "Russie", pt: "Rússia", zh: "俄罗斯", it: "Russia", ja: "ロシア", ko: "러시아", vi: "Nga" },
+      { id: "cn", file: "cn.bat", en: "China", ru: "Китай", de: "China", fr: "Chine", pt: "China", zh: "中国", it: "Cina", ja: "中国", ko: "중국", vi: "Trung Quốc" },
+      { id: "ir", file: "ir.bat", en: "Iran", ru: "Иран", de: "Iran", fr: "Iran", pt: "Irã", zh: "伊朗", it: "Iran", ja: "イラン", ko: "이란", vi: "Iran" },
+      { id: "kz", file: "kz.bat", en: "Kazakhstan", ru: "Казахстан", de: "Kasachstan", fr: "Kazakhstan", pt: "Cazaquistão", zh: "哈萨克斯坦", it: "Kazakistan", ja: "カザフスタン", ko: "카자흐스탄", vi: "Kazakhstan" },
+      { id: "by", file: "by.bat", en: "Belarus", ru: "Беларусь", de: "Belarus", fr: "Biélorussie", pt: "Bielorrússia", zh: "白俄罗斯", it: "Bielorussia", ja: "ベラルーシ", ko: "벨라루스", vi: "Belarus" },
+    ];
+    const listURL = (e) => LIST_BASE + e.file;
+    const REPO_GLOBAL = listURL(LIST_CATALOG[0]);
+    const ZONES = [
+      { id: "local", builtin: true, def: false, repo: "", auto: true },
+      { id: "global", builtin: true, def: true, repo: REPO_GLOBAL, auto: true },
+    ];
+    const zoneById = (id) => ZONES.find((z) => z.id === id);
+    if (params.get("ldef") === "via" && zoneById("local")) zoneById("local").def = true;
+    if (params.get("gdef") === "bypass" && zoneById("global")) zoneById("global").def = false;
+    if (!zoneById(regionTab)) regionTab = "global";
+    let editingZoneId = params.get("zid") || "local";
+    if (!zoneById(editingZoneId)) editingZoneId = "local";
+    let addZoneVia = params.get("zdef") !== "bypass";
+    let addZoneName = "";
+    let addZoneRepo = "";
+    let addZoneAuto = true;
+    let listPickBack = "splitrepo";
+    let splitFmt = params.get("sfmt") === "keen" ? "keen" : "loft";
+    let addKind = params.get("kind") === "ignore" ? "ignore" : "route";
+    let splitAuto = params.get("sauto") !== "0";
+    let splitOn = params.get("split") === "1";
+    let aboutChecked = false;
+    let sharedSocks = params.get("socks") !== "0";
+    let simpleOn = params.get("simple") === "1";
+    let dockMode = ["always", "window", "never"].includes(params.get("dock")) ? params.get("dock") : "window";
+    let reconnectOn = params.get("reconnect") !== "0";
+    let extIPOn = params.get("extip") !== "0";
+    let loftMode = params.get("loft") === "manual" ? "manual" : "link";
+    let setTab = ["gen", "route", "client"].includes(params.get("settab")) ? params.get("settab") : "gen";
+    let socksPort = Number(params.get("sport")) > 0 && Number(params.get("sport")) < 65536 ? Number(params.get("sport")) : 1080;
+    const dedicatedPort = (p) => {
+      const d = String(p.socks || "");
+      return d && d !== String(socksPort) ? d : "";
+    };
+    const gwOf = (p) => {
+      if (p.gw) return p.gw;
+      const a = String(p.ip || "").split(".");
+      if (a.length === 4 && a[3] !== "1") return a[0] + "." + a[1] + "." + a[2] + ".1";
+      return t("pop.tun");
+    };
+    const routeOf = (p, on, fail, locked) => {
+      if (locked) return t("route.held");
+      if (on && !fail && p.tun) return gwOf(p);
+      if (p.tun) return defaultRouteOn ? t("edit.tun") : t("pop.tun");
+      return "SOCKS5";
+    };
+    const socksOf = (p) => {
+      const d = dedicatedPort(p);
+      if (d) return d;
+      if (sharedSocks) return String(socksPort);
+      let n = socksPort;
+      for (const x of PROFILES) {
+        if (x.id === p.id) return String(n);
+        if (!dedicatedPort(x)) n += 1;
+      }
+      return String(socksPort);
+    };
+    const ROUTES = [
+      { id: "yt", ru: "YouTube", en: "YouTube", region: "global", cidrs: ["142.250.0.0/16", "172.217.0.0/16", "74.125.0.0/16", "142.251.0.0/16", "173.194.0.0/16", "216.58.0.0/16"], src: "repo" },
+      { id: "cf", ru: "Cloudflare", en: "Cloudflare", de: "Cloudflare", fr: "Cloudflare", pt: "Cloudflare", zh: "Cloudflare", it: "Cloudflare", ja: "Cloudflare", ko: "Cloudflare", region: "global", cidrs: ["1.1.1.0/24", "104.16.0.0/13"], src: "repo" },
+      { id: "gpt", ru: "ChatGPT", en: "ChatGPT", de: "ChatGPT", fr: "ChatGPT", pt: "ChatGPT", zh: "ChatGPT", it: "ChatGPT", ja: "ChatGPT", ko: "ChatGPT", region: "global", cidrs: ["104.18.32.0/24"], src: "me" },
+      { id: "nf", ru: "Netflix", en: "Netflix", region: "global", cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
+      { id: "yandex", ru: "Яндекс", en: "Yandex", de: "Yandex", fr: "Yandex", pt: "Yandex", zh: "Yandex", it: "Yandex", ja: "Yandex", ko: "Yandex", region: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "me" },
+      { id: "lan", ru: "Локальная сеть", en: "LAN", de: "LAN", fr: "LAN", pt: "LAN", zh: "局域网", it: "LAN", ja: "LAN", ko: "로컬 네트워크", region: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
+      { id: "ign", ru: "Игнор", en: "Ignore", de: "Ignorieren", fr: "Ignorer", pt: "Ignorar", zh: "忽略", it: "Ignora", ja: "無視", ko: "무시", vi: "Bỏ qua", region: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
+    ];
+    const locName = (o) => o[lang] || o.en || o.ru || "";
+    const rname = (r) => locName(r);
+    // Russian has a few-form: 1 сеть, 2–4 сети, 5+ сетей.
+    const netWord = (n) => {
+      if (lang === "ru") { const d = n % 10, h = n % 100; if (d === 1 && h !== 11) return t("split.net"); if (d >= 2 && d <= 4 && (h < 12 || h > 14)) return t("split.nets.few"); return t("split.nets"); }
+      return n === 1 ? t("split.net") : t("split.nets");
+    };
+    // A Keenetic export is named after the zone's first service.
+    const keenName = () => { const r = routesIn(regionTab)[0]; return r ? rname(r) : "routes"; };
+    const zoneLabel = (id) => {
+      const z = zoneById(id);
+      const named = z ? locName(z) : "";
+      if (named) return named;
+      const k = "split.zone." + id;
+      const s = t(k);
+      return s === k ? String(id).toUpperCase() : s;
+    };
+    const zoneIds = () => {
+      const ids = [];
+      const add = (id) => { if (id && !ids.includes(id)) ids.push(id); };
+      ZONE_PRESETS.forEach(add);
+      ZONES.forEach((z) => add(z.id));
+      ROUTES.forEach((r) => add(r.region));
+      return ids;
+    };
+    const zoneDef = (id) => {
+      const z = zoneById(id);
+      if (z) return !!z.def;
+      return id !== "local";
+    };
+    const zoneSlug = (name) => {
+      const ascii = String(name || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "").slice(0, 16);
+      const taken = (id) => ZONES.some((z) => z.id === id);
+      if (ascii) {
+        let id = ascii, n = 2;
+        while (taken(id)) { id = ascii + n; n += 1; }
+        return id;
+      }
+      let n = 1, id = "z1";
+      while (taken(id)) { n += 1; id = "z" + n; }
+      return id;
+    };
+    const zoneSelect = (withCount) => {
+      const ids = zoneIds();
+      if (regionTab && !ids.includes(regionTab)) ids.push(regionTab);
+      const opts = ids.map((id) => {
+        const n = routesIn(id).length;
+        const label = withCount ? zoneLabel(id) + " · " + n : zoneLabel(id);
+        return `<option value="${id}" ${regionTab === id ? "selected" : ""}>${label}</option>`;
+      }).join("");
+      return `<select class="loft-select wide" data-region>${opts}</select>`;
+    };
+    const zoneTabs = () => {
+      const ids = zoneIds();
+      const btns = ids.map((id) => {
+        const n = routesIn(id).length;
+        return `<button type="button" class="${regionTab === id ? "on" : ""}" data-region="${id}">${zoneLabel(id)} <span class="n">${n}</span></button>`;
+      }).join("");
+      return `<div class="split-tabs">${btns}</div>`;
+    };
+    const escAttr = (s) => String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    const zoneRepoFile = (z) => {
+      const u = String((z && z.repo) || "").trim();
+      if (!u) return "";
+      return u.split("?")[0].split("#")[0].split("/").filter(Boolean).pop() || u;
+    };
+    const zoneRepoOn = (z) => !z || z.auto !== false;
+    const zoneRepoFields = (z, withPull) => {
+      const url = (z && z.repo) || "";
+      const file = zoneRepoFile(z);
+      const last = file ? t("split.repo.last") : t("split.repo.none");
+      return `
+            <div class="label">${t("split.repo.url")}</div>
+            <div class="repo-row">
+              <input class="field sm" data-zrepo value="${escAttr(url)}" placeholder="https://" spellcheck="false" />
+              <button type="button" class="pick" data-listopen>${t("split.repo.pick")}</button>
+            </div>
+            <div class="pref" style="margin-top:10px;padding:8px 0;border:0">
+              <div><div class="n">${t("split.repo.auto")}</div><div class="d">${t("split.repo.auto.d")}</div></div>
+              <div class="toggle ${zoneRepoOn(z) ? "on" : ""}" data-sauto><i></i></div>
+            </div>
+            <div class="hint">${last}</div>
+            ${withPull ? `<button class="btn connect on" style="margin-top:14px" data-zrepopull>${t("split.repo.pull")}</button>` : ""}`;
+    };
+    const applySceneZoneFields = () => {
+      const urlEl = sceneEl.querySelector("[data-zrepo]");
+      if (!urlEl) return null;
+      const url = String(urlEl.value || "").trim();
+      const nameEl = sceneEl.querySelector("[data-zname]");
+      const name = nameEl ? String(nameEl.value || "").trim() : "";
+      if (current === "zoneadd") {
+        addZoneRepo = url;
+        addZoneName = name;
+        return null;
+      }
+      const z = current === "zoneedit" ? zoneById(editingZoneId) : zoneById(regionTab);
+      if (!z) return null;
+      z.repo = url;
+      if (name && !z.builtin) {
+        z[lang] = name;
+        if (!z.en) z.en = name;
+      }
+      return z;
+    };
+    const routesVia = () => ROUTES.filter((r) => zoneDef(r.region));
+    const routesBypass = () => ROUTES.filter((r) => !zoneDef(r.region));
+    const routesIn = (region) => ROUTES.filter((r) => r.region === region);
+    const routeCount = (list) => list.reduce((n, r) => n + r.cidrs.length, 0);
+    const pname = (p) => locName(p);
+    const active = () => PROFILES.find((p) => p.id === activeId);
+    const anyUp = () => PROFILES.some((p) => p.up);
+    const anyErr = () => PROFILES.some((p) => p.err);
+    const liveTuns = () => PROFILES.filter((p) => p.tun && p.up && !p.err);
+    const routeOwner = () => {
+      if (multi) return liveTuns()[0] || null;
+      const p = active();
+      return p && p.tun ? p : null;
+    };
+    const markClass = (on, err) => (err ? "err" : on ? "on" : "");
+    const multiSummary = (on) => {
+      if (!on) return t("status.off");
+      const n = PROFILES.filter((x) => x.up).length;
+      const e = PROFILES.filter((x) => x.err).length;
+      if (e && n) return t("conn.count") + " · " + n + " · " + t("conn.err");
+      if (e) return t("conn.fail");
+      if (n) return t("conn.count") + " · " + n;
+      return t("status.off");
+    };
+
+    const TRAY_PATHS = `<path class="tb" d="M6.2100 0.6270 A0.1680 0.1680 0 0 1 6.4249 0.6312 L9.6800 4.7000 L9.6800 10.8300 A0.7700 0.7700 0 0 0 10.4500 11.6000 L14.4400 11.6000 A0.5600 0.5600 0 0 1 15.0000 12.1600 L15.0000 14.8280 A0.6720 0.6720 0 0 1 14.3280 15.5000 L3.3520 15.5000 A0.6720 0.6720 0 0 1 2.6800 14.8280 L2.6800 4.7000 Z"/><path class="tl" d="M5.0880 5.9000 H7.2720 A0.4480 0.4480 0 0 1 7.7200 6.3480 V9.3520 A0.4480 0.4480 0 0 1 7.2720 9.8000 H5.0880 A0.4480 0.4480 0 0 1 4.6400 9.3520 V6.3480 A0.4480 0.4480 0 0 1 5.0880 5.9000 Z"/>`;
+    // Title bar: mark, "Loft", Minimize and Close. No maximize: windows have a fixed size.
+    const chrome = () => `<div class="titlebar">
+            <svg viewBox="0 0 16 16" class="tmark tray-mark ${anyUp() && !heldNow ? "on" : ""}">${TRAY_PATHS}</svg>
+            <span class="ttl">Loft</span>
+            <div class="caps">
+              <button type="button" title="${t("win.min")}"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><path d="M0 5.5h10"/></svg></button>
+              <button type="button" class="x" title="${t("win.close")}"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><path d="M0 0l10 10M10 0 0 10"/></svg></button>
+            </div>
+          </div>`;
+
+    const HEART = `<svg class="heart" viewBox="0 0 7 6" width="12" height="10" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>
+      <rect x="0" y="1" width="7" height="2"/><rect x="1" y="3" width="5" height="1"/>
+      <rect x="2" y="4" width="3" height="1"/><rect x="3" y="5" width="1" height="1"/>
+    </svg>`;
+    const MARK = `<svg viewBox="0 0 96 96" class="mark MARKCLASS">
+      <path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/>
+      <path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+    </svg>`;
+
+    // Multi: the other up / failed sessions, collapsed. Click makes one the main session.
+    const UPTIME = { office: "0:12", lab: "0:07", home: "0:03" };
+    const others = () => {
+      if (!multi || simpleOn) return "";
+      const rows = PROFILES.filter((p) => p.id !== activeId && (p.up || p.err)).map((p) => `
+        <div class="other" data-prefer="${p.id}">
+          <span class="lamp-dot ${p.err ? "err" : "on"}"></span>
+          <span class="n">${pname(p)}</span>
+          <span class="tm ${p.err ? "err" : ""}">${p.err ? t("err") : UPTIME[p.id]}</span>
+          <button class="mini" data-toggle="${p.id}">${p.err ? t("retry") : t("disconnect")}</button>
+        </div>`).join("");
+      return rows ? `<div class="others">${rows}</div>` : "";
+    };
+
+    const popover = (on, err, held) => {
+      const p = active();
+      const locked = !!(held || heldNow);
+      const fail = !!err;
+      const live = on && !locked && !fail;
+      const title = live ? t("pill_on") + "  0:12" : t("pop_off");
+      const name = pname(p);
+      const lamp = locked || fail ? "err" : live ? "on" : "";
+      const primary = fail
+        ? `<button class="btn connect err" data-go="on">${t("retry_wait").replace("%d", "3")}</button>`
+        : live
+          ? `<button class="btn connect on">${t("disconnect")}</button>`
+          : `<button class="btn connect" data-go="on">${t("pop_connect")}</button>`;
+      const resetBtn = locked ? `<button class="btn reset" data-reset>${t("reset")}</button>` : "";
+      const rows = simpleOn ? "" : `<div class="rows">
+          <div class="row pick" data-go="switch"><span class="k">${t("conn")}</span><span class="v">${name} <span class="chev">›</span></span></div>
+          ${live ? `${extIPOn ? `<div class="row"><span class="k">${t("ext_ip_lab")}</span><span class="v">203.0.113.17</span></div>` : ""}
+          <div class="row"><span class="k">${t("overlay")}${p.tun ? `<span class="pop-badge">${t("net_tag")}</span>` : ""}</span><span class="v">${p.ip}</span></div>
+          <div class="row"><span class="k">${t("route")}</span><span class="v">${routeOf(p, on, fail, locked)}</span></div>
+          ${p.socks ? `<div class="row"><span class="k">SOCKS5</span><span class="v">127.0.0.1:${socksOf(p)}</span></div>` : ""}` : ""}
+        </div>
+        <div class="spark">${locked ? `<span class="err">${t("route.held")}</span>` : fail ? `<span class="err">${t("err")}</span>` : live ? `<span>loft/1.0  ·  ${p.kind}  ·  ${p.kind === "l3" ? "ip" : "mux"}  ·  mask</span>` : `<span>${t("session.none")}</span>`}</div>`;
+      return `
+      <div class="popover">
+        <div class="pop-head">
+          ${MARK.replace("MARKCLASS", lamp)}
+          <div class="who">
+            <div class="t">${title}</div>
+            <div class="s ${locked || fail ? "err" : ""}"><span class="lamp-dot ${lamp}"></span><span>${name}</span></div>
+          </div>
+          ${live ? `<div class="pop-rate"><div>↑ 12 kb/s</div><div>↓ 48 kb/s</div></div>` : ""}
+        </div>
+        ${primary}
+        ${resetBtn}
+        ${rows}
+        ${others()}
+        <div class="pop-foot">
+          <a class="left" href="#" data-go="list">${t("open")}</a>
+          <a class="mid" href="#" data-go="set">${t("settings")}</a>
+          <button class="right" type="button">${t("quit")}</button>
+        </div>
+      </div>`;
+    };
+
+    function profileRows() {
+      return PROFILES.map((p) => {
+        const selected = p.id === activeId;
+        const err = multi && p.err;
+        const live = err ? false : (multi ? p.up : selected && p.up);
+        const port = socksOf(p);
+        const host = p.host + (p.socks ? " · " + port : "");
+        let side = "";
+        if (simpleOn) side = err ? t("fail") : "";
+        else if (multi) {
+          if (live && extIPOn) side = "203.0.113.17";
+          else if (live && p.ip) side = p.ip;
+          else if (err) side = t("fail");
+          else if (live) side = t("conn_up");
+          else side = p.kind;
+        } else {
+          side = selected ? t("active") : p.kind;
+        }
+        const act = err
+          ? t("retry")
+          : live ? t("disconnect") : t("pop_connect");
+        const owns = live && p.tun && routeOwner() && routeOwner().id === p.id;
+        const nameLine = simpleOn
+          ? pname(p)
+          : `${pname(p)}${owns ? `<span class="route-tag">${t("route_tag")}</span>` : ""}`;
+        const sub = simpleOn
+          ? (err ? `<div class="u err">${t("fail")}</div>` : "")
+          : `<div class="u ${err ? "err" : ""}">${host}</div>`;
+        return `<div class="item ${live || selected ? "live" : ""} ${err ? "err" : ""}" data-profile="${p.id}">
+          <button class="mini ${live ? "on" : ""}" data-toggle="${p.id}">${act}</button>
+          <div><div class="n">${nameLine}</div>${sub}</div>
+          <div class="side">
+            ${side ? `<div class="tag">${side}</div>` : ""}
+            <button class="ghost-sm" data-edit="${p.id}">${t("edit")}</button>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    function connMenu() {
+      return `<div class="conn-menu">${PROFILES.map((p) => {
+        const selected = p.id === activeId;
+        const live = multi ? p.up : selected && p.up;
+        let st = "";
+        if (p.err) st = t("fail");
+        else if (live) st = extIPOn ? "203.0.113.17" : t("pill_on");
+        return `<button type="button" data-profile="${p.id}"><span>${selected ? "✓ " : ""}${pname(p)}${st ? "  ·  " + st : ""}</span></button>`;
+      }).join("")}</div>`;
+    }
+
+    const scenes = {
+      hero: () => popover(true) + mainWin(true),
+      off: () => popover(false),
+      on: () => popover(true),
+      err: () => popover(multi ? true : false, true),
+      hold: () => popover(false, false, true),
+      onboard: () => `
+        <div class="win onb">
+          ${chrome()}
+          <div class="body">
+            ${MARK.replace("MARKCLASS", "on")}
+            <div class="steps">${t("key_step")}</div>
+            <h1>${t("key_title")}</h1>
+            <p>${t("key_body")}</p>
+            <input class="field" placeholder="lt_…" value="lt_" spellcheck="false" />
+            <div class="hint">${t("key_hint")}</div>
+            <button class="btn connect on" style="margin-top:22px" data-go="url">${t("continue")}</button>
+            <button class="btn back" data-go="import">${t("key_orfile")}</button>
+          </div>
+        </div>`,
+      url: () => `
+        <div class="win onb tall">
+          ${chrome()}
+          <div class="body" style="text-align:left">
+            ${MARK.replace("MARKCLASS", "on")}
+            <div class="steps" style="text-align:center">${t("url_step")}</div>
+            <h1 style="text-align:center">${t("url_title")}</h1>
+            <p style="text-align:center">${t("url_body")}</p>
+            <div class="label">${t("url")}</div>
+            <input class="field sm" placeholder="https://" value="https://" spellcheck="false" />
+            <div class="label">${t("url_type")}</div>
+            <div class="seg">
+              ${[["get","GET"],["ws","WS"],["h2","H2"],["quic","QUIC"],["h3","H3"],["l3","L3"]].map(([id, lab]) => `<button type="button" class="${id === "get" ? "on" : ""}" data-type="${id}">${lab}</button>`).join("")}
+            </div>
+            <div class="label">${t("path")}</div>
+            <input class="field sm" placeholder="/static/v3/build" spellcheck="false" />
+            <div class="hint" style="margin-top:10px">${t("url_hint")}</div>
+            <button class="btn connect on" style="margin-top:18px" data-go="on">${t("url_go")}</button>
+            <button class="btn back" data-go="onboard">${t("back")}</button>
+          </div>
+        </div>`,
+      main: () => mainWin(),
+      out: () => mainWin(),
+      list: () => `
+        <div class="win conns${simpleOn ? " simple" : ""}">
+          ${chrome()}
+          <div class="body">
+            <div class="head-row">
+              <div class="head-title">
+                <h1>${t("conns")}</h1>
+                <button type="button" class="head-plus" data-go="edit" title="${t("manual")}">+</button>
+              </div>
+              ${simpleOn ? "" : `<div class="multi-switch" data-multi title="${t("multi")}">
+                <span class="multi-cap">${t("several")}</span>
+                <div class="toggle ${multi ? "on" : ""}"><i></i></div>
+              </div>`}
+            </div>
+            ${simpleOn ? "" : `<div class="subline">${multi ? t("conns_sub_multi") : t("conns_sub")}</div>`}
+            <div class="list plist ${multi ? "multi" : ""}">${profileRows()}</div>
+            <div class="actions">
+              <button class="btn" data-go="import">${t("import")}</button>
+              <button class="btn" data-go="export">${t("export")}</button>
+              <button class="btn" data-go="set">${t("settings")}</button>
+            </div>
+          </div>
+        </div>`,
+      edit: () => {
+        const p = PROFILES.find((x) => x.id === editingId) || active();
+        const adv = editTab === "adv";
+        const manual = loftMode === "manual";
+        const main = `
+            <div class="seg" style="margin-bottom:10px">
+              <button type="button" class="${manual ? "" : "on"}" data-loft-mode="link">${t("vless_link")}</button>
+              <button type="button" class="${manual ? "on" : ""}" data-loft-mode="manual">${t("vless_manual")}</button>
+            </div>
+            ${manual ? `
+            <div class="label">${t("key_title")}</div>
+            <input class="field sm" value="lt_••••••••" spellcheck="false" />
+            <div class="edit-pair">
+              <div>
+                <div class="label">${t("vless_host")}</div>
+                <input class="field sm" value="${p.host}" spellcheck="false" />
+              </div>
+              <div>
+                <div class="label">${t("vless_port")}</div>
+                <input class="field sm" value="443" />
+              </div>
+            </div>
+            <div class="label">${t("url_type")}</div>
+            <div class="seg">
+              ${[["get","GET"],["ws","WS"],["h2","H2"],["quic","QUIC"],["h3","H3"],["l3","L3"]].map(([id, lab]) => `<button type="button" class="${p.kind === id ? "on" : ""}" data-type="${id}">${lab}</button>`).join("")}
+            </div>
+            <div class="label">${t("path")}</div>
+            <input class="field sm" value="${p.path}" placeholder="/static/v3/build" />`
+            : `
+            <div class="label">${t("loft_uri")}</div>
+            <input class="field sm" value="loft://lt_…@${p.host}" spellcheck="false" />`}`;
+        const advanced = `
+            <div class="label">${t("socks")}</div>
+            <input class="field sm" value="${dedicatedPort(p) ? "127.0.0.1:" + dedicatedPort(p) : ""}" placeholder="${t("socks_d")}" />
+            <div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("tun")}</div><div class="d">${t("tun_d")}</div></div>
+              <div class="toggle ${p.tun ? "on" : ""}" data-tun="${p.id}"><i></i></div>
+            </div>
+            <div class="label">${t("sstp_dns")}</div>
+            <input class="field sm" value="${p.dns || ""}" placeholder="${t("dns_ph_loft")}" spellcheck="false" />
+            <div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("dns_system")}</div><div class="d">${t("dns_system_d")}</div></div>
+              <div class="toggle ${p.dnsSystem ? "on" : ""}"><i></i></div>
+            </div>`;
+        return `
+        <div class="win onb edit">
+          ${chrome()}
+          <div class="body" style="text-align:left">
+            <div class="head-row">
+              <h1>${t("edit_title")}</h1>
+              <button class="btn" style="background:#3a332e;color:var(--snow);padding:5px 10px;font-size:11.5px;margin:0;flex-shrink:0">${t("qr")}</button>
+            </div>
+            <div class="label">${t("name")}</div>
+            <input class="field sm" value="${pname(p)}" />
+            <div class="pref" style="padding:8px 0;border:0">
+              <div class="n">${t("vpn_type")}</div>
+              <div class="seg" style="flex:0 0 auto;width:auto">
+                <button type="button" class="on">${t("vpn_loft")}</button>
+                <button type="button">${t("vpn_sstp")}</button>
+                <button type="button">${t("vpn_vless")}</button>
+                <button type="button">${t("vpn_trojan")}</button>
+              </div>
+            </div>
+            <div class="seg" style="margin:6px 0 12px">
+              <button type="button" class="${adv ? "" : "on"}" data-edittab="main">${t("edit_main")}</button>
+              <button type="button" class="${adv ? "on" : ""}" data-edittab="adv">${t("edit_adv")}</button>
+            </div>
+            ${adv ? advanced : main}
+            <div class="edit-foot">
+              <button class="btn connect on" data-go="list">${t("save")}</button>
+              <div class="edit-alt">
+                <button class="btn back" data-go="list">${t("back")}</button>
+                <button class="btn back" style="color:var(--copper)">${t("delete")}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      },
+      editvless: () => {
+        const manual = vlessMode === "manual";
+        const linkFields = `
+            <div class="label">${t("edit.vless.url")}</div>
+            <input class="field sm" value="vless://11111111-1111-1111-1111-111111111111@de1.example.com:443?security=reality&sni=www.example.com&fp=chrome&pbk=…&sid=abcd" spellcheck="false" />`;
+        const manualFields = `
+            <div class="label">${t("edit.vless.uuid")}</div>
+            <input class="field sm" value="11111111-1111-1111-1111-111111111111" spellcheck="false" />
+            <div class="edit-pair">
+              <div>
+                <div class="label">${t("edit.vless.host")}</div>
+                <input class="field sm" value="de1.example.com" spellcheck="false" />
+              </div>
+              <div>
+                <div class="label">${t("edit.vless.port")}</div>
+                <input class="field sm" value="443" />
+              </div>
+            </div>
+            <div class="label">${t("edit.vless.sec")}</div>
+            <div class="seg">
+              <button type="button">${t("edit.vless.tls")}</button>
+              <button type="button" class="on">${t("edit.vless.reality")}</button>
+            </div>
+            <div class="label">${t("edit.vless.net")}</div>
+            <div class="seg">
+              <button type="button" class="on">${t("edit.vless.tcp")}</button>
+              <button type="button">${t("edit.vless.xhttp")}</button>
+            </div>
+            <div class="label">${t("edit.vless.sni")}</div>
+            <input class="field sm" value="www.example.com" spellcheck="false" />
+            <div class="label">${t("edit.vless.fp")}</div>
+            <input class="field sm" value="chrome" spellcheck="false" />
+            <div class="label">${t("edit.vless.pbk")}</div>
+            <input class="field sm" value="" placeholder="pbk" spellcheck="false" />
+            <div class="label">${t("edit.vless.sid")}</div>
+            <input class="field sm" value="abcd" spellcheck="false" />
+            <div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("edit.vless.vision")}</div><div class="d">${t("edit.vless.vision.d")}</div></div>
+              <div class="toggle"><i></i></div>
+            </div>`;
+        return `
+        <div class="win onb edit">
+          ${chrome()}
+          <div class="body" style="text-align:left">
+            <div class="head-row">
+              <h1>${t("edit_title")}</h1>
+              <button class="btn" style="background:#3a332e;color:var(--snow);padding:5px 10px;font-size:11.5px;margin:0;flex-shrink:0">${t("qr")}</button>
+            </div>
+            <div class="label">${t("name")}</div>
+            <input class="field sm" value="Travel" />
+            <div class="pref" style="padding:8px 0;border:0">
+              <div class="n">${t("vpn_type")}</div>
+              <div class="seg" style="flex:0 0 auto;width:auto">
+                <button type="button">${t("vpn_loft")}</button>
+                <button type="button">${t("vpn_sstp")}</button>
+                <button type="button" class="on">${t("vpn_vless")}</button>
+                <button type="button">${t("vpn_trojan")}</button>
+              </div>
+            </div>
+            <div class="seg" style="margin:6px 0 12px">
+              <button type="button" class="${editTab === "adv" ? "" : "on"}" data-edittab="main">${t("edit_main")}</button>
+              <button type="button" class="${editTab === "adv" ? "on" : ""}" data-edittab="adv">${t("edit_adv")}</button>
+            </div>
+            ${editTab === "adv" ? `
+            <div class="label">${t("edit.socks")}</div>
+            <input class="field sm" placeholder="127.0.0.1:${socksPort}" />
+            <div class="pref" style="margin-top:8px;padding:8px 0 0;border:0">
+              <div><div class="n">${t("edit.tun")}</div><div class="d">${t("edit.tun.d")}</div></div>
+              <div class="toggle on"><i></i></div>
+            </div>` : `
+            <div class="seg" style="margin-top:10px">
+              <button type="button" class="${manual ? "" : "on"}" data-vless-mode="link">${t("edit.vless.link")}</button>
+              <button type="button" class="${manual ? "on" : ""}" data-vless-mode="manual">${t("edit.vless.manual")}</button>
+            </div>
+            ${manual ? manualFields : linkFields}` }
+            <div class="edit-foot">
+              <button class="btn connect on" data-go="list">${t("edit.save")}</button>
+              <div class="edit-alt">
+                <button class="btn back" data-go="list">${t("back")}</button>
+                <button class="btn back" style="color:var(--copper)">${t("edit.delete")}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      },
+      switch: () => popover(true) + connMenu(),
+      traymenu: () => trayMenu(),
+      import: () => `
+        <div class="win onb">
+          ${chrome()}
+          <div class="body">
+            ${MARK.replace("MARKCLASS", "on")}
+            <h1>${t("import.title")}</h1>
+            <p>${t("import.body")}</p>
+            <div class="drop">${t("drop")}</div>
+            <button class="btn connect on" style="margin-top:18px" data-go="list">${t("import.pick")}</button>
+            <button class="btn back" data-go="list">${t("back")}</button>
+          </div>
+        </div>`,
+      export: () => {
+        const p = active();
+        const fname = pname(p) + ".loft";
+        return `
+        <div class="win onb">
+          ${chrome()}
+          <div class="body">
+            ${MARK.replace("MARKCLASS", "on")}
+            <h1>${t("export.title")}</h1>
+            <p>${t("export.body")}</p>
+            <div class="file">${fname}
+token: lt_…
+select: auto
+outbounds:
+  - type: ${p.kind}
+    url: https://${p.host}</div>
+            <div class="warn">${t("export.warn")}</div>
+            <button class="btn connect on" style="margin-top:18px" data-go="list">${t("edit.save")} ${fname}</button>
+            <button class="btn back" data-go="list">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      set: () => {
+        const tabBtn = (id, label) => `<button type="button" class="${setTab === id ? "on" : ""}" data-settab="${id}">${label}</button>`;
+        const gen = `
+            <div class="pref"><div><div class="n">${t("login")}</div><div class="d">${t("login_d")}</div></div><div class="toggle on"><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("dock")}</div><div class="d">${t("dock_d")}</div></div><select class="loft-select" data-dock>${["always","window","never"].map((id) => `<option value="${id}" ${dockMode === id ? "selected" : ""}>${t("dock_" + id)}</option>`).join("")}</select></div>
+            <div class="pref"><div><div class="n">${t("simple")}</div><div class="d">${t("simple_d")}</div></div><div class="toggle ${simpleOn ? "on" : ""}" data-simple><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("rate_unit")}</div><div class="d">${t("rate_unit_d")}</div></div><div class="rate-bits"><button type="button" class="on">${t("u_kbit")}</button><button type="button">${t("u_kb")}</button></div></div>
+            <div class="pref"><div><div class="n">${t("lang")}</div><div class="d">${t("lang_d")}</div></div><select class="loft-select" data-uilang>${LANGS.map((id) => `<option value="${id}" ${lang === id ? "selected" : ""}>${t("lang_" + id)}</option>`).join("")}</select></div>
+            <div class="pref"><div><div class="n">${t("upd_launch")}</div><div class="d">${t("upd_launch_d")}</div></div><div class="toggle on"><i></i></div></div>
+            <div class="pref" style="border:0"><div><div class="n">${t("diag")}</div><div class="d">${t("diag_d")}</div></div><div class="toggle"><i></i></div></div>`;
+        const route = `
+            <div class="pref"><div><div class="n">${t("default_route")}</div><div class="d">${t("default_route_d")}</div></div><div class="toggle ${defaultRouteOn ? "on" : ""}" data-defroute><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("failover")}</div><div class="d">${t("failover_d")}</div></div><div class="toggle ${failoverOn ? "on" : ""}" data-fail><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("hold")}</div><div class="d">${t("hold_d")}</div></div><div class="toggle ${holdOn ? "on" : ""}" data-hold><i></i></div></div>
+            <div class="pref"><div style="min-width:0;flex:1"><div class="n">${t("split")}</div><div class="d">${t("split_d")}</div><button type="button" class="ghost-sm" data-go="split">${t("split_lists")}</button></div><div class="toggle ${splitOn ? "on" : ""}" data-split><i></i></div></div>`;
+        const client = `
+            <div class="pref"><div><div class="n">${t("auto")}</div><div class="d">${t("auto_d")}</div></div><div class="toggle on"><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("reconnect")}</div><div class="d">${t("reconnect_d")}</div></div><div class="toggle ${reconnectOn ? "on" : ""}" data-reconnect><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("multi")}</div><div class="d">${t("multi_d")}</div></div><div class="toggle ${multi ? "on" : ""}" data-multi><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("socks_share")}</div><div class="d">${t("socks_share_d")}</div></div><div class="toggle ${sharedSocks ? "on" : ""}" data-socks><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("socks_port")}</div><div class="d">${t("socks_port_d")}</div></div><input class="field sm port-field" data-sport value="${socksPort}" /></div>
+            <div class="pref"><div><div class="n">${t("ext_ip")}</div><div class="d">${t("ext_ip_d")}</div></div><div class="toggle ${extIPOn ? "on" : ""}" data-extip><i></i></div></div>
+            <div class="pref" style="flex-wrap:wrap;border:0"><div style="width:100%"><div class="n">${t("ext_ip_url")}</div><div class="d">${t("ext_ip_url_d")}</div></div><input class="field sm url-field" value="https://api.ipify.org" spellcheck="false" /></div>`;
+        const body = setTab === "route" ? route : setTab === "client" ? client : gen;
+        const foot = `
+            <div class="sheet-foot" style="display:flex;justify-content:center;gap:20px">
+              <button class="btn back" type="button" style="margin:0" data-defaults>${t("defaults")}</button>
+              <button class="btn back" type="button" style="margin:0" data-go="journal">${t("journal")}</button>
+              <button class="btn back" data-go="about" style="margin:0">${t("about")}</button>
+            </div>`;
+        return `
+        <div class="win sheet">
+          ${chrome()}
+          <div class="body">
+            <div class="head-row">
+              <h1>${t("settings")}</h1>
+              <button class="btn" data-reset style="background:#3a332e;color:var(--snow);padding:5px 10px;font-size:11.5px;margin:0;flex-shrink:0">${t("reset")}</button>
+            </div>
+            <div class="split-tabs" style="margin:8px 0 10px">
+              ${tabBtn("gen", t("set_gen"))}
+              ${tabBtn("route", t("route"))}
+              ${tabBtn("client", t("set_client"))}
+            </div>
+            ${body}
+            ${foot}
+          </div>
+        </div>`;
+      },
+      split: () => {
+        const q = splitQ.trim().toLowerCase();
+        const list = routesIn(regionTab).filter((r) => !q || rname(r).toLowerCase().includes(q));
+        const defVia = zoneDef(regionTab);
+        const policy = zoneLabel(regionTab) + " · " + (defVia ? t("split.via") : t("split.bypass"));
+        const rows = list.map((r) => {
+          const n = r.cidrs.length;
+          const net = netWord(n);
+          return `<div class="rrow" data-go="splitadd">
+            <div><div class="n">${rname(r)}</div><div class="u">${r.cidrs.slice(0, 2).join(" ")}${n > 2 ? " …" : ""}</div></div>
+            <div class="meta">${n} ${net}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : t("split.src.me")}</div></div>
+          </div>`;
+        }).join("");
+        return `
+        <div class="win split">
+          ${chrome()}
+          <div class="body">
+            <div class="head-row">
+              <h1>${t("split")}</h1>
+              <div class="toggle ${splitOn ? "on" : ""}" data-split title="${t("split")}"><i></i></div>
+            </div>
+            <div class="split-sub">${splitOn ? t("split.sub") : t("split.sub.off")}</div>
+            ${splitOn ? `<div class="split-native">${t("split.native")}</div>` : ""}
+            <div class="split-zone">
+              <div class="split-zone-head">
+                <div class="label">${t("split.zone")}</div>
+                <button type="button" class="ghost-sm" data-go="zones">${t("split.zones")}</button>
+              </div>
+              ${zoneTabs()}
+            </div>
+            <div class="split-policy">${policy}</div>
+            <input class="field sm split-search" data-sq type="search" value="${splitQ.replace(/"/g, "&quot;")}" placeholder="${t("split.search")}" spellcheck="false" />
+            <div class="split-list ${splitOn ? "" : "dim"}">${rows || `<div class="split-sub">${t("split.empty")}</div>`}</div>
+            <button class="ghost-sm" data-go="splitadd" style="align-self:flex-start;margin:8px 0 4px">+ ${t("split.add")}</button>
+            <div class="actions">
+              <button class="btn" data-go="splitin">${t("import")}</button>
+              <button class="btn" data-go="splitout">${t("export")}</button>
+              <button class="btn" data-go="splitrepo">${t("split.repo")}</button>
+            </div>
+          </div>
+        </div>`;
+      },
+      splitin: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          ${chrome()}
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.import.title")}</h1>
+            <p>${t("split.import.body")}</p>
+            <div class="drop">${t("split.import.drop")}</div>
+            <div class="hint" style="margin-top:10px">${t("split.import.detect")}</div>
+            <div class="label">${t("split.zone")}</div>
+            ${zoneSelect(false)}
+            <button class="btn connect on" style="margin-top:16px" data-go="split">${t("split.import.go")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`,
+      splitout: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          ${chrome()}
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.export.title")}</h1>
+            <p>${t("split.export.body")}</p>
+            <div class="label">${t("split.export.fmt")}</div>
+            <div class="seg">
+              <button type="button" class="${splitFmt === "loft" ? "on" : ""}" data-sfmt="loft">${t("split.export.loft")}</button>
+              <button type="button" class="${splitFmt === "keen" ? "on" : ""}" data-sfmt="keen">${t("split.export.keen")}</button>
+            </div>
+            ${splitFmt === "keen" ? `<div class="label">${t("split.zone")}</div>
+            ${zoneSelect(false)}` : ""}
+            <div class="fmt">${splitFmt === "loft"
+              ? "REM loft-routes 1.0\nREM zone: global\nroute ADD 142.250.0.0 MASK 255.255.0.0 0.0.0.0 :: rem YouTube\nREM zone: local\nroute ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"
+              : "route ADD 10.0.0.0 MASK 255.0.0.0 0.0.0.0 :: rem LAN"}</div>
+            <button class="btn connect on" data-go="split">${splitFmt === "loft" ? t("split.export.save") : t("split.export.save.keen").replace("%@", keenName())}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`,
+      splitlists: () => {
+        const z = listPickBack === "zoneedit" ? zoneById(editingZoneId) : zoneById(regionTab);
+        const cur = String((listPickBack === "zoneadd" ? addZoneRepo : (z && z.repo)) || "").trim();
+        const rows = LIST_CATALOG.map((e) => {
+          const u = listURL(e);
+          const on = cur === u ? " live" : "";
+          return `<div class="rrow${on}" data-listpick="${e.id}">
+            <div><div class="n">${locName(e)}</div><div class="u">${e.file}</div></div>
+            <div class="meta">${t("split.src.repo")}</div>
+          </div>`;
+        }).join("");
+        return `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          ${chrome()}
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.lists")}</h1>
+            <p>${t("split.lists.body")}</p>
+            <div class="split-list">${rows}</div>
+            <button class="btn back" data-go="${listPickBack}">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      splitrepo: () => {
+        const z = zoneById(regionTab) || ZONES[0];
+        return `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          ${chrome()}
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.repo")}</h1>
+            <p>${zoneLabel(z.id)} · ${t("split.repo.body")}</p>
+            ${zoneRepoFields(z, true)}
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      splitadd: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          ${chrome()}
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.add.title")}</h1>
+            <p>${addKind === "ignore" ? t("split.add.body.ignore") : t("split.add.body")}</p>
+            <div class="label">${t("split.add.kind")}</div>
+            <div class="seg">
+              <button type="button" class="${addKind === "route" ? "on" : ""}" data-kind="route">${t("split.add.route")}</button>
+              <button type="button" class="${addKind === "ignore" ? "on" : ""}" data-kind="ignore">${t("split.add.ignore")}</button>
+            </div>
+            <div class="label">${t("split.add.net")}</div>
+            <input class="field sm" placeholder="142.250.0.0/16" spellcheck="false" />
+            <div class="label">${t("split.add.name")}</div>
+            <input class="field sm" placeholder="${addKind === "ignore" ? t("split.ignore") : "YouTube"}" />
+            <div class="label">${t("split.zone")}</div>
+            ${zoneSelect(false)}
+            <button class="btn connect on" style="margin-top:16px" data-go="split">${t("split.add.go")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`,
+      zones: () => {
+        const rows = zoneIds().map((id) => {
+          const z = zoneById(id) || { id, builtin: false, def: zoneDef(id) };
+          const n = routesIn(id).length;
+          const net = netWord(n);
+          const file = zoneRepoFile(z);
+          const sub = file ? n + " " + net + " · " + file : n + " " + net;
+          return `<div class="rrow" data-zid="${id}">
+            <div><div class="n">${zoneLabel(id)}</div><div class="u">${sub}</div></div>
+            <div class="meta">${z.def ? t("split.via") : t("split.bypass")}${z.builtin ? `<div class="src">${t("split.zones.builtin")}</div>` : ""}</div>
+          </div>`;
+        }).join("");
+        return `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          ${chrome()}
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.zones")}</h1>
+            <p>${t("split.zones.add.body")}</p>
+            <div class="split-list">${rows}</div>
+            <button class="ghost-sm" data-go="zoneadd" style="align-self:flex-start;margin:8px 0 4px">+ ${t("split.zones.add")}</button>
+            <button class="btn back" data-go="split">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      zoneedit: () => {
+        const z = zoneById(editingZoneId) || zoneById("local") || ZONES[0];
+        const n = routesIn(z.id).length;
+        const net = netWord(n);
+        return `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          ${chrome()}
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.zones.edit.title")}</h1>
+            <p>${z.builtin ? t("split.zones.builtin") + " · " + n + " " + net : n + " " + net}</p>
+            <div class="label">${t("split.zones.name")}</div>
+            <input class="field sm" data-zname value="${zoneLabel(z.id).replace(/"/g, "&quot;")}" ${z.builtin ? "disabled" : ""} />
+            <div class="label">${t("split.rdef")}</div>
+            <div class="seg">
+              <button type="button" class="${z.def ? "on" : ""}" data-zdef="via">${t("split.via")}</button>
+              <button type="button" class="${!z.def ? "on" : ""}" data-zdef="bypass">${t("split.bypass")}</button>
+            </div>
+            ${zoneRepoFields(z, false)}
+            <button class="btn connect on" style="margin-top:16px" data-zsave>${t("split.zones.save")}</button>
+            ${z.builtin ? "" : `<button class="btn back" data-zdel style="color:var(--err)">${t("split.zones.del")}</button>
+            <div class="hint">${t("split.zones.move")}</div>`}
+            <button class="btn back" data-go="zones">${t("back")}</button>
+          </div>
+        </div>`;
+      },
+      zoneadd: () => `
+        <div class="win onb" style="height:auto;max-height:calc(100% - 24px)">
+          ${chrome()}
+          <div class="body" style="text-align:left;padding:8px 28px 18px">
+            <h1 style="text-align:center;font-size:1.2rem">${t("split.zones.add.title")}</h1>
+            <p>${t("split.zones.add.body")}</p>
+            <div class="label">${t("split.zones.name")}</div>
+            <input class="field sm" data-zname value="${escAttr(addZoneName)}" placeholder="EU" />
+            <div class="label">${t("split.rdef")}</div>
+            <div class="seg">
+              <button type="button" class="${addZoneVia ? "on" : ""}" data-zadddef="via">${t("split.via")}</button>
+              <button type="button" class="${!addZoneVia ? "on" : ""}" data-zadddef="bypass">${t("split.bypass")}</button>
+            </div>
+            ${zoneRepoFields({ repo: addZoneRepo, auto: addZoneAuto }, false)}
+            <button class="btn connect on" style="margin-top:16px" data-zadd>${t("split.zones.add.go")}</button>
+            <button class="btn back" data-go="zones">${t("back")}</button>
+          </div>
+        </div>`,
+      journal: () => `
+        <div class="win journal">
+          ${chrome()}
+          <div class="body">
+            <h1>${t("journal")}</h1>
+            <p class="sub">${t("journal_d")}</p>
+            <div class="log">21:14:02\tfront\tGET cdn.example.com /static/v3/build
+21:14:03\tsession\thello loft/1.0
+21:14:03\tsession\toverlay 10.8.17.4
+21:14:04\tfront\tmux up · mask</div>
+            <div class="jfoot">
+              <button type="button">${t("copy")}</button>
+              <button type="button">${t("clear_log")}</button>
+              <button type="button" data-go="main">${t("back")}</button>
+            </div>
+          </div>
+        </div>`,
+      about: () => `
+        <div class="win about">
+          ${chrome()}
+          <div class="body">
+            ${MARK.replace("MARKCLASS", "on")}
+            <h1>loft</h1>
+            <p class="ver">${t("about.ver")}</p>
+            <div class="spec-cap">${t("protos")}</div>
+            <div class="spec">
+              <span class="k">loft/1.0</span><span class="v">get · ws · h2 · quic · h3 · l3 · mask</span>
+              <span class="k">SSTP</span><span class="v">ppp · mschapv2 · pap</span>
+              <span class="k">VLESS</span><span class="v">tcp · tls</span>
+            </div>
+            <p class="blurb">${t("blurb").replace(/\n/g, "<br>")}</p>
+            <div class="upd-slot"><button class="btn connect on upd" data-updcheck>${aboutChecked ? t("upd_current") : t("upd_check")}</button></div>
+            <p class="madeby">Made with love ${HEART} by A<sup>3</sup></p>
+          </div>
+        </div>`,
+      upd: () => `
+        <div class="win offer">
+          ${chrome()}
+          <div class="body">
+            <h1>${t("upd.offer.title")}</h1>
+            <p>${t("upd.offer.body")}</p>
+            <button class="btn connect on">${t("upd.install")}</button>
+            <button class="btn ghost">${t("upd.later")}</button>
+            <div class="quiet" data-quiet>
+              <div class="loft-check" data-check></div>
+              <div>
+                <div class="n">${t("upd.quiet")}</div>
+                <div class="d">${t("upd.quiet.d")}</div>
+              </div>
+            </div>
+          </div>
+        </div>`,
+    };
+
+
+    // Right click on the tray icon. Windows has no app menu bar, so the macOS menus
+    // Loft / Connections / Tools land here.
+    function trayMenu() {
+      const p = active();
+      const on = !!(p && p.up && !p.err);
+      const conns = PROFILES.map((x) => {
+        const live = multi ? x.up : x.id === activeId && x.up;
+        const st = x.err ? t("fail") : live ? t("pill_on") : "";
+        return `<button type="button" data-profile="${x.id}"><span class="mi-row"><span class="chk">${x.id === activeId ? "✓" : ""}</span>${pname(x)}</span><span class="st">${st}</span></button>`;
+      }).join("");
+      return `
+        <div class="tray-menu">
+          <button type="button" class="tm-head" data-toggle="${p.id}"><span class="mi-row"><span class="chk"></span>${on ? t("disconnect") : t("pop_connect")} · ${pname(p)}</span></button>
+          <div class="tm-sub">
+            <button type="button"><span class="mi-row"><span class="chk"></span>${t("conns")}</span><span class="sub-arr">›</span></button>
+            <div class="tray-menu">${conns}</div>
+          </div>
+          <hr>
+          <button type="button" data-go="list"><span class="mi-row"><svg class="mi" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="9" rx="1.4"/><path d="M2.5 6.4h11"/></svg>${t("open")}</span></button>
+          <button type="button" data-go="set"><span class="mi-row"><svg class="mi" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2"/><path d="M8 2.4v1.5M8 12.1v1.5M2.4 8h1.5M12.1 8h1.5M4.1 4.1l1.1 1.1M10.8 10.8l1.1 1.1M11.9 4.1l-1.1 1.1M5.2 10.8l-1.1 1.1"/></svg>${t("settings")}</span></button>
+          <button type="button" data-split><span class="mi-row"><span class="chk">${splitOn ? "✓" : ""}</span>${t("split")}</span></button>
+          <button type="button" data-go="split"><span class="mi-row"><svg class="mi" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M8 13.4V8.1M8 8.1 3.8 3.5M8 8.1l4.2-4.6"/></svg>${t("nav.split")}</span></button>
+          <button type="button" data-go="journal"><span class="mi-row"><svg class="mi" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="2" width="9" height="12" rx="1.2"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3.5"/></svg>${t("journal")}</span></button>
+          <hr>
+          <div class="tm-sub">
+            <button type="button"><span class="mi-row"><svg class="mi" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><ellipse cx="8" cy="8" rx="2.4" ry="5.5"/><path d="M2.5 8h11"/></svg>${t("menu_lang")}</span><span class="sub-arr">›</span></button>
+            <div class="tray-menu">${LANGS.map((id) => `<button type="button" data-setlang="${id}"><span class="mi-row"><span class="chk">${lang === id ? "✓" : ""}</span>${t("pref.lang." + id)}</span></button>`).join("")}</div>
+          </div>
+          <button type="button" data-go="about"><span class="mi-row"><span class="chk"></span>${t("menu_about")}</span></button>
+          <hr>
+          <button type="button"><span class="mi-row"><span class="chk"></span>${t("menu_quit")}</span></button>
+        </div>`;
+    }
+
+    function mainWin(aside) {
+      const p = active();
+      const name = pname(p);
+      const on = !!(p && p.up && !p.err) && !heldNow;
+      const pill = on ? `${t("pill_on")}: ${name} 0:12` : t("pill_off");
+      const action = on
+        ? `<button class="btn connect on" data-toggle="${p.id}">${t("disconnect")}</button>`
+        : `<button class="btn connect" data-toggle="${p.id}">${t("pop_connect")}</button>`;
+      const cards = simpleOn ? "" : `<div class="stats">
+              <div class="stat"><div class="k">OVERLAY</div><div class="v">${on ? (p.ip || "—") : "—"}</div></div>
+              <div class="stat"><div class="k">${t("front").toUpperCase()}</div><div class="v">${on ? (p.kind || "get") : "auto"}</div></div>
+              <div class="stat"><div class="k">SOCKS5</div><div class="v">${on ? ":" + socksOf(p) : "—"}</div></div>
+            </div>
+            <div class="spark" style="padding:12px 2px 0"><span>↑ 12 kb/s</span><span>↓ 48 kb/s</span></div>`;
+      return `
+        <div class="win main ${aside ? "aside" : ""}${simpleOn ? " simple" : ""}">
+          ${chrome()}
+          <div class="body">
+            <div class="hero">
+              ${MARK.replace("MARKCLASS", on ? "on" : "")}
+              <h1>loft</h1>
+              <div class="pill pick" data-go="list"><span class="dot ${on ? "on" : ""}"></span> ${pill}</div>
+            </div>
+            ${action}
+            ${cards}
+            ${others()}
+            <div class="actions">
+              <button class="btn" data-go="journal">${t("journal")}</button>
+              <button class="btn" data-reset>${t("reset")}</button>
+              <button class="btn" data-go="split">${t("split_lists")}</button>
+              <button class="btn" data-go="set">${t("settings")}</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    const sceneEl = document.getElementById("scene");
+    const mb = document.getElementById("mb-loft");
+
+    function paintBoard() {
+      document.documentElement.lang = lang;
+      document.getElementById("board-sub").textContent = t("board.sub");
+      document.getElementById("board-lang").textContent = t("board.lang");
+      document.getElementById("board-scenes").textContent = t("board.scenes");
+      document.querySelectorAll("nav button[data-i18n]").forEach((b) => {
+        b.textContent = t(b.dataset.i18n);
+      });
+      document.querySelectorAll(".lang button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.lang === lang);
+      });
+    }
+
+    function loftWindowKey(name) {
+      return !["on", "off", "err", "hold", "switch", "traymenu"].includes(name);
+    }
+
+    // Taskbar button follows the "Taskbar button" setting (macOS: Dock icon).
+    function paintTaskbar(name) {
+      const btn = document.getElementById("tb-loft");
+      const show = dockMode === "always" || (dockMode === "window" && loftWindowKey(name));
+      btn.classList.toggle("hide", !show);
+      btn.innerHTML = MARK.replace("MARKCLASS", anyUp() && !heldNow ? "on" : "");
+      btn.onclick = () => show && window.__show && window.__show("main");
+      document.getElementById("tb-kb").textContent = lang === "ru" ? "РУС" : lang === "zh" ? "中" : "ENG";
+    }
+
+    function paintMenuLamp(name) {
+      const svg = document.getElementById("mb-svg");
+      svg.classList.remove("on", "err");
+      const hide = ["onboard", "url", "about", "import", "export"].includes(name);
+      // Off: the window is copper like the body (docs/brand loft-tray-off).
+      let st = "off";
+      if (hide) st = "off";
+      else if (heldNow || name === "hold" || name === "err" || (multi && name !== "off" && anyErr())) st = "err";
+      else if (multi) st = name !== "off" && anyUp() ? "on" : "off";
+      else if (["on", "hero", "main", "out", "switch", "traymenu", "list", "edit", "editvless", "journal", "set"].includes(name)) st = "on";
+      if (st !== "off") svg.classList.add(st);
+      svg.style.opacity = "1";
+    }
+
+    function show(name, keep) {
+      current = name;
+      if (!keep) {
+        PROFILES.forEach((p) => {
+          p.err = false;
+          if (name === "off" || name === "hold") p.up = false;
+          else if (name === "traymenu" && !multi) p.up = p.id === activeId;
+          else if (multi) p.up = p.id === "office" || p.id === "lab";
+          else p.up = p.id === activeId;
+        });
+      }
+      if (name === "err") {
+        const lab = PROFILES.find((p) => p.id === "lab");
+        lab.err = true;
+        lab.up = false;
+      }
+      if (name === "hold") {
+        PROFILES.forEach((p) => { p.up = false; p.err = false; });
+        heldNow = true;
+      } else if (!keep) {
+        heldNow = name === "off" && holdOn;
+      }
+      if (name === "about" && !keep) aboutChecked = false;
+      sceneEl.innerHTML = scenes[name]();
+      document.querySelectorAll("nav button[data-scene]").forEach((b) => b.classList.toggle("on", b.dataset.scene === name));
+      mb.classList.toggle("open", ["on", "off", "hero", "switch", "err", "hold", "traymenu"].includes(name));
+      paintMenuLamp(name);
+      paintTaskbar(name);
+      sceneEl.querySelectorAll("[data-go]").forEach((b) => {
+        b.onclick = () => {
+          applySceneZoneFields();
+          show(b.dataset.go);
+        };
+      });
+      sceneEl.querySelectorAll("[data-quiet]").forEach((row) => {
+        row.onclick = () => {
+          const box = row.querySelector("[data-check]");
+          if (box) box.classList.toggle("on");
+        };
+      });
+      sceneEl.querySelectorAll("[data-updcheck]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          if (aboutChecked) return;
+          aboutChecked = true;
+          show("about", true);
+        };
+      });
+      sceneEl.querySelectorAll(".seg").forEach((seg) => {
+        seg.querySelectorAll("button").forEach((b) => {
+          b.onclick = () => {
+            seg.querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+            b.classList.add("on");
+          };
+        });
+      });
+      sceneEl.querySelectorAll("[data-vless-mode]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          vlessMode = el.dataset.vlessMode === "manual" ? "manual" : "link";
+          show("editvless", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-loft-mode]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          loftMode = el.dataset.loftMode === "manual" ? "manual" : "link";
+          show("edit", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-edittab]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          editTab = el.dataset.edittab === "adv" ? "adv" : "main";
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-extip]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          extIPOn = !extIPOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-sport]").forEach((el) => {
+        el.onchange = () => {
+          const n = Number(el.value);
+          if (n > 0 && n < 65536) socksPort = Math.floor(n);
+        };
+      });
+      sceneEl.querySelectorAll("[data-region]").forEach((el) => {
+        const apply = (ev) => {
+          ev.stopPropagation();
+          const next = el.tagName === "SELECT" ? el.value : el.dataset.region;
+          if (!next) return;
+          regionTab = next;
+          show(current, true);
+        };
+        el[el.tagName === "SELECT" ? "onchange" : "onclick"] = apply;
+      });
+      sceneEl.querySelectorAll("[data-zid]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          editingZoneId = el.dataset.zid;
+          show("zoneedit", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zdef]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          applySceneZoneFields();
+          const z = zoneById(editingZoneId);
+          if (z) z.def = el.dataset.zdef === "via";
+          show("zoneedit", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zadddef]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          applySceneZoneFields();
+          addZoneVia = el.dataset.zadddef === "via";
+          show("zoneadd", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zsave]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          applySceneZoneFields();
+          show("zones", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-listopen]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          applySceneZoneFields();
+          listPickBack = current;
+          show("splitlists", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-listpick]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const e = LIST_CATALOG.find((x) => x.id === el.dataset.listpick);
+          if (!e) return;
+          const url = listURL(e);
+          if (listPickBack === "zoneadd") addZoneRepo = url;
+          else {
+            const z = listPickBack === "zoneedit" ? zoneById(editingZoneId) : zoneById(regionTab);
+            if (z) z.repo = url;
+          }
+          show(listPickBack, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zrepopull]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const z = applySceneZoneFields() || zoneById(regionTab);
+          if (z) z.pulled = true;
+          show("split", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zdel]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const z = zoneById(editingZoneId);
+          if (!z || z.builtin) return;
+          ROUTES.forEach((r) => { if (r.region === z.id) r.region = "global"; });
+          const i = ZONES.findIndex((x) => x.id === z.id);
+          if (i >= 0) ZONES.splice(i, 1);
+          if (regionTab === z.id) regionTab = "global";
+          editingZoneId = "local";
+          show("zones", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-zadd]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          applySceneZoneFields();
+          const name = addZoneName || "EU";
+          const id = zoneSlug(name);
+          const z = { id, builtin: false, def: addZoneVia, en: name, repo: addZoneRepo, auto: addZoneAuto };
+          z[lang] = name;
+          ZONES.push(z);
+          editingZoneId = id;
+          regionTab = id;
+          addZoneName = "";
+          addZoneRepo = "";
+          addZoneAuto = true;
+          show("zones", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-sq]").forEach((el) => {
+        el.oninput = () => {
+          splitQ = el.value;
+          const pos = el.selectionStart;
+          show("split", true);
+          requestAnimationFrame(() => {
+            const n = document.querySelector("[data-sq]");
+            if (n) {
+              n.focus();
+              try { n.setSelectionRange(pos, pos); } catch (_) {}
+            }
+          });
+        };
+      });
+      sceneEl.querySelectorAll("[data-sfmt]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          splitFmt = el.dataset.sfmt;
+          show("splitout", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-kind]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          addKind = el.dataset.kind === "ignore" ? "ignore" : "route";
+          show("splitadd", true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-sauto]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          applySceneZoneFields();
+          if (current === "zoneadd") addZoneAuto = !addZoneAuto;
+          else {
+            const z = current === "zoneedit" ? zoneById(editingZoneId) : zoneById(regionTab);
+            if (z) z.auto = z.auto === false;
+          }
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-split]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          splitOn = !splitOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-socks]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          sharedSocks = !sharedSocks;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-simple]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          simpleOn = !simpleOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-dock]").forEach((el) => {
+        el.onchange = (ev) => {
+          ev.stopPropagation();
+          dockMode = el.value || "window";
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-setlang]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          setLang(el.dataset.setlang);
+        };
+      });
+      sceneEl.querySelectorAll(".tm-sub > button").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          el.parentElement.classList.toggle("open");
+        };
+      });
+      sceneEl.querySelectorAll("[data-uilang]").forEach((el) => {
+        el.onchange = (ev) => {
+          ev.stopPropagation();
+          if (LANGS.includes(el.value)) setLang(el.value);
+        };
+      });
+      sceneEl.querySelectorAll("[data-profile]").forEach((el) => {
+        el.onclick = (ev) => {
+          if (ev.target.closest("[data-toggle],[data-edit],[data-retry]")) return;
+          if (multi) {
+            editingId = el.dataset.profile;
+            if (current === "list" || current === "main") show("edit");
+            return;
+          }
+          activeId = el.dataset.profile;
+          show(current === "switch" ? "on" : current, current === "traymenu");
+        };
+      });
+      sceneEl.querySelectorAll("[data-prefer]").forEach((el) => {
+        el.onclick = (ev) => {
+          if (ev.target.closest("[data-toggle]")) return;
+          activeId = el.dataset.prefer;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-toggle]").forEach((b) => {
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          const p = PROFILES.find((x) => x.id === b.dataset.toggle);
+          if (p) {
+            p.up = !p.up;
+            p.err = false;
+          }
+          if (holdOn && liveTuns().length === 0) heldNow = true;
+          if (liveTuns().length > 0) heldNow = false;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-retry]").forEach((b) => {
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          const p = PROFILES.find((x) => x.id === b.dataset.retry);
+          if (p) {
+            p.err = false;
+            p.up = true;
+          }
+          show("on");
+        };
+      });
+      sceneEl.querySelectorAll("[data-edit]").forEach((b) => {
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          editingId = b.dataset.edit;
+          show("edit");
+        };
+      });
+      sceneEl.querySelectorAll("[data-multi]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          multi = !multi;
+          if (!multi) {
+            const firstUp = PROFILES.find((x) => x.up);
+            if (firstUp) activeId = firstUp.id;
+          }
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-reconnect]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          reconnectOn = !reconnectOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-tun]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const p = PROFILES.find((x) => x.id === el.dataset.tun);
+          if (p) p.tun = !p.tun;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-defroute]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          defaultRouteOn = !defaultRouteOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-fail]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          failoverOn = !failoverOn;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-hold]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          holdOn = !holdOn;
+          if (!holdOn) heldNow = false;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-reset]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          heldNow = false;
+          show(current === "hold" ? "off" : current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-defaults]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          multi = false;
+          holdOn = false;
+          defaultRouteOn = true;
+          failoverOn = true;
+          splitOn = false;
+          sharedSocks = true;
+          simpleOn = false;
+          dockMode = "window";
+          reconnectOn = true;
+          socksPort = 1080;
+          heldNow = false;
+          extIPOn = true;
+          loftMode = "link";
+          editTab = "main";
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-settab]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          setTab = el.dataset.settab || "gen";
+          show("set", true);
+        };
+      });
+      try {
+        const u = new URL(location.href);
+        u.searchParams.set("scene", name);
+        u.searchParams.set("lang", lang);
+        u.searchParams.set("multi", multi ? "1" : "0");
+        u.searchParams.set("region", regionTab);
+        u.searchParams.set("zid", editingZoneId);
+        u.searchParams.set("sfmt", splitFmt);
+        u.searchParams.set("split", splitOn ? "1" : "0");
+        u.searchParams.set("socks", sharedSocks ? "1" : "0");
+        u.searchParams.set("sport", String(socksPort));
+        u.searchParams.set("simple", simpleOn ? "1" : "0");
+        u.searchParams.set("dock", dockMode);
+        u.searchParams.set("reconnect", reconnectOn ? "1" : "0");
+        u.searchParams.set("settab", setTab);
+        u.searchParams.set("extip", extIPOn ? "1" : "0");
+        u.searchParams.set("loft", loftMode);
+        u.searchParams.set("edittab", editTab);
+        history.replaceState(null, "", u);
+      } catch (_) {}
+    }
+
+    function setLang(next) {
+      lang = next;
+      paintBoard();
+      show(current);
+    }
+
+    document.querySelectorAll("nav button[data-scene]").forEach((b) => {
+      b.onclick = () => show(b.dataset.scene);
+    });
+    document.querySelectorAll(".lang button").forEach((b) => {
+      b.onclick = () => setLang(b.dataset.lang);
+    });
+    window.__show = show;
+    mb.onclick = () => show(anyUp() && !heldNow ? "on" : heldNow ? "hold" : "off", true);
+    mb.oncontextmenu = (ev) => { ev.preventDefault(); show("traymenu", true); };
+    mb.ondblclick = () => show("main", true);
+
+    const qScene = params.get("scene");
+    try {
+      paintBoard();
+      show(qScene && scenes[qScene] ? qScene : "hero");
+    } catch (e) {
+      sceneEl.textContent = String(e && e.stack || e);
+    }
+  </script>
+
+</body>
+</html>
