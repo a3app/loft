@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -64,7 +65,7 @@ func TestRelayEnrolBoundToKeyAndPin(t *testing.T) {
 		beat := uint32(50)
 		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 		defer cancel()
-		return relayCtlSession(ctx, cli, wire.EnrolReq{ID: asID, URL: "https://r.example"}, rt, &beat, &relayPin{base: pin, cur: pin}), rt
+		return relayCtlSession(ctx, cli, wire.EnrolReq{ID: asID, URL: "https://r.example"}, rt, &beat, &relayPin{base: pin, cur: pin}, ""), rt
 	}
 
 	var ee enrolError
@@ -106,7 +107,7 @@ func TestRelayFollowsKeyRoll(t *testing.T) {
 	beat := uint32(50)
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
-	err := relayCtlSession(ctx, cli, wire.EnrolReq{ID: "ru1", URL: "https://r.example"}, &relayRuntime{started: time.Now()}, &beat, pin)
+	err := relayCtlSession(ctx, cli, wire.EnrolReq{ID: "ru1", URL: "https://r.example"}, &relayRuntime{started: time.Now()}, &beat, pin, "")
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("relay refused the rolled controller: %v", err)
 	}
@@ -125,3 +126,65 @@ func TestRelayFollowsKeyRoll(t *testing.T) {
 		t.Fatal("saved key used although node.conf names another controller")
 	}
 }
+
+// TestStandbyGetsState: a relay listed as replica gets the controller's
+// files under its standby dir; an ordinary relay gets nothing; a name with
+// a path in it is not written.
+func TestStandbyGetsState(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	prev, prevState := FleetCtl, StateFn
+	FleetCtl = NewFleet(priv, &config.ServerConfig{Relays: []config.RelayEntry{{ID: "r2", Replica: true}, {ID: "ru1"}}})
+	StateFn = func() map[string][]byte {
+		return map[string][]byte{"members.keys": []byte("alice: lt_a\n"), "controller.seed": []byte("seed"), "../escape": []byte("x")}
+	}
+	t.Cleanup(func() { FleetCtl, StateFn = prev, prevState })
+
+	// run keeps the relay session up for a moment and returns its standby
+	// dir and, from while it was up, when the controller says the state went.
+	run := func(id string) (string, time.Time) {
+		cli, srv := muxPair(t)
+		srv.SetRelay(id)
+		go func() {
+			for {
+				st, err := srv.Accept()
+				if err != nil {
+					return
+				}
+				go FleetCtl.ServeCtl(st)
+			}
+		}()
+		dir := filepath.Join(t.TempDir(), "standby")
+		beat := uint32(50)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			_ = relayCtlSession(ctx, cli, wire.EnrolReq{ID: id, URL: "https://r.example"}, &relayRuntime{started: time.Now()}, &beat, &relayPin{base: pub, cur: pub}, dir)
+			close(done)
+		}()
+		time.Sleep(300 * time.Millisecond)
+		var at time.Time
+		for _, r := range FleetCtl.Live() {
+			if r.ID == id {
+				at = r.StateAt
+			}
+		}
+		cancel()
+		<-done
+		return dir, at
+	}
+	dir, at := run("r2")
+	if b, err := os.ReadFile(filepath.Join(dir, "members.keys")); err != nil || string(b) != "alice: lt_a\n" {
+		t.Fatalf("standby state: %q %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "escape")); err == nil {
+		t.Fatal("a name with a path escaped the standby dir")
+	}
+	if at.IsZero() {
+		t.Fatal("controller does not record when the standby got the state")
+	}
+	if dir, _ := run("ru1"); dirExists(dir) {
+		t.Fatal("an ordinary relay got the controller's state")
+	}
+}
+
+func dirExists(p string) bool { _, err := os.Stat(p); return err == nil }

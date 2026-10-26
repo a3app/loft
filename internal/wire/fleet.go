@@ -26,6 +26,7 @@ const (
 	FltSlice    byte = 5
 	FltDrain    byte = 6
 	FltKeyRoll  byte = 7 // the controller's key changes: an encoded KeyRoll, before enrol_ok
+	FltState    byte = 8 // to a standby controller: a copy of the controller's state (EncodeState)
 )
 
 // EnrolNo reason codes: unknown id, bad form, duplicate, disabled.

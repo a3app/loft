@@ -41,7 +41,7 @@ func applyNode(c *ServerConfig, tok []string) error {
 		// overlay id lives in network.conf; accepted and ignored.
 	case "role":
 		if len(tok) < 2 {
-			return fmt.Errorf("role wants controller|relay")
+			return fmt.Errorf("role wants controller|relay|replica")
 		}
 		c.Role = startup.Word(tok[1])
 	case "listen":
@@ -152,8 +152,10 @@ func applyNode(c *ServerConfig, tok []string) error {
 			c.ListsPath = tok[1]
 		}
 	case "controller":
+		// controller URL [standby URL …]: a relay tries them in this order.
 		if len(tok) >= 2 {
 			c.Controller = tok[1]
+			c.ControllerAlt = append([]string(nil), tok[2:]...)
 		}
 	case "id":
 		if len(tok) >= 2 {
@@ -194,6 +196,10 @@ func applyRelay(c *ServerConfig, tok []string) error {
 		k := startup.Word(tok[i])
 		if k == "drain" {
 			e.Drain = true
+			continue
+		}
+		if k == "replica" {
+			e.Replica = true
 			continue
 		}
 		if i+1 >= len(tok) {
@@ -295,12 +301,12 @@ func RenderCommands(c ServerConfig) string {
 	if c.Advertise != "" {
 		fmt.Fprintf(&b, "advertise %s\n", c.Advertise)
 	}
-	if c.Role == "relay" {
+	if c.IsRelay() {
 		if c.ID != "" {
 			fmt.Fprintf(&b, "id %s\n", c.ID)
 		}
-		if c.Controller != "" {
-			fmt.Fprintf(&b, "controller %s\n", c.Controller)
+		if urls := c.ControllerURLs(); len(urls) > 0 {
+			fmt.Fprintf(&b, "controller %s\n", strings.Join(urls, " "))
 		}
 		if c.ControllerPub != "" {
 			fmt.Fprintf(&b, "controller_pub %s\n", c.ControllerPub)
@@ -358,6 +364,9 @@ func RenderCommands(c ServerConfig) string {
 		}
 		if e.KeySHA256 != "" {
 			fmt.Fprintf(&b, " key_sha256 %s", e.KeySHA256)
+		}
+		if e.Replica {
+			b.WriteString(" replica")
 		}
 		if e.Drain {
 			b.WriteString(" drain")

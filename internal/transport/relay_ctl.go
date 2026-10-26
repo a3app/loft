@@ -13,9 +13,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"io"
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -50,7 +52,7 @@ func (rt *relayRuntime) apply(sl wire.Slice) {
 }
 
 // runRelayCtl reconnects ctl:1 until ctx is done.
-func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *relayRuntime, pin *relayPin) {
+func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *relayRuntime, pin *relayPin, standby string) {
 	id := cfg.ID
 	if id == "" {
 		id = "relay"
@@ -77,7 +79,7 @@ func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *r
 			time.Sleep(time.Second)
 			continue
 		}
-		if err := relayCtlSession(ctx, sess, req, rt, &beatMS, pin); err != nil {
+		if err := relayCtlSession(ctx, sess, req, rt, &beatMS, pin, standby); err != nil {
 			log.Printf("loft-relay: ctl %v", err)
 		}
 		select {
@@ -94,7 +96,7 @@ func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *r
 // signature by any other key is refused.
 // It returns when the stream fails or ctx ends; runRelayCtl then enrols
 // again, so a controller restart is picked up without restarting the relay.
-func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, rt *relayRuntime, beatMS *uint32, pin *relayPin) error {
+func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, rt *relayRuntime, beatMS *uint32, pin *relayPin, standby string) error {
 	st, err := sess.Open(net.JoinHostPort(wire.CtlHost, wire.CtlPort))
 	if err != nil {
 		return err
@@ -141,6 +143,11 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 	if sl.BeatMS > 0 {
 		*beatMS = sl.BeatMS
 	}
+	// A standby controller keeps the state the controller sends after
+	// enrol_ok; the stream is read here while the loop below writes beats.
+	if standby != "" {
+		go readStandbyState(st, standby)
+	}
 	t := time.NewTicker(time.Duration(*beatMS) * time.Millisecond)
 	defer t.Stop()
 	for {
@@ -159,6 +166,49 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 			}
 		}
 	}
+}
+
+// readStandbyState stores each state message under dir until the stream
+// ends. Each file is replaced whole, then "received" records when.
+func readStandbyState(st io.Reader, dir string) {
+	for {
+		raw, err := readMsg(st)
+		if err != nil {
+			return
+		}
+		kind, body, err := wire.DecodeFlt(raw)
+		if err != nil || kind != wire.FltState {
+			continue
+		}
+		files, err := wire.DecodeState(body)
+		if err != nil {
+			continue
+		}
+		if err := saveStandby(dir, files); err != nil {
+			log.Printf("loft-relay: standby state: %v", err)
+		}
+	}
+}
+
+// saveStandby writes the controller's files into dir (0700, files 0600).
+// Names are plain file names: anything with a path separator is dropped.
+func saveStandby(dir string, files map[string][]byte) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	for name, b := range files {
+		if name != filepath.Base(name) || strings.HasPrefix(name, ".") {
+			continue
+		}
+		tmp := filepath.Join(dir, name+".new")
+		if err := os.WriteFile(tmp, b, 0o600); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, filepath.Join(dir, name)); err != nil {
+			return err
+		}
+	}
+	return os.WriteFile(filepath.Join(dir, "received"), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o600)
 }
 
 // relayPin is the controller key a relay trusts. base is controller_pub

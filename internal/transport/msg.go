@@ -20,6 +20,9 @@ func writeMsg(w io.Writer, b []byte) error {
 	return err
 }
 
+// maxMsg is the largest message readMsg takes (1 MiB).
+const maxMsg = 1 << 20
+
 // readMsg reads one length-prefixed message; n > 1 MiB is an error.
 // The cap stops a corrupt or hostile length from making us allocate
 // gigabytes before any byte is authenticated.
@@ -29,7 +32,7 @@ func readMsg(r io.Reader) ([]byte, error) {
 		return nil, err
 	}
 	n := binary.BigEndian.Uint32(hdr[:])
-	if n > 1<<20 {
+	if n > maxMsg {
 		return nil, fmt.Errorf("msg too large")
 	}
 	b := make([]byte, n)

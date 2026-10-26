@@ -12,7 +12,9 @@ package transport
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"io"
+	"log"
 	"sync"
 	"time"
 
@@ -79,7 +81,12 @@ type liveRelay struct {
 	conns    uint32
 	gen      uint64
 	ctlClose func()
+	stateAt  time.Time // when a standby last got the controller's state
 }
+
+// StateFn returns the files a standby controller needs (by name); the node
+// sets it in the controller role. Nil means no standby gets state.
+var StateFn func() map[string][]byte
 
 // NewFleet starts an empty live set, signs the initial roster, and watches beats.
 func NewFleet(priv ed25519.PrivateKey, cfg *config.ServerConfig) *Fleet {
@@ -203,6 +210,11 @@ func (f *Fleet) ServeCtl(st *mux.Stream) {
 	if beatTO < time.Second {
 		beatTO = 10 * time.Second
 	}
+	if e, ok := f.yamlEntry(req.ID); ok && e.Replica && StateFn != nil {
+		done := make(chan struct{})
+		defer close(done)
+		go f.pushState(st, req.ID, gen, done)
+	}
 	for {
 		_ = st.SetReadDeadline(time.Now().Add(beatTO * evictAfter))
 		raw, err := readMsg(st)
@@ -227,6 +239,42 @@ func (f *Fleet) ServeCtl(st *mux.Stream) {
 			continue
 		}
 	}
+}
+
+// pushState keeps a standby controller's copy of the state current: the
+// whole state at once, then again whenever any file changes (checked every
+// few seconds). It is the only writer on the stream after enrol_ok.
+func (f *Fleet) pushState(st *mux.Stream, id string, gen uint64, done <-chan struct{}) {
+	var last string
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	for {
+		enc := wire.EncodeState(StateFn())
+		if sum := string(sha256Sum(enc)); sum != last {
+			if len(enc)+1 > maxMsg {
+				log.Printf("fleet: state for %s is %d bytes, over the message limit", id, len(enc))
+			} else if err := writeMsg(st, wire.EncodeFlt(wire.FltState, enc)); err != nil {
+				return
+			} else {
+				last = sum
+				f.mu.Lock()
+				if r, ok := f.live[id]; ok && r.gen == gen {
+					r.stateAt = time.Now()
+				}
+				f.mu.Unlock()
+			}
+		}
+		select {
+		case <-done:
+			return
+		case <-t.C:
+		}
+	}
+}
+
+func sha256Sum(b []byte) []byte {
+	s := sha256.Sum256(b)
+	return s[:]
 }
 
 // admit replaces any previous session for id, YAML-overrides URL/decoy/fronts, and signs a slice.
@@ -423,11 +471,12 @@ func (f *Fleet) SetRelays(rel []config.RelayEntry) {
 
 // LiveRelay is one connected relay, for the status file.
 type LiveRelay struct {
-	ID    string    `json:"id"`
-	URL   string    `json:"url,omitempty"`
-	Load  byte      `json:"load"`
-	Conns uint32    `json:"conns"`
-	Beat  time.Time `json:"beat"`
+	ID      string    `json:"id"`
+	URL     string    `json:"url,omitempty"`
+	Load    byte      `json:"load"`
+	Conns   uint32    `json:"conns"`
+	Beat    time.Time `json:"beat"`
+	StateAt time.Time `json:"state_at,omitzero"` // a standby: when it last got the state
 }
 
 // Live lists the connected relays.
@@ -436,7 +485,7 @@ func (f *Fleet) Live() []LiveRelay {
 	defer f.mu.Unlock()
 	out := []LiveRelay{}
 	for id, r := range f.live {
-		out = append(out, LiveRelay{ID: id, URL: r.info.URL, Load: r.load, Conns: r.conns, Beat: r.last})
+		out = append(out, LiveRelay{ID: id, URL: r.info.URL, Load: r.load, Conns: r.conns, Beat: r.last, StateAt: r.stateAt})
 	}
 	return out
 }

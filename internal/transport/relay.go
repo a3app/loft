@@ -20,6 +20,7 @@ import (
 	"io"
 	"net"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/a3app/loft/internal/config"
@@ -49,25 +50,10 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 		pin.path = filepath.Join(filepath.Dir(cfg.ControllerKey), "controller.pub")
 		pin.load()
 	}
-	o := config.Outbound{
-		Name:        "hub",
-		Type:        "ws",
-		URL:         cfg.Controller,
-		Fingerprint: "chrome",
-		Insecure:    true,
-	}
-	// The controller URL scheme picks the trunk front: http(s) → get,
-	// wss → ws (the default, with certificate checks off for a bare host).
-	if len(cfg.Controller) >= 8 && (cfg.Controller[:7] == "http://" || (len(cfg.Controller) >= 6 && cfg.Controller[:4] == "http" && cfg.Controller[4] != 's')) {
-		o.Type = "get"
-	}
-	if len(cfg.Controller) >= 6 && cfg.Controller[:6] == "https:" {
-		o.Type = "get"
-		o.Insecure = false
-	}
-	if len(cfg.Controller) >= 4 && cfg.Controller[:4] == "wss:" {
-		o.Type = "ws"
-		o.Insecure = false
+	// The trunk tries the controller, then any standby controllers.
+	var obs []config.Outbound
+	for k, u := range cfg.ControllerURLs() {
+		obs = append(obs, trunkOutbound(fmt.Sprintf("hub%d", k), u))
 	}
 	// The Holder keeps the current trunk; Supervise replaces it on every
 	// reconnect, so pipeHub always opens hub streams on a live mux.
@@ -77,13 +63,17 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 		_ = Supervise(ctx, &config.ClientConfig{
 			Token:     token,
 			Select:    "auto",
-			Outbounds: []config.Outbound{o},
+			Outbounds: obs,
 			// ExtraCaps is the only way a Hello gets CapRelay after MemberCaps.
 			// Without this bit the controller will not Open hub:* / ctl:1.
 			ExtraCaps: uint64(wire.CapRelay),
 		}, func(d Dialer, _ config.Outbound) { h.Set(d) })
 	}()
-	go runRelayCtl(ctx, h, cfg, rt, pin)
+	standby := ""
+	if cfg.IsReplica() && cfg.ControllerKey != "" {
+		standby = filepath.Join(filepath.Dir(cfg.ControllerKey), "standby")
+	}
+	go runRelayCtl(ctx, h, cfg, rt, pin, standby)
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return err
@@ -182,4 +172,20 @@ func waitSession(h *Holder, d time.Duration) *mux.Session {
 		time.Sleep(50 * time.Millisecond)
 	}
 	return h.Session()
+}
+
+// trunkOutbound is how a relay dials one controller URL: http(s) → the GET
+// front, wss → WebSocket (the default, with certificate checks off for a
+// bare host).
+func trunkOutbound(name, u string) config.Outbound {
+	o := config.Outbound{Name: name, Type: "ws", URL: u, Fingerprint: "chrome", Insecure: true}
+	switch {
+	case strings.HasPrefix(u, "https:"):
+		o.Type, o.Insecure = "get", false
+	case strings.HasPrefix(u, "http:"):
+		o.Type = "get"
+	case strings.HasPrefix(u, "wss:"):
+		o.Type, o.Insecure = "ws", false
+	}
+	return o
 }

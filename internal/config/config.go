@@ -160,6 +160,7 @@ type ServerConfig struct {
 	Canary        CanaryConfig        `yaml:"canary"`
 	Role          string              `yaml:"role"`           // controller | relay; empty = controller
 	Controller    string              `yaml:"controller"`     // relay: hub URL
+	ControllerAlt []string            `yaml:"controller_alt"` // relay: standby controllers' hub URLs, tried after Controller
 	RelayToken    string              `yaml:"-"`              // relay: its own key, from {dir}/relay.key
 	ControllerPub string              `yaml:"controller_pub"` // relay: controller Ed25519 key (hex) that signs its slice
 	ControllerKey string              `yaml:"controller_key"` // path to ed25519 seed
@@ -178,6 +179,7 @@ type ServerConfig struct {
 type RelayEntry struct {
 	ID        string   `yaml:"id"`
 	KeySHA256 string   `yaml:"key_sha256"` // SHA-256 of the relay's key; the key itself is in relays.keys
+	Replica   bool     `yaml:"replica"`    // a standby controller: it gets a copy of the controller's state
 	URL       string   `yaml:"url"`
 	Decoy     string   `yaml:"decoy"`
 	Fronts    []string `yaml:"fronts"`
@@ -410,7 +412,21 @@ func (c *ServerConfig) EdgeByte() (byte, error) {
 }
 
 // IsRelay is role relay (TLS edge); otherwise this node is the controller.
-func (c *ServerConfig) IsRelay() bool { return c.Role == "relay" }
+func (c *ServerConfig) IsRelay() bool { return c.Role == "relay" || c.Role == "replica" }
+
+// IsReplica is a standby controller: it runs as a relay and keeps a copy of
+// the controller's state, so it can be promoted when the controller is gone.
+func (c *ServerConfig) IsReplica() bool { return c.Role == "replica" }
+
+// ControllerURLs is the controller trunk URL followed by any alternates
+// (standby controllers), in the order a relay tries them.
+func (c *ServerConfig) ControllerURLs() []string {
+	out := []string{}
+	if c.Controller != "" {
+		out = append(out, c.Controller)
+	}
+	return append(out, c.ControllerAlt...)
+}
 
 // EnabledFronts is cfg.fronts, else outbound types, else GET.
 func (c *ClientConfig) EnabledFronts() []string {
