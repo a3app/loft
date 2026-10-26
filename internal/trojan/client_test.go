@@ -104,7 +104,7 @@ func TestParseURLRealityXHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !e.xhttp() || e.Path != "/api" {
+	if !e.xhttp() || e.Path != "/api" || e.Mode != "auto" {
 		t.Fatalf("%+v", e)
 	}
 }

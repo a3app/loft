@@ -16,7 +16,6 @@ package trojan
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -146,18 +145,10 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 		}
 	case c.ep.TLS:
 		c.stage("tls")
-		cfg := &tls.Config{
-			ServerName:         c.ep.SNI,
-			InsecureSkipVerify: c.insecure,
-			MinVersion:         tls.VersionTLS12,
-			NextProtos:         c.alpn(),
-		}
-		tc := tls.Client(raw, cfg)
-		if err := tc.Handshake(); err != nil {
-			raw.Close()
+		conn, err = xtls.DialTLS(raw, c.ep.SNI, c.ep.Fingerprint, c.alpn(), c.insecure)
+		if err != nil {
 			return nil, err
 		}
-		conn = tc
 	}
 	_ = conn.SetDeadline(time.Time{})
 	if c.ep.xhttp() {

@@ -27,6 +27,8 @@ type Endpoint struct {
 	Path        string
 	Host        string
 	Mode        string
+	PadFrom     int
+	PadTo       int
 }
 
 // ParseURL reads trojan://password@host:port?…, https://host:port, or host:port.
@@ -84,7 +86,7 @@ func ParseURL(raw, password string) (Endpoint, error) {
 		e.ShortID = q.Get("sid")
 		e.Path = q.Get("path")
 		e.Host = q.Get("host")
-		e.Mode = strings.ToLower(q.Get("mode"))
+		e.Mode, e.PadFrom, e.PadTo = xtls.XShare(q)
 		if e.PublicKey != "" || e.ShortID != "" {
 			e.Reality = true
 			e.TLS = true
@@ -152,7 +154,10 @@ func (e Endpoint) reality() xtls.Reality {
 }
 
 func (e Endpoint) xhttpCfg() xtls.XHTTP {
-	return xtls.XHTTP{Host: e.Host, SNI: e.SNI, Addr: e.Addr, Path: e.Path}
+	return xtls.XHTTP{
+		Host: e.Host, SNI: e.SNI, Addr: e.Addr, Path: e.Path,
+		Mode: e.Mode, PadFrom: e.PadFrom, PadTo: e.PadTo,
+	}
 }
 
 // truthy reads a yes/no query value the way share links write it.
