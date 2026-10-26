@@ -23,7 +23,7 @@
 
 ## 2. Bind
 
-`make -C clients/mobile android` собирает `clients/mobile/build/engine.aar` (`-androidapi 24`, страницы 16 КиБ). Приложение зависит от этого файла. Для bind нужен NDK.
+`make -C clients/mobile android` собирает `clients/mobile/build/engine.aar` (`-androidapi 24`, страницы 16 КиБ). Приложение зависит от этого файла. Для bind нужен NDK. Gradle не собирает приложение, если AAR нет или он старше Go-исходников, которые в него входят (`clients/mobile`, `internal/vless`, `internal/xtls`, `internal/protect`, `clients/go/inbound`).
 
 Java-пакет `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketProtector`, `Mobile.parseShare`, `Mobile.parseShareAll`. Snapshot содержит `IP` / `IP6`, `Prefix` / `Prefix6`, `Routes`, `FrontIPs`.
 

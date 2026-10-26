@@ -331,6 +331,67 @@ final class Profile {
         return s == null ? "" : s.trim();
     }
 
+    /** Query value of a vless:// or trojan:// share URL. */
+    String linkQuery(String key) {
+        String u = url;
+        if (u == null || key == null || key.isEmpty()) {
+            return "";
+        }
+        int q = u.indexOf('?');
+        if (q < 0) {
+            return "";
+        }
+        int hash = u.indexOf('#', q);
+        String qs = hash < 0 ? u.substring(q + 1) : u.substring(q + 1, hash);
+        for (String part : qs.split("&")) {
+            int eq = part.indexOf('=');
+            String k = eq < 0 ? part : part.substring(0, eq);
+            if (!key.equalsIgnoreCase(k)) {
+                continue;
+            }
+            String v = eq < 0 ? "" : part.substring(eq + 1);
+            try {
+                return java.net.URLDecoder.decode(v, "UTF-8");
+            } catch (Exception e) {
+                return v;
+            }
+        }
+        return "";
+    }
+
+    /** Transport from the share URL: TCP, XHTTP, WS, gRPC. */
+    String linkTransport() {
+        String t = linkQuery("type").toLowerCase();
+        if (t.isEmpty() || "tcp".equals(t)) {
+            return "TCP";
+        }
+        if ("xhttp".equals(t) || "splithttp".equals(t)) {
+            return "XHTTP";
+        }
+        if ("ws".equals(t)) {
+            return "WS";
+        }
+        if ("grpc".equals(t)) {
+            return "gRPC";
+        }
+        return t.toUpperCase();
+    }
+
+    /** Security from the share URL: TLS, REALITY, none. */
+    String linkSecurity() {
+        String s = linkQuery("security").toLowerCase();
+        if ("reality".equals(s) || !linkQuery("pbk").isEmpty() || !linkQuery("sid").isEmpty()) {
+            return "REALITY";
+        }
+        if ("none".equals(s)) {
+            return "none";
+        }
+        if ("xtls".equals(s)) {
+            return "XTLS";
+        }
+        return "TLS";
+    }
+
     /** Protocol family: loft, sstp, vless or trojan. */
     String family() {
         if (isSSTP()) {
@@ -459,8 +520,9 @@ final class Profile {
 
     /**
      * Reads a profile from one engine YAML document (as produced by
-     * Mobile.parseShareAll). The original YAML is kept as the session config;
-     * fields are only picked out for the UI and the Edit screen.
+     * Mobile.parseShareAll). Fields feed the UI, Edit, and Engine.Start:
+     * sessionYaml rebuilds the document via YamlBuilder. Mac VLESS files
+     * write uuid instead of token.
      */
     static Profile fromYaml(String yaml) {
         Profile p = new Profile();
@@ -478,6 +540,9 @@ final class Profile {
             p.name = Peek.outbound(yaml, "name");
         }
         p.token = Peek.get(yaml, "token");
+        if (p.token.isEmpty()) {
+            p.token = Peek.get(yaml, "uuid");
+        }
         if (p.token.isEmpty()) {
             p.token = Peek.get(yaml, "password");
         }

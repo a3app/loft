@@ -288,14 +288,14 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             k2.setText(R.string.trans_k);
             k3.setText(R.string.sec_k);
             v1.setText("VLESS");
-            v2.setText("TCP");
-            v3.setText("REALITY");
+            v2.setText(p == null ? "TCP" : p.linkTransport());
+            v3.setText(p == null ? "TLS" : p.linkSecurity());
         } else if ("trojan".equals(fam)) {
             k2.setText(R.string.trans_k);
             k3.setText(R.string.sec_k);
             v1.setText("Trojan");
-            v2.setText("TCP");
-            v3.setText("TLS");
+            v2.setText(p == null ? "TCP" : p.linkTransport());
+            v3.setText(p == null ? "TLS" : p.linkSecurity());
         } else {
             k2.setText(R.string.front_k);
             k3.setText(R.string.opt_k);

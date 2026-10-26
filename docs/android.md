@@ -23,7 +23,7 @@ There is no `loft-front`. The service *is* the session. It starts as a foregroun
 
 ## 2. Bind
 
-`make -C clients/mobile android` writes `clients/mobile/build/engine.aar` (`-androidapi 24`, 16 KiB pages). The app depends on that file. NDK is required for the bind.
+`make -C clients/mobile android` writes `clients/mobile/build/engine.aar` (`-androidapi 24`, 16 KiB pages). The app depends on that file. NDK is required for the bind. Gradle refuses to assemble if the AAR is missing or older than the Go it binds (`clients/mobile`, `internal/vless`, `internal/xtls`, `internal/protect`, `clients/go/inbound`).
 
 Java package `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketProtector`, `Mobile.parseShare`, `Mobile.parseShareAll`. Snapshot carries `IP` / `IP6`, `Prefix` / `Prefix6`, `Routes`, `FrontIPs`.
 

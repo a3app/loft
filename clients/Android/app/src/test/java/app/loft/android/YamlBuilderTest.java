@@ -131,6 +131,40 @@ public final class YamlBuilderTest {
     }
 
     @Test
+    public void fromYamlReadsUuid() {
+        String y = "kind: vless\nuuid: 550e8400-e29b-41d4-a716-446655440000\noutbounds:\n"
+                + "  - name: z\n    type: vless\n    url: vless://550e8400-e29b-41d4-a716-446655440000@de1.example.com:443?type=xhttp&security=tls\n";
+        Profile p = Profile.fromYaml(y);
+        assertTrue("vless".equals(p.kind));
+        assertTrue("550e8400-e29b-41d4-a716-446655440000".equals(p.token));
+        String back = YamlBuilder.from(p);
+        assertTrue(back.contains("uuid:"));
+        assertTrue(back.contains("token:"));
+        assertTrue("XHTTP".equals(p.linkTransport()));
+        assertTrue("TLS".equals(p.linkSecurity()));
+    }
+
+    @Test
+    public void vlessCardsFromUrl() {
+        Profile p = new Profile();
+        p.kind = "vless";
+        p.token = "550e8400-e29b-41d4-a716-446655440000";
+        p.url = "vless://x@h:443?type=tcp&security=reality&pbk=abc";
+        String y = YamlBuilder.from(p);
+        assertTrue(y.contains("kind: vless"));
+        assertTrue(y.contains("uuid:"));
+        assertTrue("TCP".equals(p.linkTransport()));
+        assertTrue("REALITY".equals(p.linkSecurity()));
+        p.url = "vless://x@h:443?type=xhttp&security=tls";
+        assertTrue("XHTTP".equals(p.linkTransport()));
+        assertTrue("TLS".equals(p.linkSecurity()));
+        p.url = "trojan://p@h:443?security=none";
+        p.kind = "trojan";
+        assertTrue("TCP".equals(p.linkTransport()));
+        assertTrue("none".equals(p.linkSecurity()));
+    }
+
+    @Test
     public void fromYamlSkipsPinnedCdn() {
         String y = "kind: loft\ntoken: lt_x\nedge: https://cdn.example.com\n"
                 + "outbounds:\n"

@@ -30,6 +30,9 @@ final class YamlBuilder {
             }
         } else {
             line(b, "token", p.token);
+            if (p.isVLESS()) {
+                line(b, "uuid", p.token);
+            }
         }
         b.append("select: auto\n");
         if (p.isLoft() && p.edge != null && !p.edge.isEmpty()) {

@@ -23,7 +23,7 @@ loft 在手机上怎么跑，然后是 Android TV / Google TV。目录：[client
 
 ## 2. Bind
 
-`make -C clients/mobile android` 写出 `clients/mobile/build/engine.aar`（`-androidapi 24`，16 KiB 页）。应用依赖这个文件。bind 需要 NDK。
+`make -C clients/mobile android` 写出 `clients/mobile/build/engine.aar`（`-androidapi 24`，16 KiB 页）。应用依赖这个文件。bind 需要 NDK。若 AAR 缺失或比所绑定的 Go 源码旧（`clients/mobile`、`internal/vless`、`internal/xtls`、`internal/protect`、`clients/go/inbound`），Gradle 拒绝打包。
 
 Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProtector`、`Mobile.parseShare`、`Mobile.parseShareAll`。Snapshot 带 `IP` / `IP6`、`Prefix` / `Prefix6`、`Routes`、`FrontIPs`。
 

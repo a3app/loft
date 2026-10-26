@@ -138,7 +138,54 @@ fun packEmulatorApp(apkDir: File, versionName: String, versionCode: Int, spec: E
     }
 }
 
+fun newestGo(root: File): Long {
+    var t = 0L
+    if (!root.isDirectory) {
+        return t
+    }
+    root.walkTopDown()
+        .onEnter { it.name != "build" && it.name != "vendor" }
+        .forEach { f ->
+            if (f.isFile && f.extension == "go" && f.lastModified() > t) {
+                t = f.lastModified()
+            }
+        }
+    return t
+}
+
+tasks.register("checkEngineAar") {
+    doLast {
+        val aar = project.projectDir.resolve("../../mobile/build/engine.aar")
+        val msg = "engine.aar is missing or older than Go sources; run: make -C clients/mobile android"
+        if (!aar.isFile) {
+            throw GradleException(msg)
+        }
+        val roots = listOf(
+            project.projectDir.resolve("../../mobile"),
+            project.projectDir.resolve("../../../internal/vless"),
+            project.projectDir.resolve("../../../internal/xtls"),
+            project.projectDir.resolve("../../../internal/protect"),
+            project.projectDir.resolve("../../go/inbound"),
+        )
+        var newest = 0L
+        roots.forEach { n ->
+            val t = newestGo(n)
+            if (t > newest) {
+                newest = t
+            }
+        }
+        if (aar.lastModified() < newest) {
+            throw GradleException(msg)
+        }
+    }
+}
+
 afterEvaluate {
+    tasks.matching {
+        it.name.startsWith("assemble") || it.name.startsWith("install")
+    }.configureEach {
+        dependsOn("checkEngineAar")
+    }
     val phoneApk = layout.buildDirectory.file(
         "outputs/apk/phoneGithub/debug/app-phone-github-debug.apk"
     )
