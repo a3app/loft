@@ -116,7 +116,9 @@ func l3Inet(reply func([]byte) error, who egress.Who, src net.IP, pkt []byte) {
 	}
 	switch pkt[9] {
 	case ipProtoICMP:
-		l3InetICMP(reply, src, dst, pkt, ihl)
+		if icmpOut(who, dst) {
+			l3InetICMP(reply, src, dst, pkt, ihl)
+		}
 	case ipProtoUDP:
 		l3InetUDP(reply, who, src, dst, pkt, ihl)
 	case ipProtoTCP:

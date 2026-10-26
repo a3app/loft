@@ -216,3 +216,44 @@ func TestL3UDPFollowsMemberExitRules(t *testing.T) {
 		t.Fatal("allowed member's UDP got no reply")
 	}
 }
+
+// TestInternetPingFollowsExitRules: a ping to the internet leaves only when
+// the member's route is direct, for L3 and for mux datagrams alike.
+func TestInternetPingFollowsExitRules(t *testing.T) {
+	cfg, err := egress.Parse("rule member bob via block\ndefault direct\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := egress.New(cfg, egress.Options{SysNet: t.TempDir()})
+	defer r.Close()
+	oldEg, oldPing := Egress.Load(), internetICMPPing
+	Egress.Store(r)
+	t.Cleanup(func() { Egress.Store(oldEg); internetICMPPing = oldPing })
+	pinged := make(chan string, 4)
+	internetICMPPing = func(dst net.IP, echo []byte) ([]byte, net.IP, error) {
+		pinged <- dst.String()
+		return nil, nil, io.EOF
+	}
+	sent := func() bool {
+		select {
+		case <-pinged:
+			return true
+		case <-time.After(200 * time.Millisecond):
+			return false
+		}
+	}
+	src := net.IPv4(10, 8, 0, 8)
+	req := makeEchoPkt(src, net.IPv4(8, 8, 8, 8), []byte("x"))
+	nop := func([]byte) error { return nil }
+	l3Inet(nop, egress.Who{Member: "bob"}, src, req)
+	if sent() {
+		t.Fatal("L3 ping of a blocked member left the node")
+	}
+	l3Inet(nop, egress.Who{Member: "alice"}, src, req)
+	if !sent() {
+		t.Fatal("L3 ping of an allowed member was not sent")
+	}
+	if icmpOut(egress.Who{Member: "bob"}, net.IPv4(8, 8, 8, 8)) {
+		t.Fatal("mux ping of a blocked member allowed")
+	}
+}

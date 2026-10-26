@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/net/icmp"
 
+	"github.com/a3app/loft/internal/egress"
 	"github.com/a3app/loft/internal/mux"
 )
 
@@ -45,7 +46,7 @@ func DeliverInternetICMP(from *mux.Session, pkt []byte) {
 	if dst == nil || dst.IsLoopback() || dst.IsMulticast() || dst.IsUnspecified() || dst.IsLinkLocalUnicast() {
 		return
 	}
-	if LookupAddr("", dst) == ActDrop {
+	if LookupAddr("", dst) == ActDrop || !icmpOut(whoOf(from), dst) {
 		return
 	}
 	replyTo := net.IP(pkt[12:16]).To4()
@@ -179,4 +180,12 @@ func addrIP(a net.Addr) net.IP {
 		}
 		return net.ParseIP(host)
 	}
+}
+
+// icmpOut reports whether a member's ping to dst may leave the node. Exit
+// rules carry only TCP and UDP, so a ping goes out only when the member's
+// route to dst is direct; a block rule or an assigned channel stops it.
+func icmpOut(who egress.Who, dst net.IP) bool {
+	r := Egress.Load()
+	return r == nil || r.DirectFor(who, dst.String())
 }

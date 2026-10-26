@@ -259,6 +259,27 @@ func (r *Router) Route(who Who, host string) string {
 	return r.cfg.Default
 }
 
+// DirectFor reports whether traffic of who to host leaves the node
+// directly: walking the route's steps as DialTCP does, the first usable step
+// is direct. A block step, or a live channel (SOCKS5, HTTP, SSTP, another
+// interface), gives false. ICMP cannot go through a channel, so a ping is
+// sent only when this is true; otherwise it would bypass a block rule or
+// leave from the node's own address instead of the member's channel.
+func (r *Router) DirectFor(who Who, host string) bool {
+	for _, s := range r.steps(r.Route(who, host), false) {
+		switch s {
+		case Direct:
+			return r.directUp()
+		case Block:
+			return false
+		}
+		if cs := r.ch[s]; cs != nil && r.up(cs) {
+			return false
+		}
+	}
+	return false
+}
+
 // inList matches host against a named list. An entry is a CIDR, a
 // ".suffix" (matching the domain itself and all its subdomains), an exact
 // name, or an IP. host is the name the member asked for, so a CIDR only
