@@ -61,14 +61,18 @@ Entry: Settings → Route → the toggle and the gold **Lists**. The screens are
 
 | Screen | What |
 |--------|------|
-| Lists | The title stands alone; under it a switch row **On** / **Off** with its line (through goes into the tunnel, bypass stays direct). Pulley: **Repository · Export · Import · Zones**. **Zone** + **Zones** → editor. Zone capsules with the service count. Quiet line `Global · Through loft`. Search. Rows: name, first CIDRs, network count, source (list / own / excl.); tap edits. **+ Add**. |
-| Network | Entry Route / Exclusion, network or address (one CIDR per line when editing), service, zone. Add / Save. |
+| Lists | The title stands alone; under it a switch row **On** / **Off** with its line (through goes into the tunnel, bypass stays direct). Pulley: **Clear zone · Repository · Export · Import · Zones · Select**. **Zone** + **Zones** → editor. Zone capsules with the service count. Quiet line `Global · Through loft`. Search. Rows: name, first CIDRs, network count, source (list / own); tap edits, **touch and hold** opens a context menu under the row, **Edit / Delete** (the rows below move down). A row **Exclusions · N ›**. **+ Add**. **Select** puts checks on the rows; at the bottom **Select all**, **Cancel** and **Delete (N)** (`#split-select`). |
+| Network | Entry Route / Exclusion, network or address (one CIDR per line when editing), service, zone. Add / Save. An existing entry has **Delete** in the pulley (`#splitsvc-pulley-cf`). |
+| Exclusions | “Global · Exclusions”: CIDR rows (monospace) with the service name on the right. Tap edits; touch and hold gives **Edit / Restore** (the exclusion goes, the network returns with the next list update). **+ Add** opens Network with “Exclusion” selected. Pulley: **Clear exclusions**. |
+| Clear zone | Page “Clear Global”, line “Exclusions stay.” Two rows: **Only mine** (own services go, list ones stay) and **Everything, including the list** (all go, the zone’s list is unlinked: address and auto-update are turned off); the service count on the right. A tap goes back to Lists and starts the remorse (`#splitclr`). |
 | Zones | Rows: name, network count · list file, direction, “Built-in”. **+ Add zone**. |
 | Zone | Name (locked on a built-in), direction Through loft / Bypass loft, list address + **Lists**, auto-update, Save; an own zone has Delete zone (services → Global). A new zone has the same fields. |
 | Repository | List address of the open zone + **Lists**, auto-update, last pull, Update now. |
 | Catalog | loft-routes lists: World, Russia, China, Iran, Kazakhstan, Belarus; the current one is lit. A tap sets the address and goes back. |
 | Import | From file (Documents), detected format and line count, zone, Add. |
 | Export | All zones in one loft-routes file (the zone in `REM zone:`, the service name in a comment), a sample, Save (share). |
+
+**Deleting routes** is a remorse too, but the change shows at once: the row goes, and a bar on top reads “Deleting YouTube” (several: “Deleting: 3”, a zone: “Clearing Global”, an exclusion: “Restoring 162.159.0.0/16”) with a 5 s countdown; a tap on the bar puts everything back (`#split-remorse`). A list service leaves its networks in the zone’s exclusions, or the next update would bring it back. Own services are gone for good.
 
 ---
 
@@ -194,7 +198,7 @@ Mock: [`aurora.html`](aurora.html). Same package tree as Sailfish (`aurora/`, `a
 | Home | AppBar on top with icon buttons **Connections**, **Settings** and **Scan QR code**; Home has just this one action, so it sits on the bar, no PopupMenu. No pulley, no lit line. |
 | Connections | AppBar: **‹**, title “Connections”, **+** → PopupMenu with **Scan QR code · Paste link · From file · Manually** (`#list-menu`). |
 | Press and hold | As on Sailfish: the context menu (Edit / Export / Delete) opens under its row and pushes the rows below down. |
-| Edit, Settings, Log, Lists | The Sailfish pulleys are a **⋮** AppBar button with a PopupMenu over a dimmed page. Edit: the ⋮ is on the left of the title row, because the title is right-aligned; Settings, Log, Lists: the ⋮ is at the top right of the back row. Links use `-menu` instead of `-pulley` (`#edit-menu`, `#settings-menu`, `#journal-menu`, `#list-menu`). |
+| Edit, Settings, Log, Lists | The Sailfish pulleys are a **⋮** AppBar button with a PopupMenu over a dimmed page. Edit: the ⋮ is on the left of the title row, because the title is right-aligned; Settings, Log, Lists: the ⋮ is at the top right of the back row. Links use `-menu` instead of `-pulley` (`#edit-menu`, `#settings-menu`, `#journal-menu`, `#list-menu`). Lists: ⋮ → **Select · Repository · Export · Import · Zones · Clear zone**; Network: ⋮ → **Delete**; Exclusions: ⋮ → **Clear exclusions**. |
 | Onboard | The consent hint reads “If Aurora asks to allow the VPN, tap Allow. Only once.” |
 | Everything else | As in the Sailfish mock: Edit dialog header (Cancel / Save), remorse, page headers, the Export page, the hold banner, cover, Settings → VPN. The mock nav section is **Аврора**. |
 

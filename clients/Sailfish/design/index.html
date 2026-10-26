@@ -232,6 +232,25 @@
     .rrow .m { color: var(--mute); font: 400 10.5px var(--mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .rrow .meta { text-align: right; font-size: 11px; color: var(--stone); flex-shrink: 0; }
     .rrow .meta .src { color: var(--mute); font-size: 10px; margin-top: 2px; }
+    /* Silica context menu under a route row: it pushes the rows below down */
+    .rrow.held { border-color: rgba(232,184,74,.45); background: #2a2420; }
+    .ictx { display: flex; flex-direction: column; background: #2a2420; margin: -4px 0 8px; }
+    .ictx button { background: none; border: 0; cursor: pointer; color: var(--lamp); font: 500 15px var(--ui); padding: 11px 16px; }
+    .rrow .ck {
+      flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%;
+      border: 1.5px solid var(--mute); display: flex; align-items: center; justify-content: center;
+      font: 700 11px var(--ui); color: var(--ink);
+    }
+    .rrow .ck + .grow { flex: 1; }
+    .rrow.picked { border-color: rgba(232,184,74,.45); }
+    .rrow.picked .ck { background: var(--lamp); border-color: var(--lamp); }
+    .rrow.xrow .n { font-weight: 500; }
+    .rrow .n.mono { font: 500 12.5px var(--mono); }
+    .selrow { display: flex; gap: 8px; margin-top: 10px; }
+    .selrow button { flex: 1; }
+    .selrow button:disabled { opacity: .4; cursor: default; }
+    /* remorse over a list: the change shows at once, a tap within 5 s undoes it */
+    .remorse-bar.rm-float { position: absolute; left: 0; right: 0; top: 40px; z-index: 6; }
     .rlist.dim { opacity: .5; }
     .row-3 { display: flex; gap: 6px; margin-top: 10px; }
     .row-3 .ghost { flex: 1; font-size: 12px; padding: 10px 4px; }
@@ -655,12 +674,19 @@
     <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · подключение</button>
     <h4 data-i="hRoutes">Раздельная маршрутизация</h4>
     <button type="button" data-go="split" data-i="nSplit">Маршруты · списки</button>
+    <button type="button" data-go="split" data-pulley="1" data-i="nSplitP">Маршруты · меню</button>
+    <button type="button" data-go="split" data-list="ctx" data-i="nSplitCtx">Маршруты · контекстное меню</button>
+    <button type="button" data-go="split" data-list="select" data-i="nSplitSel">Маршруты · выбор</button>
+    <button type="button" data-go="split" data-list="remorse" data-i="nSplitRm">Маршруты · удаление</button>
+    <button type="button" data-go="splitclr" data-i="nSplitClr">Маршруты · очистка зоны</button>
+    <button type="button" data-go="splitexcl" data-i="nExcl">Маршруты · исключения</button>
     <button type="button" data-go="splitsvc" data-i="nSvc">Маршруты · сеть</button>
     <button type="button" data-go="zones" data-i="nZones">Маршруты · зоны</button>
     <button type="button" data-go="zone" data-i="nZone">Маршруты · зона</button>
     <button type="button" data-go="splitrepo" data-i="nRepo">Маршруты · репозиторий</button>
     <button type="button" data-go="splitlists" data-i="nLists">Маршруты · каталог</button>
     <button type="button" data-go="splitin" data-i="nSin">Маршруты · импорт</button>
+    <button type="button" data-go="splitsvc" data-list="cf" data-pulley="1" data-i="nSvcP">Маршруты · сеть · меню</button>
     <button type="button" data-go="splitout" data-i="nSout">Маршруты · экспорт</button>
     <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
     <button type="button" data-go="journal" data-pulley="1" data-i="nJournalP">Журнал · меню</button>
@@ -1316,14 +1342,28 @@ hold  armed</pre>
 
       <div class="screen hidden" id="split">
         <div class="pull-ind"></div>
-        <div class="pull-menu"><button type="button" data-go="splitrepo" data-i="splitRepoP">Репозиторий</button><button type="button" data-go="splitout" data-i="splitOutP">Экспорт</button><button type="button" data-go="splitin" data-i="splitInP">Импорт</button><button type="button" data-go="zones" data-i="splitZonesP">Зоны</button></div>
+        <div class="pull-menu"><button type="button" data-splitmenu="clear" data-i="split.clear">Очистить зону</button><button type="button" data-go="splitrepo" data-i="splitRepoP">Репозиторий</button><button type="button" data-go="splitout" data-i="splitOutP">Экспорт</button><button type="button" data-go="splitin" data-i="splitInP">Импорт</button><button type="button" data-go="zones" data-i="splitZonesP">Зоны</button><button type="button" data-splitmenu="select" data-i="split.sel">Выбрать</button></div>
         <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
         <div class="scroll dyn" id="split-body"></div>
       </div>
 
       <div class="screen hidden" id="splitsvc">
+        <div class="pull-ind"></div>
+        <div class="pull-menu"><button type="button" class="only-old" data-svcdel data-i="delete">Удалить</button></div>
         <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
         <div class="scroll dyn" id="splitsvc-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitexcl">
+        <div class="pull-ind"></div>
+        <div class="pull-menu"><button type="button" data-splitmenu="clearexcl" data-i="split.excl.clear">Очистить исключения</button></div>
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="splitexcl-body"></div>
+      </div>
+
+      <div class="screen hidden" id="splitclr">
+        <div class="navbar"><button type="button" class="bk" data-back aria-label="Назад">‹</button></div>
+        <div class="scroll dyn" id="splitclr-body"></div>
       </div>
 
       <div class="screen hidden" id="zones">
@@ -1400,6 +1440,7 @@ hold  armed</pre>
       <div class="scrim remorse hidden" id="delScrim">
         <div class="remorse-bar" data-close="delScrim"><b id="delTitle">Удаление Office</b><span data-i="remorseCancel">Нажмите, чтобы отменить</span><i></i></div>
       </div>
+      <div class="remorse-bar rm-float hidden" id="rmBar" data-rmundo><b id="rmTitle"></b><span data-i="remorseCancel">Нажмите, чтобы отменить</span><i></i></div>
     </div>
 
     <div class="cover-stage hidden" id="cover">
@@ -1546,6 +1587,26 @@ hold  armed</pre>
         "split.zones.add.title": "Новая зона",
         "split.zones.builtin": "Встроенная",
         "split.zones.del": "Удалить зону",
+        "split.sel": "Выбрать",
+        "split.sel.all": "Выбрать все",
+        "split.del.n": "Удалить (%d)",
+        "split.back": "Вернуть",
+        "split.clear": "Очистить зону",
+        "split.clear.t": "Очистить %s",
+        "split.clear.sub": "Исключения останутся.",
+        "split.clear.me": "Только свои",
+        "split.clear.me.d": "Свои сервисы удалятся, сервисы из списка останутся.",
+        "split.clear.all": "Всё, включая список",
+        "split.clear.all.d": "Удалятся все сервисы, список зоны отвяжется: адрес и автообновление отключатся.",
+        "split.excl": "Исключения",
+        "split.excl.sub": "Эти сети не ставятся и не возвращаются при обновлении списка. Долгое нажатие — вернуть.",
+        "split.excl.empty": "Исключений нет.",
+        "split.excl.clear": "Очистить исключения",
+        "split.rm.one": "Удаление %s",
+        "split.rm.n": "Удаление: %d",
+        "split.rm.back": "Возврат %s",
+        "split.rm.clear": "Очистка %s",
+        "split.rm.excl": "Очистка исключений",
         "split.zones.edit.title": "Зона",
         "split.zones.move": "Сервисы перейдут в Global.",
         "split.zones.name": "Имя",
@@ -1561,6 +1622,13 @@ hold  armed</pre>
         nLists: "Маршруты · каталог",
         nSin: "Маршруты · импорт",
         nSout: "Маршруты · экспорт",
+        nSplitP: "Маршруты · меню",
+        nSplitCtx: "Маршруты · контекстное меню",
+        nSplitSel: "Маршруты · выбор",
+        nSplitRm: "Маршруты · удаление",
+        nSplitClr: "Маршруты · очистка зоны",
+        nExcl: "Маршруты · исключения",
+        nSvcP: "Маршруты · сеть · меню",
         hRoutes: "Раздельная маршрутизация",
         navCap: "Макет приложения Sailfish OS. Туннель — ConnMan, сессия — loft-front.",
         hApp: "Приложение",
@@ -1867,6 +1935,26 @@ hold  armed</pre>
         "split.zones.add.title": "New Zone",
         "split.zones.builtin": "Built-in",
         "split.zones.del": "Delete Zone",
+        "split.sel": "Select",
+        "split.sel.all": "Select all",
+        "split.del.n": "Delete (%d)",
+        "split.back": "Restore",
+        "split.clear": "Clear zone",
+        "split.clear.t": "Clear %s",
+        "split.clear.sub": "Exclusions stay.",
+        "split.clear.me": "Only mine",
+        "split.clear.me.d": "Your own services go; services from the list stay.",
+        "split.clear.all": "Everything, including the list",
+        "split.clear.all.d": "All services go and the zone’s list is unlinked: its address and auto-update are turned off.",
+        "split.excl": "Exclusions",
+        "split.excl.sub": "These networks are never routed and don’t come back when the list updates. Touch and hold to restore.",
+        "split.excl.empty": "No exclusions.",
+        "split.excl.clear": "Clear exclusions",
+        "split.rm.one": "Deleting %s",
+        "split.rm.n": "Deleting: %d",
+        "split.rm.back": "Restoring %s",
+        "split.rm.clear": "Clearing %s",
+        "split.rm.excl": "Clearing exclusions",
         "split.zones.edit.title": "Zone",
         "split.zones.move": "Services move to Global.",
         "split.zones.name": "Name",
@@ -1882,6 +1970,13 @@ hold  armed</pre>
         nLists: "Routes · catalog",
         nSin: "Routes · import",
         nSout: "Routes · export",
+        nSplitP: "Routes · menu",
+        nSplitCtx: "Routes · context menu",
+        nSplitSel: "Routes · select",
+        nSplitRm: "Routes · deleting",
+        nSplitClr: "Routes · clear zone",
+        nExcl: "Routes · exclusions",
+        nSvcP: "Routes · network · menu",
         hRoutes: "Split Routing",
         navCap: "Sailfish OS app mock. Tunnel is ConnMan, session is loft-front.",
         hApp: "App",
@@ -2188,6 +2283,26 @@ hold  armed</pre>
         "split.zones.add.title": "新区域",
         "split.zones.builtin": "内置",
         "split.zones.del": "删除区域",
+        "split.sel": "选择",
+        "split.sel.all": "全选",
+        "split.del.n": "删除 (%d)",
+        "split.back": "恢复",
+        "split.clear": "清空区域",
+        "split.clear.t": "清空 %s",
+        "split.clear.sub": "排除项保留。",
+        "split.clear.me": "仅自己添加的",
+        "split.clear.me.d": "删除自己添加的服务，来自列表的服务保留。",
+        "split.clear.all": "全部，包括列表",
+        "split.clear.all.d": "删除所有服务并解除区域的列表：地址和自动更新将关闭。",
+        "split.excl": "排除项",
+        "split.excl.sub": "这些网络不会加入路由，列表更新时也不会恢复。长按可恢复。",
+        "split.excl.empty": "没有排除项。",
+        "split.excl.clear": "清空排除项",
+        "split.rm.one": "正在删除 %s",
+        "split.rm.n": "正在删除：%d",
+        "split.rm.back": "正在恢复 %s",
+        "split.rm.clear": "正在清空 %s",
+        "split.rm.excl": "正在清空排除项",
         "split.zones.edit.title": "区域",
         "split.zones.move": "服务将移到 Global。",
         "split.zones.name": "名称",
@@ -2203,6 +2318,13 @@ hold  armed</pre>
         nLists: "路由 · 目录",
         nSin: "路由 · 导入",
         nSout: "路由 · 导出",
+        nSplitP: "路由 · 菜单",
+        nSplitCtx: "路由 · 上下文菜单",
+        nSplitSel: "路由 · 选择",
+        nSplitRm: "路由 · 删除",
+        nSplitClr: "路由 · 清空区域",
+        nExcl: "路由 · 排除项",
+        nSvcP: "路由 · 网络 · 菜单",
         hRoutes: "分流",
         navCap: "Sailfish OS 应用模型。隧道是 ConnMan，会话是 loft-front。",
         hApp: "应用",
@@ -2604,11 +2726,11 @@ hold  armed</pre>
     }
     // Tabs are the three rooms; Journal and About are pushed from Settings.
     // Edit, Scanner and QR are modal: Cancel / Close returns where they came from.
-    const SPLIT_SCREENS = ["split", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
+    const SPLIT_SCREENS = ["split", "splitexcl", "splitclr", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
     const TAB_OF = {}; // Silica: no tab bar
 
     const PARENT = { list: "home", settings: "home", export: "list", edit: "list", scan: "list", share: "list", journal: "settings", about: "settings",
-      split: "settings", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
+      split: "settings", splitexcl: "split", splitclr: "split", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
     let cur = "home";
     const from = {};
     // Every mock state has its own address: #edit-sstp, #settings-route, #home-off.
@@ -2689,7 +2811,15 @@ hold  armed</pre>
         editNew = !!extra.isnew;
         paintEdit();
       }
+      if (id === "split") {
+        ctxId = extra.list === "ctx" ? "cf" : null;
+        sel = extra.list === "select" ? new Set(["yt", "nf"]) : null;
+        if (extra.list) zoneTab = "global";
+      }
+      if (id === "splitsvc" && extra.list) { svcId = extra.list; svcKind = "route"; }
       if (SPLIT_SCREENS.includes(id)) paintSplitScreen(id);
+      if (id === "split" && extra.list === "remorse" && ROUTES.some((r) => r.id === "yt")) { removeSvcs(["yt"]); paintSplitScreen("split"); }
+      if (!SPLIT_SCREENS.includes(id)) document.getElementById("rmBar").classList.add("hidden");
       if (id === "settings") {
         if (extra.settab != null && extra.settab !== "") setTab = Number(extra.settab);
         paintSettings();
@@ -2927,15 +3057,20 @@ hold  armed</pre>
       { id: "yandex", en: "Yandex", ru: "Яндекс", zone: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], src: "me" },
       { id: "lan", en: "LAN", ru: "Локальная сеть", zh: "局域网", zone: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
       { id: "ign", en: "Exclusion", ru: "Исключение", zh: "排除", zone: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
+      { id: "x-cf", en: "Cloudflare", zone: "global", cidrs: ["162.159.0.0/16"], src: "ignore" },
     ];
     let splitOn = true, zoneTab = "global", splitQ = "", svcId = null, svcKind = "route";
+    // ctxId: the row whose context menu is open; sel: picked ids (null when not selecting);
+    // undo: the routes before the last removal, kept while the remorse bar runs.
+    let ctxId = null, sel = null, undo = null, rmTimer = null, xSeq = 0;
     let zoneId = "local", zoneAddVia = true, zoneAddRepo = "";
     const T = (k) => (I[lang][k] != null ? I[lang][k] : I.en[k] != null ? I.en[k] : k);
     const loc = (o) => o[lang] || o.en;
     const esc = (v) => String(v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
     const zoneById = (id) => ZONES.find((z) => z.id === id);
     const zoneName = (id) => { const z = zoneById(id); return (z && (z[lang] || z.en)) || T("split.zone." + id); };
-    const routesIn = (id) => ROUTES.filter((r) => r.zone === id);
+    const routesIn = (id) => ROUTES.filter((r) => r.zone === id && r.src !== "ignore");
+    const exclIn = (id) => ROUTES.filter((r) => r.zone === id && r.src === "ignore");
     const nets = (n) => {
       if (lang === "ru") { const d = n % 10, h = n % 100; return n + " " + (d === 1 && h !== 11 ? T("split.net") : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "сети" : T("split.nets")); }
       return n + " " + (n === 1 ? T("split.net") : T("split.nets"));
@@ -2954,14 +3089,31 @@ hold  armed</pre>
         <p class="hint">${repoFile(url) ? T("split.repo.last") : T("split.repo.none")}</p>
         ${pull ? `<div class="btns"><button type="button" class="go" data-back>${T("split.repo.pull")}</button></div>` : ""}`;
     }
-    function splitRows() {
-      const q = splitQ.trim().toLowerCase();
-      const rows = routesIn(zoneTab).filter((r) => !q || loc(r).toLowerCase().includes(q)).map((r) => `
-        <div class="rrow" data-svc="${r.id}">
+    // A route row; a long press opens its Silica context menu right under it.
+    function svcRow(r, excl) {
+      const picked = sel && sel.has(r.id);
+      const row = excl
+        ? `<div class="rrow ${ctxId === r.id ? "held" : ""}" data-svc="${r.id}">
+          <div class="grow"><div class="n mono">${r.cidrs.join(" ")}</div></div>
+          <div class="meta">${esc(loc(r))}</div>
+        </div>`
+        : `<div class="rrow ${picked ? "picked" : ""} ${ctxId === r.id ? "held" : ""}" data-svc="${r.id}">
+          ${sel ? `<span class="ck">${picked ? "✓" : ""}</span>` : ""}
           <div class="grow"><div class="n">${esc(loc(r))}</div><div class="m">${r.cidrs.slice(0, 2).join(" ")}${r.cidrs.length > 2 ? " …" : ""}</div></div>
           <div class="meta">${nets(r.cidrs.length)}<div class="src">${T("split.src." + r.src)}</div></div>
-        </div>`).join("");
+        </div>`;
+      const menu = ctxId === r.id
+        ? `<div class="ictx"><button type="button" data-svcedit="${r.id}">${T("edit")}</button><button type="button" data-rdel="${r.id}">${T(excl ? "split.back" : "delete")}</button></div>`
+        : "";
+      return row + menu;
+    }
+    function splitRows() {
+      const q = splitQ.trim().toLowerCase();
+      const rows = routesIn(zoneTab).filter((r) => sel || !q || loc(r).toLowerCase().includes(q)).map((r) => svcRow(r, false)).join("");
       return rows || `<p class="hint">${T("split.empty")}</p>`;
+    }
+    function exclRows() {
+      return exclIn(zoneTab).map((r) => svcRow(r, true)).join("") || `<p class="hint">${T("split.excl.empty")}</p>`;
     }
     const SPLIT_PAINT = {
       split: () => {
@@ -2972,12 +3124,26 @@ hold  armed</pre>
           <div class="ztabs">${ZONES.map((x) => `<button type="button" class="${x.id === zoneTab ? "on" : ""}" data-ztab="${x.id}">${esc(zoneName(x.id))} <span>${routesIn(x.id).length}</span></button>`).join("")}</div>
           <div class="policy">${esc(zoneName(zoneTab))} · ${dirOf(z.def)}</div>
           <label class="field"><input type="search" data-sq value="${esc(splitQ)}" placeholder="${esc(T("split.search"))}" /></label>
-          <div class="rlist ${splitOn ? "" : "dim"}" id="splitRows">${splitRows()}</div>
-          <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>
+          <div class="rlist ${splitOn && !sel ? "" : sel ? "" : "dim"}" id="splitRows">${splitRows()}</div>
+          ${sel
+            ? `<button type="button" class="ghost-sm" data-selall>${T("split.sel.all")}</button>
+          <div class="selrow"><button type="button" class="ghost" data-selx>${T("cancel")}</button><button type="button" class="danger" data-seldel ${sel.size ? "" : "disabled"}>${T("split.del.n").replace("%d", sel.size)}</button></div>`
+            : `<div class="rrow xrow" data-go="splitexcl"><div class="grow"><div class="n">${T("split.excl")}</div></div><div class="meta">${exclIn(zoneTab).length} ›</div></div>
+          <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>`}
 `;
+      },
+      splitexcl: () => head(esc(zoneName(zoneTab)) + " · " + T("split.excl"), T("split.excl.sub")) + `
+          <div class="rlist">${exclRows()}</div>
+          <button type="button" class="ghost-sm" data-svc="new">+ ${T("split.add")}</button>`,
+      splitclr: () => {
+        const svcs = routesIn(zoneTab), mine = svcs.filter((r) => r.src === "me").length;
+        const row = (how, k, n) => `<button type="button" class="exp-row" data-clr="${how}"><span>${T(k)}<br><span class="s">${T(k + ".d")}</span></span><span class="s">${n}</span></button>`;
+        return head(T("split.clear.t").replace("%s", esc(zoneName(zoneTab))), T("split.clear.sub")) +
+          row("me", "split.clear.me", mine) + row("all", "split.clear.all", svcs.length);
       },
       splitsvc: () => {
         const r = svcId && ROUTES.find((x) => x.id === svcId);
+        document.querySelectorAll("#splitsvc .only-old").forEach((b) => b.classList.toggle("hidden", !r));
         const ign = svcKind === "ignore";
         return head(T("split.add.title"), ign ? T("split.add.body.ignore") : T("split.add.body")) + `
           <label class="field"><span>${T("split.add.kind")}</span></label>
@@ -3038,12 +3204,80 @@ hold  armed</pre>
       const el = document.getElementById(id + "-body");
       if (el && SPLIT_PAINT[id]) el.innerHTML = SPLIT_PAINT[id]();
     }
+
+    /* Silica remorse: the change shows at once and the bar counts down 5 s;
+       a tap on it puts everything back. A service from the zone's list leaves
+       its networks behind as exclusions, or the next list update would bring
+       it back. */
+    function remorse(title) {
+      const bar = document.getElementById("rmBar");
+      document.getElementById("rmTitle").textContent = title;
+      bar.classList.add("hidden");
+      void bar.offsetWidth; // restart the countdown line
+      bar.classList.remove("hidden");
+      clearTimeout(rmTimer);
+      rmTimer = setTimeout(() => { bar.classList.add("hidden"); undo = null; }, 5000);
+    }
+    function remember() {
+      undo = { routes: ROUTES.map((r) => Object.assign({}, r)), zones: ZONES.map((z) => Object.assign({}, z)) };
+    }
+    function removeSvcs(ids) {
+      const gone = ROUTES.filter((r) => ids.includes(r.id));
+      if (!gone.length) return;
+      remember();
+      gone.forEach((r) => {
+        ROUTES.splice(ROUTES.indexOf(r), 1);
+        if (r.src === "repo") r.cidrs.forEach((c) => ROUTES.push({ id: "x" + ++xSeq, en: r.en, ru: r.ru, zh: r.zh, zone: r.zone, cidrs: [c], src: "ignore" }));
+      });
+      const one = gone[0];
+      remorse(gone.length > 1 ? T("split.rm.n").replace("%d", gone.length)
+        : one.src === "ignore" ? T("split.rm.back").replace("%s", one.cidrs[0]) : T("split.rm.one").replace("%s", loc(one)));
+    }
+    function clearZone(how) {
+      remember();
+      const z = zoneById(zoneTab);
+      const keep = (r) => r.zone !== z.id || (how === "excl" ? r.src !== "ignore" : how === "me" ? r.src !== "me" : r.src === "ignore");
+      ROUTES.splice(0, ROUTES.length, ...ROUTES.filter(keep));
+      if (how === "all") { z.repo = ""; z.auto = false; }
+      remorse(how === "excl" ? T("split.rm.excl") : T("split.rm.clear").replace("%s", zoneName(z.id)));
+    }
+    let hold = null, swallow = false;
     const phoneEl = document.getElementById("phone");
     phoneEl.addEventListener("click", (e) => {
-      const at = (sel) => e.target.closest(sel);
+      const at = (q) => e.target.closest(q);
       let el;
+      if (swallow) { swallow = false; return; }
       if (at("#setSplit")) { splitOn = at("#setSplit").classList.contains("on"); return; }
+      if (at("[data-rmundo]")) {
+        if (undo) { ROUTES.splice(0, ROUTES.length, ...undo.routes); undo.zones.forEach((z, i) => Object.assign(ZONES[i], z)); undo = null; }
+        clearTimeout(rmTimer);
+        document.getElementById("rmBar").classList.add("hidden");
+        if (SPLIT_SCREENS.includes(cur)) paintSplitScreen(cur);
+        return;
+      }
+      if ((el = at("[data-splitmenu]"))) {
+        const a = el.getAttribute("data-splitmenu");
+        el.closest(".screen").classList.remove("pulled");
+        if (a === "select") { sel = new Set(); ctxId = null; paintSplitScreen("split"); }
+        else if (a === "clear") show("splitclr");
+        else if (a === "clearexcl") { clearZone("excl"); paintSplitScreen("splitexcl"); }
+        return;
+      }
+      if (at("[data-svcdel]")) { el = at("[data-svcdel]"); el.closest(".screen").classList.remove("pulled"); removeSvcs([svcId]); goBack(); return; }
       if (!at(".dyn")) return;
+      if ((el = at("[data-rdel]"))) { ctxId = null; removeSvcs([el.getAttribute("data-rdel")]); paintSplitScreen(cur); return; }
+      if ((el = at("[data-svcedit]"))) { ctxId = null; svcId = el.getAttribute("data-svcedit"); const r = ROUTES.find((x) => x.id === svcId); svcKind = r && r.src === "ignore" ? "ignore" : "route"; show("splitsvc"); return; }
+      if ((el = at("[data-clr]"))) { clearZone(el.getAttribute("data-clr")); goBack(); return; }
+      if (at("[data-selx]")) { sel = null; paintSplitScreen("split"); return; }
+      if (at("[data-selall]")) { const all = routesIn(zoneTab).map((r) => r.id); sel = sel.size === all.length ? new Set() : new Set(all); paintSplitScreen("split"); return; }
+      if (at("[data-seldel]")) { const ids = [...sel]; sel = null; removeSvcs(ids); paintSplitScreen("split"); return; }
+      if (ctxId && !at(".ictx")) { ctxId = null; paintSplitScreen(cur); return; }
+      if (sel && (el = at("[data-svc]")) && el.getAttribute("data-svc") !== "new") {
+        const id = el.getAttribute("data-svc");
+        if (sel.has(id)) sel.delete(id); else sel.add(id);
+        paintSplitScreen("split");
+        return;
+      }
       if ((el = at("[data-split]"))) {
         splitOn = !splitOn;
         document.getElementById("setSplit").classList.toggle("on", splitOn);
@@ -3053,7 +3287,7 @@ hold  armed</pre>
         const id = el.getAttribute("data-svc");
         svcId = id === "new" ? null : id;
         const r = svcId && ROUTES.find((x) => x.id === svcId);
-        svcKind = r && r.src === "ignore" ? "ignore" : "route";
+        svcKind = (r ? r.src === "ignore" : cur === "splitexcl") ? "ignore" : "route";
         show("splitsvc");
       } else if ((el = at("[data-kind]"))) { svcKind = el.getAttribute("data-kind"); paintSplitScreen("splitsvc"); }
       else if ((el = at("[data-zone]"))) {
@@ -3076,6 +3310,18 @@ hold  armed</pre>
       else if ((el = at("[data-go]"))) { show(el.getAttribute("data-go"), attrsOf(el)); }
       else if (at("[data-back]")) { goBack(); }
     });
+    phoneEl.addEventListener("pointerdown", (e) => {
+      const row = e.target.closest("#split-body [data-svc], #splitexcl-body [data-svc]");
+      swallow = false;
+      if (!row || sel || row.getAttribute("data-svc") === "new" || (e.button && e.button !== 0)) return;
+      const id = row.getAttribute("data-svc");
+      clearTimeout(hold);
+      hold = setTimeout(() => { hold = null; swallow = true; ctxId = id; paintSplitScreen(cur); }, 480);
+    });
+    ["pointerup", "pointercancel", "pointermove"].forEach((t) => phoneEl.addEventListener(t, (e) => {
+      if (t === "pointermove" && !(e.movementX || e.movementY)) return;
+      clearTimeout(hold);
+    }));
     phoneEl.addEventListener("input", (e) => {
       if (e.target.matches("[data-sq]")) { splitQ = e.target.value; document.getElementById("splitRows").innerHTML = splitRows(); }
     });
