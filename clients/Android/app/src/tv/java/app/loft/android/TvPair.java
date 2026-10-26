@@ -87,9 +87,10 @@ final class TvPair {
 
     /**
      * Minimal HTTP/1.1 handler: reads headers up to the blank line (8 KiB cap),
-     * then a body of Content-Length bytes (256 KiB cap). A POST body is the
-     * profiles text sent by the phone and goes to {@code onBody}; any other
-     * request gets the pairing code back.
+     * then a body of Content-Length bytes (256 KiB cap). Only POST /pair with
+     * the code shown on screen is accepted: its body is the profiles text sent
+     * by the phone and goes to {@code onBody}. Anything else, from any device
+     * on the LAN, gets 404 and changes nothing; the code is never sent back.
      */
     private void handle(Socket s, Consumer<String> onBody, Handler h) throws Exception {
         InputStream in = s.getInputStream();
@@ -121,7 +122,8 @@ final class TvPair {
                 }
             }
         }
-        boolean post = hdr.startsWith("POST ");
+        int eol = hdr.indexOf("\r\n");
+        boolean ok = PairUrl.authorized(eol < 0 ? hdr : hdr.substring(0, eol), code);
         byte[] body = new byte[Math.max(0, Math.min(len, 256 * 1024))];
         int got = 0;
         while (got < body.length) {
@@ -133,19 +135,19 @@ final class TvPair {
         }
         String text = new String(body, 0, got, StandardCharsets.UTF_8);
         OutputStream out = s.getOutputStream();
-        if (post) {
+        if (ok) {
             if (!text.isEmpty()) {
                 h.post(() -> onBody.accept(text));
             }
             reply(out, 200, "ok\n");
         } else {
-            reply(out, 200, code + "\n");
+            reply(out, 404, "not found\n");
         }
     }
 
     private static void reply(OutputStream out, int code, String body) throws Exception {
         byte[] b = body.getBytes(StandardCharsets.UTF_8);
-        String h = "HTTP/1.1 " + code + " OK\r\n"
+        String h = "HTTP/1.1 " + code + (code == 200 ? " OK" : " Not Found") + "\r\n"
                 + "Content-Type: text/plain; charset=utf-8\r\n"
                 + "Content-Length: " + b.length + "\r\n"
                 + "Connection: close\r\n\r\n";

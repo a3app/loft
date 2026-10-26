@@ -22,4 +22,17 @@ public final class PairUrlTest {
         assertFalse(PairUrl.isPair(""));
         assertFalse(PairUrl.isPair(null));
     }
+
+    @Test
+    public void onlyPostWithTheCodeIsAuthorized() {
+        assertTrue(PairUrl.authorized("POST /pair?c=K7M2P4 HTTP/1.1", "K7M2P4"));
+        assertFalse(PairUrl.authorized("POST /pair?c=K7M2P5 HTTP/1.1", "K7M2P4"));
+        assertFalse(PairUrl.authorized("POST /pair HTTP/1.1", "K7M2P4"));
+        assertFalse(PairUrl.authorized("POST /pair?c= HTTP/1.1", "K7M2P4"));
+        assertFalse(PairUrl.authorized("GET /pair?c=K7M2P4 HTTP/1.1", "K7M2P4"));
+        assertFalse(PairUrl.authorized("POST /other?c=K7M2P4 HTTP/1.1", "K7M2P4"));
+        assertFalse(PairUrl.authorized("POST /pair?c=K7M2P4 HTTP/1.1", ""));
+        assertFalse(PairUrl.authorized("", "K7M2P4"));
+        assertFalse(PairUrl.authorized(null, "K7M2P4"));
+    }
 }

@@ -9,6 +9,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * LAN pairing: TV listens on http://ip:port/pair?c=CODE, phone POSTs YAML.
@@ -33,6 +34,33 @@ final class PairUrl {
 
     static String build(String host, int port, String code) {
         return "http://" + host + ":" + port + PATH + "?c=" + code;
+    }
+
+    /**
+     * True when an HTTP request line is the phone's import: {@code POST /pair}
+     * with the code the TV shows. Anyone on the LAN can reach the TV's
+     * listener, so a request without the right code must not change profiles.
+     * The comparison takes the same time wherever the codes differ.
+     */
+    static boolean authorized(String requestLine, String code) {
+        if (requestLine == null || code == null || code.isEmpty()) {
+            return false;
+        }
+        String[] p = requestLine.trim().split(" ");
+        if (p.length < 2 || !"POST".equals(p[0]) || !p[1].startsWith("/")) {
+            return false;
+        }
+        URI u;
+        try {
+            u = URI.create("http://tv" + p[1]);
+        } catch (Exception e) {
+            return false;
+        }
+        String got = query(u, "c");
+        if (!PATH.equals(u.getPath()) || got == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(got.getBytes(StandardCharsets.UTF_8), code.getBytes(StandardCharsets.UTF_8));
     }
 
     /** POST body to the TV listener. Callback on the main thread. */
