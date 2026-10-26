@@ -1,5 +1,13 @@
 // Package config loads client.yaml and node config (YAML or switch-style
 // commands). CDN vendor names are deployment profiles, not protocol caps.
+//
+// Two programs read this package. The client (loft) reads client.yaml: its
+// member key, the local SOCKS5/TUN inbound, and the list of outbounds (the
+// node addresses and fronts to try). The node (loft-node) reads its own
+// config (server.yaml, or the same settings written as switch-style
+// commands): listen address, certificate, enabled fronts, decoy site, and
+// its fleet role (controller or relay). The overlay network itself
+// (members, IPs, ACL) is not here; it lives in network.conf (internal/netconf).
 package config
 
 import (
@@ -15,6 +23,12 @@ import (
 )
 
 // ClientConfig is clients/go/configs/client.yaml.
+//
+// Bootstrap, ControllerPub and Tofu control the roster: the client fetches
+// the controller-signed list of entry points from Bootstrap and checks it
+// against ControllerPub. With Tofu ("trust on first use") and no key set,
+// the first valid roster's key is pinned. Use and Default map the names of
+// signed address lists to routing actions (direct, via loft, drop).
 type ClientConfig struct {
 	Listen        ListenConfig      `yaml:"listen"`
 	Token         string            `yaml:"token"`
@@ -90,7 +104,10 @@ func WriteClient(path string, cfg *ClientConfig) error {
 	return os.WriteFile(path, b, 0o600)
 }
 
-// Outbound is one TLS edge the client will try.
+// Outbound is one TLS edge the client will try: a node (or a CDN in front
+// of it) at URL, reached over one front (Type). Fingerprint picks which
+// browser's TLS ClientHello to imitate. Decoy and MaskPub are what the
+// client last learned about the node's cover site and mask key.
 type Outbound struct {
 	Name         string `yaml:"name"`
 	Type         string `yaml:"type"` // get | ws | h2 | quic | h3 | l3
@@ -114,6 +131,12 @@ func (o Outbound) UseMux() bool {
 }
 
 // ServerConfig is node listen, fronts, decoy, and controller/relay role.
+//
+// A controller is the main node: it holds members, leases and the signing
+// key. A relay is an extra entry point that forwards its clients to the
+// controller over one mux "trunk" and enrols itself in the controller's
+// roster (Enrol: list = only relays named in Relays, open = any relay with
+// a valid key).
 type ServerConfig struct {
 	Listen        string              `yaml:"listen"`
 	CertFile      string              `yaml:"cert"`
@@ -274,6 +297,9 @@ func LoadServer(path string) (*ServerConfig, error) {
 }
 
 // finishServer fills listen :443, default paths, ALPN h3, and role controller.
+// Both the YAML and the command parser end here, so the defaults are the
+// same whichever format the file uses. It also rejects a bad edge preset
+// or an unknown inner cipher name.
 func finishServer(c *ServerConfig) (*ServerConfig, error) {
 	if c.Listen == "" {
 		c.Listen = ":443"

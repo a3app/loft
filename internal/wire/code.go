@@ -1,6 +1,10 @@
 package wire
 
 // Handshake and stream status codes. Numeric values are stable; names may grow.
+// The high byte groups the codes: 0x01xx auth (the key was not accepted),
+// 0x02xx session and protocol, 0x03xx overlay address and VLAN, 0x04xx
+// policy, 0x05xx streams. Status carries a Code for the whole session;
+// CmdReset carries one for a single stream.
 
 import "fmt"
 

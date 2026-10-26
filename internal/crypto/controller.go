@@ -1,6 +1,12 @@
 package crypto
 
 // Controller Ed25519 seed and signatures over roster, lists, and fleet slices.
+//
+// The controller is the main node of a fleet. It signs everything that
+// clients and relays must trust but that travels through other hands (a
+// relay, a CDN, a public URL): the roster of entry points, the routing
+// lists, and each relay's settings (slice). Clients check the signature,
+// so a relay cannot forge any of them.
 
 import (
 	"crypto/ed25519"
@@ -16,6 +22,7 @@ import (
 
 // LoadControllerKey returns a stable Ed25519 key: file if present, else
 // HKDF(token) and the seed is written to path so signatures survive restart.
+// With an empty token the seed comes from the fixed string "loft".
 func LoadControllerKey(path, token string) (ed25519.PrivateKey, error) {
 	if path != "" {
 		if b, err := os.ReadFile(path); err == nil && len(b) >= ed25519.SeedSize {

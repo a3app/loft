@@ -1,5 +1,10 @@
 // Package startup scans loft node and overlay config written as
 // switch-style commands (Keenetic / D-Link / Cisco extended ACL).
+//
+// This is only the tokenizer shared by internal/config (node config) and
+// internal/netconf (network.conf): it splits a file into lines and words,
+// drops # comments, and records indentation, which marks lines that belong
+// to the block above (for example the lines under "ipif overlay").
 package startup
 
 import (
@@ -7,7 +12,9 @@ import (
 	"unicode"
 )
 
-// Line is one config command.
+// Line is one config command: N is the 1-based line number in the file
+// (for error messages), Indent the leading spaces, Tok the words, and Raw
+// the line without its comment.
 type Line struct {
 	N      int
 	Indent int

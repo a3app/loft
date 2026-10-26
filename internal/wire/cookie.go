@@ -2,6 +2,12 @@ package wire
 
 // Cookie encoding for GET uplink. Handshake Cookie stays base64url.
 // Later GETs MAY use Z85 when Status uplink_enc is 1.
+//
+// On the GET front the client has no request body to send data in, so
+// client-to-node traffic ("uplink") rides in the Cookie header of each GET.
+// A header has a size limit (the "header budget"), so the encoding matters:
+// Z85 turns 4 bytes into 5 characters, base64 turns 3 into 4, which leaves
+// a little more room for mux data in the same header.
 
 import (
 	"encoding/base64"
@@ -17,9 +23,11 @@ const (
 	UplinkCookie85 byte = 1
 )
 
+// cookie85tag marks a Z85 value. '~' never appears in base64url, so the
+// node can accept both encodings without being told which one is used.
 const cookie85tag = '~'
 
-// RFC 32 Z85.
+// z85alphabet is ZeroMQ RFC 32 Z85.
 const z85alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
 
 var (
@@ -54,6 +62,9 @@ func DecodeUplink(s string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(s)
 }
 
+// encodeCookie85 is '~' || Z85(u16be length || blob || zero pad). Z85 works
+// on 4-byte groups, so the blob is padded and the length prefix tells the
+// decoder where the real bytes end.
 func encodeCookie85(blob []byte) string {
 	n := len(blob)
 	if n > 0xffff {
@@ -67,6 +78,8 @@ func encodeCookie85(blob []byte) string {
 	return string(cookie85tag) + z85Encode(buf)
 }
 
+// decodeCookie85 reverses encodeCookie85 (without the leading '~') and
+// drops the padding.
 func decodeCookie85(s string) ([]byte, error) {
 	raw, err := z85Decode(s)
 	if err != nil {
@@ -84,6 +97,7 @@ func decodeCookie85(s string) ([]byte, error) {
 	return out, nil
 }
 
+// z85Encode encodes whole 4-byte groups; the caller pads src first.
 func z85Encode(src []byte) string {
 	n := len(src) / 4
 	out := make([]byte, n*5)
@@ -97,6 +111,8 @@ func z85Encode(src []byte) string {
 	return string(out)
 }
 
+// z85Decode decodes 5-character groups. A length that is not a multiple of
+// 5 or a character outside the alphabet is an error.
 func z85Decode(s string) ([]byte, error) {
 	if len(s) == 0 || len(s)%5 != 0 {
 		return nil, errCookie

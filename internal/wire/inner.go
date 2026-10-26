@@ -7,6 +7,11 @@ import (
 
 // Data-cipher ids on the optional Hello/Status byte.
 // An absent byte is ChaCha20-Poly1305. A present 0 is no inner AEAD.
+//
+// "Inner" is the frame encryption that loft adds inside TLS. The client
+// asks for a cipher in Hello and the node answers in Status. "clear" turns
+// the inner layer off (TLS still protects the link); it is meant for
+// direct fronts where the extra encryption only costs CPU.
 const (
 	InnerClear  byte = 0
 	InnerChaCha byte = 1
@@ -58,6 +63,8 @@ func AgreeInner(front string, askSet bool, ask byte, allow []byte) (set bool, id
 	}
 }
 
+// allowsInner reports whether the node policy lists id. ChaCha is always
+// allowed because it is the default every peer supports.
 func allowsInner(allow []byte, id byte) bool {
 	if id == InnerChaCha {
 		return true

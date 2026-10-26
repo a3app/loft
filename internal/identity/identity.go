@@ -1,5 +1,11 @@
 // Package identity is the member key: lt_ plus 48 hex characters (24 bytes).
 // The node stores SHA-256(key); HMAC/HKDF need the plaintext in members.keys.
+//
+// A member is one device or person allowed to use the node. Its key is
+// both its login and the secret behind the 0x02 handshake proof. Two files
+// hold it on the node: network.conf keeps only the hash (safe to show in
+// the panel and in backups), and members.keys keeps the plaintext, because
+// the node must compute the same HMAC as the client to check the proof.
 package identity
 
 import (

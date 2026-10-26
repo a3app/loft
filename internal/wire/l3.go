@@ -1,6 +1,11 @@
 package wire
 
 // L3 inner frames after Status on the l3 front: one type byte, then payload.
+//
+// The l3 front does not use the mux at all. It carries raw IP packets (from
+// a TUN device) over an HTTP/2 CONNECT stream, one encrypted message per
+// packet or per batch of packets. This avoids per-connection streams when
+// the client routes a whole device through loft.
 
 import (
 	"encoding/binary"

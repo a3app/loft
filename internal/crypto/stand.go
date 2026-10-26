@@ -12,6 +12,8 @@ import (
 // LOFT_STAND_INNER=cache keeps one ChaCha AEAD per key.
 // LOFT_STAND_INNER=clear skips the inner AEAD. Both peers must set clear.
 // Do not set these on the live :444 node.
+// A "stand" is the test bench used to measure throughput; these switches
+// let it compare the cost of the inner AEAD against no encryption.
 
 var standAEADCache sync.Map
 
@@ -19,6 +21,8 @@ func standInner() string { return os.Getenv("LOFT_STAND_INNER") }
 
 func standClear() bool { return standInner() == "clear" }
 
+// standAEAD is the ChaCha20-Poly1305 constructor used by Seal and Open. In
+// production it builds a new AEAD per call; with "cache" it reuses one.
 func standAEAD(key []byte) (cipher.AEAD, error) {
 	if standInner() != "cache" {
 		return chacha20poly1305.New(key)

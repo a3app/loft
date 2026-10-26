@@ -1,6 +1,11 @@
 package wire
 
 // CmdFront selects which attached front carries bulk mux.
+//
+// A client can attach extra fronts (for example WebSocket) to a live GET
+// session with the 0x04 attach message, without a new handshake. With
+// several fronts attached, CmdFront says which one should carry the bulk
+// traffic from now on.
 
 // EncodeFront is the CmdFront payload: the front name (get, ws, h2, quic, h3).
 func EncodeFront(name string) []byte {

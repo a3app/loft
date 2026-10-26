@@ -136,6 +136,9 @@ func (s Seg) DNSServers() []string {
 	return out
 }
 
+// validateSegs checks the overlay and every VLAN CIDR: IPv4, at most a /16
+// (the allocator scans addresses one by one), no two segments overlapping,
+// pool bounds inside the CIDR, and the VLAN gateway inside its CIDR.
 func (n *Network) validateSegs() error {
 	type span struct {
 		lo, hi uint32
@@ -191,6 +194,8 @@ func (n *Network) validateSegs() error {
 	return nil
 }
 
+// cidrSpan is the first and last IPv4 address of n as integers, for the
+// overlap check. IPv6 is 0, 0.
 func cidrSpan(n *net.IPNet) (lo, hi uint32) {
 	ip := n.IP.To4()
 	if ip == nil {

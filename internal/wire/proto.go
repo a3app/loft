@@ -19,7 +19,9 @@ func ProtoString(v uint16) string {
 }
 
 // Cap is a feature bit advertised on the inner handshake (inside TLS).
-// Only protocol abilities, never build or OS version.
+// Only protocol abilities, never build or OS version. The client lists its
+// caps in Hello, the node lists its own in Status, and each side uses a
+// feature only when the other side has the bit.
 type Cap uint64
 
 // Capability bits on Hello/Status. SOCKS, TUN, CDN vendor, OS, and origin names are not caps.
@@ -72,7 +74,8 @@ const NodeCaps = CapMulti | CapResume | CapStickyIP | CapVLAN | CapRules |
 // CapHold stays so a path drop still parks the mux (fresh 0x02, same instance_id).
 const MemberCaps = NodeCaps &^ CapRelay
 
-// capName is bit i of Cap in protocol order (see protocol.md §5.3).
+// capName is the name of bit i of Cap, in protocol order. The order must
+// match the iota list above, because bit numbers are fixed on the wire.
 var capName = [...]string{
 	"multi", "resume", "sticky_ip", "vlan", "rules",
 	"get", "ws", "status", "timers", "hello_caps", "reset",

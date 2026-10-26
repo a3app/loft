@@ -1,6 +1,12 @@
 package netconf
 
 // Live overlay leases: sticky member IPs, multi-instance caps, hold-then-GC.
+//
+// A lease ties one running client install (member id + instance_id) to an
+// overlay IP. When the client disconnects, the lease goes offline but the
+// IP stays reserved for the lease hold time; a reconnect inside that window
+// resumes the same lease (Status code ok_resumed). After the hold the lease
+// is garbage-collected and the IP returns to the pool.
 
 import (
 	"bytes"
@@ -199,6 +205,7 @@ func (n *Network) AllocateIPIn(vlan int, used map[string]bool) (string, error) {
 	return n.nextFreeIn(vlan, used)
 }
 
+// nextFree is nextFreeIn for the default overlay.
 func (n *Network) nextFree(used map[string]bool) (string, error) {
 	return n.nextFreeIn(0, used)
 }

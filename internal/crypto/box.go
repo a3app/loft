@@ -2,6 +2,24 @@
 // bound to a client X25519 pub, and derives the session key from the DH
 // secret (HKDF info "loft-v1"). Data default is ChaCha20-Poly1305.
 // BindInner may select clear or AES-256-GCM after the handshake Status.
+//
+// The handshake in plain words:
+//   - Every member has a long-term secret key ("lt_..." token). The node
+//     keeps the same keys in members.keys.
+//   - The client sends 0x02: a random 16-byte nonce, a fresh (ephemeral)
+//     X25519 public key eph_c, and an HMAC of both under its member key.
+//     The HMAC proves the client knows a member key without sending it. It
+//     uses no timestamp ("clockless"), so a client with a wrong clock still
+//     gets in; replays are caught by the node's Nonces cache instead.
+//   - The node answers with its own ephemeral key eph_n, followed by Status
+//     sealed under the new session key. Both sides compute the same key
+//     from X25519(eph_c, eph_n) and the nonce, so the member key itself is
+//     never used to encrypt traffic.
+//   - Every later batch of mux frames is sealed with Seal and opened with
+//     Open under that session key.
+//
+// This is the "inner" layer: it runs inside TLS, so a TLS-terminating CDN
+// in the middle sees only sealed blobs.
 package crypto
 
 import (
@@ -109,6 +127,13 @@ func OpenHello(sk *ecdh.PrivateKey, nonce, raw, aad []byte) (key, plain []byte, 
 // sealState is one session key's nonce generator. Wire is still nonce[12]||ct
 // (loft/1.0). Prefix is random per process+key. Counter continues across
 // GET Park on the same key (skip-handshake hold). A new 0x02 is a new key.
+//
+// An AEAD nonce must never repeat under the same key, or the encryption
+// breaks. A counter guarantees that inside one process; the random prefix
+// makes a collision between the client and the node (which share the key)
+// very unlikely.
+// "Park" here is the node keeping a GET session alive across a short drop:
+// the session key stays the same, so the counter must keep going too.
 type sealState struct {
 	prefix uint32
 	n      atomic.Uint64
@@ -153,6 +178,7 @@ func Seal(key, plaintext, aad []byte) ([]byte, error) {
 	}
 }
 
+// sealWith seals with the given AEAD constructor and prepends the nonce.
 func sealWith(key, plaintext, aad []byte, newAEAD func([]byte) (cipher.AEAD, error)) ([]byte, error) {
 	aead, err := newAEAD(key)
 	if err != nil {
@@ -182,6 +208,8 @@ func Open(key, blob, aad []byte) ([]byte, error) {
 	}
 }
 
+// openWith splits nonce[12] || ciphertext and opens it with the given
+// AEAD constructor.
 func openWith(key, blob, aad []byte, newAEAD func([]byte) (cipher.AEAD, error)) ([]byte, error) {
 	if len(blob) < NonceSize+aeadOverhead() {
 		return nil, ErrAuth
@@ -194,7 +222,7 @@ func openWith(key, blob, aad []byte, newAEAD func([]byte) (cipher.AEAD, error)) 
 	return aead.Open(nil, nonce, blob[NonceSize:], aad)
 }
 
-// aeadOverhead is the Poly1305 tag size.
+// aeadOverhead is the Poly1305 tag size (AES-GCM uses the same 16 bytes).
 func aeadOverhead() int { return 16 }
 
 // authMAC is HMAC-SHA256(lt_, "lft-a2" || nonce || eph_c)[:16].
@@ -236,6 +264,8 @@ type Auth struct {
 	Replay bool // same nonce+eph_c inside TTL (GET Cookie retry)
 }
 
+// hsRec is one remembered handshake: the client's key, the node's answer
+// key and the session key, so a retry can be answered with the same bytes.
 type hsRec struct {
 	ephC []byte
 	ephN []byte
@@ -245,6 +275,12 @@ type hsRec struct {
 
 // Nonces remembers 0x02 handshakes so a GET Cookie retry is idempotent
 // and a different eph_c on the same nonce is refused. Expiry is the node's clock.
+//
+// Why a retry must be idempotent: on the GET front the handshake rides in
+// a Cookie, and a CDN may send the same GET twice. The second copy must get
+// the same session key, not a new one, or the client and node would end up
+// with different keys. A real client never reuses a nonce with a new
+// eph_c, so that case is refused.
 type Nonces struct {
 	mu  sync.Mutex
 	hs  map[string]*hsRec
@@ -256,6 +292,9 @@ func NewNonces() *Nonces {
 	return &Nonces{hs: map[string]*hsRec{}, ttl: 10 * time.Minute}
 }
 
+// sweepLocked drops expired records, but only once the cache holds more
+// than 50,000 entries, so a normal node does not scan the map on every
+// handshake. The caller holds n.mu.
 func (n *Nonces) sweepLocked(now time.Time) {
 	if n == nil || len(n.hs) <= 50_000 {
 		return
@@ -267,6 +306,8 @@ func (n *Nonces) sweepLocked(now time.Time) {
 	}
 }
 
+// mintHandshake makes the node's ephemeral X25519 key and the session key
+// for one new handshake.
 func mintHandshake(ephC []byte, nonce []byte) (ephN, key []byte, err error) {
 	sk, err := ecdh.X25519().GenerateKey(entropy)
 	if err != nil {
@@ -279,6 +320,10 @@ func mintHandshake(ephC []byte, nonce []byte) (ephN, key []byte, err error) {
 	return sk.PublicKey().Bytes(), key, nil
 }
 
+// establish returns the node key and session key for a verified 0x02. A
+// repeat of the same nonce and eph_c inside the TTL gets the stored answer
+// (replay true); the same nonce with another eph_c is ErrAuth. A nil
+// Nonces keeps no memory and always mints a new answer.
 func (n *Nonces) establish(nonce, ephC []byte) (ephN, key []byte, replay bool, err error) {
 	if n == nil {
 		ephN, key, err = mintHandshake(ephC, nonce)
@@ -309,7 +354,9 @@ func (n *Nonces) establish(nonce, ephC []byte) (ephN, key []byte, replay bool, e
 }
 
 // FinishAuth verifies 0x02 (nonce || eph_c || HMAC). A wrong key does not
-// burn a valid blob.
+// burn a valid blob. The node does not know which member is connecting, so
+// it tries each member key until one HMAC matches. Only a match touches the
+// Nonces cache, so trying wrong keys first has no side effects.
 func FinishAuth(tokens [][]byte, blob []byte, seen *Nonces) (Auth, error) {
 	var z Auth
 	if len(blob) < ProofLen || blob[0] != tagAuth {

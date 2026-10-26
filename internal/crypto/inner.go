@@ -8,7 +8,8 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
-// innerModes is the data cipher for a session key. Handshake Seal of Status
+// innerModes is the data cipher for a session key ("inner" = the frame
+// encryption inside TLS). Handshake Seal of Status
 // happens before BindInner, so that blob stays ChaCha20-Poly1305.
 // LOFT_STAND_INNER=clear still forces clear for every key.
 var innerModes sync.Map // string(key) -> byte
@@ -31,6 +32,7 @@ func BindInner(key []byte, id byte) {
 // InnerOf is the data cipher Seal/Open will use for key.
 func InnerOf(key []byte) byte { return dataInner(key) }
 
+// dataInner is InnerOf: the stand override first, then BindInner, else ChaCha.
 func dataInner(key []byte) byte {
 	if standClear() {
 		return wire.InnerClear

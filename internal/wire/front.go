@@ -1,6 +1,14 @@
 package wire
 
 // Transport front names (get, ws, h2, quic, h3) and default try order.
+//
+// A front is one way to carry the mux over HTTPS. The inner protocol is the
+// same on every front; only the packaging changes:
+//   - get: all traffic rides ordinary GET requests (uplink in the Cookie
+//     header, downlink in the response body), so it passes through a CDN;
+//   - ws: binary WebSocket messages;
+//   - h2: an HTTP/2 CONNECT stream;
+//   - quic / h3: QUIC over UDP (h3 is QUIC with the HTTP/3 ALPN).
 
 import "fmt"
 
@@ -53,7 +61,9 @@ func CapForFront(f string) Cap {
 // when those bits are set. connect and l3 are not in the mux try-list; they
 // still have to appear here so a reconnect keeps an advertised extra front.
 // A decoy node sends quic and h3 as quic_mark and h3_mark so a client that
-// cannot mark its QUIC Initial does not try them.
+// cannot mark its QUIC Initial does not try them. (A decoy node passes
+// everything that is not loft on to a real website, so on QUIC it must be
+// able to recognise a loft client from its first packet, the Initial.)
 func (c Cap) Fronts() []string {
 	var out []string
 	for _, f := range FrontOrder {

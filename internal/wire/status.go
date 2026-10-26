@@ -1,6 +1,11 @@
 package wire
 
 // Hello and Status handshake payloads. Neither is a mux command.
+//
+// Hello rides inside the client's 0x02 message. Status is the node's first
+// encrypted answer. Both have a fixed head and a long optional tail; each
+// tail field may only be written if every field before it is written too,
+// so an old peer that stops reading early never misreads a newer field.
 
 import (
 	"encoding/binary"
@@ -32,6 +37,17 @@ func (h Hello) Offer() Offer {
 }
 
 // Status is the node's reply: code, lease, timers, protocol offer.
+//
+// Some terms used in the field notes:
+//   - lease: the overlay IP the node gives this member, kept LeaseSec
+//     after a disconnect so a reconnect gets the same address;
+//   - ticket: the session id (sid) other fronts present to attach;
+//   - decoy / mask: the real website behind the node, and a mode in which
+//     the node shows a certificate shaped like that site's;
+//   - canary: TLS path checks (padded or split ClientHello) that make a
+//     handshake rewritten by a middlebox fail instead of working silently;
+//   - roster: the controller-signed list of live fronts and relays;
+//   - lists: signed domain/subnet sets the client uses for routing.
 type Status struct {
 	Code         Code
 	IP           string
@@ -130,7 +146,9 @@ type Route struct {
 }
 
 // PeerHint is one Status p2p hint: overlay IP, TLS-observed host, listen
-// port, VLAN, and the peer's 32-byte X25519 pub for LFT.
+// port, VLAN, and the peer's 32-byte X25519 pub for LFT. LFT is the short
+// key proof two members exchange when they connect to each other directly
+// (peer-to-peer) instead of through the node.
 type PeerHint struct {
 	IP   string
 	Host string
@@ -211,6 +229,10 @@ func DecodeHello(b []byte) (Hello, error) {
 }
 
 // Encode writes Status fields in protocol order. IPv6 is omitted when both addresses are empty.
+//
+// The nested ifs below follow the tail rule: to send a later field (for
+// example Inner), every earlier optional field is written too, as zero or
+// empty if it is not set. The need* flags compute how deep the tail goes.
 func (s Status) Encode() []byte {
 	ip, gw, inst := []byte(s.IP), []byte(s.Gateway), []byte(s.InstanceID)
 	b := make([]byte, 28+3+len(ip)+len(gw)+len(inst))
@@ -735,6 +757,9 @@ func encodePolicy(p Policy) []byte {
 	return b
 }
 
+// encodePolicyRule is action || flags || only the fields whose flag bit is
+// set. Flags: 1 src VLAN, 2 dst VLAN, 4 src, 8 dst, 16 src tag, 32 dst tag,
+// 64 proto, 128 port lists. Unset fields cost no bytes.
 func encodePolicyRule(r PolicyRule) []byte {
 	var flags byte
 	if r.SrcVLAN != nil {
@@ -884,6 +909,8 @@ func decodePolicy(b []byte) (Policy, int) {
 	return p, off
 }
 
+// decodePolicyRule reads one encodePolicyRule. It returns the bytes
+// consumed, or 0 when even the action and flags are missing.
 func decodePolicyRule(b []byte) (PolicyRule, int) {
 	if len(b) < 2 {
 		return PolicyRule{}, 0

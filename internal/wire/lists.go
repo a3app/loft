@@ -1,6 +1,10 @@
 package wire
 
 // Signed named address lists. Names have no protocol meaning; the client maps them to direct / via / drop.
+//
+// The controller signs the lists with Ed25519, so a relay or a CDN in the
+// middle cannot change which traffic goes direct. Status carries only the
+// serial and hash; the client downloads the full blob when they change.
 
 import (
 	"crypto/ed25519"

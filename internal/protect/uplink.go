@@ -1,6 +1,12 @@
 package protect
 
 // Physical IPv4 uplink: skip TUN/VPN so overlay sockets do not hairpin SSTP.
+//
+// "Hairpin" means a socket leaves through another tunnel (or loft's own)
+// and comes back, instead of using the real link. To avoid it, loft finds
+// the interface of the real default route: it reads the routing table
+// (netstat on macOS, /proc/net/route on Linux and Android), skips anything
+// that looks like a tunnel, and falls back to the first up interface.
 
 import (
 	"context"
@@ -39,6 +45,7 @@ func PhysicalName() string {
 	return physicalFromIfaces()
 }
 
+// physicalFromRoutes reads the OS routing table; other systems return empty.
 func physicalFromRoutes() string {
 	switch runtime.GOOS {
 	case "darwin":
@@ -50,6 +57,7 @@ func physicalFromRoutes() string {
 	}
 }
 
+// darwinPhysical asks netstat for the IPv4 default routes (400 ms limit).
 func darwinPhysical() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
 	defer cancel()
@@ -60,6 +68,7 @@ func darwinPhysical() string {
 	return pickPhysical(parseNetstatDefaults(string(out)))
 }
 
+// uplinkHop is one default route: gateway and interface.
 type uplinkHop struct {
 	gw, iface string
 }
@@ -77,6 +86,8 @@ func parseNetstatDefaults(s string) []uplinkHop {
 	return out
 }
 
+// pickPhysical skips tunnels and link-only routes and prefers an en*
+// interface (Ethernet or Wi-Fi on macOS), else the first other one.
 func pickPhysical(hops []uplinkHop) string {
 	var en, other string
 	for _, hop := range hops {
@@ -99,6 +110,8 @@ func pickPhysical(hops []uplinkHop) string {
 	return other
 }
 
+// linkGateway is a route with no gateway IP ("link#20"), which a VPN uses
+// to capture the default route.
 func linkGateway(gw string) bool {
 	return strings.HasPrefix(gw, "link#") || strings.HasPrefix(gw, "link/")
 }
@@ -111,6 +124,8 @@ func linuxPhysical() string {
 	return pickLinuxRoute(string(b))
 }
 
+// pickLinuxRoute reads /proc/net/route and returns the non-tunnel interface
+// of the default route (destination 00000000) with the lowest metric.
 func pickLinuxRoute(s string) string {
 	best, metric := "", int(^uint(0)>>1)
 	for i, line := range strings.Split(s, "\n") {
@@ -136,6 +151,8 @@ func pickLinuxRoute(s string) string {
 	return best
 }
 
+// physicalFromIfaces is the fallback when no route was found: the first up,
+// non-loopback, non-tunnel interface with an IPv4, preferring en*.
 func physicalFromIfaces() string {
 	ifis, err := net.Interfaces()
 	if err != nil {

@@ -1,6 +1,11 @@
 package config
 
 // Switch-style node.conf commands (role, listen, decoy, canary, …).
+//
+// This is the second spelling of ServerConfig: one command per line, like
+// a router config, instead of YAML. LoadServer picks the parser by looking
+// at the file. RenderCommands writes this form back so the panel can edit
+// the file.
 
 import (
 	"fmt"

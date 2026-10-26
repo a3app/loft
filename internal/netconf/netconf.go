@@ -1,6 +1,14 @@
 // Package netconf is Loft overlay 1.0 network.conf: members, overlay IPs,
 // leases, Cisco-style ACL, IPAM, DNS policy, session timers, managed routes
 // and VLANs. YAML (network.yaml) is a legacy fallback.
+//
+// The overlay is the members' private virtual network. Each member gets an
+// overlay IP, and the node acts as the switch and router between them: it
+// decides who may reach whom (Peers mode and ACL rules), which subnets sit
+// behind which member (managed routes), and which DNS servers members use.
+// network.conf describes all of that; this package parses and renders it,
+// hands out addresses (IPAM, leases), and answers "may this packet pass?"
+// (Allow). The node reads it at start and on reload; the panel edits it.
 package netconf
 
 import (
@@ -149,7 +157,8 @@ type Rule struct {
 	Sport   []int  `yaml:"sport,omitempty" json:"sport,omitempty"`
 }
 
-// Packet is what the switch sees.
+// Packet is what the switch sees: the facts about one overlay packet or
+// stream that the ACL can match on. The caller fills it in; Allow decides.
 type Packet struct {
 	SrcVLAN int
 	DstVLAN int
@@ -210,6 +219,9 @@ func Parse(b []byte) (*Network, error) {
 
 // Validate fills defaults (peers hub, MTU 1280, canonical pool, listen fronts)
 // and rejects a missing id/CIDR, bad peers, ports, routes, ACL actions, or DNS.
+// It also lower-cases tags and checks that segment CIDRs do not overlap.
+// Both parsers (YAML and commands) end with it, so code that holds a
+// *Network can rely on these defaults being set.
 func (n *Network) Validate() error {
 	if n.ID == "" {
 		return fmt.Errorf("network id is required")

@@ -1,6 +1,14 @@
 package wire
 
 // Fleet control on mux Open ctl:1 (relay trunk only): enrol, beat, slice, drain.
+//
+// A fleet is one controller node plus relay nodes (extra entry points that
+// forward to the controller). A relay connects to the controller like a
+// member, then opens the service stream ctl:1 and talks this protocol:
+//   - Enrol: the relay asks to be published (EnrolOK or EnrolNo back);
+//   - Beat: periodic heartbeat with load and connection count;
+//   - Slice: the controller's signed settings for this relay;
+//   - Drain: stop taking new clients (for maintenance), or resume.
 
 import (
 	"crypto/ed25519"

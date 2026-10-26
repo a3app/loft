@@ -2,6 +2,12 @@ package crypto
 
 // 0x04 attaches another front to the live session (the 0x02 that holds the mux).
 // HMAC uses the session AEAD key, not the member token. No new ECDH.
+//
+// Example: a client runs a GET session and wants to add a WebSocket for
+// faster bulk traffic. It opens the WebSocket and sends 0x04 with the
+// session id (sid, the "ticket" from Status) and the front name. The HMAC
+// proves it holds the session key, so the node joins the new front to the
+// same mux without a second handshake.
 
 import (
 	"crypto/hmac"
@@ -16,7 +22,7 @@ const tagAttach byte = 0x04
 const maxAttachSID = 64
 const maxAttachFront = 8
 
-// AttachProofLen is the size of a 0x04 blob for sid and front (variable).
+// attachLen is the size of a 0x04 blob for sid and front (variable).
 func attachLen(sid, front string) int {
 	return 1 + 1 + len(sid) + 16 + 1 + len(front) + AuthSize
 }
@@ -75,6 +81,8 @@ func FinishAttach(key, blob []byte) (sid, front string, nonce []byte, err error)
 	return sid, front, nonce, nil
 }
 
+// parseAttach splits a 0x04 blob into its fields and rejects a wrong
+// length or a front that cannot be attached.
 func parseAttach(blob []byte) (sid, front string, nonce, mac []byte, err error) {
 	if !LooksLikeAttach(blob) {
 		return "", "", nil, nil, ErrAuth
@@ -96,6 +104,8 @@ func parseAttach(blob []byte) (sid, front string, nonce, mac []byte, err error) 
 	return sid, front, nonce, mac, nil
 }
 
+// attachableFront lists the fronts that can join a session. GET is the
+// session itself; connect and l3 do not carry the mux.
 func attachableFront(front string) bool {
 	switch front {
 	case "ws", "h2", "quic", "h3":
@@ -105,6 +115,7 @@ func attachableFront(front string) bool {
 	}
 }
 
+// attachMAC is HMAC-SHA256(session_key, "lft-a4" || sid || nonce || front)[:16].
 func attachMAC(key []byte, sid string, nonce []byte, front string) []byte {
 	m := hmac.New(sha256.New, key)
 	m.Write([]byte("lft-a4"))
@@ -114,7 +125,9 @@ func attachMAC(key []byte, sid string, nonce []byte, front string) []byte {
 	return m.Sum(nil)[:AuthSize]
 }
 
-// AttachNonce remembers 0x04 nonces per session so a replay is refused.
+// TakeAttach remembers 0x04 nonces per session so a replay is refused.
+// It shares the 0x02 cache and its TTL; the "a4:" prefix keeps the two
+// kinds of nonce apart.
 func (n *Nonces) TakeAttach(nonce []byte) error {
 	if n == nil {
 		return nil

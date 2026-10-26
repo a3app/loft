@@ -2,6 +2,17 @@ package wire
 
 import "encoding/binary"
 
+// Resin and draft (GET front only).
+//
+// On the GET front each request is numbered (the "GET seq"). Requests can
+// fail at the CDN, so some frames must be delivered for sure and others may
+// be lost:
+//   - resin: control frames that must arrive. The client keeps them and
+//     resends them on the same seq until the node confirms that seq with a
+//     CmdReport;
+//   - draft: Data, Pad and most datagrams. They are sent once, because the
+//     inner TCP (or the application over UDP) resends lost bytes itself.
+//
 // Resin frames are held until CmdReport, then retransmitted.
 // Draft frames are sent once: inner TCP or UDP will produce a new frame
 // if the application still needs the bytes. Close/Reset are resin but
@@ -70,6 +81,8 @@ func SplitUplink(fs []Frame) [][]Frame {
 	return parts
 }
 
+// classifyUplink sorts frames into resin control, draft, Close/Reset and
+// Pad, keeping the order inside each group.
 func classifyUplink(fs []Frame) (control, draft, fin, pad []Frame) {
 	for _, f := range fs {
 		switch {

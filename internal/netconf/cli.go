@@ -2,6 +2,22 @@ package netconf
 
 // Switch-style network.conf parse and render (Keenetic / D-Link commands).
 // Indented lines belong to ipif overlay or ip access-list overlay.
+//
+// network.conf reads like a managed switch config, so a network admin can
+// edit it by hand. A short example of the shape:
+//
+//	network loft
+//	enable
+//	ipif overlay 10.77.0.0/24
+//	  gateway 10.77.0.1
+//	  peers mesh
+//	create member laptop
+//	config member laptop key_sha256 <hex>
+//	enable member laptop
+//	ip route 192.168.10.0/24 10.77.0.5
+//
+// RenderCommands writes the same form back, so the panel can load, change
+// and save the file.
 
 import (
 	"fmt"

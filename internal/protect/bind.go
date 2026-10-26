@@ -1,6 +1,8 @@
 package protect
 
 // Bind pins outbound sockets to an interface name or a local/gateway IPv4.
+// On desktop and routers there is no VpnService hook, so loft keeps its own
+// sockets off the tunnel by binding them to the physical interface.
 
 import (
 	"fmt"
@@ -115,6 +117,9 @@ func localIPv4() net.IP {
 	return append(net.IP(nil), bindIP...)
 }
 
+// resolveBind turns a Bind spec into an interface index, its IPv4 and its
+// name. It tries an interface name first, then an exact local address,
+// then any interface whose subnet contains the address (a gateway IP).
 func resolveBind(spec string) (idx int, ip net.IP, name string, err error) {
 	if ifi, e := net.InterfaceByName(spec); e == nil {
 		return ifi.Index, firstIPv4(ifi), ifi.Name, nil
@@ -157,6 +162,7 @@ func firstIPv4(ifi *net.Interface) net.IP {
 	return nil
 }
 
+// v4nets lists the IPv4 networks configured on ifi, in 4-byte form.
 func v4nets(ifi *net.Interface) []*net.IPNet {
 	addrs, err := ifi.Addrs()
 	if err != nil {

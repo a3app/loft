@@ -1,5 +1,13 @@
 // Package protect marks VPN process sockets so they use the physical path
 // (Android VpnService.protect). iOS uses excludedRoutes instead; the hook is a no-op.
+//
+// The problem: when loft runs as a VPN, the OS sends all traffic into the
+// tunnel, including loft's own connection to the node. That connection
+// would then loop back into loft itself. Every socket loft opens toward the
+// node (and every DNS lookup it needs to reconnect) must therefore go out
+// the real network. This package does that in two ways: an OS hook
+// (Set, for Android) and an interface pin (Bind, the -if option), and gives
+// dialers that apply both.
 package protect
 
 import (
@@ -57,6 +65,9 @@ func DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	return d.DialContext(ctx, network, addr)
 }
 
+// resolverDial is the Dial of the protected resolver: DNS packets also use
+// a protected socket, and with a protector set a private nameserver is
+// swapped for a public one (see bypassDNS).
 func resolverDial(ctx context.Context, network, address string) (net.Conn, error) {
 	if current != nil {
 		address = bypassDNS(network, address)
@@ -88,6 +99,9 @@ func bypassDNS(network, address string) string {
 	return net.JoinHostPort("1.1.1.1", port)
 }
 
+// poisonDNS is a nameserver address that may sit behind the tunnel
+// (loopback, private, link-local, unspecified) and so cannot be trusted
+// while the tunnel is down.
 func poisonDNS(ip net.IP) bool {
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
 }
@@ -152,6 +166,7 @@ func Apply(conn syscall.Conn) {
 	})
 }
 
+// protectError is returned when the OS protector refuses a socket.
 type protectError struct{}
 
 func (protectError) Error() string { return "protect" }

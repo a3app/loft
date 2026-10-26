@@ -1,6 +1,10 @@
 // Package testcfg loads hostnames for tests.
 // testdata/domains.yaml is the committed example.com set.
 // testdata/domains.local.yaml (gitignored) overlays a live stand.
+//
+// Tests never hard-code real hostnames. They ask this package, which
+// returns example.com names by default; a developer who tests against a
+// real node ("stand") puts the real names in the local file instead.
 package testcfg
 
 import (
@@ -27,6 +31,7 @@ var (
 	cur  Set
 )
 
+// defaults are the hostnames used when no testdata file is found.
 func defaults() Set {
 	return Set{
 		Front:     "loft.example.com",
@@ -37,6 +42,7 @@ func defaults() Set {
 	}
 }
 
+// overlay returns base with every non-empty field of over applied.
 func overlay(base, over Set) Set {
 	if over.Front != "" {
 		base.Front = over.Front
@@ -68,6 +74,8 @@ func loadFile(path string) (Set, error) {
 	return s, nil
 }
 
+// root is the repository root, found from this source file's path so tests
+// in any package directory read the same testdata.
 func root() string {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -76,6 +84,7 @@ func root() string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
 }
 
+// load applies defaults, then domains.yaml, then domains.local.yaml.
 func load() Set {
 	s := defaults()
 	dir := filepath.Join(root(), "testdata")
@@ -93,6 +102,7 @@ func hosts() Set {
 	return cur
 }
 
+// parent drops the first label (loft.example.com -> example.com).
 func parent(host string) string {
 	i := strings.Index(host, ".")
 	if i < 0 {

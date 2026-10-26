@@ -51,6 +51,8 @@ func Load(path string) (*Ring, error) {
 	return r, nil
 }
 
+// yamlTokens reads one members.keys value: a single string or a list of
+// strings. Empty and non-string items are skipped.
 func yamlTokens(v any) []string {
 	switch t := v.(type) {
 	case string:
@@ -147,6 +149,8 @@ func (r *Ring) Put(id, token string) {
 	r.putLocked(id, token)
 }
 
+// putLocked adds token to id unless it is already there. The caller holds
+// r.mu (or owns r alone, as Load does).
 func (r *Ring) putLocked(id, token string) {
 	if r.byID == nil {
 		r.byID = map[string][][]byte{}

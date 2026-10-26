@@ -8,6 +8,8 @@ import (
 )
 
 // Allow reports whether the packet may pass. Empty Rules still apply Peers.
+// A source VLAN that is not configured is refused at once. Otherwise the
+// first rule that matches decides; if none matches, defaultAllow does.
 func (n *Network) Allow(p Packet) bool {
 	if p.SrcVLAN != 0 && n.VLANByID(p.SrcVLAN) == nil && len(n.VLANs) > 0 {
 		return false

@@ -1,6 +1,11 @@
 package wire
 
 // Controller-signed roster of live fronts, plus reserved hub/ctl mux targets.
+//
+// The roster tells a client every place it can connect to (the controller
+// and its relays). The client keeps it and fails over to another entry when
+// its current one stops working. The controller signs it with Ed25519, so
+// a relay cannot add itself or others to the list.
 
 import (
 	"crypto/ed25519"
@@ -226,8 +231,9 @@ func getLong(b []byte) (string, int, error) {
 	return string(b[2 : 2+n]), 2 + n, nil
 }
 
-// ManifestJSON is the public cover document: looks like a frontend bundle
+// Manifest is the public cover document: looks like a frontend bundle
 // pointer, payload is base64url(Roster.Encode()). No member secrets.
+// The same shape carries Lists (see Lists.ManifestJSON).
 type Manifest struct {
 	V int    `json:"v"`
 	P string `json:"p"`

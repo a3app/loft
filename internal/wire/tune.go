@@ -5,6 +5,11 @@ import "encoding/binary"
 // CmdTune payload is 4 bytes. Client event ≠ 0 reports a front break
 // once; node event 0 sets live header_budget / inflight. Zero inflight
 // or budget means leave that field unchanged.
+//
+// This lets the GET limits change during a session. The client tells the
+// node what went wrong (an HTTP 413, 404, 429, a GOAWAY from the CDN), and
+// the node can answer with smaller limits: header_budget is the size of
+// the Cookie per GET, inflight is how many GETs may be outstanding at once.
 const (
 	TuneSet    byte = 0
 	TuneCalm   byte = 1 // H2 GOAWAY ENHANCE_YOUR_CALM

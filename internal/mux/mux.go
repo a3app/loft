@@ -1,6 +1,21 @@
 // Package mux multiplexes streams and datagrams over AEAD-protected frames
 // after Status. Client stream IDs are odd starting at 1; node IDs are even
 // starting at 2. CmdLeave (stream 0) ends the session.
+//
+// This is the heart of loft/1.0. After the handshake (the client's 0x02
+// message and the node's Status answer) both sides hold one Session. Every
+// user connection (a browser TCP connection, a SOCKS5 request, an overlay
+// flow) becomes a Stream inside it, and UDP/ICMP become datagrams. The
+// Session turns all of that into wire.Frame values.
+//
+// The mux does not touch the network itself. A "front" (the way the frames
+// are carried over HTTPS: GET requests, WebSocket, HTTP/2, QUIC, ...) calls
+// Pull to take frames that are ready to send, seals them, and sends them.
+// Frames that arrive from the peer are opened by the front and handed to
+// Push. Because the front only pulls, the mux works the same on every front.
+//
+// Two separate odd/even ID ranges mean the client and the node can open
+// streams at the same time without agreeing on numbers first.
 package mux
 
 import (
@@ -25,13 +40,18 @@ var ErrClosed = errors.New("mux: closed")
 var ErrCongested = errors.New("mux: congested")
 
 // Session is one mux session: streams, datagrams, and an outbound frame queue.
+//
+// Outbound frames wait in two queues. pri holds control frames and small
+// packets (Open, Ping, DNS, TCP ACK-sized Data); out holds bulk Data. Pull
+// always drains pri first, so a large download on one stream cannot delay
+// a new connection or an ACK on another stream.
 type Session struct {
 	mu        sync.Mutex
 	streams   map[uint32]*Stream
-	accept    chan *Stream
-	out       chan wire.Frame
-	pri       chan wire.Frame
-	dgrams    chan dgram
+	accept    chan *Stream    // streams opened by the peer, waiting for Accept
+	out       chan wire.Frame // bulk Data waiting for Pull
+	pri       chan wire.Frame // control and small frames; Pull takes these first
+	dgrams    chan dgram      // inbound datagrams waiting for ReadDgram
 	dgramFn   func(string, []byte) bool
 	nextID    atomic.Uint32
 	closed    atomic.Bool
@@ -39,10 +59,12 @@ type Session struct {
 	relay     atomic.Bool
 	bytesUp   atomic.Uint64
 	bytesDown atomic.Uint64
-	die       chan struct{}
-	hold      atomic.Bool
-	instance  string
-	owner     string // member id from the authenticated key; park/adopt key
+	die       chan struct{} // closed by Close; wakes every waiter
+	// hold: the node keeps ("parks") this mux alive for a short time after
+	// the front drops, so the client can reconnect and get its streams back.
+	hold     atomic.Bool
+	instance string
+	owner    string // member id from the authenticated key; park/adopt key
 	// Data that arrived before Open (GET/HTTP2 reordering). Flushed on Open.
 	pending  map[uint32][][]byte
 	pendByte map[uint32]int
@@ -63,7 +85,11 @@ func NewClient() *Session { return newSession(true) }
 // NewServer allocates even stream IDs starting at 2.
 func NewServer() *Session { return newSession(false) }
 
-// SetRelay marks a relay trunk (may Open hub:* and ctl:1).
+// SetRelay marks a relay trunk (may Open hub:* and ctl:1). A relay is an
+// extra entry node that forwards its members' traffic to the controller
+// over one mux, the "trunk". On it the relay opens the service addresses
+// ctl:1 (control channel) and hub:* (forwarded member traffic), which an
+// ordinary member session may not open.
 func (s *Session) SetRelay() { s.relay.Store(true) }
 
 // ClearRelay drops the trunk mark. Used when Hello has CapRelay but the
@@ -127,7 +153,8 @@ func (s *Session) Accept() (*Stream, error) {
 	return st, nil
 }
 
-// Push delivers decoded frames from the AEAD plaintext.
+// Push delivers decoded frames from the AEAD plaintext. The front calls it
+// after it has received and decrypted one batch of frames from the peer.
 // Data for a full stream is deferred so a bulk download cannot stall
 // Open/ICMP/small HTTP on another stream in the same batch.
 // Push never blocks: a hog stream parks then Resets; the fabric stays live.
@@ -163,13 +190,18 @@ func (s *Session) dataFull(id uint32) bool {
 // Closed reports Leave or Close.
 func (s *Session) Closed() bool { return s.closed.Load() }
 
-// SetHold marks streams to survive a brief front drop (cap hold).
+// SetHold marks streams to survive a brief front drop (cap hold). With hold
+// on, the node "parks" the mux instead of closing it when the front goes
+// away; a client that comes back with the same instance_id and member key
+// adopts the parked mux and its inner TCP connections keep running.
 func (s *Session) SetHold(on bool) { s.hold.Store(on) }
 
 // Holding reports cap hold is on and the mux is still live.
 func (s *Session) Holding() bool { return s.hold.Load() && !s.closed.Load() }
 
-// SetInstance stores the Hello instance_id for mux park/resume.
+// SetInstance stores the Hello instance_id for mux park/resume. The
+// instance_id is a persistent id of one client install; it is how the node
+// recognises "the same" client after a reconnect.
 func (s *Session) SetInstance(id string) {
 	s.mu.Lock()
 	s.instance = id
@@ -248,6 +280,13 @@ func (s *Session) priFrame(f wire.Frame) bool {
 
 // Pull drains outbound frames up to maxBytes (including headers). maxWait 0 does
 // not use a timer so a queued frame is not missed. Control frames drain first.
+//
+// The front calls Pull when it is ready to send: for the GET front, frames
+// go into the next request's Cookie, so maxBytes is that request's budget.
+// The caller that is allowed to Pull at a given moment is called the
+// Puller. On GET there is exactly one, so frames leave strictly in order.
+// With maxWait > 0, Pull waits up to maxWait for the first frame and then
+// takes whatever else is already queued without waiting more.
 func (s *Session) Pull(maxBytes int, maxWait time.Duration) []wire.Frame {
 	if maxBytes <= 0 {
 		maxBytes = 1
@@ -306,7 +345,8 @@ func (s *Session) Pull(maxBytes int, maxWait time.Duration) []wire.Frame {
 }
 
 // PullPri drains only control/small frames (pri). Draft Data stays in out
-// so a client pause schedule does not drop bulk.
+// so a client pause schedule does not drop bulk. A front uses it when it
+// may only send a little right now but must keep pings and new Opens moving.
 func (s *Session) PullPri(maxBytes int, maxWait time.Duration) []wire.Frame {
 	if maxBytes <= 0 {
 		maxBytes = 1
@@ -381,6 +421,8 @@ func (s *Session) Ping(ctx context.Context) (time.Duration, error) {
 	}
 }
 
+// notePong wakes the Ping call waiting for this 8-byte id. A Pong with an
+// unknown id (a late answer to a Ping that already gave up) is ignored.
 func (s *Session) notePong(payload []byte) {
 	if len(payload) < 8 {
 		return
@@ -504,6 +546,16 @@ func (s *Session) sendCtx(ctx context.Context, f wire.Frame) error {
 }
 
 // handle dispatches one inbound frame. Unknown commands are ignored.
+//
+// Notes on the cases below:
+//   - Open: a new stream from the peer. If Accept is not keeping up (the
+//     accept queue is full), the stream is refused with Reset at once.
+//     Data that arrived earlier for this id is delivered now.
+//   - Data for an unknown stream is kept (up to 256 KiB per stream),
+//     because GET and HTTP/2 can deliver Data before its Open.
+//   - Dgram goes to the FilterDgram hook first, then to ReadDgram; if
+//     nobody is reading, it is dropped like a lost UDP packet.
+//   - Pad, Tune, Report and Front are handled by the front, not the mux.
 func (s *Session) handle(f wire.Frame) {
 	// Police inbound datagrams with a drop. Never waitRate here: a full
 	// token bucket would stall Push and stop reading the front socket.
@@ -654,6 +706,12 @@ func (s *Session) Close() {
 }
 
 // Stream is one mux stream. It implements net.Conn.
+//
+// Inbound Data goes into in (64 chunks). When in is full, extra chunks go
+// into park, an overflow list of up to streamParkMax bytes. This "park" is
+// a per-stream buffer and is not the same thing as parking a whole mux on
+// the node (see SetHold). The reader drains in first and refills it from
+// park, so the byte order is kept.
 type Stream struct {
 	sess   *Session
 	id     uint32
@@ -730,7 +788,9 @@ func (st *Stream) full() bool {
 	return n >= streamParkMax
 }
 
-// recv waits for the next Data chunk or a read deadline.
+// recv waits for the next Data chunk or a read deadline. It checks in, then
+// park, and sleeps on in or wake. After the stream is closed it still
+// returns the chunks left in park before reporting end of stream.
 func (st *Stream) recv() (chunk []byte, ok bool, err error) {
 	for {
 		if b, ok := st.takeIn(); ok {

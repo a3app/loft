@@ -1,5 +1,11 @@
 // Package cdn holds vendor edge profiles on top of protocol fronts get/ws.
 // The protocol does not name Yandex or Cloudflare; those names exist only here.
+//
+// A CDN in front of the node only passes ordinary web traffic, and each CDN
+// has its own limits (header size, request time, which methods work). A
+// profile collects the numbers that keep loft under one CDN's limits, so the
+// rest of the code can stay vendor-neutral. The client picks a profile with
+// the cdn: field of an outbound.
 package cdn
 
 import (
@@ -11,6 +17,13 @@ import (
 // Profile is edge-specific glue on top of a protocol front (get | ws).
 // The protocol does not name vendors; a profile only tweaks budgets, path
 // camouflage and which front that edge can carry.
+//
+// HeaderBudget is the encoded Cookie size per GET and Inflight the number
+// of GETs outstanding at once. Path, Ext, ContentType and FetchDest make the
+// GET look like a request for a static script file, so the CDN treats it
+// like any other asset. UplinkHeader is the header that carries client data.
+// The Puller (see PullWait) is the one GET allowed to take frames from the
+// mux at a given moment; other GETs wait their turn.
 type Profile struct {
 	Name         string
 	Front        string // get | ws

@@ -1,6 +1,19 @@
 // Package wire is loft overlay protocol 1.0 (0x0100): Hello/Status handshake,
 // mux frames, signed roster/lists, and fleet control. Handshake is
 // auth/Hello/Status, not mux. CmdLeave ends the mux session.
+//
+// This package only turns protocol messages into bytes and back. It does no
+// network I/O and no encryption (that is internal/crypto). The order of
+// a session is:
+//   - the client's 0x02 message (key proof, built in internal/crypto) with
+//     a Hello inside: what the client can do;
+//   - the node's Status: the answer with a Code, the overlay address,
+//     timers, the list of fronts, and a ticket (session id);
+//   - then mux frames (Frame) in both directions until CmdLeave.
+//
+// The binary layouts grow only at the end: a newer field is appended after
+// the older ones, so an old decoder stops early and still works. That is why
+// most decoders here accept a truncated tail and ignore unknown bytes.
 package wire
 
 import (
@@ -10,15 +23,20 @@ import (
 )
 
 // Multiplex commands. Handshake (auth, Hello, Status) is not mux.
+//
+// Open starts a stream to host:port, Data carries its bytes, Close ends it
+// normally and Reset ends it with an error Code. Ping/Pong measure the
+// round trip and keep the path alive. Pad is filler that the receiver
+// ignores (for example, what a GET carries when it has no real data).
 const (
-	CmdOpen  byte = 1
-	CmdData  byte = 2
-	CmdClose byte = 3
-	CmdPing  byte = 4
-	CmdPong  byte = 5
-	CmdPad   byte = 6
-	CmdReset byte = 7
-	CmdDgram byte = 8  // UDP datagram: Open-target prefix + payload
+	CmdOpen   byte = 1
+	CmdData   byte = 2
+	CmdClose  byte = 3
+	CmdPing   byte = 4
+	CmdPong   byte = 5
+	CmdPad    byte = 6
+	CmdReset  byte = 7
+	CmdDgram  byte = 8  // UDP datagram: Open-target prefix + payload
 	CmdLeave  byte = 9  // end the mux session (stream_id 0, empty payload)
 	CmdTune   byte = 10 // front event (client) or budget/inflight set (node)
 	CmdReport byte = 11 // GET uplink applied-through seq; stream_id 0
@@ -109,7 +127,9 @@ func ReadFrame(r io.Reader) (Frame, error) {
 }
 
 // EncodeBatch concatenates frames. CmdData larger than MaxPayload is split
-// so a GET front does not drop the whole AEAD batch.
+// so a GET front does not drop the whole AEAD batch. One batch is what the
+// front seals into a single encrypted message (AEAD: authenticated
+// encryption, so a changed byte makes the whole message fail to open).
 func EncodeBatch(frames []Frame) ([]byte, error) {
 	var out []byte
 	for _, f := range frames {

@@ -81,6 +81,8 @@ func (n *Network) canonicalizePool(ipnet *net.IPNet) error {
 	return canonicalizePool(ipnet, &n.PoolFrom, &n.PoolTo)
 }
 
+// canonicalizePool rewrites poolFrom and poolTo in place as full IPv4
+// strings (VLAN pools use it directly).
 func canonicalizePool(ipnet *net.IPNet, poolFrom, poolTo *string) error {
 	from, to, err := poolBounds(*poolFrom, *poolTo, ipnet)
 	if err != nil {
@@ -100,6 +102,8 @@ func (n *Network) poolBounds(ipnet *net.IPNet) (from, to net.IP, err error) {
 	return poolBounds(n.PoolFrom, n.PoolTo, ipnet)
 }
 
+// poolBounds is the shared form of Network.poolBounds for any segment. Nil
+// from and to mean "no pool": the whole CIDR is used.
 func poolBounds(poolFrom, poolTo string, ipnet *net.IPNet) (from, to net.IP, err error) {
 	from, err = expandPoolIP(poolFrom, ipnet)
 	if err != nil {

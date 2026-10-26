@@ -10,6 +10,19 @@ import (
 )
 
 // SessionPolicy is timers and reconnect. Network sets defaults, member may override.
+//
+// The node sends these values to the client in Status, so one config file
+// controls how every client behaves. The two "hold" timers are easy to mix
+// up:
+//   - lease_hold_ms: how long the member's overlay IP stays reserved after
+//     it disconnects, so a reconnect gets the same address;
+//   - gap_hold_ms: how long the node keeps ("parks") the mux and its
+//     streams after the front drops, so open TCP connections survive a
+//     short network gap.
+//
+// The reconnect fields shape the client's retry backoff: first
+// reconnect_fast_n quick tries during reconnect_fast_for_ms, then a delay
+// that grows from reconnect_min_ms up to reconnect_max_ms.
 type SessionPolicy struct {
 	HandshakeMS        int `yaml:"handshake_ms,omitempty" json:"handshake_ms,omitempty"`
 	IdleMS             int `yaml:"idle_ms,omitempty" json:"idle_ms,omitempty"`
@@ -20,7 +33,7 @@ type SessionPolicy struct {
 	ReconnectFastN     int `yaml:"reconnect_fast_n,omitempty" json:"reconnect_fast_n,omitempty"`
 	ReconnectFastForMS int `yaml:"reconnect_fast_for_ms,omitempty" json:"reconnect_fast_for_ms,omitempty"`
 	GapHoldMS          int `yaml:"gap_hold_ms,omitempty" json:"gap_hold_ms,omitempty"`
-	TTLMS              int `yaml:"ttl_ms,omitempty" json:"ttl_ms,omitempty"` // live session max; 0 = off. Distinct from lease_hold.
+	TTLMS              int `yaml:"ttl_ms,omitempty" json:"ttl_ms,omitempty"`     // live session max; 0 = off. Distinct from lease_hold.
 	RateBPS            int `yaml:"rate_bps,omitempty" json:"rate_bps,omitempty"` // bulk Data/Dgram, both ways; 0 = off
 }
 

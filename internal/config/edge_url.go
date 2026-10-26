@@ -1,5 +1,9 @@
 package config
 
+// Client "edge" URL: an optional CDN address placed in front of the node's
+// own GET outbound. The client tries the CDN first, so traffic passes
+// through it; the node GET stays in the list as a fallback.
+
 import (
 	"fmt"
 	"net/url"
@@ -106,6 +110,8 @@ func PinEdgeGET(cfg *ClientConfig, edge string) error {
 	return nil
 }
 
+// originOf is scheme://host[:port] with the default port dropped and IPv6
+// hosts in brackets, so two spellings of one origin compare equal.
 func originOf(u *url.URL) string {
 	host := u.Hostname()
 	if strings.Contains(host, ":") {
@@ -119,6 +125,8 @@ func originOf(u *url.URL) string {
 	return scheme + "://" + host
 }
 
+// sameOrigin reports whether raw (an outbound URL, scheme optional) has the
+// given origin.
 func sameOrigin(raw, origin string) bool {
 	s := strings.TrimSpace(raw)
 	if s == "" {

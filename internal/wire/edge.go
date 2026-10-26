@@ -5,6 +5,10 @@ import "time"
 // Edge is the GET preset a node advertises in Status after the handshake.
 // 0 is plain: the client keeps the limits it opened the first GET with.
 // Vendor names are not on the wire.
+//
+// The "edge" is the CDN or reverse proxy in front of the node. Some edges
+// drop the connection when the client sends many large-header GETs at once,
+// so the node tells the client to use smaller, gentler limits ("tight").
 const (
 	EdgePlain byte = 0
 	EdgeTight byte = 1 // GET edge that drops a fat concurrent Cookie burst
