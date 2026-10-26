@@ -167,6 +167,87 @@ func trustSignerLocked(pub []byte) bool {
 	return true
 }
 
+// rollSerial is the serial of the last KeyRoll applied; an older one is ignored.
+var rollSerial uint64
+
+// RememberKeyRoll applies a KeyRoll from Status or the roster manifest. When
+// the key it hands trust from is the controller key this client trusts (the
+// pin, or the held roster's key), the new key becomes the pin. The roster
+// held under the old key is dropped so the next one, under the new key, is
+// taken. The roll is kept on disk and replayed at start, so a client whose
+// config still names the old controller_pub reaches the new key after a
+// restart too. An expired roll, an older one, or one from a key this client
+// does not trust changes nothing.
+func RememberKeyRoll(raw []byte) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	k, err := wire.DecodeKeyRoll(raw)
+	if err != nil || k.Verify(time.Now()) != nil {
+		return false
+	}
+	rosterMu.Lock()
+	defer rosterMu.Unlock()
+	if !applyRollLocked(k) {
+		return false
+	}
+	appendStoredRollLocked(raw)
+	return true
+}
+
+// applyRollLocked moves the pin from k.Old to k.New. Caller holds rosterMu.
+func applyRollLocked(k wire.KeyRoll) bool {
+	trusted := pinnedPub
+	if len(trusted) == 0 {
+		trusted = heldRoster.Pub
+	}
+	if len(trusted) == 0 || string(trusted) != string(k.Old) || k.Serial <= rollSerial {
+		return false
+	}
+	pinnedPub = append([]byte(nil), k.New...)
+	rollSerial = k.Serial
+	heldRoster = wire.Roster{}
+	persistPinnedPubLocked(pinnedPub)
+	return true
+}
+
+// appendStoredRollLocked keeps an applied roll next to client.instance.
+func appendStoredRollLocked(raw []byte) {
+	dir := instanceDir()
+	if dir == "" {
+		return
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "controller.rolls"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(raw)
+	_ = f.Close()
+}
+
+// replayStoredRolls applies the rolls kept on disk to the current pin, in
+// the order they were applied. Their expiry is not checked again: each was
+// valid when this client first took it.
+func replayStoredRolls() {
+	dir := instanceDir()
+	if dir == "" {
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "controller.rolls"))
+	if err != nil {
+		return
+	}
+	rosterMu.Lock()
+	defer rosterMu.Unlock()
+	for size := wire.KeyRollSize; len(b) >= size; b = b[size:] {
+		k, err := wire.DecodeKeyRoll(b[:size])
+		if err != nil || k.Verify(time.Unix(k.NotAfter, 0)) != nil {
+			continue
+		}
+		applyRollLocked(k)
+	}
+}
+
 // persistPinnedPubLocked writes the TOFU pin next to client.instance.
 // Caller holds rosterMu; instanceDir uses a different lock.
 func persistPinnedPubLocked(pub []byte) {
@@ -203,6 +284,7 @@ func resetRosterForTest() {
 	heldRoster = wire.Roster{}
 	pinnedPub = nil
 	tofuOK = false
+	rollSerial = 0
 	rosterMu.Unlock()
 }
 
@@ -331,6 +413,7 @@ func adoptDecoy(addr, usedSNI string, st wire.Status, apply bool) error {
 	publishMask(st.MaskPub)
 	RememberReplicas(addr, st.Replicas)
 	RememberCanary(addr, st.CanaryFlags, st.CanaryPad)
+	RememberKeyRoll(st.KeyRoll)
 	RememberRoster(st.Roster)
 	maybeRefreshLists(st)
 	RememberVis(st)

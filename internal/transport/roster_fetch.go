@@ -80,6 +80,7 @@ func FetchRoster(ctx context.Context, url string) error {
 	if err != nil {
 		return err
 	}
+	RememberKeyRoll(wire.ManifestRoll(b))
 	r, err := wire.ParseManifest(b)
 	if err != nil {
 		return err
@@ -110,6 +111,7 @@ func BootstrapRoster(ctx context.Context, cfg *config.ClientConfig) {
 			PinControllerPub(pub)
 		}
 	}
+	replayStoredRolls()
 	if len(CachedRoster()) > 0 {
 		return
 	}

@@ -4,9 +4,11 @@ package crypto
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/a3app/loft/internal/wire"
 )
@@ -54,5 +56,35 @@ func TestControllerKeyRandomAndKept(t *testing.T) {
 	}
 	if st, err := os.Stat(a); err != nil || st.Mode().Perm() != 0o600 {
 		t.Fatalf("seed file mode %v %v", st.Mode(), err)
+	}
+}
+
+// TestRollControllerKey: the seed is replaced, the roll is signed by the old
+// key and points at the new one, serials grow, and LoadKeyRoll gives the roll
+// only for the new key.
+func TestRollControllerKey(t *testing.T) {
+	dir := t.TempDir()
+	seed, roll := filepath.Join(dir, "controller.seed"), filepath.Join(dir, "controller.roll")
+	old, err := LoadControllerKey(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := RollControllerKey(seed, roll, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, _ := LoadControllerKey(seed)
+	if bytes.Equal(old, next) || !bytes.Equal(k.Old, old.Public().(ed25519.PublicKey)) || !bytes.Equal(k.New, next.Public().(ed25519.PublicKey)) {
+		t.Fatal("roll does not hand old to new")
+	}
+	if err := k.Verify(time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if LoadKeyRoll(roll, next.Public().(ed25519.PublicKey)) == nil || LoadKeyRoll(roll, old.Public().(ed25519.PublicKey)) != nil {
+		t.Fatal("LoadKeyRoll is not tied to the current key")
+	}
+	k2, err := RollControllerKey(seed, roll, time.Hour)
+	if err != nil || k2.Serial != k.Serial+1 || !bytes.Equal(k2.Old, k.New) {
+		t.Fatalf("second roll: %+v %v", k2, err)
 	}
 }

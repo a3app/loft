@@ -2,6 +2,16 @@
    page's own strings (whole or the pieces a template is built from); the
    panel test fails when a Russian string has no entry here. */
 window.LOFT_EN = {
+  "Идёт смена ключа до": "The key changes until",
+  "Клиенты и ретрансляторы со старым ключом переходят на новый сами.": "Clients and relays with the old key move to the new one by themselves.",
+  "Сменить ключ…": "Change key…",
+  "Сменить ключ контроллера": "Change the controller key",
+  "Нода перезапустится и начнёт подписывать новым ключом. Старый ключ подпишет передачу: клиенты и ретрансляторы, которые его знают, перейдут на новый сами, если выйдут в сеть за это время. Остальным нужна будет новая ссылка.": "The node restarts and signs with the new key. The old key signs a hand-over: clients and relays that know it move to the new key by themselves if they come online within this time. The others will need a new link.",
+  "Срок перехода": "Hand-over period",
+  "90 дней": "90 days",
+  "Сменить ключ": "Change key",
+  "Меняю ключ: нода перезапускается…": "Changing the key: the node restarts…",
+  "Ключ контроллера сменён": "Controller key changed",
   "Ключ и установка появятся, когда ретранслятор будет сохранён.": "The key and install appear once the relay is saved.",
   "Показать установку": "Show install",
   "Выпустить ключ": "Issue key",

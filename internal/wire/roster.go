@@ -237,12 +237,33 @@ func getLong(b []byte) (string, int, error) {
 type Manifest struct {
 	V int    `json:"v"`
 	P string `json:"p"`
+	R string `json:"r,omitempty"` // base64url KeyRoll while the controller key changes
 }
 
 // ManifestJSON is the public cover document: {"v":1,"p":"<base64url(Roster.Encode())>"}.
 func (r Roster) ManifestJSON() ([]byte, error) {
 	m := Manifest{V: 1, P: base64.RawURLEncoding.EncodeToString(r.Encode())}
 	return json.Marshal(m)
+}
+
+// ManifestJSONRoll is ManifestJSON with the KeyRoll the controller is
+// publishing (none when roll is empty).
+func (r Roster) ManifestJSONRoll(roll []byte) ([]byte, error) {
+	m := Manifest{V: 1, P: base64.RawURLEncoding.EncodeToString(r.Encode()), R: RollField(roll)}
+	return json.Marshal(m)
+}
+
+// ManifestRoll returns the KeyRoll carried by a JSON manifest, if any.
+func ManifestRoll(b []byte) []byte {
+	var m Manifest
+	if json.Unmarshal(b, &m) != nil || m.R == "" {
+		return nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(m.R)
+	if err != nil {
+		return nil
+	}
+	return raw
 }
 
 // ParseManifest accepts JSON Manifest or a raw Encode blob.

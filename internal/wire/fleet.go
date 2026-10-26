@@ -25,6 +25,7 @@ const (
 	FltBeat     byte = 4
 	FltSlice    byte = 5
 	FltDrain    byte = 6
+	FltKeyRoll  byte = 7 // the controller's key changes: an encoded KeyRoll, before enrol_ok
 )
 
 // EnrolNo reason codes: unknown id, bad form, duplicate, disabled.

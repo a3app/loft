@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -39,6 +40,11 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 		if err == nil {
 			fl := transport.NewFleet(priv, cfg)
 			transport.FleetCtl = fl
+			if cfg.ControllerKey != "" {
+				roll := filepath.Join(filepath.Dir(cfg.ControllerKey), "controller.roll")
+				fl.SetKeyRoll(ecrypto.LoadKeyRoll(roll, priv.Public().(ed25519.PublicKey)))
+			}
+			info.KeyRollFn = fl.KeyRoll
 			info.RosterFn = fl.RosterBytes
 			info.Caps |= wire.CapRoster
 			listsKey = priv
@@ -316,7 +322,7 @@ func serveRoster(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	b, err := ros.ManifestJSON()
+	b, err := ros.ManifestJSONRoll(transport.FleetCtl.KeyRoll())
 	if err != nil {
 		http.NotFound(w, r)
 		return

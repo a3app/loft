@@ -12,9 +12,12 @@ package transport
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"log"
 	"net"
+	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -47,7 +50,7 @@ func (rt *relayRuntime) apply(sl wire.Slice) {
 }
 
 // runRelayCtl reconnects ctl:1 until ctx is done.
-func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *relayRuntime, ctlPub []byte) {
+func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *relayRuntime, pin *relayPin) {
 	id := cfg.ID
 	if id == "" {
 		id = "relay"
@@ -74,7 +77,7 @@ func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *r
 			time.Sleep(time.Second)
 			continue
 		}
-		if err := relayCtlSession(ctx, sess, req, rt, &beatMS, ctlPub); err != nil {
+		if err := relayCtlSession(ctx, sess, req, rt, &beatMS, pin); err != nil {
 			log.Printf("loft-relay: ctl %v", err)
 		}
 		select {
@@ -86,11 +89,12 @@ func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *r
 }
 
 // relayCtlSession sends enrol_req, applies enrol_ok/slice, then beats.
-// The slice must be signed by ctlPub, the controller key the relay was
-// installed with: a valid signature by any other key is refused.
+// The slice must be signed by the pinned controller key: the one the relay
+// was installed with, or the key a KeyRoll from it handed over to. A valid
+// signature by any other key is refused.
 // It returns when the stream fails or ctx ends; runRelayCtl then enrols
 // again, so a controller restart is picked up without restarting the relay.
-func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, rt *relayRuntime, beatMS *uint32, ctlPub []byte) error {
+func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, rt *relayRuntime, beatMS *uint32, pin *relayPin) error {
 	st, err := sess.Open(net.JoinHostPort(wire.CtlHost, wire.CtlPort))
 	if err != nil {
 		return err
@@ -107,6 +111,15 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 	if err != nil {
 		return err
 	}
+	if kind == wire.FltKeyRoll {
+		pin.roll(body)
+		if raw, err = readMsg(st); err != nil {
+			return err
+		}
+		if kind, body, err = wire.DecodeFlt(raw); err != nil {
+			return err
+		}
+	}
 	if kind == wire.FltEnrolNo {
 		_, reason := wire.DecodeEnrolNo(body)
 		return errEnrol(reason)
@@ -121,7 +134,7 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 	if err := sl.Verify(); err != nil {
 		return err
 	}
-	if !bytes.Equal(sl.Pub, ctlPub) {
+	if !bytes.Equal(sl.Pub, pin.key()) {
 		return errEnrol("slice not signed by controller_pub")
 	}
 	rt.apply(sl)
@@ -146,6 +159,57 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 			}
 		}
 	}
+}
+
+// relayPin is the controller key a relay trusts. base is controller_pub
+// from node.conf; cur moves on when a KeyRoll signed by cur arrives, and is
+// kept in path ("base cur" in hex) so it survives a restart while node.conf
+// still names base.
+type relayPin struct {
+	mu   sync.Mutex
+	base []byte
+	cur  []byte
+	ser  uint64
+	path string
+}
+
+func (p *relayPin) key() []byte {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.cur
+}
+
+// load takes the saved key when it was rolled from the configured one.
+func (p *relayPin) load() {
+	b, err := os.ReadFile(p.path)
+	if err != nil {
+		return
+	}
+	f := strings.Fields(string(b))
+	if len(f) != 2 || f[0] != hex.EncodeToString(p.base) {
+		return
+	}
+	if cur, err := hex.DecodeString(f[1]); err == nil && len(cur) == 32 {
+		p.cur = cur
+	}
+}
+
+// roll applies a KeyRoll signed by the current key and saves the result.
+func (p *relayPin) roll(raw []byte) {
+	k, err := wire.DecodeKeyRoll(raw)
+	if err != nil || k.Verify(time.Now()) != nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !bytes.Equal(k.Old, p.cur) || k.Serial <= p.ser {
+		return
+	}
+	p.cur, p.ser = append([]byte(nil), k.New...), k.Serial
+	if p.path != "" {
+		_ = os.WriteFile(p.path, []byte(hex.EncodeToString(p.base)+" "+hex.EncodeToString(p.cur)+"\n"), 0o600)
+	}
+	log.Printf("loft-relay: controller key changed to %x…", p.cur[:4])
 }
 
 // enrolError is a ctl enrol_no reason.

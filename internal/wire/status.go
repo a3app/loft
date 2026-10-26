@@ -96,6 +96,7 @@ type Status struct {
 	Edge         byte      // 0 plain, 1 tight; 0 = client keeps its opening GET limits
 	InnerSet     bool      // inner byte is present. Absent means ChaCha20-Poly1305
 	Inner        byte      // 0 clear, 1 ChaCha20-Poly1305, 2 AES-256-GCM
+	KeyRoll      []byte    // encoded KeyRoll while the controller key changes; empty otherwise
 }
 
 // FrontEP is one Status front: name (get/ws/h2/h3/quic), HTTP path, optional URL.
@@ -348,7 +349,8 @@ func (s Status) Encode() []byte {
 	needRoutes := len(s.Routes) > 0
 	needPolicy := s.Policy.Present || len(s.Policy.OwnTags) > 0 || s.Policy.ACLDefault > 0 || len(s.Policy.Rules) > 0 || len(s.Policy.Peers) > 0
 	needTTL := s.SessionTTLMS > 0
-	needInner := s.InnerSet
+	needRoll := len(s.KeyRoll) > 0
+	needInner := s.InnerSet || needRoll
 	needFronts := len(s.Fronts) > 0 || s.Edge > 0 || needInner
 	needRate := s.RateBPS > 0 || needFronts
 	needAfterGap := needRoutes || needPolicy || needTTL || needRate
@@ -391,7 +393,19 @@ func (s Status) Encode() []byte {
 										if s.Edge > 0 || needInner {
 											tail = append(tail, s.Edge)
 											if needInner {
-												tail = append(tail, s.Inner)
+												// Without a negotiated cipher the byte is
+												// ChaCha20-Poly1305, which needs no switch.
+												in := s.Inner
+												if !s.InnerSet {
+													in = InnerChaCha
+												}
+												tail = append(tail, in)
+												if needRoll {
+													var rl [2]byte
+													binary.BigEndian.PutUint16(rl[:], uint16(len(s.KeyRoll)))
+													tail = append(tail, rl[:]...)
+													tail = append(tail, s.KeyRoll...)
+												}
 											}
 										}
 									}
@@ -648,6 +662,14 @@ func DecodeStatus(b []byte) (Status, error) {
 													s.Inner = b[off]
 													s.InnerSet = true
 													off++
+													if off+2 <= len(b) {
+														n := int(binary.BigEndian.Uint16(b[off : off+2]))
+														off += 2
+														if off+n <= len(b) {
+															s.KeyRoll = append([]byte(nil), b[off:off+n]...)
+															off += n
+														}
+													}
 												}
 											}
 										}

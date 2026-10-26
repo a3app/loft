@@ -149,6 +149,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("GET /api/nodecfg/log", s.need(area("node", store.View), s.nodeLog))
 	mux.HandleFunc("POST /api/nodecfg/token", s.need(area("node", store.Change), s.nodeToken))
 	mux.HandleFunc("POST /api/nodecfg/cdn", s.need(area("node", store.Change), s.cdnRanges))
+	mux.HandleFunc("POST /api/nodecfg/ctlroll", s.need(area("node", store.Change), s.ctlRoll))
 	mux.HandleFunc("POST /api/relays/key", s.need(area("node", store.Change), s.relayKeyIssue))
 	mux.HandleFunc("GET /api/relays/key", s.need(area("node", store.Change), s.relayKeyShow))
 	mux.HandleFunc("GET /api/relays/bundle", s.need(area("node", store.Change), s.relayBundle))

@@ -8,10 +8,12 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/a3app/loft/internal/config"
+	ecrypto "github.com/a3app/loft/internal/crypto"
 	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/wire"
 )
@@ -62,7 +64,7 @@ func TestRelayEnrolBoundToKeyAndPin(t *testing.T) {
 		beat := uint32(50)
 		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 		defer cancel()
-		return relayCtlSession(ctx, cli, wire.EnrolReq{ID: asID, URL: "https://r.example"}, rt, &beat, pin), rt
+		return relayCtlSession(ctx, cli, wire.EnrolReq{ID: asID, URL: "https://r.example"}, rt, &beat, &relayPin{base: pin, cur: pin}), rt
 	}
 
 	var ee enrolError
@@ -74,5 +76,52 @@ func TestRelayEnrolBoundToKeyAndPin(t *testing.T) {
 	}
 	if err, _ := run("ru1", pub); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("ru1 with the right key: %v", err)
+	}
+}
+
+// TestRelayFollowsKeyRoll: the controller signs with a new key and publishes
+// a KeyRoll from the old one; a relay that pins the old key takes the roll
+// and then the slice, and saves the new key for the next start.
+func TestRelayFollowsKeyRoll(t *testing.T) {
+	oldPub, oldPriv, _ := ed25519.GenerateKey(rand.Reader)
+	newPub, newPriv, _ := ed25519.GenerateKey(rand.Reader)
+	prev := FleetCtl
+	FleetCtl = NewFleet(newPriv, &config.ServerConfig{Relays: []config.RelayEntry{{ID: "ru1"}}})
+	t.Cleanup(func() { FleetCtl = prev })
+	roll := ecrypto.SignKeyRoll(oldPriv, newPub, 1, time.Now().Add(time.Hour))
+	FleetCtl.SetKeyRoll(roll.Encode())
+
+	cli, srv := muxPair(t)
+	srv.SetRelay("ru1")
+	go func() {
+		for {
+			st, err := srv.Accept()
+			if err != nil {
+				return
+			}
+			go FleetCtl.ServeCtl(st)
+		}
+	}()
+	pin := &relayPin{base: oldPub, cur: oldPub, path: filepath.Join(t.TempDir(), "controller.pub")}
+	beat := uint32(50)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	err := relayCtlSession(ctx, cli, wire.EnrolReq{ID: "ru1", URL: "https://r.example"}, &relayRuntime{started: time.Now()}, &beat, pin)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("relay refused the rolled controller: %v", err)
+	}
+	if string(pin.key()) != string(newPub) {
+		t.Fatal("pin did not move to the new key")
+	}
+	again := &relayPin{base: oldPub, cur: oldPub, path: pin.path}
+	again.load()
+	if string(again.key()) != string(newPub) {
+		t.Fatal("rolled key not kept for the next start")
+	}
+	other, _, _ := ed25519.GenerateKey(rand.Reader)
+	fresh := &relayPin{base: other, cur: other, path: pin.path}
+	fresh.load()
+	if string(fresh.key()) != string(other) {
+		t.Fatal("saved key used although node.conf names another controller")
 	}
 }

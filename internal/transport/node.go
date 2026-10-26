@@ -44,10 +44,13 @@ type NodeInfo struct {
 	// ListsFn, when set, gives the current lists serial and hash (lists
 	// are re-signed on reload).
 	ListsFn func() (uint64, []byte)
-	GetPath string
-	WSPath  string
-	H2Path  string
-	H3Path  string
+	// KeyRollFn, when set, gives the KeyRoll the controller publishes while
+	// its signing key changes, so pinned clients move to the new key.
+	KeyRollFn func() []byte
+	GetPath   string
+	WSPath    string
+	H2Path    string
+	H3Path    string
 }
 
 // Status builds the first AEAD Status from session defaults and this node's offer.
@@ -68,6 +71,9 @@ func (n NodeInfo) Status(sid string) wire.Status {
 		st.Roster = n.RosterFn()
 	} else {
 		st.Roster = append([]byte(nil), n.Roster...)
+	}
+	if n.KeyRollFn != nil {
+		st.KeyRoll = n.KeyRollFn()
 	}
 	st.ListsSerial = n.ListsSerial
 	st.ListsHash = append([]byte(nil), n.ListsHash...)

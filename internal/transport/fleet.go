@@ -38,6 +38,34 @@ type Fleet struct {
 	serial uint64
 	gens   uint64
 	cached []byte
+	roll   []byte // encoded KeyRoll while the controller key changes
+	rollTo int64  // its NotAfter (unix seconds)
+}
+
+// SetKeyRoll installs the KeyRoll to publish (nil for none).
+func (f *Fleet) SetKeyRoll(raw []byte) {
+	var to int64
+	if k, err := wire.DecodeKeyRoll(raw); err == nil {
+		to = k.NotAfter
+	} else {
+		raw = nil
+	}
+	f.mu.Lock()
+	f.roll, f.rollTo = raw, to
+	f.mu.Unlock()
+}
+
+// KeyRoll is the KeyRoll to publish now, or nil once it has expired.
+func (f *Fleet) KeyRoll() []byte {
+	if f == nil {
+		return nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.roll) == 0 || time.Now().Unix() > f.rollTo {
+		return nil
+	}
+	return append([]byte(nil), f.roll...)
 }
 
 // liveRelay is one enrolled edge: last beat, load, and ctl closer.
@@ -158,6 +186,13 @@ func (f *Fleet) ServeCtl(st *mux.Stream) {
 	if req.ID != st.Sess().RelayID() || !f.allowed(req.ID) {
 		_ = writeMsg(st, wire.EncodeFlt(wire.FltEnrolNo, wire.EncodeEnrolNo(wire.EnrolUnknown, "id")))
 		return
+	}
+	// While the controller key changes, the relay first learns the new key
+	// from the old one, so it can check the slice that follows.
+	if roll := f.KeyRoll(); len(roll) > 0 {
+		if err := writeMsg(st, wire.EncodeFlt(wire.FltKeyRoll, roll)); err != nil {
+			return
+		}
 	}
 	sl, gen := f.admit(req, func() { _ = st.Close() })
 	if err := writeMsg(st, wire.EncodeFlt(wire.FltEnrolOK, sl.Encode())); err != nil {

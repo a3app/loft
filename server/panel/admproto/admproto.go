@@ -61,6 +61,7 @@ const (
 	OpNodeToken  = "node.token.rotate" // → NodeConfig (restart)
 	OpRelayKey   = "relay.key"         // RelayKeyReq → IssuedKey (new key, node reloads)
 	OpRelayGet   = "relay.key.get"     // RelayKeyReq → IssuedKey (the key in relays.keys)
+	OpCtlRoll    = "controller.roll"   // CtlRoll → NodeConfig (new controller key, node restarts)
 
 	OpChannels      = "channels.get"    // → ChannelsView
 	OpChannelSave   = "channels.save"   // Channel → ChannelsView
@@ -569,6 +570,12 @@ type Relay struct {
 	Key    bool     `json:"key,omitempty"`
 }
 
+// CtlRoll replaces the controller key; pinned clients and relays follow the
+// signed hand-over for Days.
+type CtlRoll struct {
+	Days int `json:"days"`
+}
+
 // RelayKeyReq names the relay whose key is issued or read.
 type RelayKeyReq struct {
 	ID string `json:"id"`
@@ -597,6 +604,7 @@ type NodeConfig struct {
 	// shown only
 	MaskPub       string              `json:"mask_pub,omitempty"`
 	ControllerPub string              `json:"controller_pub,omitempty"`
+	KeyRollUntil  int64               `json:"key_roll_until,omitempty"` // unix: the old key's clients follow until then
 	MemberKeys    int                 `json:"member_keys"`
 	CertUntil     time.Time           `json:"cert_until,omitzero"`
 	CertNames     []string            `json:"cert_names,omitempty"`

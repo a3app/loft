@@ -2174,13 +2174,28 @@
   function ndAccess() {
     const d = L.ndDraft, own = L.can('node'), pub = L.nd.controller_pub || '';
     return blk('Ключ контроллера', 'Клиенты сверяют по нему подпись списка ретрансляторов и списков. Входит в файл .loft.',
-        `<div class="uri" id="ctlpub" style="margin-bottom:12px">${pub ? 'ed25519:' + esc(pub) : '—'}</div><div class="acts"><button class="btn sm" type="button" onclick="LIVE.copy('#ctlpub')">Копировать</button></div>`) +
+        `<div class="uri" id="ctlpub" style="margin-bottom:12px">${pub ? 'ed25519:' + esc(pub) : '—'}</div>` +
+        (L.nd.key_roll_until ? `<p class="hint">${'Идёт смена ключа до'} ${new Date(L.nd.key_roll_until * 1000).toLocaleDateString(LOC())}. ${'Клиенты и ретрансляторы со старым ключом переходят на новый сами.'}</p>` : '') +
+        `<div class="acts"><button class="btn sm" type="button" onclick="LIVE.copy('#ctlpub')">Копировать</button>${own && pub ? `<button class="btn sm" type="button" onclick="LIVE.ctlRollAsk()">Сменить ключ…</button>` : ''}</div>`) +
       blk('Общий токен', 'Вход по одному токену вместо личных ключей. Работает, только пока в сети нет ни одного участника с ключом.',
         `<label class="sw"><input type="checkbox" ${d.auth_shared ? 'checked' : ''} ${dis()} aria-label="Общий токен" onchange="LIVE.ndSet('auth_shared',this.checked)"><i></i><span>Разрешить вход по общему токену</span></label>`) +
       (own ? blk('Смена токена ноды', 'Меняет ключ маскировки (pbk). Ключ контроллера, ключи участников и ретрансляторов остаются; при включённой маскировке ссылки участников придётся выдать заново.',
         `<button class="btn danger" type="button" onclick="LIVE.ndTokenAsk()">Сменить токен…</button>`) : '') +
       blk('Диагностика', '', `<label class="sw"><input type="checkbox" ${d.trace ? 'checked' : ''} ${dis()} aria-label="Журнал сессий" onchange="LIVE.ndSet('trace',this.checked)"><i></i><span>Писать журнал сессий <span class="mute">/var/lib/loft/trace.log</span></span></label>`);
   }
+  // ctlRollAsk / ctlRoll: replace the controller key (/api/nodecfg/ctlroll,
+  // a job: the node restarts). The old key signs a hand-over that the node
+  // publishes for the chosen days, so clients and relays that pin it move to
+  // the new key by themselves.
+  L.ctlRollAsk = () => dialog('Сменить ключ контроллера?', 'Нода перезапустится и начнёт подписывать новым ключом. Старый ключ подпишет передачу: клиенты и ретрансляторы, которые его знают, перейдут на новый сами, если выйдут в сеть за это время. Остальным нужна будет новая ссылка.',
+    `<div class="fld"><label for="cr1">Срок перехода</label><select id="cr1"><option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">90 дней</option></select></div>`,
+    `<button class="btn danger" type="button" onclick="LIVE.ctlRoll()">Сменить ключ</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  L.ctlRoll = async () => {
+    const days = parseInt($('#cr1').value, 10) || 30;
+    closeDlg(); toast('Меняю ключ: нода перезапускается…');
+    try { const v = await job('/api/nodecfg/ctlroll', { days }); L.nd = v; L.ndDraft = JSON.parse(JSON.stringify(v)); toast('Ключ контроллера сменён'); } catch (e) { toast(e.message); }
+    render();
+  };
   L.ndTokenAsk = () => dialog('Сменить токен ноды?', 'Нода перезапустится. При маскировке участники получат новый ключ pbk только с новыми ссылками.', '',
     `<button class="btn danger" type="button" onclick="LIVE.ndToken()">Сменить токен</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.ndToken = async () => { closeDlg(); toast('Меняю токен: нода перезапускается…'); try { const v = await job('/api/nodecfg/token', {}); L.nd = v; L.ndDraft = JSON.parse(JSON.stringify(v)); toast('Токен ноды сменён'); } catch (e) { toast(e.message); } render(); };

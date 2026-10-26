@@ -2,6 +2,7 @@ package adm
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
@@ -16,10 +17,13 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/a3app/loft/internal/config"
+	ecrypto "github.com/a3app/loft/internal/crypto"
 	"github.com/a3app/loft/internal/identity"
 	"github.com/a3app/loft/internal/transport"
+	lwire "github.com/a3app/loft/internal/wire"
 	"github.com/a3app/loft/server/panel/admproto"
 )
 
@@ -75,6 +79,13 @@ func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 	v.MaskPub = o.maskPubB64()
 	if in, err := o.NodeInfo(); err == nil {
 		v.ControllerPub = in.ControllerPub
+		if pub, err := hex.DecodeString(in.ControllerPub); err == nil {
+			if raw := ecrypto.LoadKeyRoll(o.ctlRoll(), ed25519.PublicKey(pub)); raw != nil {
+				if k, err := lwire.DecodeKeyRoll(raw); err == nil {
+					v.KeyRollUntil = k.NotAfter
+				}
+			}
+		}
 	}
 	if ring, err := identity.Load(o.keys()); err == nil {
 		v.MemberKeys = ring.Len()
@@ -236,6 +247,45 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 }
 
 func (o *Ops) relayKeys() string { return filepath.Join(o.Dir, "relays.keys") }
+func (o *Ops) ctlSeed() string   { return filepath.Join(o.Dir, "controller.seed") }
+func (o *Ops) ctlRoll() string   { return filepath.Join(o.Dir, "controller.roll") }
+
+// ControllerRoll replaces the controller signing key. The old key signs a
+// hand-over (controller.roll) that the node publishes for in.Days, so
+// clients and relays that pin the old key move to the new one by
+// themselves; the node restarts to sign with the new key. Clients offline
+// for the whole window need a new link.
+func (o *Ops) ControllerRoll(ctx context.Context, in admproto.CtlRoll) (admproto.NodeConfig, error) {
+	if in.Days < 1 || in.Days > 365 {
+		return admproto.NodeConfig{}, errors.New("hand-over window: 1–365 days")
+	}
+	o.mu.Lock()
+	oldSeed, err := os.ReadFile(o.ctlSeed())
+	if err != nil {
+		o.mu.Unlock()
+		return admproto.NodeConfig{}, fmt.Errorf("controller.seed: %w", err)
+	}
+	oldRoll, _ := os.ReadFile(o.ctlRoll())
+	if _, err := ecrypto.RollControllerKey(o.ctlSeed(), o.ctlRoll(), time.Duration(in.Days)*24*time.Hour); err != nil {
+		o.mu.Unlock()
+		return admproto.NodeConfig{}, err
+	}
+	o.chown(o.ctlSeed())
+	o.chown(o.ctlRoll())
+	if err := o.restartSettled(ctx); err != nil {
+		o.write(o.ctlSeed(), oldSeed, 0o600)
+		if len(oldRoll) > 0 {
+			o.write(o.ctlRoll(), oldRoll, 0o600)
+		} else {
+			os.Remove(o.ctlRoll())
+		}
+		rb := o.restartSettled(ctx)
+		o.mu.Unlock()
+		return admproto.NodeConfig{}, fmt.Errorf("loft-node did not start with the new controller key, the old one is back: %v %v", err, rb)
+	}
+	o.mu.Unlock()
+	return o.NodeConfig(ctx)
+}
 
 // pruneRelayKeys drops keys of relays that are no longer listed.
 func (o *Ops) pruneRelayKeys(rels []config.RelayEntry) error {

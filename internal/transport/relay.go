@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"path/filepath"
 	"time"
 
 	"github.com/a3app/loft/internal/config"
@@ -42,6 +43,11 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 	ctlPub, err := ParseControllerPub(cfg.ControllerPub)
 	if err != nil {
 		return fmt.Errorf("relay: controller_pub: %w", err)
+	}
+	pin := &relayPin{base: ctlPub, cur: ctlPub}
+	if cfg.ControllerKey != "" {
+		pin.path = filepath.Join(filepath.Dir(cfg.ControllerKey), "controller.pub")
+		pin.load()
 	}
 	o := config.Outbound{
 		Name:        "hub",
@@ -77,7 +83,7 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 			ExtraCaps: uint64(wire.CapRelay),
 		}, func(d Dialer, _ config.Outbound) { h.Set(d) })
 	}()
-	go runRelayCtl(ctx, h, cfg, rt, ctlPub)
+	go runRelayCtl(ctx, h, cfg, rt, pin)
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return err

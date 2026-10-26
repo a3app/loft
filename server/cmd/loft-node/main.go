@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
@@ -37,6 +38,7 @@ func main() {
 	showVer := flag.Bool("version", false, "print program and protocol versions")
 	printPub := flag.Bool("print-pub", false, "print controller Ed25519 public key (64 hex) and exit")
 	tracePath := flag.String("trace", "", "session event log (GET seq); empty = off")
+	rollKey := flag.Int("roll-key", 0, "replace the controller key; pinned clients and relays follow for this many days (restart the node after)")
 	flag.Parse()
 	if *showVer {
 		version.Print("loft-node")
@@ -46,6 +48,16 @@ func main() {
 		if err := printControllerPub(*dir, *cfgPath); err != nil {
 			log.Fatal(err)
 		}
+		return
+	}
+	if *rollKey > 0 {
+		seed := filepath.Join(*dir, "controller.seed")
+		k, err := ecrypto.RollControllerKey(seed, filepath.Join(*dir, "controller.roll"), time.Duration(*rollKey)*24*time.Hour)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("%x\n", k.New)
+		log.Printf("controller key replaced; clients and relays pinning %x… follow until %s. Restart loft-node.", k.Old[:4], time.Unix(k.NotAfter, 0).UTC().Format(time.DateOnly))
 		return
 	}
 
