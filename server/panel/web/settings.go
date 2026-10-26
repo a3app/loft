@@ -72,6 +72,7 @@ type settingsJSON struct {
 	SessionMax   string             `json:"session_max"`
 	Lang         string             `json:"lang"`
 	LoftOutbound store.LoftOutbound `json:"loft_outbound"`
+	PortActivity bool               `json:"port_activity"`
 	Notify       notifyJSON         `json:"notify"`
 }
 
@@ -85,7 +86,7 @@ func settingsView(st store.Settings) settingsJSON {
 	}
 	return settingsJSON{Node: st.Domain, Panel: firstOf(st.PanelDomain, st.Domain),
 		SessionIdle: firstOf(st.SessionIdle, "30m"), SessionMax: firstOf(st.SessionMax, "7d"), Lang: firstOf(st.Lang, "ru"),
-		LoftOutbound: st.LoftOutboundView(),
+		LoftOutbound: st.LoftOutboundView(), PortActivity: st.PortActivity,
 		Notify: notifyJSON{To: n.To, Host: n.Host, Port: n.Port, Security: firstOf(n.Security, "starttls"), User: n.User,
 			HasPassword: n.Password != "", From: n.From, Events: on}}
 }
@@ -105,6 +106,7 @@ func (s *Server) settingsPanel(w http.ResponseWriter, r *http.Request) {
 		SessionMax   string              `json:"session_max"`
 		Lang         string              `json:"lang"`
 		LoftOutbound *store.LoftOutbound `json:"loft_outbound"`
+		PortActivity *bool               `json:"port_activity"`
 	}
 	if !readJSON(w, r, 4<<10, &req) {
 		return
@@ -125,6 +127,9 @@ func (s *Server) settingsPanel(w http.ResponseWriter, r *http.Request) {
 				o.Front = true
 			}
 			st.LoftOutbound = &o
+		}
+		if req.PortActivity != nil {
+			st.PortActivity = *req.PortActivity
 		}
 	})
 	if err != nil {

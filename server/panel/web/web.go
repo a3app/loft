@@ -479,16 +479,18 @@ func (s *Server) me(u store.User, csrf string) *meJSON {
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	out := struct {
-		Setup   bool    `json:"setup"`
-		Me      *meJSON `json:"me,omitempty"`
-		Wizard  bool    `json:"wizard"`            // the owner has not finished the wizard
-		Lang    string  `json:"lang"`              // the panel's default language
-		Version string  `json:"version,omitempty"` // signed in only: the footer shows it
+		Setup        bool    `json:"setup"`
+		Me           *meJSON `json:"me,omitempty"`
+		Wizard       bool    `json:"wizard"`            // the owner has not finished the wizard
+		Lang         string  `json:"lang"`              // the panel's default language
+		Version      string  `json:"version,omitempty"` // signed in only: the footer shows it
+		PortActivity bool    `json:"port_activity"`     // two LEDs on the switch (link + activity)
 	}{Setup: s.Store.Empty(), Lang: "ru"}
 	if s.Settings != nil {
 		if st, err := s.Settings.Get(); err == nil {
 			out.Wizard = !st.WizardDone
 			out.Lang = firstOf(st.Lang, "ru")
+			out.PortActivity = st.PortActivity
 		}
 	}
 	if c, err := r.Cookie(cookieName); err == nil {

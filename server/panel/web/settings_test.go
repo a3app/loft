@@ -14,7 +14,7 @@ func TestSettingsAPI(t *testing.T) {
 	e := newEnv(t)
 	c, csrf := e.owner()
 	r := e.do("GET", "/api/settings", nil, c, "")
-	if r.code != 200 || r.body["session_idle"] != "30m" || r.body["lang"] != "ru" {
+	if r.code != 200 || r.body["session_idle"] != "30m" || r.body["lang"] != "ru" || r.body["port_activity"] != false {
 		t.Fatalf("get %d %v", r.code, r.body)
 	}
 	if r := e.do("POST", "/api/settings/panel", map[string]string{"session_idle": "1y", "session_max": "7d", "lang": "ru"}, c, csrf); r.code != 400 {
@@ -51,6 +51,18 @@ func TestSettingsAPI(t *testing.T) {
 		t.Fatalf("omit loft %d", r.code)
 	} else if o, _ := r.body["loft_outbound"].(map[string]any); o["host"] != true || o["front"] != true {
 		t.Fatalf("omit cleared loft_outbound %v", r.body["loft_outbound"])
+	}
+	if r := e.do("POST", "/api/settings/panel", map[string]any{"session_idle": "30m", "session_max": "7d", "lang": "zh", "port_activity": true}, c, csrf); r.code != 200 || r.body["port_activity"] != true {
+		t.Fatalf("port_activity on %d %v", r.code, r.body)
+	}
+	if r := e.do("GET", "/api/state", nil, nil, ""); r.body["port_activity"] != true {
+		t.Fatalf("state port_activity %v", r.body)
+	}
+	if r := e.do("POST", "/api/settings/panel", map[string]string{"session_idle": "30m", "session_max": "7d", "lang": "zh"}, c, csrf); r.code != 200 || r.body["port_activity"] != true {
+		t.Fatalf("omit port_activity %d %v", r.code, r.body)
+	}
+	if r := e.do("POST", "/api/settings/panel", map[string]any{"session_idle": "30m", "session_max": "7d", "lang": "zh", "port_activity": false}, c, csrf); r.code != 200 || r.body["port_activity"] != false {
+		t.Fatalf("port_activity off %d %v", r.code, r.body)
 	}
 
 	n := map[string]any{"to": "alice@example.net", "from": "panel@example.net", "host": "smtp.example.net", "port": 587, "security": "starttls", "user": "u", "password": "secret-1", "events": []string{"cert", "node"}}

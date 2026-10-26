@@ -37,6 +37,9 @@ type Settings struct {
 	// LoftOutbound is which parts go into outbounds[].name in issued .loft
 	// files. Nil is the default: member id and front (bob-get).
 	LoftOutbound *LoftOutbound `json:"loft_outbound,omitempty"`
+	// PortActivity is two LEDs on the switch faceplate (link + activity).
+	// Off (default) is one link LED.
+	PortActivity bool `json:"port_activity,omitempty"`
 }
 
 // LoftOutbound is host, member id, and front as parts of outbounds[].name.

@@ -190,7 +190,7 @@
     [/^"(.*)" is not a DNS name like cloudflare.com$/, m => `«${m[1]}» — не имя вида cloudflare.com`],
     [/^package "(\S+)" has no build for (\S+)$/, m => `Для «${PT[m[1]] || m[1]}» нет сборки под ${m[2]}`],
     [/^version (\S+) is already installed$/, m => `Версия ${m[1]} уже установлена`],
-    [/^GitHub is not reachable: (.*)$/, m => `GitHub недоступен: ${m[1]}`],
+    [/^GitHub is not reachable: (.*)$/, m => `GitHub недоступен: ${ru(m[1])}`],
     [/^GitHub answered HTTP (\d+)$/, m => `GitHub ответил HTTP ${m[1]}`],
     [/^no release carries the panel yet$/, () => 'В релизах пока нет сборки панели'],
     [/^notify: recipient is not an e-mail address$/, () => '«Кому» — не адрес почты'],
@@ -238,7 +238,7 @@
     [/^relay (\S+): (.*)$/, m => `Ретранслятор ${m[1]}: ${m[2]}`],
     [/^loft-node did not start with the new node\.conf/, () => 'Нода не запустилась с новыми настройками — прежние возвращены'],
     [/^list name "(.*)": /, m => `Имя списка «${m[1]}»: строчная латиница, цифры, точка, дефис`],
-    [/^Cloudflare is not reachable: (.*)$/, m => `Cloudflare недоступен: ${m[1]}`],
+    [/^Cloudflare is not reachable: (.*)$/, m => `Cloudflare недоступен: ${ru(m[1])}`],
     [/^unknown role$/, () => 'Такой роли нет'],
     [/^set a password or make an invitation$/, () => 'Задайте пароль или сделайте ссылку-приглашение'],
     [/^user (\S+) exists$/, m => `Пользователь ${m[1]} уже есть`],
@@ -282,6 +282,19 @@
     [/^zerotier-cli join: /, () => 'ZeroTier не подключился: установлен и запущен ли пакет ZeroTier-клиент?'],
     [/^Xray did not start/, () => 'Xray не запустился: установлен ли пакет Xray-клиент?'],
     [/^(\S+) did not start: (.*)$/, m => `${m[1]} не запустился: ${m[2]}`],
+    [/^link check: (.*)$/, m => `проверка связи: ${ru(m[1])}`],
+    [/^direct: no link$/, () => 'напрямую: нет связи'],
+    [/^resolve (\S+): (.*)$/, m => `не удалось разрешить ${m[1]}: ${ru(m[2])}`],
+    [/context deadline exceeded$/, () => 'нет ответа за отведённое время'],
+    [/i\/o timeout$/, () => 'нет ответа за отведённое время'],
+    [/connection timed out$/, () => 'нет ответа за отведённое время'],
+    [/handshake timeout$/, () => 'TLS-рукопожатие не завершилось вовремя'],
+    [/connection refused$/, () => 'соединение отклонено'],
+    [/connection reset by peer$/, () => 'удалённая сторона сбросила соединение'],
+    [/no route to host$/, () => 'нет маршрута до узла'],
+    [/network is unreachable$|network unreachable$/, () => 'сеть недоступна'],
+    [/no such host$/, () => 'имя не находится в DNS'],
+    [/^no reply$/, () => 'нет ICMP-ответа'],
   ];
   const ru = msg => { for (const [re, f] of RU) { const m = String(msg).match(re); if (m) return f(m); } return msg; };
 
@@ -641,9 +654,9 @@
     L.kf = { id, file: k.file };
     dialog('Ключ участника ' + esc(id), note, `
       ${k.link ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))">${k.qr ? `<div class="qr" style="align-self:start">${k.qr}</div>` : ''}
-        <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri" id="klink">${esc(k.link)}</div>
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div>${uriBox(esc(k.link), 'klink')}
         <p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>` : ''}
-      <div class="dlg-sec" style="margin:0">Ключ</div><div class="uri" id="kkey">${esc(k.key)}</div>
+      <div class="dlg-sec" style="margin:0">Ключ</div>${uriBox(esc(k.key), 'kkey')}
       <div class="acts" style="margin:0">${k.link ? `<button class="btn sm pri" type="button" onclick="LIVE.copy('#klink')">Копировать ссылку</button>` : ''}${k.file ? `<button class="btn sm" type="button" onclick="LIVE.download(LIVE.kf.id + '.loft', LIVE.kf.file)">${ic('i-down', 16)}Скачать .loft</button>` : ''}<button class="btn sm" type="button" onclick="LIVE.copy('#kkey')">Копировать ключ</button></div>`,
       `<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`);
   }
@@ -679,7 +692,11 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
-  L.copy = (sel) => { const t = $(sel).textContent || $(sel).value; navigator.clipboard.writeText(t).then(() => toast('Скопировано'), () => toast('Выделите и скопируйте вручную')); };
+  L.copy = (sel) => {
+    const el = $(sel);
+    const t = el ? ([...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim() || el.value || el.textContent.trim()) : '';
+    navigator.clipboard.writeText(t).then(() => toast('Скопировано'), () => toast('Выделите и скопируйте вручную'));
+  };
 
   /* ── packages: the catalog lives in loft-panel-adm; titles and notes come
      from the mock's PKG table. The job runs in its own unit on the server,
@@ -973,7 +990,7 @@
   const EV = [['cert', 'Сертификат истекает через 14 дней'], ['update', 'Установлено обновление или откат'], ['node', 'Нода loft не запустилась'], ['backup', 'Резервная копия по расписанию не удалась']];
   async function loadSettings() {
     const [st, tz] = await Promise.allSettled([api('GET', '/api/settings'), api('GET', '/api/settings/timezone')]);
-    if (st.status === 'fulfilled') L.st = st.value; else toast('Настройки не прочитаны: ' + st.reason.message);
+    if (st.status === 'fulfilled') { L.st = st.value; L.portActivity = !!L.st.port_activity; } else toast('Настройки не прочитаны: ' + st.reason.message);
     if (tz.status === 'fulfilled') L.tz = tz.value;
   }
   function settingsView() {
@@ -985,7 +1002,9 @@
       blk('Мастер установки', 'Пройти шаги первой настройки заново: домен, сертификат, первый участник сети, пакеты. Уже сделанное не стирается.', `<button class="btn" type="button" onclick="S.wz.step=2;go('setup')">Открыть мастер</button>`) +
       blk('Панель', '', grid(`<div><div class="fld"><label for="st1">Адрес панели</label><input id="st1" class="mono" value="${esc(st.panel || location.hostname)}" readonly></div><div class="hint">Имена и сертификаты меняются в мастере установки — шаги «Домен и DNS» и «Сертификат».</div></div>
         <div><div class="fld"><label for="st2">Язык по умолчанию</label><select id="st2" onchange="LIVE.stPanel()">${opts(LANGS, st.lang)}</select></div><div class="hint">Для страницы входа и тех, кто не выбрал язык сам.</div></div>
-        <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3" ${tz ? '' : 'disabled'} onchange="LIVE.stTz(this)">${zones}</select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`)) +
+        <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3" ${tz ? '' : 'disabled'} onchange="LIVE.stTz(this)">${zones}</select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`)+
+      `<label class="sw" style="margin-top:16px"><input id="stPortAct" type="checkbox" ${st.port_activity ? 'checked' : ''} aria-label="Линк и активность на портах" onchange="LIVE.stPanel()"><i></i><span>Линк и активность на портах</span></label>
+      <div class="hint">Как на классическом свитче: слева линк, справа мигает при трафике. Выкл — один огонёк «в сети».</div>`) +
       blk('Файлы .loft', 'Какие части входят в имя исходящего в профиле участника. Ссылка loft:// не меняется.', loftOutboundBlock(st)) +
       blk('Вход', 'Блокировка адресов после неудачных входов — в <a href="#system">Системе</a>.', grid(`<div class="fld"><label for="st4">Выходить при бездействии</label><select id="st4" onchange="LIVE.stPanel()">${opts(IDLE, st.session_idle)}</select></div>
         <div class="fld"><label for="st5">Срок сессии</label><select id="st5" onchange="LIVE.stPanel()">${opts(SMAX, st.session_max)}</select></div>`)) +
@@ -1044,7 +1063,9 @@
         host: $('#stLoftHost').checked, member: $('#stLoftMember').checked, front: $('#stLoftFront').checked
       } : undefined;
       if (loft && !loft.host && !loft.member && !loft.front) loft.front = true;
-      L.st = await api('POST', '/api/settings/panel', { session_idle: $('#st4').value, session_max: $('#st5').value, lang: $('#st2').value, loft_outbound: loft });
+      const act = $('#stPortAct') ? $('#stPortAct').checked : !!(L.st && L.st.port_activity);
+      L.st = await api('POST', '/api/settings/panel', { session_idle: $('#st4').value, session_max: $('#st5').value, lang: $('#st2').value, loft_outbound: loft, port_activity: act });
+      L.portActivity = !!(L.st && L.st.port_activity);
       if (window.I18N) I18N.def(L.st.lang);
       toast('Сохранено');
     } catch (e) { toast(e.message); }
@@ -2215,31 +2236,57 @@
   };
 
   /* who is online: the node's report, the panel's memory of last seen.
-     EXTRA[3]: 0 offline, 1 online idle, 2 online with mux traffic since last sample. */
+     EXTRA[3]: 0 offline, 1 online idle, 2 online with mux traffic since last sample.
+     EXTRA[4]: left LED warn (old key / stuck / via relay). EXTRA[5]: why, Russian. */
   // /api/presence fills the mock's EXTRA table, which the Members and
   // Segments screens read: [client and front, online / devices, last seen,
   // online flag]. Relays' live state comes in the same answer.
+  const STUCK_MS = 120000;
+  function viaRelay(from, relays) {
+    if (!from || !relays || !relays.length) return false;
+    const host = String(from).replace(/^\[/, '').split(']')[0].split(':')[0];
+    if (!host) return false;
+    return relays.some(r => {
+      try { return new URL(r.url).hostname === host; } catch (e) { return false; }
+    });
+  }
   async function loadPresence(ledsOnly) {
     try { L.pres = await api('GET', '/api/presence'); } catch (e) { return; }
-    L.portBytes = L.portBytes || {};
-    L.portAct = L.portAct || {};
+    const actOn = !!L.portActivity;
+    L.portBytes = L.portBytes || {}; L.portAct = L.portAct || {}; L.portUp = L.portUp || {};
     const now = Date.now();
+    const relays = L.pres.relays || [];
     for (const id of Object.keys(L.pres.members || {})) {
       const x = L.pres.members[id];
       const sum = (x.rx || 0) + (x.tx || 0);
       const prev = L.portBytes[id];
       if (x.online && prev != null && sum > prev) L.portAct[id] = now;
       L.portBytes[id] = sum;
-      const act = x.online && L.portAct[id] && (now - L.portAct[id] < 20000);
-      EXTRA[id] = [x.front ? 'loft · ' + x.front : 'loft', `${x.online} / ${Math.max(x.devices, x.online)}`, x.online ? 'сейчас' : agoT(x.last), x.online ? (act ? 2 : 1) : 0];
+      if (x.online) { if (!L.portUp[id]) L.portUp[id] = now; }
+      else { delete L.portUp[id]; delete L.portAct[id]; }
+      const recent = x.online && L.portAct[id] && (now - L.portAct[id] < 20000);
+      let extra = x.online ? (actOn && recent ? 2 : 1) : 0;
+      const oldKey = x.key === 'old';
+      const stuck = x.online && L.portUp[id] && (now - L.portUp[id] >= STUCK_MS) && !(L.portAct[id] && now - L.portAct[id] < STUCK_MS);
+      const via = x.online && viaRelay(x.from, relays);
+      const why = oldKey ? 'старый ключ' : stuck ? 'нет трафика' : via ? 'через релей' : '';
+      EXTRA[id] = [x.front ? 'loft · ' + x.front : 'loft', `${x.online} / ${Math.max(x.devices, x.online)}`, x.online ? 'сейчас' : agoT(x.last), extra, !!why, why];
     }
     if (ledsOnly) paintPortLeds();
   }
   function paintPortLeds() {
-    document.querySelectorAll('.face .port[data-mid] i.led').forEach(el => {
-      const x = EXTRA[el.closest('.port').dataset.mid] || [];
-      el.classList.toggle('on', !!x[3]);
-      el.classList.toggle('act', x[3] === 2);
+    document.querySelectorAll('.face .port[data-mid]').forEach(port => {
+      const x = EXTRA[port.dataset.mid] || [];
+      const leds = port.querySelectorAll('i.led');
+      if (leds.length >= 2) {
+        leds[0].classList.toggle('on', !!x[3]);
+        leds[0].classList.toggle('warn', !!x[4]);
+        leds[1].classList.toggle('on', x[3] === 2);
+      } else if (leds[0]) {
+        leds[0].classList.toggle('on', !!x[3]);
+        leds[0].classList.toggle('warn', !!x[4]);
+        leds[0].classList.remove('act');
+      }
     });
   }
   L.loadPresence = loadPresence;
@@ -3011,7 +3058,7 @@
       body = `<h1>Первый участник сети</h1><p class="fs-d">Устройство, которое подключится к серверу первым. Остальных — потом в «Участниках сети».</p>` + (m ? `
         <p class="note-s">${pill('создан', 'ok')} Ключ показан один раз — сохраните ссылку или файл.</p>
         <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))">${m.qr ? `<div class="qr" style="align-self:start">${m.qr}</div>` : ''}
-        <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri" id="w4link">${esc(m.link)}</div>
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div>${uriBox(esc(m.link), 'w4link')}
         <p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
         <div class="acts" style="margin:0"><button class="btn sm pri" type="button" onclick="LIVE.copy('#w4link')">Копировать ссылку</button><button class="btn sm" type="button" onclick="LIVE.download(LIVE.W.member.id + '.loft', LIVE.W.member.file)">${ic('i-down', 16)}Скачать .loft</button><button class="btn sm" type="button" onclick="LIVE.copy('#w4file')">Копировать файл</button></div>
         <details class="adv"><summary>Файл .loft</summary><textarea id="w4file" class="mono ta" rows="12" readonly style="width:100%;margin-top:12px">${esc(m.file)}</textarea></details>` : `
@@ -3195,7 +3242,7 @@
   // Who is online changes on its own: refresh it on the pages that show it.
   // Segments keep the IP form: 5s only paints port LEDs; 30s still re-renders.
   setInterval(() => {
-    if (L.me && S.route === 'segments' && !$('#dlgRoot').firstChild) loadPresence(true);
+    if (L.me && L.portActivity && S.route === 'segments' && !$('#dlgRoot').firstChild) loadPresence(true);
   }, 5000);
   setInterval(() => {
     if (L.me && ['main', 'members', 'segments'].includes(S.route) && !$('#dlgRoot').firstChild) loadPresence().then(() => render());
@@ -3227,6 +3274,7 @@
     }
     wrapViews();
     S.ver = st.version || '';
+    L.portActivity = !!st.port_activity;
     if (window.I18N) I18N.def(st.lang); // the panel's language until this browser picks one
     showHost();
     if (st.setup) { S.wz.step = 1; settle('setup'); render(); return; }

@@ -55,6 +55,7 @@ type memberPresence struct {
 	Front   string    `json:"front,omitempty"` // live bulk mux front from the node
 	Rx      uint64    `json:"rx,omitempty"`
 	Tx      uint64    `json:"tx,omitempty"`
+	Key     string    `json:"key,omitempty"` // "current" or "old"; "old" wins if any device still pins the previous key
 }
 
 func (s *Server) readPresence(ctx context.Context) (nodeStatus, error) {
@@ -99,6 +100,11 @@ func (s *Server) track(st nodeStatus) map[string]memberPresence {
 			x.IP, x.From, x.Front = m.IP, m.From, m.Front
 			x.Rx += m.Rx
 			x.Tx += m.Tx
+			if m.Key == "old" {
+				x.Key = "old"
+			} else if x.Key == "" {
+				x.Key = m.Key
+			}
 			out[m.Member] = x
 		}
 	}
