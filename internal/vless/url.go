@@ -26,7 +26,9 @@ type Endpoint struct {
 	ShortID     string // Reality sid (hex)
 	Path        string // XHTTP path
 	Host        string // XHTTP Host header
-	Mode        string // XHTTP mode (auto, stream-one, …)
+	Mode        string // XHTTP mode (auto, stream-one, stream-up, …)
+	PadFrom     int    // xPaddingBytes inclusive start, 0 = default
+	PadTo       int    // xPaddingBytes inclusive end, 0 = default
 }
 
 // ParseURL reads vless://uuid@host:port?…, https://host:port, or host:port.
@@ -86,7 +88,7 @@ func ParseURL(raw, uuid string) (Endpoint, error) {
 		e.ShortID = q.Get("sid")
 		e.Path = q.Get("path")
 		e.Host = q.Get("host")
-		e.Mode = strings.ToLower(q.Get("mode"))
+		e.Mode, e.PadFrom, e.PadTo = xtls.XShare(q)
 		if e.PublicKey != "" || e.ShortID != "" {
 			e.Reality = true
 		}
@@ -152,7 +154,10 @@ func (e Endpoint) reality() xtls.Reality {
 }
 
 func (e Endpoint) xhttpCfg() xtls.XHTTP {
-	return xtls.XHTTP{Host: e.Host, SNI: e.SNI, Addr: e.Addr, Path: e.Path}
+	return xtls.XHTTP{
+		Host: e.Host, SNI: e.SNI, Addr: e.Addr, Path: e.Path,
+		Mode: e.Mode, PadFrom: e.PadFrom, PadTo: e.PadTo,
+	}
 }
 
 func decodePbk(s string) ([]byte, error) { return xtls.DecodePbk(s) }

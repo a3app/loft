@@ -19,8 +19,8 @@ package vless
 // Client is a transport.Dialer: each Open is a new VLESS TCP stream.
 
 import (
+	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -83,9 +83,10 @@ func New(cfg Config) (*Client, error) {
 	return c, nil
 }
 
-// Probe dials TLS (if any) and one VLESS header so a bad UUID fails before SOCKS.
-// The test target is 1.1.1.1:443; a server that rejects the UUID sends
-// no valid response header within 12 s, and that is the error.
+// Probe dials and writes one VLESS header, then returns. Xray keeps the
+// 2-byte response buffered until the target sends its first byte, so a
+// read here against 1.1.1.1:443 only burns the deadline. A rejected UUID
+// shows up on the first Open, the same way Trojan reports a bad password.
 func (c *Client) Probe(ctx context.Context) error {
 	c.stage("vless")
 	conn, err := c.dial(ctx)
@@ -94,38 +95,73 @@ func (c *Client) Probe(ctx context.Context) error {
 	}
 	defer conn.Close()
 	c.stage("handshake")
-	if err := writeRequest(conn, c.uuid, "1.1.1.1:443", c.ep.Vision); err != nil {
+	if err := writeUplink(conn, c.uuid, "1.1.1.1:443", c.ep.Vision); err != nil {
 		return err
-	}
-	_ = conn.SetReadDeadline(time.Now().Add(12 * time.Second))
-	if err := readResponse(conn); err != nil {
-		return fmt.Errorf("vless: %w", err)
 	}
 	return nil
 }
 
-// Open dials the server and starts a VLESS TCP stream to target (host:port).
-// It waits up to 15 s for the response header, so a refused UUID fails here
-// and not on the first read.
+// writeUplink writes the VLESS header and, for Vision, the empty padding
+// frame, as one Write. Xray's inbound does a single Read into the first
+// buffer and only then parses the header. The UUID frame has to already
+// be in that buffer. A second TLS record is a later Read: if it does not
+// start with the UUID the unpadder forwards it raw and never recovers, so
+// the target never sees a ClientHello and the response stays buffered.
+func writeUplink(conn net.Conn, uuid [16]byte, target string, vision bool) error {
+	var buf bytes.Buffer
+	if err := writeRequest(&buf, uuid, target, vision); err != nil {
+		return err
+	}
+	if vision {
+		buf.Write(visionHello(uuid))
+	}
+	_, err := conn.Write(buf.Bytes())
+	return err
+}
+
+// Open dials the server and writes one VLESS header. The 2-byte response is
+// consumed on the first Read, not before return. Xray keeps that response
+// buffered until the target sends a byte, and a TLS target sends nothing
+// until it has the ClientHello. Waiting here deadlocks the copy: SOCKS
+// never sees a success, and the bytes that would unblock the server are
+// never written. A refused UUID fails that first Read, within 15 s.
 func (c *Client) Open(target string) (net.Conn, error) {
 	conn, err := c.dial(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if err := writeRequest(conn, c.uuid, target, c.ep.Vision); err != nil {
+	if err := writeUplink(conn, c.uuid, target, c.ep.Vision); err != nil {
 		conn.Close()
 		return nil, err
 	}
-	_ = conn.SetReadDeadline(time.Now().Add(15 * time.Second))
-	if err := readResponse(conn); err != nil {
-		conn.Close()
-		return nil, err
-	}
-	_ = conn.SetReadDeadline(time.Time{})
+	var out net.Conn = &headerConn{Conn: conn}
 	if c.ep.Vision {
-		conn = wrapVision(conn, c.uuid)
+		out = wrapVisionContinue(out, c.uuid)
 	}
-	return &countedConn{Conn: conn, c: c}, nil
+	return &countedConn{Conn: out, c: c}, nil
+}
+
+// headerConn strips the VLESS response header on the first Read. Write goes
+// to the server immediately, so the target can answer and Xray can flush.
+type headerConn struct {
+	net.Conn
+	once sync.Once
+	err  error
+}
+
+// NetConn lets Vision walk out to the record gate under REALITY.
+func (h *headerConn) NetConn() net.Conn { return h.Conn }
+
+func (h *headerConn) Read(p []byte) (int, error) {
+	h.once.Do(func() {
+		_ = h.Conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+		h.err = readResponse(h.Conn)
+		_ = h.Conn.SetReadDeadline(time.Time{})
+	})
+	if h.err != nil {
+		return 0, h.err
+	}
+	return h.Conn.Read(p)
 }
 
 // dial makes the connection a VLESS header goes on: TCP, then REALITY or
@@ -143,6 +179,13 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	} else {
 		_ = raw.SetDeadline(time.Now().Add(15 * time.Second))
 	}
+	// Vision command direct on the downlink is a raw copy on this socket.
+	// The gate returns one TLS record per Read so that copy is not swallowed
+	// by uTLS. security=none has no outer TLS, and the gate would treat the
+	// VLESS bytes as records.
+	if c.ep.Vision && (c.ep.Reality || c.ep.TLS) {
+		raw = xtls.NewRecordGate(raw)
+	}
 	var conn net.Conn = raw
 	switch {
 	case c.ep.Reality:
@@ -153,18 +196,10 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 		}
 	case c.ep.TLS:
 		c.stage("tls")
-		cfg := &tls.Config{
-			ServerName:         c.ep.SNI,
-			InsecureSkipVerify: c.insecure,
-			MinVersion:         tls.VersionTLS12,
-			NextProtos:         c.alpn(),
-		}
-		tc := tls.Client(raw, cfg)
-		if err := tc.Handshake(); err != nil {
-			raw.Close()
+		conn, err = xtls.DialTLS(raw, c.ep.SNI, c.ep.Fingerprint, c.alpn(), c.insecure)
+		if err != nil {
 			return nil, err
 		}
-		conn = tc
 	}
 	_ = conn.SetDeadline(time.Time{})
 	if c.ep.xhttp() {

@@ -6,9 +6,18 @@ package vless
 // handshake carried inside another TLS connection still leaks its typical
 // record sizes, and censors look for exactly that. Vision wraps the first
 // writes in frames with random padding. Once the inner TLS reaches
-// application data (records starting 17 03 03), padding stops and the rest
-// of the stream goes as is ("direct"). If the inner traffic is not TLS,
-// padding stops after the first few writes ("end").
+// application data (records starting 17 03 03), padding stops with command
+// end and the rest of the stream stays on the outer TLS conn. Command
+// direct is not sent: Xray reads it as "splice the TCP under REALITY",
+// and bytes still written as TLS records arrive at the site as ciphertext.
+// The site answers bad_record_mac (Firefox SSL_ERROR_BAD_MAC_ALERT).
+// If the inner traffic is not TLS, padding stops after the first few
+// writes, also with end.
+//
+// The server does send direct once it has seen a TLS 1.3 application
+// record from the site. After that frame the rest of the downlink is on
+// the raw socket. Read switches there. The record gate under the outer
+// TLS conn keeps those bytes out of uTLS's buffer.
 //
 // A frame is: the UUID (first frame only), a command byte (continue, end,
 // direct), the content length and the padding length (2 bytes each), the
@@ -48,28 +57,39 @@ type visionConn struct {
 	net.Conn
 	uuid [16]byte
 
-	wmu         sync.Mutex
-	writeUUID   bool
-	padding     bool
-	directWrite bool
-	filterLeft  int
-	tlsInner    bool
+	wmu        sync.Mutex
+	writeUUID  bool
+	padding    bool
+	filterLeft int
+	tlsInner   bool
 
 	rmu        sync.Mutex
 	readUUID   bool
+	plainRead  bool
 	directRead bool
+	rawHead    []byte
+	raw        net.Conn
 	remainCont int
 	remainPad  int
 	cmd        byte
-	header     []byte
-	headerNeed int
 }
 
 func wrapVision(c net.Conn, uuid [16]byte) net.Conn {
+	return newVision(c, uuid, true)
+}
+
+// wrapVisionContinue is wrapVision after the UUID frame was already written
+// with the VLESS header. The next frame must not repeat the UUID: Xray's
+// unpadder only looks for it in the initial state.
+func wrapVisionContinue(c net.Conn, uuid [16]byte) net.Conn {
+	return newVision(c, uuid, false)
+}
+
+func newVision(c net.Conn, uuid [16]byte, writeUUID bool) net.Conn {
 	return &visionConn{
 		Conn:       c,
 		uuid:       uuid,
-		writeUUID:  true,
+		writeUUID:  writeUUID,
 		readUUID:   true,
 		padding:    true,
 		filterLeft: visionFilter,
@@ -78,16 +98,23 @@ func wrapVision(c net.Conn, uuid [16]byte) net.Conn {
 	}
 }
 
+// visionHello is the empty long-padding frame Xray writes with the request
+// header (command continue, no content, UUID once). tlsInner is set only
+// here so the padding is the long one; the caller's visionConn still
+// learns TLS from the first real payload.
+func visionHello(uuid [16]byte) []byte {
+	c := &visionConn{uuid: uuid, writeUUID: true, tlsInner: true}
+	return c.pad(nil, cmdPadContinue)
+}
+
 // Write sends p in padded frames of up to 8 KiB of content. On the first
-// inner TLS application record it sends that chunk with the direct command
-// and the rest of p plain; without inner TLS, the last chunk of a write
-// after the filter window carries end. Both switch padding off for good.
+// inner TLS application record it sends that chunk with command end and
+// the rest of p as ordinary TLS payload. Without inner TLS, the last chunk
+// of a write after the filter window carries end. Padding stays off after
+// either. Command direct is never written: see the package comment.
 func (c *visionConn) Write(p []byte) (int, error) {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	if c.directWrite {
-		return c.Conn.Write(p)
-	}
 	if c.filterLeft > 0 && len(p) > 0 {
 		c.filterLeft--
 		if len(p) >= 3 && p[0] == 0x16 && p[1] == 0x03 {
@@ -106,9 +133,8 @@ func (c *visionConn) Write(p []byte) (int, error) {
 		cmd := cmdPadContinue
 		last := len(p) <= visionMaxContent
 		if c.tlsInner && len(chunk) >= 3 && chunk[0] == tlsAppStart[0] && chunk[1] == tlsAppStart[1] && chunk[2] == tlsAppStart[2] {
-			cmd = cmdPadDirect
+			cmd = cmdPadEnd
 			c.padding = false
-			c.directWrite = true
 			last = true
 		} else if last && c.filterLeft <= 0 && !c.tlsInner {
 			cmd = cmdPadEnd
@@ -120,7 +146,7 @@ func (c *visionConn) Write(p []byte) (int, error) {
 		}
 		total += len(chunk)
 		p = p[len(chunk):]
-		if cmd == cmdPadDirect || cmd == cmdPadEnd {
+		if cmd == cmdPadEnd {
 			if len(p) > 0 {
 				n, err := c.Conn.Write(p)
 				return total + n, err
@@ -131,9 +157,11 @@ func (c *visionConn) Write(p []byte) (int, error) {
 	return total, nil
 }
 
-// pad builds one frame. Short content is padded: to 900–1399 bytes in all
-// while inner TLS is being set up, so handshake records all look alike;
-// otherwise with 0–255 random bytes. Content of 900 bytes or more gets none.
+// pad builds one frame. Short inner-TLS content is padded out to 900–1399
+// bytes so handshake records all look alike. Every other frame gets 0–255
+// random bytes, including content of 900 bytes or more, which is what
+// Xray's XtlsPadding does in its else branch. A full 8 KiB chunk has no
+// room left, so that one stays unpadded.
 func (c *visionConn) pad(content []byte, cmd byte) []byte {
 	n := len(content)
 	if n > visionMaxContent {
@@ -141,18 +169,19 @@ func (c *visionConn) pad(content []byte, cmd byte) []byte {
 		content = content[:n]
 	}
 	pad := 0
-	if n < 900 {
-		if c.tlsInner {
-			pad = 900 + int(randN(500)) - n
-		} else {
-			pad = int(randN(256))
-		}
-		if pad < 0 {
-			pad = 0
-		}
-		if pad > visionMaxPad {
-			pad = visionMaxPad
-		}
+	if n < 900 && c.tlsInner {
+		pad = 900 + int(randN(500)) - n
+	} else {
+		pad = int(randN(256))
+	}
+	if pad < 0 {
+		pad = 0
+	}
+	if room := visionMaxContent - n; pad > room {
+		pad = room
+	}
+	if pad > visionMaxPad {
+		pad = visionMaxPad
 	}
 	out := make([]byte, 0, visionFrameCap)
 	if c.writeUUID {
@@ -174,12 +203,16 @@ func (c *visionConn) pad(content []byte, cmd byte) []byte {
 }
 
 // Read returns content from the server's frames and skips their padding.
-// After a frame with end or direct, the rest of the stream is read as is.
+// Command end leaves the rest of the stream on the outer TLS conn.
+// Command direct is the server's splice: the rest is on the raw socket.
 func (c *visionConn) Read(p []byte) (int, error) {
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
 	for {
 		if c.directRead {
+			return c.readRaw(p)
+		}
+		if c.plainRead {
 			return c.Conn.Read(p)
 		}
 		if c.remainCont > 0 {
@@ -199,7 +232,12 @@ func (c *visionConn) Read(p []byte) (int, error) {
 			}
 			continue
 		}
-		if c.cmd == cmdPadDirect || c.cmd == cmdPadEnd {
+		if c.cmd == cmdPadEnd {
+			c.plainRead = true
+			continue
+		}
+		if c.cmd == cmdPadDirect {
+			c.rawHead, c.raw = unwrapSplice(c.Conn)
 			c.directRead = true
 			continue
 		}
@@ -207,6 +245,51 @@ func (c *visionConn) Read(p []byte) (int, error) {
 			return 0, err
 		}
 	}
+}
+
+// readRaw is the downlink after the server's command direct. head is
+// whatever the record gate had already pulled off the socket.
+func (c *visionConn) readRaw(p []byte) (int, error) {
+	if len(c.rawHead) > 0 {
+		n := copy(p, c.rawHead)
+		c.rawHead = c.rawHead[n:]
+		return n, nil
+	}
+	if c.raw != nil {
+		return c.raw.Read(p)
+	}
+	return c.Conn.Read(p)
+}
+
+// splicer is xtls.RecordGate. Release stops TLS-record framing.
+type splicer interface {
+	Release() (head []byte, raw net.Conn)
+}
+
+// unwrapSplice walks NetConn until it finds the record gate under REALITY.
+// No gate (security=none, or a test pipe) means the caller keeps reading
+// the conn it already has.
+func unwrapSplice(c net.Conn) (head []byte, raw net.Conn) {
+	seen := map[net.Conn]struct{}{}
+	for c != nil {
+		if _, ok := seen[c]; ok {
+			return nil, nil
+		}
+		seen[c] = struct{}{}
+		if s, ok := c.(splicer); ok {
+			return s.Release()
+		}
+		n, ok := c.(interface{ NetConn() net.Conn })
+		if !ok {
+			return nil, nil
+		}
+		next := n.NetConn()
+		if next == nil || next == c {
+			return nil, nil
+		}
+		c = next
+	}
+	return nil, nil
 }
 
 func (c *visionConn) skipPad() error {
