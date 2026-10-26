@@ -55,7 +55,7 @@ Entry: Settings → Route → the toggle and the gold **Lists**. The screens ope
 
 | Screen | What |
 |--------|------|
-| Lists | Title and the same toggle, a line (through goes into the tunnel, bypass stays direct). **Zone** + **Zones** → editor. Zone capsules with the service count. Quiet line `Global · Through loft`. Search. Rows: name, first CIDRs, network count, source (list / own / excl.); tap edits. **+ Add**. Bottom **Import · Export · Repository**. |
+| Lists | Title and the same toggle, a line (through goes into the tunnel, bypass stays direct). **Zone** + **Zones** → editor. Zone capsules with the service count. Quiet line `Global · Through loft`. Search. Rows: name, first CIDRs, network count, source (list / own); tap edits. A row **Exclusions · N ›**. **+ Add**. Bottom **Import · Export · Repository**. |
 | Network | Entry Route / Exclusion, network or address (one CIDR per line when editing), service, zone. Add / Save. |
 | Zones | Rows: name, network count · list file, direction, “Built-in”. **+ Add zone**. |
 | Zone | Name (locked on a built-in), direction Through loft / Bypass loft, list address + **Lists**, auto-update, Save; an own zone has Delete zone (services → Global). A new zone has the same fields. |
@@ -63,6 +63,17 @@ Entry: Settings → Route → the toggle and the gold **Lists**. The screens ope
 | Catalog | loft-routes lists: World, Russia, China, Iran, Kazakhstan, Belarus; the current one is lit. A tap sets the address and goes back. |
 | Import | From file (iOS Files), detected format and line count, zone, Add. |
 | Export | All zones in one loft-routes file (the zone in `REM zone:`, the service name in a comment), a sample, Save (share sheet). |
+
+**Clearing.** Removal takes effect at once. A snackbar at the bottom shows “Deleted: YouTube · **Undo**” for 5 s and puts everything back. There is no confirmation dialog, except for clearing a zone or its exclusions.
+
+- **Swipe left** on a service row reveals a red **Delete**.
+- **Touch and hold** a row to start selection. A bar replaces the header: **✕**, “N selected”, **All** (every service in the open zone; tap again to clear), **Delete**. Rows get a check circle; a tap toggles the row.
+- On the **Network** screen an existing entry has **Delete Service** at the bottom (**Delete Exclusion** for an exclusion). The screen closes and the snackbar appears.
+- **⋯** in the Lists nav bar: **Select** (the same selection mode) and **Clear Zone**. The dialog “Clear Global?” offers **Only Mine (N)** and **Everything, Including the List (M)**. “Everything” unlinks the zone’s list: its address and auto-update are turned off, or the services would come back on the next update. Exclusions stay. A zone with no list services shows one row, **Delete All**.
+
+A list service (source “list”) does not vanish without a trace: its networks move to the zone’s exclusions, or the next update would bring them back (macOS §5 rule). The snackbar says so: “… · list networks moved to exclusions”. Own services are deleted for good.
+
+**Exclusions** have their own screen instead of sitting in the service list. Below the services is a row **Exclusions · N ›**. The screen “Global · Exclusions” (**‹ Back** on top): the line “These networks are never routed and don’t come back when the list updates”, CIDR rows (monospace) with the service name on the right; a tap edits it on the Network screen. **Swipe left** reveals **Restore**: the exclusion is deleted and the network returns with the next list update. **+ Add** opens Network with “Exclusion” selected. At the bottom, **Clear Exclusions** with a dialog.
 
 ---
 
