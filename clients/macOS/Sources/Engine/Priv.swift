@@ -1018,23 +1018,35 @@ enum Priv {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
-    /// Host of a loft URL, stripping scheme, path, and port.
+    /// Host of a loft, VLESS or Trojan URL: scheme, userinfo, query, path, port.
+    /// vless://uuid@host keeps the uuid before @. Cutting at the first slash
+    /// of "//" leaves the token "vless", and route then rejects the pin.
     static func frontHost(_ url: String) -> String {
         var s = url.trimmingCharacters(in: .whitespacesAndNewlines)
         let low = s.lowercased()
-        for p in ["wss://", "ws://", "https://", "http://"] {
+        for p in ["vless://", "trojan://", "sstp://", "loft://", "wss://", "ws://", "https://", "http://", "tls://"] {
             if low.hasPrefix(p) {
                 s = String(s.dropFirst(p.count))
                 break
             }
         }
-        if let i = s.firstIndex(where: { $0 == "/" || $0 == "?" }) {
+        if let i = s.firstIndex(of: "#") {
             s = String(s[..<i])
         }
-        if s.contains(":") && !s.hasPrefix("[") {
-            if let i = s.lastIndex(of: ":") {
-                s = String(s[..<i])
-            }
+        if let i = s.firstIndex(of: "?") {
+            s = String(s[..<i])
+        }
+        if let i = s.lastIndex(of: "@") {
+            s = String(s[s.index(after: i)...])
+        }
+        if let i = s.firstIndex(of: "/") {
+            s = String(s[..<i])
+        }
+        if s.hasPrefix("["), let end = s.firstIndex(of: "]") {
+            return String(s[s.index(after: s.startIndex)..<end])
+        }
+        if let i = s.lastIndex(of: ":") {
+            s = String(s[..<i])
         }
         return s
     }

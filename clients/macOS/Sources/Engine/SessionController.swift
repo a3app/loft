@@ -1363,6 +1363,18 @@ final class SessionController {
         }
     }
 
+    /// Middle token of a VLESS spark: `xhttp`, `reality`, `vision`, or `tcp`.
+    /// The front name loft-front reports is only "vless"; the transport is
+    /// the share link's type / security / flow.
+    func vlessNetLabel() -> String {
+        guard let p = displayProfile() else { return "tcp" }
+        let v = ShareURI.vlessShare(p)
+        if v.xhttp { return "xhttp" }
+        if v.reality { return "reality" }
+        if v.vision { return "vision" }
+        return "tcp"
+    }
+
     /// `loft/1.0 · get · mux · mask` for loft; `sstp · ppp` for SSTP.
     func sessionSpark() -> String {
         let front = frontName.isEmpty ? (displayProfile()?.kind ?? "get") : frontName
@@ -1370,7 +1382,8 @@ final class SessionController {
             return tunLive ? "sstp  ·  ppp  ·  tun" : "sstp  ·  ppp"
         }
         if front == "vless" {
-            return tunLive ? "vless  ·  tcp  ·  tun" : "vless  ·  tcp"
+            let net = vlessNetLabel()
+            return tunLive ? "vless  ·  \(net)  ·  tun" : "vless  ·  \(net)"
         }
         if front == "trojan" {
             return tunLive ? "trojan  ·  tls  ·  tun" : "trojan  ·  tls"
