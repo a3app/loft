@@ -45,6 +45,7 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 			if cfg.ControllerKey != "" {
 				roll := filepath.Join(filepath.Dir(cfg.ControllerKey), "controller.roll")
 				fl.SetKeyRoll(ecrypto.LoadKeyRoll(roll, priv.Public().(ed25519.PublicKey)))
+				fl.SetTakeover(ownTakeover(filepath.Join(filepath.Dir(cfg.ControllerKey), "controller.epoch"), priv))
 			}
 			info.KeyRollFn = fl.KeyRoll
 			info.RosterFn = fl.RosterBytes
@@ -343,4 +344,25 @@ func coverHandler(dir string) http.Handler {
 		}
 	}
 	return cover.Handler()
+}
+
+// ownTakeover reads this controller's Takeover. One signed by an earlier
+// controller key (the key changed since the promotion) is signed again with
+// the current key, keeping its generation, so relays that follow the new
+// key still accept it.
+func ownTakeover(path string, priv ed25519.PrivateKey) []byte {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	t, err := wire.DecodeTakeover(b)
+	if err != nil {
+		return nil
+	}
+	if t.Verify(priv.Public().(ed25519.PublicKey)) != nil {
+		t.Sign(priv)
+		b = t.Encode()
+		_ = os.WriteFile(path, b, 0o600)
+	}
+	return b
 }

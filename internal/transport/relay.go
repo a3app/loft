@@ -49,6 +49,8 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 	if cfg.ControllerKey != "" {
 		pin.path = filepath.Join(filepath.Dir(cfg.ControllerKey), "controller.pub")
 		pin.load()
+		pin.takePath = filepath.Join(filepath.Dir(cfg.ControllerKey), "controller.epoch")
+		pin.loadTake()
 	}
 	// The trunk tries the controller, then any standby controllers.
 	var obs []config.Outbound
@@ -59,16 +61,20 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 	// reconnect, so pipeHub always opens hub streams on a live mux.
 	h := &Holder{}
 	rt := &relayRuntime{started: time.Now()}
+	trunk := &config.ClientConfig{
+		Token:     token,
+		Select:    "auto",
+		Outbounds: obs,
+		// ExtraCaps is the only way a Hello gets CapRelay after MemberCaps.
+		// Without this bit the controller will not Open hub:* / ctl:1.
+		ExtraCaps: uint64(wire.CapRelay),
+	}
 	go func() {
-		_ = Supervise(ctx, &config.ClientConfig{
-			Token:     token,
-			Select:    "auto",
-			Outbounds: obs,
-			// ExtraCaps is the only way a Hello gets CapRelay after MemberCaps.
-			// Without this bit the controller will not Open hub:* / ctl:1.
-			ExtraCaps: uint64(wire.CapRelay),
-		}, func(d Dialer, _ config.Outbound) { h.Set(d) })
+		_ = Supervise(ctx, trunk, func(d Dialer, _ config.Outbound) { h.Set(d) })
 	}()
+	if len(obs) > 1 {
+		go fenceLoop(ctx, trunk, pin, fenceEvery)
+	}
 	standby := ""
 	if cfg.IsReplica() && cfg.ControllerKey != "" {
 		standby = filepath.Join(filepath.Dir(cfg.ControllerKey), "standby")
@@ -183,6 +189,54 @@ func waitSession(h *Holder, d time.Duration) *mux.Session {
 // trunkOutbound is how a relay dials one controller URL: http(s) → the GET
 // front, wss → WebSocket (the default, with certificate checks off for a
 // bare host).
+// fenceEvery is how often a relay shows its Takeover to every controller
+// address; a var so tests can shorten it.
+var fenceEvery = 2 * time.Minute
+
+// fenceLoop shows the newest Takeover the relay knows to every controller
+// address in turn, over a short trunk of its own. The relay's main trunk
+// stays on one controller, so without this an old controller that comes
+// back would not hear it was replaced until that trunk dropped. A current
+// controller ignores a Takeover it already has.
+func fenceLoop(ctx context.Context, trunk *config.ClientConfig, pin *relayPin, every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		take, _ := pin.takeover()
+		if len(take) == 0 {
+			continue
+		}
+		for _, o := range trunk.Outbounds {
+			showTakeover(ctx, trunk, o, take)
+		}
+	}
+}
+
+// showTakeover dials one controller address and sends take on ctl:1.
+func showTakeover(ctx context.Context, trunk *config.ClientConfig, o config.Outbound, take []byte) {
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	d, err := startWithOffer(cctx, trunk.Token, o, helloCaps(trunk)&^wire.CapP2P)
+	if err != nil {
+		return
+	}
+	defer d.Close()
+	st, err := d.Session().Open(net.JoinHostPort(wire.CtlHost, wire.CtlPort))
+	if err != nil {
+		return
+	}
+	_ = writeMsg(st, wire.EncodeFlt(wire.FltTakeover, take))
+	// The controller reads it before closing; a short wait lets it arrive.
+	_ = st.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _ = readMsg(st)
+	st.Close()
+}
+
 func trunkOutbound(name, u string) config.Outbound {
 	o := config.Outbound{Name: name, Type: "ws", URL: u, Fingerprint: "chrome", Insecure: true}
 	switch {

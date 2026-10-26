@@ -11,8 +11,10 @@ package main
 // comes back, must not run as a controller next to the promoted one.
 
 import (
+	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,10 +22,56 @@ import (
 	"time"
 
 	"github.com/a3app/loft/internal/config"
+	"github.com/a3app/loft/internal/wire"
 )
 
 // stateFiles are the files in -dir a standby needs to take over.
-var stateFiles = []string{"network.conf", "members.keys", "relays.keys", "controller.seed", "controller.roll", "lists.conf"}
+// controller.epoch is the controller's Takeover: the standby needs its
+// generation to sign the next one, but it is not copied over its own
+// (takeOver writes the new one).
+var stateFiles = []string{"network.conf", "members.keys", "relays.keys", "controller.seed", "controller.roll", "lists.conf", epochFile}
+
+// epochFile holds the newest Takeover a node knows: on a controller its
+// own generation, on a relay the newest it has seen.
+const epochFile = "controller.epoch"
+
+// fencedMark is the file a controller writes in -dir when a relay showed
+// it a newer Takeover: it was replaced and does not start as a controller.
+const fencedMark = "fenced"
+
+// takeOver signs the next controller generation with the controller key
+// from {dir}/standby and writes it to {dir}/controller.epoch. The new
+// generation is one above the newest this standby knows, from the
+// controller's copy or from what it saw as a relay.
+func takeOver(dir, by string, like os.FileInfo) (wire.Takeover, error) {
+	seed, err := os.ReadFile(filepath.Join(dir, "standby", "controller.seed"))
+	if err != nil || len(seed) < ed25519.SeedSize {
+		return wire.Takeover{}, errors.New("promote: no controller key in the standby copy")
+	}
+	var epoch uint64
+	for _, p := range []string{filepath.Join(dir, epochFile), filepath.Join(dir, "standby", epochFile)} {
+		if b, err := os.ReadFile(p); err == nil {
+			if t, err := wire.DecodeTakeover(b); err == nil && t.Epoch > epoch {
+				epoch = t.Epoch
+			}
+		}
+	}
+	t := wire.Takeover{Epoch: epoch + 1, At: time.Now().Unix(), By: by}
+	t.Sign(ed25519.NewKeyFromSeed(seed[:ed25519.SeedSize]))
+	return t, writeLike(filepath.Join(dir, epochFile), t.Encode(), 0o600, like)
+}
+
+// fence stops this controller for good after a relay showed it t: it
+// leaves fencedMark so it does not start as a controller again, and exits
+// with 0 so systemd does not restart it.
+func fence(dir string, t wire.Takeover) {
+	msg := fmt.Sprintf("replaced by standby %s at %s (generation %d)\n", t.By, time.Unix(t.At, 0).UTC().Format(time.RFC3339), t.Epoch)
+	if err := os.WriteFile(filepath.Join(dir, fencedMark), []byte(msg), 0o600); err != nil {
+		log.Printf("loft-node: %v", err)
+	}
+	log.Printf("loft-node: this controller was %s; stopping. Reinstall it as a standby, or remove %s to run it as a controller again.", strings.TrimSpace(msg), filepath.Join(dir, fencedMark))
+	os.Exit(0)
+}
 
 // controllerState is transport.StateFn on a controller: the files above,
 // node.conf, and the node token (the mask secret) as "loft.token".
@@ -80,6 +128,9 @@ func mergePromoted(mine *config.ServerConfig, ctlConf []byte) (*config.ServerCon
 func copyState(dir string, like os.FileInfo) error {
 	sb := filepath.Join(dir, "standby")
 	for _, n := range stateFiles {
+		if n == epochFile {
+			continue
+		}
 		b, err := os.ReadFile(filepath.Join(sb, n))
 		if errors.Is(err, os.ErrNotExist) {
 			continue
@@ -130,6 +181,9 @@ func promote(dir, cfgPath, envPath string) error {
 		return err
 	}
 	if err := copyState(dir, st); err != nil {
+		return err
+	}
+	if _, err := takeOver(dir, mine.ID, st); err != nil {
 		return err
 	}
 	cst, err := os.Stat(cfgPath)

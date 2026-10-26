@@ -1,12 +1,14 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/a3app/loft/internal/config"
+	"github.com/a3app/loft/internal/wire"
 )
 
 func TestPromoteStandby(t *testing.T) {
@@ -48,6 +50,13 @@ func TestPromoteStandby(t *testing.T) {
 	if !strings.Contains(string(env), "LOFT_TOKEN=ctl-token") || !strings.Contains(string(env), "OTHER=1") || strings.Contains(string(env), "replica-own") {
 		t.Fatalf("env: %s", env)
 	}
+	// The promotion is generation 1, signed by the controller key.
+	b, _ := os.ReadFile(filepath.Join(dir, epochFile))
+	tk, err := wire.DecodeTakeover(b)
+	seed := ed25519.NewKeyFromSeed([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil || tk.Epoch != 1 || tk.By != "r2" || tk.Verify(seed.Public().(ed25519.PublicKey)) != nil {
+		t.Fatalf("takeover: %+v %v", tk, err)
+	}
 	// Once promoted it is no longer a standby.
 	if err := promote(dir, cfgPath, envPath); err == nil {
 		t.Fatal("promoted twice")
@@ -60,5 +69,34 @@ func TestPromoteNeedsState(t *testing.T) {
 	os.WriteFile(cfgPath, []byte("role replica\nid r2\n"), 0o640)
 	if err := promote(dir, cfgPath, filepath.Join(etc, "loft.env")); err == nil {
 		t.Fatal("promoted without the controller's state")
+	}
+}
+
+// TestTakeOverNextGeneration: a new promotion is one above the newest
+// generation the standby knows, from the controller's copy or its own.
+func TestTakeOverNextGeneration(t *testing.T) {
+	dir := t.TempDir()
+	sb := filepath.Join(dir, "standby")
+	os.MkdirAll(sb, 0o700)
+	seed := []byte("0123456789abcdef0123456789abcdef")
+	os.WriteFile(filepath.Join(sb, "controller.seed"), seed, 0o600)
+	priv := ed25519.NewKeyFromSeed(seed)
+	old := wire.Takeover{Epoch: 4, By: "r1"}
+	old.Sign(priv)
+	os.WriteFile(filepath.Join(sb, epochFile), old.Encode(), 0o600)
+	seen := wire.Takeover{Epoch: 2, By: "r0"}
+	seen.Sign(priv)
+	os.WriteFile(filepath.Join(dir, epochFile), seen.Encode(), 0o600)
+	tk, err := takeOver(dir, "r2", nil)
+	if err != nil || tk.Epoch != 5 {
+		t.Fatalf("%+v %v", tk, err)
+	}
+	// copyState does not put the controller's older generation back.
+	if err := copyState(dir, nil); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, epochFile))
+	if got, _ := wire.DecodeTakeover(b); got.Epoch != 5 {
+		t.Fatalf("generation after copyState: %d", got.Epoch)
 	}
 }

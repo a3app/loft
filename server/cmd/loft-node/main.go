@@ -131,12 +131,23 @@ func main() {
 		log.Printf("standby %s runs as the controller (took over by itself; loft-node -promote makes it permanent)", filepath.Base(*dir))
 	} else if cfg.IsReplica() {
 		transport.PromoteHook = func() {
+			if _, err := takeOver(*dir, cfg.ID, nil); err != nil {
+				log.Printf("loft-standby: %v", err)
+				return
+			}
 			if err := markPromoted(*dir); err != nil {
 				log.Printf("loft-standby: %v", err)
 				return
 			}
 			os.Exit(3) // systemd restarts loft-node, which starts as the controller
 		}
+	}
+	if !cfg.IsRelay() {
+		if b, err := os.ReadFile(filepath.Join(*dir, fencedMark)); err == nil {
+			log.Printf("loft-node: this controller was %s; not starting. Reinstall it as a standby, or remove %s to run it as a controller again.", strings.TrimSpace(string(b)), filepath.Join(*dir, fencedMark))
+			return
+		}
+		transport.FenceFn = func(t wire.Takeover) { fence(*dir, t) }
 	}
 	if *listen != "" {
 		cfg.Listen = *listen

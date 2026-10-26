@@ -237,3 +237,65 @@ func TestPeerKeyState(t *testing.T) {
 		t.Fatal("key state")
 	}
 }
+
+// TestTakeoverFencesOldController: a relay learns the generation of a
+// promoted controller; shown to a controller of an older generation, that
+// generation makes it stop.
+func TestTakeoverFencesOldController(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	prev, prevFence := FleetCtl, FenceFn
+	t.Cleanup(func() { FleetCtl, FenceFn = prev, prevFence })
+	serve := func(fl *Fleet, pin *relayPin) error {
+		FleetCtl = fl
+		cli, srv := muxPair(t)
+		srv.SetRelay("ru1")
+		go func() {
+			for {
+				st, err := srv.Accept()
+				if err != nil {
+					return
+				}
+				go fl.ServeCtl(st)
+			}
+		}()
+		beat := uint32(50)
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		defer cancel()
+		return relayCtlSession(ctx, cli, wire.EnrolReq{ID: "ru1", URL: "https://r.example"}, &relayRuntime{started: time.Now()}, &beat, pin, "")
+	}
+	relays := &config.ServerConfig{Relays: []config.RelayEntry{{ID: "ru1"}}}
+	take := wire.Takeover{Epoch: 1, At: time.Now().Unix(), By: "r2"}
+	take.Sign(priv)
+
+	// The promoted controller tells the relay its generation.
+	promoted := NewFleet(priv, relays)
+	promoted.SetTakeover(take.Encode())
+	pin := &relayPin{base: pub, cur: pub, takePath: filepath.Join(t.TempDir(), "controller.epoch")}
+	if err := serve(promoted, pin); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("relay refused the promoted controller: %v", err)
+	}
+	if _, e := pin.takeover(); e != 1 {
+		t.Fatalf("relay did not learn generation 1: %d", e)
+	}
+	again := &relayPin{takePath: pin.takePath}
+	again.loadTake()
+	if _, e := again.takeover(); e != 1 {
+		t.Fatal("generation not kept for the next start")
+	}
+
+	// The old controller comes back and is shown it.
+	var fenced []wire.Takeover
+	FenceFn = func(t wire.Takeover) { fenced = append(fenced, t) }
+	if err := serve(NewFleet(priv, relays), pin); err == nil || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("relay kept working with the replaced controller: %v", err)
+	}
+	if len(fenced) != 1 || fenced[0].By != "r2" {
+		t.Fatalf("old controller not fenced: %+v", fenced)
+	}
+
+	// The current controller ignores a generation it already has.
+	fenced = nil
+	if err := serve(promoted, pin); !errors.Is(err, context.DeadlineExceeded) || len(fenced) != 0 {
+		t.Fatalf("current controller: %v %v", err, fenced)
+	}
+}
