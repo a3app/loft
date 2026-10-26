@@ -171,7 +171,7 @@ TCP Open 和覆盖网 ICMP 走 `Network.Allow`（tag、CIDR、VLAN、`default de
 
 接收端客户端接这个 Open，拨 target。覆盖网 IP 拼接是 `127.0.0.1:port`。Routed 拼接是成员主机栈上的 `host:port`。
 
-可选 P2P：客户端听着，宣告 `loft.peer:<port>` 加 32 字节 X25519 公钥，Status 带着 TLS 看到的主机、端口和公钥。直连 TCP 用 42 字节 `LFT` 前言（和对方公钥做成对 ECDH 再 HMAC），Status 带着 policy 时再走和 hub 拼接同一套 ACL。失败就回 hub 拼接。客户端 `p2p: false` 就不听。seed 在 `{instanceDir}/p2p.seed`。
+可选 P2P：客户端听着，宣告 `loft.peer:<port>` 加 32 字节 X25519 公钥，Status 带着 TLS 看到的主机、端口和公钥。直连 TCP 先做加密握手（新生成的 X25519 密钥、基于与对方公钥的成对 ECDH 的证明、随机填充，没有固定字节），数据用 ChaCha20-Poly1305 封装（`p2pseal.go`），Status 带着 policy 时再走和 hub 拼接同一套 ACL。失败就回 hub 拼接。客户端 `p2p: false` 就不听。seed 在 `{instanceDir}/p2p.seed`。
 
 ---
 

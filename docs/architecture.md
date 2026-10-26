@@ -171,7 +171,7 @@ TCP Open and overlay ICMP go through `Network.Allow` (tags, CIDR, VLAN, `default
 
 The receiving client accepts that Open and dials the target. Overlay-IP splice uses `127.0.0.1:port`. Routed splice uses `host:port` on the member’s host stack.
 
-Optional P2P: the client listens, announces `loft.peer:<port>` plus a 32-byte X25519 pub, and Status carries TLS-observed host, port, and pub. Direct TCP uses the 42-byte `LFT` preface (HMAC under pairwise ECDH with the peer pub), then the same ACL as hub splice when Status carries policy. Failure falls back to hub splice. `p2p: false` on the client skips the listen. The seed is `{instanceDir}/p2p.seed`.
+Optional P2P: the client listens, announces `loft.peer:<port>` plus a 32-byte X25519 pub, and Status carries TLS-observed host, port, and pub. Direct TCP runs a sealed handshake (fresh X25519 keys, proof under pairwise ECDH with the peer pub, random padding, no fixed bytes) and carries data under ChaCha20-Poly1305 (`p2pseal.go`), then the same ACL as hub splice when Status carries policy. Failure falls back to hub splice. `p2p: false` on the client skips the listen. The seed is `{instanceDir}/p2p.seed`.
 
 ---
 

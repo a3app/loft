@@ -17,7 +17,7 @@ select: auto
 # controller_pub: # 64 hex chars of controller Ed25519 pub (required to fetch roster)
 # tofu: false      # true = pin the first valid signer when controller_pub is empty
 # lists_url: https://cdn.example.com/static/v3/lists.json
-# p2p: false   # hub splice only; skip a direct TCP attempt (LFT) to another member
+# p2p: false   # hub splice only; skip a direct (encrypted) TCP attempt to another member
 # pause: starlink  # skip mux Data around LEO handover seconds; local, not on the wire
 # default: via
 # use:

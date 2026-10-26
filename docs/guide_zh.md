@@ -131,7 +131,7 @@ session ttl_ms 86400000
 
 `default deny` 仍放行覆盖网网关（DNS）。没有这一行时 mesh 成员之间仍通。Status 把 CIDR 推给每个成员，VIA 等于自己覆盖网 IP 的那位除外。打向 `192.168.10.5:22` 的 TCP Open 在 lab 成员上拼成 `192.168.10.5:22`；打向覆盖网 IP 的 Open 仍是 `127.0.0.1:port`。直连 P2P 走同一套 ACL（Status policy）。没有 policy 的老 Status 跳过这项检查。
 
-客户端可以设 `p2p: false`，那就只用 hub 拼接。直连 TCP：客户端听着，宣告 `loft.peer:<port>` 加 32 字节 X25519 公钥，Status 带着节点在 TLS 上看到的主机。前言是 LFT（成对 ECDH）。NAT 后面试失败，同一条流走节点。经中继时看到的主机就是中继。客户端大约在 `session_ttl_ms` 的 80% 重新握手。
+客户端可以设 `p2p: false`，那就只用 hub 拼接。直连 TCP：客户端听着，宣告 `loft.peer:<port>` 加 32 字节 X25519 公钥，Status 带着节点在 TLS 上看到的主机。连接从第一个字节起即加密（成对 ECDH 加新生成的密钥），没有固定字节。NAT 后面试失败，同一条流走节点。经中继时看到的主机就是中继。客户端大约在 `session_ttl_ms` 的 80% 重新握手。
 
 ---
 
@@ -271,7 +271,7 @@ make probe
 | `outbounds` | `type`、`url`、`path`、`cdn`、`fingerprint` |
 | `use` | 列表名 → `direct` \| `via` \| `drop` |
 | `default` | 没有列表命中时的动作（默认 `via`） |
-| `p2p` | `false` 关掉直连覆盖网尝试。直连 TCP 是 LFT（成对 ECDH） |
+| `p2p` | `false` 关掉直连覆盖网尝试。直连 TCP 是加密的（成对 ECDH） |
 | `lists_url` | 改写地址列表的 GET |
 | `listen.socks5` | 绑定地址 |
 | `listen.tun` | 空 = 关；`auto` 建 utun |

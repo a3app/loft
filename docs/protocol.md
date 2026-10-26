@@ -513,13 +513,18 @@ The node loads a network document (CIDR, gateway, members, ACLs). Overlay IP and
 
 Hub splice: the receiving client accepts the stream and dials the local port.
 
-`p2p` on the network defaults to on for mesh and vlan. When on, Status carries up to 16 peer hints (overlay IP, TLS-observed host, listen port, VLAN, 32-byte X25519 public key). A client with Hello cap `p2p` listens on TCP, announces with Open `loft.peer:<port>` plus a 32-byte X25519 public key on that stream, and MAY dial `host:port` with a 42-byte preface before falling back to hub splice:
+`p2p` on the network defaults to on for mesh and vlan. When on, Status carries up to 16 peer hints (overlay IP, TLS-observed host, listen port, VLAN, 32-byte X25519 public key). A client with Hello cap `p2p` listens on TCP, announces with Open `loft.peer:<port>` plus a 32-byte X25519 public key on that stream, and MAY dial `host:port` and run the sealed handshake below before falling back to hub splice. Nothing on that TCP connection is in clear and no byte of it is fixed:
 
 ```
-"LFT" || 0x00 || src_ipv4[4] || HMAC-SHA256(ss, "lft" || nonce || dest_port || src_ipv4)[0:16] || nonce[16] || dest_port u16be
+initiator → e_pub[32] || Seal(k1, head, aad = e_pub) || pad
+            head = src_ipv4[4] || dest_port u16be || at u64be || proof[16] || pad_len u8
+responder → r_pub[32] || Seal(k2, pad_len u8, aad = r_pub) || pad
+each way  → Seal(k, len u16be) || Seal(k, data[len])        len ≤ 16384
 ```
 
-`ss` is X25519(local_sk, peer_pub from the hint). Two members with different `lt_` still share that pair secret, and HMAC uses it. The responder looks up `src_ipv4` in its hints. Missing public key or a failed MAC closes the socket; the initiator uses hub splice. A client with `p2p: false` MUST use hub splice only. Observed host through a relay is the relay; a direct attempt then fails and hub splice is used. When Status carries policy, both the initiator and the responder MUST apply the same Allow as hub splice before splicing local ports. A Status without policy (old node) skips that check.
+`e` and `r` are fresh X25519 keys for each connection. On the wire the top bit of `e_pub` and `r_pub` is random; X25519 ignores it. `s` is the member P2P key announced with `loft.peer`. `ss` = X25519(s_initiator, s_responder), `es` = X25519(e, s_responder), `ee` = X25519(e, r). `k1` = HKDF-SHA256(ikm = es, salt = e_pub, info = "loft p2p hello", L = 32), `k2` = HKDF-SHA256(es, salt = e_pub || r_pub, info = "loft p2p reply", L = 32). The data keys are HKDF-SHA256(ee || es || ss, salt = e_pub || r_pub, info = "loft p2p data", L = 64): the first 32 bytes for initiator → responder, the rest for the way back. The AEAD is ChaCha20-Poly1305. Handshake seals use a zero nonce, since each of those keys seals once; data uses a 96-bit little-endian counter per direction, from 0, one step per seal. `proof` = HMAC-SHA256(ss, "loft p2p proof" || e_pub || src_ipv4 || dest_port || at)[0:16], `at` is unix seconds, `pad` is `pad_len` random bytes.
+
+The responder opens the header, looks up `src_ipv4` in its hints and checks `proof` against that member's key, requires `at` within 60 s of its own clock, and refuses an `e_pub` (top bit cleared) it has accepted in the last 120 s. Any failure closes the socket; the initiator then uses hub splice. A client with `p2p: false` MUST use hub splice only. Observed host through a relay is the relay; a direct attempt then fails and hub splice is used. When Status carries policy, both the initiator and the responder MUST apply the same Allow as hub splice before splicing local ports. A Status without policy (old node) skips that check.
 
 Each hint record is `u8 ip | ip | u8 host | host | u16be port | u16be vlan`, then optionally `u8 32 | pub[32]`. A decoder MUST treat a following byte other than 32 as the next field (older blobs, or a peer that has not announced a public key).
 
@@ -663,7 +668,7 @@ The signed roster is a public file on a CDN path. Anyone who can GET that path c
 
 ### 11.6 Overlay
 
-Hub isolation is Reset `policy_drop` on member-to-member Open. Mesh splices through the node. P2P is an optional TCP attempt using the TLS-observed host; NAT and relays make that attempt fail, after which hub splice is used. Direct P2P uses Status policy for the same ACL as the node. The controller holds member key hashes, leases, and overlay addresses. Other members learn a peer’s overlay IP when they Open it (mesh/vlan). With `p2p` on, Status peer hints also carry the TLS-observed host, listen port, and X25519 public key. Direct TCP authenticates with LFT (ECDH pair secret). `session_ttl_ms` is a live-session maximum; `lease_sec` is IP hold after disconnect. A fresh `0x02` with the same `instance_id` starts a new TTL.
+Hub isolation is Reset `policy_drop` on member-to-member Open. Mesh splices through the node. P2P is an optional TCP attempt using the TLS-observed host; NAT and relays make that attempt fail, after which hub splice is used. Direct P2P uses Status policy for the same ACL as the node. The controller holds member key hashes, leases, and overlay addresses. Other members learn a peer’s overlay IP when they Open it (mesh/vlan). With `p2p` on, Status peer hints also carry the TLS-observed host, listen port, and X25519 public key. Direct TCP is sealed and authenticated with the pair secret (§9); none of its bytes is fixed. `session_ttl_ms` is a live-session maximum; `lease_sec` is IP hold after disconnect. A fresh `0x02` with the same `instance_id` starts a new TTL.
 
 ### 11.7 Outside this protocol
 
@@ -876,7 +881,7 @@ Uplink encoding 1 of the Data frame in §16.1. `u16be length || blob` is 11 byte
 ~00@Sb0SSi20CDfE
 ```
 
-### 16.8 ClientHello mark and P2P preface
+### 16.8 ClientHello mark and P2P handshake
 
 sid v3, cert serial, and the QUIC v3 source connection ID. Node secret is the ASCII string `loft-vector-node`. Client X25519 scalar is `01 02 … 20` (32 bytes). `R` is 32 bytes of `0x11`. SNI is `origin.example`. QUIC `client_random` is X25519(scalar, basepoint), top bit clear, and the HKDF key is the same ECDH as the cert serial.
 
@@ -896,11 +901,13 @@ sid v2 on the same ClientHello, with the member key of §16.2 as `token`:
 sid v2  d2953bbc3bcad53751c4eebc631d4a48425731080439c99eae5bcd148a79b9ca
 ```
 
-P2P preface (§9). Local scalar `50726976616379206973206e65636573736172792e2048756768657320273933`, peer scalar `5468697320697320666f722065766572796f6e652e2054696d424c2032303132`, `ss` = X25519(local, peer_pub), `src_ipv4` 10.77.0.2, nonce `4172742e3233204b6f6e73742e205246`, `dest_port` 8080.
+P2P handshake (§9). Initiator member scalar `50726976616379206973206e65636573736172792e2048756768657320273933`, responder member scalar `5468697320697320666f722065766572796f6e652e2054696d424c2032303132`, initiator fresh scalar `4172742e3233204b6f6e73742e2052462073656372656379206f66206d61696c`, responder fresh scalar `41727469636c6520313220554448523a206e6f20696e746572666572656e6365`, public keys sent with the top bit clear, `src_ipv4` 10.77.0.2, `dest_port` 8080, `at` 2524608000, initiator pad `706164`, responder pad empty. `record` is the first initiator → responder data record, carrying `ping`.
 
 ```
 peer_pub  2a4cd76bd42aaa397c78d84f0e3fa3643dfad73d128237b66e8572688fc8a306
-preface   4c4654000a4d00026986af299cbcb6931c57169b90268c704172742e3233204b6f6e73742e2052461f90
+hello     1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acef59eae3000bdb7d97c5a83bbcb0f00b0f706164
+reply     24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543eca4bde80e88b6f53d067e8874af6450401
+record    39b9fc9869bfe0580b40de9f12a7c1a3dd87f6469543822a1385ea6e9364ee21edd26e9e8d7b
 ```
 
 ### 16.9 Controller key roll

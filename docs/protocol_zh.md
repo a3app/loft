@@ -513,13 +513,18 @@ Hello 与 Status 都宣告 `hold` 时，意外丢失前置（无线电间隙，�
 
 枢纽拼接：接收客户端接受该流并拨打本机端口。
 
-网络上的 `p2p` 对 mesh 与 vlan 默认开启。开启时，Status 携带至多 16 条对等提示（覆盖网 IP、TLS 观察到的主机、监听端口、VLAN、32 字节 X25519 公钥）。带 Hello 能力 `p2p` 的客户端在 TCP 上监听，以 Open `loft.peer:<port>` 加该流上 32 字节 X25519 公钥宣告，并可以在回退到枢纽拼接前用 42 字节前言拨打 `host:port`：
+网络上的 `p2p` 对 mesh 与 vlan 默认开启。开启时，Status 携带至多 16 条对等提示（覆盖网 IP、TLS 观察到的主机、监听端口、VLAN、32 字节 X25519 公钥）。带 Hello 能力 `p2p` 的客户端在 TCP 上监听，以 Open `loft.peer:<port>` 加该流上 32 字节 X25519 公钥宣告，并可以在回退到枢纽拼接前拨打 `host:port` 并执行下面的加密握手。该 TCP 连接上没有明文，也没有任何固定字节：
 
 ```
-"LFT" || 0x00 || src_ipv4[4] || HMAC-SHA256(ss, "lft" || nonce || dest_port || src_ipv4)[0:16] || nonce[16] || dest_port u16be
+initiator → e_pub[32] || Seal(k1, head, aad = e_pub) || pad
+            head = src_ipv4[4] || dest_port u16be || at u64be || proof[16] || pad_len u8
+responder → r_pub[32] || Seal(k2, pad_len u8, aad = r_pub) || pad
+each way  → Seal(k, len u16be) || Seal(k, data[len])        len ≤ 16384
 ```
 
-`ss` 为 X25519(local_sk, 提示中的 peer_pub)。两个 `lt_` 不同的成员仍共享该对密钥，HMAC 使用它。应答方在其提示中查找 `src_ipv4`。缺少公钥或 MAC 失败则关闭套接字；发起方使用枢纽拼接。`p2p: false` 的客户端必须只用枢纽拼接。经中继观察到的主机是中继；直接尝试于是失败，改用枢纽拼接。Status 携带 policy 时，发起方与应答方在拼接本机端口前必须应用与枢纽拼接相同的 Allow。没有 policy 的 Status（旧节点）跳过该检查。
+`e` 与 `r` 是每个连接新生成的 X25519 密钥。线上 `e_pub` 与 `r_pub` 的最高位是随机的；X25519 忽略该位。`s` 是通过 `loft.peer` 宣告的成员 P2P 密钥。`ss` = X25519(s_发起方, s_应答方)，`es` = X25519(e, s_应答方)，`ee` = X25519(e, r)。`k1` = HKDF-SHA256(ikm = es, salt = e_pub, info = "loft p2p hello", L = 32)，`k2` = HKDF-SHA256(es, salt = e_pub || r_pub, info = "loft p2p reply", L = 32)。数据密钥为 HKDF-SHA256(ee || es || ss, salt = e_pub || r_pub, info = "loft p2p data", L = 64)：前 32 字节用于发起方 → 应答方，其余用于反方向。AEAD 为 ChaCha20-Poly1305。握手中的封装使用全零 nonce，因为每个这样的密钥只封装一次；数据的 nonce 为每个方向一个 96 位小端计数器，从 0 开始，每封装一次加一。`proof` = HMAC-SHA256(ss, "loft p2p proof" || e_pub || src_ipv4 || dest_port || at)[0:16]，`at` 为 unix 秒，`pad` 为 `pad_len` 个随机字节。
+
+应答方打开头部，在其提示中查找 `src_ipv4` 并用该成员的密钥校验 `proof`，要求 `at` 与自身时钟相差不超过 60 秒，并拒绝过去 120 秒内已接受过的 `e_pub`（清除最高位后比较）。任何失败都关闭套接字；发起方随后使用枢纽拼接。`p2p: false` 的客户端必须只用枢纽拼接。经中继观察到的主机是中继；直接尝试于是失败，改用枢纽拼接。Status 携带 policy 时，发起方与应答方在拼接本机端口前必须应用与枢纽拼接相同的 Allow。没有 policy 的 Status（旧节点）跳过该检查。
 
 每条提示记录为 `u8 ip | ip | u8 host | host | u16be port | u16be vlan`，然后可选 `u8 32 | pub[32]`。解码器必须把随后不是 32 的字节视为下一字段（较旧的块，或尚未宣告公钥的对端）。
 
@@ -663,7 +668,7 @@ Auth `0x02` 为 nonce、临时 X25519 公钥，以及成员密钥下的 HMAC。�
 
 ### 11.6 覆盖网
 
-枢纽隔离是成员到成员 Open 上的 Reset `policy_drop`。Mesh 经节点拼接。P2P 是使用 TLS 观察到的主机的可选 TCP 尝试；NAT 与中继使该尝试失败，随后使用枢纽拼接。直接 P2P 使用 Status policy，ACL 与节点相同。控制器持有成员密钥散列、租约与覆盖网地址。其他成员在 Open 某对端时得知其覆盖网 IP（mesh/vlan）。`p2p` 开启时，Status 对等提示还携带 TLS 观察到的主机、监听端口与 X25519 公钥。直接 TCP 以 LFT（ECDH 对密钥）认证。`session_ttl_ms` 为存活会话上限；`lease_sec` 为断开后的 IP 保留。带同一 `instance_id` 的新 `0x02` 开始新的 TTL。
+枢纽隔离是成员到成员 Open 上的 Reset `policy_drop`。Mesh 经节点拼接。P2P 是使用 TLS 观察到的主机的可选 TCP 尝试；NAT 与中继使该尝试失败，随后使用枢纽拼接。直接 P2P 使用 Status policy，ACL 与节点相同。控制器持有成员密钥散列、租约与覆盖网地址。其他成员在 Open 某对端时得知其覆盖网 IP（mesh/vlan）。`p2p` 开启时，Status 对等提示还携带 TLS 观察到的主机、监听端口与 X25519 公钥。直接 TCP 由对密钥加密并认证（§9），其中没有任何固定字节。`session_ttl_ms` 为存活会话上限；`lease_sec` 为断开后的 IP 保留。带同一 `instance_id` 的新 `0x02` 开始新的 TTL。
 
 ### 11.7 本协议之外
 
@@ -876,7 +881,7 @@ hash    647fe575001d7d8dd007eb04efebacb72b23881ad5ea241ec4440692b22fddc4
 ~00@Sb0SSi20CDfE
 ```
 
-### 16.8 ClientHello 标记与 P2P 前导
+### 16.8 ClientHello 标记与 P2P 握手
 
 sid v3、证书序列号与 QUIC v3 源连接 ID。节点秘密为 ASCII 串 `loft-vector-node`。客户端 X25519 标量为 `01 02 … 20`（32 字节）。`R` 为 32 字节 `0x11`。SNI 为 `origin.example`。QUIC `client_random` 为 X25519(标量, 基点)，最高位清零，HKDF 密钥与证书序列号同一 ECDH。
 
@@ -896,11 +901,13 @@ quic scid  25b8c53ebe475334b474445e3ee3253691b18faa
 sid v2  d2953bbc3bcad53751c4eebc631d4a48425731080439c99eae5bcd148a79b9ca
 ```
 
-P2P 前导（§9）。本地标量 `50726976616379206973206e65636573736172792e2048756768657320273933`，对端标量 `5468697320697320666f722065766572796f6e652e2054696d424c2032303132`，`ss` = X25519(local, peer_pub)，`src_ipv4` 10.77.0.2，nonce `4172742e3233204b6f6e73742e205246`，`dest_port` 8080。
+P2P 握手（§9）。发起方成员标量 `50726976616379206973206e65636573736172792e2048756768657320273933`，应答方成员标量 `5468697320697320666f722065766572796f6e652e2054696d424c2032303132`，发起方临时标量 `4172742e3233204b6f6e73742e2052462073656372656379206f66206d61696c`，应答方临时标量 `41727469636c6520313220554448523a206e6f20696e746572666572656e6365`，公钥以最高位清零发送，`src_ipv4` 10.77.0.2，`dest_port` 8080，`at` 2524608000，发起方 pad `706164`，应答方 pad 为空。`record` 是发起方 → 应答方的第一条数据记录，内容为 `ping`。
 
 ```
 peer_pub  2a4cd76bd42aaa397c78d84f0e3fa3643dfad73d128237b66e8572688fc8a306
-preface   4c4654000a4d00026986af299cbcb6931c57169b90268c704172742e3233204b6f6e73742e2052461f90
+hello     1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acef59eae3000bdb7d97c5a83bbcb0f00b0f706164
+reply     24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543eca4bde80e88b6f53d067e8874af6450401
+record    39b9fc9869bfe0580b40de9f12a7c1a3dd87f6469543822a1385ea6e9364ee21edd26e9e8d7b
 ```
 
 ### 16.9 控制器密钥更换

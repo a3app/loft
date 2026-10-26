@@ -131,7 +131,7 @@ session ttl_ms 86400000
 
 `default deny` still allows the overlay gateway (DNS). Mesh without that line stays open between members. Status pushes the CIDR to every member except the one whose overlay IP is VIA (that host already has the LAN). TCP Open to `192.168.10.5:22` splices as `192.168.10.5:22` on the lab member; overlay-IP Open still splices as `127.0.0.1:port`. Direct P2P uses the same ACL (Status policy). An old Status without policy skips that check.
 
-The client MAY set `p2p: false` and then uses hub splice only. Direct TCP: the client listens, announces `loft.peer:<port>` plus a 32-byte X25519 pub, and Status carries the host the node observed on TLS. The preface is LFT (pair ECDH). Behind NAT the attempt fails and the same flow uses the node. Through a relay the observed host is the relay. The client re-handshakes at about 80% of `session_ttl_ms`.
+The client MAY set `p2p: false` and then uses hub splice only. Direct TCP: the client listens, announces `loft.peer:<port>` plus a 32-byte X25519 pub, and Status carries the host the node observed on TLS. The connection is encrypted from its first byte (pair ECDH and fresh keys) and has no fixed bytes. Behind NAT the attempt fails and the same flow uses the node. Through a relay the observed host is the relay. The client re-handshakes at about 80% of `session_ttl_ms`.
 
 ---
 
@@ -271,7 +271,7 @@ make probe
 | `outbounds` | `type`, `url`, `path`, `cdn`, `fingerprint` |
 | `use` | List name → `direct` \| `via` \| `drop` |
 | `default` | Action when no list matches (default `via`) |
-| `p2p` | `false` disables direct overlay attempts. Direct TCP is LFT (pair ECDH) |
+| `p2p` | `false` disables direct overlay attempts. Direct TCP is encrypted (pair ECDH) |
 | `lists_url` | Override GET for address lists |
 | `listen.socks5` | Bind address |
 | `listen.tun` | Empty = off; `auto` creates utun |
