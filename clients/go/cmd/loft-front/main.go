@@ -62,6 +62,7 @@ func main() {
 	tun := flag.String("tun", "", "TUN device; empty = off, auto = create (needs root)")
 	tunNoexec := flag.Bool("tun-noexec", false, "attach named TUN, skip addr/routes/DNS")
 	tunSock := flag.String("tun-sock", "", "unix socket; loft-priv sends utun fd")
+	tunPipe := flag.String("tun-pipe", "", "named pipe of length-prefixed IP packets; address and routes stay outside")
 	probe := flag.Bool("probe", false, "handshake then exit")
 	muxOn := flag.Bool("mux", true, "inner mux; false = HTTP/2 CONNECT splice")
 	verbose := flag.Bool("v", false, "SSTP: packet and DNS traces on stderr")
@@ -216,6 +217,22 @@ func main() {
 		defer tunMu.Unlock()
 		if tunDev != nil {
 			tunDev.Attach(h)
+			return
+		}
+		if *tunPipe != "" {
+			ifc, err := inbound.OpenPacketPipe(*tunPipe)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "tun pipe: %v\n", err)
+				return
+			}
+			c, err := inbound.StartTUNIO(ifc, ipCIDR(ip), h)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "tun: %v\n", err)
+				return
+			}
+			tunDev = c
+			tunLive.Store(true)
+			fmt.Fprintf(os.Stderr, "tun up pipe\n")
 			return
 		}
 		if *tun == "" {

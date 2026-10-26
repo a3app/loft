@@ -112,6 +112,48 @@ func StartTUN(device, cidr string, killSwitch bool, d transport.Dialer, exclude 
 	return openTUN(device, cidr, killSwitch, d, exclude, false)
 }
 
+// StartTUNIO runs the userspace stack on a device the caller already opened.
+// Address, DNS, and routes stay with the caller. The Windows service uses
+// this with a named pipe of IP packets in front of Wintun.
+func StartTUNIO(ifc tunIO, cidr string, d transport.Dialer) (*Device, error) {
+	if cidr == "" {
+		cidr = OverlayCIDR(transport.OverlayIP(), "")
+	}
+	ip, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		ifc.Close()
+		return nil, err
+	}
+	live := d
+	if l, ok := d.(interface{ Live() transport.Dialer }); ok {
+		if inner := l.Live(); inner != nil {
+			live = inner
+		}
+	}
+	if _, ok := live.(*L3Net); ok {
+		dev, err := openDevice(ifc, nil, nil, false, nil, true)
+		if err != nil {
+			return nil, err
+		}
+		dev.Attach(d)
+		return dev, nil
+	}
+	if _, ok := ipPumpOf(d); ok {
+		dev, err := openDevice(ifc, nil, nil, false, nil, true)
+		if err != nil {
+			return nil, err
+		}
+		dev.Attach(d)
+		return dev, nil
+	}
+	st, err := newStack(ifc, d, ip, ipnet)
+	if err != nil {
+		ifc.Close()
+		return nil, err
+	}
+	return openDevice(ifc, st, nil, false, nil, true)
+}
+
 // AttachTUN opens an existing TUN by name and runs the userspace stack on it.
 // The kernel address, MTU, DNS, and routes stay with the caller (ConnMan,
 // NetworkManager). Same packet path as StartTUN.
@@ -125,7 +167,7 @@ func openTUN(device, cidr string, killSwitch bool, d transport.Dialer, exclude [
 	}
 	cfg := water.Config{DeviceType: water.TUN}
 	if device != "" && device != "auto" {
-		cfg.Name = device
+		setWaterName(&cfg, device)
 	}
 	ifc, err := water.New(cfg)
 	if err != nil {

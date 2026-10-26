@@ -25,7 +25,8 @@ dist/x64/loft-wintun-check.exe: *.go go.mod
 $(WINTUN_ZIP):
 	mkdir -p $(@D)
 	curl -fsSL -o $@.tmp https://www.wintun.net/builds/wintun-$(WINTUN_VER).zip
-	echo "$(WINTUN_SHA256)  $@.tmp" | shasum -a 256 -c -
+	if command -v sha256sum >/dev/null; then echo "$(WINTUN_SHA256)  $@.tmp" | sha256sum -c -; \
+	else echo "$(WINTUN_SHA256)  $@.tmp" | shasum -a 256 -c -; fi
 	mv $@.tmp $@
 
 dist/x86/wintun.dll: $(WINTUN_ZIP)

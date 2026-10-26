@@ -13,6 +13,7 @@
 | [`MikroTik/`](MikroTik/) | Контейнер RouterOS 7. Макет: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Тонкое приложение-хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md), фаза 6 |
 | [`Android/`](Android/) | VpnService. Тонкий хост на Java. Flavor для телефона и для TV. Макет: [`Android/design/index.html`](Android/design/index.html) |
+| [`Windows/`](Windows/) | Клиент в трее. Windows 7 SP1 и новее. Оболочка Win32 + loft-svc. UX: [`Windows/design/DESIGN_ru.md`](Windows/design/DESIGN_ru.md) |
 | [`Sailfish/`](Sailfish/) | Оверлей ConnMan. Тонкий хост на QML + loft-front. Для ОС Аврора — RPM-пакет OMP. Макет: [`Sailfish/design/index.html`](Sailfish/design/index.html) |
 | [`mobile/`](mobile/) | Общий движок Go (`gomobile bind`). Без GUI. |
 
@@ -28,6 +29,7 @@ make macos-dmg     # dist/clients/macOS/loft-*-macos-<arch>.dmg
 make macos-dmgs    # оба DMG, arm64 и x86_64 (CI)
 make android       # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios           # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
+make windows       # dist/clients/Windows/x64 и x86
 make dist-clients  # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
 ```
 

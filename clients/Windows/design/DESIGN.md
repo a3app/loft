@@ -12,7 +12,7 @@ The client follows macOS v1: [`../../macOS/design/DESIGN.md`](../../macOS/design
 
 The minimum version is **Windows 7**. It looks the same on 7, 8.1, 10 and 11 because the app draws its own UI. No Mica, Acrylic, Aero Glass, system theme or system accent colour. Window ground is Ink `#1A1714`; the accent is the lamp.
 
-UI type is **Segoe UI** (in Windows since Vista). Avenir Next is not bundled. Weights follow the brand: headings Semibold 600, buttons and tabs 500, body Regular 400. The word `loft` in About is drawn from the brand SVG outlines, not set as text. Monospace is Consolas.
+UI type is **Segoe UI** (in Windows since Vista). Avenir Next is not bundled. Weights follow the brand: headings Semibold 600, buttons and tabs 500, body Regular 400. The word `loft` in About is Segoe UI in the lamp colour: the brand SVG is still a `<text>` element, so v1 does not stroke outlines. Monospace is Consolas.
 
 Builds: **x86 and x64**. The UI is **native Win32** with its own drawing (no WebView, no system visual styles).
 
@@ -120,7 +120,12 @@ Installer: the install step has the same option, a checkbox "Open .loft and loft
 ## 7. Import, export, update
 
 - Import and export use the standard Windows Open / Save As dialogs. The drop zone in the mock shows that a file can be dropped on the window.
-- The update window says "Download and run the installer" instead of replacing a DMG. The check is GitHub latest, as on macOS.
+- The update window says "Download and replace this copy." The check is GitHub latest, as on macOS. It downloads `loft-<version>-windows-x64.zip` or the x86 zip, replaces the directory of the running exe, and starts again. A copy under Program Files asks for administrator. The service image is replaced on disk; a running service keeps the old image until it is restarted.
+- Dist on a `v*` tag publishes the two portable zips and `loft-windows-<version>-SHA256SUMS.txt`. `make release` also builds the installers and the Store layout.
+  - Portable: `loft-<version>-windows-x64.zip` and `loft-<version>-windows-x86.zip`. Unzip and run. Windows 7 SP1 and later. The first tunnel connect installs the service.
+  - Installer: `loft-windows-x64-setup.exe` and `loft-windows-x86-setup.exe`. Copies into Program Files, registers the service, adds a Start menu shortcut and an uninstaller. No MSI. The same OS floor. A checkbox "Open .loft and loft:// in Loft" is on by default; off writes `assoc.off` beside the exe, and the first launch turns both associations off.
+  - The GitHub channel is the portable zips. The app reads the latest `a3app/loft` release. The installers are not the update payload.
+  - Microsoft Store is a separate x64 package, Windows 10 version 1809 and later. It has no Wintun and no `loft-svc`: a Store package cannot install a kernel driver or a LocalSystem service. SOCKS works. Updates come from the Store. `make store` writes `dist/clients/Windows/store/x64` with `AppxManifest.xml`. `makeappx` and the Partner Center signature are done on Windows. The `Publisher` value `CN=a3app` is replaced by the store certificate.
 
 ---
 
@@ -145,20 +150,17 @@ As on macOS, texts use *route*, *direct Internet*, *reset*; never "kill switch" 
 
 ---
 
-## 10. Open questions
+## 10. Decisions
 
-Decided: native Win32 UI; x86 and x64 builds; `.loft` and `loft://` are an option in the installer and in Settings (§6); Segoe UI type.
+Closed in the v1 tree under [`../`](../). Build and run notes: [`../README.md`](../README.md).
 
-Still to choose before code:
-
-1. **Go and Windows 7.** The session runs in the Go process `loft-front`. Go 1.21 and later do not support Windows 7 / 8: build with Go 1.20.x or a patched toolchain.
-   Checked 2026-10-26 with [`wintun-check`](../wintun-check/): a build with the patched XTLS/go-win7 (go1.27.3) works on Windows 7 SP1 x64 just like a Go 1.20.14 build. So the client can be written in current Go (its `go.mod` dependencies need it) and built for Windows with the patched toolchain. Not signed off yet.
-2. **TUN driver.** Plan: **Wintun on every version** (Go: `golang.zx2c4.com/wireguard/tun`, L3, no Ethernet emulation). Microsoft no longer signs new kernel drivers for Windows 7, so the installer ships a prebuilt signed binary at a pinned version; we do not build the driver.
-   Checked 2026-10-26 on Windows 7 SP1 **x64** with KB4474419 and KB4490628: Wintun 0.14.1 installs the driver, creates the adapter, receives and sends packets (ping through the adapter works), and uninstalls cleanly. **x86 is not checked yet.**
-   For the client: set the adapter address with the IP Helper API (`CreateUnicastIpAddressEntry`), not `netsh`. `netsh` saves the address in the registry under the adapter GUID, and Windows restores it by itself the next time the adapter is created.
-   If it does not: signed TAP-Windows6 9.24.x on Windows 7, Wintun on 8 and later. Costs of the fallback: two interface code paths, and CVE-2024-1305 in TAP ≤ 9.26 with no fixed Windows 7 build.
-3. **Privileged part.** Routes, hold and reset are set by a Windows service (the `loft-priv` counterpart). Service name and installer (MSI / own installer) are not chosen.
-4. **Key storage.** Windows Credential Manager or DPAPI (`CryptProtectData`) in a file.
+1. **UI.** C11, Win32, GDI. No WebView and no system visual styles. `_WIN32_WINNT=0x0601`. x86 and x64 with mingw-w64 (`-mwindows -static -municode`). Segoe UI and Consolas. Windows 7 ships Regular and Bold only; the UI asks for Medium and Semibold and takes the GDI mapping. DPI is `GetDeviceCaps(LOGPIXELSX)` plus `SetProcessDPIAware`. The manifest lists Windows 7, 8, 8.1 and 10, `dpiAware` true, `asInvoker`. No Vista id. About shows `LOFT_VERSION` from [`../VERSION`](../VERSION) (1.0.0), not the macOS about string.
+2. **Session.** `loft-front.exe` next to `loft.exe`. The module is Go 1.26. Official Go 1.21+ cannot target Windows 7, so the front is built with patched XTLS/go-win7 (`make front GO_WIN7=...`). The UI does not link Go. Without `GO_WIN7`, `make` skips that binary. go1.27.3 via that toolchain already ran on Windows 7 SP1 x64 in [`wintun-check`](../wintun-check/).
+3. **TUN.** Wintun 0.14.1 only. Not songgao/water and not `netsh`. The service creates adapter name `Loft`, type `Loft`, sets the address with `CreateUnicastIpAddressEntry`, MTU 1280 with `SetIpInterfaceEntry`, and routes with `CreateIpForwardEntry2`. Packets cross `\\.\pipe\loft-tun` in byte mode: u32le length plus the IP packet, maximum 65535. `loft-front` runs the userspace stack. `WintunDeleteDriver` runs only on `--uninstall-driver`. The adapter GUID is the same 16 bytes as `wintun-check` (`6c 6f 66 74 2d 77 69 6e 74 75 6e 2d 63 68 6b 01`); Windows shows `{74666F6C-772D-6E69-7475-6E2D63686B01}`. Session capacity `0x400000`. The UI installs the overlay address as /32. If the default route is off, it also sends the overlay /24.
+4. **Service.** Name `loft`, display name `Loft`, own process, auto start, depends on Tcpip. Binary `loft-svc.exe`. Control pipe `\\.\pipe\loft-ctl` (message mode). No MSI. `--install` elevates when needed. SOCKS does not need the service; the first TUN connect offers to install it. Pipe SDDL `D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;IU)`. `tun-close` while hold is on replies `ok held` and leaves the adapter. `reset` always restores the saved IPv4 default and DNS. The physical IPv4 default is snapshotted before it is replaced. DNS is the `NameServer` value on the adapter interface key, then `DnsFlushResolverCache` and `DhcpNotifyConfigChange`. Log `%ProgramData%\loft\svc.log`, cap 1 MB, no failure restart.
+5. **Keys.** DPAPI `CryptProtectData` for the current user, `%APPDATA%\loft\keys\<id>.bin`. Profile YAML has no token, uuid or password. `.loft` export includes the key and warns. `loft-front` still receives `-token` on its command line, as on macOS.
+6. **Storage and prefs.** Profiles, active id, instance file, prefs, routes and journal under `%APPDATA%\loft`, as §8. Defaults match the macOS client (language ru, hold off, failover on, split off, default route on, shared SOCKS 1080, update check on). Windows adds per-user associations for `.loft` and `loft://` (on by default) and Start with Windows (`HKCU\...\Run`, value `Loft`, command `"exe" --tray`). Update check reads GitHub latest `a3app/loft` and, when the tag is newer and the portable zip is on that release, replaces this copy from `loft-<version>-windows-x64.zip` or the x86 zip. Dist stamps `LOFT_VERSION` from the repository `VERSION` so the tag matches. The Store build does not check GitHub.
+7. **Limits that stay.** IPv6 default routes are not removed. x86 Wintun is not hardware-checked. The service log is not rotated past the cap. The UI on this tree was linked, not run on Windows.
 
 ---
 

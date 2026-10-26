@@ -118,6 +118,7 @@ clients/Keenetic  Entware / OpkgTun（方案和模型）
 clients/MikroTik  RouterOS 7 容器（镜像 + .rsc）
 clients/iOS       Packet Tunnel（薄宿主 + appex）
 clients/Android   VpnService（薄 Java 宿主）
+clients/Windows   托盘客户端（Win7 SP1+，Win32 + loft-svc）
 clients/Sailfish  ConnMan 覆盖网（Silica；Aurora 是 OMP RPM）
 clients/mobile    共用 Go 引擎（gomobile bind）
 ```
@@ -135,6 +136,7 @@ make macos-dmg  # dist/clients/macOS/loft-*-macos-<arch>.dmg
 make macos-dmgs # arm64 和 x86_64 两份 DMG（CI）
 make android    # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios        # dist/clients/iOS/loft.app（macOS）+ iphonesimulator/loft.app
+make windows    # dist/clients/Windows/x64 和 x86
 make dist       # 节点 tar/.deb + CLI 归档
 ```
 

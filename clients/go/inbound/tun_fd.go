@@ -1,3 +1,5 @@
+//go:build darwin
+
 package inbound
 
 // tun_fd.go accepts a Darwin utun fd over a unix socket from loft-priv.

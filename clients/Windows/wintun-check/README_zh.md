@@ -2,7 +2,7 @@
 
 [English](README.md) · [Русский](README_ru.md) · **中文**
 
-在基于 Wintun 构建 Windows 客户端之前，检查该驱动能否在 Windows 7 SP1（x86 和 x64）上工作。见 [`../design/DESIGN_zh.md`](../design/DESIGN_zh.md) §10。
+检查 Wintun 驱动能否在 Windows 7 SP1（x86 和 x64）上工作。[`../`](../) 中的客户端使用同一份 0.14.1 驱动。见 [`../design/DESIGN_zh.md`](../design/DESIGN_zh.md) §10。
 
 程序安装 Wintun 0.14.1，创建地址为 `10.255.0.1/24` 的适配器 `LoftTest`，ping `10.255.0.2` 并通过适配器自行应答，从而验证双向收发。结束时删除适配器和驱动。所有信息（包括 Wintun 自身的日志）写入 exe 旁的 `loft-wintun-check.txt`。屏幕输出为俄语。
 

@@ -22,6 +22,7 @@ make macos-dmg # dist/clients/macOS/loft-*-macos-<arch>.dmg  (Applications symli
 make macos-dmgs # both arm64 and x86_64 DMGs (CI)
 make android   # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios       # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
+make windows   # dist/clients/Windows/x64 and x86
 make dist      # node tarballs/.deb + CLI archives
 ```
 

@@ -118,6 +118,7 @@ clients/Keenetic  Entware / OpkgTun (план и макет)
 clients/MikroTik  контейнер RouterOS 7 (образ + .rsc)
 clients/iOS       Packet Tunnel (хост + appex)
 clients/Android   VpnService (хост на Java)
+clients/Windows   клиент в трее (Win7 SP1+, Win32 + loft-svc)
 clients/Sailfish  оверлей ConnMan (Silica; Аврора — RPM OMP)
 clients/mobile    общий движок на Go (gomobile bind)
 ```
@@ -135,6 +136,7 @@ make macos-dmg  # dist/clients/macOS/loft-*-macos-<arch>.dmg
 make macos-dmgs # оба DMG, arm64 и x86_64 (CI)
 make android    # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios        # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
+make windows    # dist/clients/Windows/x64 и x86
 make dist       # tarball/.deb ноды + архивы CLI
 ```
 

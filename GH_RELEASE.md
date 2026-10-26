@@ -16,8 +16,9 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 | Node | `loft-node-1.0.30-linux-arm64.tar.gz` · `loft-node_1.0.30_arm64.deb` | `loft-node-1.0.30-linux-amd64.tar.gz` · `loft-node_1.0.30_amd64.deb` |
 | Panel | `loft-panel-1.0.30-linux-arm64.tar.gz` · `loft-panel_1.0.30_arm64.deb` | `loft-panel-1.0.30-linux-amd64.tar.gz` · `loft-panel_1.0.30_amd64.deb` |
 | Android (sideload, GitHub channel) | `loft-1.0.30-android.apk` · `loft-1.0.30-android-tv.apk` | same fat APKs |
+| Windows portable (7 SP1+, GitHub) | `loft-1.0.30-windows-x64.zip` | `loft-1.0.30-windows-x86.zip` |
 
-Checksums: `loft-clients-1.0.30-SHA256SUMS.txt`, `loft-node-1.0.30-SHA256SUMS.txt`, `loft-panel-1.0.30-SHA256SUMS.txt`, `loft-android-1.0.30-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.30-SHA256SUMS.txt`, `loft-node-1.0.30-SHA256SUMS.txt`, `loft-panel-1.0.30-SHA256SUMS.txt`, `loft-android-1.0.30-SHA256SUMS.txt`, `loft-windows-1.0.30-SHA256SUMS.txt`.
 
 CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`.
 
@@ -27,6 +28,7 @@ Not in Dist: iOS / Sailfish / Keenetic / MikroTik clients (catalog and mocks).
 
 - **macOS app** — menu bar. Named connections, import `loft://` or `.loft`, local SOCKS5 and TUN, split routes, reconnect, failover.
 - **Android** — phone `VpnService` and Leanback TV. Named connections, `loft://` / `.loft` import, overlay as one system VPN. GitHub APKs self-update from Dist; Play builds compile the updater out.
+- **Windows** — tray client, Windows 7 SP1 and later. Unzip and run. The GitHub build replaces its own directory from the next release zip. The Store layout is not in this Dist.
 
 | Home | Connections |
 |:--:|:--:|
@@ -225,7 +227,7 @@ macOS:
 
 Оверлей внутри TLS 1.3. Приложения ходят в локальные SOCKS5 или TUN. Потоки в одном mux, ChaCha20-Poly1305, снаружи обычный HTTPS: GET, WebSocket, HTTP/2, QUIC или HTTP/3. Перед нодой может стоять CDN. Протокол **loft/1.0**. Ссылка `loft://`.
 
-В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV). iOS, Sailfish, Keenetic, MikroTik в этот Dist не входят.
+В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`loft-1.0.30-windows-x64.zip` и `loft-1.0.30-windows-x86.zip`). Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic, MikroTik в этот Dist не входят.
 
 1.0.30: VLESS — XHTTP stream-up, кадр Vision с UUID в одной TLS-записи с заголовком, на application data command end, а не direct; macOS подписывает сессию xhttp, reality, vision или tcp. Слив или удаление релея закрывает его транк. Hello несёт controller_pin. Takeover — подписанное поколение контроллера после повышения standby. Панель при смене ключа показывает, сколько уже подключённых устройств ему доверяет. Протокол loft/1.0.
 
@@ -239,7 +241,7 @@ macOS:
 
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
-本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）。iOS / Sailfish / Keenetic / MikroTik 不在这次包里。
+本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`loft-1.0.30-windows-x64.zip` 和 `loft-1.0.30-windows-x86.zip`）。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic / MikroTik 不在这次包里。
 
 1.0.30：VLESS 支持 XHTTP stream-up；Vision 的 UUID 填充帧与请求头在同一条 TLS 记录里，application data 用 command end 结束填充，不发 direct；macOS 状态行按 xhttp、reality、vision 或 tcp 标注。排空或删除中继会关掉它的 trunk。Hello 携带 controller_pin。Takeover 是 standby 提升后经过签名的控制器世代。面板换钥时显示已有多少在线设备信任新钥。协议仍是 loft/1.0。
 

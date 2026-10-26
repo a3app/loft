@@ -16,13 +16,18 @@ WIN_PACKS["en"] = {
   "login": "Start with Windows",
   "login_d": "In the tray, no window",
   "diag_d": "Routes, DNS, the loft service. Rotating file.",
-  "upd.offer.body": "Download and run the installer.",
+  "upd.offer.body": "Download and replace this copy.",
   "win.min": "Minimize",
   "win.close": "Close",
   "assoc_file": "Open .loft files",
   "assoc_file_d": "Double click opens Loft",
   "assoc_link": "Open loft:// links",
-  "assoc_link_d": "Links in the browser open Loft"
+  "assoc_link_d": "Links in the browser open Loft",
+  "svc.need": "The loft service is not installed. The tunnel needs it. SOCKS works without it.",
+  "svc.install": "Install service",
+  "err.front": "loft-front.exe is not next to Loft.",
+  "held.note": "The route is held. Direct internet stays closed.",
+  "store.tun": "Store build: no tunnel. SOCKS only. The GitHub build installs the service and Wintun."
 };
 
 WIN_PACKS["ru"] = {
@@ -38,13 +43,18 @@ WIN_PACKS["ru"] = {
   "login": "Запускать вместе с Windows",
   "login_d": "В трее, без окна",
   "diag_d": "Маршруты, DNS, служба loft. Файл с ротацией.",
-  "upd.offer.body": "Скачать и запустить установщик.",
+  "upd.offer.body": "Скачать и заменить эту копию.",
   "win.min": "Свернуть",
   "win.close": "Закрыть",
   "assoc_file": "Открывать файлы .loft",
   "assoc_file_d": "Двойной клик открывает Loft",
   "assoc_link": "Открывать ссылки loft://",
-  "assoc_link_d": "Ссылки в браузере открывают Loft"
+  "assoc_link_d": "Ссылки в браузере открывают Loft",
+  "svc.need": "Служба loft не установлена. Туннель без неё не поднять. SOCKS работает и без службы.",
+  "svc.install": "Установить службу",
+  "err.front": "Рядом с Loft нет loft-front.exe.",
+  "held.note": "Маршрут удержан. Прямой интернет закрыт.",
+  "store.tun": "Сборка Store: туннеля нет, только SOCKS. Сборка GitHub ставит службу и Wintun."
 };
 
 WIN_PACKS["zh"] = {
@@ -60,11 +70,16 @@ WIN_PACKS["zh"] = {
   "login": "随 Windows 启动",
   "login_d": "在托盘中，不打开窗口",
   "diag_d": "路由、DNS、loft 服务。轮转文件。",
-  "upd.offer.body": "下载并运行安装程序。",
+  "upd.offer.body": "下载并替换这个副本。",
   "win.min": "最小化",
   "win.close": "关闭",
   "assoc_file": "打开 .loft 文件",
   "assoc_file_d": "双击即用 Loft 打开",
   "assoc_link": "打开 loft:// 链接",
-  "assoc_link_d": "浏览器中的链接用 Loft 打开"
+  "assoc_link_d": "浏览器中的链接用 Loft 打开",
+  "svc.need": "未安装 loft 服务。隧道需要它。SOCKS 不需要服务。",
+  "svc.install": "安装服务",
+  "err.front": "Loft 旁边没有 loft-front.exe。",
+  "held.note": "路由已保持。直连互联网保持关闭。",
+  "store.tun": "Store 版本没有隧道，只有 SOCKS。GitHub 版本安装服务和 Wintun。"
 };

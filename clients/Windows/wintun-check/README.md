@@ -2,7 +2,7 @@
 
 **English** · [Русский](README_ru.md) · [中文](README_zh.md)
 
-Checks that the Wintun driver works on Windows 7 SP1 (x86 and x64) before the Windows client is built on it. See [`../design/DESIGN.md`](../design/DESIGN.md) §10.
+Checks that the Wintun driver works on Windows 7 SP1 (x86 and x64). The client in [`../`](../) uses the same 0.14.1 driver. See [`../design/DESIGN.md`](../design/DESIGN.md) §10.
 
 The program installs Wintun 0.14.1, creates the adapter `LoftTest` with `10.255.0.1/24`, pings `10.255.0.2` and answers the ping itself through the adapter, so both directions are tested. At the end it removes the adapter and the driver. Everything goes to `loft-wintun-check.txt` next to the exe, including Wintun's own log lines. Screen output is in Russian.
 

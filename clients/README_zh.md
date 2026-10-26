@@ -13,6 +13,7 @@
 | [`MikroTik/`](MikroTik/) | RouterOS 7 容器。模型：[`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel。薄宿主 + appex。模型：[`iOS/design/index.html`](iOS/design/index.html)。Apple TV：[`iOS/PLAN.md`](iOS/PLAN.md) 第 6 阶段 |
 | [`Android/`](Android/) | VpnService。薄 Java 宿主。手机和电视 flavor。模型：[`Android/design/index.html`](Android/design/index.html) |
+| [`Windows/`](Windows/) | 托盘客户端。Windows 7 SP1 及更高。Win32 外壳 + loft-svc。UX：[`Windows/design/DESIGN_zh.md`](Windows/design/DESIGN_zh.md) |
 | [`Sailfish/`](Sailfish/) | ConnMan 覆盖网。薄 QML 宿主 + loft-front。Aurora OS 是 OMP RPM。模型：[`Sailfish/design/index.html`](Sailfish/design/index.html) |
 | [`mobile/`](mobile/) | 共用 Go 引擎（`gomobile bind`）。没有 GUI。 |
 
@@ -28,6 +29,7 @@ make macos-dmg     # dist/clients/macOS/loft-*-macos-<arch>.dmg
 make macos-dmgs    # arm64 和 x86_64 两份 DMG（CI）
 make android       # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios           # dist/clients/iOS/loft.app（macOS）+ iphonesimulator/loft.app
+make windows       # dist/clients/Windows/x64 和 x86
 make dist-clients  # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
 ```
 

@@ -118,6 +118,7 @@ clients/Keenetic  Entware / OpkgTun (plan and mock)
 clients/MikroTik  RouterOS 7 container (image + .rsc)
 clients/iOS       Packet Tunnel (thin host + appex)
 clients/Android   VpnService (thin Java host)
+clients/Windows   tray client (Win7 SP1+, Win32 + loft-svc)
 clients/Sailfish  ConnMan overlay (Silica; Aurora is the OMP RPM)
 clients/mobile    shared Go engine (gomobile bind)
 ```
@@ -135,6 +136,7 @@ make macos-dmg  # dist/clients/macOS/loft-*-macos-<arch>.dmg
 make macos-dmgs # both arm64 and x86_64 DMGs (CI)
 make android    # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios        # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
+make windows    # dist/clients/Windows/x64 and x86
 make dist       # node tarballs/.deb + CLI archives
 ```
 

@@ -129,6 +129,9 @@ android:
 ios:
 	$(MAKE) -C clients/iOS
 
+windows:
+	$(MAKE) -C clients/Windows
+
 # Server packages + CLI archives. macOS .app/.dmg is make macos-dmg / macos-dmgs (needs Xcode).
 # Android github-channel APKs: make -C clients/Android release (Dist job when the key secret is set).
 dist: dist-node dist-clients

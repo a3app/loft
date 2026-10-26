@@ -13,6 +13,7 @@
 | [`MikroTik/`](MikroTik/) | RouterOS 7 container. Mock: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Thin host + appex. Mock: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md) phase 6 |
 | [`Android/`](Android/) | VpnService. Thin Java host. Phone + TV flavors. Mock: [`Android/design/index.html`](Android/design/index.html) |
+| [`Windows/`](Windows/) | Tray client. Win7 SP1 and later. Win32 shell + loft-svc. UX: [`Windows/design/DESIGN.md`](Windows/design/DESIGN.md) |
 | [`Sailfish/`](Sailfish/) | ConnMan overlay. Thin QML host + loft-front. Aurora OS is the OMP RPM. Mock: [`Sailfish/design/index.html`](Sailfish/design/index.html) |
 | [`mobile/`](mobile/) | Shared Go engine (`gomobile bind`). No GUI. |
 
@@ -28,6 +29,7 @@ make macos-dmg     # dist/clients/macOS/loft-*-macos-<arch>.dmg
 make macos-dmgs    # both arm64 and x86_64 DMGs (CI)
 make android       # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios           # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
+make windows       # dist/clients/Windows/x64 and x86
 make dist-clients  # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
 ```
 
