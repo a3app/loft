@@ -98,6 +98,10 @@ func serveDgrams(ms *mux.Session) {
 			o.DeliverDNS(ms, addr, data)
 			continue
 		}
+		// Same drop as CONNECT: loopback, link-local, metadata names.
+		if err != nil || spliceDenied(host) {
+			continue
+		}
 		if r := Egress.Load(); r != nil {
 			// Exit rules: the session's datagrams go the way its member's rules say.
 			if eu == nil || eur != r {

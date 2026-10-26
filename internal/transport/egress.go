@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync/atomic"
 	"time"
@@ -25,7 +26,12 @@ func whoOf(sess *mux.Session) egress.Who {
 }
 
 // dialOut opens a member's TCP connection to the internet.
+// Loopback, link-local, and metadata names are refused, same as CONNECT.
 func dialOut(who egress.Who, target string) (net.Conn, error) {
+	host, _, err := net.SplitHostPort(target)
+	if err != nil || spliceDenied(host) {
+		return nil, errors.New("drop")
+	}
 	if r := Egress.Load(); r != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
