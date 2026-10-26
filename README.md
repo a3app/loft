@@ -5,7 +5,11 @@
 
 **English** · [Русский](README_ru.md) · [中文](README_zh.md)
 
-A private overlay is described which is carried inside TLS 1.3. Application streams are multiplexed over GET, WebSocket, HTTP/2, QUIC, or HTTP/3 and are sealed with ChaCha20-Poly1305. On the public path the session is ordinary HTTPS, and may therefore be passed through a CDN, reverse proxy, or TLS terminator. Short disconnects and packet loss are tolerated: the mux is parked and later resumed, so that inner TCP is not torn down.
+**loft** is an overlay inside TLS. The app connects over popular protocols that run on top of ordinary HTTPS — VLESS, Trojan and SSTP — and over its own protocol, loft.
+
+loft is built for networks where ordinary VPN protocols work poorly or not at all: the link is unstable, only HTTPS is open to the outside, and traffic passes through proxies, CDNs and inspection systems (DPI). From the outside the session is indistinguishable from ordinary HTTPS, and the connection survives drops and network changes.
+
+In the loft protocol, streams are multiplexed over GET, WebSocket, HTTP/2, QUIC or HTTP/3, so CDNs, reverse proxies and TLS terminators pass the session through.
 
 The protocol is **loft/1.0**. Connections are shared as **`loft://`**. YAML `kind: loft`.
 
@@ -70,7 +74,7 @@ flowchart LR
     subgraph Client["loft client"]
         App["SSH · browser · curl"] --> In["SOCKS5 / TUN"]
         In --> Mux["mux Open / Data / Close / Dgram"]
-        Mux --> Seal["ChaCha20-Poly1305"]
+        Mux --> Seal["AEAD (optional)"]
         Seal --> Front["get · ws · h2 · quic · h3"]
     end
     Front -->|"TLS 1.3 HTTPS"| Edge["CDN / reverse proxy"]
@@ -79,7 +83,7 @@ flowchart LR
 ```
 
 1. Applications speak to a local SOCKS5 or TUN listener. That listener is held by `Holder` while the front is rotated.
-2. Streams are carried on one mux and are sealed with ChaCha20-Poly1305.
+2. Streams share one mux. Inside TLS they may be sealed again (ChaCha20-Poly1305 or AES-256-GCM); on `get` that is always on.
 3. On the public path the session is ordinary HTTPS, so that a CDN or reverse proxy may sit in front of the node.
 4. A short disconnect causes the mux to be parked for `gap_hold_ms` (8 s by default). Resume is performed with a fresh `0x02` and the same `instance_id`; inner TCP is left standing.
 

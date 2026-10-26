@@ -5,7 +5,11 @@
 
 [English](README.md) · [Русский](README_ru.md) · **中文**
 
-loft 是跑在 TLS 里面的覆盖网。流在 GET、WebSocket、HTTP/2、QUIC 或 HTTP/3 上做多路复用，再用 ChaCha20-Poly1305 封住。在公网路径上，会话看起来就是普通 HTTPS，所以能过 CDN、反向代理和 TLS 终结。短断和丢包撑得住。
+**loft** 是跑在 TLS 里面的覆盖网。应用可以通过跑在普通 HTTPS 之上的常见协议连接——VLESS、Trojan 和 SSTP，也可以用自有协议 loft。
+
+loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳定，对外只开放 HTTPS，流量要经过代理、CDN 和流量检测系统（DPI）。从外面看，会话与普通 HTTPS 无法区分，连接能挺过断线和网络切换。
+
+在 loft 协议里，流在 GET、WebSocket、HTTP/2、QUIC 或 HTTP/3 上多路复用，所以 CDN、反向代理和 TLS 终结都会放行会话。
 
 协议 **loft/1.0**。分享链接 **`loft://`**。YAML 里 `kind: loft`。
 
@@ -70,7 +74,7 @@ flowchart LR
     subgraph Client["loft 客户端"]
         App["SSH · 浏览器 · curl"] --> In["SOCKS5 / TUN"]
         In --> Mux["mux Open / Data / Close / Dgram"]
-        Mux --> Seal["ChaCha20-Poly1305"]
+        Mux --> Seal["AEAD（可选）"]
         Seal --> Front["get · ws · h2 · quic · h3"]
     end
     Front -->|"TLS 1.3 HTTPS"| Edge["CDN / 反向代理"]
@@ -79,7 +83,7 @@ flowchart LR
 ```
 
 1. 应用走本机 SOCKS5 或 TUN。`Holder` 盯着这个监听口，前置怎么轮换都不撤。
-2. 流共用一条 mux，用 ChaCha20-Poly1305 封住。
+2. 流共用一条 mux。在 TLS 里还可以再加一层加密（ChaCha20-Poly1305 或 AES-256-GCM）；`get` 上始终开启。
 3. 公网路径上这就是普通 HTTPS，所以节点前面可以挂 CDN 或反向代理。
 4. 短断会把 mux 停在 `gap_hold_ms`（默认 8 秒）。续上用新的 `0x02` 和同一个 `instance_id`；里面的 TCP 不断。
 
