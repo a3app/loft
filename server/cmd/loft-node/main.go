@@ -111,6 +111,20 @@ func main() {
 	}
 	ring.Filter(want)
 	transport.AuthKeys = ring
+	if cfg.IsRelay() {
+		key, err := os.ReadFile(filepath.Join(*dir, "relay.key"))
+		if err != nil {
+			log.Fatalf("relay: %v (the key the controller issued for this relay)", err)
+		}
+		cfg.RelayToken = strings.TrimSpace(string(key))
+	} else {
+		rk, err := loadRelayKeys(*dir, cfg.Relays)
+		if err != nil {
+			log.Fatal(err)
+		}
+		transport.RelayKeys = rk
+		log.Printf("relay keys: %d", rk.Len())
+	}
 	// AuthShared: LOFT_TOKEN as client secret only when the ring is empty.
 	// Non-empty members.keys never mixes the node token, even if the flag is on.
 	transport.AuthShared = cfg.AuthShared
@@ -196,6 +210,24 @@ func printControllerPub(dir, cfgPath string) error {
 	}
 	fmt.Println(hex.EncodeToString(pub))
 	return nil
+}
+
+// loadRelayKeys reads {dir}/relays.keys (relay id → key) and keeps only keys
+// whose SHA-256 matches the relay's key_sha256 in node.conf, the same way
+// members.keys is checked against network.conf. A missing file is empty.
+func loadRelayKeys(dir string, rels []config.RelayEntry) (*identity.Ring, error) {
+	ring, err := identity.Load(filepath.Join(dir, "relays.keys"))
+	if err != nil {
+		return nil, err
+	}
+	want := map[string]string{}
+	for _, r := range rels {
+		if r.KeySHA256 != "" {
+			want[r.ID] = r.KeySHA256
+		}
+	}
+	ring.Filter(want)
+	return ring, nil
 }
 
 // reloadOnHUP re-reads network.conf and members.keys on SIGHUP

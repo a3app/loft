@@ -112,9 +112,6 @@ func (f *Fleet) allowed(id string) bool {
 	if f.cfg == nil {
 		return false
 	}
-	if f.cfg.Enrol == "open" {
-		return true
-	}
 	if id == "" {
 		return false
 	}
@@ -156,7 +153,9 @@ func (f *Fleet) ServeCtl(st *mux.Stream) {
 		_ = writeMsg(st, wire.EncodeFlt(wire.FltEnrolNo, wire.EncodeEnrolNo(wire.EnrolForm, err.Error())))
 		return
 	}
-	if !f.allowed(req.ID) {
+	// A relay enrols only under the id its key was issued for, so one relay
+	// cannot take another's place in the roster.
+	if req.ID != st.Sess().RelayID() || !f.allowed(req.ID) {
 		_ = writeMsg(st, wire.EncodeFlt(wire.FltEnrolNo, wire.EncodeEnrolNo(wire.EnrolUnknown, "id")))
 		return
 	}
@@ -366,10 +365,10 @@ func (f *Fleet) PushSlice(id string, w io.Writer) error {
 
 // SetRelays replaces the allowlist (on reload) and re-signs the roster;
 // a relay no longer listed is dropped.
-func (f *Fleet) SetRelays(rel []config.RelayEntry, enrol string) {
+func (f *Fleet) SetRelays(rel []config.RelayEntry) {
 	f.mu.Lock()
 	cfg := *f.cfg
-	cfg.Relays, cfg.Enrol = rel, enrol
+	cfg.Relays = rel
 	f.cfg = &cfg
 	var gone []string
 	for id := range f.live {

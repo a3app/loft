@@ -10,6 +10,7 @@ package transport
 // stops beating is dropped from the roster, so clients stop using it.
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"net"
@@ -46,7 +47,7 @@ func (rt *relayRuntime) apply(sl wire.Slice) {
 }
 
 // runRelayCtl reconnects ctl:1 until ctx is done.
-func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *relayRuntime) {
+func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *relayRuntime, ctlPub []byte) {
 	id := cfg.ID
 	if id == "" {
 		id = "relay"
@@ -73,7 +74,7 @@ func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *r
 			time.Sleep(time.Second)
 			continue
 		}
-		if err := relayCtlSession(ctx, sess, req, rt, &beatMS); err != nil {
+		if err := relayCtlSession(ctx, sess, req, rt, &beatMS, ctlPub); err != nil {
 			log.Printf("loft-relay: ctl %v", err)
 		}
 		select {
@@ -85,9 +86,11 @@ func runRelayCtl(ctx context.Context, h *Holder, cfg *config.ServerConfig, rt *r
 }
 
 // relayCtlSession sends enrol_req, applies enrol_ok/slice, then beats.
+// The slice must be signed by ctlPub, the controller key the relay was
+// installed with: a valid signature by any other key is refused.
 // It returns when the stream fails or ctx ends; runRelayCtl then enrols
 // again, so a controller restart is picked up without restarting the relay.
-func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, rt *relayRuntime, beatMS *uint32) error {
+func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, rt *relayRuntime, beatMS *uint32, ctlPub []byte) error {
 	st, err := sess.Open(net.JoinHostPort(wire.CtlHost, wire.CtlPort))
 	if err != nil {
 		return err
@@ -117,6 +120,9 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 	}
 	if err := sl.Verify(); err != nil {
 		return err
+	}
+	if !bytes.Equal(sl.Pub, ctlPub) {
+		return errEnrol("slice not signed by controller_pub")
 	}
 	rt.apply(sl)
 	if sl.BeatMS > 0 {

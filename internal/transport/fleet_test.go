@@ -21,7 +21,7 @@ func TestFleetAdmitAndEvict(t *testing.T) {
 	}
 	cfg := &config.ServerConfig{
 		Advertise: "https://hub.example",
-		Enrol:     "open",
+		Relays:    []config.RelayEntry{{ID: "ru1"}},
 		Decoy:     []string{testcfg.DecoyAddr()},
 	}
 	f := NewFleet(priv, cfg)
@@ -49,11 +49,10 @@ func TestFleetAdmitAndEvict(t *testing.T) {
 	}
 }
 
-// TestFleetAllowList enforces enrol:list and YAML URL/weight override.
+// TestFleetAllowList admits only listed relays; node.conf URL/weight win.
 func TestFleetAllowList(t *testing.T) {
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	cfg := &config.ServerConfig{
-		Enrol:  "list",
 		Relays: []config.RelayEntry{{ID: "ru1", URL: "https://fixed.example", Weight: 50}},
 	}
 	f := NewFleet(priv, cfg)
@@ -72,7 +71,7 @@ func TestFleetAllowList(t *testing.T) {
 // TestFleetSilentEvict drops a relay whose last beat is older than the limit.
 func TestFleetSilentEvict(t *testing.T) {
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	f := NewFleet(priv, &config.ServerConfig{Enrol: "open"})
+	f := NewFleet(priv, &config.ServerConfig{Relays: []config.RelayEntry{{ID: "x"}}})
 	f.admit(wire.EnrolReq{ID: "x", URL: "https://x"}, func() {})
 	f.mu.Lock()
 	f.live["x"].last = time.Now().Add(-time.Minute)

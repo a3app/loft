@@ -57,7 +57,8 @@ func TestRenderCommandsRoundTrip(t *testing.T) {
 	in := ServerConfig{
 		Role: "controller", Listen: ":444", Advertise: "https://de1.example.com",
 		Decoy: []string{"origin.example:443"}, Mask: true,
-		Fronts: []string{"get", "ws", "h2"}, Enrol: "list",
+		Fronts: []string{"get", "ws", "h2"},
+		Relays: []RelayEntry{{ID: "ru1", URL: "https://ru1.example", KeySHA256: "ab12"}},
 		GetH2:  2,
 		Canary: CanaryConfig{SplitHello: false, Pad: 32},
 	}

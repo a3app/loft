@@ -15,6 +15,8 @@ package transport
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -31,9 +33,15 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 	if cfg.Controller == "" {
 		return net.ErrClosed
 	}
+	// The relay enters the controller with the key issued for its id, and
+	// trusts only slices signed by the controller key it was given.
 	token := cfg.RelayToken
 	if token == "" {
-		token = cfg.Token
+		return errors.New("relay: no relay key (relay.key next to the node files)")
+	}
+	ctlPub, err := ParseControllerPub(cfg.ControllerPub)
+	if err != nil {
+		return fmt.Errorf("relay: controller_pub: %w", err)
 	}
 	o := config.Outbound{
 		Name:        "hub",
@@ -69,7 +77,7 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 			ExtraCaps: uint64(wire.CapRelay),
 		}, func(d Dialer, _ config.Outbound) { h.Set(d) })
 	}()
-	go runRelayCtl(ctx, h, cfg, rt)
+	go runRelayCtl(ctx, h, cfg, rt, ctlPub)
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return err

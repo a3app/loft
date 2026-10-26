@@ -61,7 +61,7 @@ func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 	}
 	v := admproto.NodeConfig{Role: firstNonEmpty(c.Role, "controller"), Listen: c.Listen, Advertise: c.Advertise, Fronts: c.EnabledFronts(),
 		GetH2: max(c.GetH2, 1), Decoy: c.Decoy, Mask: c.Mask, CoverDir: c.CoverDir, GetPath: c.GetPath, WSPath: c.WSPath, H2Path: c.H2Path,
-		RosterPath: c.RosterPath, ListsPath: c.ListsPath, Enrol: firstNonEmpty(c.Enrol, "list"), AuthShared: c.AuthShared, Trace: c.Trace != "",
+		RosterPath: c.RosterPath, ListsPath: c.ListsPath, AuthShared: c.AuthShared, Trace: c.Trace != "",
 		CDNPeers: c.CDNPeers, Relays: []admproto.Relay{}}
 	if v.Decoy == nil {
 		v.Decoy = []string{}
@@ -163,10 +163,6 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		*dst = p
 	}
 	c.H3Path = c.H2Path
-	if in.Enrol != "list" && in.Enrol != "open" {
-		return admproto.NodeConfig{}, errors.New("relays: list or open")
-	}
-	c.Enrol = in.Enrol
 	c.AuthShared = in.AuthShared
 	c.Trace = ""
 	if in.Trace {
@@ -209,7 +205,7 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 	}
 	onlyFleet := func() bool {
 		a, b := prev, *c
-		a.Relays, b.Relays, a.Enrol, b.Enrol = nil, nil, "", ""
+		a.Relays, b.Relays = nil, nil
 		return config.RenderCommands(a) == config.RenderCommands(b)
 	}()
 	if err := o.writeKeepMode(o.nodeConf(), []byte(text)); err != nil {

@@ -55,10 +55,12 @@ func applyNode(c *ServerConfig, tok []string) error {
 		}
 		c.Advertise = tok[1]
 	case "enrol":
+		// Old node.conf only: a relay now enrols with its own key, no mode.
+	case "controller_pub":
 		if len(tok) < 2 {
-			return fmt.Errorf("enrol wants list|open")
+			return fmt.Errorf("controller_pub wants 64 hex digits")
 		}
-		c.Enrol = startup.Word(tok[1])
+		c.ControllerPub = tok[1]
 	case "auth":
 		// auth shared enable|disable — LOFT_TOKEN as client secret when the ring is empty.
 		if len(tok) < 3 || startup.Word(tok[1]) != "shared" {
@@ -181,7 +183,8 @@ func applyNode(c *ServerConfig, tok []string) error {
 }
 
 // applyRelay is "relay ID url URL [decoy HOST:PORT] [fronts a,b] [weight N]
-// [path P] [mask_pub HEX] [drain]": one row of the enrol: list allowlist.
+// [path P] [mask_pub HEX] [key_sha256 HEX] [drain]": one relay allowed to
+// enrol, with the hash of the key it was issued.
 func applyRelay(c *ServerConfig, tok []string) error {
 	if len(tok) < 2 {
 		return fmt.Errorf("relay wants ID [url URL] …")
@@ -216,6 +219,8 @@ func applyRelay(c *ServerConfig, tok []string) error {
 			e.Path = v
 		case "mask_pub":
 			e.MaskPub = v
+		case "key_sha256":
+			e.KeySHA256 = strings.ToLower(v)
 		default:
 			return fmt.Errorf("relay %s: unknown %q", e.ID, k)
 		}
@@ -260,9 +265,6 @@ func RenderCommands(c ServerConfig) string {
 	if c.Role == "" {
 		c.Role = "controller"
 	}
-	if c.Enrol == "" {
-		c.Enrol = "list"
-	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "role %s\n", c.Role)
 	fmt.Fprintf(&b, "listen %s\n", c.Listen)
@@ -300,6 +302,9 @@ func RenderCommands(c ServerConfig) string {
 		if c.Controller != "" {
 			fmt.Fprintf(&b, "controller %s\n", c.Controller)
 		}
+		if c.ControllerPub != "" {
+			fmt.Fprintf(&b, "controller_pub %s\n", c.ControllerPub)
+		}
 	} else {
 		if c.RosterPath != "" {
 			fmt.Fprintf(&b, "roster_path %s\n", c.RosterPath)
@@ -307,7 +312,6 @@ func RenderCommands(c ServerConfig) string {
 		if c.ListsPath != "" {
 			fmt.Fprintf(&b, "lists_path %s\n", c.ListsPath)
 		}
-		fmt.Fprintf(&b, "enrol %s\n", c.Enrol)
 	}
 	fmt.Fprintf(&b, "auth shared %s\n", onOff(c.AuthShared))
 	for _, d := range c.Decoy {
@@ -351,6 +355,9 @@ func RenderCommands(c ServerConfig) string {
 		}
 		if e.MaskPub != "" {
 			fmt.Fprintf(&b, " mask_pub %s", e.MaskPub)
+		}
+		if e.KeySHA256 != "" {
+			fmt.Fprintf(&b, " key_sha256 %s", e.KeySHA256)
 		}
 		if e.Drain {
 			b.WriteString(" drain")

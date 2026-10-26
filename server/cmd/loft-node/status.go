@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/a3app/loft/internal/config"
+	"github.com/a3app/loft/internal/identity"
 	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/server/origin"
 )
@@ -42,7 +43,15 @@ func reloadFleet(dir, cfgPath string, cfg *config.ServerConfig) error {
 			return err
 		}
 		if transport.FleetCtl != nil {
-			transport.FleetCtl.SetRelays(c.Relays, c.Enrol)
+			rk, err := loadRelayKeys(dir, c.Relays)
+			if err != nil {
+				return err
+			}
+			if transport.RelayKeys == nil {
+				transport.RelayKeys = identity.NewRing()
+			}
+			transport.RelayKeys.Replace(rk)
+			transport.FleetCtl.SetRelays(c.Relays)
 		}
 		lists = c.Lists
 	}

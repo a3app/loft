@@ -24,6 +24,11 @@ import (
 // a member key; LOFT_TOKEN stays the node secret (mask).
 var AuthKeys *identity.Ring
 
+// RelayKeys is the controller's relay keyring: one key per relay, issued for
+// its id. A relay key opens only a relay trunk, never a member session, and
+// a member key never opens a trunk.
+var RelayKeys *identity.Ring
+
 // AuthShared accepts LOFT_TOKEN as the client secret when the ring is empty.
 // Default false (issue per-member keys). Node config: `auth shared enable`.
 // A non-empty ring never mixes the node token in, even with this flag on.
@@ -32,13 +37,24 @@ var AuthShared bool
 // clientTokens is the member keyring, or LOFT_TOKEN only when AuthShared and
 // the ring is empty. Overlay HMAC follows whichever secret matched.
 func clientTokens(fallback []byte) [][]byte {
+	var out [][]byte
 	if AuthKeys != nil && AuthKeys.Len() > 0 {
-		return AuthKeys.Tokens()
+		out = AuthKeys.Tokens()
+	} else if AuthShared && len(fallback) > 0 {
+		out = [][]byte{fallback}
 	}
-	if AuthShared && len(fallback) > 0 {
-		return [][]byte{fallback}
+	if RelayKeys != nil && RelayKeys.Len() > 0 {
+		out = append(out, RelayKeys.Tokens()...)
 	}
-	return nil
+	return out
+}
+
+// relayIDFor is the relay id a key was issued for, or "" for any other key.
+func relayIDFor(token []byte) string {
+	if RelayKeys == nil {
+		return ""
+	}
+	return RelayKeys.IDFor(token)
 }
 
 // frontAuth checks 0x02 (nonce || eph_c || HMAC) against every accepted
@@ -79,6 +95,13 @@ func stampOverlayAuth(st *wire.Status, rest []byte, sess *mux.Session, remote ne
 	if ov == nil || st == nil {
 		return
 	}
+	if sess != nil && sess.Relay() {
+		return // a relay trunk has no overlay address
+	}
+	if relayIDFor(token) != "" {
+		st.Code = wire.AuthBadKey // a relay key is not a member key
+		return
+	}
 	h, _ := wire.DecodeHello(rest)
 	if AuthKeys != nil && AuthKeys.Len() > 0 {
 		id := AuthKeys.IDFor(token)
@@ -95,6 +118,10 @@ func stampOverlayAuth(st *wire.Status, rest []byte, sess *mux.Session, remote ne
 func stampOverlayAuthL3(st *wire.Status, rest []byte, sink l3Sink, remote net.Addr, token []byte) {
 	ov := NetSwitch()
 	if ov == nil || st == nil {
+		return
+	}
+	if relayIDFor(token) != "" {
+		st.Code = wire.AuthBadKey // a relay key is not a member key
 		return
 	}
 	h, _ := wire.DecodeHello(rest)
@@ -142,49 +169,27 @@ func finishStatus(st *wire.Status, token []byte, sid string, rest []byte, sess *
 	}
 }
 
-// applyRelayRole sets mux.SetRelay only for a real relay trunk.
-// A relay is an extra loft node that forwards its members to the controller
-// over one mux (the trunk). A relay mux may open the service addresses
-// hub:* and ctl:1, so the bit is granted only to a Hello with CapRelay that
-// passes the enrol rules.
+// applyRelayRole makes sess a relay trunk when the key that passed 0x02 is a
+// relay key and Hello asks for the trunk (CapRelay). The trunk carries the id
+// the key was issued for, so ctl:1 can hold the relay to that id. A relay
+// that is drained or no longer listed is refused. Any other key, or a Hello
+// without CapRelay, leaves an ordinary session.
 // Hold / instance_id are not touched: a gap still parks the mux.
 func applyRelayRole(ms *mux.Session, rest, token []byte) {
 	if ms == nil {
 		return
 	}
+	ms.ClearRelay()
+	id := relayIDFor(token)
+	if id == "" {
+		return
+	}
 	h, err := wire.DecodeHello(rest)
 	if err != nil || !h.Caps.Has(wire.CapRelay) {
-		// Stock loft-front omits CapRelay (MemberCaps). Clear in case a
-		// parked mux still had the bit from an older Hello.
-		ms.ClearRelay()
 		return
 	}
-	if !relayTrunkAllowed(h, token) {
-		ms.ClearRelay()
+	if FleetCtl == nil || !FleetCtl.allowed(id) {
 		return
 	}
-	ms.SetRelay()
-}
-
-// relayTrunkAllowed is the enrol allowlist for CapRelay.
-// enrol:open — any authenticated Hello with the bit (loft-node ExtraCaps).
-// enrol:list — member id from the key ring (or Hello) must be in relays:.
-// Empty id is the shared-token relay; ServeCtl still checks enrol_req id.
-func relayTrunkAllowed(h wire.Hello, token []byte) bool {
-	if FleetCtl == nil || FleetCtl.cfg == nil {
-		return true
-	}
-	if FleetCtl.cfg.Enrol == "open" {
-		return true
-	}
-	id := h.MemberID
-	if AuthKeys != nil && AuthKeys.Len() > 0 {
-		if found := AuthKeys.IDFor(token); found != "" {
-			id = found
-		}
-	}
-	if id == "" {
-		return true
-	}
-	return FleetCtl.allowed(id)
+	ms.SetRelay(id)
 }

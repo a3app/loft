@@ -580,7 +580,6 @@ type NodeConfig struct {
 	H2Path     string   `json:"h2_path"`
 	RosterPath string   `json:"roster_path"`
 	ListsPath  string   `json:"lists_path"`
-	Enrol      string   `json:"enrol"`
 	AuthShared bool     `json:"auth_shared"`
 	Trace      bool     `json:"trace"`
 	Relays     []Relay  `json:"relays"`

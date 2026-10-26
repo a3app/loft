@@ -160,11 +160,11 @@ type ServerConfig struct {
 	Canary        CanaryConfig        `yaml:"canary"`
 	Role          string              `yaml:"role"`           // controller | relay; empty = controller
 	Controller    string              `yaml:"controller"`     // relay: hub URL
-	RelayToken    string              `yaml:"relay_token"`    // empty = Token
+	RelayToken    string              `yaml:"-"`              // relay: its own key, from {dir}/relay.key
+	ControllerPub string              `yaml:"controller_pub"` // relay: controller Ed25519 key (hex) that signs its slice
 	ControllerKey string              `yaml:"controller_key"` // path to ed25519 seed
 	Advertise     string              `yaml:"advertise"`      // public URL of this node, for roster
-	Relays        []RelayEntry        `yaml:"relays"`         // allowlist + defaults (controller)
-	Enrol         string              `yaml:"enrol"`          // list (default) | open
+	Relays        []RelayEntry        `yaml:"relays"`         // relays allowed to enrol, each with its key (controller)
 	AuthShared    bool                `yaml:"auth_shared"`    // accept LOFT_TOKEN as client secret when members.keys is empty
 	ID            string              `yaml:"id"`             // relay identity
 	RosterPath    string              `yaml:"roster_path"`
@@ -176,14 +176,15 @@ type ServerConfig struct {
 
 // RelayEntry is one controller allowlist row for enrol: list.
 type RelayEntry struct {
-	ID      string   `yaml:"id"`
-	URL     string   `yaml:"url"`
-	Decoy   string   `yaml:"decoy"`
-	Fronts  []string `yaml:"fronts"`
-	Drain   bool     `yaml:"drain"`
-	Weight  byte     `yaml:"weight"`
-	Path    string   `yaml:"path"`
-	MaskPub string   `yaml:"mask_pub"` // hex, optional
+	ID        string   `yaml:"id"`
+	KeySHA256 string   `yaml:"key_sha256"` // SHA-256 of the relay's key; the key itself is in relays.keys
+	URL       string   `yaml:"url"`
+	Decoy     string   `yaml:"decoy"`
+	Fronts    []string `yaml:"fronts"`
+	Drain     bool     `yaml:"drain"`
+	Weight    byte     `yaml:"weight"`
+	Path      string   `yaml:"path"`
+	MaskPub   string   `yaml:"mask_pub"` // hex, optional
 }
 
 // CanaryConfig is the path canary: how this node presents TLS so members

@@ -57,6 +57,7 @@ type Session struct {
 	closed    atomic.Bool
 	client    bool
 	relay     atomic.Bool
+	relayID   atomic.Pointer[string]
 	bytesUp   atomic.Uint64
 	bytesDown atomic.Uint64
 	die       chan struct{} // closed by Close; wakes every waiter
@@ -85,20 +86,33 @@ func NewClient() *Session { return newSession(true) }
 // NewServer allocates even stream IDs starting at 2.
 func NewServer() *Session { return newSession(false) }
 
-// SetRelay marks a relay trunk (may Open hub:* and ctl:1). A relay is an
-// extra entry node that forwards its members' traffic to the controller
-// over one mux, the "trunk". On it the relay opens the service addresses
-// ctl:1 (control channel) and hub:* (forwarded member traffic), which an
-// ordinary member session may not open.
-func (s *Session) SetRelay() { s.relay.Store(true) }
+// SetRelay marks a relay trunk (may Open hub:* and ctl:1) of relay id, the
+// id its key was issued for. A relay is an extra entry node that forwards
+// its members' traffic to the controller over one mux, the "trunk". On it
+// the relay opens the service addresses ctl:1 (control channel) and hub:*
+// (forwarded member traffic), which an ordinary member session may not open.
+func (s *Session) SetRelay(id string) {
+	s.relayID.Store(&id)
+	s.relay.Store(true)
+}
 
-// ClearRelay drops the trunk mark. Used when Hello has CapRelay but the
-// authenticated key is not allowed to enrol (enrol: list). Does not Close
-// streams or touch hold / instance_id.
-func (s *Session) ClearRelay() { s.relay.Store(false) }
+// ClearRelay drops the trunk mark. Does not Close streams or touch hold /
+// instance_id.
+func (s *Session) ClearRelay() {
+	s.relay.Store(false)
+	s.relayID.Store(nil)
+}
 
 // Relay reports a relay trunk session.
 func (s *Session) Relay() bool { return s.relay.Load() }
+
+// RelayID is the relay id of a trunk session, or "".
+func (s *Session) RelayID() string {
+	if p := s.relayID.Load(); p != nil && s.relay.Load() {
+		return *p
+	}
+	return ""
+}
 
 // newSession is a client (odd IDs) or server (even IDs) mux.
 func newSession(client bool) *Session {

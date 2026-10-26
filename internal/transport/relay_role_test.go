@@ -41,52 +41,74 @@ func TestAttachHelloDoesNotSetRelay(t *testing.T) {
 	ms.Close()
 }
 
-// TestApplyRelayRoleAllowlist: enrol:list members cannot self-assert a trunk.
-func TestApplyRelayRoleAllowlist(t *testing.T) {
+// TestApplyRelayRoleNeedsRelayKey: only a key issued for a listed relay,
+// with CapRelay in Hello, opens a trunk, and the trunk carries that id. A
+// member key never does, even with CapRelay; a drained relay is refused.
+func TestApplyRelayRoleNeedsRelayKey(t *testing.T) {
 	t.Cleanup(func() {
 		FleetCtl = nil
 		AuthKeys = nil
+		RelayKeys = nil
 	})
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ring := identity.NewRing()
-	ring.Put("alice", "lt_alice")
-	ring.Put("ru1", "lt_ru1")
-	AuthKeys = ring
+	members := identity.NewRing()
+	members.Put("alice", "lt_alice")
+	AuthKeys = members
+	relays := identity.NewRing()
+	relays.Put("ru1", "lt_ru1")
+	relays.Put("de1", "lt_de1")
+	RelayKeys = relays
 	FleetCtl = NewFleet(priv, &config.ServerConfig{
-		Enrol:  "list",
-		Relays: []config.RelayEntry{{ID: "ru1"}},
+		Relays: []config.RelayEntry{{ID: "ru1"}, {ID: "de1", Drain: true}},
 	})
+	trunk := wire.Hello{Version: 1, Min: wire.ProtoMin, Max: wire.Proto, Caps: wire.CapRelay | wire.CapHold}
 
-	member := wire.Hello{Version: 1, MemberID: "alice", Min: wire.ProtoMin, Max: wire.Proto, Caps: wire.CapRelay | wire.CapHold}
 	ms := mux.NewServer()
-	applyRelayRole(ms, member.Encode(), []byte("lt_alice"))
+	applyRelayRole(ms, trunk.Encode(), []byte("lt_alice"))
 	if ms.Relay() {
-		t.Fatal("member alice became trunk")
+		t.Fatal("member key opened a trunk")
 	}
-
-	listed := member
-	listed.MemberID = "ru1"
 	ms = mux.NewServer()
-	applyRelayRole(ms, listed.Encode(), []byte("lt_ru1"))
-	if !ms.Relay() {
-		t.Fatal("listed relay denied")
+	applyRelayRole(ms, trunk.Encode(), []byte("lt_ru1"))
+	if !ms.Relay() || ms.RelayID() != "ru1" {
+		t.Fatalf("relay key refused: relay=%v id=%q", ms.Relay(), ms.RelayID())
 	}
-
-	FleetCtl = NewFleet(priv, &config.ServerConfig{Enrol: "open"})
 	ms = mux.NewServer()
-	applyRelayRole(ms, member.Encode(), []byte("lt_alice"))
-	if !ms.Relay() {
-		t.Fatal("enrol:open + CapRelay should SetRelay")
+	applyRelayRole(ms, trunk.Encode(), []byte("lt_de1"))
+	if ms.Relay() {
+		t.Fatal("drained relay opened a trunk")
 	}
-
-	noBit := member
+	noBit := trunk
 	noBit.Caps = wire.CapHold
 	ms = mux.NewServer()
-	applyRelayRole(ms, noBit.Encode(), []byte("lt_alice"))
+	applyRelayRole(ms, noBit.Encode(), []byte("lt_ru1"))
 	if ms.Relay() {
 		t.Fatal("Hello without CapRelay")
+	}
+}
+
+// TestRelayKeyIsNotAMember: a relay key on an ordinary session is refused
+// as a member, with or without member keys on the node.
+func TestRelayKeyIsNotAMember(t *testing.T) {
+	t.Cleanup(func() {
+		AuthKeys = nil
+		RelayKeys = nil
+	})
+	withOverlay(t)
+	relays := identity.NewRing()
+	relays.Put("ru1", "lt_ru1")
+	RelayKeys = relays
+	alice := identity.NewRing()
+	alice.Put("alice", "lt_alice")
+	for _, members := range []*identity.Ring{nil, alice} {
+		AuthKeys = members
+		st := wire.Status{Code: wire.OK}
+		stampOverlayAuth(&st, wire.Hello{Version: 1}.Encode(), mux.NewServer(), nil, []byte("lt_ru1"))
+		if st.Code != wire.AuthBadKey {
+			t.Fatalf("relay key as member: %v", st.Code)
+		}
 	}
 }

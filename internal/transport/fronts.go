@@ -233,7 +233,7 @@ func ServerCaps(cfg *config.ServerConfig, maskOn bool) wire.Cap {
 		}
 		c &^= wire.CapQUIC | wire.CapH3
 	}
-	if len(cfg.Relays) == 0 && cfg.Advertise == "" && cfg.Enrol != "open" {
+	if len(cfg.Relays) == 0 && cfg.Advertise == "" {
 		c &^= wire.CapRoster
 	}
 	if len(cfg.Lists) == 0 {
