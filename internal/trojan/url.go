@@ -29,6 +29,7 @@ type Endpoint struct {
 	Mode        string
 	PadFrom     int
 	PadTo       int
+	ALPN        string
 }
 
 // ParseURL reads trojan://password@host:port?…, https://host:port, or host:port.
@@ -87,6 +88,7 @@ func ParseURL(raw, password string) (Endpoint, error) {
 		e.Path = q.Get("path")
 		e.Host = q.Get("host")
 		e.Mode, e.PadFrom, e.PadTo = xtls.XShare(q)
+		e.ALPN = q.Get("alpn")
 		if e.PublicKey != "" || e.ShortID != "" {
 			e.Reality = true
 			e.TLS = true
@@ -157,6 +159,7 @@ func (e Endpoint) xhttpCfg() xtls.XHTTP {
 	return xtls.XHTTP{
 		Host: e.Host, SNI: e.SNI, Addr: e.Addr, Path: e.Path,
 		Mode: e.Mode, PadFrom: e.PadFrom, PadTo: e.PadTo,
+		Reality: e.Reality,
 	}
 }
 

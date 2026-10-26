@@ -198,12 +198,39 @@ func TestParseURLRealityVisionXHTTP(t *testing.T) {
 	if err != nil || len(sid) != 8 {
 		t.Fatalf("sid %v %v", sid, err)
 	}
-	e, err = ParseURL("vless://550e8400-e29b-41d4-a716-446655440000@de1.example.com:443?type=xhttp&path=/api&mode=auto&security=tls", "")
+	e, err = ParseURL("vless://550e8400-e29b-41d4-a716-446655440000@de1.example.com:443?type=xhttp&path=/api&mode=auto&security=tls&alpn=h2", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !e.xhttp() || e.Path != "/api" || e.Mode != "auto" {
+	if !e.xhttp() || e.Path != "/api" || e.Mode != "auto" || e.ALPN != "h2" {
 		t.Fatalf("%+v", e)
+	}
+	if e.xhttpCfg().Reality {
+		t.Fatal("tls xhttp is not reality")
+	}
+}
+
+func TestClientALPN(t *testing.T) {
+	c, err := New(Config{URL: "vless://550e8400-e29b-41d4-a716-446655440000@h:443?type=xhttp&security=tls"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.alpn(); len(got) != 1 || got[0] != "h2" {
+		t.Fatalf("xhttp default %v", got)
+	}
+	c, err = New(Config{URL: "vless://550e8400-e29b-41d4-a716-446655440000@h:443?type=xhttp&security=tls&alpn=h2,http/1.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.alpn(); len(got) != 2 || got[0] != "h2" || got[1] != "http/1.1" {
+		t.Fatalf("link alpn %v", got)
+	}
+	c, err = New(Config{URL: "vless://550e8400-e29b-41d4-a716-446655440000@h:443?type=tcp&security=tls"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.alpn(); got != nil {
+		t.Fatalf("tcp %v", got)
 	}
 }
 

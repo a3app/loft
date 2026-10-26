@@ -209,8 +209,12 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	return conn, nil
 }
 
-// alpn asks for HTTP/2 when XHTTP runs over the TLS connection.
+// alpn is the TLS NextProtos list: the share-link alpn= field, else h2
+// when XHTTP runs over the TLS connection.
 func (c *Client) alpn() []string {
+	if list := xtls.SplitALPN(c.ep.ALPN); len(list) > 0 {
+		return list
+	}
 	if c.ep.xhttp() {
 		return []string{"h2"}
 	}
