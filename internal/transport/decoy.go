@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -72,6 +73,12 @@ type decoyListener struct {
 	cdn     []net.IPNet                 // CDN origin-pull ranges (cdn_peers)
 	proxy   bool                        // PROXY v1 header before the spliced bytes
 	mu      sync.Mutex
+
+	start   sync.Once
+	ready   chan net.Conn // loft connections for Accept
+	dead    chan struct{} // closed when the inner listener is closed
+	deadErr error         // what the inner Accept returned then
+	slots   chan struct{} // ClientHello reads in progress
 }
 
 // WrapDecoy wraps ln. Empty origins: decoy is off, Accept is plain.
@@ -215,50 +222,112 @@ func (d *decoyListener) Close() error { return d.ln.Close() }
 // A marked hello whose client_random was already used is a replay and is
 // spliced (see hello_once.go).
 func (d *decoyListener) Accept() (net.Conn, error) {
-	for {
-		c, err := d.ln.Accept()
-		if err != nil {
-			return nil, err
-		}
-		_ = c.SetReadDeadline(time.Now().Add(8 * time.Second))
-		raw, hello, err := readClientHello(c)
-		_ = c.SetReadDeadline(time.Time{})
-		if err != nil {
-			go spliceDecoy(c, raw, d.pick(hello.SNI), d.proxyOn())
-			continue
-		}
-		d.mu.Lock()
-		own := d.own
-		maskOn := d.mask != nil
-		d.mu.Unlock()
-		// Mask nodes admit a decoy SNI only as sid v3. sid v2 is the member
-		// key, so a stolen key would otherwise mark those ClientHellos.
-		// Own SNI still accepts v2: that path presents the node certificate.
-		loft := verifySID3(d.token, hello)
-		if !loft && (!maskOn || sniIsOwn(hello.SNI, own)) {
-			loft = verifyMemberV2(d.token, hello)
-		}
-		if loft && !helloOnce.take(hello.Random) {
-			loft = false
-		}
-		if sniIsOwn(hello.SNI, own) && (loft || d.isCDNPeer(c.RemoteAddr())) {
-			return &prefixConn{Conn: c, prefix: raw}, nil
-		}
-		if loft {
-			if d.mask != nil && d.mask.Ready() {
-				if d.onLoft != nil {
-					go d.maskThen(c, raw, hello, d.onLoft)
-					continue
-				}
-				if d.handler != nil {
-					go d.serveMask(c, raw, hello)
-					continue
-				}
-			}
-			return &prefixConn{Conn: c, prefix: raw}, nil
-		}
-		go spliceDecoy(c, raw, d.pick(hello.SNI), d.proxyOn())
+	d.start.Do(d.run)
+	select {
+	case c := <-d.ready:
+		return c, nil
+	case <-d.dead:
+		return nil, d.deadErr
 	}
+}
+
+// helloSlots caps the connections whose ClientHello is being read at once.
+// Each waits up to helloWait; past the cap a new connection is closed at
+// once rather than queued, so a flood cannot grow goroutines without limit.
+const (
+	helloSlots = 1024
+	helloWait  = 8 * time.Second
+)
+
+// run starts the accept loop. Reading a ClientHello can take up to
+// helloWait, so it is done per connection in its own goroutine: the loop
+// only accepts. When the read was inline, one client that opened TCP and
+// sent nothing stopped the node from accepting anyone for 8 seconds, and
+// one such connection every 8 seconds kept the node unreachable.
+func (d *decoyListener) run() {
+	d.ready = make(chan net.Conn)
+	d.dead = make(chan struct{})
+	d.slots = make(chan struct{}, helloSlots)
+	go func() {
+		for {
+			c, err := d.ln.Accept()
+			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					d.deadErr = err
+					close(d.dead)
+					return
+				}
+				time.Sleep(50 * time.Millisecond) // e.g. out of file descriptors
+				continue
+			}
+			select {
+			case d.slots <- struct{}{}:
+				go d.sort(c)
+			default:
+				_ = c.Close()
+			}
+		}
+	}()
+}
+
+// sort reads one ClientHello and decides where the connection goes. A loft
+// connection for the node goes to Accept; the rest is spliced to the decoy
+// or handed to the mask, on this goroutine.
+func (d *decoyListener) sort(c net.Conn) {
+	conn := d.classify(c)
+	<-d.slots
+	if conn == nil {
+		return
+	}
+	select {
+	case d.ready <- conn:
+	case <-d.dead:
+		_ = conn.Close()
+	}
+}
+
+// classify is the per-connection decision documented on Accept. It returns
+// the connection for the node to serve, or nil when it was handed elsewhere.
+func (d *decoyListener) classify(c net.Conn) net.Conn {
+	_ = c.SetReadDeadline(time.Now().Add(helloWait))
+	raw, hello, err := readClientHello(c)
+	_ = c.SetReadDeadline(time.Time{})
+	if err != nil {
+		go spliceDecoy(c, raw, d.pick(hello.SNI), d.proxyOn())
+		return nil
+	}
+	d.mu.Lock()
+	own := d.own
+	maskOn := d.mask != nil
+	d.mu.Unlock()
+	// Mask nodes admit a decoy SNI only as sid v3. sid v2 is the member
+	// key, so a stolen key would otherwise mark those ClientHellos.
+	// Own SNI still accepts v2: that path presents the node certificate.
+	loft := verifySID3(d.token, hello)
+	if !loft && (!maskOn || sniIsOwn(hello.SNI, own)) {
+		loft = verifyMemberV2(d.token, hello)
+	}
+	if loft && !helloOnce.take(hello.Random) {
+		loft = false
+	}
+	if sniIsOwn(hello.SNI, own) && (loft || d.isCDNPeer(c.RemoteAddr())) {
+		return &prefixConn{Conn: c, prefix: raw}
+	}
+	if loft {
+		if d.mask != nil && d.mask.Ready() {
+			if d.onLoft != nil {
+				go d.maskThen(c, raw, hello, d.onLoft)
+				return nil
+			}
+			if d.handler != nil {
+				go d.serveMask(c, raw, hello)
+				return nil
+			}
+		}
+		return &prefixConn{Conn: c, prefix: raw}
+	}
+	go spliceDecoy(c, raw, d.pick(hello.SNI), d.proxyOn())
+	return nil
 }
 
 // ApplyDecoyProxy turns the PROXY v1 header on TCP splice on or off. The
