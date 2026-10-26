@@ -14,6 +14,8 @@ import (
 	"golang.org/x/net/http2"
 )
 
+// xhttpUA is the User-Agent of the POST: a desktop Chrome, to look like a
+// browser.
 const xhttpUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 // XHTTP is path / Host for a stream-one POST.
@@ -24,6 +26,10 @@ type XHTTP struct {
 	Path string
 }
 
+// xhttpConn is a net.Conn over one POST: writes go into the request body
+// through a pipe, reads come from the response body. Reads wait until the
+// response headers arrive (got); if the request failed they return its
+// error.
 type xhttpConn struct {
 	tls  net.Conn
 	pw   *io.PipeWriter
@@ -35,6 +41,9 @@ type xhttpConn struct {
 }
 
 // DialXHTTP runs an HTTP/2 POST over an already-handshaked TLS or REALITY conn.
+// The body has no length, so it streams for as long as the connection
+// lives. It returns at once; the request runs in the background and only a
+// 200 answer opens the read side. Only the stream-one mode is implemented.
 func DialXHTTP(tlsConn net.Conn, x XHTTP) (net.Conn, error) {
 	host := x.Host
 	if host == "" {
@@ -86,6 +95,7 @@ func DialXHTTP(tlsConn net.Conn, x XHTTP) (net.Conn, error) {
 	return xc, nil
 }
 
+// fail records the first error and wakes readers.
 func (c *xhttpConn) fail(err error) {
 	c.mu.Lock()
 	if c.err == nil {

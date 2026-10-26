@@ -17,7 +17,9 @@ import (
 var autoProbes = []string{"ya.ru:443", "nic.ru:443", "google.com:443"}
 
 // probe runs a channel's link check until the router closes. Fails probes
-// in a row mark the channel "no link"; one success clears it.
+// in a row mark the channel "no link"; one success clears it. Defaults are
+// every 10 s and 3 fails; one probe gets at most 5 s (or the interval, if
+// shorter). The first probe runs at once. Only changes of state are logged.
 func (r *Router) probe(cs *chanState) {
 	k := cs.ch.Check
 	every := time.Duration(k.Every) * time.Second
@@ -98,6 +100,9 @@ func (r *Router) probeOnce(ctx context.Context, cs *chanState) error {
 	return fmt.Errorf("unknown check %q", k.Kind)
 }
 
+// probeDial connects to addr the way the channel would carry traffic. The
+// direct pseudo-channel uses a plain dialer: the probe tests the host route,
+// not the Deny rules.
 func (r *Router) probeDial(ctx context.Context, cs *chanState, addr string) (net.Conn, error) {
 	if cs == r.direct {
 		return (&net.Dialer{}).DialContext(ctx, "tcp4", addr)
@@ -105,6 +110,9 @@ func (r *Router) probeDial(ctx context.Context, cs *chanState, addr string) (net
 	return r.dialOn(ctx, cs, addr)
 }
 
+// probeTLS connects and completes a TLS handshake with certificate checks.
+// It proves more than a TCP connect: a broken tunnel or a middlebox often
+// still accepts TCP but cannot finish a valid handshake.
 func (r *Router) probeTLS(ctx context.Context, cs *chanState, addr string) error {
 	c, err := r.probeDial(ctx, cs, addr)
 	if err != nil {
@@ -128,7 +136,9 @@ func (r *Router) probeTLS(ctx context.Context, cs *chanState, addr string) error
 	return tls.Client(c, cfg).HandshakeContext(ctx)
 }
 
-// pingDev sends one ICMP echo out of dev and waits for the reply.
+// pingDev sends one ICMP echo out of dev and waits for the reply. It opens
+// a raw ICMP socket, so the node needs root or CAP_NET_RAW. Replies from
+// other hosts or with another echo ID are ignored.
 func pingDev(ctx context.Context, dev, host string) error {
 	ips, err := net.DefaultResolver.LookupIP(ctx, "ip4", host)
 	if err != nil || len(ips) == 0 {

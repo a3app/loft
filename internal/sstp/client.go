@@ -1,3 +1,17 @@
+// Package sstp is a client for SSTP, Microsoft's Secure Socket Tunneling
+// Protocol: a PPP link carried inside one long HTTPS request. Many routers
+// (Windows servers, Keenetic and others) serve it, so loft speaks it
+// in two places: a node can use an SSTP server as an exit channel (see
+// internal/egress), and clients can connect to such a server directly.
+//
+// A session goes through these steps: a TLS connection; an HTTP request
+// with the made-up method SSTP_DUPLEX_POST, after which the connection
+// carries SSTP packets both ways; SSTP Connect Request and Ack; PPP
+// negotiation (LCP for link options, PAP, CHAP or MS-CHAPv2 for the login,
+// optionally CCP/MPPE for encryption, IPCP for the IPv4 address and DNS);
+// and the crypto binding, a Call Connected message whose MAC ties the PPP
+// login to this TLS certificate so a man in the middle cannot relay the
+// login to another server. Then IP packets flow wrapped in PPP frames.
 package sstp
 
 // SSTP client: TLS, duplex POST, SSTP control, PPP, IP packets.
@@ -36,7 +50,10 @@ type Config struct {
 	Log func(string)
 }
 
-// Session is a live SSTP+PPP tunnel with an assigned IPv4.
+// Session is a live SSTP+PPP tunnel with an assigned IPv4. IP is ours,
+// Peer is the server's end of the PPP link, DNS are the servers IPCP gave,
+// MPPE says whether PPP-level encryption was agreed. Received IP packets
+// queue in inbound until ReadIP takes them.
 type Session struct {
 	IP   net.IP
 	Peer net.IP
@@ -59,6 +76,11 @@ type Session struct {
 }
 
 // Dial opens TLS, SSTP, PPP auth (PAP/CHAP/MSCHAPv2) and IPCP.
+// It then sends the crypto binding (Call Connected, keyed with a hash of the
+// server certificate and the key from the PPP login), measures the inner
+// MTU, and starts the read and keepalive loops. TLS 1.0 is allowed because
+// old Windows servers offer nothing newer. If ctx has no deadline, setup
+// gets 60 s.
 func Dial(ctx context.Context, cfg Config) (*Session, error) {
 	host, addr, query, err := sstpAddr(cfg.URL)
 	if err != nil {
@@ -282,6 +304,8 @@ func (s *Session) SetMTU(n int) {
 	s.mu.Unlock()
 }
 
+// flushPPP sends the PPP frames the negotiation queued, each in its own
+// SSTP data packet.
 func (s *Session) flushPPP() error {
 	for _, f := range s.ppp.out {
 		if err := s.writePkt(pkt{data: f}); err != nil {
@@ -292,6 +316,8 @@ func (s *Session) flushPPP() error {
 	return nil
 }
 
+// writePkt sends one SSTP packet. Control packets are flushed at once;
+// data may wait in the cork buffer (see startCork).
 func (s *Session) writePkt(p pkt) error {
 	return s.writePktFlush(p, p.ctrl)
 }
@@ -313,6 +339,9 @@ func (s *Session) writePktFlush(p pkt, flush bool) error {
 	return err
 }
 
+// startCork puts a 16 KiB write buffer in front of the TLS connection,
+// flushed every 2 ms. Small IP packets then share TLS records instead of
+// each paying for its own record and syscall.
 func (s *Session) startCork() {
 	s.mu.Lock()
 	s.bw = bufio.NewWriterSize(s.conn, 16*1024)
@@ -337,6 +366,8 @@ func (s *Session) flushLoop() {
 	}
 }
 
+// tuneTLS sets the TCP socket under TLS for a tunnel: no Nagle delay,
+// 256 KiB buffers, and TCP keepalive every 10 s.
 func tuneTLS(tc *tls.Conn) {
 	raw, ok := tc.NetConn().(*net.TCPConn)
 	if !ok {
@@ -349,6 +380,10 @@ func tuneTLS(tc *tls.Conn) {
 	_ = raw.SetKeepAlivePeriod(10 * time.Second)
 }
 
+// readLoop reads SSTP packets until the connection fails or the server
+// disconnects. It answers SSTP echoes, queues IP packets for ReadIP, and
+// passes other PPP frames (LCP echo, renegotiation) to the PPP state.
+// Any packet counts as a sign of life for echoLoop.
 func (s *Session) readLoop(br *bufio.Reader) {
 	defer s.Close()
 	for {
@@ -388,12 +423,17 @@ func (s *Session) readLoop(br *bufio.Reader) {
 	}
 }
 
+// SSTP keepalive: send an echo request every 30 s; give up after 75 s with
+// nothing received; a write of the echo may take at most 8 s.
 const (
 	sstpEchoEvery = 30 * time.Second
 	sstpEchoDead  = 75 * time.Second
 	sstpEchoWrite = 8 * time.Second
 )
 
+// echoLoop is the keepalive. A NAT or firewall may silently drop an idle
+// TCP connection; then reads just hang. Checking every 5 s against the wall
+// clock also catches a machine that slept with the tunnel open.
 func (s *Session) echoLoop() {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
@@ -424,6 +464,8 @@ func (s *Session) echoLoop() {
 	}
 }
 
+// writeEcho sends an echo request with a write deadline, so a stuck
+// connection shows up as an error instead of blocking the loop.
 func (s *Session) writeEcho() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -537,6 +579,8 @@ func joinIPs(ips []net.IP) string {
 	return strings.Join(parts, ",")
 }
 
+// sstpAddr reads the server address: a URL or a bare host[:port], https
+// and port 443 by default. A query string is passed on to the duplex path.
 func sstpAddr(raw string) (host, addr, query string, err error) {
 	s := strings.TrimSpace(raw)
 	if !strings.Contains(s, "://") {
@@ -557,6 +601,8 @@ func sstpAddr(raw string) (host, addr, query string, err error) {
 	return host, net.JoinHostPort(host, port), u.RawQuery, nil
 }
 
+// newCorrelationID makes a random (version 4) GUID in braces, uppercase,
+// for the SSTPCORRELATIONID header.
 func newCorrelationID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])

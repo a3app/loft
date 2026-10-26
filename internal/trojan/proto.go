@@ -24,6 +24,8 @@ const (
 var crlf = []byte{'\r', '\n'}
 
 // TunIP is the synthetic IPv4 the GUI and utun use. Trojan has no overlay lease.
+// It is in 198.18.0.0/15, a range reserved for benchmarking, so it does not
+// clash with real networks.
 const TunIP = "198.18.0.1"
 
 // hexSHA224 is the 56-byte hex(SHA224(password)) Trojan hash.
@@ -35,7 +37,9 @@ func hexSHA224(password string) []byte {
 	return out
 }
 
-// writeRequest writes a Trojan TCP or UDP header for host:port onto w.
+// writeRequest writes a Trojan TCP or UDP header for host:port onto w:
+// the password hash, CRLF, the command, the SOCKS5-style address, CRLF.
+// The stream data follows directly.
 func writeRequest(w io.Writer, password, target string, udp bool) error {
 	addr, err := socksAddr(target)
 	if err != nil {
@@ -86,6 +90,8 @@ func socksAddr(target string) ([]byte, error) {
 	return append(out, pb[:]...), nil
 }
 
+// writeUDPPacket writes one datagram on a UDP ASSOCIATE stream: address,
+// 2-byte length, CRLF, payload. Payloads over 8 KiB are refused.
 func writeUDPPacket(w io.Writer, addr net.Addr, payload []byte) error {
 	if len(payload) > maxUDPPayload {
 		return fmt.Errorf("trojan udp: oversize")
@@ -109,6 +115,8 @@ func writeUDPPacket(w io.Writer, addr net.Addr, payload []byte) error {
 	return err
 }
 
+// readUDPPacket reads one datagram in the same layout. A sender given as a
+// domain name comes back as udpHostAddr.
 func readUDPPacket(r io.Reader) (net.Addr, []byte, error) {
 	host, port, err := readSocksAddr(r)
 	if err != nil {
@@ -136,6 +144,7 @@ func readUDPPacket(r io.Reader) (net.Addr, []byte, error) {
 	return udpHostAddr{host: host, port: port}, payload, nil
 }
 
+// udpHostAddr is a UDP address given by name, which net.UDPAddr cannot hold.
 type udpHostAddr struct {
 	host string
 	port int
@@ -144,6 +153,7 @@ type udpHostAddr struct {
 func (a udpHostAddr) Network() string { return "udp" }
 func (a udpHostAddr) String() string  { return net.JoinHostPort(a.host, strconv.Itoa(a.port)) }
 
+// readSocksAddr reads an address in the SOCKS5 layout socksAddr writes.
 func readSocksAddr(r io.Reader) (host string, port int, err error) {
 	var atyp [1]byte
 	if _, err = io.ReadFull(r, atyp[:]); err != nil {

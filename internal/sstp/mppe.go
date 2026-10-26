@@ -8,6 +8,7 @@ import (
 	"fmt"
 )
 
+// rc4cipher is plain RC4, the stream cipher MPPE encrypts with.
 type rc4cipher struct {
 	s    [256]byte
 	i, j byte
@@ -35,6 +36,9 @@ func (c *rc4cipher) xor(dst, src []byte) {
 	}
 }
 
+// mppe is one direction of MPPE. In stateless mode every packet carries a
+// 12-bit counter and the session key changes for every counter value, so a
+// lost packet does not break the following ones.
 type mppe struct {
 	master []byte
 	sess   []byte
@@ -48,6 +52,8 @@ func newMPPE(master []byte) *mppe {
 	return m
 }
 
+// getNewKeyFromSHA is the MPPE key update: SHA-1 of the master key,
+// padding, the current session key and other padding, cut to 128 bits.
 func getNewKeyFromSHA(master, sess []byte) []byte {
 	pad1 := make([]byte, 40)
 	pad2 := bytesOf(0xf2, 40)
@@ -59,6 +65,8 @@ func getNewKeyFromSHA(master, sess []byte) []byte {
 	return s.Sum(nil)[:16]
 }
 
+// resetSess starts the key chain again from the master key. The counter is
+// set to 0x0fff so the first packet, counter 0, is one step on.
 func (m *mppe) resetSess() {
 	m.sess = append([]byte(nil), m.master...)
 	m.sess = getNewKeyFromSHA(m.master, m.sess)
@@ -70,6 +78,9 @@ func (m *mppe) rekey() {
 	m.sess = getNewKeyFromSHA(m.master, m.sess)
 }
 
+// sync moves the key forward to counter c, one key update per step. A jump
+// of more than half the counter space is taken as the peer starting over,
+// and the chain restarts from the master key.
 func (m *mppe) sync(c uint16) {
 	if !m.inited {
 		m.resetSess()
@@ -88,6 +99,8 @@ func (m *mppe) sync(c uint16) {
 	}
 }
 
+// crypt encrypts one packet with the next counter. The 2-byte header has
+// the "encrypted" bit (0x8000) and the counter.
 func (m *mppe) crypt(p []byte) []byte {
 	m.sync((m.count + 1) & 0x0fff)
 	out := make([]byte, 2+len(p))

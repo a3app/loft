@@ -30,6 +30,12 @@ type Endpoint struct {
 }
 
 // ParseURL reads vless://uuid@host:port?…, https://host:port, or host:port.
+// The query of a vless:// link follows the Xray share-link format: security
+// (tls, reality, none), type (tcp, xhttp; splithttp is its old name), flow,
+// fp (the browser whose ClientHello to copy), pbk and sid (REALITY), and
+// path/host/mode for XHTTP. A pbk or sid alone also turns REALITY on. TLS
+// and port 443 are the defaults. uuid is used when the URL has none; the
+// SNI defaults to the host unless that is an IP.
 func ParseURL(raw, uuid string) (Endpoint, error) {
 	var e Endpoint
 	e.TLS = true
@@ -118,6 +124,7 @@ func ParseURL(raw, uuid string) (Endpoint, error) {
 	return e, nil
 }
 
+// splitHostPort reads "host" or "host:port"; port 443 by default.
 func splitHostPort(s string) (string, string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

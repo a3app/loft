@@ -10,8 +10,12 @@ import (
 	"hash"
 )
 
+// cmkSeed is the fixed label for deriving the Compound MAC Key.
 const cmkSeed = "SSTP inner method derived CMK"
 
+// prfPlus stretches key into n bytes with HMAC in counter mode, the way
+// SSTP derives the CMK: block i is HMAC(key, previous block | seed |
+// n as 2 little-endian bytes | i).
 func prfPlus(h func() hash.Hash, key, seed []byte, n int) []byte {
 	var out []byte
 	var t []byte
@@ -29,6 +33,13 @@ func prfPlus(h func() hash.Hash, key, seed []byte, n int) []byte {
 	return out[:n]
 }
 
+// compoundMAC is the proof sent in Call Connected. The key comes from the
+// HLAK (the "higher layer authentication key", produced by the PPP login;
+// zeros when the login method yields none, such as PAP). The MAC covers
+// the whole Call Connected message with the server's nonce and our hash of
+// the server certificate, and the MAC field itself set to zero. A relay
+// that shows us a different certificate cannot produce a matching MAC.
+// The result is padded to 32 bytes.
 func compoundMAC(hlak, nonce, certHash []byte, sha256Hash bool) []byte {
 	if len(hlak) < 32 {
 		z := make([]byte, 32)
@@ -71,6 +82,8 @@ func compoundMAC(hlak, nonce, certHash []byte, sha256Hash bool) []byte {
 	return out
 }
 
+// connectedPkt builds Call Connected with the crypto binding attribute:
+// hash type, nonce, certificate hash and compound MAC, 32 bytes each.
 func connectedPkt(nonce, certHash, cmac []byte, sha256Hash bool) pkt {
 	hashID := byte(hashSHA1)
 	if sha256Hash {
@@ -87,6 +100,8 @@ func connectedPkt(nonce, certHash, cmac []byte, sha256Hash bool) pkt {
 	return pkt{ctrl: true, typ: msgConnected, attr: []attr{{id: attrCryptoBinding, val: val}}}
 }
 
+// parseBindingReq reads the server's crypto binding request from Connect
+// Ack: which hashes it accepts (a bit mask) and its 32-byte nonce.
 func parseBindingReq(val []byte) (mask byte, nonce []byte) {
 	if len(val) < 36 {
 		return 0, nil

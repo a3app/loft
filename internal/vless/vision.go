@@ -1,6 +1,18 @@
 package vless
 
 // XTLS Vision padding (xtls-rprx-vision) over a VLESS TCP stream.
+//
+// Why: most traffic inside the tunnel is itself TLS (HTTPS). A TLS
+// handshake carried inside another TLS connection still leaks its typical
+// record sizes, and censors look for exactly that. Vision wraps the first
+// writes in frames with random padding. Once the inner TLS reaches
+// application data (records starting 17 03 03), padding stops and the rest
+// of the stream goes as is ("direct"). If the inner traffic is not TLS,
+// padding stops after the first few writes ("end").
+//
+// A frame is: the UUID (first frame only), a command byte (continue, end,
+// direct), the content length and the padding length (2 bytes each), the
+// content, then random padding.
 
 import (
 	"crypto/rand"
@@ -25,8 +37,13 @@ const (
 	visionFrameCap   = visionHeadMax + visionMaxContent + visionMaxPad
 )
 
+// tlsAppStart begins a TLS 1.2/1.3 application data record.
 var tlsAppStart = []byte{0x17, 0x03, 0x03}
 
+// visionConn is a VLESS stream with Vision framing on both directions. The
+// write side looks at the first visionFilter writes to see whether the
+// inner traffic is TLS (a handshake record starts 16 03); the read side
+// strips frames until the server says end or direct.
 type visionConn struct {
 	net.Conn
 	uuid [16]byte
@@ -61,6 +78,10 @@ func wrapVision(c net.Conn, uuid [16]byte) net.Conn {
 	}
 }
 
+// Write sends p in padded frames of up to 8 KiB of content. On the first
+// inner TLS application record it sends that chunk with the direct command
+// and the rest of p plain; without inner TLS, the last chunk of a write
+// after the filter window carries end. Both switch padding off for good.
 func (c *visionConn) Write(p []byte) (int, error) {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
@@ -110,6 +131,9 @@ func (c *visionConn) Write(p []byte) (int, error) {
 	return total, nil
 }
 
+// pad builds one frame. Short content is padded: to 900–1399 bytes in all
+// while inner TLS is being set up, so handshake records all look alike;
+// otherwise with 0–255 random bytes. Content of 900 bytes or more gets none.
 func (c *visionConn) pad(content []byte, cmd byte) []byte {
 	n := len(content)
 	if n > visionMaxContent {
@@ -149,6 +173,8 @@ func (c *visionConn) pad(content []byte, cmd byte) []byte {
 	return out
 }
 
+// Read returns content from the server's frames and skips their padding.
+// After a frame with end or direct, the rest of the stream is read as is.
 func (c *visionConn) Read(p []byte) (int, error) {
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
@@ -199,6 +225,8 @@ func (c *visionConn) skipPad() error {
 	return nil
 }
 
+// readHeader reads the next frame header; the server's first frame starts
+// with the UUID too.
 func (c *visionConn) readHeader() error {
 	need := 5
 	if c.readUUID {
@@ -222,6 +250,8 @@ func (c *visionConn) readHeader() error {
 	return nil
 }
 
+// randN is a random number in [0, n) from crypto/rand. The slight modulo
+// bias does not matter for padding lengths.
 func randN(n int) uint32 {
 	if n <= 0 {
 		return 0

@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// udpConn turns a UDP ASSOCIATE stream into a net.PacketConn. Separate
+// locks for reading and writing keep each datagram whole on the stream.
 type udpConn struct {
 	net.Conn
 	c     *Client
@@ -17,6 +19,8 @@ type udpConn struct {
 	wmu   sync.Mutex
 }
 
+// ReadFrom returns the next datagram. If p is too small the rest is
+// dropped and io.ErrShortBuffer returned, the stream stays in step.
 func (c *udpConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	c.rmu.Lock()
 	defer c.rmu.Unlock()

@@ -30,6 +30,10 @@ type Endpoint struct {
 }
 
 // ParseURL reads trojan://password@host:port?…, https://host:port, or host:port.
+// The query follows the Xray share-link format, as for vless://, plus
+// allowInsecure/insecure to skip the certificate check. The password may
+// sit in either part of the user info. password is used when the URL has
+// none; the SNI defaults to the host unless that is an IP.
 func ParseURL(raw, password string) (Endpoint, error) {
 	var e Endpoint
 	e.TLS = true
@@ -120,6 +124,7 @@ func ParseURL(raw, password string) (Endpoint, error) {
 	return e, nil
 }
 
+// splitHostPort reads "host" or "host:port"; port 443 by default.
 func splitHostPort(s string) (string, string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -150,6 +155,7 @@ func (e Endpoint) xhttpCfg() xtls.XHTTP {
 	return xtls.XHTTP{Host: e.Host, SNI: e.SNI, Addr: e.Addr, Path: e.Path}
 }
 
+// truthy reads a yes/no query value the way share links write it.
 func truthy(s string) bool {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "1", "true", "yes", "on":

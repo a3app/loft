@@ -1,3 +1,19 @@
+// Package vless is a client for VLESS, the proxy protocol of Xray and
+// V2Ray. loft speaks it so its apps can also connect to an existing Xray
+// server: the user pastes a vless:// share link and the app sends traffic
+// through that server instead of a loft node.
+//
+// VLESS is simple: every TCP connection to the server opens with a short
+// header (version, the user's UUID as the password, command, target
+// address) and the server answers with a 2-byte header; after that the
+// connection is a plain byte stream to the target. Encryption comes from
+// the layer below: ordinary TLS or REALITY (see internal/xtls), optionally
+// inside an XHTTP POST. "Vision" (flow xtls-rprx-vision) pads the first
+// packets so the TLS handshake of the site inside the tunnel does not show
+// through as a recognisable size pattern.
+//
+// There is no loft mux here: every stream is its own connection, and there
+// is no overlay address, so the apps use the fixed TunIP.
 package vless
 
 // Client is a transport.Dialer: each Open is a new VLESS TCP stream.
@@ -68,6 +84,8 @@ func New(cfg Config) (*Client, error) {
 }
 
 // Probe dials TLS (if any) and one VLESS header so a bad UUID fails before SOCKS.
+// The test target is 1.1.1.1:443; a server that rejects the UUID sends
+// no valid response header within 12 s, and that is the error.
 func (c *Client) Probe(ctx context.Context) error {
 	c.stage("vless")
 	conn, err := c.dial(ctx)
@@ -87,6 +105,8 @@ func (c *Client) Probe(ctx context.Context) error {
 }
 
 // Open dials the server and starts a VLESS TCP stream to target (host:port).
+// It waits up to 15 s for the response header, so a refused UUID fails here
+// and not on the first read.
 func (c *Client) Open(target string) (net.Conn, error) {
 	conn, err := c.dial(context.Background())
 	if err != nil {
@@ -108,6 +128,9 @@ func (c *Client) Open(target string) (net.Conn, error) {
 	return &countedConn{Conn: conn, c: c}, nil
 }
 
+// dial makes the connection a VLESS header goes on: TCP, then REALITY or
+// TLS (or neither, for security=none), then XHTTP if asked for. Without a
+// context deadline the setup gets 15 s.
 func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	d := protect.NetDialer(15 * time.Second)
 	c.stage("tcp")
@@ -151,6 +174,7 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	return conn, nil
 }
 
+// alpn asks for HTTP/2 when XHTTP runs over the TLS connection.
 func (c *Client) alpn() []string {
 	if c.ep.xhttp() {
 		return []string{"h2"}
@@ -158,6 +182,7 @@ func (c *Client) alpn() []string {
 	return nil
 }
 
+// stage logs the step being tried, so a failed connect shows where it stopped.
 func (c *Client) stage(s string) {
 	if c.log != nil {
 		c.log(s)
@@ -179,6 +204,7 @@ func (c *Client) Close() error {
 // Bytes is STATUS spark counters.
 func (c *Client) Bytes() (up, down uint64) { return c.up.Load(), c.down.Load() }
 
+// countedConn adds a stream's bytes to the client's up/down totals.
 type countedConn struct {
 	net.Conn
 	c *Client
@@ -200,6 +226,7 @@ func (w *countedConn) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// CloseWrite passes a half-close through when the connection below has one.
 func (w *countedConn) CloseWrite() error {
 	if cw, ok := w.Conn.(interface{ CloseWrite() error }); ok {
 		return cw.CloseWrite()

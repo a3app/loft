@@ -11,6 +11,9 @@ import (
 	"strings"
 )
 
+// PPP protocol numbers: LCP sets up the link, PAP and CHAP log in, CCP
+// agrees on encryption, IPCP on IPv4 addresses; IP and MPPE frames carry
+// plain and encrypted packets.
 const (
 	pppLCP  uint16 = 0xc021
 	pppPAP  uint16 = 0xc023
@@ -21,6 +24,10 @@ const (
 	pppMPPE uint16 = 0x00fd
 )
 
+// Codes shared by the PPP control protocols (LCP, CCP, IPCP): each side
+// sends Configure-Request with the options it wants, and the other answers
+// Ack (all fine), Nak (use these values instead) or Reject (options it
+// does not know).
 const (
 	cpConfReq = 1
 	cpConfAck = 2
@@ -32,6 +39,9 @@ const (
 	cpEchoRep = 10
 )
 
+// ppp is the PPP state of one session, the client side only. It does not
+// do I/O: handle takes a received frame, and frames to send pile up in out
+// for the session to flush. The flags record how far negotiation got.
 type ppp struct {
 	user, pass string
 	magic      uint32
@@ -80,6 +90,9 @@ func (p *ppp) start() {
 	p.sendLCP(cpConfReq, p.lcpOpts())
 }
 
+// lcpOpts is our LCP Configure-Request: MRU, a random magic number (it
+// lets each side detect a link looped back to itself), and both header
+// compressions.
 func (p *ppp) lcpOpts() []byte {
 	mru := p.ourMRU
 	if mru < 576 {
@@ -112,6 +125,8 @@ func (p *ppp) sendCP(proto uint16, code, id byte, opts []byte) {
 	p.send(proto, info)
 }
 
+// handle processes one received PPP frame. An unknown protocol gets an
+// LCP Protocol-Reject, as PPP requires. An error means the link is over.
 func (p *ppp) handle(frame []byte) error {
 	proto, info, err := parsePPP(frame)
 	if err != nil {
@@ -140,6 +155,9 @@ func (p *ppp) handle(frame []byte) error {
 	return nil
 }
 
+// parsePPP splits a frame into protocol and body. The peer may leave out
+// the ff 03 address/control bytes (ACFC) and send a 1-byte protocol (PFC);
+// a protocol byte with the low bit set is a complete 1-byte protocol.
 func parsePPP(f []byte) (uint16, []byte, error) {
 	if len(f) < 3 {
 		return 0, nil, fmt.Errorf("ppp short")
@@ -160,6 +178,9 @@ func parsePPP(f []byte) (uint16, []byte, error) {
 	return binary.BigEndian.Uint16(f[off : off+2]), f[off+2:], nil
 }
 
+// handleLCP runs link setup. When our request is acked the link is open
+// and login starts; if the server asked for no login, we go straight to
+// CCP and IPCP. A Terminate-Request ends the session.
 func (p *ppp) handleLCP(info []byte) error {
 	if len(info) < 4 {
 		return fmt.Errorf("lcp")
@@ -223,6 +244,7 @@ func (p *ppp) echoReplyData(req []byte) []byte {
 	return mag[:]
 }
 
+// lcpOptsBare is the fallback request after a Reject: the magic number only.
 func (p *ppp) lcpOptsBare() []byte {
 	var mag [4]byte
 	binary.BigEndian.PutUint32(mag[:], p.magic)
@@ -231,6 +253,9 @@ func (p *ppp) lcpOptsBare() []byte {
 	return o
 }
 
+// lcpSplit sorts the server's LCP options into what we accept, what we
+// counter-propose and what we reject. A login method we do not allow is
+// answered with a Nak proposing MS-CHAPv2.
 func (p *ppp) lcpSplit(opts []byte) (ack, nak, rej []byte) {
 	for len(opts) >= 2 {
 		t, l := opts[0], int(opts[1])
@@ -264,6 +289,8 @@ func (p *ppp) lcpSplit(opts []byte) (ack, nak, rej []byte) {
 	return
 }
 
+// seePeerLCP records the options we just acked: the server's MRU, header
+// compression, and the login method it wants.
 func (p *ppp) seePeerLCP(opts []byte) {
 	for len(opts) >= 2 {
 		t, l := opts[0], int(opts[1])
@@ -309,6 +336,7 @@ func lcpHasMRU(opts []byte) bool {
 	return false
 }
 
+// applyLCPNak takes the MRU the server proposed, if it is sane.
 func (p *ppp) applyLCPNak(opts []byte) {
 	for len(opts) >= 2 {
 		t, l := opts[0], int(opts[1])
@@ -326,6 +354,7 @@ func (p *ppp) applyLCPNak(opts []byte) {
 	}
 }
 
+// infoMTU is the smaller of the two MRUs, 1500 where one is unknown.
 func (p *ppp) infoMTU() int {
 	a, b := int(p.ourMRU), int(p.peerMRU)
 	if a < 576 {
@@ -340,6 +369,9 @@ func (p *ppp) infoMTU() int {
 	return a
 }
 
+// wantAuth reports whether we accept a login method. MS-CHAPv2 (CHAP
+// algorithm 0x81) is always fine: it is the only one that yields keys for
+// the crypto binding. PAP and CHAP-MD5 only when the config allows them.
 func (p *ppp) wantAuth(proto uint16, alg byte) bool {
 	if proto == pppCHAP && alg == 0x81 {
 		return true
@@ -353,6 +385,8 @@ func (p *ppp) wantAuth(proto uint16, alg byte) bool {
 	return proto == pppCHAP && (alg == 0x05 || alg == 0)
 }
 
+// maybeAuth sends the PAP login. CHAP needs no first move: the server
+// sends a challenge.
 func (p *ppp) maybeAuth() {
 	if p.authProto == pppPAP {
 		u := []byte(p.user)
@@ -380,6 +414,9 @@ func (p *ppp) handlePAP(info []byte) error {
 	return nil
 }
 
+// handleCHAP answers a challenge with MS-CHAPv2 or, if allowed, CHAP-MD5,
+// and finishes the login on Success. For MS-CHAPv2 the Success message must
+// carry the authenticator response, or the server is not trusted.
 func (p *ppp) handleCHAP(info []byte) error {
 	if len(info) < 4 {
 		return fmt.Errorf("chap")
@@ -434,6 +471,9 @@ func (p *ppp) handleCHAP(info []byte) error {
 	return nil
 }
 
+// mschapv2Resp builds the MS-CHAPv2 response (our random challenge, eight
+// reserved bytes, the NT response, a flags byte, the user name) and derives
+// the HLAK and MPPE keys from it.
 func (p *ppp) mschapv2Resp(id byte, authChal []byte) error {
 	peer := make([]byte, 16)
 	_, _ = rand.Read(peer)
@@ -453,11 +493,16 @@ func (p *ppp) mschapv2Resp(id byte, authChal []byte) error {
 	return nil
 }
 
+// afterAuth starts the network phase: offer 128-bit stateless MPPE and ask
+// for an IPv4 address.
 func (p *ppp) afterAuth() {
 	p.sendCP(pppCCP, cpConfReq, p.nextID(), []byte{18, 6, 0x01, 0x00, 0x00, 0x40}) // MPPE 128 stateless
 	p.sendIPCP()
 }
 
+// handleCCP agrees on MPPE. It turns on only when MS-CHAPv2 produced keys;
+// if the server refuses, traffic goes without PPP-level encryption (TLS
+// still protects it).
 func (p *ppp) handleCCP(info []byte) error {
 	if len(info) < 4 {
 		return nil
@@ -508,6 +553,8 @@ func splitCCP(opts []byte) (ack, rej []byte) {
 	return
 }
 
+// sendIPCP asks for an address and two DNS servers by sending 0.0.0.0 for
+// each; the server answers with a Nak carrying the real values.
 func (p *ppp) sendIPCP() {
 	// IP-Address 0.0.0.0, DNS 0.0.0.0
 	opts := []byte{
@@ -518,6 +565,9 @@ func (p *ppp) sendIPCP() {
 	p.sendCP(pppIPCP, cpConfReq, p.nextID(), opts)
 }
 
+// handleIPCP acks whatever the server asks for (its own address), takes
+// the values a Nak proposes and asks again, and is open once our request
+// with a real address is acked.
 func (p *ppp) handleIPCP(info []byte) error {
 	if len(info) < 4 {
 		return nil
@@ -546,6 +596,9 @@ func (p *ppp) handleIPCP(info []byte) error {
 	return nil
 }
 
+// takeIPCP reads IPCP addresses. In the server's own request the address
+// is the server's end of the link; in answers to ours it is our address,
+// plus DNS servers.
 func (p *ppp) takeIPCP(opts []byte, fromPeer bool) {
 	if !fromPeer {
 		p.dns = nil
@@ -578,6 +631,7 @@ func (p *ppp) takeIPCP(opts []byte, fromPeer bool) {
 	}
 }
 
+// rebuildIPCP is our next IPCP request with the values the server proposed.
 func rebuildIPCP(ip net.IP, dns []net.IP) []byte {
 	a := []byte{0, 0, 0, 0}
 	if ip != nil {
@@ -600,6 +654,7 @@ func rebuildIPCP(ip net.IP, dns []net.IP) []byte {
 	return opts
 }
 
+// wrapIP puts an IP packet in a PPP frame, encrypted when MPPE is on.
 func (p *ppp) wrapIP(ip []byte) []byte {
 	payload := ip
 	proto := uint16(pppIP)
@@ -611,6 +666,8 @@ func (p *ppp) wrapIP(ip []byte) []byte {
 	return append(f, payload...)
 }
 
+// unwrapIP returns the IP packet in a frame, or false when the frame is
+// not one (a control frame for handle).
 func (p *ppp) unwrapIP(frame []byte) ([]byte, bool) {
 	proto, info, err := parsePPP(frame)
 	if err != nil {

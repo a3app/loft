@@ -36,7 +36,9 @@ import (
 	"strings"
 )
 
-// Kinds of channel.
+// Kinds of channel: a kernel interface the node routes out of (dev), a
+// SOCKS5 proxy, an HTTP CONNECT proxy, or an SSTP session the node itself
+// keeps open to a remote server.
 const (
 	KindDev    = "dev"
 	KindSOCKS5 = "socks5"
@@ -44,7 +46,8 @@ const (
 	KindSSTP   = "sstp"
 )
 
-// Terminal outcomes in a fail chain or a rule.
+// Terminal outcomes in a fail chain or a rule. Direct means the host's own
+// default route (the server's WAN); Block refuses the connection.
 const (
 	Direct = "direct"
 	Block  = "block"
@@ -60,7 +63,7 @@ type Channel struct {
 	Pass string
 	TLS  bool   // http: TLS to the proxy (an HTTPS proxy)
 	UDP  string // socks5: proxy | direct | block; http: direct | block. Empty = direct.
-	Via  string // socks5, http: reach the proxy through this channel
+	Via  string // socks5, http: reach the proxy through this channel (for a proxy only reachable over a tunnel)
 	Auth string // sstp: auto | mschapv2 | pap
 	// Insecure skips the SSTP server certificate check.
 	Insecure bool
@@ -138,6 +141,8 @@ func (c *Config) Channel(name string) *Channel {
 	return nil
 }
 
+// validName accepts channel and priority names: short, lowercase, and never
+// the reserved words direct or block, so a name in a rule is never ambiguous.
 func validName(s string) bool {
 	if s == "" || len(s) > 32 || s == Direct || s == Block {
 		return false
@@ -203,6 +208,9 @@ func Parse(text string) (*Config, error) {
 	return c, c.check()
 }
 
+// line applies one tokenised line of egress.conf to c. Commands are
+// channel, prio, rule, default and direct check; channel options come as
+// "key value" pairs, except the bare flags tls, insecure and off.
 func (c *Config) line(t []string) error {
 	switch t[0] {
 	case "channel":
@@ -408,6 +416,9 @@ func withPort(s, def string) string {
 	return net.JoinHostPort(s, def)
 }
 
+// valid checks a link probe and fills in the default port (tcp :80,
+// tls :443). pingOK is false for channels without a kernel interface:
+// an ICMP echo cannot be sent through a proxy or an SSTP session.
 func (k *Check) valid(pingOK bool) error {
 	switch k.Kind {
 	case "ping":
@@ -438,6 +449,7 @@ func (k *Check) valid(pingOK bool) error {
 	return nil
 }
 
+// writeCheck appends a channel's check options in the form line reads.
 func writeCheck(b *strings.Builder, k *Check) {
 	if k == nil {
 		return
@@ -454,11 +466,15 @@ func writeCheck(b *strings.Builder, k *Check) {
 	}
 }
 
+// target reports whether s is something a rule or default may point at.
 func (c *Config) target(s string) bool {
 	return s == Direct || s == Block || c.Channel(s) != nil || c.Prio(s) != nil
 }
 
-// check resolves names and refuses loops in via and fail.
+// check runs after the whole file is read, so names may be used before they
+// are defined. It resolves every name, checks option values, and refuses
+// loops in via and fail: a loop would make a dial or a failover go round
+// forever.
 func (c *Config) check() error {
 	for _, ch := range c.Channels {
 		switch ch.UDP {

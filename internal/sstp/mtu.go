@@ -14,6 +14,8 @@ const (
 	sstpSafeMTU = 1400 // Windows SSTP WAN miniport default
 )
 
+// sstpInnerMTU clamps the MTU PPP agreed to 1280..1400 (1500 if unknown).
+// The cap leaves room for SSTP, TLS and TCP headers inside a 1500-byte path.
 func sstpInnerMTU(pppInfo int) int {
 	if pppInfo <= 0 {
 		pppInfo = 1500
@@ -58,6 +60,11 @@ func (s *Session) probeMTU(br *bufio.Reader, hi int) int {
 	return best
 }
 
+// echoMTU sends one ping of total bytes with Don't Fragment set to the PPP
+// peer and waits up to 400 ms for the reply. It runs before readLoop, so it
+// reads the connection itself: it answers SSTP echoes, feeds PPP frames to
+// the PPP state, and queues other IP packets (dropping them if the queue is
+// full).
 func (s *Session) echoMTU(br *bufio.Reader, total int) bool {
 	id := uint16(time.Now().UnixNano())
 	seq := uint16(total)
@@ -102,6 +109,8 @@ func (s *Session) echoMTU(br *bufio.Reader, total int) bool {
 	return false
 }
 
+// icmpEchoDF builds an IPv4 ICMP echo request of total bytes (at least the
+// 28 bytes of headers) with Don't Fragment set; the payload is zeros.
 func icmpEchoDF(src, dst net.IP, id, seq uint16, total int) []byte {
 	if total < 28 {
 		total = 28
@@ -127,6 +136,7 @@ func icmpEchoDF(src, dst net.IP, id, seq uint16, total int) []byte {
 	return b
 }
 
+// icmpEchoReplyMatch reports whether ip is the echo reply to our probe.
 func icmpEchoReplyMatch(ip []byte, our net.IP, id, seq uint16) bool {
 	if len(ip) < 28 || ip[0]>>4 != 4 || ip[9] != 1 {
 		return false
@@ -158,6 +168,7 @@ func ICMPNextHopMTU(ip []byte) int {
 	return int(binary.BigEndian.Uint16(ip[ihl+6 : ihl+8]))
 }
 
+// inetSum is the Internet checksum (one's complement sum of 16-bit words).
 func inetSum(b []byte) uint16 {
 	var s uint32
 	for i := 0; i+1 < len(b); i += 2 {

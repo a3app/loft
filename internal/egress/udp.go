@@ -18,6 +18,8 @@ type UDP struct {
 	close bool
 }
 
+// udpWay is one socket a session's datagrams leave by: a local socket
+// (direct or interface), a SOCKS5 association, or a socket inside SSTP.
 type udpWay interface {
 	send(target string, data []byte) error
 	Close() error
@@ -40,7 +42,10 @@ func (u *UDP) Close() {
 }
 
 // Send sends one datagram to target ("host:port"); a blocked or unreachable
-// destination drops it, as UDP would.
+// destination drops it, as UDP would. It walks the same steps as TCP. A
+// channel's udp setting decides what its datagrams do: block drops them;
+// for a proxy, direct (the default) sends them by the host route, because
+// only SOCKS5 with "udp proxy" can carry UDP.
 func (u *UDP) Send(target string, data []byte) {
 	host, _, err := net.SplitHostPort(target)
 	if err != nil {
@@ -81,6 +86,8 @@ func (u *UDP) Send(target string, data []byte) {
 	}
 }
 
+// way returns the socket for step s, opening it on first use, and starts a
+// reader that passes replies to out.
 func (u *UDP) way(s string) (udpWay, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -134,6 +141,9 @@ func (u *UDP) way(s string) (udpWay, error) {
 	return w, nil
 }
 
+// read delivers replies from one way until it fails or stays idle for two
+// minutes, then drops it. IPv4-mapped sender addresses are reported as
+// plain IPv4.
 func (u *UDP) read(s string, w udpWay, cs *chanState) {
 	buf := make([]byte, 65535)
 	for {

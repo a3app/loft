@@ -21,6 +21,9 @@ import (
 
 type dialFn func(ctx context.Context, network, addr string) (net.Conn, error)
 
+// socksAddr encodes host:port as a SOCKS5 address: a type byte (1 IPv4,
+// 4 IPv6, 3 domain name with a length byte), the address, then the port in
+// big-endian. Names are sent as names, so the proxy resolves them.
 func socksAddr(target string) ([]byte, error) {
 	host, port, err := net.SplitHostPort(target)
 	if err != nil {
@@ -47,6 +50,9 @@ func socksAddr(target string) ([]byte, error) {
 }
 
 // socksHandshake greets, authenticates and sends one command (1 CONNECT, 3 UDP ASSOCIATE).
+// It offers "no auth" and, when a user is set, username/password too. It
+// returns the address the proxy bound (for UDP ASSOCIATE, where to send
+// datagrams).
 func socksHandshake(c net.Conn, user, pass string, cmd byte, target string) (bound string, err error) {
 	methods := []byte{5, 1, 0}
 	if user != "" {
@@ -104,6 +110,7 @@ func socksReply(code byte) string {
 		5: "connection refused", 6: "TTL expired", 7: "command not supported", 8: "address type not supported"}[code]
 }
 
+// readSocksAddr reads the address that follows a SOCKS5 address type byte.
 func readSocksAddr(r io.Reader, atyp byte) (string, error) {
 	var host string
 	switch atyp {
@@ -139,6 +146,8 @@ func readSocksAddr(r io.Reader, atyp byte) (string, error) {
 	return net.JoinHostPort(host, strconv.Itoa(int(binary.BigEndian.Uint16(p[:])))), nil
 }
 
+// socksDial opens a TCP connection to target through a SOCKS5 proxy. The
+// context deadline covers the handshake only; it is cleared after.
 func socksDial(ctx context.Context, under dialFn, ch *Channel, target string) (net.Conn, error) {
 	c, err := under(ctx, "tcp", ch.Addr)
 	if err != nil {
@@ -155,6 +164,8 @@ func socksDial(ctx context.Context, under dialFn, ch *Channel, target string) (n
 	return c, nil
 }
 
+// httpDial opens a tunnel to target with HTTP CONNECT, optionally over TLS
+// to the proxy and with Basic auth. Only 200 counts as success.
 func httpDial(ctx context.Context, under dialFn, ch *Channel, target string) (net.Conn, error) {
 	c, err := under(ctx, "tcp", ch.Addr)
 	if err != nil {
@@ -199,6 +210,8 @@ func httpDial(ctx context.Context, under dialFn, ch *Channel, target string) (ne
 	return c, nil
 }
 
+// bufConn returns bytes the response reader already buffered past the
+// header before reading the connection again, so none are lost.
 type bufConn struct {
 	net.Conn
 	r *bufio.Reader
@@ -215,6 +228,9 @@ type socksUDP struct {
 	once  sync.Once
 }
 
+// socksAssociate sets up a SOCKS5 UDP association. If the proxy answers
+// with an unspecified bound address (0.0.0.0), its relay is taken to be on
+// the proxy's own host.
 func socksAssociate(ctx context.Context, under dialFn, ch *Channel) (*socksUDP, error) {
 	ctl, err := under(ctx, "tcp", ch.Addr)
 	if err != nil {
@@ -250,6 +266,8 @@ func socksAssociate(ctx context.Context, under dialFn, ch *Channel) (*socksUDP, 
 	return u, nil
 }
 
+// WriteTo sends p to target through the relay, behind the SOCKS UDP header
+// (two reserved zero bytes, fragment 0, then the address).
 func (u *socksUDP) WriteTo(p []byte, target string) error {
 	a, err := socksAddr(target)
 	if err != nil {

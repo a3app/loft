@@ -31,7 +31,10 @@ const (
 	duplexPath = "/sra_{BA195980-CD49-458b-9E23-C84EE0ADCD75}/"
 )
 
-// pkt is one SSTP control or data packet.
+// pkt is one SSTP control or data packet. Every packet starts with a
+// 4-byte header: version 0x10, a control bit, and the total length. A data
+// packet carries one PPP frame; a control packet carries a message type and
+// a list of attributes.
 type pkt struct {
 	ctrl bool
 	typ  uint16
@@ -44,6 +47,7 @@ type attr struct {
 	val  []byte
 }
 
+// encode writes p in wire form.
 func (p pkt) encode() []byte {
 	if !p.ctrl {
 		n := 4 + len(p.data)
@@ -72,6 +76,7 @@ func (p pkt) encode() []byte {
 	return b
 }
 
+// readPkt reads one packet. Lengths over 16 KiB are refused as garbage.
 func readPkt(r io.Reader) (pkt, error) {
 	h := make([]byte, 4)
 	if _, err := io.ReadFull(r, h); err != nil {
@@ -114,6 +119,7 @@ func readPkt(r io.Reader) (pkt, error) {
 	return p, nil
 }
 
+// connectRequest is the first control message: "carry PPP".
 func connectRequest() pkt {
 	return pkt{ctrl: true, typ: msgConnectRequest, attr: []attr{{
 		id:  attrEncapsulated,

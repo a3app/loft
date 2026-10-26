@@ -12,6 +12,7 @@ import (
 	"golang.org/x/crypto/md4"
 )
 
+// ntPasswordHash is the Windows NT hash: MD4 of the password in UTF-16LE.
 func ntPasswordHash(pass string) []byte {
 	u := utf16.Encode([]rune(pass))
 	raw := make([]byte, len(u)*2)
@@ -31,6 +32,8 @@ func md4sum(b []byte) []byte {
 	return h.Sum(nil)
 }
 
+// challengeHash mixes both challenges and the user name into the 8 bytes
+// the NT response encrypts.
 func challengeHash(peerChal, authChal []byte, user string) []byte {
 	user = samUser(user)
 	s := sha1.New()
@@ -40,6 +43,8 @@ func challengeHash(peerChal, authChal []byte, user string) []byte {
 	return s.Sum(nil)[:8]
 }
 
+// samUser drops a "DOMAIN\" or "DOMAIN/" prefix: MS-CHAPv2 hashes the bare
+// account name.
 func samUser(user string) string {
 	if i := strings.LastIndexAny(user, `/\`); i >= 0 {
 		return user[i+1:]
@@ -59,6 +64,8 @@ func desHash(key7, chal []byte) []byte {
 	return out
 }
 
+// desKey spreads a 7-byte key over the 8 bytes DES expects, 7 bits per
+// byte (the low parity bit is left zero).
 func desKey(k7 []byte) []byte {
 	in := make([]byte, 8)
 	copy(in, k7)
@@ -71,6 +78,8 @@ func desKey(k7 []byte) []byte {
 	return []byte{get(0), get(7), get(14), get(21), get(28), get(35), get(42), get(49)}
 }
 
+// ntChallengeResponse encrypts the challenge with three DES keys cut from
+// the zero-padded 21-byte password hash: 24 bytes in all.
 func ntChallengeResponse(chal, passHash []byte) []byte {
 	z := make([]byte, 21)
 	copy(z, passHash)
@@ -86,6 +95,9 @@ func generateNTResponse(authChal, peerChal []byte, user, pass string) []byte {
 	return ntChallengeResponse(ch, ntPasswordHash(pass))
 }
 
+// authenticatorResponse is the "S=<40 hex>" string the server must send in
+// CHAP Success. Checking it proves the server also knows the password, so
+// MS-CHAPv2 authenticates both sides.
 func authenticatorResponse(pass string, ntResp, peerChal, authChal []byte, user string) string {
 	passHashHash := md4sum(ntPasswordHash(pass))
 	magic1 := []byte("Magic server to client signing constant")
@@ -111,6 +123,8 @@ func authenticatorResponse(pass string, ntResp, peerChal, authChal []byte, user 
 }
 
 // mppeMasterKeys is client MasterSendKey | MasterReceiveKey (HLAK).
+// Both come from the password hash and the NT response, so they exist only
+// after an MS-CHAPv2 login. They key MPPE and the SSTP crypto binding.
 func mppeMasterKeys(pass string, ntResp []byte) (send, recv []byte) {
 	phh := md4sum(ntPasswordHash(pass))
 	magic := []byte("This is the MPPE Master Key")
@@ -124,6 +138,8 @@ func mppeMasterKeys(pass string, ntResp []byte) (send, recv []byte) {
 	return send, recv
 }
 
+// asymmetricKey derives the send or receive key from the master key. The
+// two magic strings make the client's send key the server's receive key.
 func asymmetricKey(master []byte, send bool) []byte {
 	var magic string
 	if send {
@@ -149,6 +165,8 @@ func bytesOf(b byte, n int) []byte {
 	return p
 }
 
+// hlakFromMSCHAPv2 is the 32-byte HLAK for the crypto binding: the send
+// key followed by the receive key.
 func hlakFromMSCHAPv2(pass string, ntResp []byte) []byte {
 	send, recv := mppeMasterKeys(pass, ntResp)
 	out := make([]byte, 32)

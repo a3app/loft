@@ -21,6 +21,8 @@ const (
 )
 
 // TunIP is the synthetic IPv4 the GUI and utun use. VLESS has no overlay lease.
+// It is in 198.18.0.0/15, a range reserved for benchmarking, so it does not
+// clash with real networks.
 const TunIP = "198.18.0.1"
 
 // parseUUID accepts 8-4-4-4-12 or 32 hex digits.
@@ -51,7 +53,9 @@ func isHex(c byte) bool {
 	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
 
-// writeRequest writes a VLESS TCP header for host:port onto w.
+// writeRequest writes a VLESS TCP header for host:port onto w: version 0,
+// the 16-byte UUID, the add-ons (length-prefixed; carries the Vision flow),
+// command 1 (TCP), the port, then the address type and address.
 func writeRequest(w io.Writer, uuid [16]byte, target string, vision bool) error {
 	host, portStr, err := net.SplitHostPort(target)
 	if err != nil {
@@ -94,7 +98,8 @@ func writeRequest(w io.Writer, uuid [16]byte, target string, vision bool) error 
 	return err
 }
 
-// readResponse consumes the VLESS response header.
+// readResponse consumes the VLESS response header: version 0 and an
+// add-ons length, whose bytes are skipped.
 func readResponse(r io.Reader) error {
 	var hdr [2]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {
@@ -112,6 +117,7 @@ func readResponse(r io.Reader) error {
 }
 
 // visionAddon is the protobuf Addons{Flow: xtls-rprx-vision} blob, or nil.
+// It is written by hand: field 1 (tag 0x0A), a length, the flow string.
 func visionAddon(on bool) []byte {
 	if !on {
 		return nil

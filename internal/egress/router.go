@@ -51,6 +51,10 @@ type Who struct {
 	VLAN   int // overlay VLAN; 0 is the network's untagged segment
 }
 
+// chanState is one channel at run time: traffic counters, the open
+// connection count, and why it may be skipped right now (a failed connect
+// sets downUntil; a failing link check sets noLink). For SSTP it also holds
+// the live session.
 type chanState struct {
 	ch        Channel
 	tx, rx    atomic.Uint64
@@ -144,6 +148,10 @@ func (r *Router) Close() {
 // Config is what the router runs.
 func (r *Router) Config() *Config { return r.cfg }
 
+// holdSSTP keeps one SSTP channel connected until the router closes.
+// Unlike proxies, SSTP is a session: it is set up once and every connection
+// is opened inside it. On failure it retries after 5 s, doubling up to about
+// a minute; after a good session the wait starts at 5 s again.
 func (r *Router) holdSSTP(cs *chanState) {
 	wait := 5 * time.Second
 	for r.ctx.Err() == nil {
@@ -188,6 +196,8 @@ func (r *Router) holdSSTP(cs *chanState) {
 	}
 }
 
+// fail records err and takes the channel out of use for downFor, so the
+// next connections do not each wait for the same dead channel to time out.
 func (r *Router) fail(cs *chanState, err error) {
 	cs.mu.Lock()
 	cs.lastErr = err.Error()
@@ -195,7 +205,9 @@ func (r *Router) fail(cs *chanState, err error) {
 	cs.mu.Unlock()
 }
 
-// up reports whether a channel may be tried now.
+// up reports whether a channel may be tried now: not switched off, link
+// check passing, not in its downFor pause, the interface not "down" in
+// sysfs, and for SSTP a live session.
 func (r *Router) up(cs *chanState) bool {
 	cs.mu.Lock()
 	down := time.Now().Before(cs.downUntil)
@@ -219,7 +231,9 @@ func (r *Router) up(cs *chanState) bool {
 	return !down
 }
 
-// Route is where traffic of who to host goes first: a channel, direct or block.
+// Route is where traffic of who to host goes first: a priority, a channel,
+// direct or block. Rules are tried in file order and the first match wins;
+// with none, the default applies.
 func (r *Router) Route(who Who, host string) string {
 	for _, ru := range r.cfg.Rules {
 		ok := false
@@ -245,6 +259,10 @@ func (r *Router) Route(who Who, host string) string {
 	return r.cfg.Default
 }
 
+// inList matches host against a named list. An entry is a CIDR, a
+// ".suffix" (matching the domain itself and all its subdomains), an exact
+// name, or an IP. host is the name the member asked for, so a CIDR only
+// matches when the member connected by IP.
 func inList(entries []string, host string) bool {
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	ip := net.ParseIP(host)
@@ -307,7 +325,11 @@ func (r *Router) steps(first string, spread bool) []string {
 }
 
 // DialTCP opens a TCP connection for who to target along the rules; it
-// returns the step that carried it (a channel name or direct).
+// returns the step that carried it (a channel name or direct). Steps are
+// tried in order: channels that are not up are skipped, a failed connect
+// takes the channel out for downFor and moves on, Block stops with the last
+// error. A connection through a channel is counted and, if the priority
+// list caps that channel, speed-limited.
 func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn, string, error) {
 	host, _, err := net.SplitHostPort(target)
 	if err != nil {
@@ -360,6 +382,7 @@ func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn,
 	return nil, "", last
 }
 
+// dialOn opens a TCP connection to target through one channel.
 func (r *Router) dialOn(ctx context.Context, cs *chanState, target string) (net.Conn, error) {
 	switch cs.ch.Kind {
 	case KindDev:
@@ -413,6 +436,8 @@ func (r *Router) under(via string) dialFn {
 	}
 }
 
+// counted adds a connection's bytes to its channel's tx/rx counters and
+// keeps the open-connection count; Close decrements it exactly once.
 type counted struct {
 	net.Conn
 	cs   *chanState
@@ -453,7 +478,8 @@ type Status struct {
 	IP    string `json:"ip,omitempty"` // SSTP: the address the server gave
 }
 
-// Status lists every channel.
+// Status lists every channel, for the panel. When the host route has a
+// link check, a "direct" entry comes first.
 func (r *Router) Status() []Status {
 	out := make([]Status, 0, len(r.cfg.Channels))
 	for _, c := range r.cfg.Channels {
@@ -495,6 +521,7 @@ func (r *Router) Status() []Status {
 	return out
 }
 
+// directUp is false only while the host route's own link check is failing.
 func (r *Router) directUp() bool {
 	if r.direct == nil {
 		return true

@@ -8,6 +8,8 @@ import (
 )
 
 // limiter is a byte-rate limiter for mbit Mbit/s; nil when there is no cap.
+// 1 Mbit/s is 125 000 bytes/s. The burst is a tenth of a second of traffic,
+// but at least 64 KiB so one ordinary read or write fits.
 func limiter(mbit int) *rate.Limiter {
 	if mbit <= 0 {
 		return nil
@@ -23,6 +25,8 @@ type limited struct {
 	in, out *rate.Limiter
 }
 
+// Read never reads more than one burst, so WaitN cannot fail on a too-large
+// n, and charges the bytes after they arrive.
 func (c *limited) Read(p []byte) (int, error) {
 	if c.in != nil && len(p) > c.in.Burst() {
 		p = p[:c.in.Burst()]
@@ -34,6 +38,7 @@ func (c *limited) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// Write sends p in burst-sized pieces, waiting for the limiter before each.
 func (c *limited) Write(p []byte) (int, error) {
 	if c.out == nil {
 		return c.Conn.Write(p)
