@@ -15,6 +15,8 @@
 
 #include "engine.h"
 
+// One source, three builds: Aurora OS, Sailfish OS (Silica), or plain Qt
+// for running the QML on a desktop. Each exposes Engine to QML as "engine".
 int main(int argc, char *argv[])
 {
 #ifdef AURORA

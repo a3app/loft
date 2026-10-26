@@ -141,6 +141,8 @@ struct ConnectionsView: View {
         return (home.isLive || home.mode == .connecting) && home.profile == title
     }
 
+    /// Opens the editor for a new connection. With paste, the clipboard
+    /// text becomes the link and its host is pre-filled.
     private func openNew(paste: Bool, manual: Bool) {
         var c = Conn.blank()
         if manual {
@@ -156,12 +158,15 @@ struct ConnectionsView: View {
     }
 }
 
+/// A connection open in the editor, and whether it is new.
 struct ConnDraft: Identifiable {
     var id: String { conn.id }
     var conn: Conn
     var isNew: Bool
 }
 
+/// One card in the list: a Connect / Disconnect button and the
+/// name, host and protocol, which open the editor.
 struct ConnRow: View {
     var conn: Conn
     var selected: Bool

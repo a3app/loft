@@ -20,12 +20,28 @@ import (
 	"github.com/a3app/loft/internal/vless"
 )
 
+// engine.go is the session lifecycle: Start picks the outbound from the YAML,
+// runs it in a goroutine that reconnects on its own, and the OS adapter talks
+// to it only through packets, NotifyPathChange and Snapshot.
+
 const (
+	// startWait is how long Start blocks for the first live session before
+	// it gives up and reports a timeout to the app.
 	startWait = 30 * time.Second
-	loftMTU   = 1280
+	// loftMTU is the tunnel MTU for every outbound except SSTP (which takes
+	// the MTU PPP negotiated). 1280 is the smallest MTU IPv6 allows.
+	loftMTU = 1280
 )
 
 // Snapshot is gomobile-friendly session state. DNS, FrontIPs, and Routes are comma-separated.
+// gomobile cannot export slices, hence the joined strings.
+//
+// IP/Prefix and Gateway are the tunnel address the node leased (loft Status)
+// or PPP gave (SSTP IPCP). FrontIPs are the server addresses the OS must
+// route outside the tunnel so the session does not loop into itself. Fronts
+// and MaskPub are what the node told the client about itself (other fronts,
+// the mask public key); the app saves them back into the connection.
+// State is one of idle, connecting, on, error, stopped.
 type Snapshot struct {
 	Kind       string
 	IP         string
@@ -48,6 +64,10 @@ type Snapshot struct {
 }
 
 // Engine is one overlay/VPN session for a Packet Tunnel / VpnService.
+// Exactly one of holder (loft), sstp, vless or trojan is live at a time.
+// stack is the userspace TCP/IP stack that sits between the packet pipe and
+// a stream-based outbound; it outlives reconnects, so apps keep their
+// sockets while the connection underneath is replaced.
 type Engine struct {
 	mu     sync.Mutex
 	state  string
@@ -79,6 +99,12 @@ func NewEngine() *Engine {
 
 // Start brings the session up from client YAML. Blocks until the first
 // Dial / Status or startWait. Path change is NotifyPathChange, not WatchPath.
+// (WatchPath would watch the default route, and inside a full tunnel that is
+// the tunnel itself, so the OS has to tell us instead.)
+//
+// The server addresses are resolved here, before any tunnel exists, so the
+// lookup still uses the real network. On Android the uplink is pinned first
+// so the engine's own sockets bypass the VPN.
 func (e *Engine) Start(yamlStr string) error {
 	e.mu.Lock()
 	if e.state == "connecting" || e.state == "on" {
@@ -242,6 +268,13 @@ func (e *Engine) PullPacket() []byte {
 // NotifyPathChange is Wi-Fi ↔ LTE from the OS. Non-blocking.
 // GET rebinds the HTTP/2 pool (same sid). Other loft fronts Park; resume is
 // 0x02 plus the same instance_id. SSTP/VLESS/Trojan redial.
+//
+// In plain words: the GET front reopens its sockets on the new network and
+// keeps its session id (sid). Other fronts drop the connection; the node
+// parks (holds) the mux for a while, and the client comes back with a fresh
+// handshake (0x02) and the same instance_id, so the node hands back the same
+// streams and overlay address. The signal channel has room for one event;
+// extra events while one is pending are dropped.
 func (e *Engine) NotifyPathChange() {
 	e.mu.Lock()
 	ch := e.pathCh
@@ -256,6 +289,10 @@ func (e *Engine) NotifyPathChange() {
 }
 
 // Snapshot is the live tunnel settings for the OS adapter.
+// Address, gateway, routes and DNS come from process-wide state in
+// transport, filled by the last Status (or by RememberOverlay for the
+// non-loft outbounds). Byte counters come from the live client when it
+// keeps its own; SSTP counts in the pump instead.
 func (e *Engine) Snapshot() *Snapshot {
 	e.mu.Lock()
 	s := &Snapshot{
@@ -307,11 +344,16 @@ type SocketProtector interface {
 
 // SetInstanceFile persists overlay instance_id across process restarts.
 // Call before Start. Empty path is memory-only (auth_already_online after kill).
+// instance_id is how the node recognises the same install after a
+// reconnect. If it is lost when the OS kills the extension, the node still
+// sees the old session online and refuses the new one (auth_already_online).
 func (e *Engine) SetInstanceFile(path string) {
 	transport.SetInstanceFile(path)
 }
 
 // SetProtector marks new outbound fds off the tunnel. Call before Start.
+// Without it, on Android the engine's own sockets to the server would be
+// routed back into the VPN it serves.
 func (e *Engine) SetProtector(p SocketProtector) {
 	if p == nil {
 		protect.Set(nil)
@@ -349,6 +391,9 @@ func (e *Engine) addBytes(up, down int64) {
 	}
 }
 
+// run is the session goroutine. It hands off to the loop for the outbound
+// kind. Each loop sends exactly one value on ready: nil when the first
+// session is up, or the error that stopped it first.
 func (e *Engine) run(ctx context.Context, cfg *config.ClientConfig, extra fileExtra, kind string, pipe *packetPipe, path <-chan struct{}, ready chan<- error) {
 	switch {
 	case kind == "sstp":
@@ -362,6 +407,21 @@ func (e *Engine) run(ctx context.Context, cfg *config.ClientConfig, extra fileEx
 	}
 }
 
+// runLoft runs the loft overlay. transport.SuperviseOn owns the connect and
+// reconnect loop and calls the callback each time a front comes up.
+//
+// The Holder is a stable slot for "the current connection"; the callback
+// swaps what is inside it, so the userspace stack above never has to be
+// rebuilt. For the l3 front (raw IP instead of mux streams) the dialer is
+// wrapped in an L3Net, and on reconnect only its packet pump is swapped.
+//
+// On the first connect the userspace stack is started on the overlay IP
+// from Status, and Start is released. Later connects just re-attach the
+// stack (for UDP/ICMP and the l3 pump) to the new connection.
+//
+// WatchStall adds its own path events: when the mux stops answering pings
+// while the node is still reachable, the GET front is stuck behind a lost
+// response, and a forced path change gets it moving again.
 func (e *Engine) runLoft(ctx context.Context, cfg *config.ClientConfig, pipe *packetPipe, path <-chan struct{}, ready chan<- error) {
 	h := &transport.Holder{}
 	e.mu.Lock()
@@ -417,6 +477,17 @@ func (e *Engine) runLoft(ctx context.Context, cfg *config.ClientConfig, pipe *pa
 	signal(err)
 }
 
+// runSSTP runs an SSTP session (PPP inside TLS) and redials it forever.
+//
+// SSTP already carries whole IP packets, so there is no userspace stack:
+// pumpSSTP copies packets between the pipe and the session as they are.
+// The address, peer and DNS come from PPP (IPCP) and are published for
+// Snapshot through RememberOverlay.
+//
+// tls_check in the YAML, when set, overrides the outbound's insecure flag.
+// The password falls back to the token. A failed dial retries after
+// 200 ms, doubling up to about 8 s; a path change cancels the live dial or
+// session and skips the wait. A session that ends retries after 200 ms.
 func (e *Engine) runSSTP(ctx context.Context, cfg *config.ClientConfig, extra fileExtra, pipe *packetPipe, path <-chan struct{}, ready chan<- error) {
 	o, ok := firstOutbound(cfg, "sstp")
 	if !ok {
@@ -507,6 +578,9 @@ func (e *Engine) runSSTP(ctx context.Context, cfg *config.ClientConfig, extra fi
 	}
 }
 
+// pumpSSTP copies IP packets both ways between the OS pipe and the SSTP
+// session and counts bytes. It returns when either direction fails or ctx
+// ends; the caller then closes the session and redials.
 func (e *Engine) pumpSSTP(ctx context.Context, sess *sstp.Session, pipe *packetPipe) error {
 	errc := make(chan error, 2)
 	go func() {
@@ -551,6 +625,19 @@ func (e *Engine) pumpSSTP(ctx context.Context, sess *sstp.Session, pipe *packetP
 	}
 }
 
+// runVLESS runs a VLESS client (a proxy protocol over TCP+TLS; the token is
+// the user UUID) and reconnects it forever.
+//
+// VLESS opens one TCP connection per proxied stream, so there is no single
+// session to keep alive. Probe checks that the server answers before the
+// tunnel is reported up. The tunnel then gets the fixed synthetic address
+// vless.TunIP, because the server leases no address.
+//
+// The userspace stack turns OS packets into VLESS connections. It is
+// created once and re-attached to each new client, so apps keep their
+// sockets across reconnects. The loop waits until the context ends, a path
+// change arrives (close and redial at once), or the client dies. Failed
+// probes back off from 200 ms, doubling up to about 8 s.
 func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra fileExtra, pipe *packetPipe, path <-chan struct{}, ready chan<- error) {
 	o, ok := firstOutbound(cfg, "vless")
 	if !ok {
@@ -647,6 +734,9 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 	}
 }
 
+// runTrojan is runVLESS for Trojan: the same loop, probe, backoff and
+// synthetic tunnel address (trojan.TunIP); the token is the Trojan
+// password instead of a UUID.
 func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra fileExtra, pipe *packetPipe, path <-chan struct{}, ready chan<- error) {
 	o, ok := firstOutbound(cfg, "trojan")
 	if !ok {
@@ -743,6 +833,8 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 	}
 }
 
+// firstOutbound is the first outbound of type typ, looked up in the
+// selected list first and in all outbounds when the selection is empty.
 func firstOutbound(cfg *config.ClientConfig, typ string) (config.Outbound, bool) {
 	list := cfg.Pick(cfg.Select)
 	if len(list) == 0 {
@@ -756,6 +848,9 @@ func firstOutbound(cfg *config.ClientConfig, typ string) (config.Outbound, bool)
 	return config.Outbound{}, false
 }
 
+// endRun records how the session loop ended: "stopped" when it was
+// cancelled (the user or Stop), "error" with the message otherwise. It
+// leaves an idle or already stopped engine alone.
 func (e *Engine) endRun(ctx context.Context, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -772,6 +867,8 @@ func (e *Engine) endRun(ctx context.Context, err error) {
 	}
 }
 
+// splitPrefix splits "10.0.0.2/24" into the address and prefix length.
+// A bare address gets def.
 func splitPrefix(raw string, def int) (string, int) {
 	s := strings.TrimSpace(raw)
 	if s == "" {

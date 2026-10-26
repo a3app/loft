@@ -53,6 +53,8 @@ struct LoftShell: View {
         }
     }
 
+    /// Maps the system VPN state onto the Home mode. A parked (held) tunnel
+    /// shows as off, because it carries no traffic.
     private func syncHome() {
         guard followTunnel else { return }
         if tunnel.busy {
@@ -265,6 +267,8 @@ struct HomeView: View {
         }
     }
 
+    /// The three info plates under the button. The values are fixed labels
+    /// per protocol, not read from the session.
     private var plateItems: [(key: String, value: String)] {
         let live = snapshot.isLive
         switch snapshot.kind {
@@ -296,6 +300,7 @@ struct HomeView: View {
     }
 }
 
+/// The big full-width action button (Connect, Cancel, Disconnect).
 struct LoftGoButton: View {
     enum Kind { case go, ghost, danger }
     var title: String
@@ -333,6 +338,7 @@ struct LoftGoButton: View {
     }
 }
 
+/// Bottom tab bar: Home, Connections, Settings.
 struct LoftTabBar: View {
     @Binding var tab: LoftTab
     @Environment(\.locale) private var locale
@@ -373,6 +379,7 @@ struct LoftTabBar: View {
     }
 }
 
+/// Tab icons drawn as paths on a 22×22 grid.
 private enum LoftTabGlyph {
     case home, list, settings
 
@@ -420,6 +427,7 @@ private enum LoftTabGlyph {
     }
 }
 
+/// Placeholder screen with just a title, for rooms not built yet.
 struct LoftStubRoom: View {
     var titleKey: String
     @Environment(\.locale) private var locale

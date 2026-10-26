@@ -8,6 +8,16 @@
  * Compile against the Sailfish or Aurora SDK (connman-devel). Dist does
  * not build this file on macOS. CMake sets LOFT_HELPER to the flavor
  * libexec (harbour-loft or app.loft.aurora).
+ *
+ * The chain on the phone is: the app asks connman-vpnd (over D-Bus) to
+ * connect a VPN row of type "loft"; connman-vpnd loads this plugin, creates
+ * the tun and calls loft_connect, which starts loft-connman as a ConnMan
+ * task; loft-connman runs loft-front on that tun and, once the session is
+ * up, runs loft-script; loft-script sends the address and DNS back to
+ * connman-vpnd, which lands in loft_notify below.
+ *
+ * Reusing the OpenVPN notify format means ConnMan's own route and DNS
+ * handling works without a loft-specific contract.
  */
 
 #define LOFT_VPN_TYPE  "loft"
@@ -57,6 +67,8 @@
 
 static DBusConnection *connection;
 
+/* A VPN row property (as the app sets it over D-Bus) and the helper flag
+ * it becomes. */
 struct loft_opt {
 	const char *cm;
 	const char *arg;
@@ -73,6 +85,9 @@ static const struct loft_opt loft_options[] = {
 	{ "Loft.Config", "--config" },
 };
 
+/* Per-connection state, kept as the provider's plugin data from connect
+ * until the helper dies. cb is the "connect finished" callback ConnMan is
+ * waiting on; it must be called exactly once. */
 struct loft_data {
 	struct vpn_provider *provider;
 	struct connman_task *task;
@@ -81,6 +96,7 @@ struct loft_data {
 	char *if_name;
 };
 
+/* Reports the connect result to ConnMan once; later calls do nothing. */
 static void loft_connect_done(struct loft_data *data, int err)
 {
 	vpn_provider_connect_cb_t cb;
@@ -106,11 +122,15 @@ static void free_loft_data(struct loft_data *data)
 	g_free(data);
 }
 
+/* One DNS server from a foreign_option_N variable. id is N, so the
+ * servers can be put back in the order the helper listed them. */
 struct nameserver_entry {
 	int id;
 	char *nameserver;
 };
 
+/* Parses "foreign_option_N=dhcp-option DNS <addr>" (OpenVPN style).
+ * Returns NULL for any other variable. */
 static struct nameserver_entry *append_dns(const char *key, const char *value)
 {
 	struct nameserver_entry *entry;
@@ -156,6 +176,15 @@ static void free_ns_entry(gpointer data)
 	g_free(entry);
 }
 
+/*
+ * Called when loft-script reports. reason/context must be up/init: anything
+ * else means the session went down, and ConnMan is told so. The dictionary
+ * is the helper's environment: ifconfig_local is the overlay address,
+ * ifconfig_remote the peer, trusted_ip the server (used as the gateway,
+ * falling back to the row's Host), route_* extra routes, and
+ * foreign_option_N the DNS servers. Without an address the connect fails.
+ * The netmask defaults to /24.
+ */
 static int loft_notify(DBusMessage *msg, struct vpn_provider *provider)
 {
 	DBusMessageIter iter, dict;
@@ -299,6 +328,8 @@ static int loft_notify(DBusMessage *msg, struct vpn_provider *provider)
 	return VPN_STATE_CONNECT;
 }
 
+/* Saves the Loft.* properties into the row's settings file so the row
+ * survives a connman-vpnd restart. */
 static int loft_save(struct vpn_provider *provider, GKeyFile *keyfile)
 {
 	const char *group = vpn_provider_get_save_group(provider);
@@ -315,6 +346,7 @@ static int loft_save(struct vpn_provider *provider, GKeyFile *keyfile)
 	return 0;
 }
 
+/* Adds "arg value" to the helper's command line when the property is set. */
 static int add_opt(struct connman_task *task, struct vpn_provider *provider,
 			const char *cm, const char *arg)
 {
@@ -333,6 +365,12 @@ static void loft_died(struct connman_task *task, int exit_code, void *user_data)
 	free_loft_data(data);
 }
 
+/*
+ * Starts loft-connman for this row: the tun name ConnMan created, the
+ * notify script, the host, and every Loft.* property as a flag. A row with
+ * no Loft.URL uses Host as the URL. Returns -EINPROGRESS: the real result
+ * comes later through loft_notify or loft_died.
+ */
 static int loft_connect(struct vpn_provider *provider,
 			struct connman_task *task, const char *if_name,
 			vpn_provider_connect_cb_t cb, const char *dbus_sender,
@@ -404,6 +442,8 @@ static int loft_device_flags(struct vpn_provider *provider)
 	return IFF_TUN;
 }
 
+/* Tells ConnMan how to read route_network_N / route_netmask_N /
+ * route_gateway_N (IPv4, OpenVPN naming) from the notify dictionary. */
 static int loft_route_env_parse(struct vpn_provider *provider, const char *key,
 			int *family, unsigned long *idx,
 			enum vpn_provider_route_type *type)
@@ -456,6 +496,8 @@ CONNMAN_PLUGIN_DEFINE(loft, LOFT_VPN_LABEL, CONNMAN_VERSION,
 
 #endif /* CONNMAN_PLUGIN */
 
+/* Exported outside the plugin build too, so the names can be checked
+ * without the ConnMan SDK. */
 const char loft_vpn_type[] = LOFT_VPN_TYPE;
 const char loft_vpn_label[] = LOFT_VPN_LABEL;
 const char loft_vpn_helper[] = LOFT_VPN_HELPER;

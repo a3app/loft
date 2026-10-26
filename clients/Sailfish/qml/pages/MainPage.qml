@@ -1,6 +1,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
+// The only page: paste a connection (YAML or a share link), Connect /
+// Disconnect, and one status line from the engine.
 Page {
     id: page
 

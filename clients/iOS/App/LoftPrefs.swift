@@ -1,5 +1,6 @@
 import Foundation
 
+/// How the traffic graph on Home is drawn.
 enum SparkStyle: String, Codable, CaseIterable {
     case lines, bars
 }
@@ -13,11 +14,14 @@ struct LoftPrefs: Equatable, Codable {
     var lang = ""
     var diag = false
     var defaultRoute = true
+    /// Kill switch: block traffic while the session is down.
     var hold = true
     var split = true
     var autoConnect = false
     var reconnect = true
+    /// Connect On Demand on cellular and untrusted Wi-Fi.
     var demand = false
+    /// Comma-separated Wi-Fi names where On Demand stays off.
     var trustedWiFi = ""
     var showExtIP = false
 

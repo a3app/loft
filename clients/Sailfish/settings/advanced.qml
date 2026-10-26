@@ -1,6 +1,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
+// Advanced section of the Loft row editor: SSTP user name, a TLS SNI
+// override, and a config path (passed on, but the helper ignores it so far).
 Column {
     width: parent.width
 

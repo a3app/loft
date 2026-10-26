@@ -7,8 +7,15 @@ import (
 	"github.com/a3app/loft/internal/config"
 )
 
+// split.go works out which server addresses must stay outside the tunnel.
+// The tunnel takes the default route; if traffic to the server itself went
+// into the tunnel, the session would loop into itself and die.
+
 // FrontHosts are outbound hostnames or literal IPs to exclude from the tunnel.
 // EdgeURL is the CDN origin: 0/1 must not swallow the first GET.
+// ("0/1" is the full-tunnel default route. If the CDN host were not
+// excluded from it, the very first GET would be routed into the tunnel it
+// is trying to bring up.)
 func FrontHosts(cfg *config.ClientConfig) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -30,6 +37,7 @@ func FrontHosts(cfg *config.ClientConfig) []string {
 }
 
 // ResolveFrontIPs looks up FrontHosts. Literal IPs pass through. Failures skip.
+// Only IPv4 results are kept.
 func ResolveFrontIPs(hosts []string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -58,6 +66,8 @@ func ResolveFrontIPs(hosts []string) []string {
 	return out
 }
 
+// hostOf extracts the host from a URL or a bare host[:port], dropping the
+// scheme, user info, path and port.
 func hostOf(raw string) string {
 	s := strings.TrimSpace(raw)
 	if s == "" {

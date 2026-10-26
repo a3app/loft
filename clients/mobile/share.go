@@ -16,6 +16,12 @@ import (
 	"github.com/a3app/loft/internal/vless"
 )
 
+// share.go is the import detector. Whatever the user scans, pastes or
+// opens (a loft://, vless://, trojan:// or sstp:// link, a YAML or .loft
+// file, a small VPN JSON, base64 of any of these, or several links one per
+// line) is turned into the client YAML the engine runs. Both apps call it,
+// so a QR code imports the same way on iOS and Android.
+
 // loftTypes are overlay transports (get/ws/h2/quic/h3/l3). YAML kind is loft.
 var loftTypes = map[string]bool{
 	"get": true, "ws": true, "h2": true, "quic": true, "h3": true, "l3": true,
@@ -40,6 +46,10 @@ func ParseShareAll(raw string) (string, error) {
 	return strings.Join(docs, "\n---\n"), nil
 }
 
+// parseAll tries the formats from most to least specific: a YAML with
+// several connections, one share of any kind, one share per line, and last
+// a base64 blob (decoded and parsed again). A BOM is stripped first. With
+// several lines, bad lines are skipped as long as one parses.
 func parseAll(raw string) ([]string, error) {
 	s := strings.TrimSpace(strings.TrimPrefix(raw, "\ufeff"))
 	if s == "" {
@@ -80,6 +90,9 @@ func parseAll(raw string) ([]string, error) {
 	return nil, fmt.Errorf("unknown share")
 }
 
+// yamlConnections splits a .loft file with a connections list into one
+// normalised YAML per connection. Nil when s is not such a file or any
+// entry is invalid.
 func yamlConnections(s string) []string {
 	var f fileYAML
 	if err := yaml.Unmarshal([]byte(s), &f); err != nil {
@@ -103,6 +116,8 @@ func yamlConnections(s string) []string {
 	return out
 }
 
+// parseOne parses one share by its URL scheme, else as YAML, else as VPN
+// JSON.
 func parseOne(s string) (string, error) {
 	low := strings.ToLower(s)
 	switch {
@@ -124,6 +139,25 @@ func parseOne(s string) (string, error) {
 	return "", fmt.Errorf("unknown share")
 }
 
+// loftYAML turns a loft:// link into client YAML. The link looks like
+//
+//	loft://TOKEN@host[:port][/path]?type=get&fp=chrome&cdn=…&pbk=…&edge=…#name
+//
+// The user part is the member key (lt_…). Port defaults to 443, fp (the TLS
+// fingerprint to imitate) to chrome. cdn names the CDN in front of the
+// node, pbk is the node's mask public key (mask is a mode where the node
+// shows a certificate shaped like its decoy site's), edge is a CDN origin
+// to try first, and scheme forces http/https/ws/wss.
+//
+// There are two shapes. Old links have one front in type= (default get)
+// and its path in the URL path. Newer links list fronts as query keys,
+// each with its own path, e.g. ?get=/g&ws=/w&h3; an empty value means the
+// default path for that front. Each listed front becomes one outbound; the
+// first keeps the name, the others get "-type" appended.
+//
+// When fronts are listed, Hello offers exactly those, not the full
+// wire.FrontOrder: with GET and no fronts set, loftOnly would offer every
+// mux front.
 func loftYAML(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || !strings.EqualFold(u.Scheme, "loft") {
@@ -218,6 +252,10 @@ func loftYAML(raw string) (string, error) {
 	return marshalClient(cfg, "", "", false, nil)
 }
 
+// loftOutbound builds one front's outbound. ws uses ws/wss and puts the
+// path into the URL; the other fronts use http/https with a separate Path,
+// and quic takes no path. Port 443 is left out of https/wss URLs. An
+// unknown type gives an empty Outbound.
 func loftOutbound(name, typ, host, port string, portN int, scheme, path, fp, cdn, pbk string) config.Outbound {
 	if !loftTypes[typ] {
 		return config.Outbound{}
@@ -263,6 +301,9 @@ func loftOutbound(name, typ, host, port string, portN int, scheme, path, fp, cdn
 	}
 }
 
+// vlessYAML keeps a vless:// link whole as the outbound URL (the vless
+// package parses it again when dialing); the UUID becomes the token and
+// the #fragment the name.
 func vlessYAML(raw string) (string, error) {
 	ep, err := vless.ParseURL(raw, "")
 	if err != nil || ep.UUID == "" {
@@ -290,6 +331,7 @@ func vlessYAML(raw string) (string, error) {
 	return marshalClient(cfg, "", "", false, nil)
 }
 
+// trojanYAML is vlessYAML for trojan://; the password becomes the token.
 func trojanYAML(raw string) (string, error) {
 	ep, err := trojan.ParseURL(raw, "")
 	if err != nil || ep.Password == "" {
@@ -316,6 +358,9 @@ func trojanYAML(raw string) (string, error) {
 	return marshalClient(cfg, "", "", false, nil)
 }
 
+// sstpYAML turns sstp://user:pass@host[:port][/path]?sni=…&pap=1#name into
+// an SSTP outbound with an https URL. By default only MSCHAPv2 login is
+// allowed; pap=1 also allows the weaker PAP and CHAP-MD5.
 func sstpYAML(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || !strings.EqualFold(u.Scheme, "sstp") {
@@ -360,6 +405,10 @@ func sstpYAML(raw string) (string, error) {
 	return marshalClient(cfg, user, pass, pap, nil)
 }
 
+// yamlFile accepts a pasted YAML connection and normalises it through
+// decodeFile and marshalClient. Any YAML without token, password,
+// outbounds or connections is refused, so ordinary text that happens to
+// parse as YAML is not taken for a connection.
 func yamlFile(s string) (string, error) {
 	var probe map[string]any
 	if err := yaml.Unmarshal([]byte(s), &probe); err != nil {
@@ -379,6 +428,8 @@ func yamlFile(s string) (string, error) {
 	return marshalClient(cfg, extra.username, extra.password, extra.pap, extra.tlsCheck)
 }
 
+// vpnJSON imports a small JSON object {host|server, username|user,
+// password, name, sni} as an SSTP connection.
 func vpnJSON(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if !strings.HasPrefix(s, "{") {
@@ -427,6 +478,8 @@ func vpnJSON(s string) (string, error) {
 	return marshalClient(cfg, user, j.Password, false, nil)
 }
 
+// hostPort formats host and port for a URL, bracketing IPv6. omit drops
+// the port (the default 443).
 func hostPort(host, port string, omit bool) string {
 	if strings.Contains(host, ":") {
 		host = "[" + host + "]"
@@ -437,6 +490,9 @@ func hostPort(host, port string, omit bool) string {
 	return net.JoinHostPort(strings.Trim(host, "[]"), port)
 }
 
+// unwrapBase64 decodes a base64 (standard or URL-safe, padding optional)
+// subscription-style blob. It returns "" unless the result contains a
+// "://" link, so random text is not mistaken for base64.
 func unwrapBase64(s string) string {
 	if strings.Contains(s, "://") {
 		return ""

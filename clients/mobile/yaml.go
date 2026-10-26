@@ -11,6 +11,14 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+// yaml.go reads and writes the client YAML the apps store per connection.
+// It is a superset of the desktop client.yaml: besides the loft fields it
+// carries what SSTP needs (username, password, pap_chap, tls_check) and an
+// optional list of several connections.
+
+// fileExtra holds the YAML fields that have no place in
+// config.ClientConfig: SSTP login details, the TLS check switch, a default
+// SNI and the display name.
 type fileExtra struct {
 	username string
 	password string
@@ -20,6 +28,9 @@ type fileExtra struct {
 	name     string
 }
 
+// fileYAML is the on-disk shape of one connection. kind is loft, sstp,
+// vless or trojan (empty means loft). connections, when present, holds
+// several such documents in one file.
 type fileYAML struct {
 	Name        string              `yaml:"name"`
 	Kind        string              `yaml:"kind,omitempty"`
@@ -45,6 +56,19 @@ type fileYAML struct {
 	Inner       string              `yaml:"inner,omitempty"`
 }
 
+// decodeFile parses one connection YAML into a client config plus the
+// extra fields, filling the same defaults the desktop client uses.
+//
+// A file with connections decodes only the first one; it may not also have
+// a top-level token or outbounds, because then it would be unclear which
+// one is meant. Each outbound gets a browser fingerprint (chrome), a 16 KiB
+// header budget and 8 requests in flight unless set; an outbound without
+// an SNI takes the top-level sni.
+//
+// The secret is looked up in order: token, password, then the user part of
+// a vless:// or trojan:// URL. Only an SSTP-only file may call it a
+// password (hence the two error texts). An edge URL (a CDN origin) is
+// turned into an extra GET outbound placed first, see config.PinEdgeGET.
 func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
 	var f fileYAML
 	if err := yaml.Unmarshal(raw, &f); err != nil {
@@ -135,6 +159,10 @@ func decodeFile(raw []byte) (*config.ClientConfig, fileExtra, error) {
 	return cfg, ex, nil
 }
 
+// marshalClient is the reverse of decodeFile: it writes the YAML the app
+// stores. kind follows the first selected outbound. A single outbound also
+// names the connection. An SSTP file always carries a password, falling back
+// to the token.
 func marshalClient(cfg *config.ClientConfig, user, pass string, pap bool, tlsCheck *bool) (string, error) {
 	kind := "loft"
 	switch primaryType(cfg) {
@@ -179,6 +207,8 @@ func marshalClient(cfg *config.ClientConfig, user, pass string, pap bool, tlsChe
 	return string(b), nil
 }
 
+// primaryType is the lower-case type of the first selected outbound (or of
+// the first outbound at all). The engine runs that kind of session.
 func primaryType(cfg *config.ClientConfig) string {
 	list := cfg.Pick(cfg.Select)
 	if len(list) == 0 && len(cfg.Outbounds) > 0 {
@@ -190,6 +220,8 @@ func primaryType(cfg *config.ClientConfig) string {
 	return strings.ToLower(list[0].Type)
 }
 
+// credFromOutbounds finds a secret in the user part of a vless:// or
+// trojan:// outbound URL, for files that keep it only there.
 func credFromOutbounds(outs []config.Outbound) string {
 	for _, o := range outs {
 		t := strings.ToLower(o.Type)
@@ -207,6 +239,15 @@ func credFromOutbounds(outs []config.Outbound) string {
 	return ""
 }
 
+// loftOnly copies cfg with only the loft fronts (get, ws, h2, quic, h3,
+// l3) as outbounds, for transport.SuperviseOn.
+//
+// When the file names no fronts and has a GET outbound, Hello offers every
+// mux front this engine can attach. Attach (0x04) joins one more front,
+// such as WebSocket, to the live GET session without a new handshake; the
+// node answers with the paths it really serves. An l3-only file offers
+// nothing extra. P2P (direct member-to-member links) is always off here:
+// all traffic goes through the node.
 func loftOnly(cfg *config.ClientConfig) *config.ClientConfig {
 	c := *cfg
 	var out []config.Outbound

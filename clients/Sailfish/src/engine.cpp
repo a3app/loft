@@ -22,6 +22,10 @@
 #include <QDBusReply>
 #endif
 
+// engine.cpp: the QML-facing host. See engine.h for the two ways it
+// connects (ConnMan row or a loft-front child process).
+
+// Strips one pair of matching quotes around a YAML scalar.
 static QString unquote(QString v)
 {
     v = v.trimmed();
@@ -36,6 +40,9 @@ static QString unquote(QString v)
     return v;
 }
 
+// A minimal YAML read: the value of the first line (at any depth) that
+// starts with "key:". Enough for the flat fields this host needs; it is not
+// a YAML parser, so with several outbounds the first one wins.
 static QString yamlValue(const QString &body, const QString &key)
 {
     const QString prefix = key + QLatin1Char(':');
@@ -79,6 +86,8 @@ void Engine::setYaml(const QString &v)
     emit yamlChanged();
 }
 
+// Parses the pasted text, saves it as client.yaml, and connects: through
+// ConnMan when possible, otherwise by starting loft-front with SOCKS only.
 void Engine::connectSession()
 {
     if (busy_ || up_) {
@@ -144,6 +153,8 @@ void Engine::disconnectSession()
     }
 }
 
+// Finds loft-front: next to the app, in the app's libexec, in either
+// flavour's libexec (Sailfish or Aurora), or in /usr/bin.
 QString Engine::binaryPath() const
 {
     QStringList paths;
@@ -170,6 +181,8 @@ QString Engine::dataDir() const
     return d;
 }
 
+// Host part of the session URL, without scheme, port, path, query or
+// fragment; IPv6 without brackets.
 QString Engine::hostOf(const Session &s) const
 {
     QString raw = s.url;
@@ -202,6 +215,12 @@ QString Engine::hostOf(const Session &s) const
     return raw;
 }
 
+// Connects through connman-vpnd. Reuses an existing VPN row of type
+// "loft" for the same host, or creates one named "Loft" with the session
+// fields as Loft.* properties (the plugin turns them into helper flags).
+// Then it listens for the row's State and calls Connect. Returns false
+// when there is no system bus, no ConnMan VPN service, or Create fails, so
+// the caller falls back to loft-front.
 bool Engine::connectConnMan(const Session &s)
 {
 #ifdef HAVE_QT_DBUS
@@ -311,6 +330,7 @@ bool Engine::connectConnMan(const Session &s)
 #endif
 }
 
+// Stops listening to the ConnMan row and asks it to disconnect.
 void Engine::stopConnMan()
 {
 #ifdef HAVE_QT_DBUS
@@ -336,6 +356,8 @@ void Engine::stopConnMan()
 }
 
 #ifdef HAVE_QT_DBUS
+// Maps ConnMan's row State (ready, failure, idle, disconnect) onto
+// up/busy/line.
 void Engine::onConnManProperty(const QString &name, const QDBusVariant &value)
 {
     if (name != QLatin1String("State")) {
@@ -364,6 +386,8 @@ void Engine::onConnManProperty(const QString &name, const QDBusVariant &value)
 }
 #endif
 
+// Saves the pasted text as client.yaml in the app data dir; the
+// constructor loads it back on the next start.
 void Engine::persistYaml(const QString &body) const
 {
     QFile f(dataDir() + QStringLiteral("/client.yaml"));
@@ -376,6 +400,7 @@ void Engine::persistYaml(const QString &body) const
     }
 }
 
+// One line with "://" is a share link; anything else is YAML.
 bool Engine::parseBody(const QString &body, Session *out, QString *err) const
 {
     if (!body.contains(QLatin1Char('\n')) && body.contains(QStringLiteral("://"))) {
@@ -384,6 +409,9 @@ bool Engine::parseBody(const QString &body, Session *out, QString *err) const
     return parseYAML(body, out, err);
 }
 
+// Reads loft://token@host/path?type=…&cdn=…, or sstp/vless/trojan links
+// (secret from the password part, else the user part). The full share
+// syntax lives in loft-front; this only pulls out what ConnMan needs.
 bool Engine::parseURI(const QString &raw, Session *out, QString *err) const
 {
     const QUrl u(raw);
@@ -430,6 +458,8 @@ bool Engine::parseURI(const QString &raw, Session *out, QString *err) const
     return false;
 }
 
+// Reads the flat fields from client YAML. A url and a token (or user) are
+// required.
 bool Engine::parseYAML(const QString &raw, Session *out, QString *err) const
 {
     out->token = yamlValue(raw, QStringLiteral("token"));
@@ -450,6 +480,9 @@ bool Engine::parseYAML(const QString &raw, Session *out, QString *err) const
     return true;
 }
 
+// loft-front flags for the fallback mode: SOCKS5 on 127.0.0.1:1080, and an
+// instance file so instance_id (how the node recognises this install after
+// a reconnect) survives restarts.
 QStringList Engine::argsFor(const Session &s) const
 {
     QStringList a;
@@ -503,6 +536,7 @@ void Engine::setBusy(bool v)
     emit busyChanged();
 }
 
+// Stops the fallback loft-front: SIGTERM, then SIGKILL if it hangs.
 void Engine::stopProc()
 {
     if (proc_ == 0) {
@@ -521,6 +555,7 @@ void Engine::stopProc()
     p->deleteLater();
 }
 
+// loft-front prints machine-readable "STATUS key=value …" lines on stdout.
 void Engine::onStdout()
 {
     if (proc_ == 0) {
@@ -537,6 +572,7 @@ void Engine::onStdout()
     }
 }
 
+// Only the "socks5 …" line (the proxy address) from stderr is shown.
 void Engine::onStderr()
 {
     if (proc_ == 0) {
@@ -553,6 +589,8 @@ void Engine::onStderr()
     }
 }
 
+// state=up/on or any ip= means connected; other states (except down) are
+// shown as they are.
 void Engine::handleStatus(const QString &line)
 {
     QString state;

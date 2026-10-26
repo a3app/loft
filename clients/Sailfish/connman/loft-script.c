@@ -26,6 +26,7 @@ static void print(const char *format, ...)
 	va_end(ap);
 }
 
+/* Adds one NAME=value environment string to the D-Bus dictionary. */
 static void append(DBusMessageIter *dict, char *pattern)
 {
 	DBusMessageIter entry;
@@ -46,6 +47,12 @@ static void append(DBusMessageIter *dict, char *pattern)
 	dbus_message_iter_close_container(dict, &entry);
 }
 
+/*
+ * connman-vpnd sets CONNMAN_BUSNAME / _INTERFACE / _PATH in the task's
+ * environment so the script knows where to report. The whole environment
+ * goes out as one notify(reason, context, dict) call, without waiting for
+ * a reply; the plugin picks out the keys it knows.
+ */
 int main(int argc, char *argv[])
 {
 	DBusConnection *conn;

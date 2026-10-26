@@ -2,11 +2,14 @@ import Foundation
 
 /// Home / Settings copy for Canvas locales. Shared macOS `.lang` tables come in with profiles.
 enum L10n {
+    /// The text for key in the locale's language, falling back to English
+    /// and then to the key itself.
     static func t(_ key: String, _ locale: Locale) -> String {
         let id = lang(locale)
         return table[id]?[key] ?? table["en"]?[key] ?? key
     }
 
+    /// Reduces a locale to one of the shipped languages: en, ru or zh.
     static func lang(_ locale: Locale) -> String {
         let c = locale.language.languageCode?.identifier ?? "en"
         if c.hasPrefix("zh") { return "zh" }

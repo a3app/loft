@@ -5,6 +5,13 @@
  * loft-script so ConnMan can apply IP / DNS / routes.
  *
  * POSIX only. No glib. SIGTERM / SIGINT go to loft-front.
+ *
+ * Why a separate process: ConnMan runs a VPN as a task it can start and
+ * stop, and expects OpenVPN-style flags and a notify script. loft-front is
+ * the same engine the desktop uses and knows nothing about ConnMan. This
+ * small wrapper translates between the two. -tun-noexec tells loft-front to
+ * use the tun as is, because ConnMan, not loft-front, sets its address and
+ * routes.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -29,6 +36,7 @@
 static pid_t child_pid;
 static volatile sig_atomic_t got_signal;
 
+/* Forwards a stop signal to loft-front; main then returns its exit code. */
 static void on_signal(int sig)
 {
 	got_signal = sig;
@@ -55,6 +63,7 @@ static int file_ok(const char *path)
 	return path && path[0] && access(path, X_OK) == 0;
 }
 
+/* Directory of this executable, from /proc/self/exe. */
 static char *self_dir(char *buf, size_t n)
 {
 	ssize_t k = readlink("/proc/self/exe", buf, n - 1);
@@ -70,6 +79,7 @@ static char *self_dir(char *buf, size_t n)
 	return buf;
 }
 
+/* loft-front next to this binary, then the packaged path, then /usr/bin. */
 static const char *find_front(void)
 {
 	static char path[512];
@@ -87,6 +97,9 @@ static const char *find_front(void)
 	return NULL;
 }
 
+/* The notify script: the --script path from the plugin, the packaged
+ * paths, then next to this binary. Falls back to the given path so the
+ * error message names it. */
 static const char *find_script(const char *override)
 {
 	static char path[512];
@@ -106,6 +119,8 @@ static const char *find_script(const char *override)
 	return override && override[0] ? override : LOFT_SCRIPT;
 }
 
+/* Host part of a URL (no scheme, port, path); IPv6 without brackets.
+ * Caller frees. */
 static char *host_from_url(const char *url)
 {
 	const char *p, *end;
@@ -142,6 +157,8 @@ static char *host_from_url(const char *url)
 	return out;
 }
 
+/* Value of key=value in a space-separated STATUS line, or NULL.
+ * Caller frees. */
 static char *kv(const char *line, const char *key)
 {
 	char pat[64];
@@ -174,6 +191,13 @@ static char *kv(const char *line, const char *key)
 	return NULL;
 }
 
+/*
+ * Runs the notify script with the session details in OpenVPN's environment
+ * names: ifconfig_local (overlay address), ifconfig_remote (gateway),
+ * trusted_ip (the server), tun_mtu (default 1280), and one
+ * "foreign_option_N=dhcp-option DNS x" per DNS server. The netmask is always
+ * /24. Returns 0 when the script exited with 0.
+ */
 static int run_script(const char *script, const char *ip, const char *gw,
 			const char *dns, const char *mtu, const char *trusted)
 {
@@ -225,6 +249,13 @@ static int run_script(const char *script, const char *ip, const char *gw,
 	return -1;
 }
 
+/*
+ * Parses the plugin's --flags, starts loft-front with its single-dash flags
+ * (no SOCKS listener, the given tun), and reads its stdout line by line.
+ * Every line is copied to stderr for the log. The first "STATUS state=on"
+ * (or up) line with an ip runs the notify script once. "STATUS state=error"
+ * stops reading; then the exit code of loft-front becomes ours.
+ */
 int main(int argc, char **argv)
 {
 	const char *dev = NULL, *token = NULL, *url = NULL, *type = NULL;
@@ -266,6 +297,7 @@ int main(int argc, char **argv)
 			return 2;
 		}
 	}
+	/* --config is accepted for the Loft.Config property but not used yet. */
 	(void)config;
 
 	if (!dev || !url) {

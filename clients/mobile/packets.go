@@ -6,6 +6,14 @@ import (
 	"sync"
 )
 
+// packets.go is the packet hand-off between the OS tun and the engine.
+// gomobile cannot pass a Go channel or io.Reader to Swift/Java, so the app
+// pushes each packet with InjectPacket and takes them back with PullPacket
+// or a PacketSink callback.
+
+// pipeCap is how many packets each direction buffers. When a queue is full,
+// new packets are dropped (inbound returns errQueueFull, outbound drops
+// silently), like on a congested link; TCP inside resends them.
 const pipeCap = 64
 
 var errQueueFull = errors.New("queue full")
@@ -77,12 +85,15 @@ func (p *packetPipe) Close() error {
 	return nil
 }
 
+// setSink switches outbound packets from the pull queue to the callback.
 func (p *packetPipe) setSink(s PacketSink) {
 	p.mu.Lock()
 	p.sink = s
 	p.mu.Unlock()
 }
 
+// inject queues a copy of one packet from the OS. It never blocks: the
+// caller is the OS packet loop.
 func (p *packetPipe) inject(pkt []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -98,6 +109,7 @@ func (p *packetPipe) inject(pkt []byte) error {
 	}
 }
 
+// pull returns the next packet toward the OS, or nil without waiting.
 func (p *packetPipe) pull() []byte {
 	select {
 	case pkt := <-p.out:

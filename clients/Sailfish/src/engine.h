@@ -10,7 +10,13 @@
 #include <QDBusVariant>
 #endif
 
-/** Thin host: paste YAML or a share URI, Connect via ConnMan or loft-front. */
+/** Thin host: paste YAML or a share URI, Connect via ConnMan or loft-front.
+ *
+ * The app does not speak the protocol. Connect first asks ConnMan (D-Bus
+ * net.connman.vpn) to start a VPN row of type "loft", which the loft plugin
+ * serves with a real tun. If ConnMan or the plugin is missing, it starts
+ * loft-front itself with only a SOCKS5 proxy on 127.0.0.1:1080 (other apps
+ * are not routed through it). up/busy/line feed the QML page. */
 class Engine : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString yaml READ yaml WRITE setYaml NOTIFY yamlChanged)
@@ -46,6 +52,9 @@ private slots:
 #endif
 
 private:
+    /** The few fields the app reads from the pasted text. token is the
+     * member key (or the VLESS/Trojan/SSTP secret), type the front or "auto",
+     * kind the protocol (loft, sstp, vless, trojan). */
     struct Session {
         QString token;
         QString url;
@@ -78,8 +87,10 @@ private:
     bool up_;
     bool busy_;
     QProcess *proc_;
+    /** Unfinished last line of loft-front's stdout / stderr. */
     QString outRest_;
     QString errRest_;
+    /** D-Bus path of the ConnMan VPN row in use; empty when not using ConnMan. */
     QString connmanPath_;
 };
 

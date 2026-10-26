@@ -1,5 +1,9 @@
 import Foundation
 
+/// Settings shared between the app and the Packet Tunnel extension through
+/// the App Group `group.app.loft`. They are two processes, so UserDefaults in
+/// the group suite is how the app hands over the connection YAML and the
+/// extension reports whether it is parked.
 enum Group {
     static let id = "group.app.loft"
     static let yamlKey = "session.yaml"
@@ -14,6 +18,7 @@ enum Group {
         UserDefaults(suiteName: id) ?? .standard
     }
 
+    /// The connection the tunnel should run: client YAML, or a share link.
     static var yaml: String {
         get { defaults.string(forKey: yamlKey) ?? "" }
         set { defaults.set(newValue, forKey: yamlKey) }
@@ -28,6 +33,7 @@ enum Group {
         set { defaults.set(newValue, forKey: holdKey) }
     }
 
+    /// Connect On Demand: iOS brings the tunnel up by itself.
     static var demand: Bool {
         get { defaults.bool(forKey: demandKey) }
         set { defaults.set(newValue, forKey: demandKey) }

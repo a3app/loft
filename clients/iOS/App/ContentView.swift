@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// Live YAML host (Packet Tunnel). LoftApp shows `LoftShell` / Home; this stays for the session until profiles.
+/// A bare editor: the YAML (or a share link) typed here is written to the
+/// App Group, where the Packet Tunnel extension reads it on Connect.
 struct ContentView: View {
     @StateObject private var tunnel = TunnelControl()
     @State private var draft = Group.yaml

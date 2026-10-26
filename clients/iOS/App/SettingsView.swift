@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Sub-pages opened from Settings.
 enum SettingsPage: Hashable {
     case lists, journal, about
 }
@@ -179,6 +180,7 @@ struct SettingsView: View {
     }
 }
 
+/// One settings row: title, grey explanation, and a control on the right.
 struct LoftSetRow<Trailing: View>: View {
     var title: String
     var subtitle: String
@@ -203,6 +205,7 @@ struct LoftSetRow<Trailing: View>: View {
     }
 }
 
+/// The loft-styled on/off switch.
 struct LoftToggle: View {
     @Binding var on: Bool
 
@@ -225,6 +228,7 @@ struct LoftToggle: View {
     }
 }
 
+/// A sub-page frame with a Back button and a title.
 struct LoftBackChrome<Content: View>: View {
     var titleKey: String
     var onBack: () -> Void
@@ -245,6 +249,7 @@ struct LoftBackChrome<Content: View>: View {
     }
 }
 
+/// About page: app version and the supported protocols.
 struct AboutView: View {
     var onBack: () -> Void
     @Environment(\.locale) private var locale
@@ -305,6 +310,7 @@ struct AboutView: View {
     }
 }
 
+/// Connection log page. The log text is still a fixed sample from the mock.
 struct JournalView: View {
     var onBack: () -> Void
     @Environment(\.locale) private var locale

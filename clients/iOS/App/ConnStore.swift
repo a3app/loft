@@ -1,6 +1,11 @@
 import Foundation
 
 /// In-memory / App Group list. YAML profiles come in a later slice.
+///
+/// One saved connection as the UI edits it. `uri` is a share link
+/// (loft://, vless://, …) or a URL; `secret` is the member key, UUID or
+/// password typed by hand; `front` is the loft front (get, ws, h2, quic, h3,
+/// l3) or "auto".
 struct Conn: Identifiable, Equatable, Codable {
     var id: String
     var name: String
@@ -13,6 +18,7 @@ struct Conn: Identifiable, Equatable, Codable {
     var secret: String
     var user: String
 
+    /// Short protocol label for the list row, e.g. "loft · get".
     var side: String {
         switch kind {
         case .loft:
@@ -39,6 +45,8 @@ struct Conn: Identifiable, Equatable, Codable {
         )
     }
 
+    /// A plain-text summary for sharing: kind, host, port and uri (which,
+    /// for a share link, carries the key). `secret` is not written.
     func exportText() -> String {
         var lines = ["# \(fileName)", "kind: \(kind.rawValue)", "host: \(host)"]
         if !port.isEmpty { lines.append("port: \(port)") }
@@ -53,6 +61,8 @@ struct Conn: Identifiable, Equatable, Codable {
     }
 }
 
+/// The saved connections and which one is active, stored as JSON in the
+/// App Group. An empty or unreadable store falls back to the sample list.
 struct ConnStore: Equatable, Codable {
     var items: [Conn]
     var activeId: String
@@ -138,6 +148,8 @@ struct ConnStore: Equatable, Codable {
         }
     }
 
+    /// The row's Connect / Disconnect button: makes id active and flips the
+    /// Home state. Connections are matched to Home by display title.
     mutating func toggle(_ id: String, home: inout HomeSnapshot) {
         guard let c = item(id) else { return }
         let title = c.name.isEmpty ? c.host : c.name
@@ -148,6 +160,8 @@ struct ConnStore: Equatable, Codable {
         home.mode = thisUp ? .off : .on
     }
 
+    /// Deletes a connection. If it was active, the first remaining one
+    /// becomes active and a live Home state for it is turned off.
     mutating func remove(_ id: String, home: inout HomeSnapshot) {
         let wasActive = id == activeId
         let title = item(id).map { $0.name.isEmpty ? $0.host : $0.name }

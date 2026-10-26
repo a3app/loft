@@ -1,11 +1,14 @@
 import Foundation
 
 /// Canvas / UI snapshot. No Packet Tunnel, no gomobile.
+/// The numbers default to the design mock's sample values; in the live app
+/// only `mode`, `kind` and `profile` follow the tunnel.
 struct HomeSnapshot: Equatable {
     enum Mode: String, Equatable {
         case off
         case connecting
         case on
+        /// Connected, shown without plates, graph and IP rows.
         case simple
     }
 

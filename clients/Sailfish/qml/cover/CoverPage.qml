@@ -1,6 +1,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
+// The app's cover on the Sailfish home screen: a lamp that lights when
+// connected, the status line, and a play/stop action.
 CoverBackground {
     Column {
         anchors.centerIn: parent

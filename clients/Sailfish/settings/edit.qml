@@ -2,11 +2,15 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Settings.Networking.Vpn 1.0
 
+// Create / edit dialog for a Loft VPN row in Settings. Each field is a
+// Loft.* property of the row; the plugin passes them to the helper as flags.
 VpnPlatformEditDialog {
     vpnType: "loft"
     newTitle: "New Loft"
     editTitle: "Edit Loft"
 
+    // Host part of the front URL (no scheme, port or path). It is saved as
+    // the row's Host, which ConnMan shows and uses as the server address.
     function hostFromUrl(raw) {
         var s = raw ? raw.toString() : ""
         var i = s.indexOf("://")

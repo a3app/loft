@@ -8,6 +8,7 @@ struct ConnEditView: View {
     var onDelete: () -> Void
     var onCancel: () -> Void
     @Environment(\.locale) private var locale
+    /// Entry by share link (true) or by separate fields (false).
     @State private var linkMode = true
     @State private var showSecret = false
     @State private var confirmDelete = false
@@ -160,6 +161,8 @@ struct ConnEditView: View {
         .buttonStyle(.plain)
     }
 
+    /// The fields for the chosen protocol. loft and VLESS can be entered as
+    /// one link or by parts; SSTP and Trojan always use separate fields.
     @ViewBuilder
     private var kindFields: some View {
         switch draft.kind {
@@ -268,6 +271,7 @@ struct ConnEditView: View {
     }
 }
 
+/// A labelled text field in the loft style.
 struct LoftField: View {
     var label: String
     @Binding var text: String
