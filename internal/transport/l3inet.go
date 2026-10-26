@@ -302,7 +302,7 @@ func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 		if cw, ok := c.(interface{ CloseWrite() error }); ok {
 			_ = cw.CloseWrite()
 		}
-		_ = rep(l3TCPPacket(f, tcpACK, nil))
+		_ = rep(f.segment(tcpACK, nil))
 		return
 	}
 	f.mu.Lock()
@@ -318,7 +318,7 @@ func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 		}
 		rep := f.reply
 		f.mu.Unlock()
-		_ = rep(l3TCPPacket(f, tcpACK, nil))
+		_ = rep(f.segment(tcpACK, nil))
 		return
 	}
 	f.mu.Unlock()
@@ -333,7 +333,7 @@ func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 	c, err := dialOut(egress.Who{}, net.JoinHostPort(f.dst.String(), strconv.Itoa(int(f.dport))))
 	if err != nil {
-		_ = f.reply(l3TCPPacket(f, tcpRST|tcpACK, nil))
+		_ = f.reply(f.segment(tcpRST|tcpACK, nil))
 		l3TCPMu.Lock()
 		delete(l3TCP, key)
 		l3TCPMu.Unlock()
@@ -344,7 +344,7 @@ func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 	pend := f.pend
 	f.pend = nil
 	f.mu.Unlock()
-	_ = f.reply(l3TCPPacket(f, tcpSYN|tcpACK, nil))
+	_ = f.reply(f.segment(tcpSYN|tcpACK, nil))
 	f.mu.Lock()
 	f.snd = f.iss + 1
 	if len(pend) > 0 {
@@ -388,7 +388,7 @@ func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 			}
 		}
 		if err != nil {
-			_ = f.reply(l3TCPPacket(f, tcpFIN|tcpACK, nil))
+			_ = f.reply(f.segment(tcpFIN|tcpACK, nil))
 			f.close()
 			l3TCPMu.Lock()
 			delete(l3TCP, key)
@@ -407,9 +407,18 @@ func (f *l3TCPFlow) close() {
 	})
 }
 
+// segment copies snd/rcv under f.mu. reply stays outside the lock:
+// it can re-enter l3InetTCP on this flow.
+func (f *l3TCPFlow) segment(flags byte, payload []byte) []byte {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return l3TCPPacket(f, flags, payload)
+}
+
 // l3TCPPacket builds one TCP/IPv4 segment from the destination to the
 // member, with the flow's current sequence and ack numbers. A SYN carries
-// the MSS and window scale options.
+// the MSS and window scale options. It reads sport, dport, iss, snd, rcv,
+// src, dst; the caller holds f.mu.
 func l3TCPPacket(f *l3TCPFlow, flags byte, payload []byte) []byte {
 	hdr := 20
 	var opts []byte
