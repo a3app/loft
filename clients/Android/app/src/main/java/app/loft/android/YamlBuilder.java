@@ -56,7 +56,12 @@ final class YamlBuilder {
         }
         b.append("  - name: ").append(quote(p.name.isEmpty() ? p.host() : p.name)).append('\n');
         b.append("    type: ").append(obType).append('\n');
-        b.append("    url: ").append(quote(p.url)).append('\n');
+        String url = p.url;
+        if (p.isLoft()) {
+            // GET/H2/H3 speak HTTP. A stored wss:// URL is the WS front, not GET.
+            url = "ws".equals(obType) ? wsURL(p) : originURL(p);
+        }
+        b.append("    url: ").append(quote(url)).append('\n');
         if (p.isLoft() && "get".equals(obType) && p.path != null && !p.path.isEmpty()) {
             b.append("    path: ").append(quote(p.path)).append('\n');
         }
@@ -224,12 +229,13 @@ final class YamlBuilder {
             return;
         }
         String origin = originURL(p);
-        String wss = origin.replace("https://", "wss://").replace("http://", "ws://");
         String n = p.name.isEmpty() ? p.host() : p.name;
-        if (!nz(p.wsPath).isEmpty() && !Profile.DEF_WS.equals(p.wsPath)) {
+        boolean wsFirst = "ws".equalsIgnoreCase(p.kind);
+        if (!wsFirst && (contains(p.muxFronts(), "ws") || !nz(p.wsPath).isEmpty()
+                || "ws".equals(schemeOf(p.url, p.kind)) || "wss".equals(schemeOf(p.url, p.kind)))) {
             b.append("  - name: ").append(quote(n + "-ws")).append('\n');
             b.append("    type: ws\n");
-            b.append("    url: ").append(quote(wss + p.wsPath)).append('\n');
+            b.append("    url: ").append(quote(wsURL(p))).append('\n');
         }
         if (!nz(p.h2Path).isEmpty() && !Profile.DEF_H2.equals(p.h2Path)) {
             b.append("  - name: ").append(quote(n + "-h2")).append('\n');
@@ -279,6 +285,26 @@ final class YamlBuilder {
             }
             q.append("quic");
         }
+    }
+
+    /** wss://host[:port]/wsPath. GET must never see this URL. */
+    static String wsURL(Profile p) {
+        String origin = originURL(p);
+        String wss = origin.replace("https://", "wss://").replace("http://", "ws://");
+        String path = nz(p.wsPath);
+        if (path.isEmpty()) {
+            String sch = schemeOf(p.url, p.kind);
+            if ("ws".equals(sch) || "wss".equals(sch)) {
+                path = pathOf(p.url);
+            }
+        }
+        if (path.isEmpty()) {
+            path = Profile.DEF_WS;
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        return wss + path;
     }
 
     // scheme://host[:port] of the main URL, with ws/wss mapped to http/https.

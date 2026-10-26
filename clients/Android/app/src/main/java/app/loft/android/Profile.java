@@ -165,6 +165,10 @@ final class Profile {
         if (isCDN()) {
             return new String[]{"get"};
         }
+        // A pinned front (WS, H2, …) is the session. Auto/GET then adds extras.
+        if ("ws".equals(k) || "h2".equals(k) || "quic".equals(k) || "h3".equals(k)) {
+            return new String[]{k};
+        }
         if (hasMuxExtras()) {
             java.util.ArrayList<String> out = new java.util.ArrayList<>();
             out.add("get");
@@ -387,11 +391,9 @@ final class Profile {
         return u;
     }
 
-    /** YAML for Engine.start: the cached copy, or built from the fields. */
+    /** YAML for Engine.start. Always rebuilt from fields so a stale cache
+     * cannot leave GET pointing at a wss:// URL. */
     String sessionYaml() {
-        if (yaml != null && !yaml.trim().isEmpty()) {
-            return yaml;
-        }
         return YamlBuilder.from(this);
     }
 
@@ -551,9 +553,6 @@ final class Profile {
                     if (p.url.isEmpty()) {
                         p.url = stripPath(o.url);
                     }
-                    if (!"l3".equalsIgnoreCase(p.kind)) {
-                        p.kind = "get";
-                    }
                     break;
                 case "h2":
                     if (nz(p.h2Path).isEmpty()) {
@@ -561,9 +560,6 @@ final class Profile {
                     }
                     if (p.url.isEmpty()) {
                         p.url = stripPath(o.url);
-                    }
-                    if (!"l3".equalsIgnoreCase(p.kind)) {
-                        p.kind = "get";
                     }
                     break;
                 case "h3":
@@ -573,17 +569,11 @@ final class Profile {
                     if (p.url.isEmpty()) {
                         p.url = stripPath(o.url);
                     }
-                    if (!"l3".equalsIgnoreCase(p.kind)) {
-                        p.kind = "get";
-                    }
                     break;
                 case "quic":
                     p.quic = true;
                     if (p.url.isEmpty()) {
                         p.url = stripPath(o.url);
-                    }
-                    if (!"l3".equalsIgnoreCase(p.kind)) {
-                        p.kind = "get";
                     }
                     break;
                 default:
@@ -599,16 +589,26 @@ final class Profile {
     }
 
     // The URL without its path, so several fronts can share one base URL.
+    // ws/wss become http/https: GET cannot dial a WebSocket URL.
     private static String stripPath(String url) {
         if (url == null || url.isEmpty()) {
             return "";
         }
         String pth = YamlBuilder.pathOf(url);
-        if (pth.isEmpty()) {
-            return url;
+        String base = url;
+        if (!pth.isEmpty()) {
+            int i = url.indexOf(pth);
+            if (i > 0) {
+                base = url.substring(0, i);
+            }
         }
-        int i = url.indexOf(pth);
-        return i > 0 ? url.substring(0, i) : url;
+        if (base.startsWith("wss://")) {
+            return "https://" + base.substring(6);
+        }
+        if (base.startsWith("ws://")) {
+            return "http://" + base.substring(5);
+        }
+        return base;
     }
 
     static String hostOf(String url) {

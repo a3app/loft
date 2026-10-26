@@ -103,6 +103,34 @@ public final class YamlBuilderTest {
     }
 
     @Test
+    public void wsOnlyStaysWs() {
+        String y = "kind: loft\ntoken: lt_x\nselect: auto\noutbounds:\n"
+                + "  - name: alice-phone\n    type: ws\n    url: wss://api.iqos.help/api/v1/sync\n";
+        Profile p = Profile.fromYaml(y);
+        assertTrue("ws".equals(p.kind));
+        String back = YamlBuilder.from(p);
+        assertTrue(back.contains("type: ws"));
+        assertTrue(back.contains("wss://api.iqos.help/api/v1/sync"));
+        assertFalse(back.contains("type: get"));
+    }
+
+    @Test
+    public void getDoesNotDialWss() {
+        Profile p = new Profile();
+        p.name = "alice-phone";
+        p.kind = "get";
+        p.token = "lt_x";
+        p.url = "wss://api.iqos.help/api/v1/sync";
+        p.path = "/static/v3/build";
+        String y = YamlBuilder.from(p);
+        assertTrue(y.contains("type: get"));
+        assertTrue(y.contains("https://api.iqos.help"));
+        assertFalse(y.contains("url: wss://"));
+        assertTrue(y.contains("type: ws"));
+        assertTrue(y.contains("wss://api.iqos.help/api/v1/sync"));
+    }
+
+    @Test
     public void fromYamlSkipsPinnedCdn() {
         String y = "kind: loft\ntoken: lt_x\nedge: https://cdn.example.com\n"
                 + "outbounds:\n"
