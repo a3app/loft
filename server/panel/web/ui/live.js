@@ -4,11 +4,59 @@
    empty state: sign-in, the setup wizard (owner, domain and DNS, certificate, first
    member, packages), the overview, members, Segments and Domains. Opened from disk
    (no /api), the page stays a plain mock. */
+//
+// How it plugs in. `make panel-ui` copies design/index.html to web/ui/index.html,
+// adds <script src="live.js"> before </body> and a small "lp-boot" style that
+// hides the page until this file has decided what to show (so the mock's sample
+// data never flashes). The mock is plain global code: a state object S, a route
+// table V (V[route]() returns the HTML of a page), FULL (routes drawn full screen
+// without the menu), render(), go(route), dialog(), toast(), and sample arrays such
+// as NETS (the node's networks with their members and segments) and PKG. This
+// file runs after the mock, so it can:
+//   - replace V[route] with functions that draw from server data;
+//   - wrap the mock's global action functions (window.saveMember, window.delVlan…):
+//     the mock version still edits the in-page model, then this file sends the
+//     result to the server;
+//   - put new actions on window.LIVE (the object L below), called from onclick
+//     attributes in the HTML it draws, e.g. onclick="LIVE.pkgInstall('mail')".
+//
+// The server is loft-panel (Go, server/panel/web/*.go). Every call goes through
+// api(): JSON in and out, the session cookie, and a CSRF token header on writes.
+// Errors come back in English; RU below turns them into the page's Russian text
+// (and i18n.js turns that into English or Chinese when the user picks them).
+// Slow work that may restart services (applying network.conf, packages, updates,
+// backups) runs as a server-side job that the page polls.
+//
+// Words used below:
+//   member   - a device or person allowed into the loft network; it has its own
+//              key (lt_...) in the node's members.keys file;
+//   segment  - a VLAN inside the network: members in one segment see each other;
+//   node     - loft-node, the overlay server on :443 that this panel manages;
+//   channel  - an upstream connection of the server (WireGuard, OpenVPN, proxy…)
+//              that traffic can leave through instead of the server's own address;
+//   front    - a way the client carries loft traffic over HTTPS: plain GET
+//              requests (the default, "get"), WebSocket, HTTP/2, QUIC, HTTP/3, L3;
+//   decoy    - a real website behind the node: everything that is not loft goes
+//              there (here: nginx with the panel), so a scanner sees a site;
+//   helper   - loft-panel-adm, the root process that writes system files for the
+//              panel, which itself runs without privileges.
+//
+// Note on text: the panel's i18n test collects every Russian string in this file
+// (outside comments) and requires an English and a Chinese entry for it in
+// design/en.js and design/zh.js. Comments must stay free of Cyrillic.
 (() => {
+  // L holds everything loaded from the server (L.me: who is signed in, L.sha: the
+  // SHA-256 of the network.conf the draft is based on, L.node: node service state,
+  // L.wz: wizard progress) and the actions the drawn HTML calls as LIVE.x().
   const L = { csrf: '', me: null, sha: '', node: null, info: null, wz: null };
   window.LIVE = L;
+  // The network screens share one access right, "network", on the server.
   const netRight = k => (k === 'prio' || k === 'iface-priorities' || k === 'channels' || k === 'addrs' || k === 'adapters' || k === 'network') ? 'network' : k;
 
+  // api is the one way to the server. It adds the CSRF token to every write,
+  // sends the user to sign-in on 401, and throws an Error with the message
+  // already translated by ru(); e.status holds the HTTP code (0 when offline),
+  // e.raw the server's own English text.
   async function api(method, path, body) {
     const opt = { method, headers: { Accept: 'application/json' }, credentials: 'same-origin' };
     if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
@@ -29,6 +77,9 @@
   const LOC = () => ({ en: 'en-GB', zh: 'zh-CN', ru: 'ru-RU' }[(window.I18N && I18N.lang) || 'ru'] || 'ru-RU'); // dates follow the language
 
   /* The server speaks English (it is an API); the page speaks Russian. */
+  // Each entry is [pattern, make-text]; the first pattern that matches the
+  // server's error wins, so more specific patterns must come first.
+  // An error with no match is shown as the server wrote it.
   const RU = [
     [/^wrong login or password$/, () => 'Неверный логин или пароль'],
     [/^wrong setup code$/, () => 'Неверный код установки'],
@@ -236,6 +287,9 @@
 
   /* Jobs: the node restarts during them and drops this very connection, so
      a failed poll is retried until the job ends (or 4 minutes pass). */
+  // job() POSTs to path, gets back a job id, then polls /api/jobs/<id>.
+  // It returns the job's result, or throws its error. onWait(true) is called
+  // while the server cannot be reached, onWait(false) once it answers again.
   async function job(path, body, onWait) {
     const { job: id } = await api('POST', path, body);
     const until = Date.now() + 240e3;
@@ -255,6 +309,10 @@
   };
   const empty = (k) => pageHead(SOON[k][0], '') + `<div class="empty"><div class="empty-ic">${ic('i-gear', 28)}</div><b>Раздел в разработке</b><p>${esc(SOON[k][1])}</p></div>`;
 
+  // wrapViews swaps the mock's page functions in V for the live ones defined
+  // in this file, and patches the few mock globals that read sample data
+  // (overview, config editor check, search, Segments, login). It runs once,
+  // at start-up, and only when the page is served by the panel.
   function wrapViews() {
     for (const k of Object.keys(SOON)) V[k] = () => empty(k);
     V.packages = packagesView;
@@ -276,9 +334,15 @@
     V.me = meView;
     window.pkgOn = n => !!(L.pk && L.pk.packages.some(p => PT[p.key] === n && p.installed));
     window.openPicker = () => { if (L.pk) { L.P.pick = null; L.P.q = ''; picker(); } };
+    // EXTRA is the mock's per-member sample (client, traffic, last seen,
+    // online). Empty it; any member not filled in by loadPresence reads as
+    // "never seen, offline".
     for (const k of Object.keys(EXTRA)) delete EXTRA[k];
     Object.setPrototypeOf(EXTRA, new Proxy({}, { get: () => ['loft', '0 / 0', 'никогда', 0] }));
 
+    // Overview: cards for the node, members, internet addresses, domains,
+    // the server's load and recent events. Data: L.node (/api/node),
+    // L.ov (/api/overview), L.dm (/api/domains), L.ev (/api/audit), L.wz.
     V.main = () => {
       const st = L.node && L.node.active, ov = L.ov || {}, nd = ov.node || {}, sv = ov.server || {}, w = L.wz || {};
       const all = NETS.flatMap(n => n.members);
@@ -321,6 +385,8 @@
       </div>`;
     };
     // the config text is checked by the node's own parser too: its word is final
+    // (600 ms after the last key, POST /api/network/check; a "line N: ..." error
+    // marks that line in the editor, the same way the mock's own check does)
     const cfgInput0 = window.cfgInput;
     window.cfgInput = el => {
       cfgInput0(el);
@@ -350,6 +416,8 @@
       if (L.pk) L.pk.packages.forEach(p => o.push({ g: 'Пакеты', t: PT[p.key] || p.key, s: p.installed ? 'установлен' : '', go: () => go('packages') }));
       return o;
     };
+    // Opening search loads the lists it searches that are not loaded yet
+    // (only those the role may see), then redraws the results.
     const openSearch0 = window.openSearch;
     window.openSearch = () => {
       openSearch0();
@@ -378,6 +446,10 @@
   const since = v => { const m = String(v || '').match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) (UTC|[+-]\d{2,4})?/); if (!m) return v || '—'; const d = new Date(m[1] + 'T' + m[2] + (m[3] === 'UTC' || !m[3] ? 'Z' : m[3].length === 3 ? m[3] + ':00' : m[3])); return isNaN(d) ? v : d.toLocaleString(LOC(), { dateStyle: 'short', timeStyle: 'short' }); };
   L.since = since;
   const showHost = () => { const h = $('.hdr-host'); if (h) h.textContent = (L.info && L.info.host) || location.hostname; };
+  // signedIn runs after a login (or a live session found at start-up). me is
+  // the /api/login or /api/me answer (login, role, csrf token); st is the
+  // start-up state, when known. An owner whose setup wizard is not finished
+  // is sent back into it; everyone else lands on the page from the address.
   async function signedIn(me, st) {
     L.me = me; L.csrf = me.csrf; L.pk = null;
     loadPackages().then(() => { if (S.route !== 'packages') render(); }); // the menu shows Mail only with the mail server
@@ -404,11 +476,19 @@
   document.querySelectorAll('[onclick="go(\'login\')"]').forEach(b => b.setAttribute('onclick', 'goLogout()'));
 
   /* ── data ── */
+  // The overview's numbers (/api/overview) and the recent change log
+  // (/api/audit, only for roles that may see Users).
   async function loadOverview() {
     const [ov, ev] = await Promise.allSettled([api('GET', '/api/overview'), L.can('users', 1) ? api('GET', '/api/audit') : Promise.resolve([])]);
     if (ov.status === 'fulfilled') L.ov = ov.value;
     if (ev.status === 'fulfilled') L.ev = ev.value || [];
   }
+  // loadData reads the base state after sign-in: the node's network.conf
+  // (/api/network), the node service (/api/node) and, for the owner, the
+  // wizard progress (/api/wizard). network.conf is parsed with the mock's
+  // parseConf into NETS, so the mock's Members and Segments screens work on
+  // real data. APPLIED keeps the text the node runs now; a draft that differs
+  // from it is what "Apply" sends.
   async function loadData() {
     const calls = [api('GET', '/api/network'), api('GET', '/api/node')];
     if (L.me && L.me.role === 'owner') calls.push(api('GET', '/api/wizard'));
@@ -439,6 +519,8 @@
   // took it. Switches and dialogs have no Save: they look stored, so they
   // must hit the node (draft-only vanished on the next sign-in).
   // One apply at a time; a mutation during the job is applied after it.
+  // The request quotes L.sha, the hash of the file the draft started from: the
+  // server refuses it if someone else changed network.conf in between.
   async function applyNow() {
     if (!NETS[0]) return false;
     let ok = false, sent = '';
@@ -486,6 +568,8 @@
   afterNet('addSeg');
   afterNet('saveSeg');
   afterNet('delVlan');
+  // Changing a segment's VLAN number also moves the exit rules that pointed at
+  // the old number (exit rules live on the server, not in network.conf).
   const saveSeg0 = window.saveSeg;
   window.saveSeg = function (id) {
     const el = document.getElementById('sgVid');
@@ -510,6 +594,7 @@
   afterNet('joinSeg');
   afterNet('renameSeg');
   afterNet('setMemberAuth');
+  // Deleting a segment also drops the exit rules that matched it.
   const delVlan0 = window.delVlan;
   window.delVlan = function (id) {
     delVlan0(id);
@@ -558,12 +643,16 @@
       <div class="acts" style="margin:0">${k.link ? `<button class="btn sm pri" type="button" onclick="LIVE.copy('#klink')">Копировать ссылку</button>` : ''}${k.file ? `<button class="btn sm" type="button" onclick="LIVE.download(LIVE.kf.id + '.loft', LIVE.kf.file)">${ic('i-down', 16)}Скачать .loft</button>` : ''}<button class="btn sm" type="button" onclick="LIVE.copy('#kkey')">Копировать ключ</button></div>`,
       `<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`);
   }
+  // Show an existing member's key again: the panel reads it from the node's
+  // members.keys each time and keeps no copy of its own.
   window.showStoredKey = id => L.viewKey(id);
   L.viewKey = async id => {
     let k;
     try { k = await api('GET', '/api/members/key?id=' + encodeURIComponent(id)); } catch (e) { toast(e.message); return; }
     showKey(id, k, 'Ключ хранится на ноде — его можно показать снова.');
   };
+  // Reissue: POST /api/members/key makes a new key for the member, then the
+  // apply puts it into members.keys; the old key stops working.
   window.reissueKey = id => L.reissue(id);
   L.reissue = id => dialog('Перевыпустить ключ?', 'Новый ключ заменит сохранённый и сразу применится на ноде. Старый перестанет действовать.', '',
     `<button class="btn danger" type="button" onclick="LIVE.reissueGo('${esc(id)}')">Перевыпустить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
@@ -598,11 +687,14 @@
   const PG = { base: 'Основа', proto: 'Серверы протоколов', vpn: 'VPN-клиенты · вышестоящие каналы', mail: 'Почта', protect: 'Защита' };
   const pTitle = k => PT[k] || k;
   const pNote = k => ((PKG.find(p => p[0] === PT[k]) || [])[1] || '');
+  // A Debian version "1:2.6.12-1~deb12u1" shown as the upstream "2.6.12".
   const upstream = v => String(v || '').replace(/^\d+:/, '').replace(/-[^-]*$/, '');
   const owner = () => L.me && L.me.role === 'owner';
   L.pk = null; L.upd = null;
   const jobRunning = () => !!(L.pk && L.pk.job && L.pk.job.state === 'running');
 
+  // The package list with the current job (/api/packages) and the release
+  // update state (/api/update). A running job found here is followed.
   async function loadPackages() {
     const [pk, up] = await Promise.allSettled([api('GET', '/api/packages'), api('GET', '/api/update')]);
     if (pk.status === 'fulfilled') L.pk = pk.value; else toast('Пакеты не прочитаны: ' + pk.reason.message);
@@ -611,6 +703,8 @@
   }
   L.loadPackages = loadPackages;
   // Opening Packages or Settings always reads the server again.
+  // The same goes for the other live screens: each route reloads its own data
+  // when the address changes to it, then redraws if the user is still there.
   window.addEventListener('hashchange', () => {
     if (location.hash === '#packages' && L.me) loadPackages().then(() => { if (S.route === 'packages') render(); });
     if ((S.route === 'channels' || S.route === 'network') && L.me) loadChannels().then(() => { if (S.route === 'channels' || S.route === 'network') render(); });
@@ -638,6 +732,9 @@
     return cap(parts.join('; ') || 'задание');
   }
   const logTail = s => esc(String(s || '').split('\n').slice(-40).join('\n').trimEnd());
+  // The card on top of Packages: the running job with its log, or the last
+  // job's outcome (a success is shown for 10 minutes, a failure until the
+  // next job).
   function jobCard() {
     const j = L.pk && L.pk.job;
     if (!j) return '';
@@ -652,6 +749,11 @@
       `<p class="note-s">${st} ${j.error ? esc(ru(j.error)) : ''}</p><details class="adv"${j.state === 'done' ? '' : ' open'}><summary>Журнал</summary><div class="joblog" style="margin-top:12px">${logTail(j.log)}</div></details>`);
   }
 
+  // watchJob polls /api/packages/job every 2 s while a package or update
+  // job runs and streams its log into the page. Lost polls are
+  // expected (the job may restart the panel) and tolerated for about
+  // 5 minutes. A finished update reloads the page, since the panel and this
+  // script may have changed.
   let watching = false;
   async function watchJob() {
     if (watching) return;
@@ -674,6 +776,8 @@
     } finally { watching = false; }
   }
 
+  // startPlan sends a package plan ({install, remove, upgrade, purge}, catalog
+  // keys only) to /api/packages/apply; the helper runs it as a job.
   async function startPlan(plan) {
     closeDlg();
     try {
@@ -686,11 +790,14 @@
   }
   L.pkgInstall = k => startPlan({ install: [k] });
   L.pkgUpgrade = k => startPlan({ upgrade: [k] });
+  // Removing a package also removes the installed packages that need it.
   const withDeps = k => [k, ...deps(k).filter(d => L.pk.packages.some(p => p.key === d && p.installed))];
   L.pkgRemove = k => startPlan({ remove: withDeps(k), purge: !!($('#pkwipe') && $('#pkwipe').checked) });
   L.pkgAskRemove = k => dialog(`Удалить «${esc(pTitle(k))}»?`, withDeps(k).length > 1 ? `Пакет удаляется с сервера. Вместе с ним удалятся: ${withDeps(k).slice(1).map(d => '«' + esc(pTitle(d)) + '»').join(', ')}.` : 'Пакет удаляется с сервера.',
     `<label class="chk"><input id="pkwipe" type="checkbox"><span>Стереть данные пакета<span class="hint" style="display:block;margin:0">Без галочки данные (настройки, ключи) остаются и вернутся при повторной установке.</span></span></label>`,
     `<button class="btn danger" type="button" onclick="LIVE.pkgRemove('${k}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  // Telegram MTProto proxy settings (owner only): port, the TLS domain the
+  // proxy pretends to be, the secret and the tg:// link (/api/packages/mtproto).
   L.mtpOpen = async () => {
     try { L.mtp = await api('GET', '/api/packages/mtproto'); } catch (e) { toast(e.message); return; }
     const s = L.mtp || {};
@@ -717,6 +824,7 @@
       L.mtpOpen();
     } catch (e) { toast(e.message); }
   };
+  // Switch a package's service on or off without removing it.
   L.pkgUnit = async (k, on) => {
     try {
       const p = await api('POST', '/api/packages/unit', { key: k, on });
@@ -736,6 +844,8 @@
     if (!p.enabled) return pill('выключен');
     return pill(esc(p.active || 'нет данных'));
   }
+  // One package row with the buttons the role may use. Nothing can be changed
+  // while a job runs. Base packages (node, nginx) cannot be removed.
   function pkRow(p) {
     const can = L.can('packages') && !jobRunning() && !p.busy;
     let a = '';
@@ -753,6 +863,8 @@
     return `<tr><td><b>${esc(pTitle(p.key))}</b><span class="sub">${esc(pNote(p.key))}</span></td><td>${pkState(p)}</td><td class="mono mute">${p.installed && p.version ? esc(upstream(p.version)) : '—'}</td><td class="mono mute">${esc(p.ports || '—')}<br>${disk}</td><td class="r"><div class="cell-acts">${a}</div></td></tr>`;
   }
 
+  // Update from GitHub Releases: mode, channel and install window as the
+  // server stores them (/api/update/*), with their Russian labels.
   const UM = [['auto', 'Устанавливать автоматически'], ['notify', 'Проверять и сообщать'], ['off', 'Не проверять']];
   const UC = [['stable', 'Только стабильные'], ['pre', 'Включая pre-release']];
   const UW = [['daily', 'Ежедневно 04:00–05:00'], ['sunday', 'По воскресеньям 04:00–05:00'], ['now', 'Сразу после выхода']];
@@ -803,6 +915,9 @@
   }
 
   /* the picker, as in the mock: check what must be on the server */
+  // P.pick is the set of keys that should end up installed (null: start from
+  // what is installed now), P.q the search text, P.wipe the "erase data" box.
+  // The difference with the installed set becomes one install/remove plan.
   const P = { pick: null, q: '', wipe: false };
   function picker() {
     const l = L.pk.packages;
@@ -833,6 +948,7 @@
   L.P = P;
   L.pick = (k, on) => { if (on) P.pick.add(k); else { P.pick.delete(k); deps(k).forEach(d => P.pick.delete(d)); } picker(); };
   L.pickSet = l => { P.pick = l ? new Set(l) : null; if (!l) P.q = ''; picker(); };
+  // Redraw 200 ms after typing stops, then put the cursor back into the field.
   L.pickQ = v => { P.q = v; clearTimeout(L._pq); L._pq = setTimeout(() => { if (!$('#pq')) return; picker(); const e = $('#pq'); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }, 200); };
   L.pickApply = () => {
     const l = L.pk.packages;
@@ -842,6 +958,8 @@
   };
 
   /* ── settings: the mock's blocks with the server's values ── */
+  // Panel settings (/api/settings), the server's time zone and the list of
+  // zones it knows (/api/settings/timezone). Each block saves on its own.
   L.st = null; L.tz = null;
   const IDLE = [['30m', 'через 30 минут'], ['8h', 'через 8 часов'], ['off', 'не выходить']];
   const SMAX = [['7d', '7 дней'], ['30d', '30 дней']];
@@ -876,6 +994,10 @@
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:16px">${EV.map(([k, t]) => `<label class="chk"><input type="checkbox" data-ev="${k}" ${n.events.includes(k) ? 'checked' : ''}>${t}</label>`).join('')}</div>
         <div class="acts" style="margin:16px 0 0"><button class="btn pri sm" type="button" onclick="LIVE.stNotify(this)">Сохранить</button><button class="btn sm" type="button" ${n.host && n.to ? '' : 'disabled'} onclick="LIVE.stTest(this)">Отправить пробное</button></div></div>`);
   }
+  // The outbound name in a member's .loft profile, joined from the parts the
+  // owner ticked: host, member id, front (e.g. "vpn.example.net-bob-get").
+  // With nothing ticked the front alone is used. Only a preview here; the
+  // server builds the real file.
   function loftObName(o, host, member, front) {
     const h = !!o.host, m = !!o.member, f = !!o.front || (!o.host && !o.member);
     const p = [];
@@ -909,6 +1031,8 @@
     }
     L.stPanel();
   };
+  // Saves the "panel" block: idle sign-out, session length, default language
+  // and the .loft outbound name parts (/api/settings/panel).
   L.stPanel = async () => {
     try {
       const loft = $('#stLoftHost') ? {
@@ -926,6 +1050,8 @@
     try { L.tz = await api('POST', '/api/settings/timezone', { zone: sel.value }); toast('Часовой пояс сервера: ' + L.tz.zone); } catch (e) { toast(e.message); }
     render();
   };
+  // E-mail notifications: recipient, SMTP server and which events to send.
+  // An empty password field keeps the stored one.
   L.stNotify = async b => {
     const port = parseInt($('#st9').value, 10) || 0;
     const body = { to: $('#st6').value.trim(), from: $('#st7').value.trim(), host: $('#st8').value.trim(), port, security: $('#st10').value,
@@ -940,8 +1066,16 @@
   };
 
   /* ── Network and IP: addresses and routes ── */
+  // /api/net lists the server's IP addresses (with who listens on each),
+  // routes and network devices. An address or route change is applied at
+  // once but held: L.net.pending holds it with a deadline, and unless the
+  // user confirms within 2 minutes the server undoes it by itself. This keeps
+  // a wrong change from cutting the server off for good.
   L.net = null;
+  // Process names from the listening sockets, shown by friendlier names.
   const PROC = { 'loft-node': 'нода loft', nginx: 'nginx', 'loft-panel': 'панель', master: 'postfix', 'zerotier-one': 'zerotier' };
+  // listenText turns ["loft-node :443/tcp", "nginx :80/tcp", ...] into one
+  // "name :443 · name :80" line, one entry per process (names from PROC).
   function listenText(l) {
     const by = {};
     for (const x of l || []) {
@@ -957,6 +1091,8 @@
     try { L.net = await api('GET', '/api/net'); } catch (e) { toast('Адреса не прочитаны: ' + e.message); L.net = L.net || { addrs: [], routes: [], devs: [] }; }
     pendTick();
   }
+  // pendTick counts down the held change on the page; when time is up it
+  // reloads /api/net (3 s later, to give the server time to undo it).
   let pendTimer = 0;
   function pendTick() {
     clearInterval(pendTimer);
@@ -969,6 +1105,8 @@
     }, 1000);
   }
   const chgText = c => ({ 'add-addr': `добавлен адрес ${c.addr}`, 'del-addr': `убран адрес ${c.addr}`, 'add-route': `добавлен маршрут ${c.dst}`, 'del-route': `убран маршрут ${c.dst}` }[c.op] || c.op);
+  // The addresses and routes blocks. Only entries the panel added can be
+  // deleted here; nothing can be changed while another change is held.
   function netAddrLive() {
     const n = L.net, p = n.pending, own = L.can('network');
     const bar = p ? `<div class="note" role="status"><span><b>Применено: ${esc(chgText(p.change))}.</b> <span class="mute">Подтвердите, иначе через <b id="npLeft">2:00</b> изменение откатится само.</span></span>
@@ -1001,14 +1139,23 @@
     const body = kind === 'addr' ? { op: 'del-addr', addr: x, dev } : { op: 'del-route', dst: x, dev, via };
     try { await api('POST', '/api/net/change', body); await loadNet(); render(); toast('Применено — подтвердите в течение 2 минут'); } catch (e) { toast(e.message); }
   };
+  // Confirm (keep) or revert the held change: POST /api/net/confirm|revert.
   L.netHeld = async what => {
     try { await api('POST', '/api/net/' + what, { id: L.net.pending.id }); toast(what === 'confirm' ? 'Изменение сохранено' : 'Изменение откачено'); } catch (e) { toast(e.message); }
     await loadNet(); render();
   };
   /* ── Network and IP: external channels and exit rules ── */
+  // /api/channels returns, in one answer: the channels (upstream connections:
+  // wg WireGuard, sstp, ovpn OpenVPN, zt ZeroTier, px HTTP/HTTPS/SOCKS5 proxy,
+  // xr Xray link), their live status, the exit rules (which members leave by
+  // which priority list), the priority lists ("prios") and the address lists.
+  // Most writes answer with the same whole object, which replaces L.ch.
   L.ch = null;
   const CT = { wg: 'WireGuard', sstp: 'SSTP', ovpn: 'OpenVPN', zt: 'ZeroTier', px: 'Прокси', xr: 'Xray' };
   const STW = { up: ['работает', 'ok'], connecting: ['подключается…', 'busy'], down: ['не работает', 'warn'], nolink: ['нет связи', 'warn'], off: ['выключен', ''], denied: ['ждёт авторизации', 'warn'] };
+  // loadChannels skips the request when the data is under 5 s old and shares
+  // one request between callers that ask at the same time. The package list
+  // is needed too: which channel kinds are shown depends on installed clients.
   let chPend = null, chAt = 0;
   async function loadChannels() {
     if (L.ch && Date.now() - chAt < 5000) return;
@@ -1029,6 +1176,8 @@
   }
   const pkgHas = k => !!(L.pk && L.pk.packages.some(p => p.key === k && p.installed));
   const chHas = t => !!(L.ch && L.ch.channels.some(c => c.type === t));
+  // A channel kind gets its block when its client package is installed, or
+  // when channels of that kind exist anyway (so they stay reachable).
   const showKind = (pkg, ...types) => pkgHas(pkg) || types.some(chHas);
   const chOf = n => L.ch.channels.find(c => c.name === n);
   const stOf = n => (L.ch.status || []).find(s => s.name === n) || { state: 'down' };
@@ -1039,6 +1188,8 @@
   const prOf = id => (L.ch.prios || []).find(p => p.id === id);
   const lastT = x => x === 'block' ? 'блокировать' : 'напрямую';
   const prName = v => !v || v === 'direct' ? 'напрямую' : v === 'block' ? 'блокировать' : (prOf(v) || {}).title || v;
+  // "direct" in a list is the server's own network adapter (its primary
+  // address), shown by the device name.
   const isNative = n => n === 'direct';
   const nativeDev = () => ((L.net && L.net.addrs.find(a => a.primary)) || {}).dev || '';
   const connTitle = n => isNative(n) ? (nativeDev() || 'Напрямую') : (tt(chOf(n)) || n);
@@ -1056,6 +1207,7 @@
     if (isNative(n)) { const st = (L.ch.status || []).find(s => s.name === 'direct'); return !(st && st.state === 'nolink'); }
     const c = chOf(n); return !!(c && c.on && stOf(n).state === 'up');
   };
+  // The entry of a list that carries traffic now: the first one that is up.
   const prLive = use => use.find(chUp);
   const prChain = p => p.use.map(n => `<span class="${chUp(n) ? '' : 'mute'}">${esc(connTitle(n))}</span>`).concat(`<span class="mute">${lastT(p.last)}</span>`).join(' → ');
   const prLink = id => prOf(id) ? `<span class="tail"><a href="#iface-priorities" onclick="event.stopPropagation();LIVE.toPrio('${esc(id)}')">${prChain(prOf(id))}</a></span>` : '';
@@ -1066,6 +1218,8 @@
   const chSw = c => `<label class="sw" onclick="event.stopPropagation()"><input type="checkbox" ${c.on ? 'checked' : ''} ${L.can('network') ? '' : 'disabled'} aria-label="Включён" onchange="LIVE.chSwitch('${c.name}',this.checked)"><i></i></label>`;
   const chName = c => `<td>${chSw(c)}<span style="margin-left:10px"><b>${esc(tt(c))}</b>${chState(c)}</span></td>`;
   const chDel = c => L.can('network') ? `<td class="r"><div class="cell-acts"><button class="icb del" type="button" aria-label="Удалить канал" onclick="event.stopPropagation();LIVE.chAskDel('${c.name}')">${ic('i-trash')}</button></div></td>` : '<td></td>';
+  // chTable draws the table of one channel kind; columns differ per kind
+  // (SSTP and OpenVPN share one table). A row opens the channel dialog.
   function chTable(types) {
     const rows = L.ch.channels.filter(c => types.includes(c.type)), t = types[0];
     if (!rows.length) return '<p class="mute" style="margin:0">Подключений нет.</p>';
@@ -1079,6 +1233,8 @@
     return table(cols[0].concat([{ t: '', r: 1 }]), rows.map(c => `<tr class="click" onclick="LIVE.openChan('${c.name}')">${chName(c)}${cols[1](c, stOf(c.name))}${chDel(c)}</tr>`).join(''));
   }
   const xrServer = l => { const m = String(l).match(/@([^?#/]+)/); return m ? m[1] : '—'; };
+  // The "External channels" page: one block per channel kind, then the exit
+  // rules and the channels that accept incoming connections.
   function channelsView() {
     if (!L.ch) { loadChannels().then(() => { if (S.route === 'channels' || S.route === 'network') render(); }); return '<p class="mute">Загружаю…</p>'; }
     const add = (t, l, x = '') => L.can('network') ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openChan('new:${t}')">${ic('i-plus')}${l}</button>${x}</div>` : '';
@@ -1096,6 +1252,9 @@
     const what = { member: `Участник <b>${esc(r.value)}</b>`, tag: `Участники с тегом <b>${esc(r.value)}</b>`, vlan: `Сегмент <b>${esc(segTitle(r.value))}</b>`, list: `Адреса из списка <b class="mono">${esc(r.value)}</b>` }[r.match];
     return `${what} → <b>${esc(prName(r.via))}</b>`;
   }
+  // Exit rules: checked top to bottom, the first match picks the priority
+  // list (or "direct" / "block") for a member, tag, segment or address list.
+  // Traffic that matches no rule follows the default policy.
   function rulesBlock() {
     const R = L.ch.rules.rules, own = L.can('network');
     const tail = r => prLink(r.via);
@@ -1107,6 +1266,8 @@
        <div class="rule" style="background:var(--bg)"><span class="n">∗</span><span>Политика по умолчанию → <b>${esc(prName(def))}</b></span>${prLink(def)}</div></div>
        <p class="hint">ICMP (ping) и DNS-запросы к ноде идут напрямую.</p>`);
   }
+  // Channels with "accept" on: the channel's external IP becomes one more
+  // address of the server, and the node listens on it too.
   function acceptBlock() {
     const a = L.ch.channels.filter(c => c.accept);
     if (!a.length) return '';
@@ -1129,6 +1290,8 @@
        <div class="hint">Для TCP без порта берётся 80, для TLS — 443.</div></div>
      </div>`;
   };
+  // "Connect through": a proxy or Xray channel may reach its own server
+  // through another channel (a chain).
   const chVia = (id, self, kinds, cur, hint) => `<div><div class="fld"><label for="${id}">Подключаться через</label><select id="${id}"><option value="">Любое интернет-подключение</option>${L.ch.channels.filter(c => c.name !== self && kinds.includes(c.type)).map(c => `<option value="${esc(c.name)}" ${cur === c.name ? 'selected' : ''}>${esc(tt(c))} · ${CT[c.type]}</option>`).join('')}</select></div>${hint ? `<div class="hint">${hint}</div>` : ''}</div>`;
   const chHead = (c, nw) => `<div><div class="fld"><label for="c1">Имя подключения</label><input id="c1" value="${esc(c.title || c.name || '')}" placeholder="Например, Офис в Амстердаме" maxlength="40"></div>${nw ? '' : '<div class="hint">Как подключение называется в панели. Системное имя: <span class="mono">' + esc(c.name) + '</span>.</div>'}</div>
     <label class="chk"><input id="c0" type="checkbox" ${nw || c.exit ? 'checked' : ''}><span>Использовать для выхода в интернет<span class="hint" style="display:block;margin:0">Канал можно поставить в списки приоритетов.</span></span></label>`;
@@ -1136,6 +1299,10 @@
   const advBox = x => `<details class="adv"><summary>Дополнительные настройки</summary><div style="display:flex;flex-direction:column;gap:18px;margin-top:16px">${x}</div></details>`;
   const pwF = (id, label, has) => `<div><div class="fld"><label for="${id}">${label}</label><input id="${id}" type="password" autocomplete="new-password" placeholder="${has ? 'сохранён' : ''}" data-pw-optional></div>${has ? '<div class="hint">Пусто — оставить сохранённый.</div>' : ''}</div>`;
   let D = null; // the channel being edited
+  // openChan opens the channel dialog. id is a channel name, or "new:<kind>"
+  // for a new one ("new:vpn" lets the user pick SSTP or OpenVPN). D is a deep
+  // copy, so Cancel leaves L.ch untouched. Secrets never come back from the
+  // server: only has_password / has_key / has_psk flags do.
   L.openChan = id => {
     const nw = id.startsWith('new:');
     const t0 = nw ? id.slice(4) : chOf(id).type;
@@ -1143,6 +1310,9 @@
     D = nw ? { _nw: true, type: t, on: true, exit: true, wg: { address: '', peers: [{ allowed_ips: ['0.0.0.0/0'], keepalive: 25 }] }, sstp: { auth: 'auto' }, ovpn: { routes: false }, zt: { managed: true }, px: { kind: 'socks5', udp: 'direct' }, xr: {} } : JSON.parse(JSON.stringify(chOf(id)));
     drawChan(nw, t0 === 'vpn');
   };
+  // drawChan draws the dialog fields for D's kind. It is called again after
+  // edits that change the form (peer added, VPN type switched), so the
+  // values typed so far are read back into D first (see readChan).
   function drawChan(nw, vpnPick) {
     const c = D, t = c.type, title = nw ? 'Новое подключение · ' + (t === 'sstp' || t === 'ovpn' ? 'VPN' : CT[t]) : 'Подключение ' + esc(tt(c));
     let body = chHead(c, nw), sub = '';
@@ -1223,8 +1393,13 @@
   }
   L.vpnType = t => { readChan(); D.type = t; drawChan(true, true); };
   L.wgPeer = i => { readChan(); if (i < 0) D.wg.peers.push({ allowed_ips: ['0.0.0.0/0'], keepalive: 25 }); else D.wg.peers.splice(i, 1); drawChan(!!D._nw); };
+  // The server makes a WireGuard key pair (/api/channels/wgkey); the page
+  // only fills the fields, nothing is stored until Save.
   L.wgGen = async () => { try { const k = await api('POST', '/api/channels/wgkey', {}); $('#c2').value = k.private; $('#c2p').value = k.public; toast('Пара ключей создана — сохраните подключение'); } catch (e) { toast(e.message); } };
   L.fileInto = (inp, sel) => { const f = inp.files[0]; inp.value = ''; if (!f) return; f.text().then(t => { $(sel).value = t; }); };
+  // Show what an Xray link says (protocol, server, security, transport):
+  // the server parses it (/api/channels/xray), so a bad link shows its error
+  // before Save.
   L.xrParse = async () => {
     const box = $('#xkv'), link = $('#x1').value.trim();
     if (!box || !link) return;
@@ -1258,6 +1433,11 @@
       toast('Поля заполнены из ' + f.name + ' — проверьте и добавьте');
     });
   };
+  // chSave sends the whole channel to /api/channels/save (name '' for a new
+  // one: the server picks the system name). The node re-reads its channels.
+  // If that reload drops this very connection, the save may still have
+  // landed: for a new channel the list is re-read for 5 s, looking for a new
+  // channel of this kind and title, before the error is shown.
   L.chSave = once(async () => {
     readChan();
     const c = D, nw = !!c._nw, body = { name: nw ? '' : c.name, title: c.title || '', type: c.type, on: nw ? true : c.on, exit: !!c.exit, accept: !!c.accept, check: c.check || null, via: c.via || '' };
@@ -1291,10 +1471,14 @@
   L.chDel = async n => { closeDlg(); try { L.ch = await api('POST', '/api/channels/delete', { name: n }); toast('Подключение удалено'); } catch (e) { toast(e.message); } render(); };
 
   /* exit rules */
+  // The rule list is always sent whole (/api/channels/rules), with the
+  // default policy; order matters, the first matching rule wins.
   const saveRules = async (rules, def) => { try { L.ch = await api('POST', '/api/channels/rules', { rules, default: def || L.ch.rules.default || 'direct' }); closeDlg(); toast('Правила сохранены — нода перечитала их'); } catch (e) { toast(e.message); } render(); };
   L.ruleMove = (i, d) => { const r = L.ch.rules.rules.slice(); [r[i], r[i + d]] = [r[i + d], r[i]]; saveRules(r); };
   L.ruleDel = i => { const r = L.ch.rules.rules.slice(); r.splice(i, 1); saveRules(r); };
   const exits = cur => `<option value="direct" ${cur === 'direct' ? 'selected' : ''}>Напрямую</option>${(L.ch.prios || []).map(p => `<option value="${esc(p.id)}" ${cur === p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}<option value="block" ${cur === 'block' ? 'selected' : ''}>Блокировать</option>`;
+  // The choices for a rule's "who or what": member ids, tags and segments come
+  // from network.conf (NETS); address lists come from node.conf via the server.
   function ruleValues(m) {
     if (m === 'member') return [...new Set(NETS.flatMap(n => n.members.map(x => x.id)))].map(v => [v, v]);
     if (m === 'tag') return [...new Set(NETS.flatMap(n => n.members.flatMap(x => x.tags || [])))].map(v => [v, v]);
@@ -1319,6 +1503,16 @@
     saveRules(all);
   };
   /* ── connection priorities: lists of channels and who leaves by which ── */
+  // A policy (a "prio" on the server) is an ordered list of connections. In
+  // failover mode the first working one carries the traffic; in multipath
+  // mode ("multi") new connections are spread over all working ones. "last"
+  // says what happens when none works: go direct or block. Per-connection
+  // speed limits are shared by everyone using the policy.
+  // The policy with id "default" is drawn as "direct" in the side list (S.prio)
+  // and is used by everyone without a rule; "block" (no internet) exists only
+  // as a target on the "use" tab. Two tabs: "lists" edits a policy's
+  // connections, "use" assigns members, tags and segments to policies by
+  // drag and drop (which writes exit rules).
   const modeT = p => p.multi ? 'Многопутевой режим' : 'Режим резервирования';
   const limT = (p, n) => { const l = (p.limits || {})[n]; return l && (l.in || l.out) ? [l.in ? `↓ ${l.in} Мбит/с` : '', l.out ? `↑ ${l.out} Мбит/с` : ''].filter(Boolean).join(' · ') : '—'; };
   const DRAG = `<span class="drag" aria-hidden="true">${'<i></i>'.repeat(6)}</span>`;
@@ -1337,6 +1531,8 @@
       `<div class="tabs" role="tablist">${[['lists', 'Политики доступа в интернет', 'iface-priorities'], ['use', 'Применение политик', 'iface-priorities/use']].map(([k, x, h]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>` +
       (t === 'use' ? prioUse() : prioLists());
   }
+  // The side list of policies. On the "use" tab (dropId) each entry is a drop
+  // target for chips and shows how many consumers it has (count).
   function prioSide(own, count, dropId) {
     const P = ownPrios();
     const n = id => count ? ` <span class="mute">(${count(id)})</span>` : '';
@@ -1351,7 +1547,10 @@
     const block = (S.tab.prio || 'lists') === 'use' ? sys('block', 'Без доступа в интернет', 'интернет закрыт') : '';
     return `<div class="pl-side">${sys('direct', 'Политика по умолчанию', defP ? modeT(defP) : 'выход напрямую')}${P.map(item).join('')}${block}${own ? `<div class="pl-add"><button class="btn" type="button" onclick="LIVE.prioNew()">${ic('i-plus')}Добавить политику</button></div>` : ''}</div>`;
   }
+  // A policy picked by an exit rule (or as the default) cannot be deleted.
   const prUsed = id => L.ch.rules.rules.some(r => r.via === id) || (L.ch.rules.default || 'default') === id;
+  // The "lists" tab: the chosen policy's connections in order (ticked, can be
+  // dragged), then the other connections that may be used for exit (unticked).
   function prioLists() {
     const own = L.can('network'), wrap = (main, extra) => `<div class="pl-wrap"><div class="pl-head"><span>Политика</span><span>Подключение</span><span>Ограничение скорости</span></div>${prioSide(own)}<div class="pl-main">${main}${extra || ''}</div></div>`;
     const p = prCur();
@@ -1376,6 +1575,9 @@
         <p class="hint" style="margin:0">${now} Порядок — перетаскиванием. Проверка связи — в окне канала во «Внешних каналах».</p>${hostHint}${saveBar}</div>`);
   }
   // Order and “use” ticks stay local until Save; auto, last, limits and rename still go at once.
+  // The local edit lives in S.prioDraft ({id, use}); it is dropped as soon as
+  // it equals the stored order again. /api/channels/prio takes the whole
+  // policy (id '' makes a new one).
   const prioPost = async (body, msg) => {
     try { L.ch = await api('POST', '/api/channels/prio', body); closeDlg(); toast(msg); return true; } catch (e) { toast(e.message); return false; } finally { render(); }
   };
@@ -1444,6 +1646,8 @@
   };
 
   // Consumers: member, tag and segment chips dragged onto a policy.
+  // Each chip sits under the policy its own rule names; a member with no rule
+  // of its own, of its tags or of its segment is shown under the default.
   function prioUse() {
     const own = L.can('network'), R = L.ch.rules.rules;
     const mems = [...new Set(NETS.flatMap(n => n.members.map(m => m.id)))], tags = [...new Set(NETS.flatMap(n => n.members.flatMap(m => m.tags || [])))], segs = segsOf();
@@ -1468,6 +1672,9 @@
   }
   L.chipDrag = (kind, v) => { dragChip = [kind, v]; };
   // Drop on default clears the rule; drop on a policy or «no access» writes via.
+  // The new rule is put where it keeps precedence right: member rules go
+  // first, tag rules before segment and address-list rules, segment rules
+  // before address-list rules (the first matching rule wins).
   L.chipDrop = id => {
     if (!dragChip) return;
     const [kind, v] = dragChip;
@@ -1485,6 +1692,8 @@
     saveRules(R);
   };
 
+  // The "Adapters" page: the link check of the server's own adapter (the
+  // "direct" connection), then its addresses and routes.
   function addrsPage() {
     if (!L.net) { loadNet().then(() => { if (S.route === 'adapters' || S.route === 'addrs') render(); }); return pageHead('Адаптеры', '') + '<p class="mute">Загружаю…</p>'; }
     if (!L.ch) loadChannels().then(() => { if (S.route === 'adapters' || S.route === 'addrs') render(); });
@@ -1492,6 +1701,9 @@
     const st = ((L.ch && (L.ch.status || []).find(s => s.name === 'direct')) || {}).state || (k.kind && k.kind !== 'off' ? 'up' : '');
     return pageHead('Адаптеры', 'Сетевые адаптеры сервера, их адреса и маршруты. Сети loft — в Сегментах, туннели — во Внешних каналах.') + pingCheckBox(k, st, true, L.can('network')) + netAddrLive();
   }
+  // The mock's ping-check box (pingCheckBox) asks pcSaved for the stored
+  // settings and calls pcSave / pcCancel; here they are the link check of the
+  // server's own adapter, stored on the server (/api/channels/direct-check).
   window.pcSaved = () => {
     const k = (L.ch && L.ch.direct_check) || { kind: 'off', every: 10, fails: 5, probe: '' };
     return { kind: k.kind || 'off', probe: k.probe || '', every: k.every || 10, fails: k.fails || 5 };
@@ -1512,15 +1724,23 @@
   function networkView() { return channelsPage(); }
 
   /* ── panel users: accounts, roles, sessions, log ── */
+  // Panel users are people who administer this panel, not network members.
+  // A role gives each area (AREA_RU keys) a level: 0 none, 1 view, 2 change.
+  // The server checks the same levels on every request; the page only hides
+  // what the role cannot use.
   L.us = null; L.sess = null; L.log = null;
   const AREA_RU = { main: 'Обзор', node: 'Нода loft', members: 'Участники сети', segments: 'Сегменты сети', network: 'Интернет', domains: 'Домены', mail: 'Почта', packages: 'Пакеты', users: 'Пользователи', system: 'Система', settings: 'Настройки' };
   const ROLE_RU = { owner: 'Владелец', operator: 'Оператор', viewer: 'Наблюдатель' };
   const roleName = r => (r && (r.builtin || r.id === 'owner') ? ROLE_RU[r.id] : r && r.name) || '—';
   const roleOf = id => ((L.us && L.us.roles) || []).find(r => r.id === id);
+  // L.can(area) - may change; L.can(area, 1) - may at least view.
   L.can = (a, l = 2) => !!(L.me && L.me.perms && L.me.perms[a] >= l);
+  // Go's zero time ("0001-01-01...") means "never".
   const when2 = v => v && !String(v).startsWith('0001') ? new Date(v).toLocaleString(LOC(), { dateStyle: 'short', timeStyle: 'short' }) : '—';
   const agoT = v => { if (!v || String(v).startsWith('0001')) return '—'; const s = (Date.now() - new Date(v)) / 1000; return s < 90 ? 'сейчас' : s < 3600 ? Math.round(s / 60) + ' мин назад' : s < 86400 ? Math.round(s / 3600) + ' ч назад' : Math.round(s / 86400) + ' дн. назад'; };
   const device = ua => { ua = ua || ''; const b = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /curl\//.test(ua) ? 'curl' : ua.split(/[ /]/)[0] || '—'; const o = /iPhone|iPad/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : ''; return o ? `${b} · ${o}` : b; };
+  // Users and roles (/api/users), plus what the open tab needs: sessions and
+  // API tokens (/api/sessions) or the change log (/api/audit).
   async function loadUsers() {
     const t = S.tab.users;
     try {
@@ -1559,6 +1779,8 @@
       `<div class="tabs" role="tablist">${[['list', 'Пользователи'], ['roles', 'Роли'], ['sess', 'Сессии'], ['log', 'Журнал']].map(([k, tt]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="LIVE.usersTab('${k}')">${tt}</button>`).join('')}</div>` + body;
   }
   // what a log entry says: the route and its target
+  // (the server logs each write as "METHOD /path" plus a target; jobs the
+  // server starts by itself are logged as "system <event>")
   const OPS = {
     'POST /api/login': 'Вошёл в панель', 'POST /api/logout': 'Вышел', 'POST /api/invite': 'Принял приглашение и задал пароль', 'POST /api/setup': 'Создал владельца',
     'POST /api/network/apply': 'Применил сеть loft', 'POST /api/members/key': 'Выдал ключ участнику', 'POST /api/wizard/member': 'Создал участника сети', 'POST /api/node/restart': 'Перезапустил ноду loft',
@@ -1581,6 +1803,8 @@
   const whoText = u => u === 'system' ? 'система' : u;
 
   /* ── #me: own profile, password, API token, sessions ── */
+  // Every signed-in user may manage their own account here, whatever their
+  // role: /api/me and /api/me/* act on the caller only.
   L.my = null;
   const RIGHT = ['нет', 'смотрит', 'меняет'];
   function meView() {
@@ -1617,6 +1841,9 @@
     try { await api('POST', '/api/me/sessions/end', key ? { key } : { others: true }); toast(key ? 'Сессия завершена' : 'Остальные сессии завершены'); } catch (e) { toast(e.message); }
     await reMe();
   });
+  // The user dialog (new when login is ''). The last enabled owner keeps the
+  // owner role, and nobody can switch off or delete themselves: the server
+  // refuses both, so the dialog does not offer them.
   L.openUser = login => {
     const nw = !login, u = nw ? { login: '', name: '', role: 'viewer' } : L.us.users.find(x => x.login === login), own = L.can('users');
     const owners = L.us.users.filter(x => x.role === 'owner' && !x.disabled).length, lastOwner = u.role === 'owner' && owners < 2;
@@ -1634,6 +1861,9 @@
         : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
     L.edUser = { nw, login: u.login };
   };
+  // Save a user (/api/users/save). With invite, no password is sent: the
+  // server answers with an invitation path, valid 24 hours and once, and
+  // the user sets the password on the #invite page.
   L.userSave = async invite => {
     const nw = L.edUser.nw, pw = $('#pu4').value;
     if (!invite && (nw || pw) && !pwCheck($('#dlgRoot'), !nw)) { toast('Проверьте пароль'); return; }
@@ -1651,6 +1881,7 @@
   };
   L.userDel = login => dialog(`Удалить пользователя «${esc(login)}»?`, 'Его сессии и API-токен перестанут действовать.', '', `<button class="btn danger" type="button" onclick="LIVE.userDelGo('${esc(login)}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.userDelGo = async login => { closeDlg(); try { await api('POST', '/api/users/delete', { login }); toast('Пользователь удалён'); } catch (e) { toast(e.message); } await loadUsers(); render(); };
+  // A new API token (lpt_...) is shown once; afterwards only its tail is known.
   L.tokIssue = async login => {
     try {
       const r = await api('POST', '/api/users/token', { login });
@@ -1678,6 +1909,8 @@
   L.roleDel = async id => { closeDlg(); try { await api('POST', '/api/roles/delete', { id }); toast('Роль удалена'); } catch (e) { toast(e.message); } await loadUsers(); render(); };
 
   /* invitation page: #invite/TOKEN */
+  // Opened without a session. GET /api/invite/TOKEN says whose invitation it
+  // is; POST /api/invite sets the password and signs the user in.
   const INV = { login: '', token: '', error: '' };
   function inviteView() {
     return `<div class="fs"><div class="fs-card" style="max-width:420px">${fullHead(esc(location.hostname))}<h1>Приглашение в панель</h1>
@@ -1717,6 +1950,18 @@
   }
 
   /* ── the loft node: node.conf, lists, relays, access ── */
+  // /api/nodecfg reads and writes the node's node.conf as JSON fields. The page
+  // edits a copy (L.ndDraft) and applies it automatically 500 ms after the
+  // last change, as a job. Most settings restart the node (clients reconnect
+  // in a few seconds); a change of relays or "enrol" alone is re-read live.
+  // Words: relay - an extra node that is one more entry point and forwards to
+  // this one (the controller); enrol - which relays may connect: only those
+  // listed, or any that has the node token; roster - the signed list of live
+  // fronts and relays that clients download to know where to fail over;
+  // lists - signed sets of domains and subnets that tell clients what goes
+  // through loft; mask - the loft handshake is hidden inside ordinary-looking
+  // TLS; its public key (mask_pub, "pbk" in member links) comes from the node
+  // token, so a new token means new links.
   L.nd = null; L.ndDraft = null; L.pres = null;
   const FR = [['get', 'HTTP GET', 'Публичный путь по умолчанию. Обычный HTTPS GET, в том числе через CDN.'], ['ws', 'WebSocket', 'Опция. Один WebSocket на путь API. Прямой origin, не CDN.'], ['h2', 'HTTP/2 CONNECT', 'Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.'], ['quic', 'QUIC', 'Опция. Своё QUIC по UDP/443.'], ['h3', 'HTTP/3', 'Опция. HTTP/3 CONNECT поверх QUIC.'], ['l3', 'L3', 'Опция. HTTP/2 CONNECT на прямом origin, внутри — IP-пакеты без mux.']];
   async function loadNode() {
@@ -1734,6 +1979,8 @@
     if (!ndChanged().length) return;
     L._ndT = setTimeout(() => { if (ndChanged().length) L.ndApply(); }, 500);
   };
+  // ndApply sends a snapshot of the draft. Fields the user changed again
+  // while the job ran are kept in the new draft and applied right after.
   L.ndApply = once(async () => {
     const sent = JSON.parse(JSON.stringify(L.ndDraft));
     const onlyFleet = ndKeys.filter(k => JSON.stringify(L.nd[k]) !== JSON.stringify(sent[k])).every(k => k === 'relays' || k === 'enrol');
@@ -1749,6 +1996,7 @@
     render();
     if (ndChanged().length) scheduleNdApply();
   });
+  // The "not applied yet" bar, shown while the draft differs from the node.
   function ndBar() {
     const ch = ndChanged();
     if (!ch || !ch.length) return '';
@@ -1764,6 +2012,9 @@
       ({ main: ndMain, mask: ndMask, relay: ndRelay, lists: ndLists, access: ndAccess }[t] || ndMain)();
   }
   const dis = () => L.can('node') ? '' : 'disabled';
+  // Node tabs. Each draws from L.nd (what the node runs) and L.ndDraft (what
+  // the user is editing); every control writes through ndSet.
+  // ndMain: state, listen address, fronts and GET's HTTP/2 connection count.
   function ndMain() {
     const c = L.nd, d = L.ndDraft, n = c.node || {}, udpDecoy = (c.decoy || []).length > 0;
     return blk('Состояние', '', `<div class="card"><dl class="kv" style="margin-bottom:16px"><div><dt>Роль</dt><dd>${c.role === 'relay' ? 'ретранслятор' : 'контроллер'}</dd></div><div><dt>Версия</dt><dd class="mono">${esc((n.version || '').replace(/^loft-node /, '').replace(/ \(.*/, '') || '—')}</dd></div><div><dt>Работает с</dt><dd>${esc(L.since(n.since))}</dd></div>
@@ -1778,6 +2029,9 @@
         `<div class="rules">${FR.map(([k, l, h]) => `<label class="rule chk" style="cursor:pointer"><input type="checkbox" ${d.fronts.includes(k) ? 'checked' : ''} ${dis()} onchange="LIVE.ndFront('${k}',this.checked)"><span><b>${l}</b> <span class="mono mute">${k}</span><span class="hint" style="display:block;margin:0">${h}${udpDecoy && (k === 'quic' || k === 'h3') ? ' С decoy клиент помечает QUIC Initial (quic_mark / h3_mark).' : ''}</span></span></label>`).join('')}</div>
         <div class="fgrid" style="margin-top:20px"><div><div class="fld"><label for="nd5">Соединений HTTP/2 для GET</label><select id="nd5" ${dis()} onchange="LIVE.ndSet('get_h2',+this.value)">${[1, 2, 3, 4].map(x => `<option ${d.get_h2 === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div class="hint">Сколько параллельных HTTP/2-соединений клиент держит для фронта GET.</div></div></div>`);
   }
+  // ndMask: the decoy web servers (the first takes foreign traffic, the rest
+  // are spares), handshake masking, the page shown when there is no decoy,
+  // and the request paths of each front.
   function ndMask() {
     const d = L.ndDraft, own = L.can('node');
     return blk('Веб-сервер за нодой', 'Всё, что не похоже на клиента loft, нода молча передаёт веб-серверу. Снаружи сервер выглядит как обычный сайт.',
@@ -1794,6 +2048,8 @@
   L.ndDecoyAdd = () => dialog('Добавить адрес веб-сервера', 'Запасной адрес, куда нода передаёт постороннее, если первый не отвечает.', `<div class="fld"><label for="dc1">Адрес</label><input id="dc1" class="mono" placeholder="127.0.0.1:9443"></div>`,
     `<button class="btn pri" type="button" onclick="LIVE.ndDecoyAddGo()">Добавить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.ndDecoyAddGo = () => { const v = $('#dc1').value.trim(); if (!/^[^\s:]+:\d+$/.test(v) && !/^\[.+\]:\d+$/.test(v)) { toast('Адрес вида host:port'); return; } closeDlg(); L.ndSet('decoy', L.ndDraft.decoy.concat([v])); };
+  // ndRelay: relays with their live state from /api/presence, and the CDN
+  // address ranges the node accepts GET requests from.
   function ndRelay() {
     const d = L.ndDraft, own = L.can('node'), live = ((L.pres || {}).relays || []);
     const st = r => { const l = live.find(x => x.id === r.id); return r.drain ? [pill('выведен'), '0', '—'] : l ? [pill('в сети', 'ok'), String(l.conns), agoT(l.beat)] : [pill('не в сети'), '—', '—']; };
@@ -1805,6 +2061,8 @@
         `<div class="card"><label class="chk" style="margin-bottom:16px"><input type="checkbox" ${cf ? 'checked' : ''} ${dis()} onchange="LIVE.ndCDN(this.checked)">Cloudflare</label>
         <dl class="kv"><div><dt>Диапазоны CDN</dt><dd>${cf ? cf + ' ' + plural(cf, 'подсеть', 'подсети', 'подсетей') : 'нет'}</dd></div></dl>${cf && own ? `<div class="acts" style="margin:16px 0 0"><button class="btn sm" type="button" onclick="LIVE.ndCDN(true)">Обновить диапазоны</button></div>` : ''}</div>`);
   }
+  // Turning Cloudflare on asks the server for Cloudflare's current ranges
+  // (/api/nodecfg/cdn) and puts them into the draft.
   L.ndCDN = async on => {
     if (!on) { L.ndSet('cdn_peers', []); return; }
     try { const r = await api('POST', '/api/nodecfg/cdn', {}); L.ndSet('cdn_peers', r.ranges); toast('Диапазоны Cloudflare получены'); } catch (e) { toast(e.message); render(); }
@@ -1830,6 +2088,8 @@
     closeDlg(); L.ndSet('relays', all);
   };
   L.relayDel = i => { const all = L.ndDraft.relays.slice(); all.splice(i, 1); closeDlg(); L.ndSet('relays', all); };
+  // ndLists: the node's signed lists. Unlike other node settings they are not
+  // part of the draft: each save writes all lists at once (/api/nodecfg/lists).
   function ndLists() {
     const lists = L.nd.lists || {}, own = L.can('node');
     const names = Object.keys(lists).sort();
@@ -1864,6 +2124,9 @@
     if (!f) return;
     f.text().then(t => { L.openList(''); $('#ls1').value = f.name.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 32); $('#ls2').value = entries(t).join('\n'); });
   };
+  // ndAccess: the controller's public key (clients check signatures of the
+  // roster and lists with it), the shared token, the node token change and
+  // the session trace log.
   function ndAccess() {
     const d = L.ndDraft, own = L.can('node'), pub = L.nd.controller_pub || '';
     return blk('Ключ контроллера', 'Клиенты сверяют по нему подпись списка ретрансляторов и списков. Входит в файл .loft.',
@@ -1883,6 +2146,9 @@
   };
 
   /* who is online: the node's report, the panel's memory of last seen */
+  // /api/presence fills the mock's EXTRA table, which the Members and
+  // Segments screens read: [client and front, online / devices, last seen,
+  // online flag]. Relays' live state comes in the same answer.
   async function loadPresence() {
     try { L.pres = await api('GET', '/api/presence'); } catch (e) { return; }
     for (const id of Object.keys(L.pres.members || {})) {
@@ -1893,6 +2159,10 @@
   L.loadPresence = loadPresence;
 
   /* ── Mail: domains, boxes, aliases, DNS; the helper writes the daemons' files ── */
+  // /api/mail is the whole mail state; writes answer with it again. L.mlDom is
+  // the mail domain on screen. /api/mail/dns checks that domain's records
+  // (MX, SPF, DKIM, DMARC, PTR) against what they should be, /api/mail/stats
+  // gives queue and daily counters. The server is mail.<domain>.
   L.ml = null; L.mlDom = null; L.mlDNS = null; L.mlStats = null;
   const ML_EMPTY = { installed: false, domains: [], boxes: [], aliases: [], services: [], users: [], zones: [], web_hosts: [] };
   async function loadMail() {
@@ -1943,6 +2213,9 @@
     o += `<div class="cards">` + mailDNSCard(D, own) + mailSvcCard(M, h) + `</div>`;
     return o;
   }
+  // The DNS card: each record with its state (ok, missing, differs). When the
+  // zone has a DNS provider (N.api), "create missing" lets the server write
+  // the records itself; otherwise the user enters them at the registrar.
   function mailDNSCard(D, own) {
     const N = L.mlDNS, h = 'mail.' + D.name;
     let c = `<section class="card"><div class="card-h"><h2>Записи DNS</h2><button class="btn sm" type="button" style="margin-left:auto" onclick="LIVE.mailCheck()">Проверить</button></div>`;
@@ -2006,6 +2279,8 @@
     `<button class="btn danger" type="button" onclick="LIVE.mdDelGo('${esc(name)}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.mdDelGo = name => mailPost('/api/mail/domain', { name, delete: true, drop_mail: $('#mdd').checked }, 'Домен удалён');
   const QUOTAS = [[1024, '1 ГБ'], [3072, '3 ГБ'], [10240, '10 ГБ'], [0, 'без ограничения']];
+  // A 14-character password from the browser's crypto RNG, without look-alike
+  // characters (no l, o, I, O, 0, 1); shown in clear so it can be passed on.
   L.genPw = id => {
     const a = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', b = new Uint8Array(14);
     crypto.getRandomValues(b);
@@ -2027,6 +2302,8 @@
       ${nw ? '' : `<div class="dlg-sec">Настройка почтовой программы</div><dl class="kv"><div><dt>IMAP</dt><dd class="mono">${esc(host)}:993</dd></div><div><dt>SMTP</dt><dd class="mono">${esc(host)}:465 / 587</dd></div><div><dt>Логин</dt><dd class="mono">${esc(b.address)}</dd></div></dl>`}`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.boxSave(${i})">${nw ? 'Создать' : 'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить ящик" style="margin-left:auto" onclick="LIVE.boxDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
+  // A mailbox password cannot be shown later, so after a create or a password
+  // change the page shows the one it just sent, once, with the client settings.
   L.boxSave = async i => {
     if (!pwCheck($('#dlgRoot'), true)) { toast('Проверьте пароль'); return; }
     const nw = i < 0, address = nw ? $('#mb1').value.trim().toLowerCase() + '@' + L.mlDom : L.ml.boxes[i].address, password = $('#mb3').value;
@@ -2048,6 +2325,7 @@
       <div><div class="fld"><label for="al2">Куда доставлять</label><input id="al2" class="mono" value="${esc(a.to.join(', '))}"></div><div class="hint">Ящики этого сервера или внешние адреса, через запятую. Ящики из списка могут и отправлять письма с этого адреса.</div></div>`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.aliasSave(${i})">${nw ? 'Добавить' : 'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить псевдоним" style="margin-left:auto" onclick="LIVE.aliasDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
+  // "old" names the alias being edited, so a rename replaces it.
   L.aliasSave = i => {
     const old = i < 0 ? '' : L.ml.aliases[i].from, d = old ? old.split('@')[1] : L.mlDom;
     return mailPost('/api/mail/alias', { from: $('#al1').value.trim().toLowerCase() + '@' + d, to: addrs($('#al2').value), old }, 'Псевдоним сохранён');
@@ -2055,6 +2333,8 @@
   L.aliasDel = i => mailPost('/api/mail/alias', { from: L.ml.aliases[i].from, to: [], delete: true }, 'Псевдоним удалён');
 
   /* ── System: the guard (fail2ban), backups, Linux accounts ── */
+  // Three independent reads: Linux accounts, the guard and backups. Each part
+  // keeps its own error, so one failing block does not hide the others.
   L.sy = null;
   async function loadSystem() {
     const [u, g, b] = await Promise.allSettled([api('GET', '/api/system/users'), api('GET', '/api/system/guard'), api('GET', '/api/system/backup')]);
@@ -2068,6 +2348,8 @@
     const m = Math.max(0, (new Date(until) - Date.now()) / 60e3);
     return m < 60 ? Math.ceil(m) + ' мин' : m < 48 * 60 ? Math.round(m / 60) + ' ч' : Math.round(m / 1440) + ' дн.';
   };
+  // Why an address is banned, from its fail2ban jail. loft-scan bans scanners
+  // (the matched request is shown), loft-manual* are bans made in the panel.
   const JAIL = { 'loft-panel': 'перебор паролей панели', sshd: 'перебор паролей ssh', dovecot: 'перебор паролей почты', 'postfix-sasl': 'перебор паролей почты' };
   const banWhy = b => {
     if (b.jail === 'loft-scan') { const m = String(b.what || '').match(/"([A-Z]+) (\S+)/); return 'сканер' + (m ? ': ' + m[1] + ' ' + m[2] : ''); }
@@ -2081,6 +2363,8 @@
   const RIGHTS = { '': 'без sudo', password: 'sudo — с паролем', nopasswd: 'sudo — без пароля' };
   const stLabel = (B, id) => { const s = B.stores.find(x => x.id === id); return s ? s.label.split(' · ')[0] + ' · ' + SKIND[s.kind] : 'этот сервер'; };
   const whenT = t => { const d = new Date(t), now = new Date(), y = new Date(now - 864e5); const hm = d.toLocaleTimeString(LOC(), { hour: '2-digit', minute: '2-digit' }); return d.toDateString() === now.toDateString() ? 'сегодня ' + hm : d.toDateString() === y.toDateString() ? 'вчера ' + hm : d.toLocaleDateString(LOC(), { day: '2-digit', month: '2-digit' }) + ' ' + hm; };
+  // How a Linux account can log in by ssh, given its keys, its password and
+  // the server's sshd settings (password_auth, root_login).
   const entry = (u, U) => {
     if (u.locked) return pill('заблокирован', 'warn');
     if (u.root && U.root_login === 'no') return 'вход root запрещён';
@@ -2107,6 +2391,10 @@
     return o;
   }
 
+  // Backups: every copy is encrypted with a key from the recovery phrase,
+  // which the panel does not keep; without a phrase no copies are made.
+  // While a copy or restore runs (or a copy is still being carried to its
+  // store) the block re-reads /api/system/backup every few seconds.
   function backupBlock(own) {
     const B = L.sy.bk;
     if (!B) return blk('Резервные копии', '', `<p class="mute">${esc(L.sy.berr || '')}</p>`);
@@ -2133,6 +2421,10 @@
   }
 
   /* guard */
+  // The guard is fail2ban with the panel's own rules: ban after N failed
+  // logins in M minutes, ban scanners at once, never ban the allowed list.
+  // The dialog tells whether the user's own address (guard.you) is allowed,
+  // so they do not lock themselves out.
   L.openGuard = () => {
     const c = L.sy.guard.conf, you = L.sy.guard.you;
     const bans = BANS.some(x => x[0] === c.ban_sec) ? BANS : BANS.concat([[c.ban_sec, banT(c.ban_sec)]]);
@@ -2180,6 +2472,8 @@
   };
   L.newPhrase = () => dialog('Новая фраза восстановления', L.sy.bk.key ? 'Новая фраза действует для следующих копий. Старые копии открываются только старой фразой — её не выбрасывайте.' : 'Ею шифруется каждая копия. Панель её не хранит: без неё копии не открыть даже на этом сервере.', '',
     `<button class="btn pri" type="button" onclick="LIVE.phraseGo()">Создать фразу</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  // The server makes the phrase and returns it once; it is shown here and
+  // cannot be read again.
   L.phraseGo = async () => {
     let r;
     try { r = await api('POST', '/api/system/backup/phrase', {}); } catch (e) { toast(e.message); return; }
@@ -2208,6 +2502,8 @@
     try { await api('POST', '/api/system/backup/settings', body); closeDlg(); toast('Настройки копий сохранены'); } catch (e) { toast(e.message); return; }
     await loadSystem(); render();
   };
+  // Backup stores: S3-compatible, SFTP (the server logs in with its own ssh
+  // key, shown here to put into authorized_keys) or a directory on the server.
   L.openStores = () => {
     const B = L.sy.bk;
     dialog('Хранилища копий', '', `<div class="pp-list">${B.stores.map(s => `<div class="pp" style="cursor:default"><span class="pp-t"><b>${esc(s.label.split(' · ')[0])} <span class="mute" style="font-weight:400">· ${SKIND[s.kind]}</span></b><span class="mono hint" style="margin:2px 0 0;overflow-wrap:anywhere">${esc(s.kind === 'dir' ? s.dir : s.label)}</span></span><button class="icb del" type="button" aria-label="Удалить хранилище" onclick="LIVE.storeDel('${s.id}')">${ic('i-trash')}</button></div>`).join('') || '<p class="mute" style="margin:0">Хранилищ нет: копии лежат только на этом сервере.</p>'}</div>` + `
@@ -2219,6 +2515,8 @@
       <button class="btn sm" type="button" style="align-self:flex-start" onclick="LIVE.storeGo(true)">Проверить доступ</button>`,
       `<button class="btn pri" type="button" onclick="LIVE.storeGo(false)">Добавить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
+  // test=true only checks access (the server writes and deletes a probe file);
+  // test=false adds the store.
   L.storeGo = once(async test => {
     const k = $('#st0').value, body = { kind: k, test };
     if (k === 's3') Object.assign(body, { endpoint: $('#sa1').value, bucket: $('#sa2').value, access_key: $('#sa3').value, secret_key: $('#sa4').value });
@@ -2233,6 +2531,8 @@
     try { await api('POST', '/api/system/backup/store', { id, kind: 'dir', delete: true }); toast('Хранилище удалено'); } catch (e) { toast(e.message); }
     await loadSystem(); if (L.me) L.openStores(); render();
   };
+  // Restore from: a finished copy from the list, a "before restore" copy the
+  // panel made on this server, or a file uploaded from this computer.
   L.openRestore = runId => {
     const B = L.sy.bk;
     const runs = B.runs.filter(r => r.kind === 'backup' && r.ok && r.name);
@@ -2260,6 +2560,8 @@
   };
   // waitJob follows the helper's job through a panel restart (a restore
   // of the panel restarts it): failed polls are retried for 15 minutes.
+  // It uses fetch directly, not api(): a 401 comes back as {relogin: true}
+  // for the caller to handle instead of jumping to the sign-in page.
   async function waitJob(id) {
     const until = Date.now() + 900e3;
     while (Date.now() < until) {
@@ -2270,6 +2572,10 @@
     }
     return { state: 'error', error: 'Сервер долго не отвечает — обновите страницу' };
   }
+  // restoreGo first gets the copy onto this server: an uploaded file goes to
+  // /api/system/backup/upload as raw bytes, a copy kept only in a remote store
+  // is fetched (/api/system/backup/fetch, maybe as a job). Then the restore
+  // job starts. A restore that included the panel reloads the page.
   L.restoreGo = async () => {
     const B = L.sy.bk, src = $('#rs1').value, phrase = $('#rs2').value, parts = [...document.querySelectorAll('[data-rp]')].filter(i => i.checked).map(i => i.dataset.rp);
     if (!parts.length) { toast('Выберите, что восстановить'); return; }
@@ -2305,6 +2611,8 @@
     } catch (e) { toast(e.message); }
     await loadSystem(); render();
   };
+  // Waits for a job of the panel itself (/api/jobs/<id>), with no retry on
+  // errors: unlike waitJob, nothing restarts during it.
   async function waitPanelJob(id) {
     for (;;) {
       await sleep(1500);
@@ -2315,6 +2623,9 @@
   }
 
   /* Linux accounts */
+  // Accounts of the server itself (ssh users), not panel users. root can only
+  // have its ssh keys changed here; the server refuses any change that would
+  // leave no account able to log in by key and become root.
   L.openLinux = i => {
     const U = L.sy.users, nw = i < 0, u = nw ? { login: '', sudo: '', keys: [], locked: false } : U.users[i], root = !!u.root, own = L.can('system');
     dialog(nw ? 'Новая учётная запись' : 'Учётная запись ' + esc(u.login), root ? 'Учётная запись root: удалить, заблокировать и сменить ей права или пароль здесь нельзя — только ключи.' : '', `
@@ -2343,6 +2654,10 @@
   };
 
   /* ── Domains: zones, records, certificates, DNS providers ── */
+  // /api/domains gives DNS providers (API tokens for Cloudflare, DigitalOcean,
+  // Namecheap), zones and certificates. L.dz is the zone on screen and
+  // L.dzRecs its records, read separately (with check=1 the server also
+  // looks up whether records entered by hand are really in public DNS).
   L.dm = null; L.dz = null; L.dzRecs = null;
   const DNSK = { cloudflare: ['Cloudflare', 'API-токен с правом Zone.DNS — Edit'], digitalocean: ['DigitalOcean', 'API-токен с правом записи'], namecheap: ['Namecheap', 'API-ключ; IP этого сервера должен быть в белом списке API'], manual: ['Вручную', 'записи вносите у регистратора сами'] };
   const TTLS = [[0, 'авто'], [300, '5 минут'], [3600, '1 час'], [86400, '1 день']];
@@ -2359,10 +2674,12 @@
   const provName = id => { if (id === 'manual') return 'Вручную'; const p = (L.dm.providers || []).find(x => x.id === id); return p ? DNSK[p.kind][0] : '—'; };
   const dayLeft = t => Math.round((new Date(t) - Date.now()) / 86400e3);
   const untilCell = t => { if (!t) return '—'; const d = dayLeft(t); return d < 30 ? pill(d < 0 ? 'истёк' : 'через ' + d + ' дн.', 'warn') : new Date(t).toLocaleDateString(LOC()); };
+  // Does certificate c cover a name in zone z (a "*." name counts as its base)?
   const certIn = (c, z) => c.names.some(n => { n = n.replace(/^\*\./, ''); return n === z || n.endsWith('.' + z); });
   const certRows = l => l.map(c => `<tr class="click" onclick="LIVE.openCert('${c.id}')"><td class="mono" style="white-space:normal">${esc(c.names.join(', '))}</td><td>${esc(c.issuer || '—')}</td><td>${c.method === 'upload' ? 'загружен' : c.method.toUpperCase()}</td><td>${untilCell(c.until)}</td><td>${USE[c.use] || esc(c.use)}</td></tr>`).join('');
   const CERT_H = ['Имена', 'Издатель', 'Проверка', 'Действует до', 'Где используется'];
   // #domains lists zones and certificates; #domains/<zone> is the zone's own page.
+  // (The mock's router puts the part after the slash into S.arg.)
   function domainsView() {
     if (!L.can('domains', 1)) return pageHead('Домены', '') + `<div class="empty"><div class="empty-ic">${ic('i-gear', 28)}</div><b>Нет доступа</b><p>Вашей роли этот раздел не виден.</p></div>`;
     if (!L.dm) { loadDomains().then(() => { if (S.route === 'domains') render(); }); return pageHead('Домены', '') + '<p class="mute">Загружаю…</p>'; }
@@ -2374,6 +2691,9 @@
       blk('Сертификаты', 'Выпуск и продление через Let’s Encrypt. Продление — за 30 дней до конца срока, само.', (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openCert('')">${ic('i-plus')}Выпустить сертификат</button><button class="btn" type="button" onclick="LIVE.openPem()">Загрузить PEM</button></div>` : '') +
         table(CERT_H, certRows(L.dm.certs) || `<tr><td colspan="5" class="mute">Сертификатов нет. Сертификат ноды выпускается в мастере установки.</td></tr>`));
   }
+  // One zone: its DNS provider, records (a dot marks records the panel made;
+  // for a zone managed by hand a "check" column shows whether each record is
+  // really published) and the certificates for names in the zone.
   function zoneView(own) {
     const Z = L.dm.zones.find(z => z.name === S.arg), back = `<a class="crumb" href="#domains">${ic('i-back', 18)}Домены</a>`;
     if (!Z) return back + pageHead(esc(S.arg), '') + `<div class="empty"><b>Такой зоны нет</b><p>Её удалили или адрес набран с ошибкой.</p></div>`;
@@ -2404,11 +2724,15 @@
       `<button class="btn pri" type="button" onclick="LIVE.zoneSave(${nw})">${nw ? 'Добавить' : 'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить зону" style="margin-left:auto" onclick="LIVE.zoneDel('${esc(name)}')">${ic('i-trash')}</button>`}`);
     if (nw) L.zoneProv($('#zz2').value);
   };
+  // Suggest the zones the chosen provider account holds; typing by hand
+  // still works if the list cannot be read.
   L.zoneProv = async id => {
     const dl = $('#zzl');
     if (!dl || id === 'manual') { if (dl) dl.innerHTML = ''; return; }
     try { const z = await api('GET', '/api/domains/provider-zones?id=' + encodeURIComponent(id)); dl.innerHTML = z.zones.map(x => `<option value="${esc(x)}">`).join(''); } catch (e) { /* typed by hand */ }
   };
+  // A new zone may ask the server to create records at once: "addr" (A and
+  // AAAA for the server's names in this zone) and "caa" (allow Let's Encrypt).
   L.zoneSave = once(async nw => {
     const create = nw ? [$('#zz3').checked ? 'addr' : '', $('#zz4').checked ? 'caa' : ''].filter(Boolean) : [];
     const name = $('#zz1').value.trim();
@@ -2429,6 +2753,8 @@
       <label class="chk" id="rrA" ${['A', 'AAAA'].includes(r.type) ? '' : 'hidden'}><input id="rr6" type="checkbox" ${r.auto ? 'checked' : ''}>Обновлять при смене IP сервера</label>`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.recSave(${i})">${nw ? 'Добавить' : 'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить запись" style="margin-left:auto" onclick="LIVE.recDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
+  // "auto" on an A/AAAA record makes the server update it when the server's
+  // own IP addresses change.
   L.recSave = once(async i => {
     const old = i >= 0 ? L.dzRecs[i] : {};
     const rec = { id: old.id || '', type: $('#rr1').value, name: $('#rr2').value.trim() || '@', value: $('#rr4').value.trim(), priority: parseInt($('#rr3').value, 10) || 0, ttl: +$('#rr5').value };
@@ -2436,6 +2762,10 @@
     await loadRecords(); render();
   });
   L.recDel = async i => { closeDlg(); try { await api('POST', '/api/domains/record', { zone: L.dz, record: { id: L.dzRecs[i].id }, delete: true }); toast('Запись удалена'); } catch (e) { toast(e.message); } await loadRecords(); render(); };
+  // Certificate dialog. HTTP-01 proves the name through the web server on :80
+  // (the name must point at this server); DNS-01 proves it with a TXT record
+  // written through the zone's DNS provider (needed for *. names). "use" says
+  // where the certificate goes: the node, the panel or mail.
   L.openCert = (id, pre) => {
     const nw = !id, c = nw ? { names: pre || [], method: 'http-01', use: 'node' } : L.dm.certs.find(x => x.id === id), own = L.can('domains');
     const mailOn = pkgOn('Почтовый сервер');
@@ -2446,6 +2776,9 @@
       ${nw ? '' : `<dl class="kv"><div><dt>Издатель</dt><dd>${esc(c.issuer || '—')}</dd></div><div><dt>Действует до</dt><dd>${c.until ? new Date(c.until).toLocaleDateString(LOC()) : '—'}</dd></div><div><dt>Ключ</dt><dd>${esc(c.key || '—')}</dd></div></dl>`}`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.certIssue('${nw ? '' : c.id}')">${nw ? 'Выпустить' : 'Выпустить заново'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw || c.fixed ? '' : `<button class="icb del" type="button" aria-label="Удалить сертификат" style="margin-left:auto" onclick="LIVE.certDel('${c.id}')">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
+  // Issuing runs as a job (the node may restart to load the new certificate).
+  // The built-in node and panel certificates are reissued by their "use"
+  // rather than by id.
   L.certIssue = once(async id => {
     const names = $('#ce1').value.split(/[\s,]+/).filter(Boolean), method = $('#ce2').value, use = $('#ce3').value;
     closeDlg(); toast('Выпускаю сертификат: это займёт до пары минут…');
@@ -2459,6 +2792,8 @@
       <div class="acts" style="margin:0"><label class="btn sm" style="cursor:pointer">${ic('i-up', 16)}Выбрать файлы<input type="file" multiple accept=".pem,.crt,.key,.cer,text/plain" hidden onchange="LIVE.pemFiles(this)"></label></div>
       <div class="fld"><label for="pm3">Где использовать</label><select id="pm3">${Object.entries(USE).filter(([k]) => k !== 'mail' || pkgOn('Почтовый сервер')).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>`,
     `<button class="btn pri" type="button" onclick="LIVE.pemGo()">Загрузить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  // Picked files are sorted by content: a private key goes to the key field,
+  // anything else to the certificate field.
   L.pemFiles = inp => { const fs = [...inp.files]; inp.value = ''; for (const f of fs) f.text().then(t => { if (/PRIVATE KEY/.test(t)) $('#pm2').value = t; else $('#pm1').value = t; }); };
   L.pemGo = once(async () => {
     const body = { fullchain: $('#pm1').value, key: $('#pm2').value, use: $('#pm3').value };
@@ -2477,6 +2812,7 @@
       `<button class="btn pri" type="button" onclick="LIVE.provAdd()">Проверить и добавить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
   L.dnsHint = k => DNSK[k][1];
+  // The server checks the token against the provider before it stores it.
   L.provAdd = once(async () => {
     const b = { kind: $('#dp1').value, token: $('#dp2').value, user: $('#dp3').value };
     toast('Проверяю доступ…');
@@ -2485,7 +2821,18 @@
   L.provDel = async id => { try { await api('POST', '/api/domains/provider', { id, delete: true }); toast('Доступ удалён'); } catch (e) { toast(e.message); } await loadDomains(); if (L.me) L.openProviders(); };
 
   /* ── setup wizard ── */
+  // Five full-screen steps for the owner of a fresh server (the mock's WZ
+  // titles, S.wz.step 1..5): 1 create the owner with the setup code printed
+  // by the installer (/api/setup); 2 the server's domain names and their DNS
+  // records; 3 Let's Encrypt certificates; 4 the first network member and
+  // its key; 5 extra packages. The mock's wzNext button handler is replaced
+  // below; W holds what the steps typed and checked so far.
+
+  // The zone of a host name: drop the first label unless the name is already
+  // a two-label domain ("vpn.example.net" -> "example.net").
   const parentZone = n => { n = String(n || '').trim().toLowerCase().replace(/\.$/, ''); const i = n.indexOf('.'); return (i < 0 || n.indexOf('.', i + 1) < 0) ? n : n.slice(i + 1); };
+  // The records step 2 needs: A/AAAA for each host name inside the zone to
+  // each server address, plus a CAA record that allows Let's Encrypt.
   const dnsRows = (zone, hosts, ips) => {
     const rows = [];
     for (const h of (hosts || []).filter(Boolean).map(x => x.trim().toLowerCase().replace(/\.$/, ''))) {
@@ -2504,6 +2851,9 @@
   const busy = () => W.busy ? `<div class="steps-log"><div><span class="sl run">…</span>${esc(W.busy)}</div></div>` : '';
   const err = () => W.error ? `<p class="note-s" style="color:var(--bad)">${esc(W.error)}</p>` : '';
 
+  // wizardView draws the current step. w is the server's view of progress
+  // (/api/wizard: domain, certificates, member count, server IPs), info the
+  // node's current names.
   function wizardView() {
     const s = step(), w = L.wz || {}, info = L.info || {};
     let body = '', next = 'Дальше', skip = '';
@@ -2610,6 +2960,7 @@
     renderFull();
     for (const [id, v] of Object.entries(keep)) { const i = document.getElementById(id); if (i && !i.readOnly) i.value = v; }
   };
+  // work shows label as progress, runs fn, and puts any error under the step.
   const work = async (label, fn) => {
     W.busy = label; W.error = ''; redraw();
     try { await fn(); } catch (e) { W.error = e.message; }
@@ -2628,6 +2979,8 @@
     W.force = !!($('#w2force') && $('#w2force').checked);
     W.panel = W.sep && $('#w2p') ? $('#w2p').value.trim().toLowerCase().replace(/\.$/, '') : '';
   };
+  // Ask the server whether the client name (and the panel name, if separate)
+  // already resolves to this server (/api/domain/check).
   const checkBoth = async () => {
     W.check = await api('POST', '/api/domain/check', { name: W.name });
     W.pcheck = W.sep ? await api('POST', '/api/domain/check', { name: W.panel }) : null;
@@ -2644,6 +2997,9 @@
     await api('POST', '/api/domains/provider', { kind: W.prov, token: ($('#w2b') && $('#w2b').value) || W.token || '', user: ($('#w2nc') && $('#w2nc').value) || W.ncuser || '', check_only: true });
     toast('Доступ проверен');
   });
+  // saveWizardDNS stores the DNS provider account (when it is new) and adds
+  // the zone of each name to Domains, asking the server to create the A/AAAA
+  // and CAA records. With "manual" the zones are only listed.
   const saveWizardDNS = async (name, panel) => {
     const zone = (($('#w2z') && $('#w2z').value) || W.zone || parentZone(name)).trim().toLowerCase().replace(/\.$/, '');
     W.zone = zone;
@@ -2670,6 +3026,11 @@
     await loadDomains();
   };
 
+  // wzNext is the "next" button of every step: it does the step's work on the
+  // server and moves on. Step 2 renames the node through a job (the node
+  // restarts); if the panel now lives under another name, the browser is
+  // sent there. The last step queues the chosen packages and marks the
+  // wizard done (/api/wizard/done).
   window.wzNext = async () => {
     const s = step();
     if (s === 1) {
@@ -2763,6 +3124,10 @@
   async function boot() {
     try { await boot0(); } finally { reveal(); }
   }
+  // boot0 asks /api/state who is looking. No answer from a file:// page means
+  // the mock was opened from disk: leave it alone. Otherwise the order is:
+  // fresh server -> wizard step 1; #invite/TOKEN -> invitation page; no
+  // session -> sign-in; a session -> signedIn.
   async function boot0() {
     let st;
     L.want = location.hash.slice(1);
