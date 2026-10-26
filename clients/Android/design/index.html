@@ -244,6 +244,12 @@
       border-radius: 10px; padding: 9px 12px; font: 400 12px var(--mono);
     }
     .set-row input.dns-x.hidden { display: none; }
+    .app-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .app-row .ic { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font: 600 15px var(--ui); color: var(--ink); }
+    .app-row .grow { flex: 1; min-width: 0; }
+    .app-row .n { font-size: 14px; font-weight: 500; }
+    .app-row .m { color: var(--mute); font: 400 10.5px var(--mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .app-cnt { color: var(--mute); font-size: 12px; margin: 4px 0 2px; }
     .swipe.rsw { margin-bottom: 6px; }
     .swipe.rsw .rrow { margin: 0; position: relative; z-index: 1; transition: transform .18s ease; }
     .swipe.rsw.open-r .rrow { transform: translateX(-84px); }
@@ -703,6 +709,8 @@
     <button type="button" data-go="settings" data-settab="2" data-i="nSetC">Настройки · подключение</button>
     <h4 data-i="hRoutes">Раздельная маршрутизация</h4>
     <button type="button" data-go="split" data-i="nSplit">Маршруты · списки</button>
+    <button type="button" data-go="apps" data-list="except" data-i="nAppsEx">Приложения · все, кроме</button>
+    <button type="button" data-go="apps" data-list="only" data-i="nAppsOnly">Приложения · только выбранные</button>
     <button type="button" data-go="split" data-list="swipe" data-i="nSplitSwipe">Маршруты · свайп</button>
     <button type="button" data-go="split" data-list="select" data-i="nSplitSel">Маршруты · выбор</button>
     <button type="button" data-go="split" data-list="clear" data-i="nSplitClr">Маршруты · очистка зоны</button>
@@ -1180,7 +1188,14 @@
                 <div class="s" data-i="localDnsD">Резолвит домены зон «в обход loft». Остальные имена — через DNS ноды, домены зоны Block не резолвятся.</div>
                 <input class="mono dns-x hidden" id="dnsAddr" placeholder="77.88.8.8" />
               </div>
-              <select id="dnsSel" onchange="var x=document.getElementById('dnsAddr');x.classList.toggle('hidden',this.value==='sys');x.placeholder=this.value==='doh'?'https://common.dot.dns.yandex.net/dns-query':'77.88.8.8'"><option value="sys" data-i="dnsSys">Системный</option><option value="ip" data-i="dnsCustom">Свой адрес</option><option value="doh" data-i="dnsDoh">DoH</option></select>
+              <select id="dnsSel" onchange="var x=document.getElementById('dnsAddr');x.classList.toggle('hidden',this.value==='sys');x.placeholder=this.value==='doh'?'https://common.dot.dns.yandex.net/dns-query':'77.88.8.8'"><option value="sys" data-i="ldnsSys">Системный</option><option value="ip" data-i="ldnsCustom">Свой адрес</option><option value="doh" data-i="ldnsDoh">DoH</option></select>
+            </div>
+            <div class="set-row" data-go="apps" style="cursor:pointer">
+              <div>
+                <div class="k" data-i="apps">Приложения</div>
+                <div class="s" id="appsMode">Все через loft</div>
+              </div>
+              <span class="chev" style="color:var(--mute);font-size:18px">›</span>
             </div>
           </div>
           <div class="grp" id="grp-2" data-i="setClient">Подключение</div>
@@ -1375,6 +1390,11 @@ hold  armed</pre>
       <div class="screen hidden" id="split">
         <div class="navbar"><button type="button" data-back aria-label="Назад">←</button><button type="button" class="more" id="splitMore" aria-label="Ещё">⋮</button></div>
         <div class="scroll dyn" id="split-body"></div>
+      </div>
+
+      <div class="screen hidden" id="apps">
+        <div class="navbar"><button type="button" data-back aria-label="Назад">←</button></div>
+        <div class="scroll dyn" id="apps-body"></div>
       </div>
 
       <div class="screen hidden" id="splitexcl">
@@ -1722,11 +1742,28 @@ hold  armed</pre>
         "split.zone": "Зона",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "apps": "Приложения",
+        "apps.all": "Все через loft",
+        "apps.except": "Все, кроме выбранных",
+        "apps.only": "Только выбранные",
+        "apps.seg.all": "Все",
+        "apps.seg.except": "Кроме",
+        "apps.seg.only": "Только",
+        "apps.d.all": "Все приложения идут по правилам маршрутизации.",
+        "apps.d.except": "Выбранные приложения идут напрямую, мимо туннеля. Остальные — по правилам маршрутизации.",
+        "apps.d.only": "Через туннель идут только выбранные приложения. Остальные — напрямую.",
+        "apps.all.h": "Чтобы банки и Госуслуги шли напрямую, выберите «Кроме» и отметьте их.",
+        "apps.lock": "Приложения мимо туннеля не видят зон, Block и местного DNS. Если в Android включено «Блокировать подключения без VPN», они останутся без сети.",
+        "apps.search": "Найти приложение",
+        "apps.sys": "Показывать системные",
+        "apps.cnt": "Выбрано: %d",
+        "nAppsEx": "Приложения · все, кроме",
+        "nAppsOnly": "Приложения · только выбранные",
         "localDns": "Местный DNS",
         "localDnsD": "Резолвит домены зон «в обход loft». Остальные имена — через DNS ноды, домены зоны Block не резолвятся.",
-        "dnsSys": "Системный",
-        "dnsCustom": "Свой адрес",
-        "dnsDoh": "DoH",
+        "ldnsSys": "Системный",
+        "ldnsCustom": "Свой адрес",
+        "ldnsDoh": "DoH",
         "split.add.dom": "Домены",
         "split.add.dom.d": "По одному в строке; домен включает поддомены. Домены зоны «в обход» резолвит местный DNS, зоны Block — получают отказ (NXDOMAIN).",
         "split.dom": "домен",
@@ -2084,11 +2121,28 @@ hold  armed</pre>
         "split.zone": "Zone",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "apps": "Apps",
+        "apps.all": "All through loft",
+        "apps.except": "All except selected",
+        "apps.only": "Only selected",
+        "apps.seg.all": "All",
+        "apps.seg.except": "Except",
+        "apps.seg.only": "Only",
+        "apps.d.all": "All apps follow the routing rules.",
+        "apps.d.except": "Selected apps go direct, around the tunnel. The rest follow the routing rules.",
+        "apps.d.only": "Only selected apps go through the tunnel. The rest go direct.",
+        "apps.all.h": "To send banking and government apps direct, pick “Except” and check them.",
+        "apps.lock": "Apps around the tunnel don’t see zones, Block or the local DNS. If Android’s “Block connections without VPN” is on, they get no network.",
+        "apps.search": "Find an app",
+        "apps.sys": "Show system apps",
+        "apps.cnt": "Selected: %d",
+        "nAppsEx": "Apps · all except",
+        "nAppsOnly": "Apps · only selected",
         "localDns": "Local DNS",
         "localDnsD": "Resolves the domains of “bypass loft” zones. Other names go through the node’s DNS; Block zone domains don’t resolve.",
-        "dnsSys": "System",
-        "dnsCustom": "Own address",
-        "dnsDoh": "DoH",
+        "ldnsSys": "System",
+        "ldnsCustom": "Own address",
+        "ldnsDoh": "DoH",
         "split.add.dom": "Domains",
         "split.add.dom.d": "One per line; a domain covers its subdomains. Bypass zone domains resolve with the local DNS, Block zone domains are refused (NXDOMAIN).",
         "split.dom": "domain",
@@ -2446,11 +2500,28 @@ hold  armed</pre>
         "split.zone": "区域",
         "split.zone.global": "Global",
         "split.zone.local": "Local",
+        "apps": "应用",
+        "apps.all": "全部经 loft",
+        "apps.except": "除所选外全部",
+        "apps.only": "仅所选",
+        "apps.seg.all": "全部",
+        "apps.seg.except": "除外",
+        "apps.seg.only": "仅",
+        "apps.d.all": "所有应用按分流规则走。",
+        "apps.d.except": "所选应用直连，不走隧道。其余按分流规则走。",
+        "apps.d.only": "只有所选应用走隧道。其余直连。",
+        "apps.all.h": "要让银行和政务应用直连，选「除外」并勾选它们。",
+        "apps.lock": "不走隧道的应用不受区域、Block 和本地 DNS 影响。如果 Android 开启了「屏蔽未使用 VPN 的连接」，它们将无法联网。",
+        "apps.search": "查找应用",
+        "apps.sys": "显示系统应用",
+        "apps.cnt": "已选：%d",
+        "nAppsEx": "应用 · 除所选外",
+        "nAppsOnly": "应用 · 仅所选",
         "localDns": "本地 DNS",
         "localDnsD": "解析「绕过 loft」区域的域名。其他名称经节点 DNS；Block 区域的域名不解析。",
-        "dnsSys": "系统",
-        "dnsCustom": "自定义地址",
-        "dnsDoh": "DoH",
+        "ldnsSys": "系统",
+        "ldnsCustom": "自定义地址",
+        "ldnsDoh": "DoH",
         "split.add.dom": "域名",
         "split.add.dom.d": "每行一个；域名包括其子域名。绕过区域的域名用本地 DNS 解析，Block 区域的域名被拒绝（NXDOMAIN）。",
         "split.dom": "个域名",
@@ -2736,6 +2807,7 @@ hold  armed</pre>
       });
       paintHome();
       paintOnboard();
+      if (typeof paintAppsRow === "function") paintAppsRow();
       if (typeof paintSplitScreen === "function" && SPLIT_SCREENS.includes(cur)) paintSplitScreen(cur);
       document.querySelectorAll(".eye").forEach((b) => {
         const inp = b.parentElement.querySelector("input");
@@ -2904,11 +2976,11 @@ hold  armed</pre>
     }
     // Tabs are the three rooms; Journal and About are pushed from Settings.
     // Edit, Scanner and QR are modal: Cancel / Close returns where they came from.
-    const SPLIT_SCREENS = ["split", "splitexcl", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
+    const SPLIT_SCREENS = ["apps", "split", "splitexcl", "splitsvc", "zones", "zone", "splitrepo", "splitlists", "splitin", "splitout"];
     const TAB_OF = { home: "home", list: "list", settings: "settings", journal: "settings", about: "settings" };
     SPLIT_SCREENS.forEach((id) => { TAB_OF[id] = "settings"; });
     const PARENT = { edit: "list", scan: "list", share: "list", journal: "settings", about: "settings",
-      split: "settings", splitexcl: "split", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
+      apps: "settings", split: "settings", splitexcl: "split", splitsvc: "split", zones: "split", zone: "zones", splitrepo: "split", splitlists: "splitrepo", splitin: "split", splitout: "split" };
     let cur = "home";
     const from = {};
     // Every mock state has its own address: #edit-sstp, #settings-route, #home-off.
@@ -2987,6 +3059,7 @@ hold  armed</pre>
         paintEdit();
       }
       if (!SPLIT_SCREENS.includes(id)) hideSnack();
+      if (id === "apps" && extra.list) appMode = extra.list;
       if (id === "split") {
         sel = extra.list === "select" ? new Set(["yt", "nf"]) : null;
         if (extra.list) zoneTab = "global";
@@ -2996,6 +3069,7 @@ hold  armed</pre>
       if (id === "split" && extra.list === "clear") openClear(false);
       if (id === "split" && extra.list === "undo") { if (ROUTES.some((r) => r.id === "yt")) { removeSvcs(["yt"]); paintSplitScreen("split"); } }
       if (id === "settings") {
+        paintAppsRow();
         if (extra.settab != null && extra.settab !== "") setTab = Number(extra.settab);
         paintSettings();
       }
@@ -3300,7 +3374,50 @@ hold  armed</pre>
         </div></div>`).join("");
       return rows || `<p class="hint">${T("split.excl.empty")}</p>`;
     }
+    /* Apps around the tunnel (VpnService allowed / disallowed applications).
+       "except" and "only" keep separate lists, so switching modes loses nothing. */
+    const APPS = [
+      { pkg: "ru.sberbankmobile", n: { ru: "СберБанк Онлайн", en: "SberBank Online", zh: "SberBank Online" }, c: "#7fc28a" },
+      { pkg: "ru.rostel", n: { ru: "Госуслуги", en: "Gosuslugi", zh: "Gosuslugi" }, c: "#8fb4e0" },
+      { pkg: "com.idamob.tinkoff.android", n: { ru: "Т-Банк", en: "T-Bank", zh: "T-Bank" }, c: "#e8d27a" },
+      { pkg: "ru.ozon.app.android", n: { ru: "Ozon", en: "Ozon", zh: "Ozon" }, c: "#8fa4e8" },
+      { pkg: "com.wildberries.ru", n: { ru: "Wildberries", en: "Wildberries", zh: "Wildberries" }, c: "#c48fd8" },
+      { pkg: "ru.yandex.yandexmaps", n: { ru: "Яндекс Карты", en: "Yandex Maps", zh: "Yandex Maps" }, c: "#e89b7a" },
+      { pkg: "org.telegram.messenger", n: { ru: "Telegram", en: "Telegram", zh: "Telegram" }, c: "#7ac4e8" },
+      { pkg: "com.google.android.youtube", n: { ru: "YouTube", en: "YouTube", zh: "YouTube" }, c: "#e88a8a" },
+      { pkg: "com.android.chrome", n: { ru: "Chrome", en: "Chrome", zh: "Chrome" }, c: "#b8c47a" },
+      { pkg: "com.google.android.gms", n: { ru: "Сервисы Google Play", en: "Google Play services", zh: "Google Play 服务" }, c: "#9aa0a6", sys: true },
+      { pkg: "com.google.android.webview", n: { ru: "Android System WebView", en: "Android System WebView", zh: "Android System WebView" }, c: "#9aa0a6", sys: true },
+    ];
+    let appMode = "all", appQ = "", appSys = false;
+    const appSel = { except: new Set(["ru.sberbankmobile", "ru.rostel", "com.idamob.tinkoff.android"]), only: new Set(["org.telegram.messenger", "com.google.android.youtube"]) };
+    function paintAppsRow() {
+      const el = document.getElementById("appsMode");
+      if (!el) return;
+      const n = appMode === "all" ? 0 : appSel[appMode].size;
+      el.textContent = T("apps." + appMode) + (n ? " · " + n : "");
+    }
+    function appRows() {
+      const q = appQ.trim().toLowerCase(), sel = appSel[appMode];
+      const list = APPS.filter((a) => (appSys || !a.sys || sel.has(a.pkg)) && (!q || (a.n[lang] || a.n.en).toLowerCase().includes(q) || a.pkg.includes(q)));
+      list.sort((a, b) => (sel.has(b.pkg) - sel.has(a.pkg)) || (a.n[lang] || a.n.en).localeCompare(b.n[lang] || b.n.en));
+      return list.map((a) => { const nm = a.n[lang] || a.n.en; return `<div class="app-row" data-app="${a.pkg}">
+          <span class="ic" style="background:${a.c}">${esc(nm[0])}</span>
+          <div class="grow"><div class="n">${esc(nm)}</div><div class="m">${a.pkg}</div></div>
+          <div class="toggle ${sel.has(a.pkg) ? "on" : ""}"><i></i></div>
+        </div>`; }).join("");
+    }
     const SPLIT_PAINT = {
+      apps: () => {
+        const seg = ["all", "except", "only"].map((m) => `<button type="button" class="${appMode === m ? "on" : ""}" data-appmode="${m}">${T("apps.seg." + m)}</button>`).join("");
+        const top = head(T("apps"), T("apps.d." + appMode)) + `<div class="seg seg3">${seg}</div>`;
+        if (appMode === "all") return top + `<p class="hint">${T("apps.all.h")}</p>`;
+        return top + `<p class="hint">${T("apps.lock")}</p>
+          <label class="field" style="margin-top:10px"><input type="search" data-aq value="${esc(appQ)}" placeholder="${esc(T("apps.search"))}" /></label>
+          <div class="set-row" style="padding:6px 0"><div><div class="k" style="font-size:13px">${T("apps.sys")}</div></div><div class="toggle ${appSys ? "on" : ""}" data-appsys><i></i></div></div>
+          <div class="app-cnt">${T("apps.cnt").replace("%d", appSel[appMode].size)}</div>
+          <div id="appRows">${appRows()}</div>`;
+      },
       split: () => {
         const z = zoneById(zoneTab);
         document.getElementById("split").classList.toggle("selecting", !!sel);
@@ -3498,6 +3615,13 @@ hold  armed</pre>
         paintSplitScreen("split");
         return;
       }
+      if ((el = at("[data-appmode]"))) { appMode = el.getAttribute("data-appmode"); paintSplitScreen("apps"); paintAppsRow(); return; }
+      if (at("[data-appsys]")) { appSys = !appSys; paintSplitScreen("apps"); return; }
+      if ((el = at("[data-app]"))) {
+        const sel = appSel[appMode], id = el.getAttribute("data-app");
+        if (sel.has(id)) sel.delete(id); else sel.add(id);
+        paintSplitScreen("apps"); paintAppsRow(); return;
+      }
       if ((el = at("[data-split]"))) {
         splitOn = !splitOn;
         document.getElementById("setSplit").classList.toggle("on", splitOn);
@@ -3572,6 +3696,7 @@ hold  armed</pre>
     phoneEl.addEventListener("pointerup", swipeEnd);
     phoneEl.addEventListener("pointercancel", swipeEnd);
     phoneEl.addEventListener("input", (e) => {
+      if (e.target.matches("[data-aq]")) { appQ = e.target.value; document.getElementById("appRows").innerHTML = appRows(); return; }
       if (e.target.matches("[data-sq]")) { splitQ = e.target.value; document.getElementById("splitRows").innerHTML = splitRows(); }
     });
     const boot = new URLSearchParams(location.search);

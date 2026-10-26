@@ -1169,7 +1169,7 @@
                 <div class="s" data-i="localDnsD">Резолвит домены зон «в обход loft». Остальные имена — через DNS ноды, домены зоны Block не резолвятся.</div>
                 <input class="mono dns-x hidden" id="dnsAddr" placeholder="77.88.8.8" />
               </div>
-              <select id="dnsSel" onchange="var x=document.getElementById('dnsAddr');x.classList.toggle('hidden',this.value==='sys');x.placeholder=this.value==='doh'?'https://common.dot.dns.yandex.net/dns-query':'77.88.8.8'"><option value="sys" data-i="dnsSys">Системный</option><option value="ip" data-i="dnsCustom">Свой адрес</option><option value="doh" data-i="dnsDoh">DoH</option></select>
+              <select id="dnsSel" onchange="var x=document.getElementById('dnsAddr');x.classList.toggle('hidden',this.value==='sys');x.placeholder=this.value==='doh'?'https://common.dot.dns.yandex.net/dns-query':'77.88.8.8'"><option value="sys" data-i="ldnsSys">Системный</option><option value="ip" data-i="ldnsCustom">Свой адрес</option><option value="doh" data-i="ldnsDoh">DoH</option></select>
             </div>
           </div>
           <div class="grp" id="grp-2" data-i="setClient">Подключение</div>
@@ -1606,9 +1606,9 @@ hold  armed</pre>
         "split.zone.local": "Local",
         "localDns": "Местный DNS",
         "localDnsD": "Резолвит домены зон «в обход loft». Остальные имена — через DNS ноды, домены зоны Block не резолвятся.",
-        "dnsSys": "Системный",
-        "dnsCustom": "Свой адрес",
-        "dnsDoh": "DoH",
+        "ldnsSys": "Системный",
+        "ldnsCustom": "Свой адрес",
+        "ldnsDoh": "DoH",
         "split.add.dom": "Домены",
         "split.add.dom.d": "По одному в строке; домен включает поддомены. Домены зоны «в обход» резолвит местный DNS, зоны Block — получают отказ (NXDOMAIN).",
         "split.dom": "домен",
@@ -1968,9 +1968,9 @@ hold  armed</pre>
         "split.zone.local": "Local",
         "localDns": "Local DNS",
         "localDnsD": "Resolves the domains of “bypass loft” zones. Other names go through the node’s DNS; Block zone domains don’t resolve.",
-        "dnsSys": "System",
-        "dnsCustom": "Own address",
-        "dnsDoh": "DoH",
+        "ldnsSys": "System",
+        "ldnsCustom": "Own address",
+        "ldnsDoh": "DoH",
         "split.add.dom": "Domains",
         "split.add.dom.d": "One per line; a domain covers its subdomains. Bypass zone domains resolve with the local DNS, Block zone domains are refused (NXDOMAIN).",
         "split.dom": "domain",
@@ -2330,9 +2330,9 @@ hold  armed</pre>
         "split.zone.local": "Local",
         "localDns": "本地 DNS",
         "localDnsD": "解析「绕过 loft」区域的域名。其他名称经节点 DNS；Block 区域的域名不解析。",
-        "dnsSys": "系统",
-        "dnsCustom": "自定义地址",
-        "dnsDoh": "DoH",
+        "ldnsSys": "系统",
+        "ldnsCustom": "自定义地址",
+        "ldnsDoh": "DoH",
         "split.add.dom": "域名",
         "split.add.dom.d": "每行一个；域名包括其子域名。绕过区域的域名用本地 DNS 解析，Block 区域的域名被拒绝（NXDOMAIN）。",
         "split.dom": "个域名",
