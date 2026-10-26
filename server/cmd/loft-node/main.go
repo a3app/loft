@@ -70,6 +70,17 @@ func main() {
 		return
 	}
 
+	// A standby that took over by itself starts from the controller's files.
+	promoted := autoPromoted(*dir)
+	if promoted {
+		st, err := os.Stat(*dir)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := copyState(*dir, st); err != nil {
+			log.Fatal(err)
+		}
+	}
 	n, err := netconf.LoadDir(*dir)
 	if err != nil {
 		log.Fatal(err)
@@ -101,6 +112,30 @@ func main() {
 			GetPath: "/static/v3/build",
 			WSPath:  "/api/v1/sync",
 			Role:    "controller",
+		}
+	}
+	if promoted && cfg.IsReplica() {
+		sb := filepath.Join(*dir, "standby")
+		ctlConf, err := os.ReadFile(filepath.Join(sb, "node.conf"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		merged, err := mergePromoted(cfg, ctlConf)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if tok, err := os.ReadFile(filepath.Join(sb, "loft.token")); err == nil {
+			merged.Token = strings.TrimSpace(string(tok))
+		}
+		cfg = merged
+		log.Printf("standby %s runs as the controller (took over by itself; loft-node -promote makes it permanent)", filepath.Base(*dir))
+	} else if cfg.IsReplica() {
+		transport.PromoteHook = func() {
+			if err := markPromoted(*dir); err != nil {
+				log.Printf("loft-standby: %v", err)
+				return
+			}
+			os.Exit(3) // systemd restarts loft-node, which starts as the controller
 		}
 	}
 	if *listen != "" {

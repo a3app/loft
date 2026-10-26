@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/a3app/loft/internal/config"
 )
@@ -44,6 +45,55 @@ func controllerState(dir, cfgPath string, cfg *config.ServerConfig) map[string][
 	return out
 }
 
+// promotedMark is the file a standby writes in -dir when it took over by
+// itself: from then on it starts as the controller from its standby copy.
+const promotedMark = "promoted"
+
+func autoPromoted(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, promotedMark))
+	return err == nil
+}
+
+func markPromoted(dir string) error {
+	return os.WriteFile(filepath.Join(dir, promotedMark), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o600)
+}
+
+// mergePromoted is the controller's node.conf (ctlConf) with this standby's
+// own listen, address, certificate and decoy, as the controller role, and
+// without this standby in the relay list.
+func mergePromoted(mine *config.ServerConfig, ctlConf []byte) (*config.ServerConfig, error) {
+	c, err := config.ParseCommands(string(ctlConf))
+	if err != nil {
+		return nil, fmt.Errorf("promote: controller node.conf: %w", err)
+	}
+	c.Role = "controller"
+	c.Listen, c.Advertise, c.CertFile, c.KeyFile = mine.Listen, mine.Advertise, mine.CertFile, mine.KeyFile
+	c.Decoy, c.Mask, c.DecoyProxy = mine.Decoy, mine.Mask, mine.DecoyProxy
+	c.ID, c.Controller, c.ControllerAlt, c.ControllerPub = "", "", nil, ""
+	c.Witness, c.WitnessListen, c.PromoteAfter = nil, "", 0
+	c.Relays = slices.DeleteFunc(c.Relays, func(e config.RelayEntry) bool { return e.ID == mine.ID })
+	return c, nil
+}
+
+// copyState copies the controller's files from {dir}/standby into dir, with
+// the owner of like.
+func copyState(dir string, like os.FileInfo) error {
+	sb := filepath.Join(dir, "standby")
+	for _, n := range stateFiles {
+		b, err := os.ReadFile(filepath.Join(sb, n))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := writeLike(filepath.Join(dir, n), b, 0o600, like); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // promote turns this standby into the controller (run as root, then restart
 // loft-node). It copies the controller's files from {dir}/standby into dir,
 // writes the controller's node.conf with this host's listen, address,
@@ -67,35 +117,20 @@ func promote(dir, cfgPath, envPath string) error {
 	if err != nil {
 		return fmt.Errorf("promote: controller node.conf: %w", err)
 	}
-	c, err := config.ParseCommands(string(ctlConf))
+	c, err := mergePromoted(mine, ctlConf)
 	if err != nil {
-		return fmt.Errorf("promote: controller node.conf: %w", err)
+		return err
 	}
-	c.Role = "controller"
-	c.Listen, c.Advertise, c.CertFile, c.KeyFile = mine.Listen, mine.Advertise, mine.CertFile, mine.KeyFile
-	c.Decoy, c.Mask, c.DecoyProxy = mine.Decoy, mine.Mask, mine.DecoyProxy
-	c.ID, c.Controller, c.ControllerAlt, c.ControllerPub = "", "", nil, ""
-	c.Relays = slices.DeleteFunc(c.Relays, func(e config.RelayEntry) bool { return e.ID == mine.ID })
 	text := "# loft-node config; promoted from standby " + mine.ID + ".\n" + config.RenderCommands(*c)
 	if _, err := config.ParseCommands(text); err != nil {
 		return fmt.Errorf("promote: %w", err)
 	}
-
 	st, err := os.Stat(dir)
 	if err != nil {
 		return err
 	}
-	for _, n := range stateFiles {
-		b, err := os.ReadFile(filepath.Join(sb, n))
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if err := writeLike(filepath.Join(dir, n), b, 0o600, st); err != nil {
-			return err
-		}
+	if err := copyState(dir, st); err != nil {
+		return err
 	}
 	cst, err := os.Stat(cfgPath)
 	if err != nil {
@@ -109,6 +144,7 @@ func promote(dir, cfgPath, envPath string) error {
 			return err
 		}
 	}
+	os.Remove(filepath.Join(dir, promotedMark))
 	return nil
 }
 
