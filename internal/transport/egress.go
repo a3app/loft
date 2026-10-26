@@ -75,6 +75,8 @@ type Peer struct {
 	From   string    `json:"from,omitempty"`
 	Front  string    `json:"front,omitempty"` // live bulk mux front (get/ws/h2/quic/h3/l3)
 	Since  time.Time `json:"since"`
+	Rx     uint64    `json:"rx,omitempty"` // CmdData/CmdDgram from the member
+	Tx     uint64    `json:"tx,omitempty"` // CmdData/CmdDgram to the member
 }
 
 // Peers lists the attached sessions.
@@ -92,7 +94,11 @@ func (o *Overlay) Peers() []Peer {
 		} else {
 			front = sessionBulkFront(p.sess)
 		}
-		out = append(out, Peer{Member: p.member, IP: p.ip, Inst: p.inst, From: p.seen, Front: front, Since: p.at})
+		var rx, tx uint64
+		if p.sess != nil {
+			tx, rx = p.sess.Bytes()
+		}
+		out = append(out, Peer{Member: p.member, IP: p.ip, Inst: p.inst, From: p.seen, Front: front, Since: p.at, Rx: rx, Tx: tx})
 	}
 	return out
 }

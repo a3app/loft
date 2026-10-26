@@ -169,6 +169,9 @@ func TestOverlayPeersReportsBulkFront(t *testing.T) {
 	if len(peers) != 1 || peers[0].Front != wire.FrontH2 || peers[0].Member != "alice" {
 		t.Fatalf("%+v", peers)
 	}
+	if peers[0].Rx != 0 || peers[0].Tx != 0 {
+		t.Fatalf("idle bytes %+v", peers[0])
+	}
 }
 
 // TestOverlayDetachReleasesLease lets a second instance admit after Detach.
