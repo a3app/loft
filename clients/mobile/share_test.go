@@ -83,6 +83,9 @@ func TestParseShareLoftFrontQuery(t *testing.T) {
 	if cfg.Outbounds[3].Type != "quic" {
 		t.Fatalf("quic %+v", cfg.Outbounds[3])
 	}
+	if strings.Join(cfg.Fronts, ",") != "get,ws,h2,quic" {
+		t.Fatalf("fronts %v", cfg.Fronts)
+	}
 	empty, err := ParseShare("loft://lt_abc@example.com/?get=&ws=&h2=#Home")
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +99,9 @@ func TestParseShareLoftFrontQuery(t *testing.T) {
 	}
 	if got.Outbounds[1].Type != "ws" || got.Outbounds[2].Type != "h2" {
 		t.Fatalf("empty fronts %+v", got.Outbounds)
+	}
+	if strings.Join(got.Fronts, ",") != "get,ws,h2" {
+		t.Fatalf("listed fronts %v", got.Fronts)
 	}
 }
 
@@ -126,6 +132,9 @@ func TestParseShareEdgeGETThenNode(t *testing.T) {
 	}
 	if cfg.EdgeURL != "https://cdn.example.com/static/v3/build" {
 		t.Fatalf("edge field %q", cfg.EdgeURL)
+	}
+	if strings.Join(cfg.Fronts, ",") != "get,ws,h2,quic" {
+		t.Fatalf("fronts %v", cfg.Fronts)
 	}
 }
 

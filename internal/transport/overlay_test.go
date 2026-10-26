@@ -230,6 +230,28 @@ func TestOverlayResumeKeepsForwarding(t *testing.T) {
 	}
 }
 
+func TestLearnedMaskPub(t *testing.T) {
+	pub := make([]byte, 32)
+	for i := range pub {
+		pub[i] = byte(i + 1)
+	}
+	RememberVis(wire.Status{IP: "10.8.0.6", MaskPub: pub})
+	t.Cleanup(func() {
+		visMu.Lock()
+		visMaskPub = nil
+		visMu.Unlock()
+		RememberVis(wire.Status{})
+	})
+	got := LearnedMaskPub()
+	if len(got) != 64 {
+		t.Fatalf("%q", got)
+	}
+	RememberVis(wire.Status{IP: "10.8.0.7"})
+	if LearnedMaskPub() != got {
+		t.Fatal("empty Status dropped mask")
+	}
+}
+
 // TestOverlayGatewayVis keeps STATUS gw for the popover Route row.
 func TestOverlayGatewayVis(t *testing.T) {
 	RememberVis(wire.Status{IP: "10.8.0.6", Gateway: "10.8.0.1"})

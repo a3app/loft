@@ -38,6 +38,7 @@ type Snapshot struct {
 	DNS        string
 	FrontIPs   string
 	Fronts     string
+	MaskPub    string
 	Routes     string
 	BytesUp    int64
 	BytesDown  int64
@@ -278,6 +279,7 @@ func (e *Engine) Snapshot() *Snapshot {
 	s.IP6, s.Prefix6 = splitPrefix(transport.OverlayIPv6(), 64)
 	s.Routes = joinComma(transport.OverlayRoutes())
 	s.Fronts = transport.FormatFronts(transport.LearnedFronts())
+	s.MaskPub = transport.LearnedMaskPub()
 	if dns := transport.OverlayDNS(); len(dns) > 0 {
 		s.DNS = joinComma(dns)
 	}

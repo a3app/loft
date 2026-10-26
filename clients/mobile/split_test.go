@@ -24,6 +24,40 @@ func TestFrontHostsAndLiteralIPs(t *testing.T) {
 	}
 }
 
+func TestFrontHostsIncludesEdge(t *testing.T) {
+	cfg := &config.ClientConfig{
+		EdgeURL: "https://cdn.example.com:8443/foo",
+		Outbounds: []config.Outbound{
+			{URL: "https://node.example.com/static"},
+		},
+	}
+	hosts := FrontHosts(cfg)
+	if len(hosts) != 2 || hosts[0] != "cdn.example.com" || hosts[1] != "node.example.com" {
+		t.Fatalf("%v", hosts)
+	}
+}
+
+func TestFrontHostsAfterPinEdge(t *testing.T) {
+	y := "kind: loft\ntoken: lt_x\nedge: https://cdn.example.com\noutbounds:\n  - name: n\n    type: get\n    url: https://node.example.com\n    path: /static/js\n"
+	cfg, _, err := decodeFile([]byte(y))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hosts := FrontHosts(cfg)
+	var cdn, node bool
+	for _, h := range hosts {
+		if h == "cdn.example.com" {
+			cdn = true
+		}
+		if h == "node.example.com" {
+			node = true
+		}
+	}
+	if !cdn || !node {
+		t.Fatalf("%v", hosts)
+	}
+}
+
 func TestHostOf(t *testing.T) {
 	cases := map[string]string{
 		"https://edge.example.com:8443/foo?x=1": "edge.example.com",

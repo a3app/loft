@@ -8,16 +8,23 @@ import (
 )
 
 // FrontHosts are outbound hostnames or literal IPs to exclude from the tunnel.
+// EdgeURL is the CDN origin: 0/1 must not swallow the first GET.
 func FrontHosts(cfg *config.ClientConfig) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, o := range cfg.Outbounds {
-		h := hostOf(o.URL)
+	add := func(h string) {
 		if h == "" || seen[h] {
-			continue
+			return
 		}
 		seen[h] = true
 		out = append(out, h)
+	}
+	if cfg == nil {
+		return out
+	}
+	add(hostOf(cfg.EdgeURL))
+	for _, o := range cfg.Outbounds {
+		add(hostOf(o.URL))
 	}
 	return out
 }

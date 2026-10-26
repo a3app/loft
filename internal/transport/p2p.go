@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"io"
 	"net"
 	"os"
@@ -26,20 +27,21 @@ import (
 // p2pAllow and vis* are the client overlay view. LFT HMAC uses X25519
 // against the peer pub from Status hints.
 var (
-	p2pAllow  atomic.Bool
-	visMu     sync.Mutex
-	visMode   byte
-	visP2P    byte
-	visHint   []wire.PeerHint
-	visIP     string
-	visGW     string
-	visIP6    string
-	visVLAN   uint16
-	visDNS    []string
-	visRoutes []string
-	visPolicy wire.Policy
-	visTTLMS  uint32
-	visFronts []wire.FrontEP
+	p2pAllow   atomic.Bool
+	visMu      sync.Mutex
+	visMode    byte
+	visP2P     byte
+	visHint    []wire.PeerHint
+	visIP      string
+	visGW      string
+	visIP6     string
+	visVLAN    uint16
+	visDNS     []string
+	visRoutes  []string
+	visPolicy  wire.Policy
+	visTTLMS   uint32
+	visFronts  []wire.FrontEP
+	visMaskPub []byte
 
 	p2pKeyMu sync.Mutex
 	p2pKey   *ecdh.PrivateKey
@@ -131,6 +133,9 @@ func RememberVis(st wire.Status) {
 	visPolicy = st.Policy
 	visTTLMS = st.SessionTTLMS
 	visFronts = append([]wire.FrontEP(nil), st.Fronts...)
+	if len(st.MaskPub) == 32 {
+		visMaskPub = append([]byte(nil), st.MaskPub...)
+	}
 	visMu.Unlock()
 	rememberHold(st)
 	if st.InstanceID != "" {
@@ -143,6 +148,16 @@ func LearnedFronts() []wire.FrontEP {
 	visMu.Lock()
 	defer visMu.Unlock()
 	return append([]wire.FrontEP(nil), visFronts...)
+}
+
+// LearnedMaskPub is the 64-hex node mask_pub from the last OK Status. Empty = none yet.
+func LearnedMaskPub() string {
+	visMu.Lock()
+	defer visMu.Unlock()
+	if len(visMaskPub) != 32 {
+		return ""
+	}
+	return hex.EncodeToString(visMaskPub)
 }
 
 // FormatFronts is a compact STATUS token: get=/static/v3/build,ws=/api/v1/sync,quic

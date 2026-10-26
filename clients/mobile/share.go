@@ -208,6 +208,10 @@ func loftYAML(raw string) (string, error) {
 		Select:    "auto",
 		Outbounds: outs,
 	}
+	// Hello the query fronts, not FrontOrder. Empty Fronts + GET would fan every mux.
+	if len(listed) > 0 {
+		cfg.Fronts = append([]string(nil), listed...)
+	}
 	if err := config.PinEdgeGET(cfg, q.Get("edge")); err != nil {
 		return "", err
 	}
