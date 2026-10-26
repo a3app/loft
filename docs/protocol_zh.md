@@ -314,11 +314,12 @@ u64be caps
 u8    program_len || program
 u8    software_len || software
 u8    inner            可选。仅当客户端请求时有一个字节
+u8    pin_len || controller_pin   可选，位于 inner 之后
 ```
 
 `instance_id` 在客户端持久保存。空则节点在 Status 中签发一个；客户端必须存储它。字符串 ≤ 64 字节。协议版本为 `major<<8|minor`（`0x0100` = 1.0）。能力 `relay` 标记中继干线。能力 `p2p` 标记将宣告监听端口的客户端。
 
-没有 proto/caps 的旧块仍可解码。尾部未知字节必须忽略。`software` 之后若还剩一个字节，那是数据密码请求（§4.3）：`0` 为 clear，`2` 为 AES-256-GCM。没有该字节不是 `0`。再往后的字节必须忽略。旧解码器忽略该请求，留在 ChaCha20-Poly1305。
+没有 proto/caps 的旧块仍可解码。尾部未知字节必须忽略。`software` 之后若还剩一个字节，那是数据密码请求（§4.3）：`0` 为 clear，`2` 为 AES-256-GCM。没有该字节不是 `0`。`controller_pin` 是客户端当前信任的 controller 公钥 SHA-256 的前 8 字节（§10.4）；发送它但不请求密码的客户端将 `inner` 写为 `1`。节点仅用它统计密钥轮换期间已切换到新密钥的设备，它不授予任何权限。再往后的字节必须忽略。旧解码器忽略该请求，留在 ChaCha20-Poly1305。
 
 ### 5.2 Status
 

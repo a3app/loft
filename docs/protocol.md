@@ -314,11 +314,12 @@ u64be caps
 u8    program_len || program
 u8    software_len || software
 u8    inner            optional. One byte only when the client asks
+u8    pin_len || controller_pin   optional after inner
 ```
 
 `instance_id` persists on the client. Empty means the node mints one in Status; the client MUST store it. Strings ≤ 64 bytes. Protocol version is `major<<8|minor` (`0x0100` = 1.0). Cap `relay` marks a relay trunk. Cap `p2p` marks a client that will announce a listen port.
 
-An old blob without proto/caps still decodes. Trailing unknown bytes MUST be ignored. When one byte remains after `software`, it is the data-cipher ask (§4.3): `0` clear, `2` AES-256-GCM. Absence is not `0`. Further bytes MUST be ignored. An old decoder ignores the ask and stays on ChaCha20-Poly1305.
+An old blob without proto/caps still decodes. Trailing unknown bytes MUST be ignored. When one byte remains after `software`, it is the data-cipher ask (§4.3): `0` clear, `2` AES-256-GCM. Absence is not `0`. `controller_pin` is the first 8 bytes of SHA-256 of the controller public key the client trusts now (§10.4); a client that sends it and asks no cipher writes `inner` = `1`. The node uses it only to count who has moved to a new key during a key roll; it grants nothing. Further bytes MUST be ignored. An old decoder ignores the ask and stays on ChaCha20-Poly1305.
 
 ### 5.2 Status
 
