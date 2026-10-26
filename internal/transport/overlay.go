@@ -59,6 +59,7 @@ type l3Sink interface {
 // seen is the client's public address as the node saw it; together with
 // listen and p2pPub it lets other members try a direct P2P connection.
 type ovPeer struct {
+	pin    []byte // PinOf the controller key the member's client trusts (Hello)
 	ip     string
 	member string
 	inst   string

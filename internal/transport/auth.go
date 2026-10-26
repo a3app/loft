@@ -112,6 +112,7 @@ func stampOverlayAuth(st *wire.Status, rest []byte, sess *mux.Session, remote ne
 		h.MemberID = id
 	}
 	ov.Bind(st, h, sess, remote)
+	ov.setPin(sess, h.ControllerPin)
 }
 
 // stampOverlayAuthL3 binds an L3 IP pump the same way Bind binds a mux session.

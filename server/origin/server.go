@@ -40,6 +40,8 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 		if err == nil {
 			fl := transport.NewFleet(priv, cfg)
 			transport.FleetCtl = fl
+			pin := wire.PinOf(priv.Public().(ed25519.PublicKey))
+			transport.CurrentPin = func() []byte { return pin }
 			if cfg.ControllerKey != "" {
 				roll := filepath.Join(filepath.Dir(cfg.ControllerKey), "controller.roll")
 				fl.SetKeyRoll(ecrypto.LoadKeyRoll(roll, priv.Public().(ed25519.PublicKey)))

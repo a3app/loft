@@ -2,13 +2,16 @@ package wire
 
 // Hello/Status codecs, optional tails, and status code names.
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 // TestHelloStatusRoundTrip encodes then decodes Hello and a full Status.
 func TestHelloStatusRoundTrip(t *testing.T) {
 	h := Hello{Version: 1, MemberID: "alice", InstanceID: "phone", Min: ProtoMin, Max: Proto, Caps: NodeCaps, Program: "loft", Software: "0.1.0"}
 	got, err := DecodeHello(h.Encode())
-	if err != nil || got != h {
+	if err != nil || !reflect.DeepEqual(got, h) {
 		t.Fatalf("%+v %v", got, err)
 	}
 	s := Status{

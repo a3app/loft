@@ -8,6 +8,7 @@ package wire
 // so an old peer that stops reading early never misreads a newer field.
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 )
@@ -25,6 +26,19 @@ type Hello struct {
 	Software   string // client release, e.g. 1.0.22 — not the protocol
 	InnerSet   bool   // one trailing byte is present; false means the client did not ask
 	Inner      byte   // 0 clear, 1 ChaCha20-Poly1305, 2 AES-256-GCM. Meaningful when InnerSet
+	// ControllerPin is PinOf the controller key the client trusts now, so the
+	// node can tell who has moved to a new key during a key roll. Empty when
+	// the client pins none.
+	ControllerPin []byte
+}
+
+// PinOf is the first 8 bytes of SHA-256 of a controller public key.
+func PinOf(pub []byte) []byte {
+	if len(pub) == 0 {
+		return nil
+	}
+	s := sha256.Sum256(pub)
+	return s[:8]
 }
 
 // Offer is this Hello's version range and caps. Max 0 is treated as 1.0.
@@ -188,8 +202,21 @@ func (h Hello) Encode() []byte {
 	b = b[:off+12]
 	b = append(b, putStr(h.Program)...)
 	b = append(b, putStr(h.Software)...)
-	if h.InnerSet {
-		b = append(b, h.Inner)
+	if h.InnerSet || len(h.ControllerPin) > 0 {
+		// Without a cipher request the byte is ChaCha20-Poly1305, the default.
+		in := h.Inner
+		if !h.InnerSet {
+			in = InnerChaCha
+		}
+		b = append(b, in)
+		if len(h.ControllerPin) > 0 {
+			pin := h.ControllerPin
+			if len(pin) > 32 {
+				pin = pin[:32]
+			}
+			b = append(b, byte(len(pin)))
+			b = append(b, pin...)
+		}
 	}
 	return b
 }
@@ -223,6 +250,9 @@ func DecodeHello(b []byte) (Hello, error) {
 			if end := n + m; end < len(extra) {
 				h.Inner = extra[end]
 				h.InnerSet = true
+				if p := extra[end+1:]; len(p) >= 1 && len(p) >= 1+int(p[0]) {
+					h.ControllerPin = append([]byte(nil), p[1:1+int(p[0])]...)
+				}
 			}
 		}
 	}

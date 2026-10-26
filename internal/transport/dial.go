@@ -64,6 +64,7 @@ func newClientHello(caps wire.Cap) wire.Hello {
 		h.InnerSet = true
 		h.Inner = id
 	}
+	h.ControllerPin = wire.PinOf(PinnedControllerPub())
 	return h
 }
 

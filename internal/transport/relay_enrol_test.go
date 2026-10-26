@@ -225,3 +225,15 @@ func TestDrainCutsTrunk(t *testing.T) {
 		t.Fatal("drained relay's trunk is still open")
 	}
 }
+
+// TestPeerKeyState: a member is "current" when its client pins this
+// controller's key, "old" when another, and unmarked when it said nothing.
+func TestPeerKeyState(t *testing.T) {
+	prev := CurrentPin
+	cur := wire.PinOf([]byte("new key"))
+	CurrentPin = func() []byte { return cur }
+	t.Cleanup(func() { CurrentPin = prev })
+	if keyState(cur) != "current" || keyState(wire.PinOf([]byte("old key"))) != "old" || keyState(nil) != "" {
+		t.Fatal("key state")
+	}
+}

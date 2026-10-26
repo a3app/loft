@@ -83,3 +83,20 @@ func TestAgreeInner(t *testing.T) {
 		t.Fatal("name")
 	}
 }
+
+// TestHelloControllerPin: the pin rides after the inner byte; without a
+// cipher request that byte is ChaCha, which asks for nothing.
+func TestHelloControllerPin(t *testing.T) {
+	pin := PinOf([]byte("controller public key"))
+	h, err := DecodeHello(Hello{Program: "t", ControllerPin: pin}.Encode())
+	if err != nil || string(h.ControllerPin) != string(pin) || h.Inner != InnerChaCha {
+		t.Fatalf("pin round trip: %+v %v", h, err)
+	}
+	h, _ = DecodeHello(Hello{Program: "t", InnerSet: true, Inner: InnerAES, ControllerPin: pin}.Encode())
+	if string(h.ControllerPin) != string(pin) || h.Inner != InnerAES {
+		t.Fatalf("pin with AES: %+v", h)
+	}
+	if h, _ := DecodeHello(Hello{Program: "t", InnerSet: true, Inner: InnerAES}.Encode()); h.ControllerPin != nil {
+		t.Fatal("pin out of nothing")
+	}
+}

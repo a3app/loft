@@ -83,6 +83,36 @@ type Peer struct {
 	Since  time.Time `json:"since"`
 	Rx     uint64    `json:"rx,omitempty"` // CmdData/CmdDgram from the member
 	Tx     uint64    `json:"tx,omitempty"` // CmdData/CmdDgram to the member
+	// Key is "current" when the member's client trusts this controller's key
+	// now, "old" when it still trusts another (during a key roll), empty when
+	// the client did not say.
+	Key string `json:"key,omitempty"`
+}
+
+// CurrentPin returns PinOf this controller's signing key; the node sets it.
+var CurrentPin func() []byte
+
+// setPin records which controller key the client of sess trusts.
+func (o *Overlay) setPin(sess *mux.Session, pin []byte) {
+	if o == nil || sess == nil {
+		return
+	}
+	o.mu.Lock()
+	if p := o.byS[sess]; p != nil {
+		p.pin = append([]byte(nil), pin...)
+	}
+	o.mu.Unlock()
+}
+
+// keyState is Peer.Key for a client pin.
+func keyState(pin []byte) string {
+	if len(pin) == 0 || CurrentPin == nil {
+		return ""
+	}
+	if string(pin) == string(CurrentPin()) {
+		return "current"
+	}
+	return "old"
 }
 
 // Peers lists the attached sessions.
@@ -104,7 +134,7 @@ func (o *Overlay) Peers() []Peer {
 		if p.sess != nil {
 			tx, rx = p.sess.Bytes()
 		}
-		out = append(out, Peer{Member: p.member, IP: p.ip, Inst: p.inst, From: p.seen, Front: front, Since: p.at, Rx: rx, Tx: tx})
+		out = append(out, Peer{Member: p.member, IP: p.ip, Inst: p.inst, From: p.seen, Front: front, Since: p.at, Rx: rx, Tx: tx, Key: keyState(p.pin)})
 	}
 	return out
 }
