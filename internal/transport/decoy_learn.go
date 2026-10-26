@@ -135,23 +135,35 @@ func RememberRoster(raw []byte) bool {
 	}
 	rosterMu.Lock()
 	defer rosterMu.Unlock()
-	if len(pinnedPub) == 0 && len(heldRoster.Pub) == 0 {
-		if !tofuOK {
-			return false
-		}
-		pinnedPub = append([]byte(nil), r.Pub...)
-		persistPinnedPubLocked(pinnedPub)
-	}
-	if len(pinnedPub) > 0 && string(pinnedPub) != string(r.Pub) {
-		return false
-	}
-	if len(heldRoster.Pub) > 0 && string(heldRoster.Pub) != string(r.Pub) {
+	if !trustSignerLocked(r.Pub) {
 		return false
 	}
 	if r.Serial < heldRoster.Serial {
 		return false
 	}
 	heldRoster = r
+	return true
+}
+
+// trustSignerLocked reports whether pub is the controller's signing key: the
+// pin, or the key of the roster already held. The roster and the address
+// lists are signed by the same key, so a document signed by any other key is
+// refused even if its own signature is valid. With neither a pin nor a roster,
+// TOFU (when allowed) pins pub. Caller holds rosterMu.
+func trustSignerLocked(pub []byte) bool {
+	if len(pinnedPub) == 0 && len(heldRoster.Pub) == 0 {
+		if !tofuOK {
+			return false
+		}
+		pinnedPub = append([]byte(nil), pub...)
+		persistPinnedPubLocked(pinnedPub)
+	}
+	if len(pinnedPub) > 0 && string(pinnedPub) != string(pub) {
+		return false
+	}
+	if len(heldRoster.Pub) > 0 && string(heldRoster.Pub) != string(pub) {
+		return false
+	}
 	return true
 }
 

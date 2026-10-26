@@ -251,7 +251,7 @@ make probe
 | `fronts` | Дополнительный фильтр. Пусто = типы исходящих (по умолчанию GET) |
 | `inner` | Запрос шифра данных: `clear` или `aes`. Пусто или `chacha` — байт в Hello не пишется (ChaCha20-Poly1305). Нода подтверждает этот идентификатор, иначе сессия остаётся на ChaCha20-Poly1305. `get` остаётся на ChaCha20-Poly1305. `loft-front -inner` задаёт то же поле. |
 | `bootstrap` | HTTPS URL манифеста roster, запрашивается до аутентификации |
-| `controller_pub` | 32 байта Ed25519 (64 hex). Нужен, чтобы принять roster |
+| `controller_pub` | 32 байта Ed25519 (64 hex). Нужен, чтобы принять roster и списки адресов |
 | `tofu` | `true` закрепляет первого действительного подписанта, если `controller_pub` пуст (по умолчанию выкл) |
 | `outbounds` | `type`, `url`, `path`, `cdn`, `fingerprint` |
 | `use` | Имя списка → `direct` \| `via` \| `drop` |

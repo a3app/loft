@@ -251,7 +251,7 @@ make probe
 | `fronts` | Extra filter. Empty = outbound types (stock is GET) |
 | `inner` | Data-cipher ask: `clear` or `aes`. Empty or `chacha` omits the Hello byte (ChaCha20-Poly1305). The node confirms that id or the session stays on ChaCha20-Poly1305. `get` stays ChaCha20-Poly1305. `loft-front -inner` is this field. |
 | `bootstrap` | HTTPS URL of the roster manifest, before auth |
-| `controller_pub` | 32-byte Ed25519 (64 hex). Required to accept a roster |
+| `controller_pub` | 32-byte Ed25519 (64 hex). Required to accept a roster and address lists |
 | `tofu` | `true` pins the first valid signer when `controller_pub` is empty (default off) |
 | `outbounds` | `type`, `url`, `path`, `cdn`, `fingerprint` |
 | `use` | List name → `direct` \| `via` \| `drop` |

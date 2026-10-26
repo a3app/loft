@@ -582,7 +582,7 @@ Provisioning of machines and certificates is outside this protocol.
 
 The controller MAY publish named lists of addresses. Names have no protocol meaning. The client maps names to `direct`, `via`, or `drop`. If a host matches several mapped lists, apply drop, then direct, then via. Unmatched destinations use the client default (SHOULD be `via`).
 
-Body (Ed25519, same key as the roster):
+Body (Ed25519, same key as the roster). A client MUST reject lists whose signer is not the controller key it accepts for the roster, and lists with a lower serial than the lists it holds: lists decide which traffic leaves the tunnel, and they are often fetched through a CDN.
 
 ```
 u64be serial

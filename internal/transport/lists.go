@@ -11,6 +11,7 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -71,22 +72,43 @@ func SetUse(cfg *config.ClientConfig) {
 	liveBook.Store(nb)
 }
 
-// RememberLists stores a verified signed Lists document, keeping the current use map.
-func RememberLists(l wire.Lists) {
+// RememberLists stores a signed Lists document, keeping the current use map.
+// The signature must be valid and made by the controller key (the same key
+// that signs the roster): lists decide which traffic leaves the tunnel, so a
+// document signed by anyone else, for example served by a CDN or a box on the
+// path, is refused. An older serial than the one in use is refused too, so an
+// old document cannot be replayed over a newer one.
+func RememberLists(l wire.Lists) error {
 	if err := l.Verify(); err != nil {
-		return
+		return err
+	}
+	rosterMu.Lock()
+	trusted := trustSignerLocked(l.Pub)
+	rosterMu.Unlock()
+	if !trusted {
+		return errListsSigner
+	}
+	cur := liveBook.Load()
+	if cur != nil && l.Serial < cur.ser {
+		return errListsOld
 	}
 	sets := map[string][]wire.Addr{}
 	for _, s := range l.Sets {
 		sets[strings.ToLower(s.Name)] = s.Entries
 	}
 	nb := &book{sets: sets, ser: l.Serial, hash: l.Hash(), def: ActVia, use: map[string]Action{}}
-	if cur := liveBook.Load(); cur != nil {
+	if cur != nil {
 		nb.def = cur.def
 		nb.use = cur.use
 	}
 	liveBook.Store(nb)
+	return nil
 }
+
+var (
+	errListsSigner = errors.New("lists: not signed by the controller key (set controller_pub or tofu: true)")
+	errListsOld    = errors.New("lists: older serial than the lists in use")
+)
 
 // LookupAddr applies drop, then direct, then via on matching mapped lists; else default.
 // Drop wins over everything so a blocking list cannot be bypassed by a host
@@ -163,11 +185,7 @@ func FetchLists(ctx context.Context, url string) error {
 	if err != nil {
 		return err
 	}
-	if err := l.Verify(); err != nil {
-		return err
-	}
-	RememberLists(l)
-	return nil
+	return RememberLists(l)
 }
 
 // BootstrapLists applies use: then fetches lists.json from ListsURL, bootstrap, or CDN URLs.

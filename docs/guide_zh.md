@@ -251,7 +251,7 @@ make probe
 | `fronts` | 额外过滤。空 = 出站类型（默认 GET） |
 | `inner` | 数据密码请求：`clear` 或 `aes`。空或 `chacha` 不写 Hello 字节（ChaCha20-Poly1305）。节点确认该标识，否则会话留在 ChaCha20-Poly1305。`get` 保持 ChaCha20-Poly1305。`loft-front -inner` 是同一字段。 |
 | `bootstrap` | 名册清单的 HTTPS URL，认证之前 |
-| `controller_pub` | 32 字节 Ed25519（64 hex）。接名册必须有 |
+| `controller_pub` | 32 字节 Ed25519（64 hex）。接名册和地址列表必须有 |
 | `tofu` | `true` 在 `controller_pub` 空时钉住第一个有效签名者（默认关） |
 | `outbounds` | `type`、`url`、`path`、`cdn`、`fingerprint` |
 | `use` | 列表名 → `direct` \| `via` \| `drop` |
