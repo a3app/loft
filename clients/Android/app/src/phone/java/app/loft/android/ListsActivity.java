@@ -25,11 +25,20 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Editor for the split-routing lists (SplitStore): which address ranges go
+ * through the tunnel and which go direct. One activity with several pages
+ * built in code: the list of a zone, zones, one zone, one service, the
+ * repository settings and the catalog of ready-made lists. Back returns to
+ * the list page first. Changes apply on the next connect, when the routes
+ * are rebuilt.
+ */
 public final class ListsActivity extends LoftActivity {
     private static final int REQ_IN = 8;
     private SplitStore store;
     private String zoneId = SplitStore.GLOBAL;
     private String page = "list";
+    // Id of the zone or service the "zone" / "svc" page is editing.
     private String editing;
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -58,6 +67,7 @@ public final class ListsActivity extends LoftActivity {
         store.save(this);
     }
 
+    /** Switches to a page by name and rebuilds it from the store. */
     private void show(String p) {
         page = p;
         TextView title = findViewById(R.id.title);
@@ -95,6 +105,11 @@ public final class ListsActivity extends LoftActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
+    /**
+     * Main page: zone chips, the zone's policy, a searchable list of its
+     * services, add (a service or an ignore entry), and import / export as a
+     * .bat file and the repository page.
+     */
     private View listPage() {
         LinearLayout root = col();
         LinearLayout chips = new LinearLayout(this);
@@ -218,6 +233,11 @@ public final class ListsActivity extends LoftActivity {
         return row;
     }
 
+    /**
+     * Edit one service: name, prefixes (one per line or comma separated; bad
+     * entries are dropped on save), its zone, and whether it is a route or an
+     * ignore exclusion.
+     */
     private View svcPage() {
         SplitStore.Svc s = store.svc(editing);
         if (s == null) {
@@ -382,6 +402,7 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /** Repository settings of the current zone: list URL, auto-update switch, and "pull" to download now. */
     private View repoPage() {
         SplitStore.Zone z = store.zone(zoneId);
         LinearLayout root = col();
@@ -425,6 +446,7 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /** Ready-made lists from the loft-routes repository; picking one sets the zone's list URL. */
     private View catalogPage() {
         LinearLayout root = col();
         String lang = Prefs.applyLang(this);
@@ -447,6 +469,10 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /**
+     * Downloads the zone's .bat list and replaces the zone's repository
+     * services with it; user-added services stay.
+     */
     private void pull(SplitStore.Zone z) {
         if (z.repo == null || z.repo.isEmpty()) {
             Toast.makeText(this, R.string.no_url, Toast.LENGTH_SHORT).show();
@@ -473,6 +499,8 @@ public final class ListsActivity extends LoftActivity {
         }).start();
     }
 
+    // Imported .bat file: goes to the zone named in its "REM zone:" header
+    // when that zone exists, otherwise to the zone on screen.
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);

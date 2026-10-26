@@ -20,6 +20,12 @@ final class ExtIP {
             "ip", "query", "origin", "address", "ip_addr", "externalIp", "external_ip"
     };
 
+    /**
+     * Asks an echo service ("what is my IP") for the public address and returns
+     * it, or "" on any failure. The request is bound to the VPN network when one
+     * is up, so the answer is the address the internet sees through the tunnel,
+     * not the phone's own. Blocking; call it off the main thread.
+     */
     static String lookup(Context ctx, String raw) {
         if (raw == null) {
             return "";
@@ -54,6 +60,11 @@ final class ExtIP {
         }
     }
 
+    /**
+     * Extracts an IP from an echo service reply. Services differ, so it tries a
+     * bare address, then common JSON keys (the first item of a comma list, as
+     * in X-Forwarded-For style values), then the first IPv4-looking token.
+     */
     static String parse(byte[] data) {
         if (data == null || data.length == 0) {
             return "";
@@ -100,6 +111,7 @@ final class ExtIP {
         return parse(body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8));
     }
 
+    /** Returns {@code s} when it is a literal IPv4 or IPv6 address, else null. */
     static String asIP(String s) {
         if (s == null) {
             return null;
@@ -146,6 +158,7 @@ final class ExtIP {
         return true;
     }
 
+    // The first network with VPN transport, i.e. our tunnel; null when none is up.
     private static Network vpn(Context ctx) {
         if (ctx == null) {
             return null;

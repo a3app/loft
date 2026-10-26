@@ -2,6 +2,11 @@ package app.loft.android;
 
 /** One-level YAML field reader for client documents Mobile.parseShare emits. */
 final class Peek {
+    /**
+     * Value of a top-level key (first match, list items skipped). This is not a
+     * YAML parser: it only reads the flat documents the engine itself writes,
+     * which is enough to fill the UI.
+     */
     static String get(String yaml, String key) {
         if (yaml == null || key == null) {
             return "";
@@ -83,6 +88,7 @@ final class Peek {
         return val;
     }
 
+    /** The fields of one outbound list item that the app cares about. */
     static final class Ob {
         String type = "";
         String url = "";
@@ -93,6 +99,7 @@ final class Peek {
         String fp = "";
     }
 
+    /** Reads every item of the "outbounds:" list, in order. */
     static java.util.List<Ob> outbounds(String yaml) {
         java.util.ArrayList<Ob> out = new java.util.ArrayList<>();
         if (yaml == null) {
@@ -160,6 +167,7 @@ final class Peek {
         return out;
     }
 
+    /** Boolean field of the first outbound; {@code def} when absent. */
     static boolean outboundBool(String yaml, String key, boolean def) {
         String v = outbound(yaml, key).toLowerCase();
         if (v.isEmpty()) {

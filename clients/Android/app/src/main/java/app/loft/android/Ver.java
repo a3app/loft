@@ -4,6 +4,11 @@ package app.loft.android;
 final class Ver {
     private Ver() {}
 
+    /**
+     * Compares two versions; returns -1, 0 or 1. A release sorts above its own
+     * pre-release (1.2.3 &gt; 1.2.3-rc1); two pre-release tags compare as strings.
+     * Missing or non-numeric parts count as 0.
+     */
     static int cmp(String a, String b) {
         String an = a, ap = "";
         String bn = b, bp = "";

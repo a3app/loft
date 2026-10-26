@@ -7,6 +7,11 @@ import android.os.Bundle;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+/**
+ * Shows one profile as a share link and its QR code, with copy and share.
+ * The link contains the member key, so anyone who scans it can connect.
+ * Started with the profile id in the "id" extra.
+ */
 public final class ShareQrActivity extends LoftActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {

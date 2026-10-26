@@ -19,6 +19,10 @@ final class Box {
     private static final int IV = 12;
     private static final int TAG = 128;
 
+    /**
+     * Encrypts text. Output is "v1:" + base64(IV || ciphertext+tag), or
+     * "p:" + plain text when the keystore is not usable on this device.
+     */
     static String seal(String plain) {
         if (plain == null) {
             plain = "";
@@ -38,6 +42,10 @@ final class Box {
         }
     }
 
+    /**
+     * Reverses seal(). Text without a known prefix is returned as is (files
+     * written before encryption was added); a blob that fails to decrypt gives "".
+     */
     static String open(String blob) {
         if (blob == null || blob.isEmpty()) {
             return "";
@@ -64,6 +72,8 @@ final class Box {
         }
     }
 
+    // The AES-256 key lives in the hardware-backed keystore and never leaves it;
+    // it is created on first use.
     private static SecretKey key() throws Exception {
         KeyStore ks = KeyStore.getInstance(KS);
         ks.load(null);

@@ -41,6 +41,8 @@ final class Journal {
         return b.toString();
     }
 
+    // Hides member keys (lt_...) and the secret part of loft:// links so the log
+    // can be copied and shared safely.
     private static String redact(String s) {
         return s.replaceAll("lt_[0-9a-fA-F]{8,}", "lt_…")
                 .replaceAll("loft://[^\\s@]+@", "loft://…@");

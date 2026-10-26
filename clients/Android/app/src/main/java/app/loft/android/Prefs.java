@@ -10,7 +10,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * App settings in SharedPreferences "loft.prefs": UI options, routing
+ * switches and the user's custom routes. Profiles live elsewhere
+ * (Profiles, encrypted file).
+ */
 final class Prefs {
+    // Service that echoes the caller's public IP; used to show the address
+    // the internet sees through the tunnel.
     static final String DEFAULT_EXT_IP = "https://api.ipify.org";
 
     static SharedPreferences p(Context c) {
@@ -30,14 +37,17 @@ final class Prefs {
         return p(c).getBoolean("reconnect", true);
     }
 
+    /** Send all traffic through the tunnel, not only the overlay network. */
     static boolean defaultRoute(Context c) {
         return p(c).getBoolean("default_route", true);
     }
 
+    /** Keep private and link-local ranges off the tunnel so the local network stays reachable. */
     static boolean lanBypass(Context c) {
         return p(c).getBoolean("lan_bypass", true);
     }
 
+    /** Apply the user's domain/subnet lists (SplitStore) on top of the default route. */
     static boolean split(Context c) {
         return p(c).getBoolean("split", false);
     }
@@ -58,6 +68,7 @@ final class Prefs {
         return p(c).getBoolean("spark_bars", false);
     }
 
+    /** Resets all settings and restores the built-in split lists. */
     static void defaults(Context c) {
         p(c).edit().clear().apply();
         SplitStore st = new SplitStore();
@@ -74,6 +85,7 @@ final class Prefs {
         return u == null || u.trim().isEmpty() ? DEFAULT_EXT_IP : u.trim();
     }
 
+    /** User routes from the Routes screen, stored as a JSON array; invalid CIDRs are skipped. */
     static List<Route> routes(Context c) {
         List<Route> out = new ArrayList<>();
         String raw = p(c).getString("routes", "[]");
@@ -115,6 +127,7 @@ final class Prefs {
         return lang;
     }
 
+    /** One user route: a prefix and what to do with it. */
     static final class Route {
         String cidr = "";
         String via = "through"; // through | bypass | drop

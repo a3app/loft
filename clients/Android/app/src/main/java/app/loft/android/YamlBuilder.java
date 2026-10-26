@@ -2,6 +2,14 @@ package app.loft.android;
 
 /** Client YAML for Engine.Start. Shape matches clients/mobile marshalClient. */
 final class YamlBuilder {
+    /**
+     * Builds the engine config for a profile: top-level identity (member key
+     * for loft/VLESS/Trojan, user and password for SSTP), an optional edge
+     * (direct node address for the extra fronts), an optional inner cipher
+     * (extra encryption inside TLS), the "fronts" list when more than one
+     * front is used, and the outbounds (the servers to dial). For loft the
+     * first outbound is GET whenever GET is among the fronts.
+     */
     static String from(Profile p) {
         if (p == null) {
             return "";
@@ -74,6 +82,11 @@ final class YamlBuilder {
         return b.toString();
     }
 
+    /**
+     * The share form of a profile: a loft:// or sstp:// link built from its
+     * fields, or the original link for VLESS and Trojan. Used for QR sharing
+     * and TV pairing.
+     */
     static String emit(Profile p) {
         if (p == null) {
             return "";
@@ -87,6 +100,11 @@ final class YamlBuilder {
         return emitLoft(p);
     }
 
+    /**
+     * Builds a loft:// link: key@host[:port][/path]?type=&amp;scheme=&amp;cdn=&amp;edge=&amp;
+     * extra fronts&amp;pbk=#name. Defaults (GET, https/wss, port 443/80) are left
+     * out to keep the link and its QR short. pbk is the node's mask key.
+     */
     static String emitLoft(Profile p) {
         String token = p.token == null ? "" : p.token.trim();
         String host = p.host();
@@ -195,6 +213,12 @@ final class YamlBuilder {
         return b.toString();
     }
 
+    /**
+     * Writes one outbound per extra mux front (WS, H2, H3) that has a custom
+     * path, on the same origin as the main URL. A front on its default path
+     * gets no outbound of its own here. Nothing is written for CDN profiles,
+     * where only GET is used, or for L3.
+     */
     private static void appendExtraFronts(StringBuilder b, Profile p) {
         if (p.isCDN() || p.isL3()) {
             return;
@@ -221,6 +245,7 @@ final class YamlBuilder {
         }
     }
 
+    // Adds ws= / h2= / h3= / quic to a loft:// link when the profile uses extra fronts.
     private static void appendFrontQuery(StringBuilder q, Profile p) {
         if (p == null || !p.isLoft() || p.isL3()) {
             return;
@@ -256,6 +281,7 @@ final class YamlBuilder {
         }
     }
 
+    // scheme://host[:port] of the main URL, with ws/wss mapped to http/https.
     private static String originURL(Profile p) {
         String sch = schemeOf(p.url, p.kind);
         if ("ws".equals(sch) || "wss".equals(sch)) {
@@ -289,6 +315,8 @@ final class YamlBuilder {
         b.append(k).append(": ").append(quote(v == null ? "" : v)).append('\n');
     }
 
+    // Quotes a YAML value when it could be misread: contains ':', '#', a space
+    // or a quote, or is a member key (lt_...), which must stay a string.
     private static String quote(String s) {
         if (s.isEmpty()) {
             return "\"\"";
@@ -323,6 +351,7 @@ final class YamlBuilder {
         return url.substring(0, i).toLowerCase();
     }
 
+    /** Port from a URL, or the scheme's default (80 for http/ws, 443 otherwise). */
     static int portOf(String url, String scheme) {
         int def = ("http".equals(scheme) || "ws".equals(scheme)) ? 80 : 443;
         String hostport = hostPort(url);
@@ -348,6 +377,7 @@ final class YamlBuilder {
         return def;
     }
 
+    /** Path part of a URL without the query; "" for no path or a bare "/". */
     static String pathOf(String url) {
         if (url == null) {
             return "";

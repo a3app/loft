@@ -9,6 +9,13 @@ import android.widget.PopupMenu;
 import android.widget.Switch;
 import android.widget.TextView;
 
+/**
+ * Create or edit one profile. A profile can be entered as a link (loft://,
+ * vless://, trojan://, sstp://) or field by field ("manual"). For loft the
+ * manual form has the front, path, edge (direct node address used for
+ * the extra fronts) and the extra fronts' paths. Started with an "id" extra
+ * to edit, without one to create.
+ */
 public final class EditActivity extends LoftActivity {
     private static final String[] KINDS = {"loft", "sstp", "vless", "trojan"};
     private static final String[] METHODS = {"auto", "get", "ws", "h2", "quic", "h3", "l3"};
@@ -125,6 +132,11 @@ public final class EditActivity extends LoftActivity {
         ((Switch) findViewById(R.id.sw_dns_sys)).setChecked(p.dnsSystem);
     }
 
+    /**
+     * Shows only the fields that matter for the chosen protocol family and
+     * entry mode. Index 6 of the front control is L3, which has no extra fronts
+     * and no mux.
+     */
     private void show() {
         String fam = fresh ? KINDS[Seg.selected(findViewById(R.id.kind_seg))] : p.family();
         boolean loft = "loft".equals(fam);
@@ -169,6 +181,12 @@ public final class EditActivity extends LoftActivity {
         finish();
     }
 
+    /**
+     * Saves the form into the profile without closing. In link mode the link is
+     * parsed again, so a pasted or edited link wins over the fields; the name
+     * and DNS typed here are kept. In manual mode the URL is rebuilt from host
+     * and port, and for fronts other than GET the path goes into the URL.
+     */
     private void saveQuiet() {
         String fam = fresh ? KINDS[Seg.selected(findViewById(R.id.kind_seg))] : p.family();
         p.name = text(R.id.name);
@@ -281,6 +299,8 @@ public final class EditActivity extends LoftActivity {
         LoftApp.of(this).profiles().put(p);
     }
 
+    // Scanner result for a new profile: fill the form from the scanned link.
+    // Text that does not parse is left in the link field for the user to fix.
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -317,6 +337,8 @@ public final class EditActivity extends LoftActivity {
         return ((EditText) findViewById(id)).getText().toString().trim();
     }
 
+    // Hides the secret between "://" and "@" so the key is not shown on screen
+    // until the user taps the eye button.
     private static String mask(String s) {
         if (s == null) {
             return "";

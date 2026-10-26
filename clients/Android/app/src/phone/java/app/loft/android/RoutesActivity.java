@@ -14,6 +14,12 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Older per-route screen: a list of CIDRs, each sent through the tunnel,
+ * around it, or dropped. Stores into Prefs.routes; SplitStore moves those
+ * routes into its lists the first time it loads. Built in code, no layout.
+ * Long-press removes a route.
+ */
 public final class RoutesActivity extends LoftActivity {
     private static final String[] VIA = {"through", "bypass", "drop"};
     private List<Prefs.Route> list;

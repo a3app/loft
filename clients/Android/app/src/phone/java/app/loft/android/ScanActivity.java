@@ -34,10 +34,19 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Import screen: camera QR scanner plus paste, file and gallery image.
+ * Whatever is read goes through accept(). A TV pairing QR sends all
+ * profiles to the TV instead of importing anything. With the "return" extra
+ * the raw text goes back to the caller (EditActivity) instead of being
+ * saved; with the "file" extra the file picker opens at once.
+ */
 public final class ScanActivity extends LoftActivity {
     private static final int REQ_CAM = 3;
     private static final int REQ_FILE = 4;
     private static final int REQ_GAL = 5;
+    // Set once a code is accepted, so the camera's stream of frames does not
+    // import the same code many times. Cleared when the import is cancelled.
     private final AtomicBoolean got = new AtomicBoolean(false);
     private final MultiFormatReader reader = new MultiFormatReader();
 
@@ -135,6 +144,7 @@ public final class ScanActivity extends LoftActivity {
         }, ContextCompat.getMainExecutor(this));
     }
 
+    // Camera frame callback, on a background thread.
     private void analyze(ImageProxy image) {
         if (got.get()) {
             image.close();
@@ -150,6 +160,11 @@ public final class ScanActivity extends LoftActivity {
         }
     }
 
+    /**
+     * Decodes a QR code from the frame's luminance (Y) plane only, which is all
+     * ZXing needs, turned into grey pixels. Row stride may be wider than the
+     * image, so rows are copied one by one.
+     */
     private String decodeY(ImageProxy image) {
         ImageProxy.PlaneProxy y = image.getPlanes()[0];
         ByteBuffer buf = y.getBuffer();
@@ -193,6 +208,11 @@ public final class ScanActivity extends LoftActivity {
         return null;
     }
 
+    /**
+     * Handles scanned or pasted text. A pairing URL from a TV gets all profiles
+     * POSTed to it. Otherwise the text is parsed and, after the user confirms
+     * the list, the profiles are added.
+     */
     private void accept(String raw) {
         if (raw == null || raw.trim().isEmpty() || !got.compareAndSet(false, true)) {
             return;

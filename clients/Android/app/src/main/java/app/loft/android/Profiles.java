@@ -11,6 +11,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * The saved connections and which one is active. Kept in files/profiles.json,
+ * encrypted with a key from the Android keystore (see Box), because profiles
+ * hold member keys and passwords. One instance per process (LoftApp).
+ * Every change rebuilds the profile's YAML and saves the whole list.
+ */
 final class Profiles {
     private static final String FILE = "profiles.json";
     private final Context app;
@@ -35,6 +41,7 @@ final class Profiles {
         return null;
     }
 
+    /** The active profile, or the first one when the active id is gone; null when there are none. */
     synchronized Profile active() {
         Profile p = get(active);
         if (p != null) {
@@ -55,6 +62,7 @@ final class Profiles {
         }
     }
 
+    /** Adds or replaces a profile by id. The first profile ever added becomes active. */
     synchronized void put(Profile p) {
         if (p == null) {
             return;
@@ -165,6 +173,7 @@ final class Profiles {
         return p.sessionYaml();
     }
 
+    /** All profiles as one YAML file with a "connections:" list, for backup. */
     synchronized String exportAll() {
         StringBuilder b = new StringBuilder("connections:\n");
         for (Profile p : items) {
@@ -188,6 +197,7 @@ final class Profiles {
         return b.toString();
     }
 
+    /** Reads and decrypts profiles.json; on first run migrates the legacy single YAML instead. */
     private void load() {
         items.clear();
         active = "";
@@ -214,6 +224,7 @@ final class Profiles {
         }
     }
 
+    /** One-time move of the old single-session YAML (SessionStore) into the profile list. */
     private void migrateYaml() {
         String y = SessionStore.yaml(app);
         if (y == null || y.trim().isEmpty()) {

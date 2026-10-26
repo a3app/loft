@@ -11,6 +11,7 @@ import android.view.View;
 
 /** Last-minute ↓/↑ chart: smooth lines (default) or fading bars. Handshake while connecting. */
 public final class SparkView extends View {
+    // Number of samples kept; the service adds one per second.
     static final int N = 40;
 
     private final Paint downStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -71,6 +72,7 @@ public final class SparkView extends View {
         invalidate();
     }
 
+    /** While connecting there is no traffic to draw, so the view shows a pulsing label instead. */
     void setHandshake(boolean on, String label) {
         handshake = on;
         handshakeText = label == null ? "" : label;
@@ -82,6 +84,7 @@ public final class SparkView extends View {
         invalidate();
     }
 
+    /** Copies the latest rate samples (bytes/s) from Live. */
     void setSamples(float[] down, float[] up, int count) {
         n = Math.max(0, Math.min(N, count));
         if (down != null) {
@@ -169,6 +172,8 @@ public final class SparkView extends View {
         return max;
     }
 
+    // Download as a filled curve, upload as a thinner line, both scaled to the
+    // common peak, with a dot on the newest sample.
     private void drawLines(Canvas c, int w, int h, float max) {
         float[] dx = new float[n];
         float[] dy = new float[n];
@@ -196,6 +201,7 @@ public final class SparkView extends View {
         c.drawCircle(ux[n - 1], uy[n - 1], dp(1.9f), dot);
     }
 
+    // Download bars above the middle, upload bars below; older bars are fainter.
     private void drawBars(Canvas c, int w, int h) {
         if (n <= 0) {
             return;
@@ -246,6 +252,7 @@ public final class SparkView extends View {
         }
     }
 
+    // Smooth curve through the points (Catmull-Rom converted to cubic Béziers).
     private void curve(Path path, float[] x, float[] y) {
         path.reset();
         path.moveTo(x[0], y[0]);

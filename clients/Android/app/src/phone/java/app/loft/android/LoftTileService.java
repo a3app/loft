@@ -6,6 +6,11 @@ import android.os.Build;
 import android.service.quicksettings.Tile;
 import android.service.quicksettings.TileService;
 
+/**
+ * Quick Settings tile: one tap connects or disconnects the active profile.
+ * Opens the app when there is no profile yet, and the system VPN consent
+ * dialog when permission has not been granted.
+ */
 public final class LoftTileService extends TileService implements Bus.Listener {
     @Override
     public void onStartListening() {
@@ -23,6 +28,8 @@ public final class LoftTileService extends TileService implements Bus.Listener {
         paint();
     }
 
+    // startActivityAndCollapse needs a PendingIntent on API 34+; a plain
+    // Intent is refused there.
     @Override
     public void onClick() {
         if (LoftVpnService.running || Live.on() || Live.connecting()) {

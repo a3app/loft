@@ -11,8 +11,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-/** Zones + services + exclusions. Same model as macOS DESIGN §5. */
+/**
+ * Zones + services + exclusions; the same model as the macOS app's lists.
+ * These are the user's split-routing lists: which address ranges go
+ * through the tunnel and which go direct. Stored as JSON in Prefs under
+ * "split_store". RoutePlan applies them when split routing is on.
+ */
 final class SplitStore {
+    // Built-in zones: "local" stays off the tunnel, "global" goes through it.
+    // REPO_BASE is the public loft-routes repository with ready-made lists;
+    // CATALOG lists the zones offered there, with names in en / ru / zh.
     static final String LOCAL = "local";
     static final String GLOBAL = "global";
     static final String REPO_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
@@ -28,6 +36,11 @@ final class SplitStore {
     final List<Zone> zones = new ArrayList<>();
     final List<Svc> services = new ArrayList<>();
 
+    /**
+     * A group of services with one routing decision: through the tunnel or
+     * around it. A zone may follow a list file in the repository (repo); auto
+     * is the zone's "auto-update" switch on the Lists screen.
+     */
     static final class Zone {
         String id = "";
         String name = "";
@@ -37,6 +50,12 @@ final class SplitStore {
         boolean auto = true;
     }
 
+    /**
+     * A named set of prefixes in a zone. src says where it came from: added by
+     * the user ("me"), loaded from the zone's repository list ("repo"), or an
+     * "ignore" exclusion. Ignore prefixes stay off the tunnel whatever their
+     * zone says.
+     */
     static final class Svc {
         String id = UUID.randomUUID().toString();
         String name = "";
@@ -46,6 +65,11 @@ final class SplitStore {
         final List<String> cidrs = new ArrayList<>();
     }
 
+    /**
+     * Loads the lists from Prefs. On first use seeds the built-in zones and
+     * moves the old per-route settings in. A corrupt store, or one missing a
+     * built-in zone, is reseeded.
+     */
     static SplitStore load(Context c) {
         SplitStore st = new SplitStore();
         String raw = Prefs.p(c).getString("split_store", "");
@@ -141,6 +165,7 @@ final class SplitStore {
         Prefs.p(c).edit().putString("split_store", o.toString()).apply();
     }
 
+    /** Resets to the two built-in zones and a LAN service with the private IPv4 ranges. */
     void seed() {
         zones.clear();
         services.clear();
@@ -170,6 +195,11 @@ final class SplitStore {
         services.add(lan);
     }
 
+    /**
+     * Moves routes from the older Routes screen (Prefs.routes) into services:
+     * "bypass" goes to the local zone, "drop" becomes an ignore entry, and
+     * everything else goes to the global zone.
+     */
     void migrateRoutes(Context c) {
         for (Prefs.Route r : Prefs.routes(c)) {
             Cidr cidr = Cidr.parse(r.cidr);
@@ -211,6 +241,7 @@ final class SplitStore {
         return null;
     }
 
+    /** Number of non-ignore services in a zone. */
     int count(String zoneId) {
         int n = 0;
         for (Svc s : services) {
@@ -221,6 +252,7 @@ final class SplitStore {
         return n;
     }
 
+    /** Services in a zone whose name or prefixes contain the search text. */
     List<Svc> in(String zoneId, String q) {
         String needle = q == null ? "" : q.trim().toLowerCase(Locale.US);
         List<Svc> out = new ArrayList<>();
@@ -237,6 +269,7 @@ final class SplitStore {
         return out;
     }
 
+    /** Deletes a user zone; its services move to the global zone. Built-in zones cannot be deleted. */
     void deleteZone(String id) {
         Zone z = zone(id);
         if (z == null || z.builtin) {
@@ -255,6 +288,11 @@ final class SplitStore {
         }
     }
 
+    /**
+     * Replaces a zone's repository services with freshly downloaded rows.
+     * Rows with the same label are merged into one service; ignore rows are
+     * added to ignore entries. User-added services are kept.
+     */
     void replaceRepo(String zoneId, List<Bat.Row> rows) {
         Iterator<Svc> it = services.iterator();
         while (it.hasNext()) {
@@ -312,14 +350,17 @@ final class SplitStore {
         return null;
     }
 
+    /** Prefixes of every zone that goes through the tunnel (ignore entries excluded). */
     List<Cidr> through() {
         return cidrs(true);
     }
 
+    /** Prefixes of every zone that bypasses the tunnel (ignore entries excluded). */
     List<Cidr> around() {
         return cidrs(false);
     }
 
+    /** Prefixes of all ignore entries, in any zone. */
     List<Cidr> ignores() {
         List<Cidr> out = new ArrayList<>();
         for (Svc s : services) {

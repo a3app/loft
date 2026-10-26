@@ -6,7 +6,12 @@ import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.view.View;
 
-/** A³ colophon heart: 7×6 lamp cells, nearest-neighbour, no AA. */
+/**
+ * A³ colophon heart: 7×6 lamp cells, nearest-neighbour, no AA.
+ * The small pixel heart in the About screen's "made with" line. Drawn as
+ * whole square cells without anti-aliasing so the edges stay crisp at any
+ * size. Each CELLS row is {x, y, width, height} in cells.
+ */
 public final class HeartView extends View {
     private static final int[][] CELLS = {
         {1, 0, 2, 1}, {4, 0, 2, 1},

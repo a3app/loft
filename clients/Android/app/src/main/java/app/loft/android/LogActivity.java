@@ -7,6 +7,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.widget.TextView;
 
+/**
+ * Shows the session journal (Journal) with copy, share and clear. Redraws on
+ * every Bus event while visible.
+ */
 public final class LogActivity extends LoftActivity implements Bus.Listener {
     private TextView body;
 

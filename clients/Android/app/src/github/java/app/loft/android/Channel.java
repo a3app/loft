@@ -36,6 +36,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * {@code USER_ACTION_NOT_REQUIRED} plus update-ownership.
  */
 public final class Channel {
+    // busy: one check or install at a time. awaitingPerm / wantInstall remember
+    // that the user was sent to the "install unknown apps" settings screen and
+    // what to resume when they come back. pending is the last release found.
+    // The UI references are weak so a closed screen is not kept in memory.
     private static final long CHECK_EVERY_MS = 6L * 60 * 60 * 1000;
     private static final AtomicBoolean busy = new AtomicBoolean();
     private static final AtomicBoolean hooked = new AtomicBoolean();
@@ -49,6 +53,11 @@ public final class Channel {
 
     private Channel() {}
 
+    /**
+     * Called from LoftApp. Watches activity resumes (to continue after the
+     * permission screen) and, in release builds that may install packages,
+     * runs the background check.
+     */
     public static void boot(Application app) {
         if (!hooked.compareAndSet(false, true)) {
             return;
@@ -73,6 +82,10 @@ public final class Channel {
         attach(a, a.getWindow().getDecorView());
     }
 
+    /**
+     * Binds the update button and status line on a settings or About screen,
+     * when the layout has them, and adds a "GitHub" mark to the version text.
+     */
     public static void attach(Activity a, View root) {
         TextView ver = root.findViewById(R.id.ver);
         if (ver != null) {
@@ -97,6 +110,8 @@ public final class Channel {
         }
     }
 
+    // After the user grants "install unknown apps", continue what they asked
+    // for: install the pending release, or check again.
     static void onResume(Activity a) {
         Activity cur = uiAct != null ? uiAct.get() : null;
         if (awaitingPerm && canInstall(a)) {
@@ -115,6 +130,7 @@ public final class Channel {
         }
     }
 
+    /** Update button: ask for the install permission, install a known newer release, or check. */
     private static void tap(Activity a) {
         if (!canInstall(a)) {
             askInstall(a);
@@ -152,6 +168,10 @@ public final class Channel {
         }
     }
 
+    /**
+     * Background check at app start, at most once every 6 hours and only on an
+     * unmetered network, so it never spends mobile data.
+     */
     private static void auto(Context ctx) {
         long last = Prefs.p(ctx).getLong("gh_checked", 0);
         if (System.currentTimeMillis() - last < CHECK_EVERY_MS) {
@@ -189,6 +209,11 @@ public final class Channel {
         }, "loft-gh").start();
     }
 
+    /**
+     * Result of a check. A background check installs a newer release right away
+     * when it can (release build, permission granted, unmetered); otherwise the
+     * button just offers it.
+     */
     private static void onCheck(Context ctx, Gh.Rel rel, boolean silent) {
         pending = rel;
         if (rel == null) {
@@ -220,6 +245,13 @@ public final class Channel {
         busy.set(false);
     }
 
+    /**
+     * Downloads the checksum file and the APK, verifies the APK's SHA-256
+     * against the published sum, checks it is the same package signed with the
+     * same certificate, and then hands it to the system installer. Debug builds
+     * stop early: they are signed with a different key, so a release APK could
+     * not replace them.
+     */
     private static void startInstall(Context ctx, Gh.Rel rel, boolean silent) {
         if (BuildConfig.DEBUG) {
             done(ctx.getString(R.string.channel_debug));
@@ -277,6 +309,12 @@ public final class Channel {
         }, "loft-gh").start();
     }
 
+    /**
+     * Writes the APK into a PackageInstaller session and commits it. On API 31+
+     * the session asks for no user action, and on API 34+ for update ownership,
+     * so after the first confirmed install later updates can go through
+     * silently. The result arrives in GhInstall.
+     */
     private static void commit(Context ctx, File apk) throws Exception {
         Context app = ctx.getApplicationContext();
         PackageInstaller pi = app.getPackageManager().getPackageInstaller();
@@ -324,6 +362,11 @@ public final class Channel {
         return cm != null && cm.isActiveNetworkMetered();
     }
 
+    /**
+     * True when the downloaded APK has our package name and the same first
+     * signing certificate as the installed app. Catches a wrong or tampered
+     * file before the installer is asked.
+     */
     private static boolean samePackage(Context ctx, File apk) {
         PackageManager pm = ctx.getPackageManager();
         int flags = sigFlags();
@@ -388,6 +431,7 @@ public final class Channel {
         return c.getString(R.string.channel_update_d);
     }
 
+    /** Updates the bound button label (allow / install / check) and the status text, if the screen is still open. */
     private static void paint(String msg, boolean enable) {
         Activity a = uiAct != null ? uiAct.get() : null;
         Button btn = uiBtn != null ? uiBtn.get() : null;

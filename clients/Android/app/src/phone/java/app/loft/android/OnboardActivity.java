@@ -12,7 +12,14 @@ import android.widget.Toast;
 
 import java.util.List;
 
+/**
+ * First-run screen, shown while there are no profiles. Step 0 offers scan,
+ * paste or manual entry; step 1 asks for the member key; step 2 for the
+ * host, front and optional path and edge. After a profile is added it asks
+ * for VPN permission and starts the service.
+ */
 public final class OnboardActivity extends LoftActivity {
+    // Front choices in the segmented control; "auto" is stored as GET.
     private static final String[] METHODS = {"auto", "get", "ws", "h2", "quic", "h3", "l3"};
     private static final int REQ_VPN = 1;
     private int step;
@@ -42,6 +49,7 @@ public final class OnboardActivity extends LoftActivity {
         go(0);
     }
 
+    // Returning from ScanActivity with an imported profile ends onboarding.
     @Override
     protected void onResume() {
         super.onResume();
@@ -74,6 +82,7 @@ public final class OnboardActivity extends LoftActivity {
         }
     }
 
+    /** Imports from the clipboard; with an empty clipboard opens the scanner instead. */
     private void paste() {
         ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         CharSequence t = null;
@@ -120,6 +129,7 @@ public final class OnboardActivity extends LoftActivity {
         askVpn();
     }
 
+    /** Shows the system VPN consent dialog when needed, then starts the service. */
     private void askVpn() {
         Intent prep = VpnService.prepare(this);
         if (prep != null) {

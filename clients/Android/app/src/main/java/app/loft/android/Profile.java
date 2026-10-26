@@ -7,6 +7,12 @@ import java.util.UUID;
 
 /** One named connection. YAML is what Engine.Start consumes. */
 final class Profile {
+    // A "front" is how the loft connection is wrapped in ordinary HTTPS:
+    // GET (long-lived HTTP requests), WebSocket, HTTP/2, QUIC, HTTP/3, or L3.
+    // The protocol inside is the same; only the packaging differs.
+    // MUX_ORDER lists the fronts that carry the mux (many streams in one
+    // connection) and so can be combined in one session; L3 cannot.
+    // DEF_* are the default URL paths a front uses when none is given.
     static final String[] FRONTS = {"get", "ws", "h2", "quic", "h3", "l3"};
     static final String[] FRONT_TITLES = {"GET", "WS", "H2", "QUIC", "H3", "L3"};
     static final String[] MUX_ORDER = {"get", "ws", "h2", "quic", "h3"};
@@ -14,6 +20,15 @@ final class Profile {
     static final String DEF_WS = "/api/v1/sync";
     static final String DEF_H2 = "/api/v1/tunnel";
 
+    // Profile fields. kind is a front name or sstp / vless / trojan.
+    // token is the member key (lt_...). cdn is a cover host the GET front is
+    // sent through; edge is a direct node address used for the extra fronts
+    // when the main URL goes through a CDN. maskPub is the node's mask key,
+    // learned after the first handshake. inner is the extra frame encryption
+    // inside TLS. wsPath / h2Path / h3Path / quic turn on extra mux fronts.
+    // listedFronts is the front list sent in Hello (the client's first
+    // message, saying what it can do). fp is the TLS fingerprint to imitate.
+    // yaml is the cached engine config built from these fields.
     String id = UUID.randomUUID().toString();
     String name = "";
     String kind = "get";
@@ -72,11 +87,18 @@ final class Profile {
         return h.contains("cdn.");
     }
 
+    /** True when any extra front besides GET is configured. */
     boolean hasMuxExtras() {
         return !nz(wsPath).isEmpty() || !nz(h2Path).isEmpty() || !nz(h3Path).isEmpty() || quic;
     }
 
     /** Hello list from Edit extras. GET-only stays empty so Status can still teach fronts. */
+    /**
+     * Rebuilds listedFronts from the Edit screen's extra-front fields.
+     * With GET only it stays empty: the client then lists no fronts, and the
+     * node answers in Status (its reply to Hello) with the fronts it offers,
+     * which applyLearnedFronts saves.
+     */
     void syncListedFronts() {
         String k = kind == null ? "get" : kind.toLowerCase();
         if (isSSTP() || isVLESS() || isTrojan() || "l3".equals(k)) {
@@ -116,6 +138,12 @@ final class Profile {
         listedFronts = b.toString();
     }
 
+    /**
+     * The fronts this profile will use, in order. Non-loft kinds and L3 use
+     * only themselves. Otherwise: the listed fronts if any; GET only when the
+     * connection goes through a CDN (extra fronts need a direct path to the
+     * node); else GET plus the configured extras.
+     */
     String[] muxFronts() {
         String k = kind == null ? "get" : kind.toLowerCase();
         if (isSSTP() || isVLESS() || isTrojan() || "l3".equals(k)) {
@@ -160,6 +188,11 @@ final class Profile {
         return new String[]{k};
     }
 
+    /**
+     * Applies a "fronts" list from an imported link or YAML (comma list,
+     * optionally in brackets). Each named front is turned on with its default
+     * path when it has none, and the list is kept as listedFronts.
+     */
     void applyFrontList(String raw) {
         if (raw == null) {
             return;
@@ -218,6 +251,11 @@ final class Profile {
         }
     }
 
+    /**
+     * Saves the fronts the node offered in Status ("get=/path,ws=/path,quic").
+     * Returns true when something changed. Skipped for non-loft kinds, L3 and
+     * CDN profiles, where extra fronts are not used.
+     */
     boolean applyLearnedFronts(String raw) {
         if (raw == null || isSSTP() || isVLESS() || isTrojan() || isL3() || isCDN()) {
             return false;
@@ -289,6 +327,7 @@ final class Profile {
         return s == null ? "" : s.trim();
     }
 
+    /** Protocol family: loft, sstp, vless or trojan. */
     String family() {
         if (isSSTP()) {
             return "sstp";
@@ -307,6 +346,7 @@ final class Profile {
         return i >= 0 ? FRONT_TITLES[i] : kind.toUpperCase();
     }
 
+    // Short label for logs and the UI, e.g. "loft · get".
     String side() {
         if (isLoft()) {
             return "loft · " + kind.toLowerCase();
@@ -314,6 +354,7 @@ final class Profile {
         return family();
     }
 
+    /** The host name from the URL, without user info, scheme, port, path or IPv6 brackets. */
     String host() {
         String u = url;
         if (u == null) {
@@ -346,6 +387,7 @@ final class Profile {
         return u;
     }
 
+    /** YAML for Engine.start: the cached copy, or built from the fields. */
     String sessionYaml() {
         if (yaml != null && !yaml.trim().isEmpty()) {
             return yaml;
@@ -413,6 +455,11 @@ final class Profile {
         return p;
     }
 
+    /**
+     * Reads a profile from one engine YAML document (as produced by
+     * Mobile.parseShareAll). The original YAML is kept as the session config;
+     * fields are only picked out for the UI and the Edit screen.
+     */
     static Profile fromYaml(String yaml) {
         Profile p = new Profile();
         p.yaml = yaml == null ? "" : yaml;
@@ -551,6 +598,7 @@ final class Profile {
         }
     }
 
+    // The URL without its path, so several fronts can share one base URL.
     private static String stripPath(String url) {
         if (url == null || url.isEmpty()) {
             return "";
@@ -582,6 +630,7 @@ final class Profile {
         return -1;
     }
 
+    /** True for every kind the app can run: loft fronts, SSTP, VLESS, Trojan. */
     static boolean known(String kind) {
         if (kind == null) {
             return false;

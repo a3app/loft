@@ -3,6 +3,11 @@ package app.loft.android;
 import android.view.View;
 import android.view.ViewGroup;
 
+/**
+ * Segmented control built from plain views: a row whose children act like
+ * radio buttons. The chosen child has the "selected" state, which the
+ * drawables use for highlighting.
+ */
 final class Seg {
     interface Pick {
         void on(int index);
@@ -17,6 +22,7 @@ final class Seg {
         return 0;
     }
 
+    /** Selects child {@code selected} and makes every child select itself on tap and report its index. */
     static void bind(ViewGroup row, int selected, Pick pick) {
         for (int i = 0; i < row.getChildCount(); i++) {
             View c = row.getChildAt(i);

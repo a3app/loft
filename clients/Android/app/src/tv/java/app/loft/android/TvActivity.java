@@ -31,6 +31,11 @@ import java.util.List;
 /**
  * 10-foot Leanback shell. Same LoftVpnService as the phone.
  * Import: QR on this TV, USB/Downloads, or type loft://.
+ *
+ * <p>"10-foot" means a UI read from the sofa and driven by a D-pad remote:
+ * big type, focusable tiles, a left rail with Home, Connections and
+ * Settings. Panes are views swapped in one activity, like the phone's
+ * MainActivity, and redraw from Live on every Bus event.
  */
 public final class TvActivity extends LoftActivity implements Bus.Listener {
     private static final int REQ_VPN = 1;
@@ -41,6 +46,9 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     private View conns;
     private View settings;
     private View overlay;
+    // selected: id of the connection card in focus, the target of edit / share /
+    // delete. overlay: the full-screen panel (pairing QR, share, paste, edit)
+    // shown over the current pane; Back closes it.
     private String selected = "";
     private TvPair pair;
     private final java.util.concurrent.atomic.AtomicBoolean extFetch = new java.util.concurrent.atomic.AtomicBoolean();
@@ -151,6 +159,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         super.onBackPressed();
     }
 
+    // The remote's Menu key on the Connections pane opens the add dialog.
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MENU && conns != null && conns.getVisibility() == View.VISIBLE) {
@@ -160,6 +169,10 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         return super.onKeyDown(keyCode, event);
     }
 
+    /**
+     * Switches the visible pane (Home, Connections, Settings), highlights its
+     * rail icon and moves D-pad focus to a sensible control on that pane.
+     */
     private void show(View v) {
         hideOverlay();
         home.setVisibility(v == home ? View.VISIBLE : View.GONE);
@@ -200,6 +213,12 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /**
+     * Redraws Home from Live: status line, connect button and the side panel
+     * with overlay address (this device's address inside the loft network),
+     * public IP, underlying network and rates. With no profiles the button is
+     * replaced by three add tiles.
+     */
     private void paintHome() {
         Profile p = LoftApp.of(this).profiles().active();
         String name = p == null ? "" : p.name;
@@ -282,6 +301,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
 
     private View emptyAdd;
 
+    // Builds the add tiles (phone QR, USB file, type a link) once, above the button.
     private void showEmptyAdd() {
         if (emptyAdd != null) {
             emptyAdd.setVisibility(View.VISIBLE);
@@ -321,6 +341,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         return b;
     }
 
+    /** Rebuilds the row of connection cards plus a "+" card, and focuses the first card. */
     private void paintConns() {
         if (conns == null) {
             return;
@@ -417,6 +438,12 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
                 .show();
     }
 
+    /**
+     * Pairing with a phone. Typing a long link with a remote is painful, so
+     * the TV starts a small LAN web listener (TvPair) and shows its URL as a
+     * QR. The phone app scans it and POSTs all its profiles; they are imported
+     * here. The listener stops when the overlay closes.
+     */
     private void showPair() {
         stopPair();
         pair = new TvPair();
@@ -448,6 +475,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         showOverlay(box);
     }
 
+    /** Shows the focused connection as a share link and QR, with a warning that it contains the key. */
     private void shareSelected() {
         Profile p = LoftApp.of(this).profiles().get(selected);
         if (p == null) {
@@ -506,6 +534,10 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         startActivityForResult(i, REQ_FILE);
     }
 
+    /**
+     * Small TV editor: name and, for loft, the front. The "Auto" chip stores
+     * GET because the config already uses "select: auto".
+     */
     private void editSelected() {
         Profile p = LoftApp.of(this).profiles().get(selected);
         if (p == null) {
@@ -581,6 +613,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
                 .show();
     }
 
+    /** Adds every profile found in the text, closes pairing and shows Connections. */
     private void importRaw(String raw) {
         List<Profile> list = Importer.parse(raw);
         if (list.isEmpty()) {
@@ -628,6 +661,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         connect();
     }
 
+    /** Starts the active profile, asking for VPN consent first when the system needs it. */
     private void connect() {
         if (LoftApp.of(this).profiles().active() == null) {
             ensureConns();
@@ -676,6 +710,8 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    // Language buttons. Changing the language recreates the activity and
+    // reopens the Settings pane through the "pane" extra.
     private void wireLang() {
         int cur = Lang.index(this);
         int[] ids = {R.id.lang_en, R.id.lang_ru, R.id.lang_zh};
@@ -732,6 +768,10 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         Channel.attach(this, settings);
     }
 
+    /**
+     * Looks up the public IP through the tunnel on a background thread, one
+     * lookup at a time; retries every 2.5 s while the session is on.
+     */
     private void fetchExt() {
         if (!Prefs.showExtIP(this) || !Live.on()) {
             return;

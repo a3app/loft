@@ -8,18 +8,28 @@ import java.util.regex.Pattern;
 
 /** Keenetic / loft-routes `.bat` list. */
 final class Bat {
+    /** One parsed line: a prefix, its label, and whether it is an "ignore" exclusion. */
     static final class Row {
         String name = "";
         String cidr = "";
         boolean ignore;
     }
 
+    // The format is a Windows batch file of "route ADD ip MASK mask gw :: rem name"
+    // lines, so the same list works on Windows, Keenetic routers and here.
+    // "REM ignore cidr" marks a prefix to keep off the tunnel; "REM zone: id"
+    // names the zone the file belongs to.
     private static final Pattern ADD = Pattern.compile(
             "(?i)route\\s+ADD\\s+(\\S+)(?:\\s+MASK\\s+(\\S+))?");
     private static final Pattern REM = Pattern.compile("(?i)\\s(?:[:]+\\s*)?rem\\s+(.*)$");
     private static final Pattern IGNORE = Pattern.compile("(?i)^\\s*REM\\s+ignore\\s+(\\S+)");
     private static final Pattern ZONE = Pattern.compile("(?im)^\\s*REM\\s+zone:\\s*(\\S+)");
 
+    /**
+     * Parses a route list. Accepts "route ADD" lines (label from the trailing
+     * rem), "REM ignore" lines, and bare CIDRs one per line; comments and other
+     * lines are skipped.
+     */
     static List<Row> parse(String text) {
         List<Row> out = new ArrayList<>();
         if (text == null || text.isEmpty()) {
@@ -79,6 +89,7 @@ final class Bat {
         return out;
     }
 
+    /** The zone id from a "REM zone:" header, lower-cased; "" when absent. */
     static String zoneHint(String text) {
         if (text == null) {
             return "";
@@ -87,6 +98,10 @@ final class Bat {
         return m.find() ? m.group(1).toLowerCase(Locale.US) : "";
     }
 
+    /**
+     * Writes one zone as a .bat list that parse() reads back. Only IPv4 goes in
+     * route ADD lines because Windows "route ADD ... MASK" is IPv4-only.
+     */
     static String emit(SplitStore st, String zoneId) {
         StringBuilder b = new StringBuilder();
         b.append("@echo off\nREM loft-routes 1.0\nREM zone: ").append(zoneId).append("\n\n");

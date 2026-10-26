@@ -12,6 +12,8 @@ import android.widget.Toast;
  * (update-ownership). After that USER_ACTION_NOT_REQUIRED is silent.
  */
 public final class GhInstall extends BroadcastReceiver {
+    // When the system needs the user to confirm, it hands back an activity
+    // intent; start it. Any other non-success status shows a short error.
     @Override
     public void onReceive(Context c, Intent in) {
         int st = in.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);

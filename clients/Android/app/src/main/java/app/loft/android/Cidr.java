@@ -66,6 +66,7 @@ final class Cidr {
         return new Cidr(raw, v6 ? 128 : 32, v6);
     }
 
+    // Prefix length (same as bits).
     int familyPrefix() {
         return bits;
     }
@@ -89,6 +90,7 @@ final class Cidr {
         return prefixEqual(addr, o.addr, bits);
     }
 
+    /** True when the two prefixes share any address (one contains the other). */
     boolean overlaps(Cidr o) {
         if (o == null || o.v6 != v6) {
             return false;
@@ -107,6 +109,7 @@ final class Cidr {
         return out;
     }
 
+    /** IPv4 ranges that stay on the LAN: private, link-local and loopback. */
     static List<Cidr> rfc1918() {
         return of(
                 "10.0.0.0/8",
@@ -116,10 +119,12 @@ final class Cidr {
                 "127.0.0.0/8");
     }
 
+    /** IPv6 ranges that stay on the LAN: unique local, link-local and multicast. */
     static List<Cidr> rfc4193() {
         return of("fc00::/7", "fe80::/10", "ff00::/8");
     }
 
+    /** Removes every prefix in {@code cut} from every prefix in {@code set}. */
     static List<Cidr> subtractAll(List<Cidr> set, List<Cidr> cut) {
         List<Cidr> cur = new ArrayList<>(set);
         for (Cidr c : cut) {
@@ -132,6 +137,12 @@ final class Cidr {
         return cur;
     }
 
+    /**
+     * Returns {@code a} minus {@code b} as a list of prefixes. When b lies inside
+     * a, walk the bits from a's length down to b's: at each step the half that
+     * does not contain b is kept as its own prefix. The result covers a exactly
+     * except b, with at most (b.bits - a.bits) prefixes.
+     */
     static List<Cidr> subtract(Cidr a, Cidr b) {
         List<Cidr> out = new ArrayList<>();
         if (a == null) {
@@ -206,6 +217,10 @@ final class Cidr {
         return display();
     }
 
+    /**
+     * Parses a literal IPv4 or IPv6 address without DNS. Returns null for host
+     * names, so a stray name never triggers a lookup.
+     */
     static InetAddress numeric(String s) {
         if (s == null) {
             return null;
@@ -236,6 +251,7 @@ final class Cidr {
         }
     }
 
+    /** Builds a prefix from an address and a dotted mask (255.255.255.0 → /24). */
     static Cidr fromIpMask(String ip, String mask) {
         InetAddress m = numeric(mask);
         if (m == null) {
@@ -254,6 +270,7 @@ final class Cidr {
         return ((n >>> 24) & 255) + "." + ((n >>> 16) & 255) + "." + ((n >>> 8) & 255) + "." + (n & 255);
     }
 
+    /** Formats a byte rate as B/s or bit/s with 1000-based units and 3 significant digits. */
     static String fmt(long n, boolean bits) {
         if (n < 0) {
             n = 0;

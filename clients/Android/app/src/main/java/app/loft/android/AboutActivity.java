@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+/** About screen: app version and a short table of the supported protocols. */
 public final class AboutActivity extends LoftActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {

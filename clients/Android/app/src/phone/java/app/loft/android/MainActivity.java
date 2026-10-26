@@ -39,6 +39,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Phone main screen with three tabs: Home (big connect button, status,
+ * traffic chart, addresses), Connections (saved profiles) and Settings.
+ * The tabs are views swapped inside one activity. Also the entry point for
+ * imports: loft:// links, shared text and opened files arrive here.
+ * The screen never talks to the engine; it starts and stops LoftVpnService
+ * and redraws from Live on every Bus event.
+ */
 public final class MainActivity extends LoftActivity implements Bus.Listener {
     private static final int REQ_VPN = 1;
     private static final int REQ_NOTE = 2;
@@ -169,6 +177,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /**
+     * Redraws Home from Live: button and status pill for connecting / on /
+     * error / off, the info cards, rates and chart, the overlay address
+     * (this device's address inside the loft network), the gateway and the
+     * public IP seen through the tunnel. "Simple" mode hides the details.
+     */
     private void paintHome() {
         ImageView lamp = home.findViewById(R.id.lamp);
         TextView pillT = home.findViewById(R.id.pill_t);
@@ -253,6 +267,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         ((TextView) home.findViewById(R.id.row_route)).setText(Live.gateway.isEmpty() ? "—" : Live.gateway);
     }
 
+    /**
+     * Fills the three info cards for the protocol family. For loft they show the
+     * front in use and the options: mux (many streams in one connection) or IP
+     * for L3, "mask" when the node's mask key is known, and "hold" while the
+     * session waits on a network switch.
+     */
     private void paintCards(Profile p, boolean on) {
         String fam = p == null ? "loft" : p.family();
         TextView k1 = home.findViewById(R.id.card_k1);
@@ -331,6 +351,11 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         connect();
     }
 
+    /**
+     * Starts the active profile. Asks once for the notification permission
+     * (API 33+), so the VPN's ongoing notification is visible, and for VPN
+     * consent when the system needs it; the service starts after consent.
+     */
     private void connect() {
         if (LoftApp.of(this).profiles().active() == null) {
             ((BottomNavigationView) findViewById(R.id.nav)).setSelectedItemId(R.id.nav_conns);
@@ -391,6 +416,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 .show();
     }
 
+    // Export: this profile as YAML, as a QR, or every profile in one file.
     private void exportSheet(Profile pr) {
         BottomSheetDialog d = Sheets.of(this, R.layout.sheet_export);
         d.findViewById(R.id.ex_this).setOnClickListener(v -> {
@@ -450,6 +476,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         importRaw(t.toString());
     }
 
+    /** Imports from a loft:// link, text shared to the app, or an opened file. */
     private void handleIntent(Intent intent) {
         if (intent == null) {
             return;
@@ -477,6 +504,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /** Adds every profile found in the text and switches to the Connections tab. */
     void importRaw(String raw) {
         List<Profile> got = Importer.parse(raw);
         if (got.isEmpty()) {
@@ -491,6 +519,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         ((BottomNavigationView) findViewById(R.id.nav)).setSelectedItemId(R.id.nav_conns);
     }
 
+    /**
+     * Binds the Settings tab to Prefs. Routing switches take effect on the next
+     * connect, when the TUN is built. A language change recreates the screen.
+     */
     private void wireSettings() {
         CompoundButton simple = settings.findViewById(R.id.sw_simple);
         CompoundButton def = settings.findViewById(R.id.sw_default);
@@ -572,6 +604,11 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         Channel.attach(this, settings);
     }
 
+    /**
+     * Looks up the public IP through the tunnel on a background thread, one
+     * lookup at a time. On failure it retries every 2.5 s while the session is
+     * on, since the first request may run before the tunnel carries traffic.
+     */
     private void fetchExt() {
         if (!Prefs.showExtIP(this) || !Live.on()) {
             return;
@@ -614,6 +651,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         return o.toString(StandardCharsets.UTF_8.name());
     }
 
+    /** Swipe on a connection row: left asks to delete, right opens the editor. The row snaps back. */
     private final class SwipeCb extends ItemTouchHelper.SimpleCallback {
         private final Paint paint = new Paint();
 
@@ -664,6 +702,11 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         return a;
     }
 
+    /**
+     * Spinner listener that ignores the first call: Android fires
+     * onItemSelected once when the initial selection is set, which would
+     * otherwise act as a user choice.
+     */
     private static final class SimplePick implements android.widget.AdapterView.OnItemSelectedListener {
         private final Seg.Pick pick;
         private boolean primed;
@@ -686,6 +729,11 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /**
+     * Connection list. The active profile is highlighted; its button stops the
+     * session when up. Another profile's button makes it active, stops any
+     * running session and connects. Tap edits, long-press opens a menu.
+     */
     final class ConnAdapter extends RecyclerView.Adapter<ConnAdapter.Hold> {
         private List<Profile> data = new ArrayList<>();
 

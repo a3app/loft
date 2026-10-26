@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 final class PairUrl {
     static final String PATH = "/pair";
 
+    /** True when a scanned string is a TV pairing URL (path /pair with a c= code). */
     static boolean isPair(String raw) {
         URI u = parse(raw);
         if (u == null) {

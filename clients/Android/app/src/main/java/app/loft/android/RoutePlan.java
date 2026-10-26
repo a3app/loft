@@ -7,7 +7,18 @@ import java.util.List;
 
 import app.loft.engine.mobile.Snapshot;
 
-/** Positive TUN routes plus FrontIP excludes. */
+/**
+ * Positive TUN routes plus FrontIP excludes.
+ *
+ * <p>Android VPN routes are "positive": you list what goes into the tunnel.
+ * So "everything except the LAN and the node" is built by subtracting
+ * prefixes from 0.0.0.0/0 and ::/0. Steps, in order: the default route
+ * minus the LAN; the overlay subnet; extra routes pushed by the node; the
+ * user's split lists (through adds, around and ignore subtract); drops; and
+ * last the front IPs (the node addresses the engine dials). {@code include}
+ * goes to Builder.addRoute, {@code exclude} also goes to excludeRoute on
+ * API 33+, and {@code drop} is filtered packet by packet.
+ */
 final class RoutePlan {
     final List<Cidr> include = new ArrayList<>();
     final List<Cidr> exclude = new ArrayList<>();
@@ -15,6 +26,7 @@ final class RoutePlan {
     Cidr overlay4;
     Cidr overlay6;
 
+    /** Builds the route plan for a session from its Snapshot and the user's routing settings. */
     static RoutePlan of(Context ctx, Snapshot snap) {
         RoutePlan p = new RoutePlan();
         if (snap != null) {
@@ -94,6 +106,7 @@ final class RoutePlan {
         return p;
     }
 
+    /** True when an IPv4/IPv6 packet's destination falls in a drop prefix. */
     boolean destDropped(byte[] pkt) {
         if (pkt == null || pkt.length < 20 || drop.isEmpty()) {
             return false;
@@ -122,6 +135,8 @@ final class RoutePlan {
         return false;
     }
 
+    // Front IPs become /32 or /128 excludes: traffic to the node itself must
+    // go over the real network, never through its own tunnel (a "hairpin").
     private void addFronts(String csv) {
         if (csv == null || csv.isEmpty()) {
             return;

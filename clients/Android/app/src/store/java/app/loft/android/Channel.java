@@ -8,6 +8,8 @@ import android.view.View;
 public final class Channel {
     private Channel() {}
 
+    // Same API as the github flavor's Channel so shared code compiles in both.
+    // Store builds are updated by the store, so every hook does nothing.
     public static void boot(Application app) {}
 
     public static void attach(Activity a) {}

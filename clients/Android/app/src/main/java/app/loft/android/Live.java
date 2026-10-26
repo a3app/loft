@@ -1,5 +1,13 @@
 package app.loft.android;
 
+/**
+ * Current session state, shared by the VPN service and every screen.
+ * The service writes it from engine Snapshots; screens read it after a Bus
+ * event. Fields are volatile because writers and readers are on different
+ * threads. state is "idle", "connecting", "on" or "error". holding is true
+ * while the session waits on a network switch. extIP is the public address
+ * seen through the tunnel.
+ */
 final class Live {
     static volatile String state = "idle";
     static volatile String err = "";
@@ -33,6 +41,11 @@ final class Live {
         return "connecting".equals(state);
     }
 
+    /**
+     * Updates byte counters and derives bytes-per-second from the change since
+     * the last call. Samples closer than 0.2 s apart are not used for the rate.
+     * Each rate is also pushed into the sparkline history.
+     */
     static void rates(long upNow, long downNow) {
         long now = System.currentTimeMillis();
         if (lastAt > 0 && now > lastAt) {
@@ -71,6 +84,7 @@ final class Live {
         java.util.Arrays.fill(sparkUp, 0);
     }
 
+    // Appends one sample to the fixed-size sparkline history, shifting out the oldest.
     static void pushSpark(long down, long upBps) {
         if (sparkCount < SPARK_N) {
             sparkDn[sparkCount] = down;

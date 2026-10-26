@@ -59,6 +59,7 @@ public final class ToggleView extends CompoundButton {
         pos = isChecked() ? 1f : 0f;
     }
 
+    // Called when state is restored; snap the thumb without animating.
     @Override
     public void jumpDrawablesToCurrentState() {
         super.jumpDrawablesToCurrentState();
@@ -70,6 +71,7 @@ public final class ToggleView extends CompoundButton {
         invalidate();
     }
 
+    // Slides the thumb when the state changes on screen; before layout it just jumps.
     @Override
     public void setChecked(boolean checked) {
         boolean change = checked != isChecked();
@@ -116,6 +118,7 @@ public final class ToggleView extends CompoundButton {
         c.drawCircle(cx, h / 2f, r, fill);
     }
 
+    // Linear blend of two ARGB colours, channel by channel.
     private static int mix(int a, int b, float t) {
         t = Math.max(0f, Math.min(1f, t));
         int aa = (a >> 24) & 255, ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;

@@ -15,6 +15,8 @@ import java.util.regex.Pattern;
 
 /** GitHub Releases for the github channel. Store builds do not compile this. */
 final class Gh {
+    // Size caps protect against a hostile or broken server streaming forever.
+    // TAG accepts only plain release tags like v1.2.3 or v1.2.3-rc1.
     static final String API = "https://api.github.com/repos/a3app/loft/releases?per_page=20";
     static final int MAX_JSON = 2 * 1024 * 1024;
     static final int MAX_APK = 128 * 1024 * 1024;
@@ -23,6 +25,7 @@ final class Gh {
 
     private Gh() {}
 
+    /** One release: its version and the URLs of the matching APK and checksum file (null when missing). */
     static final class Rel {
         final String tag;
         final String ver;
@@ -45,6 +48,11 @@ final class Gh {
         }
     }
 
+    /**
+     * Picks the newest published (not draft, not pre-release) release from the
+     * GitHub API list, with the APK for this device type (phone or TV) and the
+     * SHA256SUMS file. Both unversioned and versioned asset names are accepted.
+     */
     static Rel pick(String json, boolean tv) throws Exception {
         JSONArray rels = new JSONArray(json);
         Rel best = null;
@@ -86,12 +94,18 @@ final class Gh {
         return best;
     }
 
+    /** Downloads a small text body (at most {@code max} bytes). */
     static String get(String url, String ua, int max) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         sha(url, ua, out, max);
         return out.toString(StandardCharsets.UTF_8.name());
     }
 
+    /**
+     * Streams a URL into {@code out} and returns the SHA-256 hex of what was
+     * written, so the APK is hashed while it downloads. Fails above {@code max}
+     * bytes.
+     */
     static String sha(String url, String ua, OutputStream out, int max) throws IOException {
         MessageDigest md;
         try {

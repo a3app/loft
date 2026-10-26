@@ -2,6 +2,11 @@ package app.loft.android;
 
 import android.app.Application;
 
+/**
+ * Application object. Applies the chosen UI language, loads the saved
+ * profiles once for the whole process, and starts the release channel
+ * (the GitHub updater in the github flavor, nothing in the store flavor).
+ */
 public final class LoftApp extends Application {
     private Profiles profiles;
 

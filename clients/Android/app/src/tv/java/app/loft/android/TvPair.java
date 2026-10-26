@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 
 /** Short-lived LAN HTTP POST /pair?c=CODE for phone → TV import. */
 final class TvPair {
+    // Code alphabet without 0/O and 1/I, which look alike on a TV screen.
     private static final char[] ALPHA = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ".toCharArray();
 
     private ServerSocket ss;
@@ -28,6 +29,11 @@ final class TvPair {
     int port;
     String url = "";
 
+    /**
+     * Opens a listener on a random port of the TV's LAN address and builds the
+     * pairing URL for the QR. Each request body is handed to {@code onBody} on
+     * the main thread. Returns false when the TV has no usable LAN address.
+     */
     boolean start(Consumer<String> onBody) {
         stop();
         host = lanIPv4();
@@ -65,6 +71,7 @@ final class TvPair {
         port = 0;
     }
 
+    // Serves one connection at a time until stop() closes the socket.
     private void loop(Consumer<String> onBody, Handler h) {
         while (run && ss != null && !ss.isClosed()) {
             try (Socket s = ss.accept()) {
@@ -78,6 +85,12 @@ final class TvPair {
         }
     }
 
+    /**
+     * Minimal HTTP/1.1 handler: reads headers up to the blank line (8 KiB cap),
+     * then a body of Content-Length bytes (256 KiB cap). A POST body is the
+     * profiles text sent by the phone and goes to {@code onBody}; any other
+     * request gets the pairing code back.
+     */
     private void handle(Socket s, Consumer<String> onBody, Handler h) throws Exception {
         InputStream in = s.getInputStream();
         ByteArrayOutputStream head = new ByteArrayOutputStream();
@@ -141,6 +154,11 @@ final class TvPair {
         out.flush();
     }
 
+    /**
+     * First non-loopback, non-link-local IPv4 address of an interface that is
+     * up. Addresses in 10.8.x.x are skipped: that is the common loft overlay
+     * range (for example 10.8.0.0/24), which the phone on the LAN cannot reach.
+     */
     static String lanIPv4() {
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
@@ -163,6 +181,7 @@ final class TvPair {
         return "";
     }
 
+    /** Random 6-character pairing code shown next to the QR. */
     static String newCode() {
         SecureRandom r = new SecureRandom();
         char[] c = new char[6];

@@ -4,6 +4,11 @@ package app.loft.android;
 final class Sums {
     private Sums() {}
 
+    /**
+     * Returns the lower-case SHA-256 hex for {@code name} from a SHA256SUMS file,
+     * or null when the file has no such line. The in-app updater uses it to check
+     * a downloaded APK against the published checksum.
+     */
     static String hexFor(String body, String name) {
         if (body == null || name == null || name.isEmpty()) {
             return null;

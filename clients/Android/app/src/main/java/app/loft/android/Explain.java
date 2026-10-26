@@ -4,6 +4,13 @@ import android.content.Context;
 
 /** Maps engine/node errors the way macOS FrontExplain does. */
 final class Explain {
+    /**
+     * Returns a translated, human message for a raw engine or node error, or the
+     * raw text when it is not a known case. Matching is by substring because the
+     * engine reports errors as plain text that wraps the node's error code
+     * (auth_bad_key, ip_pool, ...). A GET handshake answered with 404 means the
+     * node did not accept the key, so it is shown as a key error.
+     */
     static String display(Context ctx, String raw) {
         if (raw == null || raw.isEmpty()) {
             return "";
