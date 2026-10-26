@@ -12,7 +12,7 @@
 
 最低版本为 **Windows 7**。界面由应用自行绘制，因此在 7、8.1、10 和 11 上外观一致。不使用 Mica、Acrylic、Aero Glass、系统主题和系统强调色。窗口底色为 Ink `#1A1714`，强调色为灯光色。
 
-字体：品牌字体栈 `"Avenir Next", Avenir, "Helvetica Neue", "Segoe UI", sans-serif`。Windows 没有 Avenir Next，若不内置字体文件，界面回退到 Segoe UI（Windows Vista 起自带）。“关于”窗口中的 `loft` 字样使用品牌 SVG 轮廓，而非文字。等宽字体为 Consolas。
+界面字体为 **Segoe UI**（Windows Vista 起自带），不内置 Avenir Next。字重沿用品牌：标题 Semibold 600，按钮和标签 500，正文 Regular 400。“关于”窗口中的 `loft` 字样使用品牌 SVG 轮廓，而非文字。等宽字体为 Consolas。
 
 构建：**x86 和 x64**。界面为**原生 Win32** 自绘（不用 WebView，不用系统视觉样式）。
 
@@ -147,7 +147,7 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 
 ## 10. 待定问题
 
-已定：原生 Win32 界面；x86 和 x64 构建；`.loft` 和 `loft://` 在安装程序和设置中均为可选项（§6）。
+已定：原生 Win32 界面；x86 和 x64 构建；`.loft` 和 `loft://` 在安装程序和设置中均为可选项（§6）；字体为 Segoe UI。
 
 编码前仍需决定：
 
@@ -155,7 +155,6 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 2. **TUN 驱动。** 必须能在 Windows 7（x86 和 x64）上运行：TAP-Windows6 或合适版本的 Wintun。选择前先确认 Windows 7 支持。
 3. **特权部分。** 路由、hold 和重置由 Windows 服务设置（对应 `loft-priv`）。服务名和安装方式（MSI / 自有安装程序）未定。
 4. **密钥存储。** Windows 凭据管理器，或文件中的 DPAPI（`CryptProtectData`）。
-5. **字体。** 内置 Avenir Next（需嵌入授权）或使用 Segoe UI。
 
 ---
 

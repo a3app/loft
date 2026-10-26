@@ -12,7 +12,7 @@ The client follows macOS v1: [`../../macOS/design/DESIGN.md`](../../macOS/design
 
 The minimum version is **Windows 7**. It looks the same on 7, 8.1, 10 and 11 because the app draws its own UI. No Mica, Acrylic, Aero Glass, system theme or system accent colour. Window ground is Ink `#1A1714`; the accent is the lamp.
 
-Type: the brand stack `"Avenir Next", Avenir, "Helvetica Neue", "Segoe UI", sans-serif`. Windows has no Avenir Next, so without a bundled font file the UI falls back to Segoe UI (present since Windows Vista). The word `loft` in About is drawn from the brand SVG outlines, not set as text. Monospace is Consolas.
+UI type is **Segoe UI** (in Windows since Vista). Avenir Next is not bundled. Weights follow the brand: headings Semibold 600, buttons and tabs 500, body Regular 400. The word `loft` in About is drawn from the brand SVG outlines, not set as text. Monospace is Consolas.
 
 Builds: **x86 and x64**. The UI is **native Win32** with its own drawing (no WebView, no system visual styles).
 
@@ -147,7 +147,7 @@ As on macOS, texts use *route*, *direct Internet*, *reset*; never "kill switch" 
 
 ## 10. Open questions
 
-Decided: native Win32 UI; x86 and x64 builds; `.loft` and `loft://` are an option in the installer and in Settings (§6).
+Decided: native Win32 UI; x86 and x64 builds; `.loft` and `loft://` are an option in the installer and in Settings (§6); Segoe UI type.
 
 Still to choose before code:
 
@@ -155,7 +155,6 @@ Still to choose before code:
 2. **TUN driver.** It must work on Windows 7 (x86 and x64): TAP-Windows6 or a suitable Wintun version. Check Windows 7 support before choosing.
 3. **Privileged part.** Routes, hold and reset are set by a Windows service (the `loft-priv` counterpart). Service name and installer (MSI / own installer) are not chosen.
 4. **Key storage.** Windows Credential Manager or DPAPI (`CryptProtectData`) in a file.
-5. **Font.** Bundle Avenir Next (needs an embedding licence) or stay on Segoe UI.
 
 ---
 
