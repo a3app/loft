@@ -70,7 +70,7 @@ func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 		v.CDNPeers = []string{}
 	}
 	for _, r := range c.Relays {
-		v.Relays = append(v.Relays, admproto.Relay{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: int(r.Weight), Drain: r.Drain})
+		v.Relays = append(v.Relays, admproto.Relay{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: int(r.Weight), Drain: r.Drain, Key: r.KeySHA256 != ""})
 	}
 	v.MaskPub = o.maskPubB64()
 	if in, err := o.NodeInfo(); err == nil {
@@ -102,8 +102,10 @@ var pathRe = regexp.MustCompile(`^/[A-Za-z0-9._~/-]{1,80}$`)
 var knownFronts = []string{"get", "ws", "h2", "quic", "h3", "l3"}
 
 // NodeSave writes the panel's commands into node.conf. A change of relays
-// or enrol only reloads the node; anything else restarts it, and a node
-// that does not come back gets the old file.
+// only reloads the node; anything else restarts it, and a node that does
+// not come back gets the old file. A relay keeps the hash of its key (the
+// panel never sends keys); a relay that is removed loses its key in
+// relays.keys too.
 func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.NodeConfig, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -168,6 +170,10 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 	if in.Trace {
 		c.Trace = filepath.Join(o.Dir, "trace.log")
 	}
+	keyOf := map[string]string{}
+	for _, e := range prev.Relays {
+		keyOf[e.ID] = e.KeySHA256
+	}
 	c.Relays = nil
 	seen := map[string]bool{}
 	for _, r := range in.Relays {
@@ -186,7 +192,7 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		if r.Weight < 0 || r.Weight > 255 {
 			return admproto.NodeConfig{}, fmt.Errorf("relay %s: weight 0–255", r.ID)
 		}
-		c.Relays = append(c.Relays, config.RelayEntry{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: byte(r.Weight), Drain: r.Drain})
+		c.Relays = append(c.Relays, config.RelayEntry{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: byte(r.Weight), Drain: r.Drain, KeySHA256: keyOf[r.ID]})
 	}
 	c.CDNPeers = nil
 	for _, p := range in.CDNPeers {
@@ -223,7 +229,94 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		}
 		return admproto.NodeConfig{}, fmt.Errorf("loft-node did not start with the new node.conf, the old one is back: %v", err)
 	}
+	if err := o.pruneRelayKeys(c.Relays); err != nil {
+		return admproto.NodeConfig{}, err
+	}
 	return o.NodeConfig(ctx)
+}
+
+func (o *Ops) relayKeys() string { return filepath.Join(o.Dir, "relays.keys") }
+
+// pruneRelayKeys drops keys of relays that are no longer listed.
+func (o *Ops) pruneRelayKeys(rels []config.RelayEntry) error {
+	r, err := identity.Load(o.relayKeys())
+	if err != nil {
+		return fmt.Errorf("relays.keys: %w", err)
+	}
+	want := map[string]string{}
+	for _, e := range rels {
+		if e.KeySHA256 != "" {
+			want[e.ID] = e.KeySHA256
+		}
+	}
+	before := r.Len()
+	r.Filter(want)
+	if r.Len() == before {
+		return nil
+	}
+	return o.saveRingAt(o.relayKeys(), r)
+}
+
+// RelayKey issues a new key for a relay already in node.conf: the key goes
+// to relays.keys, its hash onto the relay line, and the node reloads, so the
+// old key stops working at once. The key is returned for the relay's
+// install (relay.key on that host).
+func (o *Ops) RelayKey(ctx context.Context, req admproto.RelayKeyReq) (admproto.IssuedKey, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	oldConf, err := os.ReadFile(o.nodeConf())
+	if err != nil {
+		return admproto.IssuedKey{}, err
+	}
+	c, err := config.ParseCommands(string(oldConf))
+	if err != nil {
+		return admproto.IssuedKey{}, fmt.Errorf("node.conf: %w", err)
+	}
+	i := slices.IndexFunc(c.Relays, func(e config.RelayEntry) bool { return e.ID == req.ID })
+	if i < 0 {
+		return admproto.IssuedKey{}, fmt.Errorf("relay %q is not in node.conf: save it first", req.ID)
+	}
+	plain, sha, err := identity.NewKey()
+	if err != nil {
+		return admproto.IssuedKey{}, err
+	}
+	oldKeys, _ := os.ReadFile(o.relayKeys())
+	r, err := identity.Load(o.relayKeys())
+	if err != nil {
+		return admproto.IssuedKey{}, fmt.Errorf("relays.keys: %w", err)
+	}
+	r.Delete(req.ID)
+	r.Put(req.ID, plain)
+	if err := o.saveRingAt(o.relayKeys(), r); err != nil {
+		return admproto.IssuedKey{}, err
+	}
+	c.Relays[i].KeySHA256 = sha
+	text := "# loft-node config; loft-panel edits the commands it shows.\n" + config.RenderCommands(*c)
+	if err := o.writeKeepMode(o.nodeConf(), []byte(text)); err != nil {
+		return admproto.IssuedKey{}, err
+	}
+	if err := o.applySettled(ctx); err != nil {
+		o.writeKeepMode(o.nodeConf(), oldConf)
+		o.write(o.relayKeys(), oldKeys, 0o600)
+		_ = o.applySettled(ctx)
+		return admproto.IssuedKey{}, fmt.Errorf("loft-node did not take the new relay key, the old one is back: %v", err)
+	}
+	return admproto.IssuedKey{ID: req.ID, Key: plain, KeySHA256: sha}, nil
+}
+
+// RelayGet returns the key a relay already has, to show its install again.
+func (o *Ops) RelayGet(req admproto.RelayKeyReq) (admproto.IssuedKey, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	r, err := identity.Load(o.relayKeys())
+	if err != nil {
+		return admproto.IssuedKey{}, fmt.Errorf("relays.keys: %w", err)
+	}
+	tok := r.TokenFor(req.ID)
+	if len(tok) == 0 {
+		return admproto.IssuedKey{}, errors.New("no key issued for this relay")
+	}
+	return admproto.IssuedKey{ID: req.ID, Key: string(tok), KeySHA256: identity.Sum(string(tok))}, nil
 }
 
 var listName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
@@ -277,8 +370,8 @@ func (o *Ops) NodeLog(ctx context.Context) (admproto.NodeLog, error) {
 	return admproto.NodeLog{Text: out}, nil
 }
 
-// NodeTokenRotate gives the node a new LOFT_TOKEN: the mask key (pbk) and the
-// relays' secret change; the controller key and member keys do not.
+// NodeTokenRotate gives the node a new LOFT_TOKEN: the mask key (pbk)
+// changes; the controller key, member keys and relay keys do not.
 func (o *Ops) NodeTokenRotate(ctx context.Context) (admproto.NodeConfig, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()

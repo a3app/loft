@@ -59,6 +59,8 @@ const (
 	OpNodeLists  = "node.lists"        // NodeLists → NodeConfig (reload)
 	OpNodeLog    = "node.log"          // → NodeLog
 	OpNodeToken  = "node.token.rotate" // → NodeConfig (restart)
+	OpRelayKey   = "relay.key"         // RelayKeyReq → IssuedKey (new key, node reloads)
+	OpRelayGet   = "relay.key.get"     // RelayKeyReq → IssuedKey (the key in relays.keys)
 
 	OpChannels      = "channels.get"    // → ChannelsView
 	OpChannelSave   = "channels.save"   // Channel → ChannelsView
@@ -556,13 +558,20 @@ type ChannelsView struct {
 	DirectCheck *ChanCheck      `json:"direct_check,omitempty"` // WAN ping-check; nil = off
 }
 
-// Relay is one relay the controller lets enrol, with the hash of its key.
+// Relay is one relay the controller lets enrol. Key reports that a key was
+// issued for it (its hash is on the relay line of node.conf).
 type Relay struct {
 	ID     string   `json:"id"`
 	URL    string   `json:"url"`
 	Fronts []string `json:"fronts,omitempty"`
 	Weight int      `json:"weight,omitempty"`
 	Drain  bool     `json:"drain,omitempty"`
+	Key    bool     `json:"key,omitempty"`
+}
+
+// RelayKeyReq names the relay whose key is issued or read.
+type RelayKeyReq struct {
+	ID string `json:"id"`
 }
 
 // NodeConfig is node.conf as the panel edits it, plus what it shows.

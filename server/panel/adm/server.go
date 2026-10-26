@@ -51,7 +51,7 @@ func opDeadline(op string) time.Duration {
 		return 45 * time.Second
 	case admproto.OpChannelSave, admproto.OpChannelDelete, admproto.OpChannelSwitch, admproto.OpChannelRules,
 		admproto.OpChannelPrio, admproto.OpChannelPrioDelete, admproto.OpDirectCheck,
-		admproto.OpNodeSave, admproto.OpNodeLists, admproto.OpNodeToken,
+		admproto.OpNodeSave, admproto.OpNodeLists, admproto.OpNodeToken, admproto.OpRelayKey,
 		admproto.OpMailDomain, admproto.OpMailBox, admproto.OpMailAlias, admproto.OpMailCerts, admproto.OpMailApply:
 		return 90 * time.Second
 	case admproto.OpMail, admproto.OpMailStats, admproto.OpSysUsers, admproto.OpSysUserSave, admproto.OpSysUserDelete,
@@ -106,7 +106,7 @@ func mutating(op string) bool {
 		admproto.OpNetChange, admproto.OpNetConfirm, admproto.OpNetRevert,
 		admproto.OpChannelSave, admproto.OpChannelDelete, admproto.OpChannelSwitch, admproto.OpChannelRules,
 		admproto.OpChannelPrio, admproto.OpChannelPrioDelete, admproto.OpDirectCheck,
-		admproto.OpNodeSave, admproto.OpNodeLists, admproto.OpNodeToken,
+		admproto.OpNodeSave, admproto.OpNodeLists, admproto.OpNodeToken, admproto.OpRelayKey,
 		admproto.OpMailDomain, admproto.OpMailBox, admproto.OpMailAlias, admproto.OpMailCerts, admproto.OpMailApply,
 		admproto.OpSysUserSave, admproto.OpSysUserDelete, admproto.OpGuardSet, admproto.OpGuardBan, admproto.OpGuardUnban,
 		admproto.OpBackupKey, admproto.OpBackupRun, admproto.OpBackupRestore:
@@ -228,6 +228,18 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 		return s.Ops.NodeLog(ctx)
 	case admproto.OpNodeToken:
 		return s.Ops.NodeTokenRotate(ctx)
+	case admproto.OpRelayKey:
+		var b admproto.RelayKeyReq
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.RelayKey(ctx, b)
+	case admproto.OpRelayGet:
+		var b admproto.RelayKeyReq
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.RelayGet(b)
 	case admproto.OpChannels:
 		return s.Ops.Channels(ctx)
 	case admproto.OpChannelSave:

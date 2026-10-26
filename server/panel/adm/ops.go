@@ -282,18 +282,21 @@ func (o *Ops) MemberGet(req admproto.MemberKey) (admproto.IssuedKey, error) {
 
 // saveRing writes members.keys through a temp file so a crash never leaves
 // it half written (the node would refuse every member).
-func (o *Ops) saveRing(r *identity.Ring) error {
-	tmp := o.keys() + ".new"
+func (o *Ops) saveRing(r *identity.Ring) error { return o.saveRingAt(o.keys(), r) }
+
+// saveRingAt writes a key file (members.keys, relays.keys) the same way.
+func (o *Ops) saveRingAt(path string, r *identity.Ring) error {
+	tmp := path + ".new"
 	if err := r.Save(tmp); err != nil {
 		os.Remove(tmp)
-		return fmt.Errorf("members.keys: %w", err)
+		return fmt.Errorf("%s: %w", filepath.Base(path), err)
 	}
 	b, err := os.ReadFile(tmp)
 	os.Remove(tmp)
 	if err != nil {
-		return fmt.Errorf("members.keys: %w", err)
+		return fmt.Errorf("%s: %w", filepath.Base(path), err)
 	}
-	return o.write(o.keys(), b, 0o600)
+	return o.write(path, b, 0o600)
 }
 
 // NodeStatus asks systemd about the unit.

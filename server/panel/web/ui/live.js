@@ -1957,10 +1957,10 @@
   // /api/nodecfg reads and writes the node's node.conf as JSON fields. The page
   // edits a copy (L.ndDraft) and applies it automatically 500 ms after the
   // last change, as a job. Most settings restart the node (clients reconnect
-  // in a few seconds); a change of relays or "enrol" alone is re-read live.
+  // in a few seconds); a change of relays alone is re-read live.
   // Words: relay - an extra node that is one more entry point and forwards to
-  // this one (the controller); enrol - which relays may connect: only those
-  // listed, or any that has the node token; roster - the signed list of live
+  // this one (the controller); it enters with a key issued for it here;
+  // roster - the signed list of live
   // fronts and relays that clients download to know where to fail over;
   // lists - signed sets of domains and subnets that tell clients what goes
   // through loft; mask - the loft handshake is hidden inside ordinary-looking
@@ -1973,7 +1973,7 @@
     if (c.status === 'fulfilled') { L.nd = c.value; L.ndDraft = JSON.parse(JSON.stringify(c.value)); } else toast('Настройки ноды не прочитаны: ' + c.reason.message);
     if (p.status === 'fulfilled') L.pres = p.value;
   }
-  const ndKeys = ['listen', 'fronts', 'get_h2', 'decoy', 'mask', 'cover_dir', 'get_path', 'ws_path', 'h2_path', 'roster_path', 'lists_path', 'enrol', 'auth_shared', 'trace', 'relays', 'cdn_peers'];
+  const ndKeys = ['listen', 'fronts', 'get_h2', 'decoy', 'mask', 'cover_dir', 'get_path', 'ws_path', 'h2_path', 'roster_path', 'lists_path', 'auth_shared', 'trace', 'relays', 'cdn_peers'];
   const ndChanged = () => L.nd && ndKeys.filter(k => JSON.stringify(L.nd[k]) !== JSON.stringify(L.ndDraft[k]));
   L.ndSet = (k, v) => { L.ndDraft[k] = v; render(); scheduleNdApply(); };
   L.ndFront = (f, on) => { const s = new Set(L.ndDraft.fronts); on ? s.add(f) : s.delete(f); L.ndDraft.fronts = FR.map(x => x[0]).filter(x => s.has(x)); render(); scheduleNdApply(); };
@@ -1987,7 +1987,7 @@
   // while the job ran are kept in the new draft and applied right after.
   L.ndApply = once(async () => {
     const sent = JSON.parse(JSON.stringify(L.ndDraft));
-    const onlyFleet = ndKeys.filter(k => JSON.stringify(L.nd[k]) !== JSON.stringify(sent[k])).every(k => k === 'relays' || k === 'enrol');
+    const onlyFleet = ndKeys.filter(k => JSON.stringify(L.nd[k]) !== JSON.stringify(sent[k])).every(k => k === 'relays');
     toast(onlyFleet ? 'Применяю…' : 'Применяю: нода перезапускается…');
     try {
       const v = await job('/api/nodecfg', sent);
@@ -2004,7 +2004,7 @@
   function ndBar() {
     const ch = ndChanged();
     if (!ch || !ch.length) return '';
-    const onlyFleet = ch.every(k => k === 'relays' || k === 'enrol');
+    const onlyFleet = ch.every(k => k === 'relays');
     return `<div class="note" role="status"><span><b>Не применено: ${ch.length} ${plural(ch.length, 'настройка', 'настройки', 'настроек')}.</b> <span class="mute">${onlyFleet ? 'Нода перечитает ретрансляторы на лету.' : 'Применение перезапустит ноду: подключения прервутся на несколько секунд.'}</span></span>${L.can('node') ? `<span class="note-acts"><button class="btn sm ghost" type="button" onclick="LIVE.ndRevert()">Отменить</button><button class="btn sm pri" type="button" onclick="LIVE.ndApply()">Применить</button></span>` : ''}</div>`;
   }
   function nodeView() {
@@ -2059,7 +2059,7 @@
     const st = r => { const l = live.find(x => x.id === r.id); return r.drain ? [pill('выведен'), '0', '—'] : l ? [pill('в сети', 'ok'), String(l.conns), agoT(l.beat)] : [pill('не в сети'), '—', '—']; };
     const cf = (d.cdn_peers || []).length;
     return blk('Ретрансляторы', 'Другие серверы, которые принимают участников и передают трафик сюда. Ключей и адресов участников у них нет.',
-        `<div class="acts">${own ? `<button class="btn pri" type="button" onclick="LIVE.openRelay(-1)">${ic('i-plus')}Добавить ретранслятор</button>` : ''}<div class="fld" style="margin:0;min-width:min(260px,100%)"><label for="rl0">Кто может подключиться</label><select id="rl0" ${dis()} onchange="LIVE.ndSet('enrol',this.value)"><option value="list" ${d.enrol === 'list' ? 'selected' : ''}>Только из списка</option><option value="open" ${d.enrol === 'open' ? 'selected' : ''}>Любой с токеном</option></select></div></div>` +
+        `<div class="acts">${own ? `<button class="btn pri" type="button" onclick="LIVE.openRelay(-1)">${ic('i-plus')}Добавить ретранслятор</button>` : ''}</div>` +
         table(['Ретранслятор', 'Адрес для клиентов', 'Фронты', 'Вес', 'Состояние', 'Подключений', 'Отклик'], d.relays.map((r, i) => { const s = st(r); return `<tr class="click" onclick="LIVE.openRelay(${i})"><td><b>${esc(r.id)}</b></td><td class="mono">${esc((r.url || '—').replace(/^https:\/\//, ''))}</td><td>${esc((r.fronts || []).join(', ') || 'get')}</td><td class="num">${r.weight || 100}</td><td>${s[0]}</td><td class="num">${s[1]}</td><td>${s[2]}</td></tr>`; }).join('') || `<tr><td colspan="7" class="mute">Ретрансляторов нет.</td></tr>`)) +
       blk('CDN', 'Участники могут подключаться через CDN по фронту GET. Нода принимает запросы со своим именем от адресов CDN.',
         `<div class="card"><label class="chk" style="margin-bottom:16px"><input type="checkbox" ${cf ? 'checked' : ''} ${dis()} onchange="LIVE.ndCDN(this.checked)">Cloudflare</label>
@@ -2074,12 +2074,18 @@
   L.openRelay = i => {
     const nw = i < 0, r = nw ? { id: '', url: '', fronts: ['get'], weight: 100, drain: false } : L.ndDraft.relays[i], own = L.can('node');
     const rf = r.fronts && r.fronts.length ? r.fronts : ['get'];
-    dialog(nw ? 'Новый ретранслятор' : 'Ретранслятор ' + esc(r.id), 'Сервер с нодой loft в роли ретранслятора. Он подключается сюда сам, по токену ноды.', `
+    const saved = !nw && (L.nd.relays || []).find(x => x.id === r.id);
+    const inst = !own ? '' : !saved ? '<p class="hint" style="margin:0">Ключ и установка появятся, когда ретранслятор будет сохранён.</p>'
+      : `<div class="acts" style="margin:0">${saved.key
+        ? `<button class="btn sm" type="button" onclick="LIVE.relayShow('${esc(r.id)}')">Показать установку</button><button class="btn sm" type="button" onclick="LIVE.relayKeyAsk('${esc(r.id)}')">Перевыпустить ключ</button>`
+        : `<button class="btn sm pri" type="button" onclick="LIVE.relayKey('${esc(r.id)}')">Выпустить ключ</button>`}</div>`;
+    dialog(nw ? 'Новый ретранслятор' : 'Ретранслятор ' + esc(r.id), 'Сервер с нодой loft в роли ретранслятора. Он подключается сюда сам, по ключу, выпущенному для него здесь.', `
       <div class="fld"><label for="ry1">Имя</label><input id="ry1" class="mono" value="${esc(r.id)}" ${nw ? '' : 'readonly'} placeholder="de-1"></div>
       <div class="fld"><label for="ry2">Адрес для клиентов</label><input id="ry2" class="mono" value="${esc(r.url)}" placeholder="https://de1.example.net"></div>
       <div><div class="dlg-sec" style="margin:0">Фронты</div><div class="chk-row">${FR.map(([k, l]) => `<label class="chk"><input type="checkbox" data-rf="${k}" ${rf.includes(k) ? 'checked' : ''}>${l}</label>`).join('')}</div></div>
       <div><div class="fld"><label for="ry3">Вес</label><input id="ry3" class="num" value="${r.weight || 100}"></div><div class="hint">Чем больше, тем чаще клиенты выбирают этот ретранслятор (1–255).</div></div>
-      <label class="chk"><input id="ry4" type="checkbox" ${r.drain ? 'checked' : ''}>Вывести<span class="hint" style="display:block;margin:0">Новые клиенты сюда не идут; подключение ретранслятора закрывается.</span></label>`,
+      <label class="chk"><input id="ry4" type="checkbox" ${r.drain ? 'checked' : ''}>Вывести<span class="hint" style="display:block;margin:0">Новые клиенты сюда не идут; подключение ретранслятора закрывается.</span></label>
+      ${own ? `<div><div class="dlg-sec" style="margin:0 0 6px">Ключ и установка</div>${inst}</div>` : ''}`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.relaySave(${i})">${nw ? 'Добавить' : 'Готово'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить ретранслятор" style="margin-left:auto" onclick="LIVE.relayDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
   L.relaySave = i => {
@@ -2092,6 +2098,40 @@
     closeDlg(); L.ndSet('relays', all);
   };
   L.relayDel = i => { const all = L.ndDraft.relays.slice(); all.splice(i, 1); closeDlg(); L.ndSet('relays', all); };
+  // Relay key and install. /api/relays/key issues a key (POST) or returns the
+  // one the relay has (GET), with the install command and the relay's
+  // node.conf built by the server; /api/relays/bundle is the release archive
+  // with install-relay.sh added, for a host without GitHub.
+  L.relayKey = async id => {
+    closeDlg();
+    let k;
+    try { k = await api('POST', '/api/relays/key', { id }); } catch (e) { toast(e.message); return; }
+    await loadNode(); render();
+    relayInstall(k, 'Ключ выпущен, нода уже принимает его. Прежний ключ этого ретранслятора больше не действует.');
+  };
+  L.relayKeyAsk = id => dialog('Перевыпустить ключ?', 'Новый ключ сразу заменит прежний: ретранслятор отключится, пока на нём не установят новый.', '',
+    `<button class="btn danger" type="button" onclick="LIVE.relayKey('${esc(id)}')">Перевыпустить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  L.relayShow = async id => {
+    let k;
+    try { k = await api('GET', '/api/relays/key?id=' + encodeURIComponent(id)); } catch (e) { toast(e.message); return; }
+    relayInstall(k, 'Ключ хранится на этой ноде — установку можно показать снова.');
+  };
+  function relayInstall(k, note) {
+    L.rk = k;
+    const b = a => `/api/relays/bundle?id=${encodeURIComponent(k.id)}&arch=${a}`;
+    dialog('Установка ретранслятора ' + esc(k.id), note, `
+      <div class="dlg-sec" style="margin:0">Команда для нового сервера</div><div class="uri" id="rkcmd">${esc(k.command)}</div>
+      <p class="hint" style="margin:0">Debian или Ubuntu, от root. Скачивает loft-node той же версии, что здесь, и ставит его ретранслятором этой ноды.</p>
+      <div class="acts" style="margin:0"><button class="btn sm pri" type="button" onclick="LIVE.copy('#rkcmd')">Копировать команду</button></div>
+      <div class="dlg-sec" style="margin:0">Пакет целиком</div>
+      <p class="hint" style="margin:0">Для сервера без доступа к GitHub: архив loft-node с install-relay.sh внутри. Распакуйте и запустите install-relay.sh от root.</p>
+      <div class="acts" style="margin:0"><a class="btn sm" href="${b('amd64')}">${ic('i-down', 16)}amd64</a><a class="btn sm" href="${b('arm64')}">${ic('i-down', 16)}arm64</a></div>
+      <div class="dlg-sec" style="margin:0">Ручная установка</div>
+      <p class="hint" style="margin:0">Ключ — в /var/lib/loft/relay.key (права 0600, владелец loft), настройки — в /etc/loft/node.conf.</p>
+      <div class="uri" id="rkkey">${esc(k.key)}</div>
+      <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.copy('#rkkey')">Копировать ключ</button><button class="btn sm" type="button" onclick="LIVE.download('node.conf', LIVE.rk.config)">${ic('i-down', 16)}node.conf</button></div>`,
+      `<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`);
+  }
   // ndLists: the node's signed lists. Unlike other node settings they are not
   // part of the draft: each save writes all lists at once (/api/nodecfg/lists).
   function ndLists() {
@@ -2137,11 +2177,11 @@
         `<div class="uri" id="ctlpub" style="margin-bottom:12px">${pub ? 'ed25519:' + esc(pub) : '—'}</div><div class="acts"><button class="btn sm" type="button" onclick="LIVE.copy('#ctlpub')">Копировать</button></div>`) +
       blk('Общий токен', 'Вход по одному токену вместо личных ключей. Работает, только пока в сети нет ни одного участника с ключом.',
         `<label class="sw"><input type="checkbox" ${d.auth_shared ? 'checked' : ''} ${dis()} aria-label="Общий токен" onchange="LIVE.ndSet('auth_shared',this.checked)"><i></i><span>Разрешить вход по общему токену</span></label>`) +
-      (own ? blk('Смена токена ноды', 'Меняет ключ маскировки (pbk) и токен для ретрансляторов. Ключ контроллера и ключи участников остаются; при включённой маскировке ссылки участников придётся выдать заново.',
+      (own ? blk('Смена токена ноды', 'Меняет ключ маскировки (pbk). Ключ контроллера, ключи участников и ретрансляторов остаются; при включённой маскировке ссылки участников придётся выдать заново.',
         `<button class="btn danger" type="button" onclick="LIVE.ndTokenAsk()">Сменить токен…</button>`) : '') +
       blk('Диагностика', '', `<label class="sw"><input type="checkbox" ${d.trace ? 'checked' : ''} ${dis()} aria-label="Журнал сессий" onchange="LIVE.ndSet('trace',this.checked)"><i></i><span>Писать журнал сессий <span class="mute">/var/lib/loft/trace.log</span></span></label>`);
   }
-  L.ndTokenAsk = () => dialog('Сменить токен ноды?', 'Нода перезапустится. Ретрансляторам нужен будет новый токен; при маскировке участники получат новый ключ pbk только с новыми ссылками.', '',
+  L.ndTokenAsk = () => dialog('Сменить токен ноды?', 'Нода перезапустится. При маскировке участники получат новый ключ pbk только с новыми ссылками.', '',
     `<button class="btn danger" type="button" onclick="LIVE.ndToken()">Сменить токен</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.ndToken = async () => { closeDlg(); toast('Меняю токен: нода перезапускается…'); try { const v = await job('/api/nodecfg/token', {}); L.nd = v; L.ndDraft = JSON.parse(JSON.stringify(v)); toast('Токен ноды сменён'); } catch (e) { toast(e.message); } render(); };
   L.ndRestart = async () => { toast('Перезапускаю ноду…'); try { await job('/api/node/restart', {}); toast('Нода перезапущена'); await loadNode(); } catch (e) { toast(e.message); } render(); };
