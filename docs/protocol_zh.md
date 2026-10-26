@@ -270,7 +270,7 @@ HKDF-SHA256(ikm=ss, salt=nonce, info="loft-v1", L=32)
 
 *说明，非规范。* 一种实现取 32 位随机前缀加 64 位计数器，使停着的 GET 会话继续同一个计数器。握手的 Seal 取该计数器的一个值。其后该密钥上的 AES-256-GCM 记录接着计数。接收方接受任何唯一 nonce，不要求这种布局。
 
-Status 之后的数据密码是 Hello 与 Status 上的一个字节（§5.1、§5.2）。没有该字节就是 ChaCha20-Poly1305。`0` 表示没有内部 AEAD，只剩该前置的 TLS。`1` 是 ChaCha20-Poly1305，与没有该字节相同。`2` 是 AES-256-GCM：32 字节 HKDF 密钥、12 字节 nonce、16 字节标签，成帧与 ChaCha 相同，为 `nonce[12] || ciphertext`（[RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)）。`3` 保留给一种额外的数据密码；在本规范定义它之前，它是未知 id。`4`–`255` 未分配。一把会话密钥只有一种数据密码。
+Status 之后的数据密码是 Hello 与 Status 上的一个字节（§5.1、§5.2）。没有该字节就是 ChaCha20-Poly1305。`0` 表示没有内部 AEAD，只剩该前置的 TLS。`1` 是 ChaCha20-Poly1305，与没有该字节相同。`2` 是 AES-256-GCM：32 字节 HKDF 密钥、12 字节 nonce、16 字节标签，成帧与 ChaCha 相同，为 `nonce[12] || ciphertext`（[RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)）。`3`、`4`、`5` 与 `7` 保留给额外的数据密码；在本规范定义某个 id 之前，它是未知 id。`6` 与 `8`–`255` 未分配。一把会话密钥只有一种数据密码。
 
 客户端在 Hello 里请求。节点在 Status 里确认恰好一个标识，或者不写该字节。ChaCha20-Poly1305 始终可以，不能关掉。未知标识、策略里没有的标识，或其他不一致，会话留在 ChaCha20-Poly1305。会话仍然建立。前置 `get` 不得确认 `0` 或 `2`：CDN 可以终结 TLS，内部 AEAD 就是对这个 CDN 隐藏 mux 的东西。前置 `ws`、`h2`、`quic`、`h3`、`l3` 可以在客户端请求了该标识且节点策略列出它时确认 `0` 或 `2`。`connect` 是拼接，没有数据密码。选定 `0` 的会话不得 attach 前置 `get`（§4.4）。AES-256-GCM 可以 attach `get`：CDN 看到的仍是密文。旧对端不写该字节，留在 ChaCha20-Poly1305。双方都省略该字节时可以互通。这个选择不改变协议版本 `0x0100`。
 
@@ -522,7 +522,7 @@ responder → r_pub[32] || Seal(k2, cipher u8 || pad_len u8, aad = r_pub) || pad
 each way  → Seal(k, len u16be) || Seal(k, data[len])        len ≤ 16384
 ```
 
-`e` 与 `r` 是每个连接新生成的 X25519 密钥。线上 `e_pub` 与 `r_pub` 的最高位是随机的；X25519 忽略该位。`s` 是通过 `loft.peer` 宣告的成员 P2P 密钥。`ss` = X25519(s_发起方, s_应答方)，`es` = X25519(e, s_应答方)，`ee` = X25519(e, r)。`k1` = HKDF-SHA256(ikm = es, salt = e_pub, info = "loft p2p hello", L = 32)，`k2` = HKDF-SHA256(es, salt = e_pub || r_pub, info = "loft p2p reply", L = 32)。数据密钥为 HKDF-SHA256(ee || es || ss, salt = e_pub || r_pub, info = "loft p2p data", L = 64)：前 32 字节用于发起方 → 应答方，其余用于反方向。AEAD 为 ChaCha20-Poly1305。握手中的封装使用全零 nonce，因为每个这样的密钥只封装一次；数据的 nonce 为每个方向一个 96 位小端计数器，从 0 开始，每封装一次加一。`proof` = HMAC-SHA256(ss, "loft p2p proof" || e_pub || src_ipv4 || dest_port || at)[0:16]，`at` 为 unix 秒，`pad` 为 `pad_len` 个随机字节。头部中的 `cipher` 是发起方请求的数据密码，应答中的 `cipher` 是应答方选定的密码，id 与 Hello 的 `inner` 字节相同（§4.3）。本修订版对 P2P 只定义 `1`（ChaCha20-Poly1305）：应答方对任何请求都必须回答 `1`，且永远不选 `0`，因为直连之下没有 TLS；收到其他回答时发起方必须关闭连接。
+`e` 与 `r` 是每个连接新生成的 X25519 密钥。线上 `e_pub` 与 `r_pub` 的最高位是随机的；X25519 忽略该位。`s` 是通过 `loft.peer` 宣告的成员 P2P 密钥。`ss` = X25519(s_发起方, s_应答方)，`es` = X25519(e, s_应答方)，`ee` = X25519(e, r)。`k1` = HKDF-SHA256(ikm = es, salt = e_pub, info = "loft p2p hello", L = 32)，`k2` = HKDF-SHA256(es, salt = e_pub || r_pub, info = "loft p2p reply", L = 32)。数据密钥为 HKDF-SHA256(ee || es || ss, salt = e_pub || r_pub, info = "loft p2p data", L = 64)：前 32 字节用于发起方 → 应答方，其余用于反方向。AEAD 为 ChaCha20-Poly1305。握手中的封装使用全零 nonce，因为每个这样的密钥只封装一次；数据的 nonce 为每个方向一个 96 位小端计数器，从 0 开始，每封装一次加一。`proof` = HMAC-SHA256(ss, "loft p2p proof" || e_pub || src_ipv4 || dest_port || at)[0:16]，`at` 为 unix 秒，`pad` 为 `pad_len` 个随机字节。头部中的 `cipher` 是发起方请求的数据密码，应答中的 `cipher` 是应答方选定的密码，id 与 Hello 的 `inner` 字节相同（§4.3）。本修订版对 P2P 只定义 `1`（ChaCha20-Poly1305），保留 id 同样不会被选中：应答方对任何请求都必须回答 `1`，且永远不选 `0`，因为直连之下没有 TLS；收到其他回答时发起方必须关闭连接。
 
 应答方打开头部，在其提示中查找 `src_ipv4` 并用该成员的密钥校验 `proof`，要求 `at` 与自身时钟相差不超过 60 秒，并拒绝过去 120 秒内已接受过的 `e_pub`（清除最高位后比较）。任何失败都关闭套接字；发起方随后使用枢纽拼接。`p2p: false` 的客户端必须只用枢纽拼接。经中继观察到的主机是中继；直接尝试于是失败，改用枢纽拼接。Status 携带 policy 时，发起方与应答方在拼接本机端口前必须应用与枢纽拼接相同的 Allow。没有 policy 的 Status（旧节点）跳过该检查。
 

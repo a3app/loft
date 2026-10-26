@@ -16,10 +16,11 @@ const (
 	InnerClear  byte = 0
 	InnerChaCha byte = 1
 	InnerAES    byte = 2 // AES-256-GCM, same 12-byte nonce and 16-byte tag as ChaCha
-	// InnerReserved is kept for one more data cipher. Until it is defined
-	// it is an unknown id: asked for, it leaves the session on ChaCha.
-	InnerReserved byte = 3
 )
+
+// InnerReserved are ids kept for more data ciphers. Until one is defined
+// it is an unknown id: asked for, it leaves the session on ChaCha.
+var InnerReserved = []byte{3, 4, 5, 7}
 
 // ParseInnerName reads clear, chacha, or aes. Aliases none/off and aes-gcm are accepted.
 func ParseInnerName(s string) (byte, error) {
