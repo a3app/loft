@@ -8,8 +8,7 @@
 #   ./install.sh --unattended
 #   ./install.sh --role relay --controller wss://10.0.0.2/api/v1/sync --id ru1 \
 #       --relay-key lt_… --controller-pub <64 hex>   (both from the controller's panel)
-#   ./install.sh --role replica … --witness-listen :4443   (a standby controller)
-#   relays of a node with standbys add --witness 'standby1:4443 …'
+#   ./install.sh --role replica …   (a standby controller; the same flags as a relay)
 #   ./install.sh --uninstall
 #   ./install.sh --remove
 #
@@ -49,8 +48,6 @@ CONTROLLER=""
 RELAY_ID=""
 RELAY_KEY=""
 CTL_PUB=""
-WITNESS=""
-WITNESS_LISTEN=""
 DECOY=""
 CERT=""
 KEY=""
@@ -67,7 +64,7 @@ while [ $# -gt 0 ]; do
 		--no-firewall) NO_FIREWALL=1 ;;
 		--no-sysctl) NO_SYSCTL=1 ;;
 		--mask) MASK=1 ;;
-		--role|--listen|--advertise|--controller|--id|--relay-key|--controller-pub|--witness|--witness-listen|--decoy|--cert|--key|--peers|--token)
+		--role|--listen|--advertise|--controller|--id|--relay-key|--controller-pub|--decoy|--cert|--key|--peers|--token)
 			[ $# -gt 0 ] || { echo "$a needs a value" >&2; exit 2; }
 			v=$1; shift
 			case "$a" in
@@ -78,8 +75,6 @@ while [ $# -gt 0 ]; do
 				--id) RELAY_ID=$v ;;
 				--relay-key) RELAY_KEY=$v ;;
 				--controller-pub) CTL_PUB=$v ;;
-				--witness) WITNESS=$v ;;
-				--witness-listen) WITNESS_LISTEN=$v ;;
 				--decoy) DECOY=$v ;;
 				--cert) CERT=$v ;;
 				--key) KEY=$v ;;
@@ -93,8 +88,6 @@ while [ $# -gt 0 ]; do
 		--id=*) RELAY_ID="${a#--id=}" ;;
 		--relay-key=*) RELAY_KEY="${a#--relay-key=}" ;;
 		--controller-pub=*) CTL_PUB="${a#--controller-pub=}" ;;
-		--witness=*) WITNESS="${a#--witness=}" ;;
-		--witness-listen=*) WITNESS_LISTEN="${a#--witness-listen=}" ;;
 		--decoy=*) DECOY="${a#--decoy=}" ;;
 		--cert=*) CERT="${a#--cert=}" ;;
 		--key=*) KEY="${a#--key=}" ;;
@@ -555,9 +548,7 @@ listen $LISTEN
 advertise $ADVERTISE
 controller $CONTROLLER
 controller_pub $CTL_PUB
-${WITNESS:+witness $WITNESS
-}${WITNESS_LISTEN:+witness_listen $WITNESS_LISTEN
-}cert $LOFT_TLS/fullchain.pem
+cert $LOFT_TLS/fullchain.pem
 key $LOFT_TLS/privkey.pem
 ${DECOY_BLOCK}${MASK_LINE}
 fronts get
@@ -665,10 +656,6 @@ if [ "$NO_FIREWALL" = 0 ]; then
 		try ufw allow "$PORT"/tcp
 		try ufw allow "$PORT"/udp
 		ok "ufw allowed $PORT/tcp and $PORT/udp"
-		if [ -n "$WITNESS_LISTEN" ]; then
-			try ufw allow "${WITNESS_LISTEN##*:}"/tcp
-			ok "ufw allowed ${WITNESS_LISTEN##*:}/tcp (relays' witness reports)"
-		fi
 	else
 		ok "no active ufw — open $PORT/tcp and $PORT/udp on the path in front of this host"
 	fi

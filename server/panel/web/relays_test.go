@@ -55,7 +55,7 @@ func TestRelayInstall(t *testing.T) {
 	cmd, _ := r.body["command"].(string)
 	for _, want := range []string{"--role relay", "--id ru1", "--advertise https://ru1.example.net",
 		"--controller 'wss://api.example.net/api/v1/sync wss://r2.example.net/api/v1/sync'", "--controller-pub " + testCtlPub, "--relay-key lt_new1",
-		"V=" + version.Version, "--witness 'r2.example.net:4443'"} {
+		"V=" + version.Version} {
 		if !strings.Contains(cmd, want) {
 			t.Fatalf("command lacks %q: %s", want, cmd)
 		}
@@ -74,7 +74,7 @@ func TestRelayInstall(t *testing.T) {
 	r = e.do("GET", "/api/relays/key?id=r2", nil, c, "")
 	cmd, _ = r.body["command"].(string)
 	if r.code != 200 || !strings.Contains(cmd, "--role replica") || strings.Contains(cmd, "r2.example.net/api") ||
-		!strings.Contains(cmd, "--witness-listen :4443") || strings.Contains(cmd, "--witness '") {
+		strings.Contains(cmd, "witness") {
 		t.Fatalf("standby install: %d %s", r.code, cmd)
 	}
 }
