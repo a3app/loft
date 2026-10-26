@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/a3app/loft/internal/wire"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -197,4 +198,22 @@ func TestSignedVectors(t *testing.T) {
 func TestCookie85Vector(t *testing.T) {
 	frame, _ := hex.DecodeString("000202000000016869")
 	vecCheck(t, "z85", wire.EncodeUplink(frame, wire.UplinkCookie85), "~00@Sb0SSi20CDfE")
+}
+
+// TestKeyRollVector is the controller key roll of protocol §16.9: the key of
+// the roster vector hands over to the key from seed "Liberty Of Free
+// Transmission 1.1", serial 1, not_after 2050-01-01.
+func TestKeyRollVector(t *testing.T) {
+	old := ed25519.NewKeyFromSeed([]byte("Liberty Of Free Transmission 1.0"))
+	next := ed25519.NewKeyFromSeed([]byte("Liberty Of Free Transmission 1.1"))
+	k := SignKeyRoll(old, next.Public().(ed25519.PublicKey), 1, time.Unix(2524608000, 0))
+	want := "6c66742d726f6c6c000000000000000100000000967a76000fd3ecac78db360ace8ab85e4d92d897feb4a5e8565421ee9dcc6efbaf63ae054c4bd2cfd6b9b0741b7f7f31967f58e9e063ef28ab6edac047299effa80025f5" +
+		"7712b8da2955ab0df3f7a6f64fbcc784280075f964bd85e0d95e2e72cd0a27c473c869ee53c08d63cdeb3f90611acda4b99db6e9c1b1d6a286afdda469b47103"
+	if got := hex.EncodeToString(k.Encode()); got != want {
+		t.Fatalf("key roll\n got %s\nwant %s", got, want)
+	}
+	back, err := wire.DecodeKeyRoll(k.Encode())
+	if err != nil || back.Verify(time.Unix(2524608000, 0)) != nil {
+		t.Fatalf("vector does not verify: %v", err)
+	}
 }

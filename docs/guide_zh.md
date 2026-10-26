@@ -177,7 +177,7 @@ export LOFT_TOKEN='long-secret'
 | `replicas` | 未签名的额外 `host:port`，给故障切换 |
 | `quic_alpn` | 默认 `h3` |
 
-签名 seed：`{dir}/controller.seed`，随机生成，首次启动（或 `-print-pub`）时写入，不由令牌推导。公钥给客户端当 `controller_pub`。
+签名 seed：`{dir}/controller.seed`，随机生成，首次启动（或 `-print-pub`）时写入，不由令牌推导。公钥给客户端当 `controller_pub`。不重新签发客户端就更换密钥：`loft-node -dir {dir} -roll-key 30`（或面板「访问」→「更换密钥…」），然后重启；钉住旧密钥的客户端和中继会在 30 天内按签名交接自行切换（协议 §10.4）。
 
 活着的名册 = `advertise` 加上在心跳、不是 drain 的中继。三次没打到（大约 30 秒）或 `ctl` 流死了，就把中继拿掉，serial 加一。
 

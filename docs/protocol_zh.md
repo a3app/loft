@@ -361,6 +361,7 @@ u8    inner            可选。仅当客户端请求时有一个字节
 | fronts | rate_bps 之后可选：u8 n ≤ 8，然后 n ×（name、path、url），各为 u8 len \|\| bytes。本节点接受的 mux 前置（`get` `ws` `h2` `h3` `quic`）。空 url 为完成 `0x02` 的前置的 host:port。`quic` 路径为空。空列表 = 客户端保留 URI/默认。有本字段而无 `rate_bps` 时，编码器先写 rate 0。旧客户端忽略多余字节。成功 Status 后节点地图为权威；客户端应写入已保存的配置。 |
 | edge | fronts 之后可选：u8，GET 预设。`0` 为 plain，`inner` 也不存在时省略。`1` 为 tight。出现 `inner` 时，即使该字节为 `0` 也必须写出，并写出 `fronts`（n 可以为 0），以免下一字节被读成 `edge`。旧客户端忽略多余字节。 |
 | inner | edge 之后可选：u8，此 Status 之后记录的数据密码。仅当 Hello 请求过、策略允许该标识、且完成 `0x02` 的前置不是 `get` 时，节点才写它。`0` 无内部 AEAD。`1` 为 ChaCha20-Poly1305，与省略该字节相同；节点可以不写 `1`。`2` 为 AES-256-GCM。没有该字节、未知标识或拒绝，都是 ChaCha20-Poly1305，会话仍然建立。此 Status 的握手 Seal 无论哪种都是 ChaCha20-Poly1305。旧客户端忽略多余字节。 |
+| key_roll | inner 之后可选：u16be len \|\| bytes，控制器签名密钥更换期间的 KeyRoll（§10.4）。出现该字段而未协商数据密码时，`inner` 为 `1`（ChaCha20-Poly1305），不改变任何东西。 |
 
 选定协议为两范围交集的最大值。交集为空则码为 `protocol`（0x0203），无 mux。
 
@@ -559,7 +560,7 @@ repeat n:
 
 存活名册为 `advertise`（id `self`）加上未 drain、正在发心跳的中继。三次错过心跳（默认间隔 10 s）或死亡的 `ctl` 流移除该中继并递增序号。
 
-认证后获取：Status `roster`。认证前获取：`GET {roster_path}`（默认 `/static/v3/manifest.json`），JSON `{"v":1,"p":"<base64url>"}`，`Cache-Control: public, max-age=60`。该 GET 在 CDN 或持有真实证书的主机上成功。没有会话 HMAC 的诱饵拼接 IP 被转发到源站。文档不得包含成员令牌。客户端必须拒绝签名者与已钉控制器公钥不符的名册。接受未知签名者是运营方的选项，默认关闭。*说明，非规范。* 一种客户端把钉住写成 `controller_pub`，把该选项写成 `tofu`。见 [guide_zh.md](guide_zh.md)。
+认证后获取：Status `roster`。认证前获取：`GET {roster_path}`（默认 `/static/v3/manifest.json`），JSON `{"v":1,"p":"<base64url>"}，控制器密钥更换期间再加 `"r":"<base64url KeyRoll>"`（§10.4）`，`Cache-Control: public, max-age=60`。该 GET 在 CDN 或持有真实证书的主机上成功。没有会话 HMAC 的诱饵拼接 IP 被转发到源站。文档不得包含成员令牌。客户端必须拒绝签名者与已钉控制器公钥不符的名册。接受未知签名者是运营方的选项，默认关闭。*说明，非规范。* 一种客户端把钉住写成 `controller_pub`，把该选项写成 `tofu`。见 [guide_zh.md](guide_zh.md)。
 
 ### 10.2 机群（`ctl:1`）
 
@@ -573,6 +574,7 @@ repeat n:
 | 4 | beat | load u8, conns u32be, program, uptime_s u32be |
 | 5 | slice | 经签名的切片 |
 | 6 | drain | id, u8 |
+| 7 | key_roll | KeyRoll（§10.4）；控制器密钥更换期间在 enrol_ok 之前发送 |
 
 切片（体上的 Ed25519）：serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be，然后与名册相同的 pub 与 sig。`enrol_req` 的 id 必须等于干线所用密钥对应的中继 id，以免一个中继冒充另一个。中继必须用安装时拿到的控制器公钥校验每个切片，并必须拒绝由其他任何密钥签名的切片。登记拒绝：1 未知 id，2 格式错误，3 重复，4 停用。*说明，非规范。* 中继名单、中继密钥，以及按中继覆盖 URL、decoy、fronts、weight 的配置名，见 [guide_zh.md](guide_zh.md)。
 
@@ -596,6 +598,16 @@ repeat:
 Kind 1 精确域名，2 后缀，3 CIDR。然后公钥与签名同名册。
 
 Status 携带 `lists_serial` 与已签名块的 SHA-256。序号或散列更新时，客户端获取 `GET {lists_path}`（默认 `/static/v3/lists.json`）。名称匹配不区分大小写。*说明，非规范。* 运营文件如何书写后缀或 CIDR，见 [guide_zh.md](guide_zh.md)。SOCKS 匹配主机名。TUN 匹配 IP（CIDR）。
+
+### 10.4 控制器密钥更换
+
+控制器可以更换签名密钥，而不必为钉住旧密钥的客户端重新签发。旧密钥签署一份 KeyRoll：
+
+```
+"lft-roll" || serial u64be || not_after u64be（unix 秒）|| old_pub[32] || new_pub[32] || Ed25519(old_pub 的密钥, 之前的全部字节)[64]
+```
+
+此后控制器用新密钥签署名册、列表和切片，并在 `not_after` 之前发布 KeyRoll：Status 的 `key_roll`、名册 manifest 的 `"r"` 字段（base64url，无填充），以及 `enrol_ok` 之前的 ctl 消息 `key_roll`。客户端或中继只有在签名能用 `old_pub` 验证、`old_pub` 是它当前信任的控制器密钥、`not_after` 未过、且 `serial` 大于任何已应用的 KeyRoll 时，才必须接受它；随后必须改为信任 `new_pub`。它应当保存已应用的结果，使从 `old_pub` 开始的重启再次落到 `new_pub` 上。在 `not_after` 之前没见到 KeyRoll 的客户端仍停留在 `old_pub`，需要运营方给它新密钥。*说明，非规范。* 本仓库中：`loft-node -roll-key 天数` 或面板；控制器保存 `controller.roll`，客户端保存 `controller.rolls`，中继保存 `controller.pub`。
 
 ---
 
@@ -880,6 +892,22 @@ P2P 前导（§9）。本地标量 `50726976616379206973206e65636573736172792e20
 ```
 peer_pub  2a4cd76bd42aaa397c78d84f0e3fa3643dfad73d128237b66e8572688fc8a306
 preface   4c4654000a4d00026986af299cbcb6931c57169b90268c704172742e3233204b6f6e73742e2052461f90
+```
+
+### 16.9 控制器密钥更换
+
+旧密钥是名册向量的密钥（§16.6），新密钥来自下一个 seed。两个 seed 都是 ASCII。
+
+```
+seed_old  "Liberty Of Free Transmission 1.0"   (the roster vector key)
+seed_new  "Liberty Of Free Transmission 1.1"
+old_pub   0fd3ecac78db360ace8ab85e4d92d897feb4a5e8565421ee9dcc6efbaf63ae05
+new_pub   4c4bd2cfd6b9b0741b7f7f31967f58e9e063ef28ab6edac047299effa80025f5
+serial    1
+not_after 2524608000   (2050-01-01)
+key_roll  6c66742d726f6c6c000000000000000100000000967a76000fd3ecac78db360ace8ab85e4d92d897feb4a5e8565421ee9dcc6efbaf63ae05
+          4c4bd2cfd6b9b0741b7f7f31967f58e9e063ef28ab6edac047299effa80025f5
+          7712b8da2955ab0df3f7a6f64fbcc784280075f964bd85e0d95e2e72cd0a27c473c869ee53c08d63cdeb3f90611acda4b99db6e9c1b1d6a286afdda469b47103
 ```
 
 ---

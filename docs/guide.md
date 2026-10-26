@@ -177,7 +177,7 @@ export LOFT_TOKEN='long-secret'
 | `replicas` | Unsigned extra `host:port` for failover |
 | `quic_alpn` | Default `h3` |
 
-Signing seed: `{dir}/controller.seed`, random, made on first start (or by `-print-pub`) and not derived from the token. Give the public key to clients as `controller_pub`.
+Signing seed: `{dir}/controller.seed`, random, made on first start (or by `-print-pub`) and not derived from the token. Give the public key to clients as `controller_pub`. To replace the key without reissuing clients: `loft-node -dir {dir} -roll-key 30` (or the panel, Access → Change key), then restart; clients and relays that pin the old key follow a signed hand-over for 30 days (protocol §10.4).
 
 Live roster = `advertise` plus heartbeating relays that are not drain. Three missed beats (~30 s) or a dead `ctl` stream drop the relay and increment serial.
 

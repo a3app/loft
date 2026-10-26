@@ -361,6 +361,7 @@ Fields in order:
 | fronts | optional after rate_bps: u8 n ≤ 8, then n × (name, path, url) as u8 len \|\| bytes. Mux fronts this node accepts (`get` `ws` `h2` `h3` `quic`). Empty url is the host:port of the front that did `0x02`. `quic` has an empty path. Empty list = the client keeps URI/defaults. When this field is present without `rate_bps`, the encoder writes rate 0 first. Old clients ignore the extra bytes. After a successful Status the node map is source of truth; the client SHOULD persist it into the saved profile. |
 | edge | optional after fronts: u8 GET preset. `0` plain, omitted when `inner` is also absent. `1` tight. A present `inner` forces this byte even when it is `0`, and forces `fronts` (n MAY be 0) so the next byte is not read as `edge`. Old clients ignore the extra byte. |
 | inner | optional after edge: u8 data cipher for records after this Status. The node writes it only when Hello asked, the policy allows that id, and the front that completed `0x02` is not `get`. `0` no inner AEAD. `1` ChaCha20-Poly1305, the same as omitting the byte; a node MAY omit `1`. `2` AES-256-GCM. Absence, an unknown id, or a refused ask is ChaCha20-Poly1305, and the session still comes up. Handshake Seal of this Status is ChaCha20-Poly1305 either way. Old clients ignore the extra byte. |
+| key_roll | optional after inner: u16be len \|\| bytes, a KeyRoll (§10.4) while the controller signing key changes. When it is present and no data cipher was negotiated, `inner` is `1` (ChaCha20-Poly1305), which changes nothing. |
 
 Selected protocol is the maximum of the intersection of the two ranges. Empty intersection yields code `protocol` (0x0203) and no mux.
 
@@ -559,7 +560,7 @@ Then `u8 pub_len || pub || u16be sig_len || sig`. Signature is Ed25519 over the 
 
 The live roster is `advertise` (id `self`) plus heartbeating relays that are not drain. Three missed beats (default interval 10 s) or a dead `ctl` stream remove the relay and increment serial.
 
-Fetch after authentication: Status `roster`. Fetch before authentication: `GET {roster_path}` (default `/static/v3/manifest.json`), JSON `{"v":1,"p":"<base64url>"}`, `Cache-Control: public, max-age=60`. That GET succeeds on a CDN or a host with a real certificate. A decoy-spliced IP without session HMAC is forwarded to the origin. The document MUST NOT contain a member token. A client MUST reject a roster whose signer does not match the pinned controller public key. Accepting an unknown signer is an operator opt-in and is off by default. *Informative, not normative.* One client spells the pin `controller_pub` and the opt-in `tofu`. See [guide.md](guide.md).
+Fetch after authentication: Status `roster`. Fetch before authentication: `GET {roster_path}` (default `/static/v3/manifest.json`), JSON `{"v":1,"p":"<base64url>"}, plus `"r":"<base64url KeyRoll>"` while the controller key changes (§10.4)`, `Cache-Control: public, max-age=60`. That GET succeeds on a CDN or a host with a real certificate. A decoy-spliced IP without session HMAC is forwarded to the origin. The document MUST NOT contain a member token. A client MUST reject a roster whose signer does not match the pinned controller public key. Accepting an unknown signer is an operator opt-in and is off by default. *Informative, not normative.* One client spells the pin `controller_pub` and the opt-in `tofu`. See [guide.md](guide.md).
 
 ### 10.2 Fleet (`ctl:1`)
 
@@ -573,6 +574,7 @@ Each message `u32be length || u8 type || body`.
 | 4 | beat | load u8, conns u32be, program, uptime_s u32be |
 | 5 | slice | signed slice |
 | 6 | drain | id, u8 |
+| 7 | key_roll | KeyRoll (§10.4); sent before enrol_ok while the controller key changes |
 
 Slice (Ed25519 over the body): serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be, then pub and sig as in the roster. The `enrol_req` id MUST equal the relay id of the key the trunk authenticated with, so one relay cannot enrol as another. The relay MUST verify every slice with the controller public key it was installed with and MUST refuse a slice signed by any other key. Enrol deny: 1 unknown id, 2 bad form, 3 duplicate, 4 disabled. *Informative, not normative.* Configuration names for the relay list, relay keys, and per-relay overrides of URL, decoy, fronts, and weight are in [guide.md](guide.md).
 
@@ -596,6 +598,16 @@ repeat:
 Kind 1 exact domain, 2 suffix, 3 CIDR. Then public key and signature as in the roster.
 
 Status carries `lists_serial` and SHA-256 of the signed blob. The client fetches `GET {lists_path}` (default `/static/v3/lists.json`) when serial or hash is newer. Matching is case-insensitive for names. *Informative, not normative.* How an operator file spells a suffix or a CIDR is in [guide.md](guide.md). SOCKS matches hostname. TUN matches IP (CIDR).
+
+### 10.4 Controller key roll
+
+A controller MAY replace its signing key without reissuing the clients that pin it. The old key signs one KeyRoll:
+
+```
+"lft-roll" || serial u64be || not_after u64be (unix seconds) || old_pub[32] || new_pub[32] || Ed25519(old_pub's key, all bytes before)[64]
+```
+
+The controller then signs roster, lists, and slices with the new key and publishes the KeyRoll until `not_after`: Status `key_roll`, the roster manifest field `"r"` (base64url, no padding), and ctl message `key_roll` before `enrol_ok`. A client or relay MUST accept a KeyRoll only when the signature verifies under `old_pub`, `old_pub` is the controller key it trusts now, `not_after` has not passed, and `serial` is greater than that of any KeyRoll it applied. It then MUST trust `new_pub` instead of `old_pub`. It SHOULD keep what it applied, so that a restart that begins from `old_pub` ends on `new_pub` again. A client that sees no KeyRoll before `not_after` keeps `old_pub` and needs the new key from its operator. *Informative, not normative.* In this tree: `loft-node -roll-key DAYS` or the panel; the controller keeps `controller.roll`, a client `controller.rolls`, a relay `controller.pub`.
 
 ---
 
@@ -880,6 +892,22 @@ P2P preface (§9). Local scalar `50726976616379206973206e65636573736172792e20487
 ```
 peer_pub  2a4cd76bd42aaa397c78d84f0e3fa3643dfad73d128237b66e8572688fc8a306
 preface   4c4654000a4d00026986af299cbcb6931c57169b90268c704172742e3233204b6f6e73742e2052461f90
+```
+
+### 16.9 Controller key roll
+
+The old key is the roster vector key (§16.6); the new key is from the next seed. Both seeds are ASCII.
+
+```
+seed_old  "Liberty Of Free Transmission 1.0"   (the roster vector key)
+seed_new  "Liberty Of Free Transmission 1.1"
+old_pub   0fd3ecac78db360ace8ab85e4d92d897feb4a5e8565421ee9dcc6efbaf63ae05
+new_pub   4c4bd2cfd6b9b0741b7f7f31967f58e9e063ef28ab6edac047299effa80025f5
+serial    1
+not_after 2524608000   (2050-01-01)
+key_roll  6c66742d726f6c6c000000000000000100000000967a76000fd3ecac78db360ace8ab85e4d92d897feb4a5e8565421ee9dcc6efbaf63ae05
+          4c4bd2cfd6b9b0741b7f7f31967f58e9e063ef28ab6edac047299effa80025f5
+          7712b8da2955ab0df3f7a6f64fbcc784280075f964bd85e0d95e2e72cd0a27c473c869ee53c08d63cdeb3f90611acda4b99db6e9c1b1d6a286afdda469b47103
 ```
 
 ---
