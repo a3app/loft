@@ -562,12 +562,13 @@ type ChannelsView struct {
 // Relay is one relay the controller lets enrol. Key reports that a key was
 // issued for it (its hash is on the relay line of node.conf).
 type Relay struct {
-	ID     string   `json:"id"`
-	URL    string   `json:"url"`
-	Fronts []string `json:"fronts,omitempty"`
-	Weight int      `json:"weight,omitempty"`
-	Drain  bool     `json:"drain,omitempty"`
-	Key    bool     `json:"key,omitempty"`
+	ID      string   `json:"id"`
+	URL     string   `json:"url"`
+	Fronts  []string `json:"fronts,omitempty"`
+	Weight  int      `json:"weight,omitempty"`
+	Drain   bool     `json:"drain,omitempty"`
+	Key     bool     `json:"key,omitempty"`
+	Replica bool     `json:"replica,omitempty"` // a standby controller: it gets a copy of the controller's state
 }
 
 // CtlRoll replaces the controller key; pinned clients and relays follow the

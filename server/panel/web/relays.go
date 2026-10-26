@@ -32,9 +32,11 @@ import (
 
 // relayInstall is what the Relays dialog shows for one relay.
 type relayInstall struct {
-	ID            string `json:"id"`
-	Key           string `json:"key"`
-	ControllerURL string `json:"controller_url"`
+	ID             string   `json:"id"`
+	Role           string   `json:"role"` // relay, or replica for a standby controller
+	Key            string   `json:"key"`
+	ControllerURL  string   `json:"controller_url"`
+	ControllerURLs []string `json:"controller_urls"` // the controller, then standby controllers
 	ControllerPub string `json:"controller_pub"`
 	Advertise     string `json:"advertise"`
 	Version       string `json:"version"`
@@ -101,9 +103,15 @@ func (s *Server) relayInstall(ctx context.Context, by, op, id string) (relayInst
 		return relayInstall{}, err
 	}
 	in := relayInstall{
-		ID: id, Key: k.Key, ControllerURL: ctl, ControllerPub: nc.ControllerPub,
+		ID: id, Role: "relay", Key: k.Key, ControllerURL: ctl, ControllerPub: nc.ControllerPub,
 		Advertise: nc.Relays[i].URL, Version: version.Version,
 	}
+	if nc.Relays[i].Replica {
+		in.Role = "replica"
+	}
+	// After a standby is promoted it serves the same paths at its own
+	// address, so every relay also learns where the standbys are.
+	in.ControllerURLs = append([]string{ctl}, standbyURLs(nc, id)...)
 	in.Command = in.command()
 	in.Config = in.nodeConf(nc.Relays[i].Fronts)
 	return in, nil
@@ -122,10 +130,27 @@ func relayControllerURL(nc admproto.NodeConfig) (string, error) {
 	return "https://" + u.Host, nil
 }
 
+// standbyURLs are the trunk URLs of the standby controllers other than id.
+func standbyURLs(nc admproto.NodeConfig, id string) []string {
+	var out []string
+	for _, r := range nc.Relays {
+		u, err := url.Parse(r.URL)
+		if !r.Replica || r.ID == id || err != nil || u.Host == "" {
+			continue
+		}
+		if slices.Contains(nc.Fronts, "ws") && nc.WSPath != "" {
+			out = append(out, "wss://"+u.Host+nc.WSPath)
+		} else {
+			out = append(out, "https://"+u.Host)
+		}
+	}
+	return out
+}
+
 // args are the installer flags for this relay.
 func (in relayInstall) args() string {
-	return fmt.Sprintf("--role relay --id %s --advertise %s --controller %s --controller-pub %s --relay-key %s",
-		in.ID, in.Advertise, in.ControllerURL, in.ControllerPub, in.Key)
+	return fmt.Sprintf("--role %s --id %s --advertise %s --controller '%s' --controller-pub %s --relay-key %s",
+		in.Role, in.ID, in.Advertise, strings.Join(in.ControllerURLs, " "), in.ControllerPub, in.Key)
 }
 
 // command downloads the release archive for the host's architecture and
@@ -141,12 +166,12 @@ func (in relayInstall) nodeConf(fronts []string) string {
 	if len(fronts) == 0 {
 		fronts = []string{"get"}
 	}
-	return "# loft-node relay " + in.ID + "; its key is in /var/lib/loft/relay.key\n" +
-		"role relay\n" +
+	return "# loft-node " + in.Role + " " + in.ID + "; its key is in /var/lib/loft/relay.key\n" +
+		"role " + in.Role + "\n" +
 		"id " + in.ID + "\n" +
 		"listen :443\n" +
 		"advertise " + in.Advertise + "\n" +
-		"controller " + in.ControllerURL + "\n" +
+		"controller " + strings.Join(in.ControllerURLs, " ") + "\n" +
 		"controller_pub " + in.ControllerPub + "\n" +
 		"cert /etc/loft/tls/fullchain.pem\n" +
 		"key /etc/loft/tls/privkey.pem\n" +

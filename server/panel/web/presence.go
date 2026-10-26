@@ -34,6 +34,8 @@ type nodeStatus struct {
 		Load  int       `json:"load"`
 		Conns int       `json:"conns"`
 		Beat  time.Time `json:"beat"`
+		// StateAt is when a standby controller last got this node's state.
+		StateAt time.Time `json:"state_at,omitzero"`
 	} `json:"relays"`
 }
 

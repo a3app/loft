@@ -2056,11 +2056,12 @@
   // address ranges the node accepts GET requests from.
   function ndRelay() {
     const d = L.ndDraft, own = L.can('node'), live = ((L.pres || {}).relays || []);
-    const st = r => { const l = live.find(x => x.id === r.id); return r.drain ? [pill('выведен'), '0', '—'] : l ? [pill('в сети', 'ok'), String(l.conns), agoT(l.beat)] : [pill('не в сети'), '—', '—']; };
+    // A standby also shows when it last got the controller's state.
+    const st = r => { const l = live.find(x => x.id === r.id); return r.drain ? [pill('выведен'), '0', '—'] : l ? [pill('в сети', 'ok') + (r.replica && l.state_at ? `<div class="hint" style="margin:0">${'копия'} ${agoT(l.state_at)}</div>` : ''), String(l.conns), agoT(l.beat)] : [pill('не в сети'), '—', '—']; };
     const cf = (d.cdn_peers || []).length;
     return blk('Ретрансляторы', 'Другие серверы, которые принимают участников и передают трафик сюда. Ключей и адресов участников у них нет.',
         `<div class="acts">${own ? `<button class="btn pri" type="button" onclick="LIVE.openRelay(-1)">${ic('i-plus')}Добавить ретранслятор</button>` : ''}</div>` +
-        table(['Ретранслятор', 'Адрес для клиентов', 'Фронты', 'Вес', 'Состояние', 'Подключений', 'Отклик'], d.relays.map((r, i) => { const s = st(r); return `<tr class="click" onclick="LIVE.openRelay(${i})"><td><b>${esc(r.id)}</b></td><td class="mono">${esc((r.url || '—').replace(/^https:\/\//, ''))}</td><td>${esc((r.fronts || []).join(', ') || 'get')}</td><td class="num">${r.weight || 100}</td><td>${s[0]}</td><td class="num">${s[1]}</td><td>${s[2]}</td></tr>`; }).join('') || `<tr><td colspan="7" class="mute">Ретрансляторов нет.</td></tr>`)) +
+        table(['Ретранслятор', 'Адрес для клиентов', 'Фронты', 'Вес', 'Состояние', 'Подключений', 'Отклик'], d.relays.map((r, i) => { const s = st(r); return `<tr class="click" onclick="LIVE.openRelay(${i})"><td><b>${esc(r.id)}</b>${r.replica ? ' ' + pill('резерв') : ''}</td><td class="mono">${esc((r.url || '—').replace(/^https:\/\//, ''))}</td><td>${esc((r.fronts || []).join(', ') || 'get')}</td><td class="num">${r.weight || 100}</td><td>${s[0]}</td><td class="num">${s[1]}</td><td>${s[2]}</td></tr>`; }).join('') || `<tr><td colspan="7" class="mute">Ретрансляторов нет.</td></tr>`)) +
       blk('CDN', 'Участники могут подключаться через CDN по фронту GET. Нода принимает запросы со своим именем от адресов CDN.',
         `<div class="card"><label class="chk" style="margin-bottom:16px"><input type="checkbox" ${cf ? 'checked' : ''} ${dis()} onchange="LIVE.ndCDN(this.checked)">Cloudflare</label>
         <dl class="kv"><div><dt>Диапазоны CDN</dt><dd>${cf ? cf + ' ' + plural(cf, 'подсеть', 'подсети', 'подсетей') : 'нет'}</dd></div></dl>${cf && own ? `<div class="acts" style="margin:16px 0 0"><button class="btn sm" type="button" onclick="LIVE.ndCDN(true)">Обновить диапазоны</button></div>` : ''}</div>`);
@@ -2084,6 +2085,7 @@
       <div class="fld"><label for="ry2">Адрес для клиентов</label><input id="ry2" class="mono" value="${esc(r.url)}" placeholder="https://de1.example.net"></div>
       <div><div class="dlg-sec" style="margin:0">Фронты</div><div class="chk-row">${FR.map(([k, l]) => `<label class="chk"><input type="checkbox" data-rf="${k}" ${rf.includes(k) ? 'checked' : ''}>${l}</label>`).join('')}</div></div>
       <div><div class="fld"><label for="ry3">Вес</label><input id="ry3" class="num" value="${r.weight || 100}"></div><div class="hint">Чем больше, тем чаще клиенты выбирают этот ретранслятор (1–255).</div></div>
+      <label class="chk"><input id="ry5" type="checkbox" ${r.replica ? 'checked' : ''}>Резервный controller<span class="hint" style="display:block;margin:0">Получает копию настроек и ключей этой ноды и может её заменить: на нём выполняют sudo loft-node -c /etc/loft/node.conf -promote и перезапускают loft-node.</span></label>
       <label class="chk"><input id="ry4" type="checkbox" ${r.drain ? 'checked' : ''}>Вывести<span class="hint" style="display:block;margin:0">Новые клиенты сюда не идут; подключение ретранслятора закрывается.</span></label>
       ${own ? `<div><div class="dlg-sec" style="margin:0 0 6px">Ключ и установка</div>${inst}</div>` : ''}`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.relaySave(${i})">${nw ? 'Добавить' : 'Готово'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить ретранслятор" style="margin-left:auto" onclick="LIVE.relayDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
@@ -2091,7 +2093,7 @@
   L.relaySave = i => {
     const fr = [...document.querySelectorAll('[data-rf]')].filter(x => x.checked).map(x => x.dataset.rf);
     if (!fr.length) { toast('Нужен хотя бы один фронт'); return; }
-    const r = { id: $('#ry1').value.trim(), url: $('#ry2').value.trim(), fronts: fr, weight: parseInt($('#ry3').value, 10) || 100, drain: $('#ry4').checked };
+    const r = { id: $('#ry1').value.trim(), url: $('#ry2').value.trim(), fronts: fr, weight: parseInt($('#ry3').value, 10) || 100, drain: $('#ry4').checked, replica: $('#ry5').checked };
     if (!/^[a-z][a-z0-9-]{0,11}$/.test(r.id)) { toast('Имя: латинская буква, затем буквы, цифры или дефис'); return; }
     const all = L.ndDraft.relays.slice();
     if (i < 0) all.push(r); else all[i] = r;

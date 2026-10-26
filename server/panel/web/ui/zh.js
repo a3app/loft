@@ -3,6 +3,9 @@
    Product names stay Latin. Operator wording follows current mainland usage
    (面板, 节点, 成员, 网段, 软件包, 通道, 向导, 伪装, 中继). */
 window.LOFT_ZH = {
+  "копия": "副本",
+  "Резервный controller": "备用控制器",
+  "Получает копию настроек и ключей этой ноды и может её заменить: на нём выполняют sudo loft-node -c /etc/loft/node.conf -promote и перезапускают loft-node.": "获得本节点设置和密钥的副本，并可取而代之：在它上面运行 sudo loft-node -c /etc/loft/node.conf -promote，然后重启 loft-node。",
   "Идёт смена ключа до": "密钥更换进行至",
   "Клиенты и ретрансляторы со старым ключом переходят на новый сами.": "持有旧密钥的客户端和中继会自行切换到新密钥。",
   "Сменить ключ…": "更换密钥…",

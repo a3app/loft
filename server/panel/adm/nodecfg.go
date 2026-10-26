@@ -74,7 +74,7 @@ func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 		v.CDNPeers = []string{}
 	}
 	for _, r := range c.Relays {
-		v.Relays = append(v.Relays, admproto.Relay{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: int(r.Weight), Drain: r.Drain, Key: r.KeySHA256 != ""})
+		v.Relays = append(v.Relays, admproto.Relay{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: int(r.Weight), Drain: r.Drain, Key: r.KeySHA256 != "", Replica: r.Replica})
 	}
 	v.MaskPub = o.maskPubB64()
 	if in, err := o.NodeInfo(); err == nil {
@@ -203,7 +203,7 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		if r.Weight < 0 || r.Weight > 255 {
 			return admproto.NodeConfig{}, fmt.Errorf("relay %s: weight 0–255", r.ID)
 		}
-		c.Relays = append(c.Relays, config.RelayEntry{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: byte(r.Weight), Drain: r.Drain, KeySHA256: keyOf[r.ID]})
+		c.Relays = append(c.Relays, config.RelayEntry{ID: r.ID, URL: r.URL, Fronts: r.Fronts, Weight: byte(r.Weight), Drain: r.Drain, KeySHA256: keyOf[r.ID], Replica: r.Replica})
 	}
 	c.CDNPeers = nil
 	for _, p := range in.CDNPeers {

@@ -31,7 +31,8 @@ func (f relayAdm) Call(_ context.Context, op string, body, out any) error {
 	switch op {
 	case admproto.OpNodeConfig:
 		set(admproto.NodeConfig{Advertise: "https://api.example.net", Fronts: []string{"get", "ws"}, WSPath: "/api/v1/sync",
-			ControllerPub: testCtlPub, Relays: []admproto.Relay{{ID: "ru1", URL: "https://ru1.example.net", Fronts: []string{"get"}, Key: true}}})
+			ControllerPub: testCtlPub, Relays: []admproto.Relay{{ID: "ru1", URL: "https://ru1.example.net", Fronts: []string{"get"}, Key: true},
+				{ID: "r2", URL: "https://r2.example.net", Key: true, Replica: true}}})
 	case admproto.OpRelayKey:
 		*f.issued++
 		set(admproto.IssuedKey{ID: "ru1", Key: fmt.Sprintf("lt_new%d", *f.issued)})
@@ -53,7 +54,7 @@ func TestRelayInstall(t *testing.T) {
 	}
 	cmd, _ := r.body["command"].(string)
 	for _, want := range []string{"--role relay", "--id ru1", "--advertise https://ru1.example.net",
-		"--controller wss://api.example.net/api/v1/sync", "--controller-pub " + testCtlPub, "--relay-key lt_new1",
+		"--controller 'wss://api.example.net/api/v1/sync wss://r2.example.net/api/v1/sync'", "--controller-pub " + testCtlPub, "--relay-key lt_new1",
 		"V=" + version.Version} {
 		if !strings.Contains(cmd, want) {
 			t.Fatalf("command lacks %q: %s", want, cmd)
@@ -68,6 +69,12 @@ func TestRelayInstall(t *testing.T) {
 	}
 	if r := e.do("GET", "/api/relays/key?id=nope", nil, c, ""); r.code == 200 {
 		t.Fatal("install for a relay not in node.conf")
+	}
+	// A standby installs as role replica and lists only the controller.
+	r = e.do("GET", "/api/relays/key?id=r2", nil, c, "")
+	cmd, _ = r.body["command"].(string)
+	if r.code != 200 || !strings.Contains(cmd, "--role replica") || strings.Contains(cmd, "r2.example.net/api") {
+		t.Fatalf("standby install: %d %s", r.code, cmd)
 	}
 }
 
