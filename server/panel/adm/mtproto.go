@@ -6,10 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/a3app/loft/server/panel/admproto"
 	"github.com/a3app/loft/server/panel/catalog"
@@ -21,7 +23,10 @@ const (
 	mtprotoSetFile = "/var/lib/loft-mtproto/settings.json"
 	mtprotoVerFile = "/var/lib/loft-mtproto/version"
 	mtprotoPort    = 8448
-	mtprotoDomain  = "cloudflare.com"
+	// mtprotoDomain is the fallback TLS domain when the node has no DNS name.
+	// A foreign name on this server's IP is easy to spot (the SNI does not
+	// match the address), so the node's own name is the default.
+	mtprotoDomain = "cloudflare.com"
 )
 
 // Ports the MTProto proxy must not take: they already belong to the node,
@@ -54,7 +59,11 @@ func (r *runner) ensureMTProto() error {
 	}
 	s, err := r.o.readMTProto()
 	if err != nil {
-		s, err = newMTProto(mtprotoPort, mtprotoDomain)
+		domain := mtprotoDomain
+		if in, e := r.o.NodeInfo(); e == nil && ValidDomain(in.Host) {
+			domain = strings.ToLower(in.Host)
+		}
+		s, err = newMTProto(mtprotoPort, domain)
 		if err != nil {
 			return err
 		}
@@ -118,12 +127,42 @@ func (o *Ops) mtprotoView(s mtprotoFile) admproto.MTProto {
 	if in, err := o.NodeInfo(); err == nil {
 		out.Host = in.Host
 	}
+	out.DomainMatch = sameServer(s.Domain, out.Host)
 	if out.Host != "" && s.Secret != "" {
 		q := url.Values{"server": {out.Host}, "port": {strconv.Itoa(s.Port)}, "secret": {s.Secret}}
 		out.Link = "tg://proxy?" + q.Encode()
 		out.LinkHTTPS = "https://t.me/proxy?" + q.Encode()
 	}
 	return out
+}
+
+// sameServer reports whether domain is this server: the node's own name, or a
+// name that resolves to one of the node name's addresses.
+func sameServer(domain, host string) bool {
+	if domain == "" || host == "" {
+		return false
+	}
+	if strings.EqualFold(domain, host) {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	want, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return false
+	}
+	got, err := net.DefaultResolver.LookupIPAddr(ctx, domain)
+	if err != nil {
+		return false
+	}
+	for _, a := range got {
+		for _, b := range want {
+			if a.IP.Equal(b.IP) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // MTProtoGet is the proxy settings and share links, or installed=false.

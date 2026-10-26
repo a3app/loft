@@ -810,7 +810,8 @@
       <div class="fld"><label for="mtp-host">Сервер</label><input id="mtp-host" class="mono" value="${esc(s.host || '')}" readonly></div>
       <div class="fgrid" style="grid-template-columns:1fr 1fr"><div class="fld"><label for="mtp-port">Порт</label><input id="mtp-port" class="num" value="${s.port || 8448}"></div>
        <div class="fld"><label for="mtp-dom">TLS-домен</label><input id="mtp-dom" class="mono" value="${esc(s.domain || '')}"></div></div>
-      <div class="hint">Порт не должен совпадать с 80, 443 и 8443 (веб-сервер и нода). TLS-домен входит в секрет: клиенты Telegram предъявляют его как SNI.</div>
+      <div class="hint">Порт не должен совпадать с 80, 443 и 8443 (веб-сервер и нода). TLS-домен входит в секрет: клиенты Telegram предъявляют его как SNI. Лучше домен этого сервера: тогда имя и адрес совпадают.</div>
+      ${!s.domain_match && s.host ? `<div class="note bad" role="status" style="margin:12px 0 0"><span>TLS-домен <b class="mono">${esc(s.domain || '')}</b> не указывает на этот сервер. Фильтр видит, что имя в рукопожатии не совпадает с адресом, и такой прокси часто не работает из российских сетей. Смена домена выпустит новый секрет: ссылку придётся раздать заново.</span><span class="note-acts"><button class="btn sm pri" type="button" onclick="$('#mtp-dom').value='${esc(s.host)}';LIVE.mtpSave(false)">Взять домен ноды</button></span></div>` : ''}
       <div class="dlg-sec">Секрет</div>
       <div class="uri" id="mtp-sec">${esc(s.secret || '')}</div>
       <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.copy('#mtp-sec')">Копировать секрет</button><button class="btn sm" type="button" onclick="LIVE.mtpSave(true)">Новый секрет</button></div>

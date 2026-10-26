@@ -273,6 +273,9 @@ type MTProto struct {
 	Link      string `json:"link,omitempty"`       // tg://proxy?…
 	LinkHTTPS string `json:"link_https,omitempty"` // https://t.me/proxy?…
 	Version   string `json:"version,omitempty"`
+	// DomainMatch: the TLS domain is this server (the node's name, or a name
+	// that resolves to the same address). False means the SNI points elsewhere.
+	DomainMatch bool `json:"domain_match"`
 }
 
 // MTProtoSet changes the proxy. A new TLS domain always mints a new secret
