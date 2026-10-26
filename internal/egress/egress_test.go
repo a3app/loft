@@ -522,9 +522,9 @@ func tlsListen(t *testing.T) string {
 func TestProbeTLSAndDirectNoLink(t *testing.T) {
 	live := tlsListen(t)
 	dead := "127.0.0.1:1"
-	old := autoProbes
-	autoProbes = []string{dead, live}
-	t.Cleanup(func() { autoProbes = old })
+	old := autoProbeList()
+	autoProbes.Store([]string{dead, live})
+	t.Cleanup(func() { autoProbes.Store(old) })
 	opt := Options{SysNet: t.TempDir(), TLS: &tls.Config{InsecureSkipVerify: true}}
 
 	c, err := Parse("direct check tls probe " + live + " every 1 fails 1\nprio main direct then block\ndefault via main\n")

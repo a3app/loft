@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/icmp"
@@ -14,7 +15,17 @@ import (
 )
 
 // autoProbes are HTTPS hosts Automatic mode tries; any one success is enough.
-var autoProbes = []string{"ya.ru:443", "nic.ru:443", "google.com:443"}
+// The probe goroutine reads the list while a test (or a later reload) may replace it.
+var autoProbes atomic.Value // []string
+
+func init() {
+	autoProbes.Store([]string{"ya.ru:443", "nic.ru:443", "google.com:443"})
+}
+
+func autoProbeList() []string {
+	v, _ := autoProbes.Load().([]string)
+	return v
+}
 
 // probe runs a channel's link check until the router closes. Fails probes
 // in a row mark the channel "no link"; one success clears it. Defaults are
@@ -83,7 +94,7 @@ func (r *Router) probeOnce(ctx context.Context, cs *chanState) error {
 		return r.probeTLS(ctx, cs, k.Probe)
 	case "auto":
 		var last error
-		for _, addr := range autoProbes {
+		for _, addr := range autoProbeList() {
 			if err := r.probeTLS(ctx, cs, addr); err == nil {
 				return nil
 			} else {
