@@ -1,15 +1,25 @@
 package transport
 
 // Origin TLS application-record lengths, used to pad mask ciphertext.
+//
+// Someone watching the wire sees only record sizes and timing. When the
+// node refreshes the decoy certificate it also notes the sizes of the first
+// application records the decoy sends back. Mask TLS then pads its own
+// records (with TLS 1.3 zero padding inside the encryption) to those sizes,
+// so a loft session starts with the same size pattern as a page load from
+// the decoy.
 
 import (
 	"io"
 	"net"
 )
 
+// maskPadMax is how many decoy record sizes one refresh samples.
 const maskPadMax = 12
 
 // recordCollector notes application-record sizes while tls.Client reads.
+// It sits under crypto/tls and parses only the plaintext 5-byte record
+// headers, so it never needs the keys.
 type recordCollector struct {
 	net.Conn
 	pending []byte

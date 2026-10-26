@@ -1,6 +1,19 @@
 package transport
 
 // Decoy splice forwards non-loft ClientHellos to a configured HTTPS origin.
+//
+// Why: a censor finds proxies by connecting to suspicious IPs and looking at
+// what answers (active probing). With decoy on, the node reads the first TLS
+// message of each TCP connection before answering. If it carries the loft
+// mark (see hellopeek.go), the node serves loft. Otherwise the node splices:
+// it opens a TCP connection to the decoy, a real website named in the
+// server config, replays the bytes it read, and pipes both directions. The
+// prober then completes TLS with the real site and sees its real
+// certificate and pages. The node never decrypts spliced traffic.
+//
+// Terms used below: "own SNI" is one of the node's public hostnames (its
+// advertise URL and certificate names); a "decoy SNI" is the decoy's name;
+// "dest" and "origin" both mean the decoy website.
 
 import (
 	"crypto/tls"
@@ -35,7 +48,9 @@ func (p *prefixConn) Read(b []byte) (int, error) {
 	return p.Conn.Read(b)
 }
 
-// decoyListener implements decoy splice. A valid session_id is loft
+// decoyListener implements decoy splice. It wraps the node's public TCP
+// listener; Accept hands on only loft connections (masked ones are served
+// in their own goroutine). A valid session_id is loft
 // (own SNI → node certificate; decoy SNI → mask when ready). Own SNI
 // from a configured CDN peer may complete TLS without sid. Anything
 // else — including own SNI without sid, a broken hello, and non-TLS —
@@ -52,10 +67,10 @@ type decoyListener struct {
 	origins map[string]string // sni -> host:port
 	own     []string          // advertise / cert names: do not splice
 	mask    *Mask
-	handler http.Handler
-	onLoft  func(net.Conn, clientHello)
-	cdn     []net.IPNet
-	proxy   bool // PROXY v1 header before the spliced bytes
+	handler http.Handler                // serves masked conns when onLoft is nil
+	onLoft  func(net.Conn, clientHello) // takes masked conns; wins over handler
+	cdn     []net.IPNet                 // CDN origin-pull ranges (cdn_peers)
+	proxy   bool                        // PROXY v1 header before the spliced bytes
 	mu      sync.Mutex
 }
 
@@ -122,10 +137,12 @@ func PublicSNIs(advertise, certFile string) []string {
 	return ownSNIList(out)
 }
 
+// normSNI lower-cases a hostname and drops spaces and a trailing dot.
 func normSNI(s string) string {
 	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(s), "."))
 }
 
+// ownSNIList normalizes names and removes blanks and duplicates.
 func ownSNIList(in []string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -190,6 +207,13 @@ func (d *decoyListener) Close() error { return d.ln.Close() }
 //  2. Own SNI from a configured CDN peer, even without sid → node certificate.
 //  3. Valid session_id on a decoy SNI → loft; mask when ready.
 //  4. Anything else, including a broken or non-TLS first flight → splice to dest.
+//
+// Own SNI without a mark is spliced too: the node's hostname is public (for
+// example in Certificate Transparency logs), so a prober may ask for it by
+// name. A CDN cannot add the loft mark to its own ClientHello, which is why
+// configured CDN peer addresses are let through on own SNI.
+// A marked hello whose client_random was already used is a replay and is
+// spliced (see hello_once.go).
 func (d *decoyListener) Accept() (net.Conn, error) {
 	for {
 		c, err := d.ln.Accept()
@@ -348,6 +372,7 @@ func (d *decoyListener) pick(sni string) string {
 }
 
 // maskThen completes mask TLS then calls fn with the masked conn.
+// It runs in its own goroutine so a slow handshake does not block Accept.
 func (d *decoyListener) maskThen(c net.Conn, raw []byte, hello clientHello, fn func(net.Conn, clientHello)) {
 	mc, err := d.mask.Handshake(c, raw, hello)
 	if err != nil {
@@ -358,6 +383,8 @@ func (d *decoyListener) maskThen(c net.Conn, raw []byte, hello clientHello, fn f
 }
 
 // serveMask completes mask TLS and serves HTTP/2 on the masked conn.
+// When the client offered only http/1.1 (the WebSocket front), it serves
+// HTTP/1.1 instead.
 func (d *decoyListener) serveMask(c net.Conn, raw []byte, hello clientHello) {
 	mc, err := d.mask.Handshake(c, raw, hello)
 	if err != nil {

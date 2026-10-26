@@ -2,6 +2,13 @@ package transport
 
 // UDP dest splice: when decoy is on, UDP/443 is dest's datagrams, except
 // marked loft QUIC (ListenUDPDecoy).
+//
+// This is decoy.go for UDP. Browsers reach a site over QUIC (HTTP/3) on
+// UDP/443, so a prober can ask the node's UDP port too. "dest" is the decoy
+// website: every datagram that is not loft is relayed to it and its replies
+// are sent back, so the prober talks to the real site. UDP has no
+// connection, so the node keeps a "flow" per client address and decides
+// once, on its first datagram, whether that address is loft or dest's.
 
 import (
 	"crypto/tls"
@@ -15,8 +22,11 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+// udpFlowIdle closes a spliced flow after this long without a reply.
 const udpFlowIdle = 60 * time.Second
 
+// udpFlow is one client address relayed to dest: up is a socket connected
+// to dest, from is where its replies go back to.
 type udpFlow struct {
 	up   *net.UDPConn
 	from net.Addr
@@ -71,6 +81,8 @@ func SpliceUDP(listen, dest string) error {
 	}
 }
 
+// relayUDPReply copies dest's replies on f back to the client through the
+// shared socket until dest is idle for udpFlowIdle, then calls done.
 func relayUDPReply(pc net.PacketConn, f *udpFlow, done func()) {
 	defer done()
 	b := make([]byte, 64<<10)
@@ -121,9 +133,10 @@ const (
 	demuxLoftIdle = 3 * time.Minute  // loft QUIC keeps alive every 15 s
 	demuxWait     = time.Second      // an Initial without the ClientHello start waits this long
 	demuxSeen     = 10 * time.Minute // a client_random is single-use this long (as ecrypto.Nonces)
-	demuxPend     = 8
+	demuxPend     = 8                // datagrams held per address while undecided
 )
 
+// demuxFlow is the state of one client address on the shared socket.
 type demuxFlow struct {
 	loft bool
 	up   *udpFlow // dest side of a spliced flow, nil until the first datagram
@@ -132,6 +145,7 @@ type demuxFlow struct {
 	last time.Time
 }
 
+// seenHello is the address that first sent a given client_random.
 type seenHello struct {
 	from string
 	at   time.Time
@@ -154,6 +168,7 @@ type udpDemux struct {
 	once  sync.Once
 }
 
+// newUDPDemux builds the demux; run starts it.
 func newUDPDemux(pc net.PacketConn, upAddr *net.UDPAddr, token []byte) *udpDemux {
 	d := &udpDemux{pc: pc, upAddr: upAddr, token: token, cids: newServerCIDs(token),
 		flows: map[string]*demuxFlow{}, seen: map[string]seenHello{}, done: make(chan struct{})}
@@ -161,6 +176,7 @@ func newUDPDemux(pc net.PacketConn, upAddr *net.UDPAddr, token []byte) *udpDemux
 	return d
 }
 
+// close stops the demux, the shared socket and the loft side once.
 func (d *udpDemux) close() {
 	d.once.Do(func() {
 		close(d.done)
@@ -169,6 +185,7 @@ func (d *udpDemux) close() {
 	})
 }
 
+// run reads the shared socket until it closes and hands each datagram to handle.
 func (d *udpDemux) run() {
 	defer d.close()
 	go d.sweep()
@@ -182,6 +199,7 @@ func (d *udpDemux) run() {
 	}
 }
 
+// verdict is where a datagram from an undecided address goes.
 type verdict int
 
 const (
@@ -191,6 +209,10 @@ const (
 )
 
 // classify is the verdict on a datagram from an address with no decided flow.
+// Loft is: a short-header packet for one of the node's connection IDs, or a
+// QUIC Initial whose client_random and source connection ID carry the loft
+// mark (quicmark.go). toWait is an Initial with a mark-sized ID whose
+// ClientHello start is in a packet not yet seen. Anything else is dest's.
 func (d *udpDemux) classify(pkt []byte, key string, now time.Time) verdict {
 	if d.cids.owns(pkt) {
 		return toLoft
@@ -209,6 +231,10 @@ func (d *udpDemux) classify(pkt []byte, key string, now time.Time) verdict {
 	return toLoft
 }
 
+// handle files one datagram under its client address. A new address is
+// classified; an undecided one may be decided by this datagram; a dest flow
+// that now sends a marked loft Initial is taken over by loft (the address
+// was reused). Held datagrams are then routed in order.
 func (d *udpDemux) handle(pkt []byte, from net.Addr) {
 	key := from.String()
 	now := time.Now()
@@ -344,6 +370,7 @@ type demuxConn struct {
 	wake     chan struct{}
 }
 
+// newDemuxConn wraps the shared socket for quic-go.
 func newDemuxConn(pc net.PacketConn) *demuxConn {
 	return &demuxConn{pc: pc, in: make(chan demuxPkt, 1024), closed: make(chan struct{}), wake: make(chan struct{})}
 }
@@ -356,6 +383,8 @@ func (c *demuxConn) push(b []byte, from net.Addr) {
 	}
 }
 
+// ReadFrom returns the next datagram routed to loft. It honours the read
+// deadline quic-go sets, which SetReadDeadline may move while it waits.
 func (c *demuxConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	// One timer for the life of this read. defer Stop inside the loop pinned
 	// a timer per SetReadDeadline until the datagram arrived; quic-go moves

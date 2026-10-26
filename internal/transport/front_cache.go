@@ -2,6 +2,11 @@ package transport
 
 // Disk cache of decoy SNI and mask_pub, keyed by node addr. Survives a new
 // loft-front process so the first ClientHello on a filtered path is mask.
+//
+// Without it a freshly started client knows neither the node's decoy name
+// nor its mask_pub, so its first ClientHello falls back to the weaker
+// sid v2 mark. The file is fronts.cache, a JSON map of
+// host:port to these two fields, next to client.instance.
 
 import (
 	"encoding/base64"
@@ -13,6 +18,7 @@ import (
 	"sync"
 )
 
+// frontDisk is one node's entry in fronts.cache. MaskPub is base64url.
 type frontDisk struct {
 	Decoy   []string `json:"decoy"`
 	MaskPub string   `json:"mask_pub"`
@@ -23,6 +29,8 @@ var (
 	frontDiskOnce sync.Map // addr -> loaded
 )
 
+// frontCachePath is fronts.cache in the instance directory, or "" when
+// there is none.
 func frontCachePath() string {
 	dir := instanceDir()
 	if dir == "" {
@@ -31,6 +39,7 @@ func frontCachePath() string {
 	return filepath.Join(dir, "fronts.cache")
 }
 
+// loopbackAddr reports whether addr is localhost or a loopback IP.
 func loopbackAddr(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -45,6 +54,8 @@ func loopbackAddr(addr string) bool {
 
 // maskOnDecoySNI reports a direct ClientHello whose SNI is the dest, not the
 // node hostname. The node answers that hello with mask records.
+// While the decoy list for addr is still unknown, any SNI other than the
+// dialed host counts as dest.
 func maskOnDecoySNI(addr, sni string) bool {
 	sni = decoyHost(sni)
 	if sni == "" {
@@ -66,6 +77,8 @@ func maskOnDecoySNI(addr, sni string) bool {
 	return true
 }
 
+// loadFrontCache fills the in-memory decoy and mask_pub for addr from disk,
+// once per process and address. Values already learned from Status win.
 func loadFrontCache(addr string) {
 	if addr == "" {
 		return
@@ -101,6 +114,8 @@ func loadFrontCache(addr string) {
 	}
 }
 
+// saveFrontCache writes addr's current decoy and mask_pub into fronts.cache,
+// keeping other nodes' entries. Nothing is written when neither is known.
 func saveFrontCache(addr string) {
 	path := frontCachePath()
 	if path == "" || addr == "" {

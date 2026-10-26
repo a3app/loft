@@ -2,9 +2,16 @@ package transport
 
 // QUIC mark: how a decoy node tells a loft QUIC Initial from a browser's.
 //
+// On TCP the loft mark sits in the TLS session_id (hellopeek.go). QUIC has
+// no such field, so the mark is split over two values a client chooses
+// freely: the source connection ID (SCID) and the TLS client_random. The
+// Initial is the first QUIC packet of a connection; it carries the
+// ClientHello, encrypted with keys anyone can derive, so the node can read
+// both values before it answers (initialHello below).
+//
 // The client picks its own source connection ID and TLS client_random, and
 // both are readable in the Initial (its keys come from the public DCID, RFC
-// 9001 §5.2). client_random carries an ephemeral X25519 public and the
+// 9001, section 5.2). client_random carries an ephemeral X25519 public and the
 // 20-byte SCID is HKDF over ECDH(that ephemeral, node mask_pub): v3, which
 // needs the node private to check. A client without mask_pub uses v2, HKDF
 // under its member key. Short-header packets are routed by the node's own
@@ -43,6 +50,8 @@ func quicMark(v string, key, random []byte) []byte {
 
 // newQUICMark is a client's client_random and SCID: v3 under maskPub when
 // it is known, else v2 under the member key.
+// For v3 the client_random is the ephemeral X25519 public itself, with its
+// top bit randomized, so the node can recover the public and redo the ECDH.
 func newQUICMark(token, maskPub []byte) (random, scid []byte, err error) {
 	random = make([]byte, 32)
 	if len(maskPub) != 32 {
@@ -101,6 +110,7 @@ func quicMarked(nodeToken, random, scid []byte, allowV2 bool) bool {
 
 var maskPrivCache sync.Map // token → X25519 private
 
+// maskPrivFor is maskX25519Priv(token), cached: it runs for every Initial.
 func maskPrivFor(token []byte) []byte {
 	if v, ok := maskPrivCache.Load(string(token)); ok {
 		return v.([]byte)
@@ -135,6 +145,8 @@ func (r *markRand) Read(b []byte) (int, error) {
 }
 
 // markCIDs is the client's connection ID generator: the mark first, random after.
+// quic-go asks for the first ID when it builds the Initial, so that one
+// carries the mark.
 type markCIDs struct {
 	mu    sync.Mutex
 	first []byte
@@ -160,6 +172,7 @@ func (g *markCIDs) ConnectionIDLen() int { return quicMarkLen }
 // a short-header packet from a new address is known as loft without state.
 type serverCIDs struct{ key []byte }
 
+// newServerCIDs derives the HMAC key for the node's connection IDs from token.
 func newServerCIDs(token []byte) *serverCIDs {
 	key, err := hkdf.Key(sha256.New, token, nil, "loft-quic-cid", 32)
 	if err != nil {
@@ -168,6 +181,7 @@ func newServerCIDs(token []byte) *serverCIDs {
 	return &serverCIDs{key: key}
 }
 
+// tag is the truncated HMAC that fills the last serverCIDTag bytes of an ID.
 func (s *serverCIDs) tag(r []byte) []byte {
 	m := hmac.New(sha256.New, s.key)
 	m.Write(r)
@@ -194,7 +208,7 @@ func (s *serverCIDs) owns(pkt []byte) bool {
 	return hmac.Equal(id[serverCIDLen-serverCIDTag:], s.tag(id[:serverCIDLen-serverCIDTag]))
 }
 
-// QUIC version 1 Initial salt (RFC 9001 §5.2).
+// QUIC version 1 Initial salt (RFC 9001, section 5.2).
 var quicV1Salt = []byte{0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3, 0x4d, 0x17, 0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad, 0xcc, 0xbb, 0x7f, 0x0a}
 
 var (
@@ -205,6 +219,9 @@ var (
 // initialHello reads a client QUIC v1 Initial: its source connection ID and
 // the ClientHello client_random. errNoHello means a valid Initial whose
 // first CRYPTO bytes are in another packet (that one was lost or reordered).
+// It parses the long header, derives the Initial keys from the destination
+// connection ID, removes header protection to learn the packet number, and
+// decrypts the payload; it does not keep any state.
 func initialHello(pkt []byte) (scid, random []byte, err error) {
 	if len(pkt) < 7 || pkt[0]&0xf0 != 0xc0 || binary.BigEndian.Uint32(pkt[1:5]) != 1 {
 		return nil, nil, errNotInitial
@@ -344,7 +361,7 @@ func cryptoAtZero(b []byte) ([]byte, error) {
 	return nil, errNoHello
 }
 
-// quicVarint is a RFC 9000 §16 variable-length integer and its size (0 if short).
+// quicVarint is a RFC 9000 (section 16) variable-length integer and its size (0 if short).
 func quicVarint(b []byte) (uint64, int) {
 	if len(b) == 0 {
 		return 0, 0

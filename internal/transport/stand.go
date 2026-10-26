@@ -1,5 +1,18 @@
 package transport
 
+// Stand: switches for throughput experiments, and the stripe batch format.
+//
+// A "stand" is the test bench where loft is measured between two hosts.
+// Environment variables named LOFT_STAND_* change buffer sizes, how frames
+// are spread over attached lanes (the "fan") and how lanes are written, so
+// a run can compare variants without a rebuild. With none set, every
+// function here returns the shipping value.
+//
+// Stripe is one fan mode: frames of one stream may go over different lanes,
+// so each frame carries a sequence number and the receiver puts them back
+// in order (stripeIngest). ingestPlain, the entry point every front uses
+// for an opened batch, lives here because of that.
+
 import (
 	"encoding/binary"
 	"io"
@@ -27,6 +40,10 @@ import (
 // normal length prefix cannot be: MaxPayload is 16 KiB). Both peers must set
 // the same LOFT_STAND_INNER and LOFT_STAND_FAN. Do not set these on :444.
 
+// standFan is LOFT_STAND_FAN: how attachFan spreads frames over lanes.
+// affinity (the default) keeps a stream on one lane; rr picks lanes round
+// robin; stripe is rr plus per-frame sequence numbers; off disables extra
+// bulk lanes.
 func standFan() string {
 	switch os.Getenv("LOFT_STAND_FAN") {
 	case "off", "rr", "stripe":
@@ -36,6 +53,7 @@ func standFan() string {
 	}
 }
 
+// standSpread is true when frames of one stream may use different lanes.
 func standSpread() bool {
 	switch standFan() {
 	case "rr", "stripe":
@@ -45,6 +63,9 @@ func standSpread() bool {
 	}
 }
 
+// standDispatch is LOFT_STAND_DISPATCH: sync writes each lane inline;
+// prefetch and queue hand writes to a per-lane goroutine with a queue of 2
+// or 4 batches.
 func standDispatch() string {
 	switch os.Getenv("LOFT_STAND_DISPATCH") {
 	case "prefetch", "queue":
@@ -126,8 +147,10 @@ func standCopy() int {
 // standH2Win makes the H2 client honor the peer SETTINGS_INITIAL_WINDOW_SIZE.
 func standH2Win() bool { return os.Getenv("LOFT_STAND_H2WIN") == "1" }
 
+// standTrace turns on the stand write log (LOFT_STAND_TRACE=1).
 func standTrace() bool { return os.Getenv("LOFT_STAND_TRACE") == "1" }
 
+// standEnvInt is a positive integer from env name, or def.
 func standEnvInt(name string, def int) int {
 	v := os.Getenv(name)
 	if v == "" {
@@ -173,6 +196,7 @@ func standWrote(n int, last *time.Time, writes, bytes *int, maxGap *time.Duratio
 	}
 }
 
+// pickRR is the next live lane after the last one used, or -1 if none.
 func (f *attachFan) pickRR(lanes []fanLane) int {
 	if len(lanes) == 0 {
 		return -1
@@ -190,12 +214,15 @@ func (f *attachFan) pickRR(lanes []fanLane) int {
 	return -1
 }
 
+// standWrite is one queued batch for a lane writer goroutine.
 type standWrite struct {
 	write func([]byte) error
 	dead  *atomic.Bool
 	blob  []byte
 }
 
+// emit writes blob on lane ln, inline or through its queue (standDispatch).
+// A failed write marks the lane dead.
 func (f *attachFan) emit(ln fanLane, blob []byte) {
 	switch standDispatch() {
 	case "prefetch", "queue":
@@ -207,6 +234,8 @@ func (f *attachFan) emit(ln fanLane, blob []byte) {
 	}
 }
 
+// enqueue puts blob on ln's queue, starting that lane's writer on first use.
+// It blocks while the queue is full.
 func (f *attachFan) enqueue(ln fanLane, blob []byte) {
 	depth := 2
 	if standDispatch() == "queue" {
@@ -226,6 +255,7 @@ func (f *attachFan) enqueue(ln fanLane, blob []byte) {
 	ch <- standWrite{write: ln.write, dead: ln.dead, blob: blob}
 }
 
+// standWriter writes queued batches in order until ch closes.
 func standWriter(ch <-chan standWrite) {
 	for w := range ch {
 		if w.write == nil {
@@ -258,6 +288,7 @@ func stripePack(frames []wire.Frame, seqs []uint32) ([]byte, error) {
 	return out, nil
 }
 
+// stripeParse undoes stripePack (without the leading 0xA5).
 func stripeParse(plain []byte) ([]uint32, []wire.Frame, error) {
 	var seqs []uint32
 	var frames []wire.Frame
@@ -282,6 +313,8 @@ func stripeParse(plain []byte) ([]uint32, []wire.Frame, error) {
 	return seqs, frames, nil
 }
 
+// stripeRB is the reorder buffer of one mux: next is the sequence number
+// expected next, hold keeps frames that arrived early.
 type stripeRB struct {
 	mu   sync.Mutex
 	next uint32
@@ -290,6 +323,8 @@ type stripeRB struct {
 
 var stripeTabs sync.Map // *mux.Session -> *stripeRB
 
+// stripeIngest pushes frames into sess in sequence order. Frames ahead of
+// a gap wait in the buffer; duplicates and old frames are dropped.
 func stripeIngest(sess *mux.Session, body []byte) {
 	seqs, frames, err := stripeParse(body)
 	if err != nil || sess == nil {
@@ -338,6 +373,7 @@ func stripeIngest(sess *mux.Session, body []byte) {
 	}
 }
 
+// isStripe reports a stripe batch by its 0xA5 first byte.
 func isStripe(plain []byte) bool {
 	return len(plain) > 0 && plain[0] == 0xA5
 }

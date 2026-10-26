@@ -1,6 +1,27 @@
 package transport
 
-// Borrowed-cert mask: loft TLS presents the origin certificate; probes still splice.
+// Mask: a hand-written TLS 1.3 handshake that makes a loft connection look
+// like a visit to the decoy site.
+//
+// Background. A node with decoy on sits in front of a real website (the
+// decoy, "dest" or "origin" in the code). A connection that does not prove
+// it is loft is spliced: its bytes are piped unchanged to that website, so a
+// scanner sees the real site and its real certificate. A loft client that
+// asks for the decoy's name (SNI) would normally get the node's own
+// certificate, which is different from the site's and gives the node away.
+//
+// Mask closes that gap. The node fetches the decoy's certificate chain every
+// few hours and answers a loft ClientHello with a leaf certificate shaped
+// like the decoy's (same subject, names and dates, ECDSA P-256 key) plus the
+// decoy's real intermediates. Application records are padded to the sizes
+// the decoy itself sends. Probes that are not loft still get spliced to the
+// real site, so only loft clients ever see the borrowed shape.
+//
+// The leaf is not signed by a real CA, so the client cannot check it the
+// usual way. Instead the certificate serial number is bound to an X25519
+// exchange between the client's ephemeral key and the node's static mask
+// key (mask_pub): only the real node can compute it. Go's crypto/tls cannot
+// do any of this, so both sides of the handshake are written out here.
 
 import (
 	"crypto/aes"
@@ -65,21 +86,26 @@ func LastKEX() string {
 	return s
 }
 
-// Mask is decoy mask: loft TLS wears a dest-shaped ECDSA leaf. Probes still splice.
+// Mask is the node side of decoy mask: loft TLS wears a leaf certificate
+// shaped like the decoy's ("dest-shaped" ECDSA leaf). Probes that are not
+// loft are still spliced to the real decoy site.
 type Mask struct {
 	xpriv  []byte // 32-byte X25519 static private
 	xpub   []byte // 32-byte X25519 static public
-	origin string
-	sni    string
+	origin string // decoy host:port that refresh dials
+	sni    string // decoy hostname sent as SNI to the origin
 	mu     sync.RWMutex
-	certs  [][]byte
-	alpn   string
-	pads   []int
+	certs  [][]byte // decoy certificate chain (DER), leaf first
+	alpn   string   // ALPN the decoy chose (h2 or http/1.1)
+	pads   []int    // sampled decoy application-record sizes
 	ready  atomic.Bool
 	stop   chan struct{}
 }
 
 // NewMask derives the node X25519 mask key from token and starts origin-cert refresh.
+// The public half of that key is mask_pub: the node sends it in Status and
+// the roster, and clients use it to mark their ClientHello (sid v3) and to
+// check the certificate serial bind.
 func NewMask(token []byte, origin string) *Mask {
 	priv := maskX25519Priv(token)
 	pub, err := curve25519.X25519(priv, curve25519.Basepoint)
@@ -116,6 +142,7 @@ func maskSeed(token []byte) []byte { return maskX25519Priv(token) }
 func (m *Mask) Public() []byte { return append([]byte(nil), m.xpub...) }
 
 // NodeMaskPub is the X25519 mask public a client uses as sid v3 / serial bind.
+// sid v3 is the loft mark in the TLS session_id field; see hellopeek.go.
 func NodeMaskPub(token []byte) []byte {
 	if len(token) == 0 {
 		return nil
@@ -156,6 +183,9 @@ func (m *Mask) loop() {
 
 // refresh dials the origin, stores its certificate chain and ALPN, and
 // samples application-record lengths for dest-shaped padding.
+// It fetches "/" so the decoy sends a few real response records; their
+// sizes become the padding targets (see maskpad.go). Certificate checks are
+// off on purpose: only the shape of the chain is copied, never trusted.
 func (m *Mask) refresh() error {
 	raw, err := net.DialTimeout("tcp", m.origin, 8*time.Second)
 	if err != nil {
@@ -212,6 +242,9 @@ func (m *Mask) snapshot() (certs [][]byte, alpn string, pads []int) {
 }
 
 // Handshake completes mask TLS on raw using the peeked ClientHello.
+// rec is the ClientHello bytes the decoy listener already read off raw;
+// hello is that ClientHello parsed. It fails until the first refresh has
+// fetched the decoy certificate.
 func (m *Mask) Handshake(raw net.Conn, rec []byte, hello clientHello) (net.Conn, error) {
 	if !m.Ready() {
 		return nil, errors.New("mask: origin cert not ready")
@@ -257,6 +290,17 @@ func pickALPN(client []string, origin string) string {
 }
 
 // maskServer is the TLS 1.3 server handshake: dest-shaped ECDSA leaf, serial bind.
+//
+// Steps, as in any TLS 1.3 server: hash the ClientHello into the transcript,
+// agree a key (X25519 or the X25519MLKEM768 hybrid, see hybrid.go), send
+// ServerHello and a dummy ChangeCipherSpec, then send EncryptedExtensions,
+// Certificate, CertificateVerify and Finished under the handshake keys,
+// check the client's Finished, and switch to the application keys.
+//
+// The loft part is the leaf: its serial number is derived from
+// ECDH(node mask key, client key share) and the client_random, so a client
+// that knows mask_pub can tell the real node from a man in the middle.
+// The returned conn pads every record to the decoy's sampled sizes.
 func maskServer(raw net.Conn, rec []byte, hello clientHello, staticPriv []byte, origin [][]byte, alpn string, pads []int) (net.Conn, error) {
 	tr := sha256.New()
 	chMsg := rec
@@ -354,11 +398,21 @@ func maskServer(raw net.Conn, rec []byte, hello clientHello, staticPriv []byte, 
 }
 
 // DialMask is the client mask handshake. maskPub empty skips CertificateVerify check.
+// With maskPub the client also checks the leaf serial bind, which proves it
+// reached the real node. Without it (a client that has not yet learned
+// mask_pub) the leaf and CertificateVerify are accepted unchecked.
 func DialMask(addr, sni, fingerprint string, token, maskPub []byte) (net.Conn, error) {
 	return dialMaskALPN(addr, sni, fingerprint, token, maskPub, []string{"http/1.1", "h2"})
 }
 
 // dialMaskALPN is DialMask with an explicit ALPN offer. WS passes only http/1.1.
+//
+// It sends the ClientHello (marked with sid v3 or v2 in session_id), reads
+// ServerHello, derives the handshake keys, then reads the encrypted
+// handshake messages until the server Finished. It checks the server
+// Finished, CertificateVerify and the serial bind, sends its own Finished,
+// and returns a conn that speaks TLS 1.3 application records. The canary
+// policy for addr may ask to split the ClientHello across TCP segments.
 func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []string) (net.Conn, error) {
 	skipCV := len(maskPub) != 32
 	raw, err := protect.Timeout("tcp4", addr, 10*time.Second)
@@ -423,7 +477,8 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 		raw.Close()
 		return nil, err
 	}
-	// optional CCS
+	// The server may send a dummy ChangeCipherSpec record (TLS 1.3
+	// middlebox compatibility); skip it.
 	rec, err := readFullRecord(raw)
 	if err != nil {
 		raw.Close()
@@ -446,7 +501,7 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 		return nil, fmt.Errorf("mask: hs open typ=%d len=%d head=%x: %w", rec[0], len(rec), head, err)
 	}
 	msgs := splitHandshake(plain)
-	// may need more records
+	// A long certificate chain spans several records; read until Finished.
 	for !hasFinished(msgs) {
 		rec, err = readFullRecord(raw)
 		if err != nil {
@@ -488,6 +543,9 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 					raw.Close()
 					return nil, err
 				}
+				// Serial bind: the node derived the leaf serial from
+				// ECDH(its mask key, our key share). Recompute it from
+				// our side; a match means the peer holds the mask key.
 				auth := authSharedFromPub(kx.xPriv, maskPub)
 				if len(kx.xPriv) != 32 {
 					auth = authSharedFromPub(kx.hybridX, maskPub)
@@ -555,6 +613,8 @@ func parseHelloRandom(msg []byte) []byte {
 
 // buildMaskHello prefers a uTLS ClientHello (browser JA3) and falls back to
 // the compact builder. session_id is sid v3 when maskPub is known, else v2.
+// JA3 is a fingerprint of the ClientHello layout; a browser-shaped hello
+// does not stand out from ordinary HTTPS.
 func buildMaskHello(sni, fingerprint string, token, maskPub []byte, alpn []string) (clientKX, error) {
 	kx, err := buildUTLSHello(sni, fingerprint, token, maskPub, alpn)
 	if err == nil && len(kx.raw) > 4 && (len(kx.xPriv) == 32 || kx.mlkem != nil) {
@@ -567,6 +627,9 @@ func buildMaskHello(sni, fingerprint string, token, maskPub []byte, alpn []strin
 	return clientKX{raw: msg, xPriv: priv}, nil
 }
 
+// firstALPN is the protocol the client reports as negotiated: the first one
+// it offered, h2 when it offered none. The client does not parse the
+// server's EncryptedExtensions for the real choice.
 func firstALPN(alpn []string) string {
 	if len(alpn) == 0 {
 		return "h2"
@@ -575,6 +638,9 @@ func firstALPN(alpn []string) string {
 }
 
 // buildMaskClientHello builds a TLS 1.3 ClientHello with sid v3/v2 and X25519.
+// It is the fallback when uTLS cannot build a browser-shaped hello: a short
+// hello with only the extensions TLS 1.3 needs. It returns the handshake
+// message (no record header) and the ephemeral X25519 private.
 func buildMaskClientHello(sni string, token, maskPub []byte, alpn []string) (msg, priv []byte, err error) {
 	if len(alpn) == 0 {
 		alpn = []string{"http/1.1", "h2"}
@@ -1007,7 +1073,9 @@ func readClientFinished(raw net.Conn, cc *half, traffic []byte, tr hash.Hash) er
 	return nil
 }
 
-// half is one TLS 1.3 AES-GCM traffic direction.
+// half is one TLS 1.3 AES-GCM traffic direction: one key, one IV and a
+// record sequence number that makes each nonce unique. Each connection has
+// two halves per phase (read and write), one for handshake, one for data.
 type half struct {
 	aead cipher.AEAD
 	iv   []byte
@@ -1096,6 +1164,9 @@ func (h *half) openApp(rec []byte) ([]byte, error) {
 }
 
 // maskConn is net.Conn after mask TLS, with AES-GCM application records.
+// Fronts use it like a crypto/tls conn: it also reports ConnectionState.
+// On the node side pads holds the decoy record sizes; the client sends
+// unpadded records.
 type maskConn struct {
 	net.Conn
 	in, out *half
@@ -1109,7 +1180,8 @@ type maskConn struct {
 // ConnectionState returns the completed TLS 1.3 state.
 func (c *maskConn) ConnectionState() tls.ConnectionState { return c.state }
 
-// Read decrypts application records into p.
+// Read decrypts application records into p. A record larger than p is kept
+// in rbuf and returned by the next calls.
 func (c *maskConn) Read(p []byte) (int, error) {
 	if len(c.rbuf) > 0 {
 		n := copy(p, c.rbuf)
@@ -1133,6 +1205,8 @@ func (c *maskConn) Read(p []byte) (int, error) {
 const maskAppMax = 16384 - 1
 
 // Write seals p in records of at most maskAppMax bytes, padded to dest sizes.
+// Each record takes the next sampled decoy size as its target, so a run of
+// records looks like the decoy's own responses to someone watching sizes.
 func (c *maskConn) Write(p []byte) (int, error) {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()

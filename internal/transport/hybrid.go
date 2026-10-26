@@ -32,6 +32,8 @@ func kexName(group uint16) string {
 }
 
 // clientKX is what the mask client needs to finish the key schedule.
+// raw is the ClientHello message it sent; mlkem is set when that hello
+// offered the hybrid group.
 type clientKX struct {
 	raw     []byte
 	xPriv   []byte // standalone X25519, also the sid v3 scalar when present

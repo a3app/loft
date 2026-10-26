@@ -1,6 +1,20 @@
 package transport
 
 // Decoy learning caches node identity, path canary, replicas, and roster.
+//
+// This is the client side. Each Status the node sends (the encrypted answer
+// to the client's handshake) tells the client things it should reuse on the
+// next dial: the node's decoy site names, its mask_pub, the fronts it
+// serves, the canary policy, replica addresses and the signed roster.
+// Everything here is kept in memory per node address (host:port); the
+// decoy names and mask_pub also go to a disk cache (front_cache.go) so a new
+// process can mark its very first ClientHello.
+//
+// The canary checks that nothing on the path rewrote the TLS handshake; its
+// policy says how to shape the next ClientHello so it passes. The roster is
+// a controller-signed list of live fronts and relays the client can fail
+// over to; the client accepts only rosters signed by the pinned controller
+// key.
 
 import (
 	"crypto/x509"
@@ -54,6 +68,8 @@ var canaryPol sync.Map  // addr -> CanaryPolicy
 var replicaMap sync.Map // addr -> []string
 
 // RememberCanary stores Status canary_flags and canary_pad for addr.
+// Bit 0 asks for a fat (browser-sized) ClientHello, bit 1 for a ClientHello
+// split across TCP segments.
 func RememberCanary(addr string, flags byte, pad uint16) {
 	canaryPol.Store(addr, CanaryPolicy{Fat: flags&1 != 0, Split: flags&2 != 0, Pad: pad})
 }
@@ -67,7 +83,8 @@ func CachedCanary(addr string) CanaryPolicy {
 	return v.(CanaryPolicy)
 }
 
-// RememberReplicas stores unsigned replica hosts from Status.
+// RememberReplicas stores unsigned replica hosts from Status: extra node
+// host:port values the dialer may try for failover.
 func RememberReplicas(addr string, hosts []string) {
 	replicaMap.Store(addr, append([]string(nil), hosts...))
 }
@@ -102,6 +119,9 @@ func PinnedControllerPub() []byte {
 
 // RememberRoster stores a verified roster with a non-decreasing serial.
 // Without a pin it is a no-op unless AllowTOFU is set (YAML tofu: true).
+// TOFU is "trust on first use": the signer of the first valid roster
+// becomes the pin. A roster signed by another key, or with an older serial,
+// is refused, so an old roster cannot replace a newer one.
 func RememberRoster(raw []byte) bool {
 	if len(raw) == 0 {
 		return false
@@ -148,6 +168,8 @@ func persistPinnedPubLocked(pub []byte) {
 	_ = os.WriteFile(filepath.Join(dir, "controller.pub"), []byte(hex.EncodeToString(pub)+"\n"), 0o600)
 }
 
+// loadPersistedPub reads the TOFU pin written by persistPinnedPubLocked,
+// or nil when there is none.
 func loadPersistedPub() []byte {
 	dir := instanceDir()
 	if dir == "" {
@@ -203,7 +225,7 @@ type CanaryPolicy struct {
 }
 
 // AdaptError: ClientHello SNI did not match the node's identity. Start retries
-// once with the cached origin.
+// once with the cached origin. ("Origin" is the decoy site name.)
 type AdaptError struct {
 	Addr string
 	SNI  string
@@ -234,6 +256,11 @@ func outboundAddr(o config.Outbound) (string, error) {
 
 // resolveTLS picks ClientHello SNI. CDN and direct fronts keep the URL host
 // so the SNI matches the dialed IP. Explicit o.Decoy opts into dest SNI.
+// "Dest SNI" is the decoy site's name sent to the node's IP; that hello
+// gets mask TLS. It also loads the disk cache and the held roster for addr
+// so a known mask_pub is ready for sid v3 before the first dial.
+// insecure is true for plain http/ws URLs, for o.Insecure, and for dest SNI
+// (the masked leaf is checked by the serial bind, not by a CA).
 func resolveTLS(o config.Outbound) (addr, sni string, insecure bool, err error) {
 	u, err := parseURL(o.URL)
 	if err != nil {
@@ -281,6 +308,8 @@ func resolveTLS(o config.Outbound) (addr, sni string, insecure bool, err error) 
 
 // adoptDecoy caches Status identity fields. A live session is kept: dest SNI
 // retry after a working own-SNI handshake is held on SNI/IP-mismatch paths.
+// ("Held" means some networks stall a hello whose SNI does not belong to
+// the dialed IP.) usedSNI and apply are unused; it always returns nil.
 func adoptDecoy(addr, usedSNI string, st wire.Status, apply bool) error {
 	_ = usedSNI
 	_ = apply

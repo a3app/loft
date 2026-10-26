@@ -1,6 +1,13 @@
 package transport
 
 // Dest-shaped ECDSA leaf and CertificateVerify for mask TLS.
+//
+// "Dest" is the decoy website. For every mask handshake the node mints a
+// fresh self-signed leaf that copies the decoy leaf's visible fields
+// (subject, names, dates, key usage) so the certificate looks like the
+// site's. Its serial number carries the serial bind: a value only the real
+// node and the client can compute, which is how the client checks the node
+// without a CA signature.
 
 import (
 	"crypto/ecdsa"
@@ -22,6 +29,9 @@ import (
 const sigECDSA_P256_SHA256 uint16 = 0x0403
 
 // certSerial is 16 bytes bound to the auth ECDH and client_random.
+// authShared is ECDH(node static mask key, client X25519 share); the node
+// and the client reach the same value from opposite sides. client_random
+// makes the serial different on every handshake.
 func certSerial(authShared, clientRandom []byte) []byte {
 	out := make([]byte, 16)
 	if _, err := io.ReadFull(hkdf.New(sha256.New, authShared, clientRandom, []byte("loft-cert-serial")), out); err != nil {
@@ -63,6 +73,8 @@ func serialEqual(cert *x509.Certificate, want []byte) bool {
 
 // mintDestLeaf copies dest identity onto a fresh ECDSA P-256 leaf so
 // CertificateVerify is ecdsa_secp256r1_sha256, the scheme dests actually use.
+// The node does not have the decoy's private key, so it signs with this new
+// key instead. When the decoy leaf cannot be parsed, the leaf names sni.
 func mintDestLeaf(originDER, serial []byte, sni string) (leafDER []byte, key *ecdsa.PrivateKey, err error) {
 	key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -114,6 +126,8 @@ func mintDestLeaf(originDER, serial []byte, sni string) (leafDER []byte, key *ec
 }
 
 // maskChain is a dest-shaped leaf plus the origin intermediates (size match).
+// Sending the decoy's real intermediates keeps the Certificate message
+// close to the size the decoy itself sends.
 func maskChain(origin [][]byte, serial []byte, sni string) (certs [][]byte, key *ecdsa.PrivateKey, err error) {
 	var leafIn []byte
 	if len(origin) > 0 {

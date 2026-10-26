@@ -1,6 +1,20 @@
 package transport
 
 // ClientHello peek, SNI/key_share parse, and loft session_id (sid v3 / v2).
+//
+// Before the node answers a TLS connection it must decide whether the
+// client is loft or a stranger (see decoy.go). The only thing it has at that
+// point is the ClientHello, so the loft client hides a mark in the 32-byte
+// TLS session_id field, which browsers fill with random bytes anyway.
+//
+//   - sid v3: HKDF over ECDH(client key share, node mask key). Only the
+//     node, holding the mask private key, can check it. Needs the client to
+//     know mask_pub (from Status, the roster, a share link or the disk cache).
+//   - sid v2: HKDF under the member key (lt_…). Works before the client
+//     learns mask_pub, but anyone holding a member key can produce it.
+//
+// Both mix in client_random and the SNI, so a mark is valid only for that
+// one hello.
 
 import (
 	"crypto/hmac"
@@ -40,6 +54,8 @@ func (h clientHello) sidShare() []byte {
 }
 
 // readClientHello concatenates handshake records until one ClientHello is complete.
+// raw is every byte read, even on error, so the caller can replay them to
+// the decoy site unchanged.
 func readClientHello(r io.Reader) (raw []byte, h clientHello, err error) {
 	var hs []byte
 	for {

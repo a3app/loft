@@ -1,6 +1,13 @@
 package transport
 
 // QUIC mux front: first client-initiated bidi stream, length-prefixed like h2.
+//
+// A front is one way to carry the loft mux. This one is plain QUIC over UDP:
+// the client opens one bidirectional stream and sends the 0x02 handshake
+// plus Hello on it; the node answers with the sealed Status; then both sides
+// exchange sealed batches of mux frames. Every message on the stream is a
+// u32 length and a body (msg.go). QUIC handles loss and retransmission, so
+// this front copes better than TCP on lossy links.
 
 import (
 	"context"
@@ -85,6 +92,8 @@ func quicCfg() *quic.Config {
 
 // QUIC is the loss-tolerant front. Retransmit is QUIC's. Path change still
 // Parks: one UDP 4-tuple, no CID migration onto a new socket.
+// To park is to drop the connection but keep the mux and its streams alive
+// for gap_hold_ms, so a reconnect picks them up (hold.go).
 type QUIC struct {
 	cfg     config.Outbound
 	token   []byte
@@ -101,6 +110,8 @@ type QUIC struct {
 }
 
 // NewQUIC builds a QUIC client that has not yet dialed.
+// It takes the parked client mux when one is still held, so streams of a
+// front that just dropped carry on here.
 func NewQUIC(token string, o config.Outbound) *QUIC {
 	sess, gen := takeClientHold()
 	return &QUIC{cfg: o, token: []byte(token), sess: sess, holdGen: gen, done: make(chan struct{})}
@@ -116,6 +127,9 @@ func (q *QUIC) Done() <-chan struct{} { return q.done }
 func (q *QUIC) die() { q.dead.Do(func() { close(q.done) }) }
 
 // Start dials QUIC, writes auth on the first bidi stream, and starts mux loops.
+// After Status it caches what the node told it (adoptDecoy) and, when the
+// node issued a ticket, starts bulk lanes: extra fronts attached to the same
+// mux with 0x04 (attach) to spread bulk data.
 func (q *QUIC) Start(ctx context.Context) error {
 	addr, sni, insecure, err := resolveTLS(q.cfg)
 	if err != nil {
@@ -218,6 +232,8 @@ func (q *QUIC) Open(target string) (net.Conn, error) {
 }
 
 // Park drops QUIC without Leave or mux.Close.
+// Leave (CmdLeave) is the frame that tells the node to end the session; a
+// park skips it so the node holds the mux for a reconnect.
 func (q *QUIC) Park() error {
 	if q.lanes != nil {
 		q.lanes.closeAttach()
@@ -231,6 +247,8 @@ func (q *QUIC) Park() error {
 }
 
 // Close sends CmdLeave and closes the QUIC connection.
+// Leave is sent only while this front still owns the client hold; a newer
+// front may already be using the same mux.
 func (q *QUIC) Close() error {
 	if q.lanes != nil {
 		q.lanes.closeAttach()
@@ -278,6 +296,8 @@ func (q *QUIC) readLoop() {
 }
 
 // writeLoop Pulls mux, seals, and writes length-prefixed batches.
+// Pull takes the frames ready to send; only one writer (the Puller) may do
+// that at a time. The gate lets bulk lanes take over Pull (wss.go).
 func (q *QUIC) writeLoop() {
 	pumpWS(q.sess, time.Second, q.done, q.deadConn, func(frames []wire.Frame) ([]byte, error) {
 		raw, err := wire.EncodeBatch(frames)
@@ -291,6 +311,7 @@ func (q *QUIC) writeLoop() {
 	q.die()
 }
 
+// deadConn reports whether Done is closed.
 func (q *QUIC) deadConn() bool {
 	select {
 	case <-q.done:
@@ -317,6 +338,13 @@ func serveQUIC(c *quic.Conn, seen *ecrypto.Nonces, info NodeInfo) {
 }
 
 // serveQUICStream is serveQUIC on an already accepted first stream.
+//
+// The first message is either 0x04 (attach this stream to a live session)
+// or 0x02 (a new handshake). A bad or replayed 0x02 just closes the
+// connection. Otherwise the node adopts a parked mux for this client if
+// there is one, sends the sealed Status with a ticket, and relays mux
+// frames until the stream fails; then the mux is dropped (or parked, when
+// hold is on).
 func serveQUICStream(c *quic.Conn, st *quic.Stream, seen *ecrypto.Nonces, info NodeInfo) {
 	defer c.CloseWithError(0, "")
 	ctx := c.Context()

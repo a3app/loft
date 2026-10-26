@@ -1,6 +1,14 @@
 package transport
 
 // HTTP/2 CONNECT front: ALPN h2, CONNECT to a node-local path, then raw mux.
+//
+// The client opens TLS (or mask TLS on a decoy name) with ALPN h2 and sends
+// an extended CONNECT request (RFC 8441, :protocol "loft") to a path such as
+// /api/v1/tunnel. When the node answers 200, the request and response
+// bodies form one byte pipe, and the length-prefixed handshake and mux run
+// over it (raw.go), as on the QUIC front. To the network this is one HTTP/2
+// connection to a website. This file also holds the node-side handler,
+// which HTTP/3 reuses, and the write batching for its response body.
 
 import (
 	"bufio"
@@ -41,6 +49,7 @@ func H2HTTPServer() *http2.Server {
 }
 
 // H2 is HTTP/2 CONNECT. Extra front; get/ws/quic stay.
+// It is the client side; the mux work is done by rawSess.
 type H2 struct {
 	cfg   config.Outbound
 	token []byte
@@ -246,6 +255,8 @@ const corkBuf = 16 << 10
 const corkWait = 2 * time.Millisecond
 
 // corkWriter batches writes and delayed-flushes the inner writer.
+// A write fills a 16 KiB buffer; a ticker flushes it every corkWait, and a
+// full buffer flushes on its own.
 type corkWriter struct {
 	mu     sync.Mutex
 	bw     *bufio.Writer
@@ -253,6 +264,7 @@ type corkWriter struct {
 	once   sync.Once
 }
 
+// newCorkWriter starts the flush ticker; Close stops it.
 func newCorkWriter(w io.Writer) *corkWriter {
 	c := &corkWriter{
 		bw:     bufio.NewWriterSize(w, corkBuf),

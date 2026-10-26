@@ -1,6 +1,15 @@
 package transport
 
 // WebSocket front: TLS, HTTP upgrade, then auth / AEAD(Status) / AEAD(mux).
+//
+// The client opens an ordinary WebSocket (HTTP/1.1 upgrade over TLS) and
+// sends the 0x02 handshake plus Hello as the first binary message. The node
+// answers with the Status sealed (AEAD-encrypted) under the session key;
+// after that every binary message is one sealed batch of mux frames. Many
+// CDNs pass WebSocket through, so this front also works behind a CDN.
+//
+// This file also holds the write pump shared by the stream fronts (ws,
+// quic, h2, h3) and pullGate, which lets attached bulk lanes take over Pull.
 
 import (
 	"context"
@@ -170,6 +179,7 @@ func (w *WSS) Open(target string) (net.Conn, error) {
 }
 
 // Park drops the WebSocket without Leave or mux.Close. Streams stay for gap_hold.
+// gap_hold (Status gap_hold_ms) is how long the node keeps a parked mux.
 func (w *WSS) Park() error {
 	if w.lanes != nil {
 		w.lanes.closeAttach()
@@ -238,6 +248,8 @@ func (w *WSS) readLoop() {
 
 // wsPullBytes is one WebSocket binary message. 512 KiB HOL'd inner TCP ACKs
 // and live download fell to ~7 Mbit while upload (no inner ACK wait) hit ~27.
+// (HOL is head-of-line blocking: small inner TCP ACKs waited behind a big
+// message, so the sender inside the tunnel slowed down.)
 const wsPullBytes = 48 << 10
 
 // wsPriBytes is a WS message that is only control/small Data so a loaded
@@ -265,6 +277,9 @@ func (w *WSS) writeLoop() {
 
 // pullGate hands Pull from the owner write loop to the lane dispatcher.
 // handover blocks until the owner is outside Pull and write.
+// The owner is the front that did the 0x02 handshake. When attached bulk
+// lanes come up, they take over sending; the mux must have exactly one
+// Puller or frames would leave out of order. resume gives Pull back.
 type pullGate struct {
 	mu    sync.Mutex
 	pause atomic.Bool
@@ -292,6 +307,8 @@ func (g *pullGate) resume() {
 // into its own short message so a loaded ping is not stuck behind bulk.
 // A non-nil gate runs pull and write on one goroutine under the gate lock
 // so 0x04 can take the Puller without a second writer.
+// 0x04 is attach: another front joining this session by its ticket. Despite
+// the name, quic, h2 and h3 use this pump too.
 func pumpWS(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dead func() bool, seal func([]wire.Frame) ([]byte, error), write func([]byte) error, gate *pullGate) {
 	if gate != nil {
 		pumpGated(sess, pullWait, done, dead, seal, write, gate)
@@ -406,6 +423,9 @@ type WSSServer struct {
 }
 
 // ServeHTTP upgrades, authenticates message 1, writes AEAD(Status), and relays mux.
+// Message 1 may instead be 0x04, which attaches this socket to a live
+// session as an extra lane. A held mux of the same client is adopted, so
+// streams survive a reconnect.
 func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
@@ -440,7 +460,8 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := frontAuth(s.Token, auth, s.Seen)
 	if err != nil || a.Replay {
-		// No sealed reject: it would confirm loft to a prober (§3.4).
+		// No sealed reject: it would confirm loft to a prober. The protocol
+		// requires a wrong key to look like an ordinary site's refusal.
 		c.Close(websocket.StatusPolicyViolation, "no")
 		return
 	}

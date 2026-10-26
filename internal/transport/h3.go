@@ -1,6 +1,11 @@
 package transport
 
 // HTTP/3 CONNECT front: ALPN h3, CONNECT to the same path shape as h2.
+//
+// This is the h2 front (h2.go) carried over QUIC instead of TCP. The node
+// side also lives here: one UDP socket serves both the plain quic front and
+// h3, and since both use ALPN h3 the node tells them apart by the first byte
+// of the first stream (serveH3OrQUIC).
 
 import (
 	"context"
@@ -90,6 +95,9 @@ func (h *H3) Close() error {
 }
 
 // Start dials QUIC and issues HTTP/3 CONNECT.
+// The QUIC Initial carries the loft mark (dialQUIC) so a decoy node routes
+// it to loft. Once the node answers 200, the request and response bodies
+// carry the raw mux.
 func (h *H3) Start(ctx context.Context) error {
 	addr, sni, insecure, err := resolveTLS(h.cfg)
 	if err != nil {
@@ -213,6 +221,8 @@ func udpFronts(fronts []string) (wantQ, wantH3 bool) {
 }
 
 // serveUDP accepts QUIC from listen and serves quic mux or h3 CONNECT.
+// listen builds the QUIC listener: on a plain socket (ListenUDP) or on the
+// loft side of the decoy demux (ListenUDPDecoy).
 func serveUDP(certFile, keyFile string, info NodeInfo, fronts []string, listen func(*tls.Config) (*quic.Listener, error)) error {
 	wantQ, wantH3 := udpFronts(fronts)
 	if !wantQ && !wantH3 {

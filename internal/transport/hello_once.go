@@ -3,6 +3,12 @@ package transport
 // Single-use client_random. A second TCP ClientHello with the same random
 // inside 10 minutes is treated as a probe and spliced. QUIC already does
 // this per source address in the UDP demux; this covers the TCP front.
+//
+// Why: a censor can record a real loft ClientHello and send it again
+// (replay). The loft mark in it is still valid, so without this check the
+// node would answer as loft and confirm what it is. "Spliced" means the
+// connection is piped to the decoy website instead (see decoy.go), so the
+// replay sees an ordinary site.
 
 import (
 	"sync"
@@ -11,6 +17,7 @@ import (
 
 const helloOnceTTL = 10 * time.Minute
 
+// helloOnceCache maps each client_random seen to the time it was seen.
 type helloOnceCache struct {
 	mu sync.Mutex
 	m  map[[32]byte]time.Time

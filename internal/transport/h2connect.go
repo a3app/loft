@@ -3,6 +3,10 @@ package transport
 // RFC 8441 extended CONNECT on an already-dialed TLS conn.
 // Go 1.27 net/http ClientConn rejects Header ":protocol"; write the
 // HEADERS frame ourselves.
+//
+// So this file is a minimal HTTP/2 client for exactly one stream: it sends
+// the preface and SETTINGS, opens stream 1 with CONNECT, and then moves
+// DATA frames in both directions while honouring flow-control windows.
 
 import (
 	"bufio"
@@ -19,14 +23,18 @@ import (
 	"golang.org/x/net/http2/hpack"
 )
 
+// h2Preface is the fixed string every HTTP/2 client sends first.
 const h2Preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
+// h2hs is the outcome of the CONNECT request: the :status, or an error.
 type h2hs struct {
 	status int
 	err    error
 }
 
 // h2ExtendedConnect issues CONNECT :protocol=loft on c and returns the stream.
+// It advertises a 4 MiB stream window and an 8 MiB connection window up
+// front (see h2StreamWindow) and fails unless the node answers 200.
 func h2ExtendedConnect(ctx context.Context, c net.Conn, sni, path string) (net.Conn, error) {
 	if path == "" {
 		path = "/api/v1/tunnel"
@@ -168,6 +176,7 @@ func h2WaitSettingsWin(ctx context.Context, c net.Conn, fr *http2.Framer, bw *bu
 	}
 }
 
+// h2WaitSettings reads frames until the server's SETTINGS and acknowledges them.
 func h2WaitSettings(ctx context.Context, c net.Conn, fr *http2.Framer, bw *bufio.Writer) error {
 	if dl, ok := ctx.Deadline(); ok {
 		_ = c.SetReadDeadline(dl)
@@ -196,6 +205,8 @@ func h2WaitSettings(ctx context.Context, c net.Conn, fr *http2.Framer, bw *bufio
 }
 
 // h2stream is stream 1 DATA as a net.Conn.
+// readLoop feeds incoming DATA into a pipe that Read drains; Write sends
+// DATA only while both the stream and connection windows allow it.
 type h2stream struct {
 	c    net.Conn
 	fr   *http2.Framer
@@ -212,6 +223,9 @@ type h2stream struct {
 	hs   chan h2hs
 }
 
+// readLoop handles every frame from the server: it answers SETTINGS and
+// PING, tracks window updates, reports the CONNECT status on got, and gives
+// back window for every DATA byte it reads. RST_STREAM or GOAWAY ends it.
 func (s *h2stream) readLoop(got chan h2hs) {
 	s.hs = got
 	send := func(r h2hs) {
@@ -319,6 +333,7 @@ func (s *h2stream) Write(p []byte) (int, error) {
 	return n, nil
 }
 
+// writeData sends one DATA frame, waiting up to 15 s for window.
 func (s *h2stream) writeData(p []byte) error {
 	deadline := time.Now().Add(15 * time.Second)
 	for {
@@ -344,6 +359,7 @@ func (s *h2stream) writeData(p []byte) error {
 	}
 }
 
+// Close resets stream 1 and closes the TLS conn under it.
 func (s *h2stream) Close() error {
 	if s.dead.Swap(true) {
 		return nil
@@ -361,6 +377,7 @@ func (s *h2stream) Close() error {
 	return s.c.Close()
 }
 
+// CloseWrite ends the request side with an empty END_STREAM DATA frame.
 func (s *h2stream) CloseWrite() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
