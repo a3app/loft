@@ -14,6 +14,8 @@
 
 字体：品牌字体栈 `"Avenir Next", Avenir, "Helvetica Neue", "Segoe UI", sans-serif`。Windows 没有 Avenir Next，若不内置字体文件，界面回退到 Segoe UI（Windows Vista 起自带）。“关于”窗口中的 `loft` 字样使用品牌 SVG 轮廓，而非文字。等宽字体为 Consolas。
 
+构建：**x86 和 x64**。界面为**原生 Win32** 自绘（不用 WebView，不用系统视觉样式）。
+
 ---
 
 ## 2. 托盘
@@ -102,6 +104,17 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 
 “扩展日志”记录 loft 服务的日志行，而非 `loft-priv`。
 
+“通用”标签页末尾有两项 macOS 没有的条目：
+
+| 条目 | 说明 | 默认 |
+|------|------|------|
+| **打开 .loft 文件** | 双击即用 Loft 打开 | 开 |
+| **打开 loft:// 链接** | 浏览器中的链接用 Loft 打开 | 开 |
+
+文件或链接会打开导入（同连接列表中的“导入”）。关闭即取消注册，打开即重新注册。“恢复默认”会同时打开两项。
+
+安装程序：安装步骤中有同样的选项，复选框“用 Loft 打开 .loft 和 loft://”，**默认勾选**。未勾选 = 设置中两项均为关闭。
+
 ---
 
 ## 7. 导入、导出、更新
@@ -126,7 +139,7 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 
 ## 9. 文案
 
-字符串来自 macOS 共用语言包 [`../../macOS/lang/`](../../macOS/lang/)，其上叠加 [`lang/win.lang`](lang/win.lang)：仅包含在 Windows 上措辞不同的键（`login`、`login_d`、`dock`、`dock_d`、`diag_d`、`upd.offer.body`、`win.min`、`win.close`、托盘场景名）。查找顺序：该语言的 Windows 包 → 英文 Windows 包 → macOS 包。已翻译 en / ru / zh；其他语言中这些键暂显示英文。
+字符串来自 macOS 共用语言包 [`../../macOS/lang/`](../../macOS/lang/)，其上叠加 [`lang/win.lang`](lang/win.lang)：仅包含在 Windows 上措辞不同的键（`login`、`login_d`、`dock`、`dock_d`、`diag_d`、`upd.offer.body`、`win.min`、`win.close`、`assoc_file`、`assoc_link` 及其说明、托盘场景名）。查找顺序：该语言的 Windows 包 → 英文 Windows 包 → macOS 包。已翻译 en / ru / zh；其他语言中这些键暂显示英文。
 
 与 macOS 相同，文案使用 *route*、*direct Internet*、*reset*；不用 “kill switch” 和 “shield”。
 
@@ -134,16 +147,15 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 
 ## 10. 待定问题
 
-以下影响实现而非外观，需在编码前决定。
+已定：原生 Win32 界面；x86 和 x64 构建；`.loft` 和 `loft://` 在安装程序和设置中均为可选项（§6）。
+
+编码前仍需决定：
 
 1. **Go 与 Windows 7。** 会话由 Go 进程 `loft-front` 运行。Go 1.21 及以上不支持 Windows 7 / 8：需用 Go 1.20.x 或打补丁的工具链构建。
-2. **TUN 驱动。** 必须能在 Windows 7 上运行：TAP-Windows6 或合适版本的 Wintun。选择前先确认 Windows 7 支持。
+2. **TUN 驱动。** 必须能在 Windows 7（x86 和 x64）上运行：TAP-Windows6 或合适版本的 Wintun。选择前先确认 Windows 7 支持。
 3. **特权部分。** 路由、hold 和重置由 Windows 服务设置（对应 `loft-priv`）。服务名和安装方式（MSI / 自有安装程序）未定。
-4. **界面工具包。** WebView2 109 之后的版本不支持 Windows 7。可选：自绘原生 Win32、.NET Framework 4.8 上的 WPF、Go GUI。需要选择。
-5. **密钥存储。** Windows 凭据管理器，或文件中的 DPAPI（`CryptProtectData`）。
-6. **字体。** 内置 Avenir Next（需嵌入授权）或使用 Segoe UI。
-7. **架构。** 仅 x64，还是也支持 x86（32 位 Windows 7 很常见）。
-8. **关联。** 是否注册 `.loft` 和 `loft://` 协议，以便双击和点击链接打开。
+4. **密钥存储。** Windows 凭据管理器，或文件中的 DPAPI（`CryptProtectData`）。
+5. **字体。** 内置 Avenir Next（需嵌入授权）或使用 Segoe UI。
 
 ---
 

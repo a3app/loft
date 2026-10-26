@@ -14,6 +14,8 @@ The minimum version is **Windows 7**. It looks the same on 7, 8.1, 10 and 11 bec
 
 Type: the brand stack `"Avenir Next", Avenir, "Helvetica Neue", "Segoe UI", sans-serif`. Windows has no Avenir Next, so without a bundled font file the UI falls back to Segoe UI (present since Windows Vista). The word `loft` in About is drawn from the brand SVG outlines, not set as text. Monospace is Consolas.
 
+Builds: **x86 and x64**. The UI is **native Win32** with its own drawing (no WebView, no system visual styles).
+
 ---
 
 ## 2. Tray
@@ -102,6 +104,17 @@ Tabs and items are as on macOS. Two items on the General tab differ:
 
 "Extended journal" writes lines from the loft service instead of `loft-priv`.
 
+The General tab ends with two items that macOS does not have:
+
+| Item | Caption | Default |
+|------|---------|---------|
+| **Open .loft files** | Double click opens Loft | on |
+| **Open loft:// links** | Links in the browser open Loft | on |
+
+A file or link opens import (as Import in Connections). Off removes the registration, on sets it again. Defaults turns both on.
+
+Installer: the install step has the same option, a checkbox "Open .loft and loft:// in Loft", **checked by default**. Unchecked = both items in Settings are off.
+
 ---
 
 ## 7. Import, export, update
@@ -126,7 +139,7 @@ Tabs and items are as on macOS. Two items on the General tab differ:
 
 ## 9. Texts
 
-Strings come from the shared macOS packs [`../../macOS/lang/`](../../macOS/lang/). On top sits [`lang/win.lang`](lang/win.lang): only the keys that read differently on Windows (`login`, `login_d`, `dock`, `dock_d`, `diag_d`, `upd.offer.body`, `win.min`, `win.close`, tray scene labels). Lookup order: Windows pack for the language → English Windows pack → macOS pack. Translated for en / ru / zh; other languages show these keys in English for now.
+Strings come from the shared macOS packs [`../../macOS/lang/`](../../macOS/lang/). On top sits [`lang/win.lang`](lang/win.lang): only the keys that read differently on Windows (`login`, `login_d`, `dock`, `dock_d`, `diag_d`, `upd.offer.body`, `win.min`, `win.close`, `assoc_file`, `assoc_link` and their captions, tray scene labels). Lookup order: Windows pack for the language → English Windows pack → macOS pack. Translated for en / ru / zh; other languages show these keys in English for now.
 
 As on macOS, texts use *route*, *direct Internet*, *reset*; never "kill switch" or "shield".
 
@@ -134,16 +147,15 @@ As on macOS, texts use *route*, *direct Internet*, *reset*; never "kill switch" 
 
 ## 10. Open questions
 
-These affect the implementation, not the look. They need a decision before code.
+Decided: native Win32 UI; x86 and x64 builds; `.loft` and `loft://` are an option in the installer and in Settings (§6).
+
+Still to choose before code:
 
 1. **Go and Windows 7.** The session runs in the Go process `loft-front`. Go 1.21 and later do not support Windows 7 / 8: build with Go 1.20.x or a patched toolchain.
-2. **TUN driver.** It must work on Windows 7: TAP-Windows6 or a suitable Wintun version. Check Windows 7 support before choosing.
+2. **TUN driver.** It must work on Windows 7 (x86 and x64): TAP-Windows6 or a suitable Wintun version. Check Windows 7 support before choosing.
 3. **Privileged part.** Routes, hold and reset are set by a Windows service (the `loft-priv` counterpart). Service name and installer (MSI / own installer) are not chosen.
-4. **UI toolkit.** WebView2 after version 109 does not run on Windows 7. Options: native Win32 with own drawing, WPF on .NET Framework 4.8, a Go GUI. Needs a choice.
-5. **Key storage.** Windows Credential Manager or DPAPI (`CryptProtectData`) in a file.
-6. **Font.** Bundle Avenir Next (needs an embedding licence) or stay on Segoe UI.
-7. **Architecture.** x64 only, or x86 too (32-bit Windows 7 is common).
-8. **Associations.** Whether to register `.loft` and the `loft://` scheme so they open on double click and from links.
+4. **Key storage.** Windows Credential Manager or DPAPI (`CryptProtectData`) in a file.
+5. **Font.** Bundle Avenir Next (needs an embedding licence) or stay on Segoe UI.
 
 ---
 

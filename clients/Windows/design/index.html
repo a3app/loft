@@ -892,6 +892,9 @@
     let dockMode = ["always", "window", "never"].includes(params.get("dock")) ? params.get("dock") : "window";
     let reconnectOn = params.get("reconnect") !== "0";
     let extIPOn = params.get("extip") !== "0";
+    // Windows: open .loft files and loft:// links in Loft (HKCU file and URL handlers).
+    let assocFile = params.get("afile") !== "0";
+    let assocLink = params.get("alink") !== "0";
     let loftMode = params.get("loft") === "manual" ? "manual" : "link";
     let setTab = ["gen", "route", "client"].includes(params.get("settab")) ? params.get("settab") : "gen";
     let socksPort = Number(params.get("sport")) > 0 && Number(params.get("sport")) < 65536 ? Number(params.get("sport")) : 1080;
@@ -1463,7 +1466,9 @@ outbounds:
             <div class="pref"><div><div class="n">${t("rate_unit")}</div><div class="d">${t("rate_unit_d")}</div></div><div class="rate-bits"><button type="button" class="on">${t("u_kbit")}</button><button type="button">${t("u_kb")}</button></div></div>
             <div class="pref"><div><div class="n">${t("lang")}</div><div class="d">${t("lang_d")}</div></div><select class="loft-select" data-uilang>${LANGS.map((id) => `<option value="${id}" ${lang === id ? "selected" : ""}>${t("lang_" + id)}</option>`).join("")}</select></div>
             <div class="pref"><div><div class="n">${t("upd_launch")}</div><div class="d">${t("upd_launch_d")}</div></div><div class="toggle on"><i></i></div></div>
-            <div class="pref" style="border:0"><div><div class="n">${t("diag")}</div><div class="d">${t("diag_d")}</div></div><div class="toggle"><i></i></div></div>`;
+            <div class="pref"><div><div class="n">${t("diag")}</div><div class="d">${t("diag_d")}</div></div><div class="toggle"><i></i></div></div>
+            <div class="pref"><div><div class="n">${t("assoc_file")}</div><div class="d">${t("assoc_file_d")}</div></div><div class="toggle ${assocFile ? "on" : ""}" data-afile><i></i></div></div>
+            <div class="pref" style="border:0"><div><div class="n">${t("assoc_link")}</div><div class="d">${t("assoc_link_d")}</div></div><div class="toggle ${assocLink ? "on" : ""}" data-alink><i></i></div></div>`;
         const route = `
             <div class="pref"><div><div class="n">${t("default_route")}</div><div class="d">${t("default_route_d")}</div></div><div class="toggle ${defaultRouteOn ? "on" : ""}" data-defroute><i></i></div></div>
             <div class="pref"><div><div class="n">${t("failover")}</div><div class="d">${t("failover_d")}</div></div><div class="toggle ${failoverOn ? "on" : ""}" data-fail><i></i></div></div>
@@ -1954,6 +1959,20 @@ outbounds:
           show(current, true);
         };
       });
+      sceneEl.querySelectorAll("[data-afile]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          assocFile = !assocFile;
+          show(current, true);
+        };
+      });
+      sceneEl.querySelectorAll("[data-alink]").forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          assocLink = !assocLink;
+          show(current, true);
+        };
+      });
       sceneEl.querySelectorAll("[data-sport]").forEach((el) => {
         el.onchange = () => {
           const n = Number(el.value);
@@ -2267,6 +2286,8 @@ outbounds:
           socksPort = 1080;
           heldNow = false;
           extIPOn = true;
+          assocFile = true;
+          assocLink = true;
           loftMode = "link";
           editTab = "main";
           show(current, true);
@@ -2295,6 +2316,8 @@ outbounds:
         u.searchParams.set("reconnect", reconnectOn ? "1" : "0");
         u.searchParams.set("settab", setTab);
         u.searchParams.set("extip", extIPOn ? "1" : "0");
+        u.searchParams.set("afile", assocFile ? "1" : "0");
+        u.searchParams.set("alink", assocLink ? "1" : "0");
         u.searchParams.set("loft", loftMode);
         u.searchParams.set("edittab", editTab);
         history.replaceState(null, "", u);

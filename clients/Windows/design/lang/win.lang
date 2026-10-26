@@ -18,7 +18,11 @@ WIN_PACKS["en"] = {
   "diag_d": "Routes, DNS, the loft service. Rotating file.",
   "upd.offer.body": "Download and run the installer.",
   "win.min": "Minimize",
-  "win.close": "Close"
+  "win.close": "Close",
+  "assoc_file": "Open .loft files",
+  "assoc_file_d": "Double click opens Loft",
+  "assoc_link": "Open loft:// links",
+  "assoc_link_d": "Links in the browser open Loft"
 };
 
 WIN_PACKS["ru"] = {
@@ -36,7 +40,11 @@ WIN_PACKS["ru"] = {
   "diag_d": "Маршруты, DNS, служба loft. Файл с ротацией.",
   "upd.offer.body": "Скачать и запустить установщик.",
   "win.min": "Свернуть",
-  "win.close": "Закрыть"
+  "win.close": "Закрыть",
+  "assoc_file": "Открывать файлы .loft",
+  "assoc_file_d": "Двойной клик открывает Loft",
+  "assoc_link": "Открывать ссылки loft://",
+  "assoc_link_d": "Ссылки в браузере открывают Loft"
 };
 
 WIN_PACKS["zh"] = {
@@ -54,5 +62,9 @@ WIN_PACKS["zh"] = {
   "diag_d": "路由、DNS、loft 服务。轮转文件。",
   "upd.offer.body": "下载并运行安装程序。",
   "win.min": "最小化",
-  "win.close": "关闭"
+  "win.close": "关闭",
+  "assoc_file": "打开 .loft 文件",
+  "assoc_file_d": "双击即用 Loft 打开",
+  "assoc_link": "打开 loft:// 链接",
+  "assoc_link_d": "浏览器中的链接用 Loft 打开"
 };
