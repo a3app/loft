@@ -8,6 +8,7 @@
 #   ./install.sh --unattended
 #   ./install.sh --role relay --controller wss://10.0.0.2/api/v1/sync --id ru1 \
 #       --relay-key lt_… --controller-pub <64 hex>   (both from the controller's panel)
+#   ./install.sh --role replica …   (same flags: a standby controller)
 #   ./install.sh --uninstall
 #   ./install.sh --remove
 #
@@ -99,7 +100,11 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-case "$ROLE" in controller|relay) ;; *) echo "role must be controller or relay" >&2; exit 2 ;; esac
+case "$ROLE" in controller|relay|replica) ;; *) echo "role must be controller, relay or replica" >&2; exit 2 ;; esac
+# A replica is a standby controller: installed like a relay, it also keeps a
+# copy of the controller's state and can take over (loft-node -promote).
+EDGE=0
+case "$ROLE" in relay|replica) EDGE=1 ;; esac
 case "$PEERS" in hub|mesh|vlan) ;; *) echo "peers must be hub, mesh, or vlan" >&2; exit 2 ;; esac
 
 # ── output ───────────────────────────────────────────────────────────────
@@ -452,7 +457,7 @@ if [ -z "$ADVERTISE" ]; then
 fi
 ok "advertise $ADVERTISE"
 
-if [ "$ROLE" = "relay" ]; then
+if [ "$EDGE" = 1 ]; then
 	[ -n "$CONTROLLER" ] || die "relay needs --controller=wss://host/api/v1/sync"
 	[ -n "$RELAY_ID" ] || RELAY_ID=$(hostname -s 2>/dev/null || echo relay)
 	# The controller issues one key per relay and signs this relay's settings
@@ -520,7 +525,7 @@ EOF
 	ok "wrote $NET and $KEYS"
 fi
 
-if [ "$ROLE" = "relay" ] && [ -n "$RELAY_KEY" ]; then
+if [ "$EDGE" = 1 ] && [ -n "$RELAY_KEY" ]; then
 	printf '%s\n' "$RELAY_KEY" | write_file "$LOFT_HOME/relay.key" 0600
 	[ "$DRY" = 1 ] || chown "$LOFT_USER":"$LOFT_USER" "$LOFT_HOME/relay.key"
 	ok "wrote $LOFT_HOME/relay.key"
@@ -535,9 +540,9 @@ else
 		DECOY_BLOCK=$(printf 'decoy %s\n' "$DECOY")
 		if [ "$MASK" = 1 ]; then MASK_LINE="mask enable"; fi
 	fi
-	if [ "$ROLE" = "relay" ]; then
+	if [ "$EDGE" = 1 ]; then
 		write_file "$LOFT_YAML" 0640 <<EOF
-role relay
+role $ROLE
 id $RELAY_ID
 listen $LISTEN
 advertise $ADVERTISE
