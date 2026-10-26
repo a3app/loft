@@ -93,7 +93,7 @@ Local inbound (SOCKS5, TUN) calls `Holder.Open(host:port)` or sends a datagram. 
 
 Holds:
 
-- member keys as SHA-256 in `network.conf`; plaintext in `{dir}/members.keys` (`keep_keys` lets an operator re-read that file). `auth shared enable` accepts `LOFT_TOKEN` as the client secret only when that ring is empty.
+- member keys as SHA-256 in `network.conf`; plaintext in `{dir}/members.keys`. `auth shared enable` accepts `LOFT_TOKEN` as the client secret only when that ring is empty.
 - leases and overlay IP
 - ACL and VLAN
 - Ed25519 seed `{dir}/controller.seed`

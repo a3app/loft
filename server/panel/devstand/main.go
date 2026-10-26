@@ -133,7 +133,7 @@ func main() {
 
 	st, _ := store.Open(data)
 	srv := &web.Server{Store: st, Sessions: auth.NewSessions(), Limit: auth.NewLimiter(), SetupCode: "000000-000000", UIDir: *ui, Log: lg,
-		Settings: store.OpenSettings(data), Keys: store.OpenMemberKeys(data), ACME: &web.ACME{Dir: data},
+		Settings: store.OpenSettings(data), ACME: &web.ACME{Dir: data},
 		Adm: func(by string) web.Adm { return admproto.Client{Path: sock, By: by} }}
 	srv.SetBackupDir(data)
 	h, err := srv.Handler()

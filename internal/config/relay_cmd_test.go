@@ -18,7 +18,7 @@ func TestRelayAndCDNCommands(t *testing.T) {
 	if len(c.CDNPeers) != 1 {
 		t.Fatalf("cdn %v", c.CDNPeers)
 	}
-	out := RenderCommands(*c, false)
+	out := RenderCommands(*c)
 	c2, err := ParseCommands(out)
 	if err != nil || len(c2.Relays) != 1 || c2.Relays[0].Weight != 5 || !strings.Contains(out, "cdn_peer 173.245.48.0/20") {
 		t.Fatalf("round trip: %v\n%s", err, out)

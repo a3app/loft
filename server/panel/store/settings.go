@@ -34,9 +34,6 @@ type Settings struct {
 	// Lang is the default interface language: ru | en | zh.
 	Lang   string `json:"lang,omitempty"`
 	Notify Notify `json:"notify"`
-	// KeepMemberKeys stores issued member secrets in member-keys.json so
-	// the operator can show the link, QR and .loft again. Off by default.
-	KeepMemberKeys bool `json:"keep_member_keys,omitempty"`
 	// LoftOutbound is which parts go into outbounds[].name in issued .loft
 	// files. Nil is the default: member id and front (bob-get).
 	LoftOutbound *LoftOutbound `json:"loft_outbound,omitempty"`

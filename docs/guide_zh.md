@@ -81,7 +81,7 @@ ip access-list overlay
 
 `dns.servers` 塞进 Status，写到客户端 TUN。打到网关 53 端口的查询（UDP CmdDgram 和 TCP Open）由节点答。`dns.upstream` 是节点怎么取答案：`https://` 是 DNS-over-HTTPS，`tls://` 是 DNS-over-TLS（端口 853），光 IP 是 UDP/53。`quic://` 预留。空 `servers` 就是网关。`enabled: false` 不碰系统 DNS。
 
-成员密钥是 `lt_` 加 48 个十六进制字符（24 字节）。`network.conf` 存 SHA-256。明文在 `{dir}/members.keys`（权限 0600），因为 HMAC 和 HKDF 不能从哈希跑。`keep_keys enable`（默认）时运营方能再读这个文件，再吐客户端 YAML。`keep_keys disable` 只在签发时给 YAML；节点还是要明文文件。
+成员密钥是 `lt_` 加 48 个十六进制字符（24 字节）。`network.conf` 存 SHA-256。明文在 `{dir}/members.keys`（权限 0600），因为 HMAC 和 HKDF 不能从哈希跑。运营方能再读这个文件，再生成客户端 YAML。旧配置里可能还留着 `keep_keys`，节点会忽略它。
 
 **重载。** `systemctl reload loft-node`（SIGHUP）在不停止节点的情况下重新读取 `network.conf` 与 `members.keys`。条目未变的成员保持连接；被删除、停用或修改的成员会断开，并以新设置重连。客户端在 Hello 时获得的内容（CIDR、网关、MTU、peers、p2p、DNS、路由、VLAN、会话计时；启用 p2p 时的规则）发生变化时，所有成员都会重连，但仍无需重启。无法加载的文件只记入日志，运行中的配置保持不变。`node.conf`、证书与令牌仍需重启。
 

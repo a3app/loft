@@ -546,7 +546,6 @@ roster_path /static/v3/manifest.json
 lists_path /static/v3/lists.json
 enrol list
 auth shared disable
-keep_keys enable
 ${DECOY_BLOCK}${MASK_LINE}
 canary fat_hello enable
 canary split_hello disable

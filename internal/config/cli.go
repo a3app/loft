@@ -65,7 +65,7 @@ func applyNode(c *ServerConfig, tok []string) error {
 		}
 		c.AuthShared = on
 	case "keep_keys":
-		// operator-side flag; the node does not use it.
+		// Old configs only: the node always needs plaintext in members.keys.
 	case "mask":
 		if len(tok) < 2 {
 			return fmt.Errorf("mask wants enable|disable")
@@ -248,7 +248,7 @@ func applyCanary(d *CanaryConfig, tok []string) error {
 }
 
 // RenderCommands writes node config as switch-style commands.
-func RenderCommands(c ServerConfig, keepKeys bool) string {
+func RenderCommands(c ServerConfig) string {
 	if c.Listen == "" {
 		c.Listen = ":443"
 	}
@@ -318,7 +318,6 @@ func RenderCommands(c ServerConfig, keepKeys bool) string {
 	if len(c.Inner) > 0 {
 		fmt.Fprintf(&b, "inner %s\n", strings.Join(c.Inner, " "))
 	}
-	fmt.Fprintf(&b, "keep_keys %s\n", onOff(keepKeys))
 	fmt.Fprintf(&b, "canary fat_hello %s\n", onOff(c.Canary.Fat()))
 	fmt.Fprintf(&b, "canary split_hello %s\n", onOff(c.Canary.SplitHello))
 	fmt.Fprintf(&b, "canary pad %d\n", c.Canary.Pad)

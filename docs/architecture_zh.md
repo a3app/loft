@@ -93,7 +93,7 @@ client.Holder
 
 存着：
 
-- 成员密钥：`network.conf` 里是 SHA-256；明文在 `{dir}/members.keys`（`keep_keys` 让运营方能再读这个文件）。`auth shared enable` 只在密钥环空着时才把 `LOFT_TOKEN` 当客户端密钥。
+- 成员密钥：`network.conf` 里是 SHA-256；明文在 `{dir}/members.keys`。`auth shared enable` 只在密钥环空着时才把 `LOFT_TOKEN` 当客户端密钥。
 - 租约和覆盖网 IP
 - ACL 和 VLAN
 - Ed25519 seed `{dir}/controller.seed`

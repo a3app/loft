@@ -47,14 +47,12 @@ type Server struct {
 	hostsMu sync.RWMutex
 	// Settings is the wizard's state; ACME issues certificates.
 	Settings *store.SettingsFile
-	// Keys is the optional panel copy of member secrets (keep_member_keys).
-	Keys *store.MemberKeys
-	ACME *ACME
-	jobs jobs
-	pres presence
-	dom  domains
-	mail mailCache
-	bk   backups
+	ACME     *ACME
+	jobs     jobs
+	pres     presence
+	dom      domains
+	mail     mailCache
+	bk       backups
 	// ReleasesAPI and HTTP are for following GitHub releases (tests).
 	ReleasesAPI string
 	HTTP        *http.Client
@@ -78,7 +76,7 @@ const cookieName = "loft_panel"
 // dummyHash is verified for unknown logins so timing does not reveal them.
 var dummyHash, _ = auth.Hash("not a real password, only for timing")
 
-var errKeyNotStored = errors.New("key is not stored")
+var errKeyNotStored = errors.New("no stored key for this member")
 
 // Handler returns the full HTTP handler.
 func (s *Server) Handler() (http.Handler, error) {
@@ -477,18 +475,16 @@ func (s *Server) me(u store.User, csrf string) *meJSON {
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	out := struct {
-		Setup          bool    `json:"setup"`
-		Me             *meJSON `json:"me,omitempty"`
-		Wizard         bool    `json:"wizard"` // the owner has not finished the wizard
-		Lang           string  `json:"lang"`   // the panel's default language
-		KeepMemberKeys bool    `json:"keep_member_keys"`
-		Version        string  `json:"version,omitempty"` // signed in only: the footer shows it
+		Setup   bool    `json:"setup"`
+		Me      *meJSON `json:"me,omitempty"`
+		Wizard  bool    `json:"wizard"`            // the owner has not finished the wizard
+		Lang    string  `json:"lang"`              // the panel's default language
+		Version string  `json:"version,omitempty"` // signed in only: the footer shows it
 	}{Setup: s.Store.Empty(), Lang: "ru"}
 	if s.Settings != nil {
 		if st, err := s.Settings.Get(); err == nil {
 			out.Wizard = !st.WizardDone
 			out.Lang = firstOf(st.Lang, "ru")
-			out.KeepMemberKeys = st.KeepMemberKeys
 		}
 	}
 	if c, err := r.Cookie(cookieName); err == nil {
@@ -688,23 +684,6 @@ type memberKeyOut struct {
 	QR   string `json:"qr,omitempty"`
 }
 
-func (s *Server) keepMemberKeys() bool {
-	if s.Settings == nil {
-		return false
-	}
-	st, err := s.Settings.Get()
-	return err == nil && st.KeepMemberKeys
-}
-
-func (s *Server) persistIssued(k admproto.IssuedKey) {
-	if s.Keys == nil || !s.keepMemberKeys() || k.ID == "" || k.Key == "" {
-		return
-	}
-	if err := s.Keys.Put(k.ID, k.Key, k.KeySHA256); err != nil {
-		s.logf("keep member key %s: %v", k.ID, err)
-	}
-}
-
 func (s *Server) wrapIssued(ctx context.Context, a Adm, k admproto.IssuedKey) memberKeyOut {
 	out := memberKeyOut{IssuedKey: k}
 	var info admproto.NodeInfo
@@ -727,7 +706,6 @@ func (s *Server) memberKey(w http.ResponseWriter, r *http.Request) {
 		admFail(w, err)
 		return
 	}
-	s.persistIssued(k)
 	ok(w, s.wrapIssued(r.Context(), a, k))
 }
 
@@ -738,10 +716,6 @@ func (s *Server) memberKeyGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auditTarget(r, id)
-	if !s.keepMemberKeys() {
-		fail(w, http.StatusNotFound, "member keys are not kept")
-		return
-	}
 	k, err := s.lookupMemberKey(r.Context(), userOf(r).Login, id)
 	if err != nil {
 		if errors.Is(err, errKeyNotStored) {
@@ -754,29 +728,20 @@ func (s *Server) memberKeyGet(w http.ResponseWriter, r *http.Request) {
 	ok(w, s.wrapIssued(r.Context(), s.Adm(userOf(r).Login), k))
 }
 
+// lookupMemberKey reads the key the node already holds in members.keys; the
+// panel keeps no copy of member secrets.
 func (s *Server) lookupMemberKey(ctx context.Context, by, id string) (admproto.IssuedKey, error) {
-	var stored store.StoredKey
-	var have bool
-	if s.Keys != nil {
-		var err error
-		stored, have, err = s.Keys.Get(id)
-		if err != nil {
-			return admproto.IssuedKey{}, err
+	var k admproto.IssuedKey
+	if err := s.Adm(by).Call(ctx, admproto.OpMemberGet, admproto.MemberKey{ID: id}, &k); err != nil {
+		if strings.Contains(err.Error(), errKeyNotStored.Error()) {
+			return k, errKeyNotStored
 		}
+		return k, err
 	}
-	var peeked admproto.IssuedKey
-	peekErr := s.Adm(by).Call(ctx, admproto.OpMemberGet, admproto.MemberKey{ID: id}, &peeked)
-	if peekErr == nil && peeked.Key != "" {
-		s.persistIssued(peeked)
-		return peeked, nil
+	if k.Key == "" {
+		return k, errKeyNotStored
 	}
-	if have && stored.Key != "" {
-		return admproto.IssuedKey{ID: id, Key: stored.Key, KeySHA256: stored.SHA256}, nil
-	}
-	if peekErr != nil && !strings.Contains(peekErr.Error(), "no stored key") {
-		return admproto.IssuedKey{}, peekErr
-	}
-	return admproto.IssuedKey{}, errKeyNotStored
+	return k, nil
 }
 
 func (s *Server) nodeStatus(w http.ResponseWriter, r *http.Request) {

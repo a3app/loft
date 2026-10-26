@@ -85,8 +85,13 @@ func serve(args []string) error {
 	if err := sess.Persist(filepath.Join(*data, "sessions.json")); err != nil {
 		return err
 	}
+	// Older panels could keep a copy of member keys; the node's members.keys
+	// is now the only place for them.
+	if err := os.Remove(filepath.Join(*data, "member-keys.json")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		lg.Printf("member-keys.json: %v", err)
+	}
 	srv := &web.Server{Store: st, Sessions: sess, Limit: auth.NewLimiter(), UIDir: *ui, Log: lg,
-		Settings: settings, Keys: store.OpenMemberKeys(*data), Audit: store.OpenAudit(*data), ACME: &web.ACME{Dir: *data, URL: *acmeDir},
+		Settings: settings, Audit: store.OpenAudit(*data), ACME: &web.ACME{Dir: *data, URL: *acmeDir},
 		Adm: func(by string) web.Adm { return admproto.Client{Path: *sock, By: by} }}
 	srv.SetSeenFile(*data)
 	srv.SetDomainsFile(*data)

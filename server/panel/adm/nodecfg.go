@@ -200,8 +200,7 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		}
 		c.CDNPeers = append(c.CDNPeers, pp.Masked().String())
 	}
-	keep := regexp.MustCompile(`(?m)^keep_keys\s+enable`).Match(oldText)
-	text := "# loft-node config; loft-panel edits the commands it shows.\n" + config.RenderCommands(*c, keep)
+	text := "# loft-node config; loft-panel edits the commands it shows.\n" + config.RenderCommands(*c)
 	if _, err := config.ParseCommands(text); err != nil {
 		return admproto.NodeConfig{}, fmt.Errorf("node.conf: %w", err)
 	}
@@ -211,7 +210,7 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 	onlyFleet := func() bool {
 		a, b := prev, *c
 		a.Relays, b.Relays, a.Enrol, b.Enrol = nil, nil, "", ""
-		return config.RenderCommands(a, keep) == config.RenderCommands(b, keep)
+		return config.RenderCommands(a) == config.RenderCommands(b)
 	}()
 	if err := o.writeKeepMode(o.nodeConf(), []byte(text)); err != nil {
 		return admproto.NodeConfig{}, err

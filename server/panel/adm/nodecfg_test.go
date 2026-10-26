@@ -64,7 +64,7 @@ func TestNodeSave(t *testing.T) {
 		t.Fatalf("calls %v", fn.calls)
 	}
 	b, _ := os.ReadFile(filepath.Join(o.Etc, "node.conf"))
-	if !strings.Contains(string(b), "relay de-1 url https://de1.example.net weight 10") || !strings.Contains(string(b), "decoy_proxy enable") || !strings.Contains(string(b), "keep_keys enable") {
+	if !strings.Contains(string(b), "relay de-1 url https://de1.example.net weight 10") || !strings.Contains(string(b), "decoy_proxy enable") || strings.Contains(string(b), "keep_keys") {
 		t.Fatalf("node.conf:\n%s", b)
 	}
 	// Fronts: a restart.

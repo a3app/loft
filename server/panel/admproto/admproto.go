@@ -134,8 +134,8 @@ type MemberKey struct {
 	ID string `json:"id"`
 }
 
-// IssuedKey is the plaintext member secret. The panel shows it on issue;
-// with keep_member_keys it may show it again from its own store.
+// IssuedKey is the plaintext member secret. The panel shows it on issue and
+// again on request via member.get; it keeps no copy of its own.
 type IssuedKey struct {
 	ID        string `json:"id"`
 	Key       string `json:"key"`

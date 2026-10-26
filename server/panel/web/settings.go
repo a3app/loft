@@ -66,14 +66,13 @@ type notifyJSON struct {
 }
 
 type settingsJSON struct {
-	Node           string             `json:"node"`
-	Panel          string             `json:"panel"`
-	SessionIdle    string             `json:"session_idle"`
-	SessionMax     string             `json:"session_max"`
-	Lang           string             `json:"lang"`
-	KeepMemberKeys bool               `json:"keep_member_keys"`
-	LoftOutbound   store.LoftOutbound `json:"loft_outbound"`
-	Notify         notifyJSON         `json:"notify"`
+	Node         string             `json:"node"`
+	Panel        string             `json:"panel"`
+	SessionIdle  string             `json:"session_idle"`
+	SessionMax   string             `json:"session_max"`
+	Lang         string             `json:"lang"`
+	LoftOutbound store.LoftOutbound `json:"loft_outbound"`
+	Notify       notifyJSON         `json:"notify"`
 }
 
 func settingsView(st store.Settings) settingsJSON {
@@ -86,7 +85,7 @@ func settingsView(st store.Settings) settingsJSON {
 	}
 	return settingsJSON{Node: st.Domain, Panel: firstOf(st.PanelDomain, st.Domain),
 		SessionIdle: firstOf(st.SessionIdle, "30m"), SessionMax: firstOf(st.SessionMax, "7d"), Lang: firstOf(st.Lang, "ru"),
-		KeepMemberKeys: st.KeepMemberKeys, LoftOutbound: st.LoftOutboundView(),
+		LoftOutbound: st.LoftOutboundView(),
 		Notify: notifyJSON{To: n.To, Host: n.Host, Port: n.Port, Security: firstOf(n.Security, "starttls"), User: n.User,
 			HasPassword: n.Password != "", From: n.From, Events: on}}
 }
@@ -102,11 +101,10 @@ func (s *Server) settingsGet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) settingsPanel(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SessionIdle    string              `json:"session_idle"`
-		SessionMax     string              `json:"session_max"`
-		Lang           string              `json:"lang"`
-		KeepMemberKeys *bool               `json:"keep_member_keys"`
-		LoftOutbound   *store.LoftOutbound `json:"loft_outbound"`
+		SessionIdle  string              `json:"session_idle"`
+		SessionMax   string              `json:"session_max"`
+		Lang         string              `json:"lang"`
+		LoftOutbound *store.LoftOutbound `json:"loft_outbound"`
 	}
 	if !readJSON(w, r, 4<<10, &req) {
 		return
@@ -119,17 +117,8 @@ func (s *Server) settingsPanel(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "bad settings")
 		return
 	}
-	if req.KeepMemberKeys != nil && !*req.KeepMemberKeys && s.Keys != nil {
-		if err := s.Keys.Wipe(); err != nil {
-			fail(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
 	st, err := s.Settings.Update(func(st *store.Settings) {
 		st.SessionIdle, st.SessionMax, st.Lang = req.SessionIdle, req.SessionMax, req.Lang
-		if req.KeepMemberKeys != nil {
-			st.KeepMemberKeys = *req.KeepMemberKeys
-		}
 		if req.LoftOutbound != nil {
 			o := *req.LoftOutbound
 			if !o.Host && !o.Member && !o.Front {

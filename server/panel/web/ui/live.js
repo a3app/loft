@@ -545,15 +545,12 @@
     toast('Применяю…');
     const ok = await applyNow();
     render();
-    showKey(nid, k, ok
-      ? (L.keepKeys ? 'Ключ хранится в панели — его можно показать снова. Нода уже пускает этот ключ.' : 'Нода уже пускает этот ключ.')
-      : (L.keepKeys ? 'Ключ хранится в панели. После «Применить» нода начнёт пускать этот ключ.' : 'После «Применить» нода начнёт пускать этот ключ.'));
+    showKey(nid, k, ok ? 'Нода уже пускает этот ключ.' : 'После «Применить» нода начнёт пускать этот ключ.');
   };
   // The key with its link, QR code (drawn by the panel) and .loft file.
   function showKey(id, k, note) {
     L.kf = { id, file: k.file };
-    const head = L.keepKeys ? note : ('Показан один раз. ' + note);
-    dialog('Ключ участника ' + esc(id), head, `
+    dialog('Ключ участника ' + esc(id), note, `
       ${k.link ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))">${k.qr ? `<div class="qr" style="align-self:start">${k.qr}</div>` : ''}
         <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri" id="klink">${esc(k.link)}</div>
         <p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>` : ''}
@@ -565,17 +562,11 @@
   L.viewKey = async id => {
     let k;
     try { k = await api('GET', '/api/members/key?id=' + encodeURIComponent(id)); } catch (e) { toast(e.message); return; }
-    showKey(id, k, 'Ключ хранится в панели — его можно показать снова.');
+    showKey(id, k, 'Ключ хранится на ноде — его можно показать снова.');
   };
   window.reissueKey = id => L.reissue(id);
-  L.reissue = id => {
-    if (L.keepKeys) {
-      dialog('Перевыпустить ключ?', 'Новый ключ заменит сохранённый и сразу применится на ноде. Старый перестанет действовать.', '',
-        `<button class="btn danger" type="button" onclick="LIVE.reissueGo('${esc(id)}')">Перевыпустить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
-      return;
-    }
-    L.reissueGo(id);
-  };
+  L.reissue = id => dialog('Перевыпустить ключ?', 'Новый ключ заменит сохранённый и сразу применится на ноде. Старый перестанет действовать.', '',
+    `<button class="btn danger" type="button" onclick="LIVE.reissueGo('${esc(id)}')">Перевыпустить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.reissueGo = async id => {
     closeDlg();
     let k;
@@ -585,9 +576,7 @@
     toast('Применяю…');
     const ok = await applyNow();
     render();
-    showKey(id, k, ok
-      ? (L.keepKeys ? 'Новый ключ сохранён в панели. Нода уже пускает его, старый больше не действует.' : 'Нода уже пускает новый ключ, старый больше не действует.')
-      : (L.keepKeys ? 'Новый ключ сохранён в панели. После «Применить» нода начнёт пускать его, старый перестанет действовать.' : 'После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.'));
+    showKey(id, k, ok ? 'Нода уже пускает новый ключ, старый больше не действует.' : 'После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.');
   };
   // The page is served by the panel itself, so a blob link downloads normally.
   L.download = (name, text) => {
@@ -873,8 +862,7 @@
       blk('Мастер установки', 'Пройти шаги первой настройки заново: домен, сертификат, первый участник сети, пакеты. Уже сделанное не стирается.', `<button class="btn" type="button" onclick="S.wz.step=2;go('setup')">Открыть мастер</button>`) +
       blk('Панель', '', grid(`<div><div class="fld"><label for="st1">Адрес панели</label><input id="st1" class="mono" value="${esc(st.panel || location.hostname)}" readonly></div><div class="hint">Имена и сертификаты меняются в мастере установки — шаги «Домен и DNS» и «Сертификат».</div></div>
         <div><div class="fld"><label for="st2">Язык по умолчанию</label><select id="st2" onchange="LIVE.stPanel()">${opts(LANGS, st.lang)}</select></div><div class="hint">Для страницы входа и тех, кто не выбрал язык сам.</div></div>
-        <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3" ${tz ? '' : 'disabled'} onchange="LIVE.stTz(this)">${zones}</select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`) +
-        `<div><label class="chk"><input id="stKeep" type="checkbox" ${st.keep_member_keys ? 'checked' : ''} onchange="LIVE.stPanel()"><span>Хранить ключи участников</span></label><div class="hint">Ссылка, QR-код и файл .loft открываются снова без перевыпуска. Копия лежит в каталоге данных панели, права 0600. Выключение стирает копию в панели; файл на ноде остаётся.</div></div>`) +
+        <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3" ${tz ? '' : 'disabled'} onchange="LIVE.stTz(this)">${zones}</select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`)) +
       blk('Файлы .loft', 'Какие части входят в имя исходящего в профиле участника. Ссылка loft:// не меняется.', loftOutboundBlock(st)) +
       blk('Вход', 'Блокировка адресов после неудачных входов — в <a href="#system">Системе</a>.', grid(`<div class="fld"><label for="st4">Выходить при бездействии</label><select id="st4" onchange="LIVE.stPanel()">${opts(IDLE, st.session_idle)}</select></div>
         <div class="fld"><label for="st5">Срок сессии</label><select id="st5" onchange="LIVE.stPanel()">${opts(SMAX, st.session_max)}</select></div>`)) +
@@ -919,26 +907,15 @@
       const member = (NETS[0] && NETS[0].members[0] && NETS[0].members[0].id) || 'bob';
       prev.textContent = 'outbounds:\n  - name: ' + loftObName(o, host, member, 'get');
     }
-    L.stPanelGo($('#stKeep') ? $('#stKeep').checked : !!L.keepKeys);
+    L.stPanel();
   };
-  L.stPanel = () => {
-    const keep = $('#stKeep') ? $('#stKeep').checked : !!L.keepKeys;
-    if (L.keepKeys && !keep) {
-      dialog('Выключить хранение ключей?', 'Копия в панели будет стёрта. Файл на ноде останется. Ссылку, QR-код и .loft снова можно будет только перевыпустить.', '',
-        `<button class="btn danger" type="button" onclick="LIVE.stPanelGo(false)">Выключить</button><button class="btn" type="button" onclick="closeDlg();render()">Отмена</button>`);
-      return;
-    }
-    L.stPanelGo(keep);
-  };
-  L.stPanelGo = async keep => {
-    closeDlg();
+  L.stPanel = async () => {
     try {
       const loft = $('#stLoftHost') ? {
         host: $('#stLoftHost').checked, member: $('#stLoftMember').checked, front: $('#stLoftFront').checked
       } : undefined;
       if (loft && !loft.host && !loft.member && !loft.front) loft.front = true;
-      L.st = await api('POST', '/api/settings/panel', { session_idle: $('#st4').value, session_max: $('#st5').value, lang: $('#st2').value, keep_member_keys: keep, loft_outbound: loft });
-      L.keepKeys = !!L.st.keep_member_keys;
+      L.st = await api('POST', '/api/settings/panel', { session_idle: $('#st4').value, session_max: $('#st5').value, lang: $('#st2').value, loft_outbound: loft });
       if (window.I18N) I18N.def(L.st.lang);
       toast('Сохранено');
     } catch (e) { toast(e.message); }
@@ -2795,7 +2772,6 @@
     }
     wrapViews();
     S.ver = st.version || '';
-    L.keepKeys = !!st.keep_member_keys;
     if (window.I18N) I18N.def(st.lang); // the panel's language until this browser picks one
     showHost();
     if (st.setup) { S.wz.step = 1; settle('setup'); render(); return; }

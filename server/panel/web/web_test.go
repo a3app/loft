@@ -105,7 +105,7 @@ func newEnv(t *testing.T) *env {
 	mail := &admproto.MailView{Installed: true, Helo: "mail.example.net"}
 	e.mail = mail
 	e.srv = &Server{Store: st, Sessions: auth.NewSessions(), Limit: auth.NewLimiter(), SetupCode: "123456-abcdef",
-		Hosts: []string{"panel.example.net"}, Settings: store.OpenSettings(dir), Keys: store.OpenMemberKeys(dir), ACME: &ACME{Dir: dir}, sleep: func(time.Duration) {}}
+		Hosts: []string{"panel.example.net"}, Settings: store.OpenSettings(dir), ACME: &ACME{Dir: dir}, sleep: func(time.Duration) {}}
 	e.srv.Adm = func(by string) Adm {
 		e.by = append(e.by, by)
 		return fakeAdm{by: &e.by, ops: &e.ops, text: &text, host: &host, keys: &keys, mail: mail}

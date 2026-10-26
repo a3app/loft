@@ -81,7 +81,7 @@ ip access-list overlay
 
 `dns.servers` is pushed in Status and programmed on the client TUN. Queries to the gateway on port 53 (UDP CmdDgram and TCP Open) are answered by the node. `dns.upstream` is how the node fetches answers: `https://` is DNS-over-HTTPS, `tls://` is DNS-over-TLS (port 853), a bare IP is UDP/53. `quic://` is reserved. Empty `servers` means the gateway. `enabled: false` leaves OS DNS alone.
 
-A member key is `lt_` plus 48 hex characters (24 bytes). `network.conf` stores SHA-256. Plaintext lives in `{dir}/members.keys` (mode 0600), because HMAC and HKDF cannot run from the hash. With `keep_keys enable` (the default) an operator can re-read that file to emit client YAML again. `keep_keys disable` shows YAML only at issue; the node still needs the plaintext file.
+A member key is `lt_` plus 48 hex characters (24 bytes). `network.conf` stores SHA-256. Plaintext lives in `{dir}/members.keys` (mode 0600), because HMAC and HKDF cannot run from the hash. An operator can re-read that file to emit client YAML again. Old configs may still carry `keep_keys`; the node ignores it.
 
 **Reload.** `systemctl reload loft-node` (SIGHUP) re-reads `network.conf` and `members.keys` without stopping the node. Members whose entry did not change stay connected; a removed, disabled or edited member is dropped and reconnects with the new settings. A change that clients learn at Hello (CIDR, gateway, MTU, peers, p2p, DNS, routes, VLANs, session timers; rules when p2p is on) reconnects everyone, still without a restart. A file that does not load is logged and the running config stays. `node.conf`, the certificate and the token still need a restart.
 

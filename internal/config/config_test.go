@@ -63,7 +63,7 @@ func TestRenderCommandsRoundTrip(t *testing.T) {
 	}
 	on := true
 	in.Canary.FatHello = &on
-	got, err := ParseCommands(RenderCommands(in, true))
+	got, err := ParseCommands(RenderCommands(in))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestRenderCommandsRoundTrip(t *testing.T) {
 		t.Fatal("default auth shared")
 	}
 	in.AuthShared = true
-	got, err = ParseCommands(RenderCommands(in, true))
+	got, err = ParseCommands(RenderCommands(in))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestAuthSharedCommand(t *testing.T) {
 	if !c.AuthShared {
 		t.Fatal("auth shared enable")
 	}
-	out := RenderCommands(*c, true)
+	out := RenderCommands(*c)
 	if !strings.Contains(out, "auth shared enable\n") {
 		t.Fatal(out)
 	}
@@ -125,7 +125,7 @@ func TestInnerCommand(t *testing.T) {
 	if len(ids) != 2 || ids[0] != wire.InnerClear || ids[1] != wire.InnerAES {
 		t.Fatalf("ids %v", ids)
 	}
-	out := RenderCommands(*c, true)
+	out := RenderCommands(*c)
 	if !strings.Contains(out, "inner clear aes\n") {
 		t.Fatal(out)
 	}
@@ -200,7 +200,7 @@ func TestTraceCommand(t *testing.T) {
 	if c.Trace != "/var/log/loft-sess.log" {
 		t.Fatalf("trace %q", c.Trace)
 	}
-	out := RenderCommands(*c, true)
+	out := RenderCommands(*c)
 	if !strings.Contains(out, "trace /var/log/loft-sess.log\n") {
 		t.Fatal(out)
 	}
@@ -274,11 +274,11 @@ func TestDecoyProxyCommand(t *testing.T) {
 	if !c.DecoyProxy {
 		t.Fatal("decoy_proxy enable")
 	}
-	if out := RenderCommands(*c, true); !strings.Contains(out, "decoy 127.0.0.1:8443\ndecoy_proxy enable\n") {
+	if out := RenderCommands(*c); !strings.Contains(out, "decoy 127.0.0.1:8443\ndecoy_proxy enable\n") {
 		t.Fatal(out)
 	}
 	off, _ := ParseCommands("listen :443\ndecoy 127.0.0.1:8443\n")
-	if off.DecoyProxy || strings.Contains(RenderCommands(*off, true), "decoy_proxy") {
+	if off.DecoyProxy || strings.Contains(RenderCommands(*off), "decoy_proxy") {
 		t.Fatal("decoy_proxy must default off and not render")
 	}
 	if _, err := ParseCommands("decoy_proxy maybe\n"); err == nil {
