@@ -11,8 +11,9 @@
 // with a throwaway certificate signed with a value derived from the same
 // key, which the client checks instead of a CA chain.
 //
-// XHTTP (formerly SplitHTTP) carries the proxy stream in the body of an
-// HTTP/2 POST, for servers that sit behind an HTTP front.
+// XHTTP (formerly SplitHTTP) carries the proxy stream over HTTP/2.
+// stream-one is one POST. stream-up is a GET for download and a POST
+// for upload, which is what current Xray share links ask for.
 package xtls
 
 // REALITY TLS client (Xray transport/internet/reality). Shared by VLESS and Trojan.
