@@ -526,7 +526,7 @@ pre.diff .dr{background:var(--diff-r);text-decoration:line-through;text-decorati
 const MENU=[
   {id:'status',ic:'i-status',t:'Статус',items:[['main','Обзор']]},
   {id:'net',ic:'i-net',t:'Интернет',items:[['adapters','Адаптеры'],['channels','Внешние каналы'],['iface-priorities','Приоритеты подключений']]},
-  {id:'loft',ic:'i-loft',t:'Сеть loft',items:[['node','Нода loft'],['members','Члены сети'],['segments','Сегменты сети']]},
+  {id:'loft',ic:'i-loft',t:'Сеть loft',items:[['node','Нода loft'],['members','Участники сети'],['segments','Сегменты сети']]},
   {id:'dom',ic:'i-dom',t:'Домены и почта',items:[['domains','Домены'],['mail','Почта','Почтовый сервер']]},
   {id:'adm',ic:'i-gear',t:'Управление',items:[['packages','Пакеты'],['users','Пользователи'],['system','Система'],['settings','Настройки']]}
 ];
@@ -555,9 +555,9 @@ V.main=()=>pageHead('Обзор','Состояние сервера и ноды 
     <dl class="kv"><div><dt>Роль</dt><dd>controller</dd></div><div><dt>Слушает</dt><dd class="mono">0.0.0.0:443 tcp</dd></div>
     <div><dt>Прочий трафик</dt><dd class="mono">→ nginx 127.0.0.1:8443</dd></div><div><dt>Фронты</dt><dd>get</dd></div>
     <div><dt>Сертификат</dt><dd>до 10.01.2027</dd></div><div><dt>Версия</dt><dd>1.0.22</dd></div></dl></section>
-  <section class="card"><div class="card-h"><h2>Члены сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
+  <section class="card"><div class="card-h"><h2>Участники сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
     <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${NETS.flatMap(n=>n.members).filter(m=>m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${Object.values(EXTRA).filter(x=>x[3]).length}</div><div class="mute">в сети</div></div><div><div class="big num">${NETS.flatMap(n=>n.members).filter(m=>!m.authorized).length}</div><div class="mute">выключено</div></div></div>
-    <button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button></section>
+    <button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить участника</button></section>
   <section class="card"><div class="card-h"><h2>Интернет</h2><a href="#adapters" style="margin-left:auto">Подробно</a></div>
     <dl class="kv"><div><dt>Основной IP</dt><dd class="mono">203.0.113.10</dd></div><div><dt>Доп. IP</dt><dd class="mono">203.0.113.11</dd></div>
     <div><dt>IPv6</dt><dd class="mono">2001:db8::10</dd></div><div><dt>Канал «Нидерланды»</dt><dd class="mono">198.51.100.77</dd></div></dl></section>
@@ -576,10 +576,10 @@ V.main=()=>pageHead('Обзор','Состояние сервера и ноды 
 
 V.members=()=>{
  const all=NETS.flatMap(n=>n.members.map(m=>[n,m]));
- return pageHead('Члены сети','Устройства и люди, которые подключаются к этому серверу. Каждому выдаётся свой ключ и профиль; протоколы включаются галочками. Член сети — это порт свитча в <a href="#segments">Сегментах сети</a>.')+pendNet()+
- blk('Члены сети',`${all.filter(([,m])=>m.authorized).length} включено · сети ${NETS.map(n=>n.id).join(' и ')}`,
-  `<div class="acts"><button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button></div>`+
-  table(['Член','Сеть · VLAN','IP в сети','Протоколы','Устройств','Последний вход'],all.map(([n,m])=>{const x=EXTRA[m.id]||['loft','0 / 1','—',0],v=n.vlans.find(y=>y.id===m.vlan);return `<tr class="click" onclick="openMember('${m.id}')">
+ return pageHead('Участники сети','Устройства и люди, которые подключаются к этому серверу. Каждому выдаётся свой ключ и профиль; протоколы включаются галочками. Участник сети — это порт свитча в <a href="#segments">Сегментах сети</a>.')+pendNet()+
+ blk('Участники сети',`${all.filter(([,m])=>m.authorized).length} включено · сети ${NETS.map(n=>n.id).join(' и ')}`,
+  `<div class="acts"><button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить участника</button></div>`+
+  table(['Участник','Сеть · VLAN','IP в сети','Протоколы','Устройств','Последний вход'],all.map(([n,m])=>{const x=EXTRA[m.id]||['loft','0 / 1','—',0],v=n.vlans.find(y=>y.id===m.vlan);return `<tr class="click" onclick="openMember('${m.id}')">
    <td>${who(`<label class="sw" onclick="event.stopPropagation()"><input type="checkbox" ${m.authorized?'checked':''} aria-label="Включён" onchange="setMemberAuth('${m.id}',this.checked)"><i></i></label>`,esc(m.name),`<span class="sub mono">${esc(m.id)}</span>`)}</td>
    <td><span class="sq" style="background:${vcol(n,m.vlan)}"></span>${n.id}${v?' · '+v.id+' '+esc(v.name):''}</td><td class="mono">${m.ip||'—'}</td><td>${x[0]}</td><td class="num">${m.multi?x[1].split(' / ')[0]+' / '+(m.multi_limit||8):x[1].split(' / ')[0]+' / 1'}</td><td><span class="dot ${x[3]?'on':''}"></span>${x[2]}</td></tr>`}).join('')));
 };
@@ -711,7 +711,7 @@ V['iface-priorities']=()=>{
  const t=S.tab.prio||'lists';
  if(t!=='use'&&S.prio==='block')S.prio='direct';
  if(t!=='use'&&!prioSys(S.prio)&&!PRIO[S.prio])S.prio='direct';
- return pageHead('Приоритеты подключений','Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию включает адаптер сервера и все каналы с выходом; члены без назначения идут по ней. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.')+
+ return pageHead('Приоритеты подключений','Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию включает адаптер сервера и все каналы с выходом; участники без назначения идут по ней. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.')+
  `<div class="tabs" role="tablist">${[['lists','Политики доступа в интернет','iface-priorities'],['use','Применение политик','iface-priorities/use']].map(([k,x,h])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>`+
  (t==='use'?prioUse():prioLists());
 };
@@ -754,10 +754,10 @@ function openPrioLim(k){
  const p=PRIO[S.prio],l=(p.lim||{})[k]||[0,0];
  const sel=(id,v,lab)=>`<div class="fld"><label for="${id}">${lab}</label><select id="${id}"><option ${v?'':'selected'}>Отключено</option>${[1,5,10,20,50,100,200,500].map(x=>`<option ${v===x?'selected':''}>${x} Мбит/с</option>`).join('')}</select></div>`;
  dialog('Ограничение скорости',`Для подключения «${esc(CH[k].title)}» в политике «${esc(p.t)}». Делится на всех, кто выходит по этой политике.`,
-  sel('pl1',l[0],'Входящий трафик (к членам)')+sel('pl2',l[1],'Исходящий трафик (от членов)'),
+  sel('pl1',l[0],'Входящий трафик (к участникам)')+sel('pl2',l[1],'Исходящий трафик (от участников)'),
   `<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
 }
-// Применение политик: члены, теги и сегменты плашками, перетаскиваются между политиками.
+// Применение политик: участники, теги и сегменты плашками, перетаскиваются между политиками.
 function prioUse(){
  const all=NETS.flatMap(n=>n.members.map(m=>m.id)),tags=[...new Set(NETS.flatMap(n=>n.members.flatMap(m=>m.tags)))],segs=segsOf();
  const of=(m,v)=>EXR.filter(r=>r[0]===m&&r[1]===v).map(r=>r[2])[0];
@@ -772,10 +772,10 @@ function prioUse(){
  return `<div class="pl-wrap use"><div class="pl-head"><span>Политика</span><span>Кто выходит по ней</span></div>
   ${plList(sel,i=>memIn(i).length+tagIn(i).length+segIn(i).length)}
   <div class="pl-main" style="padding:16px 20px">
-   <div class="pl-sec">Члены сети</div><div class="m-chips">${m.length?m.map(x=>chip(x)).join(''):'<span class="mute">—</span>'}</div>
+   <div class="pl-sec">Участники сети</div><div class="m-chips">${m.length?m.map(x=>chip(x)).join(''):'<span class="mute">—</span>'}</div>
    <div class="pl-sec">Теги</div><div class="m-chips">${t.length?t.map(x=>chip('# '+x,'tag')).join(''):'<span class="mute">—</span>'}</div>
    <div class="pl-sec">Сегменты</div><div class="m-chips">${g.length?g.map(s=>chip(s.name,'seg')).join(''):'<span class="mute">—</span>'}</div>
-   <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега, тег важнее сегмента. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
+   <p class="hint">Перетащите плашку на политику слева. Правило участника важнее правила тега, тег важнее сегмента. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
   </div></div>`;
 }
 function openPrioNew(){
@@ -787,7 +787,7 @@ function openPrioNew(){
 }
 function netUp(){
   const add=(t,l,x='')=>`<div class="acts"><button class="btn" type="button" onclick="openChan('new:${t}')">${ic('i-plus')}${l}</button>${x}</div>`;
-  const what={member:v=>`Член <b>${v}</b>`,tag:v=>`Члены с тегом <b>${v}</b>`,vlan:v=>`Сегмент <b>${esc(segTitle(v))}</b>`,list:v=>`Адреса из списка <b class="mono">${v}</b>`};
+  const what={member:v=>`Участник <b>${v}</b>`,tag:v=>`Участники с тегом <b>${v}</b>`,vlan:v=>`Сегмент <b>${esc(segTitle(v))}</b>`,list:v=>`Адреса из списка <b class="mono">${v}</b>`};
   return `<p class="blk-d">Разделы — по установленным VPN-клиентам. SSTP и прокси встроены в loft.</p>`+
   blk('WireGuard','Канал к провайдеру VPN или своему серверу. Можно загрузить файл .conf от провайдера.',add('wg','Добавить подключение',`<button class="btn" type="button">${ic('i-up')}Загрузить из файла</button>`)+chanTable('wg'))+
   blk('VPN-подключения','Подключения к удалённым сетям по SSTP и OpenVPN.',add('vpn','Добавить подключение')+chanTable('vpn'))+
@@ -805,11 +805,11 @@ function netUp(){
 const exitTo=cur=>`<option ${cur==='direct'?'selected':''}>Напрямую</option>${PRIO.map((p,i)=>`<option ${i===cur?'selected':''}>${esc(p.t)}</option>`).join('')}<option ${cur==='block'?'selected':''}>Блокировать</option>`;
 function openExit(i){const r=i>=0?EXR[i]:['member','',0];
  dialog(i>=0?'Правило '+(i+1):'Новое правило','Чей трафик и куда он выходит.',
-  `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1">${[['member','Член сети'],['tag','Члены с тегом'],['vlan','Сегмент'],['list','Адреса из списка']].map(([k,l])=>`<option ${r[0]===k?'selected':''}>${l}</option>`).join('')}</select></div>
+  `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1">${[['member','Участник сети'],['tag','Участники с тегом'],['vlan','Сегмент'],['list','Адреса из списка']].map(([k,l])=>`<option ${r[0]===k?'selected':''}>${l}</option>`).join('')}</select></div>
    <div class="fld"><label for="ru2">Кто или что</label><select id="ru2"><option>${r[1]||'alice-phone'}</option></select></div>
    <div class="fld"><label for="ru3">Политика</label><select id="ru3">${exitTo(r[2])}</select></div>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">${i>=0?'Сохранить':'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
-function openExitDefault(){dialog('Политика по умолчанию','Куда выходит трафик членов без назначения.',`<div class="fld"><label for="rd1">Выход</label><select id="rd1">${exitTo(EXDEF)}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
+function openExitDefault(){dialog('Политика по умолчанию','Куда выходит трафик участников без назначения.',`<div class="fld"><label for="rd1">Выход</label><select id="rd1">${exitTo(EXDEF)}</select></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 
 /* ── Домены: зоны, записи, сертификаты, DNS-провайдеры ── */
 // Record: [name, type, value, priority, made by the panel, check in a manual zone: ok | missing | differs]
@@ -975,7 +975,7 @@ V.login=()=>`<div class="fs"><div class="fs-card" style="max-width:420px">${full
  <details class="adv"><summary>Не могу войти</summary><p class="hint" style="font-size:13px">Сбросить пароль можно на самом сервере: <span class="mono">sudo loft-panel passwd admin</span>. После 5 неудачных попыток за 10 минут адрес блокируется на 24 часа.</p></details>
 </div></div>`;
 S.wz={step:1,prov:'cloudflare',pk:{}};
-const WZ=['Администратор','Домен и DNS','Сертификат','Первый член сети','Пакеты'];
+const WZ=['Администратор','Домен и DNS','Сертификат','Первый участник сети','Пакеты'];
 const WPK=[['Протоколы для клиентов',[['mtp','Прокси Telegram MTProto','Прокси MTProto: клиенты добавляют его в Telegram → Настройки → Данные и память → Прокси.'],['vless','Сервер VLESS','VLESS + Reality/Vision на 443 рядом с нодой.'],['trojan','Сервер Trojan','Trojan поверх TLS по своему имени.'],['ss','Сервер Shadowsocks','Shadowsocks 2022 на порту 8388.']]],
  ['VPN-клиенты · внешние каналы',[['wg','WireGuard-клиент','Канал к провайдеру или своему серверу по .conf.'],['awg','AmneziaWG-клиент','WireGuard с обфускацией.'],['ovpn','OpenVPN-клиент','Канал по .ovpn.'],['zt','ZeroTier-клиент','Сеть ZeroTier по ID.'],['loftc','loft-клиент','Другая нода loft как канал.'],['xrayc','Xray-клиент','Ссылка vless:// trojan:// ss://.']]],
  ['Почта',[['mail','Почтовый сервер','Postfix, Dovecot, OpenDKIM. Домен, ящики и записи DNS — в разделе «Почта».'],['antispam','Антиспам','Rspamd проверяет входящие.','mail'],['webmail','Веб-почта','Roundcube: почта в браузере.','mail']]],
@@ -1001,7 +1001,7 @@ function wzBody(){
   <div class="fld"><label for="w3b">Проверка</label><select id="w3b"><option>${S.wz.prov==='manual'?'HTTP-01 — через веб-сервер на :80':'DNS-01 — через '+DNSP[S.wz.prov][0]}</option></select></div>
   <div class="steps-log">${[['Имя vpn.example.net указывает на сервер',1],['Запрос к Let’s Encrypt',1],['Проверка владения',2],['Сертификат установлен в ноду и панель',0]].map(([t,s])=>`<div><span class="sl ${s===1?'ok':s===2?'run':''}">${s===1?'✓':s===2?'…':''}</span>${t}</div>`).join('')}</div>
   <p class="hint">Пока сертификата нет, нода работает с самоподписанным; клиенты с привязкой к ключу контроллера подключатся и так.</p>`;
- if(st===4)return `<h1>Первый член сети</h1><p class="fs-d">Устройство, которое подключится к серверу первым. Остальных — потом в «Членах сети».</p>
+ if(st===4)return `<h1>Первый участник сети</h1><p class="fs-d">Устройство, которое подключится к серверу первым. Остальных — потом в «Участниках сети».</p>
   <div class="fld"><label for="w4a">Имя</label><input id="w4a" value="Alice"></div>
   <div class="fld"><label for="w4b">Идентификатор</label><input id="w4b" class="mono" value="alice-phone"></div>
   <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g><g fill="#fff"><rect x="1" y="1" width="5" height="5"/><rect x="15" y="1" width="5" height="5"/><rect x="1" y="15" width="5" height="5"/></g><g fill="#1A1714"><rect x="2" y="2" width="3" height="3"/><rect x="16" y="2" width="3" height="3"/><rect x="2" y="16" width="3" height="3"/><rect x="9" y="1" width="1" height="2"/><rect x="8" y="8" width="2" height="2"/><rect x="12" y="9" width="3" height="1"/><rect x="9" y="12" width="1" height="3"/><rect x="15" y="12" width="2" height="2"/></g></svg></div>
@@ -1112,7 +1112,7 @@ function pkgRow(p){
  return `<tr><td><b>${p[0]}</b><span class="sub">${p[1]}</span></td><td>${st}</td><td class="mono mute">${s==='run'?p[3]:'—'}</td><td class="mono mute">${p[4]}<br>${p[5]}</td><td class="r"><div class="cell-acts">${a}</div></td></tr>`;
 }
 
-V.users=()=>pageHead('Пользователи панели','Кто входит в эту панель. Это не члены сети: у члена сети свой ключ и профиль подключения.')+
+V.users=()=>pageHead('Пользователи панели','Кто входит в эту панель. Это не участники сети: у участника сети свой ключ и профиль подключения.')+
  `<div class="tabs" role="tablist">${[['list','Пользователи'],['roles','Роли'],['sess','Сессии'],['log','Журнал']].map(([k,t])=>`<button class="tab ${S.tab.users===k?'on':''}" role="tab" aria-selected="${S.tab.users===k}" type="button" onclick="S.tab.users='${k}';render()">${t}</button>`).join('')}</div>`+
  (S.tab.users==='list'?blk('Пользователи','',`<div class="acts"><button class="btn pri" type="button" onclick="openPUser(-1)">${ic('i-plus')}Добавить пользователя</button></div>`+
   table(['Логин','Роль','API-токен','Был','Состояние'],PUSERS.map((r,i)=>`<tr class="click" onclick="openPUser(${i})"><td><b>${r[0]}</b><span class="sub">${r[1]}</span></td><td>${r[2].toLowerCase()}</td><td class="mono mute">${r[3]}</td><td>${r[4]}</td><td>${r[5]===2?pill('приглашён · до 22.10.2026, 14:00','busy'):r[5]?pill('может входить','ok'):pill('выключен')}</td></tr>`).join(''))):
@@ -1177,8 +1177,8 @@ V.system=()=>pageHead('Система','Защита от сканеров и п
   `<div class="card" style="margin-bottom:16px"><dl class="kv" style="margin-bottom:16px"><div><dt>Блок после неудачных входов</dt><dd>5 за 10 мин → 24 ч</dd></div><div><dt>Блок сканеров</dt><dd>включён</dd></div><div><dt>Белый список</dt><dd class="mono">198.51.100.0/24</dd></div><div><dt>Заблокировано сейчас</dt><dd class="num">${BLOCKED.length}</dd></div></dl>
    <div class="acts" style="margin:0"><button class="btn" type="button" onclick="openGuard()">Настроить</button><button class="btn" type="button" onclick="openBlock()">Заблокировать адрес</button></div></div>`+
   table(['Адрес','Причина','Осталось',{t:'',r:1}],BLOCKED.map(r=>`<tr><td class="mono">${r[0]}</td><td style="white-space:normal">${r[1]}</td><td>${r[2]}</td><td class="r"><button class="btn sm" type="button" onclick="toast('${r[0]} разблокирован')">Снять</button></td></tr>`).join(''))):'')+
- blk('Резервные копии','Нода и члены сети, панель, почта. Копия шифруется ключом фразы восстановления: без фразы её не открыть даже на этом сервере.',
-  `<div class="card" style="margin-bottom:16px"><dl class="kv" style="margin-bottom:16px"><div><dt>Расписание</dt><dd>ежедневно 04:00</dd></div><div><dt>Хранить</dt><dd>14 копий</dd></div><div><dt>Куда</dt><dd>backup-bucket · S3</dd></div><div><dt>Что входит</dt><dd>нода и члены, панель, почта</dd></div><div><dt>Фраза восстановления</dt><dd>задана 12.10.2026</dd></div></dl>
+ blk('Резервные копии','Нода и участники сети, панель, почта. Копия шифруется ключом фразы восстановления: без фразы её не открыть даже на этом сервере.',
+  `<div class="card" style="margin-bottom:16px"><dl class="kv" style="margin-bottom:16px"><div><dt>Расписание</dt><dd>ежедневно 04:00</dd></div><div><dt>Хранить</dt><dd>14 копий</dd></div><div><dt>Куда</dt><dd>backup-bucket · S3</dd></div><div><dt>Что входит</dt><dd>нода и участники, панель, почта</dd></div><div><dt>Фраза восстановления</dt><dd>задана 12.10.2026</dd></div></dl>
    <div class="acts" style="margin:0"><button class="btn pri" type="button" onclick="toast('Копия делается: займёт пару минут')">Сделать сейчас</button><button class="btn" type="button" onclick="openRestore(0)">Восстановить…</button><button class="btn" type="button" onclick="openBackupCfg()">Настроить</button><button class="btn" type="button" onclick="openStores()">Хранилища</button></div></div>`+
   table(['Когда','Размер','Куда','Итог',{t:'',r:1}],BACKUPS.map((r,i)=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td>${r[2]}</td><td style="white-space:normal">${r[3]==='успешно'?pill('успешно','ok'):pill(r[3],'warn')}</td><td class="r">${r[3]==='успешно'?`<button class="btn sm" type="button" onclick="openRestore(${i})">Восстановить</button>`:''}</td></tr>`).join('')))+
  blk('Учётные записи Linux','Пользователи самого сервера для входа по ssh. Вход по паролю в ssh на сервере выключен: только ключи.',`<div class="acts"><button class="btn" type="button" onclick="openLinux(-1)">${ic('i-plus')}Добавить</button></div>`+
@@ -1203,7 +1203,7 @@ function openBackupCfg(){
   <div class="fld"><label for="k2">Хранить копий</label><input id="k2" class="num" value="14"></div>
   <div><div class="fld"><label for="k3">Куда</label><select id="k3">${STORES.map(s=>`<option>${s[0]} · ${s[1]}</option>`).join('')}<option>только на этом сервере</option></select></div><div class="hint">На сервере всегда лежат две последние копии — для быстрого восстановления.</div></div>
   <div class="dlg-sec">Что входит</div>
-  <label class="chk"><input type="checkbox" checked disabled>Нода loft: настройки, сети, ключи членов</label>
+  <label class="chk"><input type="checkbox" checked disabled>Нода loft: настройки, сети, ключи участников</label>
   <label class="chk"><input type="checkbox" checked disabled>Панель: пользователи, домены, каналы, почтовые настройки</label>
   <label class="chk"><input type="checkbox" checked>Почта: ящики и письма</label>
   <div class="dlg-sec">Фраза восстановления</div>
@@ -1217,7 +1217,7 @@ function openRestore(i){
   <div class="fld"><label for="rs1">Копия</label><select id="rs1" onchange="$('#rsf').hidden=this.value!=='file'">${BACKUPS.filter(x=>x[3]==='успешно').map(x=>`<option ${x===b?'selected':''}>${x[0]} · ${x[1]} · ${x[2]}</option>`).join('')}<option value="file">Из файла…</option></select></div>
   <div id="rsf" hidden><div class="fld"><label for="rs3">Файл копии</label><input id="rs3" type="file" accept=".lpbak"></div></div>
   <div class="dlg-sec">Что восстановить</div>
-  <label class="chk"><input type="checkbox" checked>Нода loft: настройки, сети, ключи членов</label>
+  <label class="chk"><input type="checkbox" checked>Нода loft: настройки, сети, ключи участников</label>
   <label class="chk"><input type="checkbox" checked>Панель: пользователи, домены, каналы, почтовые настройки</label>
   <label class="chk"><input type="checkbox">Почта: ящики и письма</label>
   <div class="fld"><label for="rs2">Фраза восстановления</label><input id="rs2" type="password" autocomplete="off"></div>`,
@@ -1246,7 +1246,7 @@ function linuxDel(l){dialog(`Удалить учётную запись ${l}?`,'
 
 /* ── Пользователи панели: окно пользователя и права ролей ── */
 const PUSERS=[['admin','Администратор','Владелец','выключен','сейчас',1],['bob','Bob','Оператор','lpt_…9a1c','2 ч назад',1],['support','Поддержка','Наблюдатель','выключен','5 дн. назад',1],['intern','Стажёр','Наблюдатель','выключен','2 мес. назад',0],['carol','Carol','Наблюдатель','выключен','—',2]];
-const AREAS=['Обзор','Нода loft','Члены сети','Сегменты сети','Интернет','Домены','Почта','Пакеты','Пользователи','Система','Настройки'];
+const AREAS=['Обзор','Нода loft','Участники сети','Сегменты сети','Интернет','Домены','Почта','Пакеты','Пользователи','Система','Настройки'];
 const PERM={'Владелец':AREAS.map(()=>2),'Оператор':[1,1,2,2,2,2,2,1,0,1,0],'Наблюдатель':AREAS.map(a=>a==='Пользователи'?0:1)};
 function mockTok(){dialog('API-токен','Показан один раз. Передавайте в заголовке Authorization: Bearer ….','<div class="uri">lpt_8c1e…</div>','<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>')}
 function mockInvite(){dialog('Приглашение для bob','Ссылка действует 24 часа и открывается один раз. Передайте её пользователю — пароль он задаст сам.','<div class="uri">https://panel.example.net/#invite/3f9c…</div>','<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>')}
@@ -1418,7 +1418,7 @@ const changed=()=>NETS.filter(n=>renderConf(n)!==APPLIED[n.id]);
 function pendNet(){
  const c=changed();if(!c.length)return '';
  const k=c.reduce((s,n)=>s+diffLines(APPLIED[n.id],renderConf(n)).filter(x=>x[0]!==' ').length,0);
- return `<div class="note" role="status"><span><b>Не применено: ${k} ${plural(k,'строка','строки','строк')} в ${c.map(n=>n.id).join(', ')}.</b> <span class="mute">Нода перечитает сеть на лету: переподключатся только члены, которых касается изменение.</span></span><span class="note-acts"><button class="btn sm" type="button" onclick="showDiff()">Что изменено</button><button class="btn sm ghost" type="button" onclick="revertAll()">Отменить</button><button class="btn sm pri" type="button" onclick="applyAll()">Применить</button></span></div>`;
+ return `<div class="note" role="status"><span><b>Не применено: ${k} ${plural(k,'строка','строки','строк')} в ${c.map(n=>n.id).join(', ')}.</b> <span class="mute">Нода перечитает сеть на лету: переподключатся только участники, которых касается изменение.</span></span><span class="note-acts"><button class="btn sm" type="button" onclick="showDiff()">Что изменено</button><button class="btn sm ghost" type="button" onclick="revertAll()">Отменить</button><button class="btn sm pri" type="button" onclick="applyAll()">Применить</button></span></div>`;
 }
 const plural=(n,a,b,c)=>{const d=n%10,h=n%100;return d===1&&h!==11?a:d>=2&&d<=4&&(h<12||h>14)?b:c};
 function showDiff(){
@@ -1510,7 +1510,7 @@ V.segments=()=>{
    return pageHead('Сегменты сети','')+`<div class="empty"><b>Такого сегмента нет</b><p>Его удалили или адрес набран с ошибкой.</p></div>`+segTabs(n,-1);
  }
  if(t==='ports'&&!named){try{history.replaceState(null,'','#segments/0')}catch(e){}S.arg='0';id=0}
- return pageHead('Сегменты сети','Сеть loft — свитч: сегмент это мост со своим IP, DHCP, DNS и шлюзом. Член сети — порт. Вкладки сверху — сегменты, плюс добавляет новый.')+pendNet()+
+ return pageHead('Сегменты сети','Сеть loft — свитч: сегмент это мост со своим IP, DHCP, DNS и шлюзом. Участник сети — порт. Вкладки сверху — сегменты, плюс добавляет новый.')+pendNet()+
  (NETS.length>1?`<div class="netbar" role="tablist" aria-label="Сеть">${NETS.map(x=>`<button type="button" role="tab" aria-selected="${x.id===n.id}" class="netchip ${x.id===n.id?'on':''}" onclick="S.net='${x.id}';S.sel.clear();render()"><span class="dot ${x.enabled?'on':''}"></span><b>${esc(x.name||x.id)}</b><span class="mono">${x.cidr}</span></button>`).join('')}
   <button type="button" class="btn" onclick="openNet('new')">${ic('i-plus')}Сеть</button></div>`:'')+
  `<div class="tabs" role="tablist">${[['ports','Сегменты'],['acl','Правила доступа'],['set','Настройки сети'],['conf','Конфиг']].map(([k,x])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="S.tab.seg='${k}';${k==='ports'?"S.arg?render():go('segments/0')":"S.arg?go('segments'):render()"}">${x}${k==='conf'&&err?' <span class="pill warn">ошибка</span>':''}</button>`).join('')}</div>`+
@@ -1672,7 +1672,7 @@ function segPage(id){
    <div class="fld"><label for="sgGw">Шлюз</label><input id="sgGw" class="mono" value="${esc(gw)}"></div>
    <div class="fld"><label for="sgFrom">Пул адресов, с</label><input id="sgFrom" class="mono" value="${esc(from)}" placeholder="авто"></div>
    <div class="fld"><label for="sgTo">Пул адресов, по</label><input id="sgTo" class="mono" value="${esc(to)}" placeholder="авто"></div>
-   <div class="fld"><label for="sgDns">DNS для членов</label><select id="sgDns"><option value="1" ${dns.enabled!==false?'selected':''}>на адресе шлюза</option><option value="0" ${dns.enabled===false?'selected':''}>не давать</option></select></div>
+   <div class="fld"><label for="sgDns">DNS для участников</label><select id="sgDns"><option value="1" ${dns.enabled!==false?'selected':''}>на адресе шлюза</option><option value="0" ${dns.enabled===false?'selected':''}>не давать</option></select></div>
    <div style="grid-column:1/-1;max-width:640px"><div class="fld"><label for="sgPeers">Между портами</label><select id="sgPeers">${(id?[['','как в сети'],['hub','только через шлюз (hub)'],['mesh','напрямую между собой (mesh)']]:[['hub','только через шлюз (hub)'],['mesh','напрямую между собой (mesh)'],['vlan','внутри своего VLAN (vlan)']]).map(([p,l])=>`<option value="${p}" ${peers===p?'selected':''}>${l}</option>`).join('')}</select></div><div class="hint">${peersHint}</div></div>
    <div class="acts" style="grid-column:1/-1;margin:0"><button class="btn pri" type="submit">Сохранить</button><button class="btn" type="button" onclick="render()">Отменить</button>${id?`<button class="btn danger" type="button" style="margin-left:auto" onclick="delVlan(${id})">Удалить сегмент</button>`:''}</div>
   </form>`);
@@ -1712,9 +1712,9 @@ function segSet(n){
   <label class="chk" style="align-self:center"><input id="s12" type="checkbox" ${n.enabled?'checked':''}>Сеть включена</label>
   <div style="grid-column:1/-1"><details class="adv"><summary>Таймеры сессии, мс</summary><div class="fgrid" style="margin-top:20px">${T.map(([k,l])=>`<div class="fld"><label for="t_${k}">${l}</label><input id="t_${k}" class="num" value="${s[k]||''}" placeholder="по умолчанию"></div>`).join('')}</div></details></div>
   <div class="acts" style="grid-column:1/-1;margin:0"><button class="btn pri" type="submit">Сохранить</button><button class="btn danger" type="button" style="margin-left:auto" onclick="delNet()">Удалить сеть</button></div></form>`)+
- blk('Маршруты для членов','Подсети за портами — например, офисная сеть за роутером. Члены получают их вместе с адресом.',
+ blk('Маршруты для участников','Подсети за портами — например, офисная сеть за роутером. Участники получают их вместе с адресом.',
   table(['Назначение','Через','Описание'],n.routes.map(r=>`<tr><td class="mono">${r.dst}</td><td class="mono">${r.via||'—'}</td><td>${esc(r.note)}</td></tr>`).join('')||`<tr><td colspan="3" class="mute">нет</td></tr>`)+
-  `<p class="hint">Нода пока принимает маршруты, но членам их не отдаёт.</p>`);
+  `<p class="hint">Нода пока принимает маршруты, но участникам их не отдаёт.</p>`);
 }
 function saveNet(){
  const n=curNet(),g=id=>$('#'+id).value.trim(),old=n.id;
@@ -1797,7 +1797,7 @@ function readRule(){
 }
 function saveRule(i){const x=readRule();if(x.err){toast(x.err);return}const n=curNet();if(i<0)n.rules.push(x.r);else n.rules[i]=x.r;closeDlg();render()}
 
-/* член сети = порт: одно окно из «Членов сети» и со свитча */
+/* участник сети = порт: одно окно из «Участников сети» и со свитча */
 function findMember(id){for(const n of NETS){const m=n.members.find(x=>x.id===id);if(m)return[n,m]}return[curNet(),null]}
 function keepKeys(){return !!(window.LIVE&&LIVE.keepKeys)||!!S.keepKeys}
 function openMember(id){
@@ -1807,12 +1807,12 @@ function openMember(id){
  const curv=nw?(n.vlans[0]||{id:0}).id:m.vlan;
  const idx=m?n.members.indexOf(m)+1:n.members.length+1;
  const keep=keepKeys();
- dialog(nw?'Новый порт · член сети':`Порт ${idx} · ${esc(m.id)}`,nw?(keep?'Ключ сохранится в панели — его можно будет показать снова.':'Ключ покажется один раз — потом его можно только перевыпустить.'):'',`
+ dialog(nw?'Новый порт · участник сети':`Порт ${idx} · ${esc(m.id)}`,nw?(keep?'Ключ сохранится в панели — его можно будет показать снова.':'Ключ покажется один раз — потом его можно только перевыпустить.'):'',`
   <div class="fld"><label for="m1">Имя</label><input id="m1" value="${m?esc(m.name):''}"></div>
   <div class="fld"><label for="m2">Идентификатор</label><input id="m2" class="mono" value="${m?esc(m.id):''}" ${nw?'':'readonly'}></div>
-  <label class="chk"><input id="m0" type="checkbox" ${!m||m.authorized?'checked':''}>Порт включён — член может подключаться</label>
+  <label class="chk"><input id="m0" type="checkbox" ${!m||m.authorized?'checked':''}>Порт включён — участник может подключаться</label>
   <div class="fld"><label for="m5">Сеть и VLAN</label><select id="m5">${opts.map(o=>`<option value="${o[0]}|${o[1]}" ${o[0]===n.id&&o[1]===curv?'selected':''}>${esc(o[2])}</option>`).join('')}</select></div>
-  <div><div class="fld"><label for="m3">IP в сети</label><input id="m3" class="mono" value="${m?m.ip:''}" placeholder="${nextIP(n,curv)||'из пула'}"></div><div class="hint">Пусто — выдаётся из диапазона VLAN и закрепляется за членом.</div></div>
+  <div><div class="fld"><label for="m3">IP в сети</label><input id="m3" class="mono" value="${m?m.ip:''}" placeholder="${nextIP(n,curv)||'из пула'}"></div><div class="hint">Пусто — выдаётся из диапазона VLAN и закрепляется за участником.</div></div>
   <div><label class="chk"><input id="m6" type="checkbox" ${m&&m.multi?'checked':''}>Несколько устройств с одним ключом</label>
   <div class="fld" style="margin-top:14px"><label for="m4">Не больше устройств</label><input id="m4" class="num" value="${m&&m.multi_limit||8}"></div></div>
   <div class="fld"><label for="m7">Теги</label><input id="m7" value="${m?m.tags.join(' '):''}" placeholder="через пробел"></div>
@@ -1826,16 +1826,16 @@ function openMember(id){
   <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="reissueKey('${esc(m.id)}')">Перевыпустить ключ</button></div>`}`}`,
   `<button class="btn pri" type="button" onclick="saveMember(${nw?"null":`'${m.id}'`})">${nw?'Создать и выдать профиль':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить порт" style="margin-left:auto" onclick="delMember('${m.id}')">${ic('i-trash')}</button>`}`);
 }
-function showStoredKey(id){dialog('Ключ члена '+id,'Ключ хранится в панели — его можно показать снова.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
+function showStoredKey(id){dialog('Ключ участника '+id,'Ключ хранится в панели — его можно показать снова.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
  <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri">loft://lt_8f3a…c21e@vpn.example.net/static/js?type=get&amp;fp=chrome#${id}</div><p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
  <div class="acts" style="margin:0"><button class="btn sm pri" type="button">Копировать ссылку</button><button class="btn sm" type="button">${ic('i-down',16)}Скачать .loft</button><button class="btn sm" type="button">Копировать ключ</button></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`)}
-function reissueKey(id){dialog('Ключ члена '+id,'Показан один раз. После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
+function reissueKey(id){dialog('Ключ участника '+id,'Показан один раз. После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
  <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri">loft://lt_8f3a…c21e@vpn.example.net/static/js?type=get&amp;fp=chrome#${id}</div><p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
  <div class="acts" style="margin:0"><button class="btn sm pri" type="button">Копировать ссылку</button><button class="btn sm" type="button">${ic('i-down',16)}Скачать .loft</button><button class="btn sm" type="button">Копировать ключ</button></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`)}
 function saveMember(id){
  const g=i=>$('#'+i).value.trim(),[nid,vs]=g('m5').split('|'),v=+vs,N=netById(nid);
  let [n,m]=id?findMember(id):[N,null];
- if(!m){const nid2=g('m2');if(!/^[A-Za-z0-9._-]+$/.test(nid2)){toast('Идентификатор: латиница, цифры, . _ -');return}if(findMember(nid2)[1]){toast('Такой член уже есть');return}
+ if(!m){const nid2=g('m2');if(!/^[A-Za-z0-9._-]+$/.test(nid2)){toast('Идентификатор: латиница, цифры, . _ -');return}if(findMember(nid2)[1]){toast('Такой участник уже есть');return}
   m={id:nid2,name:g('m1')||nid2,ip:'',vlan:0,key_sha256:hex(64),pubkey:'',tags:[],authorized:true,multi:false,multi_limit:0};N.members.push(m);EXTRA[nid2]=['loft','0 / 1','никогда',0]}
  else if(n!==N){n.members.splice(n.members.indexOf(m),1);N.members.push(m)}
  m.name=g('m1')||m.id;m.authorized=$('#m0').checked;m.vlan=v;m.ip=g('m3');if(!m.ip||!inRange(m.ip,v?(N.vlans.find(x=>x.id===v)||{}).cidr:N.cidr))m.ip=nextIP(N,v);
@@ -1845,7 +1845,7 @@ function saveMember(id){
 function delMember(id){const [n,m]=findMember(id);n.members.splice(n.members.indexOf(m),1);S.sel.delete(id);closeDlg();render()}
 
 /* изменения ноды применяются только перезапуском: нода читает настройки при старте */
-const pend=()=>`<div class="note" role="status"><span><b>2 изменения ждут перезапуска ноды.</b> <span class="mute">Подключения членов прервутся на 2–3 секунды и восстановятся сами.</span></span><span class="note-acts"><button class="btn sm" type="button">Что изменено</button><button class="btn sm pri" type="button">Перезапустить</button></span></div>`;
+const pend=()=>`<div class="note" role="status"><span><b>2 изменения ждут перезапуска ноды.</b> <span class="mute">Подключения участников прервутся на 2–3 секунды и восстановятся сами.</span></span><span class="note-acts"><button class="btn sm" type="button">Что изменено</button><button class="btn sm pri" type="button">Перезапустить</button></span></div>`;
 const FRONTS=[['get','HTTP GET','Публичный путь по умолчанию. Обычный HTTPS GET, в том числе через CDN.',1,0],['ws','WebSocket','Опция. Один WebSocket на путь API. Прямой origin, не CDN.',0],['h2','HTTP/2 CONNECT','Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.',0],
  ['quic','QUIC','Опция. Своё QUIC по UDP/443.',0],['h3','HTTP/3','Опция. HTTP/3 CONNECT поверх QUIC.',0],['l3','L3','Опция. HTTP/2 CONNECT на прямом origin, внутри — IP-пакеты без mux.',0]];
 const RELAYS=[['de-1','de1.example.net:443','get','100','в сети','34','12 с назад'],['fi-1','fi1.example.net:443','get','100','выведен','0','—'],['nl-1','nl1.example.net:443','get','100','не в сети','—','—']];
@@ -1853,17 +1853,17 @@ const LISTS=[['blocked-ru','2 140','.example.ru, 198.51.100.0/24, …'],['local'
 V.node=()=>{
  const t=S.tab.node;
  const tabs=[['main','Основное'],['mask','Маскировка'],['relay','Ретрансляторы и CDN'],['lists','Списки'],['access','Доступ']];
- return pageHead('Нода loft','Сервер оверлея loft: на каком адресе он принимает членов, как прячется за веб-сервером и какие списки раздаёт клиентам.')+pend()+
+ return pageHead('Нода loft','Сервер оверлея loft: на каком адресе он принимает участников, как прячется за веб-сервером и какие списки раздаёт клиентам.')+pend()+
  `<div class="tabs" role="tablist">${tabs.map(([k,x])=>`<button class="tab ${t===k?'on':''}" role="tab" aria-selected="${t===k}" type="button" onclick="S.tab.node='${k}';render()">${x}</button>`).join('')}</div>`+
  ({main:nodeMain,mask:nodeMask,relay:nodeRelay,lists:nodeLists,access:nodeAccess}[t])();
 };
 const grid=x=>`<div class="fgrid">${x}</div>`;
 function nodeMain(){
  return blk('Состояние','',`<div class="card"><dl class="kv" style="margin-bottom:16px"><div><dt>Роль</dt><dd>контроллер</dd></div><div><dt>Версия</dt><dd class="mono">1.0.22</dd></div><div><dt>Работает с</dt><dd>12.10 11:28</dd></div>
-  <div><dt>TCP 443</dt><dd>нода loft</dd></div><div><dt>UDP 443</dt><dd>нода loft; чужие пакеты → веб-сервер</dd></div><div><dt>Ключей членов</dt><dd class="num">12</dd></div></dl>
+  <div><dt>TCP 443</dt><dd>нода loft</dd></div><div><dt>UDP 443</dt><dd>нода loft; чужие пакеты → веб-сервер</dd></div><div><dt>Ключей участников</dt><dd class="num">12</dd></div></dl>
   <div class="acts" style="margin:0"><button class="btn" type="button">Перезапустить</button><button class="btn" type="button" onclick="dialog('Журнал службы loft-node','Последние 300 строк.','<div class=&quot;joblog&quot;>2026-10-12T11:28:01 loft-node: member keys: 12</div>','<button class=&quot;btn&quot; type=&quot;button&quot; onclick=&quot;closeDlg()&quot;>Закрыть</button>')">Журнал службы</button></div></div>`)+
- blk('Подключение','Адрес для клиентов попадает в ссылки и профили членов.',grid(`
-  <div><div class="fld"><label for="nd1">Роль</label><input id="nd1" value="Контроллер" readonly></div><div class="hint">Контроллер держит членов и ключи. Роль задаётся при установке ноды.</div></div>
+ blk('Подключение','Адрес для клиентов попадает в ссылки и профили участников.',grid(`
+  <div><div class="fld"><label for="nd1">Роль</label><input id="nd1" value="Контроллер" readonly></div><div class="hint">Контроллер держит участников и ключи. Роль задаётся при установке ноды.</div></div>
   <div class="fld"><label for="nd2">Слушать</label><input id="nd2" class="mono" value=":443"></div>
   <div><div class="fld"><label for="nd3">Адрес для клиентов</label><input id="nd3" class="mono" value="vpn.example.net" readonly></div><div class="hint">Меняется в мастере установки — шаг «Домен и DNS».</div></div>
   <div><div class="fld"><label for="nd4">Сертификат</label><input id="nd4" class="mono" value="vpn.example.net · до 10.01.2027" readonly></div><div class="hint">Выпускается в мастере установки и продлевается сам.</div></div>`))+
@@ -1875,11 +1875,11 @@ function nodeMask(){
  return blk('Веб-сервер за нодой','Всё, что не похоже на клиента loft, нода молча передаёт веб-серверу. Снаружи сервер выглядит как обычный сайт.',
   table(['Адрес','',{t:'',r:1}],[['127.0.0.1:8443','основной · панель и сайт'],['127.0.0.1:9443','']].map((r,i)=>`<tr><td class="mono">${r[0]}</td><td>${r[1]?pill(r[1]):''}</td><td class="r"><div class="cell-acts">${i?`<button class="icb del" type="button" aria-label="Удалить">${ic('i-trash')}</button>`:''}</div></td></tr>`).join(''))+
   `<div class="acts" style="margin-top:16px"><button class="btn" type="button" onclick="dialog('Добавить адрес веб-сервера','Запасной адрес, куда нода передаёт постороннее, если первый не отвечает.','<div class=&quot;fld&quot;><label for=&quot;dc1&quot;>Адрес</label><input id=&quot;dc1&quot; class=&quot;mono&quot; placeholder=&quot;127.0.0.1:9443&quot;></div>',okFoot('Добавить'))">${ic('i-plus')}Добавить адрес</button></div><p class="hint">Первый адрес принимает постороннее; следующие — запасные.</p>`)+
- blk('Маскировка рукопожатия','Рукопожатие loft прячется в обычный TLS. Ключ маскировки выводится из токена ноды и входит в ссылки членов (pbk).',
+ blk('Маскировка рукопожатия','Рукопожатие loft прячется в обычный TLS. Ключ маскировки выводится из токена ноды и входит в ссылки участников (pbk).',
   `<div class="card"><label class="sw" style="margin-bottom:16px"><input type="checkbox" checked aria-label="Маскировка"><i></i><span>Маскировать рукопожатие</span></label>
   <dl class="kv"><div><dt>Ключ pbk</dt><dd class="mono">Xq2…f0Q</dd></div></dl></div>`)+
  blk('Сайт для посторонних','Что видит браузер, открывший адрес ноды, если веб-сервера за нодой нет.',grid(`<div class="fld"><label for="mk1">Каталог сайта</label><input id="mk1" class="mono" value="" placeholder="встроенная страница"></div>`))+
- blk('Пути запросов','Пути, похожие на статику и API обычного сайта. Менять их стоит, только если их кто-то начал блокировать — новые ссылки членам придётся выдать заново.',grid(
+ blk('Пути запросов','Пути, похожие на статику и API обычного сайта. Менять их стоит, только если их кто-то начал блокировать — новые ссылки участникам придётся выдать заново.',grid(
   [['GET','/static/js'],['WebSocket','/api/v1/sync'],['HTTP/2 и HTTP/3','/api/v1/tunnel'],['Список ретрансляторов','/static/v3/manifest.json'],['Списки','/static/v3/lists.json']].map((r,i)=>`<div class="fld"><label for="pp${i}">${r[0]}</label><input id="pp${i}" class="mono" value="${r[1]}"></div>`).join('')));
 }
 function openRelayMock(nw){
@@ -1892,10 +1892,10 @@ function openRelayMock(nw){
   `<button class="btn pri" type="button" onclick="closeDlg()">${nw?'Добавить':'Готово'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить ретранслятор" style="margin-left:auto">${ic('i-trash')}</button>`}`);
 }
 function nodeRelay(){
- return blk('Ретрансляторы','Другие серверы, которые принимают членов и передают трафик сюда. Ключей и адресов членов у них нет.',
+ return blk('Ретрансляторы','Другие серверы, которые принимают участников и передают трафик сюда. Ключей и адресов участников у них нет.',
   `<div class="acts"><button class="btn pri" type="button" onclick="openRelayMock(1)">${ic('i-plus')}Добавить ретранслятор</button><div class="fld" style="margin:0;min-width:min(260px,100%)"><label for="rl0">Кто может подключиться</label><select id="rl0"><option>Только из списка</option><option>Любой с токеном</option></select></div></div>`+
   table(['Ретранслятор','Адрес для клиентов','Фронты','Вес','Состояние','Подключений','Отклик'],RELAYS.map(r=>`<tr class="click" onclick="openRelayMock(0)"><td><b>${r[0]}</b></td><td class="mono">${r[1]}</td><td>${r[2]}</td><td class="num">${r[3]}</td><td>${r[4]==='в сети'?pill('в сети','ok'):pill(r[4])}</td><td class="num">${r[5]}</td><td>${r[6]}</td></tr>`).join('')))+
- blk('CDN','Члены могут подключаться через CDN по фронту GET. Нода принимает запросы со своим именем от адресов CDN.',
+ blk('CDN','Участники могут подключаться через CDN по фронту GET. Нода принимает запросы со своим именем от адресов CDN.',
   `<div class="card"><label class="chk" style="margin-bottom:16px"><input type="checkbox" checked>Cloudflare</label>
   <dl class="kv"><div><dt>Диапазоны CDN</dt><dd>22 подсети</dd></div></dl><div class="acts" style="margin:16px 0 0"><button class="btn sm" type="button">Обновить диапазоны</button></div></div>`);
 }
@@ -1914,21 +1914,21 @@ function nodeLists(){
 function nodeAccess(){
  return blk('Ключ контроллера','Клиенты сверяют по нему подпись списка ретрансляторов и списков. Входит в файл .loft.',
   `<div class="uri" style="margin-bottom:12px">ed25519:7b1f…a90c</div><div class="acts"><button class="btn sm" type="button">Копировать</button></div>`)+
- blk('Общий токен','Вход по одному токену вместо личных ключей. Работает, только пока в сети нет ни одного члена с ключом.',
+ blk('Общий токен','Вход по одному токену вместо личных ключей. Работает, только пока в сети нет ни одного участника с ключом.',
   `<label class="sw"><input type="checkbox" aria-label="Общий токен"><i></i><span>Разрешить вход по общему токену</span></label>`)+
- blk('Смена токена ноды','Меняет ключ маскировки (pbk) и токен для ретрансляторов. Ключ контроллера и ключи членов остаются; при включённой маскировке ссылки членов придётся выдать заново.',
+ blk('Смена токена ноды','Меняет ключ маскировки (pbk) и токен для ретрансляторов. Ключ контроллера и ключи участников остаются; при включённой маскировке ссылки участников придётся выдать заново.',
   `<button class="btn danger" type="button">Сменить токен…</button>`)+
  blk('Диагностика','',`<label class="sw"><input type="checkbox" aria-label="Журнал сессий"><i></i><span>Писать журнал сессий <span class="mute">/var/lib/loft/trace.log</span></span></label>`);
 }
 V.settings=()=>pageHead('Настройки','Настройки самой панели: адрес, язык, часовой пояс, вход, уведомления.')+
- blk('Мастер установки','Пройти шаги первой настройки заново: домен, сертификат, первый член сети, пакеты. Уже сделанное не стирается.',`<button class="btn" type="button" onclick="S.wz.step=2;go('setup')">Открыть мастер</button>`)+
+ blk('Мастер установки','Пройти шаги первой настройки заново: домен, сертификат, первый участник сети, пакеты. Уже сделанное не стирается.',`<button class="btn" type="button" onclick="S.wz.step=2;go('setup')">Открыть мастер</button>`)+
  blk('Панель','',grid(`<div><div class="fld"><label for="st1">Адрес панели</label><input id="st1" class="mono" value="panel.example.net" readonly></div><div class="hint">Имена и сертификаты меняются в мастере установки — шаги «Домен и DNS» и «Сертификат».</div></div>
   <div><div class="fld"><label for="st2">Язык по умолчанию</label><select id="st2"><option value="en">English</option><option value="ru">Русский</option><option value="zh">中文</option></select></div><div class="hint">Для страницы входа и тех, кто не выбрал язык сам.</div></div>
   <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3"><option>Europe/Moscow</option><option>UTC</option></select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`) +
-  `<div><label class="chk"><input id="stKeep" type="checkbox" ${S.keepKeys?'checked':''} onchange="S.keepKeys=this.checked"><span>Хранить ключи членов</span></label><div class="hint">Ссылка, QR-код и файл .loft открываются снова без перевыпуска. Копия лежит в каталоге данных панели, права 0600. Выключение стирает копию в панели; файл на ноде остаётся.</div></div>`)+
- blk('Файлы .loft','Какие части входят в имя исходящего в профиле члена. Ссылка loft:// не меняется.',`<div class="chk-row">
+  `<div><label class="chk"><input id="stKeep" type="checkbox" ${S.keepKeys?'checked':''} onchange="S.keepKeys=this.checked"><span>Хранить ключи участников</span></label><div class="hint">Ссылка, QR-код и файл .loft открываются снова без перевыпуска. Копия лежит в каталоге данных панели, права 0600. Выключение стирает копию в панели; файл на ноде остаётся.</div></div>`)+
+ blk('Файлы .loft','Какие части входят в имя исходящего в профиле участника. Ссылка loft:// не меняется.',`<div class="chk-row">
   <label class="chk"><input type="checkbox"><span>Хост</span></label>
-  <label class="chk"><input type="checkbox" checked><span>Член</span></label>
+  <label class="chk"><input type="checkbox" checked><span>Участник</span></label>
   <label class="chk"><input type="checkbox" checked><span>Фронт</span></label>
  </div>
  <pre class="mono" style="margin:12px 0 0">outbounds:\n  - name: bob-get</pre>
@@ -1945,7 +1945,7 @@ V.settings=()=>pageHead('Настройки','Настройки самой па
   <div style="display:flex;flex-direction:column;gap:4px;margin-top:16px">${['Сертификат истекает через 14 дней','Установлено обновление или откат','Нода loft не запустилась','Резервная копия по расписанию не удалась'].map(x=>`<label class="chk"><input type="checkbox" checked>${x}</label>`).join('')}</div>
   <div class="acts" style="margin:16px 0 0"><button class="btn pri sm" type="button" onclick="toast('Сохранено')">Сохранить</button><button class="btn sm" type="button" onclick="toast('Пробное письмо отправлено')">Отправить пробное</button></div></div>`);
 
-const ROLES=[['Владелец','всё, включая пользователей, пакеты и обновления','1'],['Оператор','члены сети, каналы, домены и записи; без пакетов, пользователей и системы','1'],['Наблюдатель','только просмотр','2']];
+const ROLES=[['Владелец','всё, включая пользователей, пакеты и обновления','1'],['Оператор','участники сети, каналы, домены и записи; без пакетов, пользователей и системы','1'],['Наблюдатель','только просмотр','2']];
 function usersTab(t){
  if(t==='roles')return blk('Роли','Роль задаёт, какие разделы пользователь видит и что может менять.',`<div class="acts"><button class="btn" type="button" onclick="openRole('')">${ic('i-plus')}Добавить роль</button></div>`+table(['Роль','Что может','Пользователей'],ROLES.map(r=>`<tr class="click" onclick="openRole('${r[0]}')"><td><b>${r[0]}</b></td><td style="white-space:normal;min-width:260px">${r[1]}</td><td class="num">${r[2]}</td></tr>`).join('')));
  if(t==='sess')return blk('Сессии','Кто сейчас вошёл в панель.',table(['Пользователь','Откуда','Устройство','Вход','Активность',{t:'',r:1}],[['admin','198.51.100.20','Safari · macOS','сегодня 09:02','сейчас',1],['bob','192.0.2.17','Chrome · Android','вчера 18:40','2 ч назад',0],['bob','API-токен','lpt_…9a1c','12.10 10:11','5 мин назад',0]].map(r=>`<tr><td><b>${r[0]}</b>${r[5]?' <span class="mute">(это вы)</span>':''}</td><td class="mono">${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td class="r">${r[5]?'':`<button class="btn sm" type="button">${r[1]==='API-токен'?'Отозвать':'Завершить'}</button>`}</td></tr>`).join('')));
@@ -2010,7 +2010,7 @@ function openChan(id){
    <div class="fld"><label for="p3">Тип аутентификации</label><select id="p3" onchange="$('#pAuth').hidden=this.value==='n'"><option value="n">Не использовать</option><option value="a" ${c.auth==='логин'?'selected':''}>Логин и пароль</option></select></div>
    <div id="pAuth" ${c.auth==='логин'?'':'hidden'} style="display:flex;flex-direction:column;gap:18px"><div class="fld"><label for="p4">Имя пользователя</label><input id="p4" value="${nw?'':'loft'}" autocomplete="off"></div>${pwOpt('p5','Пароль',!nw)}</div>
    ${advBlk(`${viaSel('p6',id,['wg','vpn','zt','px'],'','')}
-    <div><div class="fld"><label for="p7">UDP</label><select id="p7"><option>Напрямую</option><option>Через прокси (только SOCKS5, если сервер умеет)</option><option>Блокировать</option></select></div><div class="hint">Так пойдут DNS и QUIC членов, у которых выход через этот прокси.</div></div>
+    <div><div class="fld"><label for="p7">UDP</label><select id="p7"><option>Напрямую</option><option>Через прокси (только SOCKS5, если сервер умеет)</option><option>Блокировать</option></select></div><div class="hint">Так пойдут DNS и QUIC участников, у которых выход через этот прокси.</div></div>
     ${chCheck('p8',c)}`)}`,foot);
   if(t==='xr') return dialog(title,'Ссылка от провайдера или своего сервера Xray.',`${head}
    <div><div class="fld"><label for="x1">Ссылка</label><input id="x1" class="mono" value="${nw?'':'vless://…@de.example.org:443?security=reality&amp;flow=xtls-rprx-vision&amp;pbk=…'}"></div><div class="hint">vless://, trojan:// или ss://.</div></div>
@@ -2066,20 +2066,20 @@ function renderFoot(){
 const OSS=[['Go','язык и среда выполнения'],['nginx','веб-сервер за нодой'],['Xray-core','серверы и клиенты VLESS, Trojan, Shadowsocks'],['WireGuard · AmneziaWG','каналы WireGuard'],['OpenVPN','каналы по файлу .ovpn'],['ZeroTier','подключение к сетям ZeroTier'],['quic-go','QUIC и HTTP/3'],['uTLS','отпечаток TLS как у браузера'],['gVisor','сетевой стек в пространстве пользователя'],['Postfix · Dovecot · OpenDKIM','почта: отправка, приём, подпись'],['Rspamd','фильтр спама'],['Roundcube','веб-почта в браузере'],['nftables · fail2ban','защита от сканеров и перебора паролей'],['Let’s Encrypt','бесплатные сертификаты TLS']];
 /* ── справка по разделу ── */
 const HELP={
- main:['Сводка сервера: нода, члены сети, адреса, домены, нагрузка и последние события. Карточки ведут в свои разделы.',['Проверить, что нода работает и сертификат не истекает','Добавить члена сети прямо с обзора','Открыть журнал последних изменений'],['«нет данных» у ноды — служба loft-panel-adm не отвечает: перезапустите её на сервере','Сертификат помечен — продлите его в «Доменах»']],
+ main:['Сводка сервера: нода, участники сети, адреса, домены, нагрузка и последние события. Карточки ведут в свои разделы.',['Проверить, что нода работает и сертификат не истекает','Добавить участника сети прямо с обзора','Открыть журнал последних изменений'],['«нет данных» у ноды — служба loft-panel-adm не отвечает: перезапустите её на сервере','Сертификат помечен — продлите его в «Доменах»']],
  node:['Настройки ноды loft: роль, фронты, маскировка, ретрансляторы, списки и доступ. Переключатели сразу идут на ноду.',['Включить нужные фронты (GET, WebSocket, HTTP/2, QUIC)','Добавить ретранслятор или CDN','Подождать секунду — нода перезапустится сама'],['После смены фронтов нода не поднялась — откройте журнал службы на вкладке «Основное»','Клиенты не подключаются — проверьте адрес для клиентов и сертификат']],
- members:['Устройства и люди, которые подключаются к серверу. У каждого свой ключ и профиль.',['Добавить члена — панель выдаст ссылку loft://, QR-код и файл .loft','Перевыпустить ключ, если устройство потеряно','Выключить члена, не удаляя его'],['Член не в сети — проверьте, что профиль на устройстве свежий','Выключатель сразу действует на ноде']],
+ members:['Устройства и люди, которые подключаются к серверу. У каждого свой ключ и профиль.',['Добавить участника — панель выдаст ссылку loft://, QR-код и файл .loft','Перевыпустить ключ, если устройство потеряно','Выключить участника, не удаляя его'],['Участник не в сети — проверьте, что профиль на устройстве свежий','Выключатель сразу действует на ноде']],
  segments:['Сеть loft как свитч: сегменты вкладками сверху, плюс добавляет новый, как порт входит, правила доступа и текст network.conf.',['Создать сегмент плюсом в ряду вкладок','Задать VLAN ID и какие порты входят в сегмент','Разрешить или запретить доступ между сегментами'],['Конфиг подсвечен красным — исправьте строку из сообщения','Текст конфига применяется кнопкой «Применить» в плашке']],
  channels:['Каналы WireGuard, OpenVPN, SSTP, ZeroTier, прокси и Xray. Здесь же правила выхода по спискам адресов.',['Подключить VPN для выхода в интернет','Включить «использовать для выхода» у канала','Задать правила выхода по спискам адресов'],['Подключение «нет связи» — проверка доступности интернета не проходит, посмотрите адрес проверки','Канал не в политике — поставьте его в «Приоритетах подключений»']],
  adapters:['Адреса и маршруты сетевых адаптеров сервера и проверка, есть ли интернет через маршрут по умолчанию. Изменение адреса без подтверждения откатится через 2 минуты.',['Включить проверку доступности интернета','Добавить IP, выданный хостером','Подтвердить изменение адреса на плашке'],['Проверка «НЕДОСТУПЕН» — приоритеты пропускают «напрямую»','Сервер пропал из сети после правки адреса — подождите 2 минуты, изменение откатится само']],
  addrs:['Адреса и маршруты сетевых адаптеров сервера. Изменение без подтверждения откатится через 2 минуты.',['Добавить IP, выданный хостером','Добавить маршрут','Подтвердить изменение на плашке'],['Сервер пропал из сети после правки — подождите 2 минуты, изменение откатится само']],
- 'iface-priorities':['Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию — адаптер сервера и все каналы с выходом.',['Создать политику и отметить подключения','Перетащить члена, тег или сегмент на политику на вкладке «Применение политик»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике член или сегмент','Все подключения не работают — сработает пункт «Если ни один не работает»']],
+ 'iface-priorities':['Политики доступа в интернет: какие подключения пробовать и кто ими пользуется. Политика по умолчанию — адаптер сервера и все каналы с выходом.',['Создать политику и отметить подключения','Перетащить участника, тег или сегмент на политику на вкладке «Применение политик»','Закрыть интернет политикой «Без доступа»'],['Трафик идёт не туда — посмотрите, в какой политике участник или сегмент','Все подключения не работают — сработает пункт «Если ни один не работает»']],
  domains:['Зоны, DNS-записи и сертификаты. Откройте зону, чтобы увидеть и править её записи.',['Добавить домен через DNS-провайдера — записи панель создаст сама','Выпустить сертификат Let’s Encrypt','Для ручной зоны — проверить, что записи внесены у регистратора'],['Namecheap отказывает — укажите имя аккаунта (не e-mail), ключ и белый IP сервера','Сертификат не выпускается — имя должно указывать на этот сервер, а для HTTP-01 нужен открытый порт 80']],
  mail:['Почтовый сервер: домены, ящики, псевдонимы и DNS-записи почты.',['Добавить почтовый домен и создать недостающие записи DNS','Завести ящик и выдать пароль','Посмотреть настройки для почтовой программы'],['Письма уходят в спам — проверьте SPF, DKIM, DMARC и PTR в «Записях DNS»','Применение не прошло — панель вернула прежние файлы, исправьте ошибку и нажмите «Применить снова»']],
  packages:['Что установлено на сервере и обновления. Пакеты ставятся заданием, ход виден здесь же.',['Выбрать пакеты и поставить их одним заданием','Настроить окно и режим обновлений','Открыть настройки пакета шестерёнкой'],['Задание упало — откройте его журнал','Раздел меню не появился — нужный пакет ещё не установлен']],
- users:['Кто входит в эту панель, их роли, сессии и журнал изменений. Это не члены сети.',['Пригласить пользователя ссылкой на 24 часа','Настроить роль: что видно и что можно менять','Завершить чужую сессию или найти, кто что изменил'],['Пользователь не может войти — проверьте «Может входить» и не истекло ли приглашение','Нет нужного раздела — роли не хватает прав']],
+ users:['Кто входит в эту панель, их роли, сессии и журнал изменений. Это не участники сети.',['Пригласить пользователя ссылкой на 24 часа','Настроить роль: что видно и что можно менять','Завершить чужую сессию или найти, кто что изменил'],['Пользователь не может войти — проверьте «Может входить» и не истекло ли приглашение','Нет нужного раздела — роли не хватает прав']],
  system:['Защита сервера, резервные копии и учётные записи Linux.',['Настроить расписание копий и хранилище','Создать фразу восстановления и записать её не на этом сервере','Восстановить сервер из копии'],['Копия не открывается — нужна фраза, которой она шифровалась','Вас заблокировала защита — войдите с другого адреса и разблокируйте свой']],
- settings:['Настройки самой панели: язык, часовой пояс, сессии, ключи членов, файлы .loft и уведомления.',['Запустить мастер установки заново, чтобы сменить имена и сертификат','Включить уведомления по почте и отправить пробное письмо','Задать, из каких частей складывается имя исходящего в .loft'],['Письма не приходят — проверьте сервер SMTP и отправьте пробное письмо']],
+ settings:['Настройки самой панели: язык, часовой пояс, сессии, ключи участников, файлы .loft и уведомления.',['Запустить мастер установки заново, чтобы сменить имена и сертификат','Включить уведомления по почте и отправить пробное письмо','Задать, из каких частей складывается имя исходящего в .loft'],['Письма не приходят — проверьте сервер SMTP и отправьте пробное письмо']],
  me:['Ваш вход в панель: права роли, пароль, API-токен и сессии.',['Сменить пароль — остальные ваши сессии завершатся','Выпустить API-токен для скриптов','Завершить сессию на чужом или потерянном устройстве'],['Токен перестал работать — его отозвали или перевыпустили: выпустите новый']]
 };
 const GUIDE={ru:'README_ru.md',en:'README.md',zh:'README_zh.md'};
@@ -2100,7 +2100,7 @@ function goThen(r,f){if(location.hash.slice(1)===r){f();return}S.after=f;go(r)}
 function searchItems(){
  const o=MENU.flatMap(g=>g.items).map(([k,t])=>({g:'Разделы',t,go:()=>go(k)}));
  o.push({g:'Разделы',t:'Личный кабинет',go:()=>go('me')});
- NETS.forEach(n=>n.members.forEach(m=>o.push({g:'Члены сети',t:m.id,s:m.name||'',go:()=>goThen('members',()=>openMember(m.id))})));
+ NETS.forEach(n=>n.members.forEach(m=>o.push({g:'Участники сети',t:m.id,s:m.name||'',go:()=>goThen('members',()=>openMember(m.id))})));
  Object.entries(CH).forEach(([k,c])=>o.push({g:'Внешние каналы',t:c.title,s:k,go:()=>goThen('channels',()=>openChan(k))}));
  ZONES.forEach(z=>o.push({g:'Домены',t:z.z,go:()=>go('domains/'+z.z)}));
  BOXES.forEach((b,i)=>o.push({g:'Почта',t:b[0],go:()=>goThen('mail',()=>openBox(i))}));
@@ -2110,7 +2110,7 @@ function searchItems(){
 }
 let SR=[],SRi=0;
 function openSearch(){
- dialog('Поиск по панели','Разделы, члены сети, подключения, домены, ящики, пользователи и пакеты.',`<div class="fld"><label for="sq">Что найти</label><input id="sq" autocomplete="off" spellcheck="false" oninput="searchDraw()" onkeydown="searchKey(event)"></div><div class="sr" id="sr" role="listbox"></div>`,`<span class="hint" style="margin:0">↑ ↓ — выбрать, Enter — открыть, Esc — закрыть</span>`);
+ dialog('Поиск по панели','Разделы, участники сети, подключения, домены, ящики, пользователи и пакеты.',`<div class="fld"><label for="sq">Что найти</label><input id="sq" autocomplete="off" spellcheck="false" oninput="searchDraw()" onkeydown="searchKey(event)"></div><div class="sr" id="sr" role="listbox"></div>`,`<span class="hint" style="margin:0">↑ ↓ — выбрать, Enter — открыть, Esc — закрыть</span>`);
  searchDraw();
 }
 function searchDraw(){

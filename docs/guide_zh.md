@@ -271,11 +271,11 @@ make probe
 
 `fingerprint` `chrome` 是这个客户端用 uTLS 构造的 Chrome ClientHello。`firefox` 是另一种浏览器形态。`go` 是 Go 自带密码套件列表；JA3/JA4 过滤器已经把它标成非浏览器。协议在有这类过滤器的路径上要求浏览器形态。它不要求 uTLS。
 
-没写 `header_budget` 就是 16 KiB HTTP 头（Yandex CDN 配置钉死 12 KiB）。没写 `inflight` 在这棵树是 8（协议范围 2–8，规范默认 4）。没写 `h2_max_age_ms` 就是 0：GET 的 HTTP/2 一直留到出错。大于 0（下限 15 秒，上限 1 小时）会换这条 TCP；mux 和 GET 会话 id 不变。GET 上行是 Cookie `session=`；第一次 GET 是标签 `0x02`，会话 id 已经在路径里。覆盖网 ICMP 是打到 `dst:1` 的 CmdDgram；节点答网关，并发互联网 echo。
+没写 `header_budget` 就是 16 KiB HTTP 头（Yandex CDN 配置也钉在 16 KiB）。没写 `inflight` 在这棵树是 8（协议范围 2–8，规范默认 4）。没写 `h2_max_age_ms` 就是 0：GET 的 HTTP/2 一直留到出错。大于 0（下限 15 秒，上限 1 小时）会换这条 TCP；mux 和 GET 会话 id 不变。GET 上行是 Cookie `session=`；第一次 GET 是标签 `0x02`，会话 id 已经在路径里。覆盖网 ICMP 是打到 `dst:1` 的 CmdDgram；节点答网关，并发互联网 echo。
 
 客户端不选诱饵 SNI。节点宣告。CDN 前置保持 CDN 主机名。
 
-Yandex Cloud CDN（源站组、资源、缓存关、GET 12 KiB）：[yandex-cdn_zh.md](yandex-cdn_zh.md)。
+Yandex Cloud CDN（源站组、资源、缓存关、GET 16 KiB）：[yandex-cdn_zh.md](yandex-cdn_zh.md)。
 
 `bootstrap` 必须是有真证书的主机或 CDN。打到诱饵 IP 且没有会话 HMAC 的 GET 拼接到源站。
 

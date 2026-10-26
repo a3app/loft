@@ -271,11 +271,11 @@ Outbound fields: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`
 
 `fingerprint` `chrome` is a uTLS Chrome ClientHello. `firefox` is the other browser shape. `go` is the stock Go cipher list; JA3/JA4 filters already mark it as a non-browser. The protocol requires the browser shape on a path that filters browsers. It does not require uTLS.
 
-Omitted `header_budget` is 16 KiB of HTTP header (Yandex CDN profile pins 12 KiB). Omitted `inflight` is 8 in this tree (protocol range 2–8, spec default 4). Omitted `h2_max_age_ms` is 0: keep the GET HTTP/2 connection until error. A positive value (floor 15 s, cap 1 h) replaces that TCP; mux and GET session id stay. GET uplink is Cookie `session=`; the first GET is tag `0x02` with the session id already in the path. Overlay ICMP is CmdDgram to `dst:1`; the node answers the gateway and emits internet echo.
+Omitted `header_budget` is 16 KiB of HTTP header (the Yandex CDN profile pins the same 16 KiB). Omitted `inflight` is 8 in this tree (protocol range 2–8, spec default 4). Omitted `h2_max_age_ms` is 0: keep the GET HTTP/2 connection until error. A positive value (floor 15 s, cap 1 h) replaces that TCP; mux and GET session id stay. GET uplink is Cookie `session=`; the first GET is tag `0x02` with the session id already in the path. Overlay ICMP is CmdDgram to `dst:1`; the node answers the gateway and emits internet echo.
 
 The client does not choose decoy SNI. The node advertises it. A CDN front keeps the CDN hostname.
 
-Yandex Cloud CDN (origin group, resource, cache off, 12 KiB GET): [yandex-cdn_ru.md](yandex-cdn_ru.md).
+Yandex Cloud CDN (origin group, resource, cache off, 16 KiB GET): [yandex-cdn_ru.md](yandex-cdn_ru.md).
 
 `bootstrap` MUST be a host with a real certificate or a CDN. GET to a decoy IP without session HMAC is spliced to the origin.
 

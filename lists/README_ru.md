@@ -2,7 +2,7 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-Именованные файлы Keenetic / loft-routes, которые клиент macOS цепляет к зоне. Живые списки и каталог кнопки «Списки» — в [a3app/loft-routes](https://github.com/a3app/loft-routes). Файлы здесь — заводские заглушки.
+Именованные файлы в формате Keenetic / loft-routes, которые клиент для macOS может привязать к зоне. Актуальные списки и каталог для кнопки «Списки» лежат в [a3app/loft-routes](https://github.com/a3app/loft-routes). Файлы здесь — встроенные заглушки.
 
 ```
 https://raw.githubusercontent.com/a3app/loft-routes/main/catalog.json
@@ -14,9 +14,9 @@ https://raw.githubusercontent.com/a3app/loft-routes/main/kz.bat
 https://raw.githubusercontent.com/a3app/loft-routes/main/by.bat
 ```
 
-У зоны один URL. Направление у зоны, не у файла. `REM zone:` — подсказка для импорта.
+У зоны один URL. Направление задаётся у зоны, а не у файла. `REM zone:` — подсказка при импорте.
 
-| Файл | Обычная зона |
+| Файл | Типичная зона |
 |------|----------------|
 | `global.bat` | Global (через лофт) |
 | `ru.bat` | Local (мимо лофта) |

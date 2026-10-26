@@ -4,15 +4,15 @@
 
 Как loft работает на телефоне с Sailfish OS. Каталог: [clients/Sailfish/](../clients/Sailfish/). План: [clients/Sailfish/PLAN.md](../clients/Sailfish/PLAN.md). Макет: [clients/Sailfish/design/index.html](../clients/Sailfish/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md). URI импорта: [share_ru.md](share_ru.md).
 
-ОС Аврора — пакет OMP этого клиента: [aurora_ru.md](aurora_ru.md), [`clients/Sailfish/aurora/`](../clients/Sailfish/aurora/).
+Для ОС Аврора этот клиент упаковывается как пакет OMP: [aurora_ru.md](aurora_ru.md), [`clients/Sailfish/aurora/`](../clients/Sailfish/aurora/).
 
-GUI в Dist ещё нет. Этот файл — спецификация стыковки.
+GUI в Dist пока не собирается. Этот файл — спецификация интеграции.
 
 ---
 
 ## 1. Три части
 
-Sailfish решает **когда** есть tun (строка VPN ConnMan, одна сразу). `loft-front` решает **как** сессия выглядит в канале. Приложение QML пишет YAML и просит ConnMan стартовать.
+Sailfish решает, **когда** существует tun (строка VPN в ConnMan, активна только одна). `loft-front` решает, **как** сессия выглядит в канале. Приложение QML записывает YAML и просит ConnMan запустить подключение.
 
 ```
 приложения
@@ -25,15 +25,15 @@ Sailfish решает **когда** есть tun (строка VPN ConnMan, о�
                   → IP сервера мимо tun
 ```
 
-Контейнер протокол не говорит. Он пишет `client.yaml` и просит ConnMan стартовать тип `loft` (D-Bus `net.connman.vpn`). Если плагина нет — запускает `loft-front` с SOCKS на loopback. loft, SSTP и VLESS — исходящие одной строки. OpenVPN остаётся штатным типом Настроек.
+Контейнер сам по протоколу не общается. Он записывает `client.yaml` и просит ConnMan запустить тип `loft` (D-Bus `net.connman.vpn`). Если плагина нет, он запускает `loft-front` с SOCKS на loopback. loft, SSTP и VLESS — исходящие одной и той же строки. OpenVPN остаётся штатным типом Настроек.
 
-Помощник: `loft-connman` exec `loft-front -tun NAME -tun-noexec`. ConnMan ставит адрес, DNS и маршруты из скрипта notify.
+Помощник: `loft-connman` запускает через exec `loft-front -tun NAME -tun-noexec`. ConnMan применяет адрес, DNS и маршруты из скрипта notify.
 
-Bind `clients/mobile` нет. Sailfish — GNU/Linux; помощник — тот же `loft-front`, что запускает macOS.
+Bind из `clients/mobile` здесь не используется. Sailfish — это GNU/Linux, и помощником служит тот же `loft-front`, который запускает macOS.
 
 ## 2. TUN
 
-После живой сессии (Status loft или IPCP SSTP) плагин говорит ConnMan:
+Когда сессия установлена (Status от loft или IPCP от SSTP), плагин передаёт ConnMan:
 
 | Status | ConnMan |
 |--------|---------|
@@ -43,15 +43,15 @@ Bind `clients/mobile` нет. Sailfish — GNU/Linux; помощник — то�
 | `dns` | серверы имён |
 | `ip6` / `gateway6` | если есть |
 
-IP фронтов **должны** сидеть мимо tun, иначе сессия зациклится. Списки / зоны → маршруты ConnMan (`via` / `direct`). `drop` — отброс в помощнике, не маршрут ОС.
+IP фронтов **должны** идти мимо tun, иначе сессия зациклится. Списки и зоны протокола превращаются в маршруты ConnMan (`via` / `direct`). `drop` — это отброс пакетов в помощнике, а не маршрут ОС.
 
-Удержание держит default занятым, если сессия умерла: у телефона нет пути LTE/Wi-Fi, пока снова Подключить или сброс в Настройках. Копирайт: *маршрут* / *прямой интернет*.
+Удержание оставляет маршрут по умолчанию занятым, даже если сессия оборвалась: у телефона нет выхода через LTE/Wi-Fi, пока пользователь снова не нажмёт «Подключить» или не сбросит настройку в Настройках. В текстах интерфейса: *маршрут* / *прямой интернет*.
 
 ## 3. Смена пути
 
-Wi-Fi → LTE (и обратно) — новый default. loft-front уже закрывает живой фронт и поднимает свежий `0x02` с тем же `instance_id` (IP оверлея тот же). SSTP перенабирает TLS+PPP. Внутренний TCP всё равно RST.
+Переход Wi-Fi → LTE (и обратно) означает новый путь по умолчанию. loft-front уже умеет закрывать живой фронт и возобновлять сессию свежим `0x02` с тем же `instance_id` (IP оверлея сохраняется). SSTP заново устанавливает TLS+PPP. Внутренние TCP-соединения всё равно получают RST.
 
-Тот же контракт, что macOS / CLI. Это не новая cap.
+Контракт тот же, что на macOS / CLI. Новой cap здесь нет.
 
 ## 4. Идентификаторы
 
@@ -66,10 +66,10 @@ Wi-Fi → LTE (и обратно) — новый default. loft-front уже за
 | SDK | Sailfish SDK (`sfdk`) | Аврора SDK (`mb2`) |
 | CMake | `-DLOFT_OS=sailfish` | `-DLOFT_OS=aurora` |
 
-Движок (`loft-front`): **linux/arm64**. GUI: Qt 5 / QML Silica. Если glibc не примет статический бинарник — пересборка в Build Engine этой ОС.
+Движок (`loft-front`): **linux/arm64**. GUI: Qt 5 / QML Silica. Если glibc не принимает статический бинарник, его пересобирают в Build Engine соответствующей ОС.
 
 ## 5. Чем это не является
 
-SOCKS5 на `127.0.0.1` — не вход, которым пользуются чужие приложения. Хост QML поднимает его только если плагина ConnMan нет.
+SOCKS5 на `127.0.0.1` — не вход, которым пользуются чужие приложения. Хост QML поднимает его, только если плагина ConnMan нет.
 
-macOS `loft-priv` в RPM не кладём. TUN создаёт ConnMan.
+`loft-priv` из macOS в RPM не входит. TUN создаёт ConnMan.

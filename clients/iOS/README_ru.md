@@ -2,11 +2,11 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-Клиент iOS: один **Packet Tunnel**, который система видит как Personal VPN. Контейнер держит профили и лампу; Network Extension ведёт сессию Go (loft, SSTP или VLESS).
+Клиент iOS: один **Packet Tunnel**, который система видит как Personal VPN. Приложение-контейнер отвечает за профили и лампу; Network Extension ведёт сессию Go (loft, SSTP или VLESS).
 
-Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/ios.md](../../docs/ios.md). URI импорта: [docs/share_ru.md](../../docs/share_ru.md). План: [PLAN.md](PLAN.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
+Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/ios_ru.md](../../docs/ios_ru.md). URI импорта: [docs/share_ru.md](../../docs/share_ru.md). План: [PLAN.md](PLAN.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
 
-Home и Settings на SwiftUI (`HomeView`, `SettingsView`, Xcode Canvas `#Preview`) и Packet Tunnel в этом дереве. Сначала bind движка: `make -C ../mobile ios`. YAML-хост остаётся в `ContentView`.
+Home и Settings на SwiftUI (`HomeView`, `SettingsView`, Xcode Canvas `#Preview`) и Packet Tunnel находятся в этом дереве. Сначала соберите bind движка Go: `make -C ../mobile ios`. YAML-хост остаётся в `ContentView`.
 
 ## Рамки
 
@@ -16,13 +16,13 @@ Home и Settings на SwiftUI (`HomeView`, `SettingsView`, Xcode Canvas `#Previe
 | SSTP | Тот же туннель. TLS + PPP, IP из IPCP. Go `internal/sstp`. Импорт YAML `type: sstp` или `sstp://`. |
 | VLESS | Тот же туннель, когда loft режут. Импорт — QR `vless://` (камера или файл). |
 | SOCKS5 как вход продукта | На iOS нет. Чужие приложения не ходят в локальный SOCKS. Вход — системный VPN. |
-| IKEv2, WireGuard в этом приложении | Нет. IKEv2 остаётся Настройки → VPN. |
+| IKEv2, WireGuard в этом приложении | Нет. IKEv2 остаётся в Настройки → VPN. |
 
-iOS держит **один** Personal VPN. Несколько профилей loft — переключение, не параллельные TUN.
+iOS допускает только **один** активный Personal VPN. Несколько профилей loft — это переключатель, а не параллельные TUN-сессии.
 
 Расширение должно вынести IP фронтов из туннеля, чтобы сессия не зациклилась.
 
-## Раскладка
+## Структура
 
 ```
 clients/iOS/
@@ -35,7 +35,7 @@ clients/iOS/
   ../mobile/         общий движок Go (iOS + Android)
 ```
 
-Сессия — [`clients/mobile`](../mobile/) (`internal/` + inbound-стек) в appex. Процесса `loft-front` нет. На macOS `loft-front` остаётся отдельным процессом; на iOS сессия в процессе расширения.
+Сессию ведёт [`clients/mobile`](../mobile/) (`internal/` + inbound-стек), слинкованный в appex. Процесса `loft-front` нет. На macOS `loft-front` остаётся отдельным процессом, а на iOS сессия работает внутри процесса расширения.
 
 ## Требования
 
@@ -45,7 +45,7 @@ clients/iOS/
 | Контейнер SwiftUI | **iOS 16+** (`NavigationStack`, макет) |
 | Загрузка в Store | Xcode 26+, iOS 26 SDK. Deployment 15 — минимум toolchain. |
 
-Apple Developer Program для entitlement Packet Tunnel. App group `group.app.loft` для профилей между приложением и appex. Архитектуры: arm64 на устройстве, arm64 симулятор.
+Apple Developer Program нужна для entitlement Packet Tunnel. App group `group.app.loft` — для общих профилей приложения и appex. Архитектуры: arm64 на устройстве, arm64 в симуляторе.
 
 ## Сборка
 
@@ -57,4 +57,4 @@ make -C clients/iOS run  # открыть macOS-обёртку
 make -C clients/iOS sim  # один раз создать Simulator loft-ios
 ```
 
-Пишет macOS `loft.app` (двойной клик: boot `loft-ios`, install, launch) рядом с unsigned Simulator `iphonesimulator/loft.app`. Промежуточное — в `dist/clients/iOS/`, не в `clients/iOS/`. IPA на устройство / TestFlight — позже. Лог: `~/Library/Logs/loft-ios-simulator.log`.
+Собирает macOS-обёртку `loft.app` (двойной клик: boot `loft-ios`, install, launch) рядом с неподписанной сборкой для Simulator `iphonesimulator/loft.app`. Промежуточные файлы лежат в `dist/clients/iOS/`, а не в `clients/iOS/`. IPA для устройства / TestFlight — позже. Лог: `~/Library/Logs/loft-ios-simulator.log`.

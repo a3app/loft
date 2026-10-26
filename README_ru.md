@@ -9,7 +9,7 @@ loft — оверлей внутри TLS. Потоки мультиплекси�
 
 Протокол **loft/1.0**. Ссылка **`loft://`**. В YAML `kind: loft`.
 
-В этом репозитории открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.29`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
+В этом репозитории лежат открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.29`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
 
 ## Содержание
 
@@ -25,11 +25,11 @@ loft — оверлей внутри TLS. Потоки мультиплекси�
 
 ## Для операторов
 
-Обычные задачи: доступ в лабораторию снаружи, парк серверов, связь двух площадок. Участники предъявляют ClientHello в форме браузера. Если посредник переписывает рукопожатие, сессия не поднимается.
+Типичные задачи: доступ в сеть лаборатории снаружи, парк серверов, связь двух площадок. Участники предъявляют ClientHello такой же формы, как у браузера. Если промежуточный узел переписывает рукопожатие, сессия не поднимается.
 
 ## Скачать
 
-Сборки в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла — версия (`loft-1.0.29-macos-arm64.dmg`).
+Сборки опубликованы в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла указана версия (`loft-1.0.29-macos-arm64.dmg`).
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
@@ -39,17 +39,17 @@ loft — оверлей внутри TLS. Потоки мультиплекси�
 | Нода | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.29/loft-node-1.0.29-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.29/loft-node_1.0.29_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.29/loft-node-1.0.29-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.29/loft-node_1.0.29_amd64.deb) |
 | Панель | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.29/loft-panel-1.0.29-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.29/loft-panel_1.0.29_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.29/loft-panel-1.0.29-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.29/loft-panel_1.0.29_amd64.deb) |
 
-Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.29/loft-clients-1.0.29-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.29/loft-node-1.0.29-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.29/loft-panel-1.0.29-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.29/loft-android-1.0.29-SHA256SUMS.txt). DMG — приложение в строке меню, подпись ad-hoc. В архивах CLI: `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub (sideload): [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.29/loft-1.0.29-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.29/loft-1.0.29-android-tv.apk). Сборка Play без обновления из приложения.
+Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.29/loft-clients-1.0.29-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.29/loft-node-1.0.29-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.29/loft-panel-1.0.29-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.29/loft-android-1.0.29-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub (sideload): [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.29/loft-1.0.29-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.29/loft-1.0.29-android-tv.apk). Сборки для Play выходят без встроенного обновления.
 
 ## Приложение
 
-Клиент для macOS живёт в строке меню. Оттуда открывают оверлей, держат несколько именованных подключений, импортируют ссылку `loft://` или файл `.loft`. SOCKS5 и TUN остаются локальными.
+Клиент для macOS работает из строки меню. В нём поднимают оверлей, хранят несколько именованных подключений, импортируют ссылку `loft://` или файл `.loft`. SOCKS5 и TUN остаются локальными.
 
 | Статус | Подключения |
 |:--:|:--:|
 | <img src="docs/img/macos/ru-status.png" alt="Окно статуса loft" width="400"> | <img src="docs/img/macos/ru-connections.png" alt="Список подключений" width="400"> |
 
-Телефон на Android — системный VPN (`VpnService`). Именованные подключения, ссылка `loft://` или файл `.loft`; оверлей — одна строка VPN. GitHub APK сами обновляются из Dist; в сборках Play встроенного обновления нет. Android TV — Leanback, тот же движок.
+На телефоне Android клиент работает как системный VPN (`VpnService`). Поддерживаются именованные подключения, ссылка `loft://` и файл `.loft`; оверлей занимает одну строку VPN. APK с GitHub обновляются сами из Dist; в сборках для Play встроенного обновления нет. На Android TV — интерфейс Leanback и тот же движок.
 
 | Главная | Подключения |
 |:--:|:--:|
@@ -59,7 +59,7 @@ loft — оверлей внутри TLS. Потоки мультиплекси�
 
 ## Панель
 
-Веб-панель одного сервера loft: нода, её сети и члены, IP-адреса и внешние каналы, домены с DNS-записями и сертификатами, почта, пакеты, пользователи панели. Цель — поставить и настроить сервер loft без ручной правки файлов. Спецификация: [server/panel](server/panel/).
+Веб-панель одного сервера loft: нода, её сети и участники, IP-адреса и внешние каналы, домены с DNS-записями и сертификатами, почта, пакеты, пользователи панели. Цель — поставить и настроить сервер loft без ручной правки файлов. Спецификация: [server/panel](server/panel/).
 
 <img src="docs/img/panel/ru-overview.png" alt="Обзор loft-panel" width="800">
 
@@ -79,15 +79,15 @@ flowchart LR
 ```
 
 1. Приложения ходят в локальный SOCKS5 или TUN. `Holder` держит этот слушатель, пока фронт меняется.
-2. Потоки живут в одном mux и шифруются ChaCha20-Poly1305.
+2. Все потоки идут через один mux и шифруются ChaCha20-Poly1305.
 3. Снаружи это обычный HTTPS, поэтому перед нодой может стоять CDN или обратный прокси.
-4. Короткий обрыв паркует mux на `gap_hold_ms` (по умолчанию 8 с). Возобновление — свежий `0x02` и тот же `instance_id`; внутренний TCP не рвётся.
+4. При коротком обрыве mux паркуется на `gap_hold_ms` (по умолчанию 8 с). Для возобновления отправляется новый `0x02` с тем же `instance_id`; внутренний TCP при этом не рвётся.
 
 | | |
 |--|--|
 | [docs/protocol_ru.md](docs/protocol_ru.md) | Спецификация. По ней можно написать свою реализацию. |
 | [docs/architecture_ru.md](docs/architecture_ru.md) | Как устроен репозиторий. |
-| [docs/guide_ru.md](docs/guide_ru.md) | Собрать, настроить, запустить, Debian. |
+| [docs/guide_ru.md](docs/guide_ru.md) | Сборка, настройка, запуск, Debian. |
 | [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN: как подключить. |
 | [docs/keenetic_ru.md](docs/keenetic_ru.md) | Клиент KeeneticOS (Entware, OpkgTun). Каталог: [clients/Keenetic/](clients/Keenetic/). |
 | [docs/mikrotik_ru.md](docs/mikrotik_ru.md) | Клиент RouterOS 7 (контейнер). Каталог: [clients/MikroTik/](clients/MikroTik/). |
@@ -143,7 +143,7 @@ ALL_PROXY=socks5://127.0.0.1:1080 curl https://example.com
 
 ## Поддержка
 
-Свободный интернет стоит работы. Ваше спонсорство важно: оно держит протокол, ноду и клиенты независимыми.
+Работа над свободным интернетом не бесплатна. Ваше спонсорство помогает сохранять протокол, ноду и клиенты независимыми.
 
 | | Сеть | Адрес |
 |--|--|--|
@@ -155,7 +155,7 @@ ALL_PROXY=socks5://127.0.0.1:1080 curl https://example.com
 | Litecoin | Litecoin | `ltc1qq93zr9pjst9fy732qjuy0pltze4x4llcv30w79` |
 | Zcash | Zcash (прозрачный) | `t1RCtApkwLxjuG2dmR7SdnHSVR1Xrx2c6Bk` |
 
-ETH и USDT ERC-20 — один адрес Ethereum. TRX и USDT TRC20 — один адрес TRON. USDT — в сеть той строки. Подробности: [SUPPORT_ru.md](SUPPORT_ru.md).
+ETH и USDT ERC-20 — один адрес Ethereum. TRX и USDT TRC20 — один адрес TRON. USDT отправляйте в сети, указанной в той же строке. Подробности: [SUPPORT_ru.md](SUPPORT_ru.md).
 
 ## Лицензия
 

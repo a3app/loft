@@ -6,7 +6,7 @@
 
 客户端里的配置 `cdn: yandex` 不是协议能力。信道上仍是 `get` 前置。YAML 里写 Yandex 只是收紧头预算和 SNI。
 
-这个边缘**只过 GET**。POST 和 WebSocket 回 405。头长过约 12 KiB 给 413。源站必须在 5 秒内应答。CDN 只走 IPv4 去 origin。
+这个边缘**只过 GET**。POST 和 WebSocket 回 405，带 body 的 GET 回 413。单个请求的 Cookie 约 40 KiB 以内能过，但 16 个这样的请求同时在飞，边缘会断开 HTTP/2（GOAWAY `ENHANCE_YOUR_CALM`），所以头预算是 16 KiB。源站必须在 5 秒内应答。CDN 只走 IPv4 去 origin。
 
 截图是 Cloud CDN 控制台（目录 `default`）。例子里 origin 是 `loft.example.com`，分发是 `cdn.example.com`。屏上的标签和表一致。
 
@@ -265,12 +265,12 @@ outbounds:
     url: https://cdn.example.com
     path: /static/v3/build
     fingerprint: chrome
-    header_budget: 12288
+    header_budget: 16384
     inflight: 16
     insecure_skip_verify: false
 ```
 
-`internal/cdn/yandex.go` 里的 `cdn: yandex` 把预算钉在 12 KiB、inflight 16。边缘对 origin 大约维持 10–12 条 HTTP/1.1：32 个在飞 GET 会把 Cookie 的 TTFB 抬到约 900 ms，下载仍约 3 Mbit。显式写 `header_budget: 12288`，配置没接上时也能兜住。
+`internal/cdn/yandex.go` 里的 `cdn: yandex` 把预算钉在 16 KiB、inflight 16。边缘对 origin 大约维持 10–12 条 HTTP/1.1：32 个在飞 GET 会把 Cookie 的 TTFB 抬到约 900 ms，下载仍约 3 Mbit。显式写 `header_budget: 16384`，配置没接上时也能兜住。
 
 客户端 SNI 是 `cdn.example.com`。设了 `cdn` 时传输自己会这么做。
 
@@ -301,7 +301,7 @@ make bench
   -token "$LOFT_TOKEN"
 ```
 
-`-cdn yandex` 设 12 KiB 预算和 TLS 校验。这条边缘不上 WS。
+`-cdn yandex` 设 16 KiB 预算和 TLS 校验。这条边缘不上 WS。
 
 或者 CLI：
 
@@ -318,7 +318,8 @@ CLI `loft` / `loft-front` 不写端口时听 `127.0.0.1:18080`，免得占掉开
 
 | 现象 | 查什么 |
 |------|--------|
-| 413 | `header_budget` 超过约 12 KiB；客户端没写 `cdn: yandex` |
+| GOAWAY `ENHANCE_YOUR_CALM`、丢包 | `header_budget` 超过 16 KiB；客户端没写 `cdn: yandex` |
+| 413 | GET 带了 body；客户端没写 `cdn: yandex` |
 | 405 | WS 或 POST；Yandex 只要 GET |
 | 502 | 去 origin 的 Host/SNI 和节点证书对不上（`other.example.net` 盖不住 `loft.example.com`）；诱饵拼接了边缘 |
 | 504 / origin 超时 5 秒 | 去 origin 的 SNI/Host 不是 advertise 名（节点在拼接）；防火墙；origin 没有 IPv4 |
@@ -335,7 +336,7 @@ CLI `loft` / `loft-front` 不写端口时听 `127.0.0.1:18080`，免得占掉开
 
 | 文件 | 角色 |
 |------|------|
-| `internal/cdn/yandex.go` | 配置：GET，12 KiB，inflight 16 |
+| `internal/cdn/yandex.go` | 配置：GET，16 KiB，inflight 16 |
 | `internal/transport/get.go` | `setCDNHeaders`，Cookie / `X-Session` |
 | `clients/go/configs/client.yaml` | 出站例子 `cdn-get`，path `/static/v3/build` |
 | `clients/go/cmd/loft-bench` | `-cdn yandex`；path 要显式写 |

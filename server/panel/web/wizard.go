@@ -314,7 +314,7 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 // GET outbound. Query get=/ws=/h2= lists node fronts; YAML keeps one GET
 // outbound and a fronts: list so Hello offers mux caps for 0x04 attach.
 // Status remains source of truth for paths. conn is the connection name;
-// memberID is the outbound-name part «член».
+// memberID is the outbound-name part «участник».
 func (s *Server) memberLink(in admproto.NodeInfo, key, conn, memberID string) (string, string) {
 	host := in.Host
 	link := "loft://" + url.PathEscape(key) + "@" + host + "/?" + loftFrontQuery(in) + "#" + url.PathEscape(conn)

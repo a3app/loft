@@ -111,11 +111,11 @@
     [/^(\S+) points at (.+), this server is (.+)$/, m => `${m[1]} указывает на ${m[2]}, а этот сервер — ${m[3]}. Исправьте A-запись`],
     [/^http:\/\/(\S+)\/ does not reach the panel \((.*)\): port 80/, m => `Запрос http://${m[1]}/ не дошёл до панели (${m[2]}): порт 80 должен быть открыт и вести на этот сервер`],
     [/^Let's Encrypt could not check http:\/\/(\S+)\/: (.*)$/, m => `Let’s Encrypt не смог проверить http://${m[1]}/: ${m[2]}`],
-    [/^member keys are not kept$/, () => 'Ключи членов в панели не хранятся'],
-    [/^key is not stored$/, () => 'Ключ этого члена в панели не сохранён'],
-    [/^no stored key for this member$/, () => 'Ключ этого члена в панели не сохранён'],
-    [/^member id required$/, () => 'Укажите идентификатор члена'],
-    [/^member (\S+) already exists$/, m => `Член сети ${m[1]} уже есть — выберите другой идентификатор`],
+    [/^member keys are not kept$/, () => 'Ключи участников в панели не хранятся'],
+    [/^key is not stored$/, () => 'Ключ этого участника в панели не сохранён'],
+    [/^no stored key for this member$/, () => 'Ключ этого участника в панели не сохранён'],
+    [/^member id required$/, () => 'Укажите идентификатор участника'],
+    [/^member (\S+) already exists$/, m => `Участник сети ${m[1]} уже есть — выберите другой идентификатор`],
     [/^member id "(.*)": /, m => `Идентификатор «${m[1]}»: только латиница, цифры, точка, дефис, подчёркивание; до 64 знаков`],
     [/^network\.conf changed since it was opened/, () => 'network.conf изменили, пока вы его правили: обновите страницу и примените снова'],
     [/^loft-node did not start with (.*?)(, the (old|previous) .* is back)?: (.*)$/, m => `Нода не запустилась с новыми настройками${m[2] ? ', прежние возвращены' : ''}: ${m[4]}`],
@@ -307,9 +307,9 @@
         <section class="card"><div class="card-h"><h2>Нода loft</h2>${!st ? pill('нет данных') : st === 'active' ? pill('работает', 'ok') : pill(st, 'warn')}${L.can('node', 1) ? '<a href="#node" style="margin-left:auto">Подробно</a>' : ''}</div>
           <dl class="kv">${kv('Роль', esc(nd.role || '—'))}${kv('Адрес', esc(host || '—'), 'mono')}${kv('Слушает', esc(nd.listen || '—'), 'mono')}${kv('Фронты', esc((nd.fronts || []).join(', ') || 'get'))}
           ${kv('Прочий трафик', esc((nd.decoy || []).join(', ') || 'не пересылается'), 'mono')}${kv('Сертификат', cert)}${kv('Версия', esc(L.node && L.node.version || '—'))}${kv('Работает с', esc(since(L.node && L.node.since)))}</dl></section>
-        <section class="card"><div class="card-h"><h2>Члены сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
+        <section class="card"><div class="card-h"><h2>Участники сети</h2><a href="#members" style="margin-left:auto">Все</a></div>
           <div style="display:flex;gap:32px;margin-bottom:16px"><div><div class="big num">${all.filter(m => m.authorized).length}</div><div class="mute">включено</div></div><div><div class="big num">${all.filter(m => (EXTRA[m.id] || [])[3]).length}</div><div class="mute">в сети</div></div><div><div class="big num">${all.filter(m => !m.authorized).length}</div><div class="mute">выключено</div></div></div>
-          ${L.can('members') ? `<button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить члена</button>` : ''}</section>
+          ${L.can('members') ? `<button class="btn pri" type="button" onclick="openMember('new')">${ic('i-plus')}Добавить участника</button>` : ''}</section>
         <section class="card"><div class="card-h"><h2>Интернет</h2>${L.can('network', 1) ? '<a href="#adapters" style="margin-left:auto">Подробно</a>' : ''}</div>
           <dl class="kv">${kv('Основной IP', esc(main4 ? main4.ip : '—'), 'mono')}${more4.length ? kv('Доп. IP', esc(more4.map(a => a.ip).join(', ')), 'mono') : ''}${v6.length ? kv('IPv6', esc(v6.filter(a => !a.channel).map(a => a.ip).join(', ') || '—'), 'mono') : ''}${chans.map(a => kv('Канал «' + esc(a.channel) + '»', esc(a.ip), 'mono')).join('')}</dl></section>
         ${L.can('domains', 1) ? `<section class="card"><div class="card-h"><h2>Домены</h2><a href="#domains" style="margin-left:auto">Все</a></div>${domBody}</section>` : ''}
@@ -342,7 +342,7 @@
       const o = [];
       for (const g of MENU) for (const [k, t, pkg] of g.items) if ((!pkg || pkgOn(pkg)) && L.can(netRight(k), 1)) o.push({ g: 'Разделы', t, go: () => go(k) });
       o.push({ g: 'Разделы', t: 'Личный кабинет', go: () => go('me') });
-      if (L.can('members', 1)) NETS.forEach(n => n.members.forEach(m => o.push({ g: 'Члены сети', t: m.id, s: m.name || '', go: () => goThen('members', () => openMember(m.id)) })));
+      if (L.can('members', 1)) NETS.forEach(n => n.members.forEach(m => o.push({ g: 'Участники сети', t: m.id, s: m.name || '', go: () => goThen('members', () => openMember(m.id)) })));
       if (L.ch) L.ch.channels.forEach(c => o.push({ g: 'Внешние каналы', t: c.title || c.name, s: c.name, go: () => goThen('channels', () => L.openChan(c.name)) }));
       if (L.dm) L.dm.zones.forEach(z => o.push({ g: 'Домены', t: z.name, go: () => go('domains/' + z.name) }));
       if (L.ml) L.ml.boxes.forEach((b, i) => o.push({ g: 'Почта', t: b.address, go: () => { L.mlDom = b.address.split('@')[1]; goThen('mail', () => L.openBox(i)); } }));
@@ -480,7 +480,7 @@
       return ret;
     };
   }
-  afterNet('delMember', 'Член удалён');
+  afterNet('delMember', 'Участник удалён');
   afterNet('saveNet');
   afterNet('saveVlan');
   afterNet('addSeg');
@@ -520,7 +520,7 @@
   window.applyAll = async () => {
     closeDlg();
     toast('Применяю…');
-    if (await applyNow()) toast('Применено: нода перечитала сеть, переподключились только затронутые члены');
+    if (await applyNow()) toast('Применено: нода перечитала сеть, переподключились только затронутые участники');
     render();
   };
   window.revertAll = () => loadData().then(() => toast('Черновик сброшен к тому, что работает'));
@@ -535,7 +535,7 @@
       return;
     }
     const nid = $('#m2').value.trim();
-    if (findMember(nid)[1]) { toast('Такой член уже есть'); return; }
+    if (findMember(nid)[1]) { toast('Такой участник уже есть'); return; }
     let k;
     try { k = await api('POST', '/api/members/key', { id: nid }); } catch (e) { toast(e.message); return; }
     saveMember0(null);
@@ -553,7 +553,7 @@
   function showKey(id, k, note) {
     L.kf = { id, file: k.file };
     const head = L.keepKeys ? note : ('Показан один раз. ' + note);
-    dialog('Ключ члена ' + esc(id), head, `
+    dialog('Ключ участника ' + esc(id), head, `
       ${k.link ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))">${k.qr ? `<div class="qr" style="align-self:start">${k.qr}</div>` : ''}
         <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri" id="klink">${esc(k.link)}</div>
         <p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>` : ''}
@@ -870,12 +870,12 @@
     const st = L.st, n = st.notify, tz = L.tz;
     const zones = tz ? tz.zones.map(z => `<option ${z === tz.zone ? 'selected' : ''}>${esc(z)}</option>`).join('') : '<option>—</option>';
     return pageHead('Настройки', 'Настройки самой панели: адрес, язык, часовой пояс, вход, уведомления.') +
-      blk('Мастер установки', 'Пройти шаги первой настройки заново: домен, сертификат, первый член сети, пакеты. Уже сделанное не стирается.', `<button class="btn" type="button" onclick="S.wz.step=2;go('setup')">Открыть мастер</button>`) +
+      blk('Мастер установки', 'Пройти шаги первой настройки заново: домен, сертификат, первый участник сети, пакеты. Уже сделанное не стирается.', `<button class="btn" type="button" onclick="S.wz.step=2;go('setup')">Открыть мастер</button>`) +
       blk('Панель', '', grid(`<div><div class="fld"><label for="st1">Адрес панели</label><input id="st1" class="mono" value="${esc(st.panel || location.hostname)}" readonly></div><div class="hint">Имена и сертификаты меняются в мастере установки — шаги «Домен и DNS» и «Сертификат».</div></div>
         <div><div class="fld"><label for="st2">Язык по умолчанию</label><select id="st2" onchange="LIVE.stPanel()">${opts(LANGS, st.lang)}</select></div><div class="hint">Для страницы входа и тех, кто не выбрал язык сам.</div></div>
         <div><div class="fld"><label for="st3">Часовой пояс сервера</label><select id="st3" ${tz ? '' : 'disabled'} onchange="LIVE.stTz(this)">${zones}</select></div><div class="hint">По нему считается окно установки обновлений.</div></div>`) +
-        `<div><label class="chk"><input id="stKeep" type="checkbox" ${st.keep_member_keys ? 'checked' : ''} onchange="LIVE.stPanel()"><span>Хранить ключи членов</span></label><div class="hint">Ссылка, QR-код и файл .loft открываются снова без перевыпуска. Копия лежит в каталоге данных панели, права 0600. Выключение стирает копию в панели; файл на ноде остаётся.</div></div>`) +
-      blk('Файлы .loft', 'Какие части входят в имя исходящего в профиле члена. Ссылка loft:// не меняется.', loftOutboundBlock(st)) +
+        `<div><label class="chk"><input id="stKeep" type="checkbox" ${st.keep_member_keys ? 'checked' : ''} onchange="LIVE.stPanel()"><span>Хранить ключи участников</span></label><div class="hint">Ссылка, QR-код и файл .loft открываются снова без перевыпуска. Копия лежит в каталоге данных панели, права 0600. Выключение стирает копию в панели; файл на ноде остаётся.</div></div>`) +
+      blk('Файлы .loft', 'Какие части входят в имя исходящего в профиле участника. Ссылка loft:// не меняется.', loftOutboundBlock(st)) +
       blk('Вход', 'Блокировка адресов после неудачных входов — в <a href="#system">Системе</a>.', grid(`<div class="fld"><label for="st4">Выходить при бездействии</label><select id="st4" onchange="LIVE.stPanel()">${opts(IDLE, st.session_idle)}</select></div>
         <div class="fld"><label for="st5">Срок сессии</label><select id="st5" onchange="LIVE.stPanel()">${opts(SMAX, st.session_max)}</select></div>`)) +
       blk('Уведомления', 'Письма о событиях уходят через SMTP-сервер, указанный здесь.', `<div class="card">${grid(`<div class="fld"><label for="st6">Кому</label><input id="st6" type="email" value="${esc(n.to)}" placeholder="admin@example.net"></div>
@@ -903,7 +903,7 @@
     const name = loftObName(o, host, member, 'get');
     return `<div class="chk-row">
       <label class="chk"><input id="stLoftHost" type="checkbox" ${o.host ? 'checked' : ''} onchange="LIVE.stLoft()"><span>Хост</span></label>
-      <label class="chk"><input id="stLoftMember" type="checkbox" ${o.member ? 'checked' : ''} onchange="LIVE.stLoft()"><span>Член</span></label>
+      <label class="chk"><input id="stLoftMember" type="checkbox" ${o.member ? 'checked' : ''} onchange="LIVE.stLoft()"><span>Участник</span></label>
       <label class="chk"><input id="stLoftFront" type="checkbox" ${o.front ? 'checked' : ''} onchange="LIVE.stLoft()"><span>Фронт</span></label>
     </div>
     <pre class="mono" id="stLoftPrev" style="margin:12px 0 0">outbounds:\n  - name: ${esc(name)}</pre>
@@ -1116,7 +1116,7 @@
     return h;
   }
   function ruleText(r) {
-    const what = { member: `Член <b>${esc(r.value)}</b>`, tag: `Члены с тегом <b>${esc(r.value)}</b>`, vlan: `Сегмент <b>${esc(segTitle(r.value))}</b>`, list: `Адреса из списка <b class="mono">${esc(r.value)}</b>` }[r.match];
+    const what = { member: `Участник <b>${esc(r.value)}</b>`, tag: `Участники с тегом <b>${esc(r.value)}</b>`, vlan: `Сегмент <b>${esc(segTitle(r.value))}</b>`, list: `Адреса из списка <b class="mono">${esc(r.value)}</b>` }[r.match];
     return `${what} → <b>${esc(prName(r.via))}</b>`;
   }
   function rulesBlock() {
@@ -1188,7 +1188,7 @@
         <div class="fld"><label for="p3">Тип аутентификации</label><select id="p3" onchange="$('#pAuth').hidden=this.value==='n'"><option value="n">Не использовать</option><option value="a" ${c.px.user ? 'selected' : ''}>Логин и пароль</option></select></div>
         <div id="pAuth" ${c.px.user ? '' : 'hidden'} style="display:flex;flex-direction:column;gap:18px"><div class="fld"><label for="p4">Имя пользователя</label><input id="p4" value="${esc(c.px.user || '')}" autocomplete="off"></div>${pwF('p5', 'Пароль', c.px.has_password)}</div>
         ${advBox(`${chVia('cv', c.name, ['wg', 'ovpn', 'zt', 'px', 'sstp'], c.via, '')}
-          <div><div class="fld"><label for="p7">UDP</label><select id="p7">${[['direct', 'Напрямую'], ['proxy', 'Через прокси (только SOCKS5, если сервер умеет)'], ['block', 'Блокировать']].map(([k, l]) => `<option value="${k}" ${(c.px.udp || 'direct') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div><div class="hint">Так пойдут DNS и QUIC членов, у которых выход через этот прокси.</div></div>
+          <div><div class="fld"><label for="p7">UDP</label><select id="p7">${[['direct', 'Напрямую'], ['proxy', 'Через прокси (только SOCKS5, если сервер умеет)'], ['block', 'Блокировать']].map(([k, l]) => `<option value="${k}" ${(c.px.udp || 'direct') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div><div class="hint">Так пойдут DNS и QUIC участников, у которых выход через этот прокси.</div></div>
           ${chCheck(c)}`)}`;
     } else if (t === 'xr') {
       sub = 'Ссылка от провайдера или своего сервера Xray.';
@@ -1324,12 +1324,12 @@
     if (m === 'vlan') return segsOf().map(s => [String(s.id), s.id ? s.name + ' · VLAN ' + s.id : s.name]);
     return (L.ch.lists || []).map(v => [v, v]);
   }
-  L.ruleMatch = m => { const vals = ruleValues(m); $('#ru2').innerHTML = vals.length ? vals.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('') : '<option value="">—</option>'; $('#ruH').textContent = m === 'list' && !vals.length ? 'В node.conf нет списков адресов (lists).' : m === 'tag' && !vals.length ? 'Ни у одного члена нет тегов.' : m === 'vlan' && !vals.length ? 'Сегментов пока нет.' : ''; };
+  L.ruleMatch = m => { const vals = ruleValues(m); $('#ru2').innerHTML = vals.length ? vals.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('') : '<option value="">—</option>'; $('#ruH').textContent = m === 'list' && !vals.length ? 'В node.conf нет списков адресов (lists).' : m === 'tag' && !vals.length ? 'Ни у одного участника нет тегов.' : m === 'vlan' && !vals.length ? 'Сегментов пока нет.' : ''; };
   L.openRule = i => {
     const r = i >= 0 ? L.ch.rules.rules[i] : { match: 'member', value: '', via: ((L.ch.prios || []).find(p => p.id !== 'default') || prOf('default') || {}).id || 'direct' };
     const vals = ruleValues(r.match);
     dialog(i >= 0 ? `Правило ${i + 1}` : 'Новое правило', 'Чей трафик и куда он выходит.',
-      `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1" onchange="LIVE.ruleMatch(this.value)">${[['member', 'Член сети'], ['tag', 'Члены с тегом'], ['vlan', 'Сегмент'], ['list', 'Адреса из списка']].map(([k, l]) => `<option value="${k}" ${r.match === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      `<div class="fld"><label for="ru1">Кого касается</label><select id="ru1" onchange="LIVE.ruleMatch(this.value)">${[['member', 'Участник сети'], ['tag', 'Участники с тегом'], ['vlan', 'Сегмент'], ['list', 'Адреса из списка']].map(([k, l]) => `<option value="${k}" ${r.match === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
        <div><div class="fld"><label for="ru2">Кто или что</label><select id="ru2">${vals.map(([v, t]) => `<option value="${esc(v)}" ${v === r.value ? 'selected' : ''}>${esc(t)}</option>`).join('') || '<option value="">—</option>'}</select></div><div class="hint" id="ruH"></div></div>
        <div><div class="fld"><label for="ru3">Политика</label><select id="ru3">${exits(r.via)}</select></div>${(L.ch.prios || []).length ? '' : '<div class="hint">Политик пока нет — их создают в «Приоритетах подключений».</div>'}</div>`,
       `<button class="btn pri" type="button" onclick="LIVE.ruleSave(${i})">${i >= 0 ? 'Сохранить' : 'Добавить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
@@ -1356,7 +1356,7 @@
     if (S.prio === 'default') S.prio = 'direct';
     if (t !== 'use' && S.prio === 'block') S.prio = 'direct';
     if (!prioSys(S.prio) && !P.some(p => p.id === S.prio)) S.prio = 'direct';
-    return pageHead('Приоритеты подключений', 'Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию включает адаптер сервера и все каналы с выходом; члены без назначения идут по ней. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.') +
+    return pageHead('Приоритеты подключений', 'Политика — набор подключений для выхода в интернет и кто ею пользуется. Политика по умолчанию включает адаптер сервера и все каналы с выходом; участники без назначения идут по ней. Дополнительные политики — резервирование или многопутевая передача по выбранным каналам.') +
       `<div class="tabs" role="tablist">${[['lists', 'Политики доступа в интернет', 'iface-priorities'], ['use', 'Применение политик', 'iface-priorities/use']].map(([k, x, h]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="location.hash='${h}'">${x}</button>`).join('')}</div>` +
       (t === 'use' ? prioUse() : prioLists());
   }
@@ -1441,7 +1441,7 @@
     const p = prCur(), l = (p.limits || {})[n] || {};
     const sel = (id, v, lab) => `<div class="fld"><label for="${id}">${lab}</label><select id="${id}"><option value="0">Отключено</option>${[1, 5, 10, 20, 50, 100, 200, 500].concat(v && ![1, 5, 10, 20, 50, 100, 200, 500].includes(v) ? [v] : []).map(x => `<option value="${x}" ${v === x ? 'selected' : ''}>${x} Мбит/с</option>`).join('')}</select></div>`;
     dialog('Ограничение скорости', `Для подключения «${esc(tt(chOf(n)))}» в политике «${esc(p.title)}». Делится на всех, кто выходит по этой политике.`,
-      sel('pl1', l.in || 0, 'Входящий трафик (к членам)') + sel('pl2', l.out || 0, 'Исходящий трафик (от членов)'),
+      sel('pl1', l.in || 0, 'Входящий трафик (к участникам)') + sel('pl2', l.out || 0, 'Исходящий трафик (от участников)'),
       `<button class="btn pri" type="button" onclick="LIVE.prioLimSave('${esc(n)}')">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   };
   L.prioLimSave = n => { const limits = Object.assign({}, prCur().limits || {}); limits[n] = { in: +$('#pl1').value, out: +$('#pl2').value }; L.prioSet({ limits }); };
@@ -1483,10 +1483,10 @@
     return `<div class="pl-wrap use"><div class="pl-head"><span>Политика</span><span>Кто выходит по ней</span></div>
       ${prioSide(own, count, true)}
       <div class="pl-main" style="padding:16px 20px">
-       <div class="pl-sec">Члены сети</div><div class="m-chips">${m.length ? m.map(x => chip('member', x)).join('') : '<span class="mute">—</span>'}</div>
+       <div class="pl-sec">Участники сети</div><div class="m-chips">${m.length ? m.map(x => chip('member', x)).join('') : '<span class="mute">—</span>'}</div>
        <div class="pl-sec">Теги</div><div class="m-chips">${t.length ? t.map(x => chip('tag', x)).join('') : '<span class="mute">—</span>'}</div>
        <div class="pl-sec">Сегменты</div><div class="m-chips">${g.length ? g.map(s => chip('vlan', String(s.id), s.name)).join('') : '<span class="mute">—</span>'}</div>
-       <p class="hint">Перетащите плашку на политику слева. Правило члена важнее правила тега, тег важнее сегмента. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
+       <p class="hint">Перетащите плашку на политику слева. Правило участника важнее правила тега, тег важнее сегмента. Списки адресов (по сайтам) — во «Внешних каналах» → «Правила выхода».</p>
       </div></div>`;
   }
   L.chipDrag = (kind, v) => { dragChip = [kind, v]; };
@@ -1536,7 +1536,7 @@
 
   /* ── panel users: accounts, roles, sessions, log ── */
   L.us = null; L.sess = null; L.log = null;
-  const AREA_RU = { main: 'Обзор', node: 'Нода loft', members: 'Члены сети', segments: 'Сегменты сети', network: 'Интернет', domains: 'Домены', mail: 'Почта', packages: 'Пакеты', users: 'Пользователи', system: 'Система', settings: 'Настройки' };
+  const AREA_RU = { main: 'Обзор', node: 'Нода loft', members: 'Участники сети', segments: 'Сегменты сети', network: 'Интернет', domains: 'Домены', mail: 'Почта', packages: 'Пакеты', users: 'Пользователи', system: 'Система', settings: 'Настройки' };
   const ROLE_RU = { owner: 'Владелец', operator: 'Оператор', viewer: 'Наблюдатель' };
   const roleName = r => (r && (r.builtin || r.id === 'owner') ? ROLE_RU[r.id] : r && r.name) || '—';
   const roleOf = id => ((L.us && L.us.roles) || []).find(r => r.id === id);
@@ -1578,13 +1578,13 @@
       body = blk('Пользователи', '', (own ? `<div class="acts"><button class="btn pri" type="button" onclick="LIVE.openUser('')">${ic('i-plus')}Добавить пользователя</button></div>` : '') +
         table(['Логин', 'Роль', 'API-токен', 'Был', 'Состояние'], L.us.users.map(u => `<tr class="click" onclick="LIVE.openUser('${u.login}')"><td><b>${esc(u.login)}</b><span class="sub">${esc(u.name || '')}</span></td><td>${esc(roleName(roleOf(u.role)).toLowerCase())}</td><td class="mono mute">${u.token_tail ? 'lpt_…' + esc(u.token_tail) : 'нет'}</td><td>${agoT(u.seen)}</td><td>${st(u)}</td></tr>`).join('')));
     }
-    return pageHead('Пользователи панели', 'Кто входит в эту панель. Это не члены сети: у члена сети свой ключ и профиль подключения.') +
+    return pageHead('Пользователи панели', 'Кто входит в эту панель. Это не участники сети: у участника сети свой ключ и профиль подключения.') +
       `<div class="tabs" role="tablist">${[['list', 'Пользователи'], ['roles', 'Роли'], ['sess', 'Сессии'], ['log', 'Журнал']].map(([k, tt]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="LIVE.usersTab('${k}')">${tt}</button>`).join('')}</div>` + body;
   }
   // what a log entry says: the route and its target
   const OPS = {
     'POST /api/login': 'Вошёл в панель', 'POST /api/logout': 'Вышел', 'POST /api/invite': 'Принял приглашение и задал пароль', 'POST /api/setup': 'Создал владельца',
-    'POST /api/network/apply': 'Применил сеть loft', 'POST /api/members/key': 'Выдал ключ члену', 'POST /api/wizard/member': 'Создал члена сети', 'POST /api/node/restart': 'Перезапустил ноду loft',
+    'POST /api/network/apply': 'Применил сеть loft', 'POST /api/members/key': 'Выдал ключ участнику', 'POST /api/wizard/member': 'Создал участника сети', 'POST /api/node/restart': 'Перезапустил ноду loft',
     'POST /api/domain': 'Сменил имена сервера', 'POST /api/cert/issue': 'Выпустил сертификаты', 'POST /api/wizard/done': 'Закончил мастер установки',
     'POST /api/packages/apply': 'Запустил задание с пакетами', 'POST /api/packages/unit': 'Включил или выключил пакет', 'POST /api/update/settings': 'Изменил настройки обновлений', 'POST /api/update/check': 'Проверил обновления', 'POST /api/update/apply': 'Запустил обновление',
     'POST /api/net/change': 'Изменил адрес или маршрут', 'POST /api/net/confirm': 'Подтвердил изменение сети', 'POST /api/net/revert': 'Откатил изменение сети',
@@ -1782,7 +1782,7 @@
     if (!L.can('node', 1)) return pageHead('Нода loft', '') + `<div class="empty"><div class="empty-ic">${ic('i-gear', 28)}</div><b>Нет доступа</b><p>Вашей роли этот раздел не виден.</p></div>`;
     if (!L.nd) { loadNode().then(() => { if (S.route === 'node') render(); }); return pageHead('Нода loft', '') + '<p class="mute">Загружаю…</p>'; }
     const t = S.tab.node, tabs = [['main', 'Основное'], ['mask', 'Маскировка'], ['relay', 'Ретрансляторы и CDN'], ['lists', 'Списки'], ['access', 'Доступ']];
-    return pageHead('Нода loft', 'Сервер оверлея loft: на каком адресе он принимает членов, как прячется за веб-сервером и какие списки раздаёт клиентам.') + ndBar() +
+    return pageHead('Нода loft', 'Сервер оверлея loft: на каком адресе он принимает участников, как прячется за веб-сервером и какие списки раздаёт клиентам.') + ndBar() +
       `<div class="tabs" role="tablist">${tabs.map(([k, x]) => `<button class="tab ${t === k ? 'on' : ''}" role="tab" aria-selected="${t === k}" type="button" onclick="S.tab.node='${k}';render()">${x}</button>`).join('')}</div>` +
       ({ main: ndMain, mask: ndMask, relay: ndRelay, lists: ndLists, access: ndAccess }[t] || ndMain)();
   }
@@ -1790,10 +1790,10 @@
   function ndMain() {
     const c = L.nd, d = L.ndDraft, n = c.node || {}, udpDecoy = (c.decoy || []).length > 0;
     return blk('Состояние', '', `<div class="card"><dl class="kv" style="margin-bottom:16px"><div><dt>Роль</dt><dd>${c.role === 'relay' ? 'ретранслятор' : 'контроллер'}</dd></div><div><dt>Версия</dt><dd class="mono">${esc((n.version || '').replace(/^loft-node /, '').replace(/ \(.*/, '') || '—')}</dd></div><div><dt>Работает с</dt><dd>${esc(L.since(n.since))}</dd></div>
-        <div><dt>TCP 443</dt><dd>нода loft</dd></div><div><dt>UDP 443</dt><dd>${udpDecoy ? 'нода loft; чужие пакеты → веб-сервер' : 'нода loft'}</dd></div><div><dt>Ключей членов</dt><dd class="num">${c.member_keys}</dd></div></dl>
+        <div><dt>TCP 443</dt><dd>нода loft</dd></div><div><dt>UDP 443</dt><dd>${udpDecoy ? 'нода loft; чужие пакеты → веб-сервер' : 'нода loft'}</dd></div><div><dt>Ключей участников</dt><dd class="num">${c.member_keys}</dd></div></dl>
         <div class="acts" style="margin:0">${L.can('node') ? `<button class="btn" type="button" onclick="LIVE.ndRestart()">Перезапустить</button>` : ''}<button class="btn" type="button" onclick="LIVE.ndLog()">Журнал службы</button></div></div>`) +
-      blk('Подключение', 'Адрес для клиентов попадает в ссылки и профили членов.', grid(`
-        <div><div class="fld"><label for="nd1">Роль</label><input id="nd1" value="${c.role === 'relay' ? 'Ретранслятор' : 'Контроллер'}" readonly></div><div class="hint">Контроллер держит членов и ключи. Роль задаётся при установке ноды.</div></div>
+      blk('Подключение', 'Адрес для клиентов попадает в ссылки и профили участников.', grid(`
+        <div><div class="fld"><label for="nd1">Роль</label><input id="nd1" value="${c.role === 'relay' ? 'Ретранслятор' : 'Контроллер'}" readonly></div><div class="hint">Контроллер держит участников и ключи. Роль задаётся при установке ноды.</div></div>
         <div class="fld"><label for="nd2">Слушать</label><input id="nd2" class="mono" value="${esc(d.listen)}" ${dis()} onchange="LIVE.ndSet('listen',this.value.trim())"></div>
         <div><div class="fld"><label for="nd3">Адрес для клиентов</label><input id="nd3" class="mono" value="${esc(c.advertise.replace(/^https:\/\//, ''))}" readonly></div><div class="hint">Меняется в мастере установки — шаг «Домен и DNS».</div></div>
         <div><div class="fld"><label for="nd4">Сертификат</label><input id="nd4" class="mono" value="${esc((c.cert_names || []).join(', ') || '—')}${c.cert_until ? ' · до ' + new Date(c.cert_until).toLocaleDateString(LOC()) : ''}" readonly></div><div class="hint">Выпускается в мастере установки и продлевается сам.</div></div>`)) +
@@ -1806,11 +1806,11 @@
     return blk('Веб-сервер за нодой', 'Всё, что не похоже на клиента loft, нода молча передаёт веб-серверу. Снаружи сервер выглядит как обычный сайт.',
         table(['Адрес', '', { t: '', r: 1 }], d.decoy.map((a, i) => `<tr><td class="mono">${esc(a)}</td><td>${i ? '' : pill('основной · панель и сайт')}</td><td class="r"><div class="cell-acts">${i && own ? `<button class="icb del" type="button" aria-label="Удалить" onclick="LIVE.ndDecoyDel(${i})">${ic('i-trash')}</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="3" class="mute">Нет: всё постороннее сбрасывается.</td></tr>') +
         (own ? `<div class="acts" style="margin-top:16px"><button class="btn" type="button" onclick="LIVE.ndDecoyAdd()">${ic('i-plus')}Добавить адрес</button></div>` : '') + '<p class="hint">Первый адрес принимает постороннее; следующие — запасные.</p>') +
-      blk('Маскировка рукопожатия', 'Рукопожатие loft прячется в обычный TLS. Ключ маскировки выводится из токена ноды и входит в ссылки членов (pbk).',
+      blk('Маскировка рукопожатия', 'Рукопожатие loft прячется в обычный TLS. Ключ маскировки выводится из токена ноды и входит в ссылки участников (pbk).',
         `<div class="card"><label class="sw" style="margin-bottom:16px"><input type="checkbox" ${d.mask ? 'checked' : ''} ${dis()} aria-label="Маскировка" onchange="LIVE.ndSet('mask',this.checked)"><i></i><span>Маскировать рукопожатие</span></label>
         <div class="uri" id="ndpbk" style="margin-bottom:12px">${esc(L.nd.mask_pub || '—')}</div>${L.nd.mask_pub ? `<div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.copy('#ndpbk')">Копировать</button></div>` : ''}</div>`) +
       blk('Сайт для посторонних', 'Что видит браузер, открывший адрес ноды, если веб-сервера за нодой нет.', grid(`<div class="fld"><label for="mk1">Каталог сайта</label><input id="mk1" class="mono" value="${esc(d.cover_dir)}" placeholder="встроенная страница" ${dis()} onchange="LIVE.ndSet('cover_dir',this.value.trim())"></div>`)) +
-      blk('Пути запросов', 'Пути, похожие на статику и API обычного сайта. Менять их стоит, только если их кто-то начал блокировать — новые ссылки членам придётся выдать заново.', grid(
+      blk('Пути запросов', 'Пути, похожие на статику и API обычного сайта. Менять их стоит, только если их кто-то начал блокировать — новые ссылки участникам придётся выдать заново.', grid(
         [['get_path', 'GET'], ['ws_path', 'WebSocket'], ['h2_path', 'HTTP/2 и HTTP/3'], ['roster_path', 'Список ретрансляторов'], ['lists_path', 'Списки']].map(([k, l]) => `<div class="fld"><label for="pp-${k}">${l}</label><input id="pp-${k}" class="mono" value="${esc(d[k])}" ${dis()} onchange="LIVE.ndSet('${k}',this.value.trim())"></div>`).join('')));
   }
   L.ndDecoyDel = i => { const a = L.ndDraft.decoy.slice(); a.splice(i, 1); L.ndSet('decoy', a); };
@@ -1821,10 +1821,10 @@
     const d = L.ndDraft, own = L.can('node'), live = ((L.pres || {}).relays || []);
     const st = r => { const l = live.find(x => x.id === r.id); return r.drain ? [pill('выведен'), '0', '—'] : l ? [pill('в сети', 'ok'), String(l.conns), agoT(l.beat)] : [pill('не в сети'), '—', '—']; };
     const cf = (d.cdn_peers || []).length;
-    return blk('Ретрансляторы', 'Другие серверы, которые принимают членов и передают трафик сюда. Ключей и адресов членов у них нет.',
+    return blk('Ретрансляторы', 'Другие серверы, которые принимают участников и передают трафик сюда. Ключей и адресов участников у них нет.',
         `<div class="acts">${own ? `<button class="btn pri" type="button" onclick="LIVE.openRelay(-1)">${ic('i-plus')}Добавить ретранслятор</button>` : ''}<div class="fld" style="margin:0;min-width:min(260px,100%)"><label for="rl0">Кто может подключиться</label><select id="rl0" ${dis()} onchange="LIVE.ndSet('enrol',this.value)"><option value="list" ${d.enrol === 'list' ? 'selected' : ''}>Только из списка</option><option value="open" ${d.enrol === 'open' ? 'selected' : ''}>Любой с токеном</option></select></div></div>` +
         table(['Ретранслятор', 'Адрес для клиентов', 'Фронты', 'Вес', 'Состояние', 'Подключений', 'Отклик'], d.relays.map((r, i) => { const s = st(r); return `<tr class="click" onclick="LIVE.openRelay(${i})"><td><b>${esc(r.id)}</b></td><td class="mono">${esc((r.url || '—').replace(/^https:\/\//, ''))}</td><td>${esc((r.fronts || []).join(', ') || 'get')}</td><td class="num">${r.weight || 100}</td><td>${s[0]}</td><td class="num">${s[1]}</td><td>${s[2]}</td></tr>`; }).join('') || `<tr><td colspan="7" class="mute">Ретрансляторов нет.</td></tr>`)) +
-      blk('CDN', 'Члены могут подключаться через CDN по фронту GET. Нода принимает запросы со своим именем от адресов CDN.',
+      blk('CDN', 'Участники могут подключаться через CDN по фронту GET. Нода принимает запросы со своим именем от адресов CDN.',
         `<div class="card"><label class="chk" style="margin-bottom:16px"><input type="checkbox" ${cf ? 'checked' : ''} ${dis()} onchange="LIVE.ndCDN(this.checked)">Cloudflare</label>
         <dl class="kv"><div><dt>Диапазоны CDN</dt><dd>${cf ? cf + ' ' + plural(cf, 'подсеть', 'подсети', 'подсетей') : 'нет'}</dd></div></dl>${cf && own ? `<div class="acts" style="margin:16px 0 0"><button class="btn sm" type="button" onclick="LIVE.ndCDN(true)">Обновить диапазоны</button></div>` : ''}</div>`);
   }
@@ -1891,13 +1891,13 @@
     const d = L.ndDraft, own = L.can('node'), pub = L.nd.controller_pub || '';
     return blk('Ключ контроллера', 'Клиенты сверяют по нему подпись списка ретрансляторов и списков. Входит в файл .loft.',
         `<div class="uri" id="ctlpub" style="margin-bottom:12px">${pub ? 'ed25519:' + esc(pub) : '—'}</div><div class="acts"><button class="btn sm" type="button" onclick="LIVE.copy('#ctlpub')">Копировать</button></div>`) +
-      blk('Общий токен', 'Вход по одному токену вместо личных ключей. Работает, только пока в сети нет ни одного члена с ключом.',
+      blk('Общий токен', 'Вход по одному токену вместо личных ключей. Работает, только пока в сети нет ни одного участника с ключом.',
         `<label class="sw"><input type="checkbox" ${d.auth_shared ? 'checked' : ''} ${dis()} aria-label="Общий токен" onchange="LIVE.ndSet('auth_shared',this.checked)"><i></i><span>Разрешить вход по общему токену</span></label>`) +
-      (own ? blk('Смена токена ноды', 'Меняет ключ маскировки (pbk) и токен для ретрансляторов. Ключ контроллера и ключи членов остаются; при включённой маскировке ссылки членов придётся выдать заново.',
+      (own ? blk('Смена токена ноды', 'Меняет ключ маскировки (pbk) и токен для ретрансляторов. Ключ контроллера и ключи участников остаются; при включённой маскировке ссылки участников придётся выдать заново.',
         `<button class="btn danger" type="button" onclick="LIVE.ndTokenAsk()">Сменить токен…</button>`) : '') +
       blk('Диагностика', '', `<label class="sw"><input type="checkbox" ${d.trace ? 'checked' : ''} ${dis()} aria-label="Журнал сессий" onchange="LIVE.ndSet('trace',this.checked)"><i></i><span>Писать журнал сессий <span class="mute">/var/lib/loft/trace.log</span></span></label>`);
   }
-  L.ndTokenAsk = () => dialog('Сменить токен ноды?', 'Нода перезапустится. Ретрансляторам нужен будет новый токен; при маскировке члены получат новый ключ pbk только с новыми ссылками.', '',
+  L.ndTokenAsk = () => dialog('Сменить токен ноды?', 'Нода перезапустится. Ретрансляторам нужен будет новый токен; при маскировке участники получат новый ключ pbk только с новыми ссылками.', '',
     `<button class="btn danger" type="button" onclick="LIVE.ndToken()">Сменить токен</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
   L.ndToken = async () => { closeDlg(); toast('Меняю токен: нода перезапускается…'); try { const v = await job('/api/nodecfg/token', {}); L.nd = v; L.ndDraft = JSON.parse(JSON.stringify(v)); toast('Токен ноды сменён'); } catch (e) { toast(e.message); } render(); };
   L.ndRestart = async () => { toast('Перезапускаю ноду…'); try { await job('/api/node/restart', {}); toast('Нода перезапущена'); await loadNode(); } catch (e) { toast(e.message); } render(); };
@@ -2098,7 +2098,7 @@
     return JAIL[b.jail] || b.jail;
   };
   const SCHED = { daily: 'ежедневно 04:00', weekly: 'по воскресеньям 04:00', off: 'не делать сами' };
-  const PARTS = { node: 'Нода loft: настройки, сети, ключи членов', panel: 'Панель: пользователи, домены, каналы, почтовые настройки', mail: 'Почта: ящики и письма' };
+  const PARTS = { node: 'Нода loft: настройки, сети, ключи участников', panel: 'Панель: пользователи, домены, каналы, почтовые настройки', mail: 'Почта: ящики и письма' };
   const SKIND = { s3: 'S3', sftp: 'SFTP', dir: 'Каталог' };
   const PNAME = { node: 'нода', panel: 'панель', mail: 'почта' };
   const RIGHTS = { '': 'без sudo', password: 'sudo — с паролем', nopasswd: 'sudo — без пароля' };
@@ -2133,7 +2133,7 @@
   function backupBlock(own) {
     const B = L.sy.bk;
     if (!B) return blk('Резервные копии', '', `<p class="mute">${esc(L.sy.berr || '')}</p>`);
-    const parts = 'нода и члены, панель' + (B.mail && pkgOn('Почтовый сервер') ? ', почта' : '');
+    const parts = 'нода и участники, панель' + (B.mail && pkgOn('Почтовый сервер') ? ', почта' : '');
     const J = B.job && B.job.state === 'running' ? B.job : null;
     let h = '';
     if (!B.key) h += `<div class="note" role="status"><span><b>Фраза восстановления не задана.</b> <span class="mute">Без неё копии не делаются: ею шифруется каждая копия.</span></span>${own ? `<span class="note-acts"><button class="btn sm" type="button" onclick="LIVE.newPhrase()">Задать фразу</button></span>` : ''}</div>`;
@@ -2144,7 +2144,7 @@
     h += table(['Когда', 'Размер', 'Куда', 'Итог', { t: '', r: 1 }], B.runs.map(r => `<tr><td>${whenT(r.at)}</td><td class="num">${r.size ? bytes(r.size) : '—'}</td><td>${r.kind === 'restore' ? 'восстановление · ' + r.parts.map(p => PNAME[p] || esc(p)).join(', ') : esc(stLabel(B, r.store))}</td><td style="white-space:normal">${res(r)}</td><td class="r">${own && r.kind === 'backup' && r.ok && !J ? `<button class="btn sm" type="button" onclick="LIVE.openRestore('${r.id}')">Восстановить</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="5" class="mute">Копий ещё не было.</td></tr>`);
     if (J && !L.syPoll) { L.syPoll = 1; setTimeout(async () => { L.syPoll = 0; await loadSystem(); syRe(); }, 3000); }
     else if (!J && B.runs.some(r => r.job || r.upload) && !L.syPoll) { L.syPoll = 1; setTimeout(async () => { L.syPoll = 0; await loadSystem(); syRe(); }, 4000); }
-    return blk('Резервные копии', 'Нода и члены сети, панель, почта. Копия шифруется ключом фразы восстановления: без фразы её не открыть даже на этом сервере.', h);
+    return blk('Резервные копии', 'Нода и участники сети, панель, почта. Копия шифруется ключом фразы восстановления: без фразы её не открыть даже на этом сервере.', h);
   }
 
   function linuxBlock(own) {
@@ -2563,7 +2563,7 @@
       }
       const nowCell = i => { const x = W.now && W.now.records[i]; return !x ? '<span class="mute">…</span>' : x.check === 'ok' ? pill('уже есть', 'ok') : x.now.length ? `<span class="mono">${esc(x.now.join(', '))}</span>` : '<span class="mute">нет записи</span>'; };
       body = `<h1>Домен сервера</h1><p class="fs-d">Клиенты подключаются по этому имени, на него же выпускается сертификат. Через DNS-провайдера панель сама создаст записи на адрес <span class="mono">${esc(ips.join(', ') || '—')}</span>.</p>
-        <div><div class="fld"><label for="w2a">Имя для подключения клиентов</label><input id="w2a" class="mono" value="${esc(name)}" placeholder="api.example.net" oninput="LIVE.W.name=this.value;LIVE.W.check=null;LIVE.W.zone=LIVE.W.zone||''"></div><div class="hint">Попадает в ссылки loft:// и профили членов сети.${W.now && W.now.reg_until ? ` Зона ${esc(zone)} · регистрация до ${new Date(W.now.reg_until).toLocaleDateString(LOC())}.` : ''}</div></div>${line(W.check)}
+        <div><div class="fld"><label for="w2a">Имя для подключения клиентов</label><input id="w2a" class="mono" value="${esc(name)}" placeholder="api.example.net" oninput="LIVE.W.name=this.value;LIVE.W.check=null;LIVE.W.zone=LIVE.W.zone||''"></div><div class="hint">Попадает в ссылки loft:// и профили участников сети.${W.now && W.now.reg_until ? ` Зона ${esc(zone)} · регистрация до ${new Date(W.now.reg_until).toLocaleDateString(LOC())}.` : ''}</div></div>${line(W.check)}
         <label class="chk"><input id="w2sep" type="checkbox" ${W.sep ? 'checked' : ''} onchange="LIVE.W.sep=this.checked;LIVE.W.pcheck=null;LIVE.redrawKeep()"><span>Отдельное имя для панели<span class="hint" style="display:block;margin:0">Тот, кто проверяет адрес ноды, увидит обычную страницу веб-сервера и сертификат только с именем ноды — панель там не найти. Оба имени указывают на один IP, и по истории DNS это видно.</span></span></label>
         ${W.sep ? `<div class="fld"><label for="w2p">Имя панели</label><input id="w2p" class="mono" value="${esc(panel)}" placeholder="panel.example.net" oninput="LIVE.W.panel=this.value;LIVE.W.pcheck=null"></div>${line(W.pcheck)}` : ''}
         <div><div class="fld"><label for="w2z">Зона</label><input id="w2z" class="mono" value="${esc(zone)}" placeholder="example.net" list="w2zl" oninput="LIVE.W.zone=this.value"></div><div class="hint">В этой зоне панель ведёт записи. Подсказки — из зон провайдера.</div></div><datalist id="w2zl">${(W.pz || []).map(x => `<option value="${esc(x)}">`).join('')}</datalist>
@@ -2595,7 +2595,7 @@
       skip = all ? '' : 'Оставить самоподписанный';
     } else if (s === 4) {
       const m = W.member;
-      body = `<h1>Первый член сети</h1><p class="fs-d">Устройство, которое подключится к серверу первым. Остальных — потом в «Членах сети».</p>` + (m ? `
+      body = `<h1>Первый участник сети</h1><p class="fs-d">Устройство, которое подключится к серверу первым. Остальных — потом в «Участниках сети».</p>` + (m ? `
         <p class="note-s">${pill('создан', 'ok')} Ключ показан один раз — сохраните ссылку или файл.</p>
         <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))">${m.qr ? `<div class="qr" style="align-self:start">${m.qr}</div>` : ''}
         <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div><div class="uri" id="w4link">${esc(m.link)}</div>
@@ -2752,7 +2752,7 @@
     if (s === 4) {
       if (W.member) return advance();
       const id = $('#w4b').value.trim(), name = $('#w4a').value.trim();
-      return work('Создаю члена сети…', async () => {
+      return work('Создаю участника сети…', async () => {
         W.member = await job('/api/wizard/member', { id, name });
         await loadData();
       });

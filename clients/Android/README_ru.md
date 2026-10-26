@@ -2,11 +2,11 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-Приложение телефона + `VpnService`. Сессия — Go [`clients/mobile`](../mobile/). **Java 17**, не Kotlin: gomobile уже отдаёт Java.
+Приложение для телефона + `VpnService`. Сессию ведёт Go-код из [`clients/mobile`](../mobile/). **Java 17**, не Kotlin: gomobile уже отдаёт Java.
 
 Протокол: [docs/protocol.md](../../docs/protocol.md). Интеграция: [docs/android.md](../../docs/android.md). URI импорта: [docs/share.md](../../docs/share.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет телефона: [design/index.html](design/index.html). Макет TV: [design/tv/](design/tv/).
 
-Overlay — обычная сеть Android: одна системная строка VPN, `protect(fd)` на каждом сокете фронта, `NetworkCallback` → `NotifyPathChange` (свежий `0x02`, тот же `instance_id`). Dual-stack из Snapshot. Фронты: get, ws, h2, quic, h3, l3. `connect` — только на ноде.
+Оверлей — полноценная сеть Android: одна системная строка VPN, `protect(fd)` на каждом сокете фронта, `NetworkCallback` → `NotifyPathChange` (свежий `0x02`, тот же `instance_id`). Dual-stack берётся из Snapshot. Фронты: get, ws, h2, quic, h3, l3. `connect` есть только на ноде.
 
 ## Дерево
 
@@ -23,7 +23,7 @@ clients/Android/
   ../mobile/               общий движок Go
 ```
 
-minSdk **26** (GUI / канал уведомлений). AAR движка собирается под API **24**. targetSdk **36**. `.so` arm64 — страницы 16 КиБ.
+minSdk **26** (GUI / канал уведомлений). AAR движка собирается под API **24**. targetSdk **36**. `.so` для arm64 совместимы со страницами 16 КиБ.
 
 ## Сборка
 
@@ -32,14 +32,14 @@ make android                 # из корня репозитория; нуже�
 # или: make -C clients/Android
 ```
 
-Пишет `dist/clients/Android/app-debug.apk`, `app-tv-debug.apk`, `loft.app`, `loft-tv.app` и `loft-gtv.app`. Промежуточное — в `dist/clients/Android/gradle/`, не в `clients/Android/`. Три лаунчера macOS, у каждого свой AVD; serial привязан к этому AVD, их можно держать вместе. Стрелки на TV — D-pad.
+Результат: `dist/clients/Android/app-debug.apk`, `app-tv-debug.apk`, `loft.app`, `loft-tv.app` и `loft-gtv.app`. Промежуточные файлы остаются в `dist/clients/Android/gradle/`, а не в `clients/Android/`. Три лаунчера для macOS, у каждого свой AVD; serial закреплён за своим AVD, поэтому их можно запускать одновременно. На TV стрелки работают как D-pad.
 
 | App | AVD | Образ | APK | Activity |
 |--|--|--|--|--|
-| `loft.app` | `loft-phone` | AOSP телефон API 34 | телефон | `MainActivity` — loft, Browser, Apps, Settings на домашнем экране |
+| `loft.app` | `loft-phone` | AOSP телефон API 34 | телефон | `MainActivity`; на домашнем экране закреплены loft, Browser, Apps, Settings |
 | `loft-tv.app` | `loft-tv` | AOSP Android TV API 36 x86_64, `tv_1080p` | TV | `TvActivity` |
 | `loft-gtv.app` | `loft-gtv` | Google TV API 36 x86_64, `tv_1080p` | TV | `TvActivity` |
 
-AVD для TV один раз: `make -C clients/Android avds` (`emulator/setup-avds`). В AOSP нет Chrome; Browser на телефоне — WebView Shell. Intel Mac + AMD GPU — SwiftShader (`-gpu swiftshader_indirect`); host GLES даёт чёрное окно. Журналы: `~/Library/Logs/loft-emulator.log`, `loft-tv-emulator.log`, `loft-gtv-emulator.log`.
+AVD для TV создаются один раз: `make -C clients/Android avds` (`emulator/setup-avds`). В AOSP нет Chrome; в образе телефона роль Browser играет WebView Shell. На Intel Mac с AMD GPU используется SwiftShader (`-gpu swiftshader_indirect`): с host GLES окно остаётся чёрным. Журналы: `~/Library/Logs/loft-emulator.log`, `loft-tv-emulator.log`, `loft-gtv-emulator.log`.
 
-Id: телефон `app.loft.android`, TV `app.loft.android.tv`. Тип VPN: `VpnService`. Одна системная строка на устройство. Flavor `tv` — Leanback. Канал `github` (по умолчанию) — Dist/sideload с обновлением из приложения; `store` — Play, код обновления вырезан. `make -C clients/Android release` подписывает `secrets/android-github.p12` и пишет `loft-{ver}-android.apk` и `loft-{ver}-android-tv.apk`. Первый ключ: `make -C clients/Android github-key`.
+Id: телефон `app.loft.android`, TV `app.loft.android.tv`. Тип VPN: `VpnService`. Одна системная строка VPN на устройство. Flavor `tv` — Leanback. Канал `github` (по умолчанию) — Dist/sideload с обновлением из самого приложения; `store` — для Play, код обновления из него вырезан. `make -C clients/Android release` подписывает сборку ключом `secrets/android-github.p12` и выдаёт `loft-{ver}-android.apk` и `loft-{ver}-android-tv.apk`. Первый ключ: `make -C clients/Android github-key`.

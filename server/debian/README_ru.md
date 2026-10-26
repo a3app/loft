@@ -4,11 +4,11 @@
 
 ПО 1.0.29. Протокол 1.0. Спецификация: [docs/protocol_ru.md](../../docs/protocol_ru.md). Эксплуатация: [docs/guide_ru.md](../../docs/guide_ru.md).
 
-Этот каталог — Debian-раскладка ноды: POSIX-установщик, unit systemd, sysctl, конфиг команды и `.deb`.
+Здесь собрано всё для установки ноды на Debian: POSIX-установщик, unit systemd, sysctl, командный конфиг и `.deb`.
 
 ---
 
-## 1. Раскладка на машине
+## 1. Размещение файлов на машине
 
 | Путь | Роль |
 |------|------|
@@ -18,15 +18,15 @@
 | `/etc/loft/loft.env` | `LOFT_TOKEN` (mode 0640, группа `loft`) |
 | `/etc/loft/tls/fullchain.pem` | публичный сертификат |
 | `/etc/loft/tls/privkey.pem` | закрытый ключ |
-| `/var/lib/loft/network.conf` | CIDR оверлея, члены, пиры |
-| `/var/lib/loft/members.keys` | ключи членов открытым текстом (mode 0600), выдаёт оператор |
+| `/var/lib/loft/network.conf` | CIDR оверлея, участники, пиры |
+| `/var/lib/loft/members.keys` | ключи участников открытым текстом (mode 0600), их выдаёт оператор |
 | `/var/lib/loft/controller.seed` | Ed25519 seed, пишется при первом старте |
 | `/etc/systemd/system/loft-node.service` | unit |
 | `/etc/sysctl.d/99-loft.conf` | UDP-буферы для QUIC; ping_group_range для ICMP в интернет |
 
-Процесс идёт от пользователя `loft`. TCP и UDP 443 биндит с `CAP_NET_BIND_SERVICE`. Токен на командной строке не бывает.
+Процесс работает от пользователя `loft`. TCP и UDP 443 он занимает благодаря `CAP_NET_BIND_SERVICE`. Токен никогда не передаётся в командной строке.
 
-Новая установка пишет `fronts get` и `auth shared disable`, и ключ `operator` в `members.keys`. `/root/loft-client.yaml` — только GET, с этим `lt_`, не `LOFT_TOKEN`. `LOFT_TOKEN` в `loft.env` остаётся секретом ноды (mask, seed). Старый оверлей на одном токене: `auth shared enable` в `node.conf`, пока `members.keys` пуст. После обновления бинарника нода без этой строки и без ключей клиентов не пустит, пока не добавите строку или не выдадите ключи. `ws`, `h2`, `quic`, `h3` — явно в `fronts`.
+Новая установка записывает `fronts get` и `auth shared disable`, а также ключ `operator` в `members.keys`. `/root/loft-client.yaml` работает только через GET и использует этот `lt_`, а не `LOFT_TOKEN`. `LOFT_TOKEN` в `loft.env` остаётся секретом ноды (mask, seed). Чтобы сохранить старый оверлей на одном токене, пропишите `auth shared enable` в `node.conf`, пока `members.keys` пуст. После обновления бинарника нода на общем токене без этой строки не пустит клиентов, пока вы не добавите строку или не выдадите ключи. `ws`, `h2`, `quic`, `h3` включаются явным перечислением в `fronts`.
 
 ---
 
@@ -38,7 +38,7 @@
 make dist-node
 ```
 
-Пишет `dist/node/linux-amd64/` и `dist/node/linux-arm64/` (tarball, распакованный установщик, `.deb`) плюс `dist/node/SHA256SUMS`. Раскладка: [DIST_ru.md](DIST_ru.md).
+Команда создаёт `dist/node/linux-amd64/` и `dist/node/linux-arm64/` (tarball, распакованный установщик, `.deb`) плюс `dist/node/SHA256SUMS`. Состав: [DIST_ru.md](DIST_ru.md).
 
 На хосте Debian:
 
@@ -52,14 +52,14 @@ sudo ./install.sh
 
 | Флаг | Смысл |
 |------|---------|
-| `--dry-run` | печать шагов, ничего не менять |
+| `--dry-run` | напечатать шаги, ничего не меняя |
 | `--unattended`, `-y` | без вопросов |
 | `--role=controller` | по умолчанию |
 | `--role=relay` | TLS-край; нужны `--controller=` и `--id=` |
 | `--advertise=https://host` | публичный URL в roster |
-| `--listen=:443` | адрес бинда |
+| `--listen=:443` | адрес для прослушивания |
 | `--decoy=host:443` | сплайс origin |
-| `--mask` | маска чужим сертификатом (с decoy) |
+| `--mask` | маскировка чужим сертификатом (вместе с decoy) |
 | `--cert=` `--key=` | готовые PEM; иначе самоподписанный |
 | `--peers=hub` | политика оверлея (`hub` \| `mesh` \| `vlan`) |
 | `--token=lt_…` | иначе генерируется |
@@ -67,9 +67,9 @@ sudo ./install.sh
 | `--uninstall` | снять службу, данные оставить |
 | `--remove` | снять службу и стереть данные |
 
-Повторный запуск меняет бинарник и перезапускает unit. Токен, конфиг и сертификаты остаются.
+Повторный запуск заменяет бинарник и перезапускает unit. Токен, конфиг и сертификаты сохраняются.
 
-Принимаются Debian 12 и 13, Ubuntu 22.04 / 24.04 / 26.04. Debian 10/11 и Ubuntu 16/18/20 отклоняются. Прочие Debian-семейства спрашиваются.
+Поддерживаются Debian 12 и 13, Ubuntu 22.04 / 24.04 / 26.04. На Debian 10/11 и Ubuntu 16/18/20 установщик откажется работать. Для прочих систем семейства Debian он спросит подтверждение.
 
 ---
 
@@ -87,13 +87,13 @@ dpkg -i dist/node/linux-amd64/loft-node_*_amd64.deb
 systemctl enable --now loft-node
 ```
 
-`postinst` создаёт пользователя, токен, самоподписанный сертификат и дефолтный конфиг. Unit не стартует. `apt purge loft-node` удаляет `/etc/loft` и `/var/lib/loft`.
+`postinst` создаёт пользователя, токен, самоподписанный сертификат и конфиг по умолчанию. Unit при этом не запускается. `apt purge loft-node` удаляет `/etc/loft` и `/var/lib/loft`.
 
 ---
 
 ## 4. После установки
 
-`install.sh` пишет `/root/loft-client.yaml` (mode 0600) с токеном, advertise URL и `controller_pub`. `insecure_skip_verify` включён, пока сертификат самоподписанный. Замените PEM на публичный сертификат и выключите поле.
+`install.sh` пишет `/root/loft-client.yaml` (mode 0600) с токеном, advertise URL и `controller_pub`. Пока сертификат самоподписанный, `insecure_skip_verify` включён. Замените PEM на публичный сертификат и выключите это поле.
 
 ```bash
 journalctl -u loft-node -f
@@ -101,7 +101,7 @@ loft-node --version
 loft-node -dir /var/lib/loft -print-pub
 ```
 
-На пути перед хостом откройте 443/tcp и 443/udp. QUIC и HTTP/3 идут по UDP.
+Откройте 443/tcp и 443/udp на всём пути до хоста. QUIC и HTTP/3 работают поверх UDP.
 
 ---
 
@@ -116,4 +116,4 @@ sudo ./install.sh --role=relay \
   --advertise=https://203.0.113.10
 ```
 
-В YAML контроллера тот же `id` должен быть в `relays:`, если `enrol: list`.
+Если `enrol: list`, тот же `id` должен быть указан в `relays:` в YAML контроллера.

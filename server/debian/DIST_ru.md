@@ -2,7 +2,7 @@
 
 [English](DIST.md) · **Русский** · [中文](DIST_zh.md)
 
-Собирает `make dist-node`. Протокол 1.0. Версия ПО — `VERSION`.
+Собираются командой `make dist-node`. Протокол 1.0. Версия ПО берётся из `VERSION`.
 
 ```
 dist/node/
@@ -15,7 +15,7 @@ dist/node/
   SHA256SUMS
 ```
 
-Tarball на хосте:
+Установка из tarball на хосте:
 
 ```bash
 tar -C /tmp -xzf loft-node-*-linux-amd64.tar.gz
@@ -23,12 +23,12 @@ cd /tmp/loft-node-*-linux-amd64
 sudo ./install.sh
 ```
 
-Пакет Debian:
+Установка пакета Debian:
 
 ```bash
 dpkg -i loft-node_*_amd64.deb
 ```
 
-Флаги установщика и unit: [README_ru.md](README_ru.md) в этом каталоге (`server/debian/README_ru.md` в дереве).
+Флаги установщика и unit-файл описаны в [README_ru.md](README_ru.md) в этом же каталоге (`server/debian/README_ru.md` в дереве).
 
-GitHub Actions на теге `v*` (должен совпасть с `VERSION`) кладёт эти файлы в Release.
+При пуше тега `v*` (он должен совпадать с `VERSION`) GitHub Actions выкладывает эти файлы в Release.

@@ -4,16 +4,16 @@
 
 | | |
 |--|--|
-| [`go/cmd/loft`](go/cmd/loft/) | CLI: SOCKS5, TUN. Эталон протокола 1.0 |
-| [`go/cmd/loft-front`](go/cmd/loft-front/) | Процесс сессии. Его запускают macOS и Sailfish |
+| [`go/cmd/loft`](go/cmd/loft/) | CLI: SOCKS5, TUN. Эталонная реализация протокола 1.0 |
+| [`go/cmd/loft-front`](go/cmd/loft-front/) | Процесс сессии, его запускают клиенты для macOS и Sailfish |
 | [`go/cmd/loft-probe`](go/cmd/loft-probe/) | ICMP/TCP/UDP/DNS/HTTP через сессию |
-| [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Автозамер GET/WS против пути connect на macOS |
-| [`macOS/`](macOS/) | Строка меню. UX: [`macOS/design/DESIGN_ru.md`](macOS/design/DESIGN_ru.md) |
+| [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Автоматический замер пропускной способности GET/WS в сравнении с путём connect на macOS |
+| [`macOS/`](macOS/) | Приложение в строке меню. UX: [`macOS/design/DESIGN_ru.md`](macOS/design/DESIGN_ru.md) |
 | [`Keenetic/`](Keenetic/) | Entware / OpkgTun. План: [`Keenetic/PLAN.md`](Keenetic/PLAN.md). Макет: [`Keenetic/design/index.html`](Keenetic/design/index.html) |
 | [`MikroTik/`](MikroTik/) | Контейнер RouterOS 7. Макет: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
-| [`iOS/`](iOS/) | Packet Tunnel. Тонкий хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md) фаза 6 |
-| [`Android/`](Android/) | VpnService. Тонкий хост Java. Flavor телефона и TV. Макет: [`Android/design/index.html`](Android/design/index.html) |
-| [`Sailfish/`](Sailfish/) | Оверлей ConnMan. Тонкий хост QML + loft-front. ОС Аврора — RPM OMP. Макет: [`Sailfish/design/index.html`](Sailfish/design/index.html) |
+| [`iOS/`](iOS/) | Packet Tunnel. Тонкое приложение-хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md), фаза 6 |
+| [`Android/`](Android/) | VpnService. Тонкий хост на Java. Flavor для телефона и для TV. Макет: [`Android/design/index.html`](Android/design/index.html) |
+| [`Sailfish/`](Sailfish/) | Оверлей ConnMan. Тонкий хост на QML + loft-front. Для ОС Аврора — RPM-пакет OMP. Макет: [`Sailfish/design/index.html`](Sailfish/design/index.html) |
 | [`mobile/`](mobile/) | Общий движок Go (`gomobile bind`). Без GUI. |
 
 Общий код: `internal/`. Артефакты: `dist/clients/`.
