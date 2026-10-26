@@ -104,7 +104,7 @@ default via main
 
 Rules match in order, then `default`; each names a priority list (or `direct`, `block`). A list takes its first channel that may carry traffic, then the next, then its `then` step. A channel is skipped while it is `off`, has no interface, failed a connect in the last 20 s, or fails its link check: `check ping` (kernel interfaces), `check tcp`, `check tls` (handshake after the connect) or `check auto` (HTTPS to ya.ru, nic.ru, google.com; any one is enough) sends a probe every `every` seconds (10) and calls the link lost after `fails` failures in a row (3); one success brings it back. `direct check KIND …` is the same probe of the host default route; while it fails, priority lists skip `direct`. A rule may still name a channel; then that channel's `fail` chain (a channel, `direct`, `block`) is the order, as in older files. `multi` turns a list into multipath: each new TCP connection starts one channel further (a member's UDP to one host keeps one way). `limit CHANNEL IN/OUT` caps that channel for everyone who leaves by the list, in Mbit/s (IN towards members, 0 = none). A proxy may go `via` another channel. `dev` binds the socket to the interface (SO_BINDTODEVICE); the system needs a routing rule for it (`ip rule add oif DEV lookup TABLE` with a default route in TABLE), which loft-panel sets up. TCP streams and member datagrams follow the rules; ICMP and DNS queries to the node leave directly. The node re-reads the file on SIGHUP and writes `egress-status.json` (state, bytes, connections) every 5 s.
 
-`LOFT_TOKEN` is the node secret (mask, controller seed). Clients use per-member keys in `members.keys`. `auth shared enable` (`auth_shared: true` in YAML) accepts `LOFT_TOKEN` as the client secret when the ring is empty — the old one-token overlay. A non-empty ring never mixes the node token, even with that flag on. New installs leave `auth shared disable` and issue an `operator` key.
+`LOFT_TOKEN` is the node secret (mask). Clients use per-member keys in `members.keys`. `auth shared enable` (`auth_shared: true` in YAML) accepts `LOFT_TOKEN` as the client secret when the ring is empty — the old one-token overlay. A non-empty ring never mixes the node token, even with that flag on. New installs leave `auth shared disable` and issue an `operator` key.
 
 The client YAML carries `member_id` and that member’s `token`. Hello `member_id` is bound from the matching key, not from the client’s claim.
 
@@ -156,7 +156,7 @@ export LOFT_TOKEN='long-secret'
 |-------|---------|
 | `listen` | `:443` |
 | `cert` `key` | Node certificate. With decoy+mask a loft client is shown a dest-shaped leaf. |
-| `token` | Node secret (`LOFT_TOKEN`): mask, controller seed. Member keys are `members.keys`. |
+| `token` | Node secret (`LOFT_TOKEN`): mask. Member keys are `members.keys`. |
 | `get_path` `ws_path` `h2_path` `h3_path` | Front paths |
 | `get_h2` | GET HTTP/2 connections, 1–4 (default 1). Total inflight is shared across them. |
 | `fronts` | Empty = `get`. List `ws`, `h2`, `quic`, `h3` to opt in. `connect` is mux-off HTTP CONNECT splice; off unless listed. `l3` is HTTP/2 CONNECT then IP datagrams; off unless listed |
@@ -178,7 +178,7 @@ export LOFT_TOKEN='long-secret'
 | `replicas` | Unsigned extra `host:port` for failover |
 | `quic_alpn` | Default `h3` |
 
-Signing seed: `{dir}/controller.seed`. Give the public key to clients as `controller_pub`.
+Signing seed: `{dir}/controller.seed`, random, made on first start (or by `-print-pub`) and not derived from the token. Give the public key to clients as `controller_pub`.
 
 Live roster = `advertise` plus heartbeating relays that are not drain. Three missed beats (~30 s) or a dead `ctl` stream drop the relay and increment serial.
 

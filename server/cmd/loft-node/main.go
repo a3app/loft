@@ -172,26 +172,21 @@ func main() {
 	}
 }
 
-// printControllerPub writes the controller Ed25519 public key as 64 hex digits.
+// printControllerPub writes the controller Ed25519 public key as 64 hex
+// digits. Before the first start it makes the random seed, so the key it
+// prints is the one the node will use.
 func printControllerPub(dir, cfgPath string) error {
-	token := os.Getenv("LOFT_TOKEN")
 	seed := filepath.Join(dir, "controller.seed")
 	if cfgPath != "" {
 		cfg, err := config.LoadServer(cfgPath)
 		if err != nil {
 			return err
 		}
-		if cfg.Token != "" {
-			token = cfg.Token
-		}
 		if cfg.ControllerKey != "" {
 			seed = cfg.ControllerKey
 		}
 	}
-	if _, err := os.Stat(seed); err != nil && token == "" {
-		return fmt.Errorf("controller.seed missing and LOFT_TOKEN empty")
-	}
-	priv, err := ecrypto.LoadControllerKey(seed, token)
+	priv, err := ecrypto.LoadControllerKey(seed)
 	if err != nil {
 		return err
 	}

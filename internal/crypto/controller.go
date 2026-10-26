@@ -10,35 +10,29 @@ package crypto
 
 import (
 	"crypto/ed25519"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
 
-	"golang.org/x/crypto/hkdf"
-
 	"github.com/a3app/loft/internal/wire"
 )
 
-// LoadControllerKey returns a stable Ed25519 key: file if present, else
-// HKDF(token) and the seed is written to path so signatures survive restart.
-// With an empty token the seed comes from the fixed string "loft".
-func LoadControllerKey(path, token string) (ed25519.PrivateKey, error) {
+// LoadControllerKey returns the controller's Ed25519 signing key: the seed in
+// path, or on first start a random seed written there (mode 0600) so the
+// key, and the controller_pub clients pin, survive restarts. The seed is not
+// derived from anything: a key derived from LOFT_TOKEN would be known to
+// whoever knows the token (every client in "auth shared" mode), and one
+// derived from a fixed string would be the same on every node. Empty path
+// gives a fresh key that lasts only for this process.
+func LoadControllerKey(path string) (ed25519.PrivateKey, error) {
 	if path != "" {
 		if b, err := os.ReadFile(path); err == nil && len(b) >= ed25519.SeedSize {
 			return ed25519.NewKeyFromSeed(b[:ed25519.SeedSize]), nil
 		}
 	}
 	seed := make([]byte, ed25519.SeedSize)
-	if token != "" {
-		r := hkdf.New(sha256.New, []byte(token), nil, []byte("loft-controller-ed25519"))
-		if _, err := io.ReadFull(r, seed); err != nil {
-			return nil, err
-		}
-	} else {
-		if _, err := io.ReadFull(hkdf.New(sha256.New, []byte("loft"), nil, []byte("loft-controller-ed25519")), seed); err != nil {
-			return nil, err
-		}
+	if _, err := io.ReadFull(entropy, seed); err != nil {
+		return nil, err
 	}
 	if path != "" {
 		if err := os.WriteFile(path, seed, 0o600); err != nil {

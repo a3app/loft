@@ -21,7 +21,7 @@ import (
 )
 
 // AuthKeys is the node’s member keyring. Non-empty: clients authenticate with
-// a member key; LOFT_TOKEN stays the node secret (mask, controller seed).
+// a member key; LOFT_TOKEN stays the node secret (mask).
 var AuthKeys *identity.Ring
 
 // AuthShared accepts LOFT_TOKEN as the client secret when the ring is empty.

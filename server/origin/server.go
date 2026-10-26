@@ -35,7 +35,7 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 		}
 	}
 	if !cfg.IsRelay() {
-		priv, err := ecrypto.LoadControllerKey(cfg.ControllerKey, cfg.Token)
+		priv, err := ecrypto.LoadControllerKey(cfg.ControllerKey)
 		if err == nil {
 			fl := transport.NewFleet(priv, cfg)
 			transport.FleetCtl = fl

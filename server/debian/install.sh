@@ -646,9 +646,9 @@ if [ "$DRY" = 0 ] && [ "$ROLE" = "controller" ]; then
 	TOKEN_VAL=$(awk -F= '/^LOFT_TOKEN=/{print substr($0,12); exit}' "$LOFT_ENV" 2>/dev/null || true)
 	if [ -z "$TOKEN_VAL" ]; then TOKEN_VAL=$TOKEN; fi
 	if have runuser; then
-		PUB=$(runuser -u "$LOFT_USER" -- env LOFT_TOKEN="$TOKEN_VAL" "$LOFT_BIN" -dir "$LOFT_HOME" -print-pub 2>/dev/null || true)
+		PUB=$(runuser -u "$LOFT_USER" -- "$LOFT_BIN" -dir "$LOFT_HOME" -print-pub 2>/dev/null || true)
 	else
-		PUB=$(su -s /bin/sh "$LOFT_USER" -c "env LOFT_TOKEN='$TOKEN_VAL' '$LOFT_BIN' -dir '$LOFT_HOME' -print-pub" 2>/dev/null || true)
+		PUB=$(su -s /bin/sh "$LOFT_USER" -c "'$LOFT_BIN' -dir '$LOFT_HOME' -print-pub" 2>/dev/null || true)
 	fi
 	TOKEN=$TOKEN_VAL
 fi
