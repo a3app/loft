@@ -516,8 +516,8 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     }
 
     /**
-     * Binds the Settings tab to Prefs. Routing switches take effect on the next
-     * connect, when the TUN is built. A language change recreates the screen.
+     * Binds the Settings tab to Prefs. Routing switches rebuild the live TUN.
+     * A language change recreates the screen.
      */
     private void wireSettings() {
         CompoundButton simple = settings.findViewById(R.id.sw_simple);

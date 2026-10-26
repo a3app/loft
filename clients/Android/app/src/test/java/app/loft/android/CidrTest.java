@@ -20,6 +20,14 @@ public final class CidrTest {
     }
 
     @Test
+    public void canonicalZerosHostBits() {
+        Cidr c = Cidr.parse("10.8.0.2/24").canonical();
+        assertEquals("10.8.0.0", c.address());
+        assertEquals(24, c.bits);
+        assertEquals("10.8.0.0/24", c.display());
+    }
+
+    @Test
     public void parseV6() {
         Cidr c = Cidr.parse("2001:db8::1/64");
         assertNotNull(c);

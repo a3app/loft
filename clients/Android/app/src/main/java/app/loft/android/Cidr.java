@@ -83,6 +83,13 @@ final class Cidr {
         return address() + "/" + bits;
     }
 
+    /** Network form: host bits zeroed. addRoute and excludeRoute need this. */
+    Cidr canonical() {
+        byte[] n = addr.clone();
+        zeroAfter(n, bits);
+        return new Cidr(n, bits, v6);
+    }
+
     boolean contains(Cidr o) {
         if (o == null || o.v6 != v6 || o.bits < bits) {
             return false;

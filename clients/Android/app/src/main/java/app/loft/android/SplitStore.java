@@ -5,6 +5,11 @@ import android.content.Context;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -24,6 +29,9 @@ final class SplitStore {
     static final String LOCAL = "local";
     static final String GLOBAL = "global";
     static final String REPO_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
+    // Same window as macOS SplitStore.maybePull: skip if pulled less than 20 h ago.
+    static final long AUTO_MS = 20L * 60 * 60 * 1000;
+    static final int PULL_MAX = 2 * 1024 * 1024;
     static final String[][] CATALOG = {
             {"global", "World", "Мир", "全球"},
             {"ru", "Russia", "Россия", "俄罗斯"},
@@ -48,6 +56,7 @@ final class SplitStore {
         boolean through;
         String repo = "";
         boolean auto = true;
+        long pulled;
     }
 
     /**
@@ -92,6 +101,7 @@ final class SplitStore {
                     zone.through = z.optBoolean("through");
                     zone.repo = z.optString("repo");
                     zone.auto = z.optBoolean("auto", true);
+                    zone.pulled = z.optLong("pulled", 0);
                     if (!zone.id.isEmpty()) {
                         st.zones.add(zone);
                     }
@@ -141,6 +151,7 @@ final class SplitStore {
                 j.put("through", z.through);
                 j.put("repo", z.repo);
                 j.put("auto", z.auto);
+                j.put("pulled", z.pulled);
                 zs.put(j);
             }
             JSONArray ss = new JSONArray();
@@ -406,6 +417,82 @@ final class SplitStore {
             b.append(x);
         }
         return b.toString();
+    }
+
+    /** True when the zone has auto-update on, a list URL, and no pull in AUTO_MS. */
+    boolean due(Zone z) {
+        if (z == null || !z.auto) {
+            return false;
+        }
+        if (z.repo == null || z.repo.trim().isEmpty()) {
+            return false;
+        }
+        return z.pulled <= 0 || System.currentTimeMillis() - z.pulled >= AUTO_MS;
+    }
+
+    /**
+     * Downloads the zone's .bat and replaces repository services. User-added
+     * rows stay. Throws on a bad URL or a failed HTTP GET.
+     */
+    int pullZone(Zone z) throws Exception {
+        if (z == null || z.repo == null || z.repo.trim().isEmpty()) {
+            throw new IOException("no url");
+        }
+        URL u = new URL(z.repo.trim());
+        String sch = u.getProtocol();
+        if (!"http".equalsIgnoreCase(sch) && !"https".equalsIgnoreCase(sch)) {
+            throw new IOException("no url");
+        }
+        HttpURLConnection c = (HttpURLConnection) u.openConnection();
+        c.setConnectTimeout(15000);
+        c.setReadTimeout(15000);
+        c.setInstanceFollowRedirects(true);
+        try (InputStream in = c.getInputStream()) {
+            List<Bat.Row> rows = Bat.parse(read(in));
+            if (rows.isEmpty()) {
+                throw new IOException("empty list");
+            }
+            replaceRepo(z.id, rows);
+            z.pulled = System.currentTimeMillis();
+            return rows.size();
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    /**
+     * Pulls every due auto zone. Returns true when at least one list changed;
+     * the caller must save.
+     */
+    boolean pullDue() {
+        boolean changed = false;
+        for (Zone z : zones) {
+            if (!due(z)) {
+                continue;
+            }
+            try {
+                pullZone(z);
+                changed = true;
+            } catch (Exception e) {
+                Journal.add("routes " + z.id + " " + e.getMessage());
+            }
+        }
+        return changed;
+    }
+
+    private static String read(InputStream in) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        int n;
+        int total = 0;
+        while ((n = in.read(buf)) > 0) {
+            total += n;
+            if (total > PULL_MAX) {
+                throw new IOException("list too large");
+            }
+            out.write(buf, 0, n);
+        }
+        return out.toString("UTF-8");
     }
 
     static String catalogUrl(String id) {

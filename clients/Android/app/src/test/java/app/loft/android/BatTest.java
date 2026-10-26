@@ -41,4 +41,17 @@ public final class BatTest {
         assertEquals(1, st.count(SplitStore.LOCAL));
         assertEquals(3, st.svc("lan").cidrs.size());
     }
+
+    @Test
+    public void autoDueWhenNeverPulled() {
+        SplitStore st = new SplitStore();
+        st.seed();
+        assertTrue(st.due(st.zone(SplitStore.GLOBAL)));
+        st.zone(SplitStore.GLOBAL).pulled = System.currentTimeMillis();
+        assertFalse(st.due(st.zone(SplitStore.GLOBAL)));
+        assertFalse(st.due(st.zone(SplitStore.LOCAL)));
+        st.zone(SplitStore.GLOBAL).auto = false;
+        st.zone(SplitStore.GLOBAL).pulled = 0;
+        assertFalse(st.due(st.zone(SplitStore.GLOBAL)));
+    }
 }

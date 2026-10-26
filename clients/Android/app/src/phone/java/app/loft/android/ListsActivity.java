@@ -19,8 +19,6 @@ import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
@@ -30,8 +28,7 @@ import java.util.UUID;
  * through the tunnel and which go direct. One activity with several pages
  * built in code: the list of a zone, zones, one zone, one service, the
  * repository settings and the catalog of ready-made lists. Back returns to
- * the list page first. Changes apply on the next connect, when the routes
- * are rebuilt.
+ * the list page first. Saving rebuilds the live TUN when a session is up.
  */
 public final class ListsActivity extends LoftActivity {
     private static final int REQ_IN = 8;
@@ -480,19 +477,12 @@ public final class ListsActivity extends LoftActivity {
         }
         new Thread(() -> {
             try {
-                HttpURLConnection c = (HttpURLConnection) new URL(z.repo).openConnection();
-                c.setConnectTimeout(8000);
-                c.setReadTimeout(8000);
-                try (InputStream in = c.getInputStream()) {
-                    String body = read(in);
-                    List<Bat.Row> rows = Bat.parse(body);
-                    main.post(() -> {
-                        store.replaceRepo(z.id, rows);
-                        persist();
-                        Toast.makeText(this, R.string.pulled, Toast.LENGTH_SHORT).show();
-                        show("list");
-                    });
-                }
+                store.pullZone(z);
+                main.post(() -> {
+                    persist();
+                    Toast.makeText(this, R.string.pulled, Toast.LENGTH_SHORT).show();
+                    show("list");
+                });
             } catch (Exception e) {
                 main.post(() -> Toast.makeText(this, R.string.pull_fail, Toast.LENGTH_SHORT).show());
             }

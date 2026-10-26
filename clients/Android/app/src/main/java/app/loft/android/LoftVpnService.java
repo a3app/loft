@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.net.ConnectivityManager;
 import android.net.IpPrefix;
@@ -55,6 +56,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     private final ExecutorService go = Executors.newCachedThreadPool();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Object io = new Object();
+    private final Object tunLock = new Object();
     private final AtomicBoolean stopping = new AtomicBoolean(false);
 
     private Engine engine;
@@ -165,6 +167,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
         Journal.add("front " + p.side() + " " + p.host() + (path.isEmpty() ? "" : " " + path));
         watchPath();
+        watchRoutePrefs();
         try {
             Engine eng = new Engine();
             eng.setProtector(this);
@@ -182,6 +185,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             retries = 0;
             Live.since = System.currentTimeMillis();
             Journal.add("up " + Live.ip + (Live.ip6.isEmpty() ? "" : " " + Live.ip6));
+            go.execute(this::pullRoutes);
         } catch (Exception e) {
             fail(e.getMessage());
         }
@@ -213,11 +217,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     /**
      * Creates or rebuilds the TUN from a Snapshot. Returns false when the node
      * gave no overlay address (the address inside the members' virtual network).
-     * The TUN is rebuilt only when the address, DNS, front IPs or MTU change,
-     * for example when SSTP renegotiates a new address after a network switch.
-     * Routes come from RoutePlan; front IPs are excluded so the engine's own
-     * traffic to the node never enters the tunnel. The old reader thread is
-     * stopped and a new one started on the new descriptor.
+     * The TUN is rebuilt when the address, DNS, front IPs, MTU or the route
+     * plan change (split lists, default route, LAN bypass). Routes come from
+     * RoutePlan; front IPs and split bypass prefixes are excluded so they stay
+     * on the real network. The old reader thread is stopped and a new one
+     * started on the new descriptor.
      */
     private boolean applyTun(Snapshot snap) throws Exception {
         if (snap == null) {
@@ -228,75 +232,92 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         if (ip.isEmpty() && ip6.isEmpty()) {
             return false;
         }
-        String key = ip + "|" + ip6 + "|" + snap.getDNS() + "|" + snap.getFrontIPs() + "|" + snap.getMTU();
-        if (key.equals(lastAddr) && tun != null) {
-            paint(snap);
-            return true;
-        }
         RoutePlan rp = RoutePlan.of(this, snap);
-        Builder b = new Builder()
-                .setSession(Live.name.isEmpty() ? "loft" : Live.name)
-                .setMtu(snap.getMTU() > 0 ? (int) snap.getMTU() : 1280)
-                .setBlocking(true);
-        if (Build.VERSION.SDK_INT >= 29) {
-            b.setMetered(false);
-        }
-        if (rp.overlay4 != null) {
-            b.addAddress(rp.overlay4.address(), rp.overlay4.bits);
-            if (Build.VERSION.SDK_INT >= 33) {
-                b.allowFamily(android.system.OsConstants.AF_INET);
+        String key = ip + "|" + ip6 + "|" + snap.getDNS() + "|" + snap.getFrontIPs()
+                + "|" + snap.getMTU() + "|" + rp.key();
+        synchronized (tunLock) {
+            if (key.equals(lastAddr) && tun != null) {
+                paint(snap);
+                return true;
             }
-        }
-        if (rp.overlay6 != null) {
-            b.addAddress(rp.overlay6.address(), rp.overlay6.bits);
-            if (Build.VERSION.SDK_INT >= 33) {
-                b.allowFamily(android.system.OsConstants.AF_INET6);
+            Builder b = new Builder()
+                    .setSession(Live.name.isEmpty() ? "loft" : Live.name)
+                    .setMtu(snap.getMTU() > 0 ? (int) snap.getMTU() : 1280)
+                    .setBlocking(true);
+            if (Build.VERSION.SDK_INT >= 29) {
+                b.setMetered(false);
             }
-        }
-        if (snap.getDNS() != null) {
-            for (String s : snap.getDNS().split(",")) {
-                String d = s.trim();
-                if (d.isEmpty()) {
-                    continue;
-                }
-                InetAddress a = Cidr.numeric(d);
-                if (a != null) {
-                    b.addDnsServer(a);
+            if (rp.overlay4 != null) {
+                b.addAddress(rp.overlay4.address(), rp.overlay4.bits);
+                if (Build.VERSION.SDK_INT >= 33) {
+                    b.allowFamily(android.system.OsConstants.AF_INET);
                 }
             }
-        }
-        for (Cidr c : rp.include) {
-            try {
-                b.addRoute(c.address(), c.bits);
-            } catch (Exception ignored) {
+            if (rp.overlay6 != null) {
+                b.addAddress(rp.overlay6.address(), rp.overlay6.bits);
+                if (Build.VERSION.SDK_INT >= 33) {
+                    b.allowFamily(android.system.OsConstants.AF_INET6);
+                }
             }
-        }
-        if (Build.VERSION.SDK_INT >= 33) {
-            for (Cidr c : rp.exclude) {
+            if (snap.getDNS() != null) {
+                for (String s : snap.getDNS().split(",")) {
+                    String d = s.trim();
+                    if (d.isEmpty()) {
+                        continue;
+                    }
+                    InetAddress a = Cidr.numeric(d);
+                    if (a != null) {
+                        b.addDnsServer(a);
+                    }
+                }
+            }
+            int fail = 0;
+            for (Cidr c : rp.include) {
                 try {
-                    b.excludeRoute(new IpPrefix(InetAddress.getByAddress(c.addr), c.bits));
-                } catch (Exception ignored) {
+                    Cidr n = c.canonical();
+                    b.addRoute(n.address(), n.bits);
+                } catch (Exception e) {
+                    fail++;
+                    if (fail <= 8) {
+                        Journal.add("addRoute " + c.display() + " " + e.getMessage());
+                    }
                 }
             }
-        }
-        if (underlying != null && Build.VERSION.SDK_INT >= 22) {
-            b.setUnderlyingNetworks(new Network[]{underlying});
-        }
-        ParcelFileDescriptor pfd = b.establish();
-        if (pfd == null) {
-            return false;
-        }
-        Thread old = reader;
-        reader = null;
-        if (old != null) {
-            old.interrupt();
-        }
-        synchronized (io) {
-            closeTunLocked();
-            tun = pfd;
-            out = new FileOutputStream(pfd.getFileDescriptor());
-            plan = rp;
-            lastAddr = key;
+            if (Build.VERSION.SDK_INT >= 33) {
+                for (Cidr c : rp.exclude) {
+                    try {
+                        Cidr n = c.canonical();
+                        b.excludeRoute(new IpPrefix(InetAddress.getByAddress(n.addr), n.bits));
+                    } catch (Exception e) {
+                        fail++;
+                        if (fail <= 8) {
+                            Journal.add("excludeRoute " + c.display() + " " + e.getMessage());
+                        }
+                    }
+                }
+            }
+            if (fail > 8) {
+                Journal.add("routes " + fail + " failed");
+            }
+            if (underlying != null && Build.VERSION.SDK_INT >= 22) {
+                b.setUnderlyingNetworks(new Network[]{underlying});
+            }
+            ParcelFileDescriptor pfd = b.establish();
+            if (pfd == null) {
+                return false;
+            }
+            Thread old = reader;
+            reader = null;
+            if (old != null) {
+                old.interrupt();
+            }
+            synchronized (io) {
+                closeTunLocked();
+                tun = pfd;
+                out = new FileOutputStream(pfd.getFileDescriptor());
+                plan = rp;
+                lastAddr = key;
+            }
         }
         pumpReads();
         paint(snap);
@@ -582,13 +603,66 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         return false;
     }
 
+    /**
+     * Rebuilds TUN routes when split, default route, LAN bypass or the lists
+     * change. apply() callbacks can land on a binder thread; the work runs on
+     * {@code go} so the UI is not blocked on establish().
+     */
+    private final SharedPreferences.OnSharedPreferenceChangeListener routeWatch = (sp, k) -> {
+        if (!("split".equals(k) || "default_route".equals(k)
+                || "lan_bypass".equals(k) || "split_store".equals(k))) {
+            return;
+        }
+        go.execute(() -> {
+            if ("split".equals(k) && Prefs.split(this)) {
+                pullRoutes();
+            }
+            rebuildRoutes();
+        });
+    };
+
+    private void watchRoutePrefs() {
+        Prefs.p(this).registerOnSharedPreferenceChangeListener(routeWatch);
+    }
+
+    private void unwatchRoutePrefs() {
+        Prefs.p(this).unregisterOnSharedPreferenceChangeListener(routeWatch);
+    }
+
+    /** Daily auto-pull of zone lists, same 20 h window as macOS. */
+    private void pullRoutes() {
+        if (!Prefs.split(this) || stopping.get()) {
+            return;
+        }
+        SplitStore st = SplitStore.load(this);
+        if (!st.pullDue()) {
+            return;
+        }
+        st.save(this);
+        Journal.add("routes pulled");
+        rebuildRoutes();
+    }
+
+    private void rebuildRoutes() {
+        if (stopping.get() || engine == null) {
+            return;
+        }
+        try {
+            applyTun(engine.snapshot());
+        } catch (Exception e) {
+            Journal.add("tun " + e.getMessage());
+        }
+    }
+
     /** Stops polling, network watching, the engine and the TUN, and resets Live. */
     private void stopSession() {
         main.removeCallbacks(ticker);
         unwatchPath();
+        unwatchRoutePrefs();
         stopEngine();
         synchronized (io) {
             closeTunLocked();
+            lastAddr = "";
         }
         running = false;
         Live.reset();
@@ -626,7 +700,6 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         } catch (Exception ignored) {
         }
         tun = null;
-        lastAddr = "";
     }
 
     private void updateNote() {
