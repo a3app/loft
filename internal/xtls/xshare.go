@@ -34,6 +34,23 @@ func XShare(q url.Values) (mode string, from, to int) {
 	return mode, from, to
 }
 
+// SplitALPN reads the alpn= share-link field: comma or plus separated.
+func SplitALPN(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	s = strings.ReplaceAll(s, "+", ",")
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // padRange parses "100-1000" or a single "100". A bad string is 0,0.
 func padRange(s string) (int, int) {
 	s = strings.TrimSpace(s)

@@ -3,15 +3,14 @@ package xtls
 // XHTTP (SplitHTTP). stream-one is one HTTP/2 POST. stream-up, which current
 // Xray panels put on the share link, is two requests on that connection:
 // GET carries the download, POST carries the upload. Both use one session
-// id appended to the path. Padding is a Referer query x_padding of X's,
-// length picked from the link's range (default 100-1000). The POST is
+// id appended to the path. Empty and auto follow Xray: stream-up on TLS
+// (HTTP/2), stream-one on REALITY. Padding is a Referer query x_padding of
+// X's, length picked from the link's range (default 100-1000). The POST is
 // marked application/grpc, which is Xray's default camouflage and what
 // grpc_pass frontends require.
 
 import (
-	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -30,6 +29,7 @@ const xhttpUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537
 
 // XHTTP is path, Host and the Xray mode for one session.
 // PadFrom, PadTo are the inclusive xPaddingBytes range. 0,0 is 100-1000.
+// Reality selects the auto fallback: stream-one instead of stream-up.
 type XHTTP struct {
 	Host    string
 	SNI     string
@@ -38,6 +38,22 @@ type XHTTP struct {
 	Mode    string
 	PadFrom int
 	PadTo   int
+	Reality bool
+}
+
+// XHTTPMode maps a share-link mode onto a wire mode. Empty and auto follow
+// Xray: stream-up on TLS, stream-one on REALITY.
+func XHTTPMode(mode string, reality bool) string {
+	m := strings.ToLower(strings.TrimSpace(mode))
+	switch m {
+	case "stream-up", "stream-one", "packet-up":
+		return m
+	default:
+		if reality {
+			return "stream-one"
+		}
+		return "stream-up"
+	}
 }
 
 // xhttpConn is a net.Conn over one POST: writes go into the request body
@@ -60,7 +76,7 @@ type xhttpConn struct {
 // It returns at once. The read side opens on a 200. packet-up is refused:
 // that mode is a sequence of short POSTs this client does not speak.
 func DialXHTTP(tlsConn net.Conn, x XHTTP) (net.Conn, error) {
-	switch strings.ToLower(strings.TrimSpace(x.Mode)) {
+	switch XHTTPMode(x.Mode, x.Reality) {
 	case "packet-up":
 		tlsConn.Close()
 		return nil, fmt.Errorf("xhttp: packet-up")
@@ -86,12 +102,18 @@ func dialStreamOne(tlsConn net.Conn, x XHTTP) (net.Conn, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", xhttpUA)
+	req.Header.Set("Content-Type", "application/grpc")
 	req.Host = host
 	req.ContentLength = -1
+	cc, err := xhttpClient(tlsConn)
+	if err != nil {
+		tlsConn.Close()
+		_ = pw.Close()
+		return nil, err
+	}
 	xc := &xhttpConn{tls: tlsConn, pw: pw, got: make(chan struct{})}
-	tr := xhttpTransport(tlsConn)
 	go func() {
-		resp, err := tr.RoundTrip(req)
+		resp, err := cc.RoundTrip(req)
 		if err != nil {
 			xc.fail(err)
 			_ = pr.CloseWithError(err)
@@ -138,10 +160,15 @@ func dialStreamUp(tlsConn net.Conn, x XHTTP) (net.Conn, error) {
 	dress(post, host, base, x)
 	post.Header.Set("Content-Type", "application/grpc")
 	post.ContentLength = -1
+	cc, err := xhttpClient(tlsConn)
+	if err != nil {
+		tlsConn.Close()
+		_ = pw.Close()
+		return nil, err
+	}
 	xc := &xhttpConn{tls: tlsConn, pw: pw, got: make(chan struct{})}
-	tr := xhttpTransport(tlsConn)
 	go func() {
-		resp, err := tr.RoundTrip(get)
+		resp, err := cc.RoundTrip(get)
 		if err != nil {
 			xc.fail(err)
 			_ = pr.CloseWithError(err)
@@ -157,7 +184,7 @@ func dialStreamUp(tlsConn net.Conn, x XHTTP) (net.Conn, error) {
 		xc.ready(resp.Body)
 	}()
 	go func() {
-		resp, err := tr.RoundTrip(post)
+		resp, err := cc.RoundTrip(post)
 		if err != nil {
 			xc.fail(err)
 			_ = pr.CloseWithError(err)
@@ -212,22 +239,15 @@ func xhttpBasePath(p string) string {
 	return p
 }
 
-// xhttpTransport speaks HTTP/2 on the one conn the caller already
-// handshaked. Compression stays off: the body is a raw byte stream.
-func xhttpTransport(tlsConn net.Conn) *http2.Transport {
-	var once sync.Once
-	return &http2.Transport{
+// xhttpClient is one HTTP/2 connection on the TLS (or REALITY) socket the
+// caller already handshaked. GET and POST in stream-up are streams on this
+// connection; a Transport-level dial pool would race a second dial.
+func xhttpClient(tlsConn net.Conn) (*http2.ClientConn, error) {
+	tr := &http2.Transport{
 		AllowHTTP:          true,
 		DisableCompression: true,
-		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
-			var c net.Conn
-			once.Do(func() { c = tlsConn })
-			if c == nil {
-				return nil, fmt.Errorf("xhttp: conn")
-			}
-			return c, nil
-		},
 	}
+	return tr.NewClientConn(tlsConn)
 }
 
 // paddingReferer is the Xray default placement: Referer query x_padding,

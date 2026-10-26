@@ -26,11 +26,15 @@ func TestXHTTPStreamOneEcho(t *testing.T) {
 			http.Error(w, "shape", 400)
 			return
 		}
+		if r.Header.Get("Content-Type") != "application/grpc" {
+			http.Error(w, "ct", 400)
+			return
+		}
 		w.WriteHeader(200)
 		_, _ = io.Copy(flushBody{w}, r.Body)
 	}))
 	c := dialH2(t, ln)
-	xc, err := DialXHTTP(c, XHTTP{Host: "panel.example", Path: "/one"})
+	xc, err := DialXHTTP(c, XHTTP{Host: "panel.example", Path: "/one", Mode: "stream-one"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +138,7 @@ func TestXHTTPReadDeadlineBeforeHeaders(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	c := dialH2(t, ln)
-	xc, err := DialXHTTP(c, XHTTP{Host: "panel.example", Path: "/hang"})
+	xc, err := DialXHTTP(c, XHTTP{Host: "panel.example", Path: "/hang", Mode: "stream-one"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +154,73 @@ func TestXHTTPReadDeadlineBeforeHeaders(t *testing.T) {
 	ne, ok := err.(net.Error)
 	if !ok || !ne.Timeout() || !strings.Contains(err.Error(), "i/o timeout") {
 		t.Fatalf("want timeout, got %v", err)
+	}
+}
+
+func TestXHTTPMode(t *testing.T) {
+	cases := []struct {
+		mode    string
+		reality bool
+		want    string
+	}{
+		{"", false, "stream-up"},
+		{"auto", false, "stream-up"},
+		{"AUTO", true, "stream-one"},
+		{"", true, "stream-one"},
+		{"stream-one", false, "stream-one"},
+		{"stream-up", true, "stream-up"},
+		{"packet-up", false, "packet-up"},
+	}
+	for _, c := range cases {
+		if got := XHTTPMode(c.mode, c.reality); got != c.want {
+			t.Fatalf("mode=%q reality=%v got %q want %q", c.mode, c.reality, got, c.want)
+		}
+	}
+}
+
+func TestXHTTPAutoEmptyUsesStreamUp(t *testing.T) {
+	got := make(chan string, 4)
+	ln := serveH2(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Method
+		w.WriteHeader(200)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		if r.Method == http.MethodGet {
+			<-r.Context().Done()
+		}
+	}))
+	c := dialH2(t, ln)
+	xc, err := DialXHTTP(c, XHTTP{Host: "panel.example", Path: "/abc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer xc.Close()
+	seen := map[string]bool{}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && (!seen[http.MethodGet] || !seen[http.MethodPost]) {
+		select {
+		case m := <-got:
+			seen[m] = true
+		case <-time.After(time.Until(deadline)):
+		}
+	}
+	if !seen[http.MethodGet] || !seen[http.MethodPost] {
+		t.Fatalf("methods %v", seen)
+	}
+}
+
+func TestSplitALPN(t *testing.T) {
+	got := SplitALPN("h2,http/1.1")
+	if len(got) != 2 || got[0] != "h2" || got[1] != "http/1.1" {
+		t.Fatalf("%v", got)
+	}
+	got = SplitALPN("h2+http/1.1")
+	if len(got) != 2 || got[0] != "h2" || got[1] != "http/1.1" {
+		t.Fatalf("%v", got)
+	}
+	if SplitALPN("") != nil {
+		t.Fatal("empty")
 	}
 }
 
