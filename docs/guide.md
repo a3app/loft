@@ -209,6 +209,19 @@ The relay opens a trunk with Hello cap `relay`, then `ctl:1` (enrol, beat) and, 
 
 Certificates, DNS, and the machine itself are provisioned out of band. Enrol is how the controller learns that the edge is live.
 
+### Standby controller
+
+A standby is a relay that keeps a copy of the controller's state and can take its place. Mark the relay "Standby controller" in the panel (`relay … replica` in `node.conf`) and install it with `--role replica`; its install command already lists the controller. After `enrol_ok` the controller sends it `network.conf`, `members.keys`, `relays.keys`, `controller.seed`, `controller.roll`, `lists.conf`, `node.conf` and the node token, and sends them again when any of them changes; the standby keeps them in `{dir}/standby`, and the panel shows when it last got them. Every relay's install lists the standbys after the controller (`controller URL standby-URL …`), so relays try them in that order.
+
+To take over when the controller is gone, on the standby as root:
+
+```bash
+loft-node -dir /var/lib/loft -c /etc/loft/node.conf -promote
+systemctl restart loft-node
+```
+
+The standby becomes the controller with the same members, relay keys, controller key and mask secret, so clients and relays need no new links; its own address, certificate and decoy stay. Clients find it through the roster, relays through their controller list. The old controller must not come back as a controller next to it: reinstall it as a standby of the new one.
+
 ---
 
 ## 6. Client

@@ -209,6 +209,19 @@ export LOFT_TOKEN='long-secret'
 
 证书、DNS、机器本身带外准备。Enrol 是控制器知道边缘还活着的办法。
 
+### 备用控制器
+
+备用是一个保存控制器状态副本、可以取而代之的中继。在面板里把中继标为「备用控制器」（`node.conf` 中的 `relay … replica`），并用 `--role replica` 安装；安装命令里已经有控制器地址。`enrol_ok` 之后，控制器把 `network.conf`、`members.keys`、`relays.keys`、`controller.seed`、`controller.roll`、`lists.conf`、`node.conf` 和节点令牌发给备用，其中任一变化时再发一次；备用把它们存在 `{dir}/standby`，面板显示它最后一次收到的时间。每个中继的安装命令在控制器之后列出备用（`controller URL 备用地址 …`），中继按此顺序尝试。
+
+控制器不在时，在备用上以 root 运行：
+
+```bash
+loft-node -dir /var/lib/loft -c /etc/loft/node.conf -promote
+systemctl restart loft-node
+```
+
+备用成为控制器，成员、中继密钥、控制器密钥和伪装密钥都不变，所以客户端和中继不需要新链接；它自己的地址、证书和 decoy 保持不变。客户端通过名册找到它，中继通过自己的控制器列表找到它。旧控制器不得作为控制器与它并存：把旧控制器重装为新控制器的备用。
+
 ---
 
 ## 6. 客户端

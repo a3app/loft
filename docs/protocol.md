@@ -575,10 +575,13 @@ Each message `u32be length || u8 type || body`.
 | 5 | slice | signed slice |
 | 6 | drain | id, u8 |
 | 7 | key_roll | KeyRoll (§10.4); sent before enrol_ok while the controller key changes |
+| 8 | state | to a standby controller only: the controller's state as named files (u8 n, then n × (u8 name_len \|\| name \|\| u32be len \|\| bytes)), after enrol_ok and again when it changes |
 
 Slice (Ed25519 over the body): serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be, then pub and sig as in the roster. The `enrol_req` id MUST equal the relay id of the key the trunk authenticated with, so one relay cannot enrol as another. The relay MUST verify every slice with the controller public key it was installed with and MUST refuse a slice signed by any other key. Enrol deny: 1 unknown id, 2 bad form, 3 duplicate, 4 disabled. *Informative, not normative.* Configuration names for the relay list, relay keys, and per-relay overrides of URL, decoy, fronts, and weight are in [guide.md](guide.md).
 
 Provisioning of machines and certificates is outside this protocol.
+
+A standby controller is a relay that the controller marks as such. The controller MUST send `state` only to a trunk whose key belongs to a relay marked standby. *Informative, not normative.* What the state holds and how a standby takes over are deployment matters; this tree's are in [guide.md](guide.md).
 
 ### 10.3 Address lists
 

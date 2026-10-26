@@ -575,10 +575,13 @@ repeat n:
 | 5 | slice | 经签名的切片 |
 | 6 | drain | id, u8 |
 | 7 | key_roll | KeyRoll（§10.4）；控制器密钥更换期间在 enrol_ok 之前发送 |
+| 8 | state | 仅发给备用控制器：以命名文件表示的控制器状态（u8 n，然后 n × (u8 name_len \|\| name \|\| u32be len \|\| bytes)），在 enrol_ok 之后发送，任何变化时再次发送 |
 
 切片（体上的 Ed25519）：serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be，然后与名册相同的 pub 与 sig。`enrol_req` 的 id 必须等于干线所用密钥对应的中继 id，以免一个中继冒充另一个。中继必须用安装时拿到的控制器公钥校验每个切片，并必须拒绝由其他任何密钥签名的切片。登记拒绝：1 未知 id，2 格式错误，3 重复，4 停用。*说明，非规范。* 中继名单、中继密钥，以及按中继覆盖 URL、decoy、fronts、weight 的配置名，见 [guide_zh.md](guide_zh.md)。
 
 机器与证书的置备在本协议之外。
+
+备用控制器是被控制器标记为备用的中继。控制器必须只把 `state` 发给密钥属于被标记为备用的中继的干线。*说明，非规范。* 状态包含什么、备用如何接手属于部署问题；本仓库的做法见 [guide_zh.md](guide_zh.md)。
 
 ### 10.3 地址列表
 
