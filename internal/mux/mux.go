@@ -190,6 +190,9 @@ func (s *Session) dataFull(id uint32) bool {
 // Closed reports Leave or Close.
 func (s *Session) Closed() bool { return s.closed.Load() }
 
+// Done is closed when the session is closed, for cleanup of per-session state.
+func (s *Session) Done() <-chan struct{} { return s.die }
+
 // SetHold marks streams to survive a brief front drop (cap hold). With hold
 // on, the node "parks" the mux instead of closing it when the front goes
 // away; a client that comes back with the same instance_id and member key

@@ -321,19 +321,37 @@ type stripeRB struct {
 	hold map[uint32]wire.Frame
 }
 
-var stripeTabs sync.Map // *mux.Session -> *stripeRB
+var stripeTabs sync.Map // *mux.Session -> *stripeRB; removed when the mux closes
+
+// stripeHoldMax caps the frames one mux keeps while waiting for a gap. A peer
+// that never fills the gap would otherwise make the node hold them forever.
+const stripeHoldMax = 4096
 
 // stripeIngest pushes frames into sess in sequence order. Frames ahead of
 // a gap wait in the buffer; duplicates and old frames are dropped.
+//
+// Stripe is a stand experiment, so a batch is taken only when this side runs
+// with LOFT_STAND_FAN=stripe too; elsewhere any member could otherwise make
+// the node buffer frames without limit. Overflowing the buffer closes the mux.
 func stripeIngest(sess *mux.Session, body []byte) {
+	if standFan() != "stripe" {
+		return
+	}
 	seqs, frames, err := stripeParse(body)
 	if err != nil || sess == nil {
 		return
 	}
-	v, _ := stripeTabs.LoadOrStore(sess, &stripeRB{hold: map[uint32]wire.Frame{}})
+	v, loaded := stripeTabs.LoadOrStore(sess, &stripeRB{hold: map[uint32]wire.Frame{}})
+	if !loaded {
+		go func() {
+			<-sess.Done()
+			stripeTabs.Delete(sess)
+		}()
+	}
 	rb := v.(*stripeRB)
 	rb.mu.Lock()
 	var ready []wire.Frame
+	overflow := false
 	for i, f := range frames {
 		seq := seqs[i]
 		if seq < rb.next {
@@ -353,9 +371,17 @@ func stripeIngest(sess *mux.Session, body []byte) {
 			}
 			continue
 		}
+		if len(rb.hold) >= stripeHoldMax {
+			overflow = true
+			break
+		}
 		rb.hold[seq] = f
 	}
 	rb.mu.Unlock()
+	if overflow {
+		sess.Close()
+		return
+	}
 	// One gap filling releases every frame that was waiting. Pushing that
 	// pile at once overflows the stream park and Reset drops a live download.
 	// Hand the reader a slice at a time.
