@@ -102,6 +102,7 @@ flowchart LR
 | [docs/android.md](docs/android.md) | Android VpnService client. Catalog: [clients/Android/](clients/Android/). |
 | [docs/sailfish.md](docs/sailfish.md) | Sailfish OS ConnMan client. Catalog: [clients/Sailfish/](clients/Sailfish/). Aurora OS is the OMP packaging. |
 | [docs/share.md](docs/share.md) | Import URI `loft://` and `.loft` files (one or several connections). |
+| [docs/codeql.md](docs/codeql.md) | Why CodeQL hits on SSTP/Trojan/mask/probe are dismissed. |
 
 ## Repository
 

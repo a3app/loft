@@ -102,6 +102,7 @@ flowchart LR
 | [docs/android_ru.md](docs/android_ru.md) | Клиент Android (VpnService). Каталог: [clients/Android/](clients/Android/). |
 | [docs/sailfish_ru.md](docs/sailfish_ru.md) | Клиент Sailfish OS (ConnMan). Каталог: [clients/Sailfish/](clients/Sailfish/). ОС Аврора — пакет OMP. |
 | [docs/share_ru.md](docs/share_ru.md) | Ссылка импорта `loft://` и файлы `.loft` (одно или несколько подключений). |
+| [docs/codeql_ru.md](docs/codeql_ru.md) | Почему закрыты срабатывания CodeQL на SSTP/Trojan/mask/probe. |
 
 ## Репозиторий
 

@@ -102,6 +102,7 @@ flowchart LR
 | [docs/android_zh.md](docs/android_zh.md) | Android VpnService 客户端。目录：[clients/Android/](clients/Android/)。 |
 | [docs/sailfish_zh.md](docs/sailfish_zh.md) | Sailfish OS ConnMan 客户端。目录：[clients/Sailfish/](clients/Sailfish/)。Aurora OS 是 OMP 打包。 |
 | [docs/share_zh.md](docs/share_zh.md) | 导入链接 `loft://` 和 `.loft` 文件（一条或多条连接）。 |
+| [docs/codeql_zh.md](docs/codeql_zh.md) | 为何关闭 SSTP/Trojan/mask/probe 上的 CodeQL 命中。 |
 
 ## 仓库
 

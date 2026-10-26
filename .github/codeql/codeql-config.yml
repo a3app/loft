@@ -1,11 +1,9 @@
 name: loft
 
-# Full default suite. Rules that fire on protocols loft implements as specified
-# are suppressed at the line, with the reason, by a `codeql[<rule-id>]` comment:
-# SSTP MS-CHAPv2 is MD4/DES (RFC 2759), CHAP is MD5 (RFC 1994), SSTP allows
-# TLS 1.0 for old Windows, Trojan hash is SHA224, dest-shaped TLS and the signed
-# roster do not trust the CA, loft-probe prints probe status. Add a suppression
-# only with a protocol reason; never exclude a rule here.
+# Full default suite. Do not exclude a rule here: a new DES/MD4/skip-verify in
+# overlay code must still fire. Protocol and trust exceptions are listed in
+# docs/codeql.md. Each site has a `codeql[<rule-id>]` comment on the line above
+# the sink; GitHub alerts are dismissed with that same human reason.
 packs:
   go:
     - codeql/go-queries:AlertSuppression.ql
