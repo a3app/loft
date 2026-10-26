@@ -152,8 +152,10 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 编码前仍需决定：
 
 1. **Go 与 Windows 7。** 会话由 Go 进程 `loft-front` 运行。Go 1.21 及以上不支持 Windows 7 / 8：需用 Go 1.20.x 或打补丁的工具链构建。
+   2026-10-26 已用 [`wintun-check`](../wintun-check/) 验证：用打补丁的 XTLS/go-win7（go1.27.3）构建的程序在 Windows 7 SP1 x64 上与 Go 1.20.14 构建的同样可用。因此客户端可以用当前的 Go 编写（`go.mod` 中的依赖需要它），Windows 版用打补丁的工具链构建。尚未最终确定。
 2. **TUN 驱动。** 方案：**所有版本均用 Wintun**（Go：`golang.zx2c4.com/wireguard/tun`，L3，无需模拟以太网）。微软已不再为 Windows 7 签名新的内核驱动，因此安装程序内置固定版本的已签名二进制；我们不自行构建驱动。
-   编码前验证：最新的已签名 Wintun 版本能在 Windows 7 SP1 x86 和 x64（装有 SHA-2 更新 KB4474419）上安装并建立接口。
+   2026-10-26 已在装有 KB4474419 和 KB4490628 的 Windows 7 SP1 **x64** 上验证：Wintun 0.14.1 能安装驱动、创建适配器、收发数据包（经适配器的 ping 可通），并能干净卸载。**x86 尚未验证。**
+   客户端注意：用 IP Helper API（`CreateUnicastIpAddressEntry`）设置适配器地址，不要用 `netsh`。`netsh` 会把地址按适配器 GUID 存进注册表，下次创建适配器时 Windows 会自动恢复它。
    若不行：Windows 7 上用已签名的 TAP-Windows6 9.24.x，8 及以上用 Wintun。备选方案的代价：两套接口代码，以及 TAP ≤ 9.26 中的 CVE-2024-1305 且没有修复的 Windows 7 版本。
 3. **特权部分。** 路由、hold 和重置由 Windows 服务设置（对应 `loft-priv`）。服务名和安装方式（MSI / 自有安装程序）未定。
 4. **密钥存储。** Windows 凭据管理器，或文件中的 DPAPI（`CryptProtectData`）。

@@ -152,8 +152,10 @@ Decided: native Win32 UI; x86 and x64 builds; `.loft` and `loft://` are an optio
 Still to choose before code:
 
 1. **Go and Windows 7.** The session runs in the Go process `loft-front`. Go 1.21 and later do not support Windows 7 / 8: build with Go 1.20.x or a patched toolchain.
+   Checked 2026-10-26 with [`wintun-check`](../wintun-check/): a build with the patched XTLS/go-win7 (go1.27.3) works on Windows 7 SP1 x64 just like a Go 1.20.14 build. So the client can be written in current Go (its `go.mod` dependencies need it) and built for Windows with the patched toolchain. Not signed off yet.
 2. **TUN driver.** Plan: **Wintun on every version** (Go: `golang.zx2c4.com/wireguard/tun`, L3, no Ethernet emulation). Microsoft no longer signs new kernel drivers for Windows 7, so the installer ships a prebuilt signed binary at a pinned version; we do not build the driver.
-   Check before code: the latest signed Wintun release installs and brings up an interface on Windows 7 SP1 x86 and x64 (with the SHA-2 update KB4474419).
+   Checked 2026-10-26 on Windows 7 SP1 **x64** with KB4474419 and KB4490628: Wintun 0.14.1 installs the driver, creates the adapter, receives and sends packets (ping through the adapter works), and uninstalls cleanly. **x86 is not checked yet.**
+   For the client: set the adapter address with the IP Helper API (`CreateUnicastIpAddressEntry`), not `netsh`. `netsh` saves the address in the registry under the adapter GUID, and Windows restores it by itself the next time the adapter is created.
    If it does not: signed TAP-Windows6 9.24.x on Windows 7, Wintun on 8 and later. Costs of the fallback: two interface code paths, and CVE-2024-1305 in TAP ≤ 9.26 with no fixed Windows 7 build.
 3. **Privileged part.** Routes, hold and reset are set by a Windows service (the `loft-priv` counterpart). Service name and installer (MSI / own installer) are not chosen.
 4. **Key storage.** Windows Credential Manager or DPAPI (`CryptProtectData`) in a file.
