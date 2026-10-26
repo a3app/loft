@@ -734,6 +734,7 @@ type Stream struct {
 	id     uint32
 	target string
 	in     chan []byte
+	inMu   sync.RWMutex // senders hold it shared; closing in takes it alone
 	remain []byte
 	done   chan struct{}
 	dead   atomic.Bool
@@ -901,11 +902,7 @@ func (st *Stream) pumpPark() {
 		if b == nil || st.dead.Load() {
 			return
 		}
-		select {
-		case st.in <- b:
-		case <-st.done:
-			return
-		default:
+		if !st.send(b) {
 			if !st.dead.Load() {
 				st.unpark(b)
 			}
@@ -987,10 +984,36 @@ func (st *Stream) Close() error {
 		return nil
 	}
 	_ = st.sess.send(wire.Frame{Cmd: wire.CmdClose, StreamID: st.id})
-	close(st.done)
-	close(st.in)
+	st.closeIn()
 	st.sess.drop(st.id)
 	return nil
+}
+
+// closeIn ends the stream for readers. dead is already set, so a sender
+// that gets the lock after this sees it and does not send on the closed
+// channel; a sender already holding the lock finishes first (it never
+// blocks).
+func (st *Stream) closeIn() {
+	st.inMu.Lock()
+	close(st.done)
+	close(st.in)
+	st.inMu.Unlock()
+}
+
+// send offers b to in without blocking. It reports false when in is full;
+// on a dead stream it drops b and reports true.
+func (st *Stream) send(b []byte) bool {
+	st.inMu.RLock()
+	defer st.inMu.RUnlock()
+	if st.dead.Load() {
+		return true
+	}
+	select {
+	case st.in <- b:
+		return true
+	default:
+		return false
+	}
 }
 
 // kill closes the stream locally without sending CmdClose.
@@ -998,8 +1021,7 @@ func (st *Stream) kill() {
 	if st.dead.Swap(true) {
 		return
 	}
-	close(st.done)
-	close(st.in)
+	st.closeIn()
 	st.parkMu.Lock()
 	st.park = nil
 	st.parkN = 0
@@ -1015,12 +1037,8 @@ func (st *Stream) push(b []byte) {
 		return
 	}
 	buf := append([]byte(nil), b...)
-	select {
-	case st.in <- buf:
+	if st.send(buf) {
 		return
-	case <-st.done:
-		return
-	default:
 	}
 	st.parkMu.Lock()
 	if st.dead.Load() {

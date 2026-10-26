@@ -755,3 +755,22 @@ func pump(a, b *Session) {
 		}
 	}
 }
+
+// TestPushRacesKill: Data arriving while the stream is killed (a lane
+// attach pushing into a stream another goroutine resets) must not send on
+// the closed channel. Run with -race: the race detector sees it every time.
+func TestPushRacesKill(t *testing.T) {
+	s := NewClient()
+	for i := 0; i < 2000; i++ {
+		st := newStream(s, uint32(i+1))
+		done := make(chan struct{})
+		go func() {
+			for j := 0; j < 100; j++ {
+				st.push([]byte("x"))
+			}
+			close(done)
+		}()
+		st.kill()
+		<-done
+	}
+}
