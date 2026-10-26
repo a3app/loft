@@ -21,6 +21,7 @@ func BindInner(key []byte, id byte) {
 	if len(key) == 0 {
 		return
 	}
+	_, _ = keyState(key) // so sweepIdleKeys also forgets this entry
 	switch id {
 	case wire.InnerClear, wire.InnerAES:
 		innerModes.Store(string(key), id)

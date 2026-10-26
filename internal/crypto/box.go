@@ -137,12 +137,24 @@ func OpenHello(sk *ecdh.PrivateKey, nonce, raw, aad []byte) (key, plain []byte, 
 type sealState struct {
 	prefix uint32
 	n      atomic.Uint64
+	used   atomic.Int64 // unix seconds of the last Seal/Open/BindInner
 }
 
 var sealers sync.Map // string(key) -> *sealState
 
-// nextNonce is 4-byte prefix || 8-byte big-endian counter, unique per key.
-func nextNonce(key []byte) ([]byte, error) {
+// keyIdle is how long a session key may go unused before its nonce counter
+// and data-cipher choice are forgotten. A live session seals or opens every
+// few seconds (keepalive is 15 s by default, and a node drops a session idle
+// for 120 s), so a key silent this long belongs to a session that has ended.
+// Without this the table grew by one entry per handshake for the life of the
+// process and kept every old session key in memory.
+const keyIdle = 6 * time.Hour
+
+// lastKeySweep is when sweepIdleKeys last ran (unix seconds).
+var lastKeySweep atomic.Int64
+
+// keyState is the nonce state of key, made on first use, marked as used now.
+func keyState(key []byte) (*sealState, error) {
 	k := string(key)
 	v, ok := sealers.Load(k)
 	if !ok {
@@ -155,6 +167,34 @@ func nextNonce(key []byte) ([]byte, error) {
 		v = actual
 	}
 	st := v.(*sealState)
+	now := time.Now().Unix()
+	st.used.Store(now)
+	sweepIdleKeys(now)
+	return st, nil
+}
+
+// sweepIdleKeys forgets keys unused for keyIdle, at most every ten minutes.
+func sweepIdleKeys(now int64) {
+	last := lastKeySweep.Load()
+	if now-last < 600 || !lastKeySweep.CompareAndSwap(last, now) {
+		return
+	}
+	idle := int64(keyIdle / time.Second)
+	sealers.Range(func(k, v any) bool {
+		if now-v.(*sealState).used.Load() > idle {
+			sealers.Delete(k)
+			innerModes.Delete(k)
+		}
+		return true
+	})
+}
+
+// nextNonce is 4-byte prefix || 8-byte big-endian counter, unique per key.
+func nextNonce(key []byte) ([]byte, error) {
+	st, err := keyState(key)
+	if err != nil {
+		return nil, err
+	}
 	n := st.n.Add(1)
 	nonce := make([]byte, NonceSize)
 	binary.BigEndian.PutUint32(nonce[:4], st.prefix)
@@ -198,6 +238,7 @@ func sealWith(key, plaintext, aad []byte, newAEAD func([]byte) (cipher.AEAD, err
 // Open decrypts a Seal blob. GET uses AAD = session id; other fronts use empty AAD.
 // The AEAD follows BindInner. LOFT_STAND_INNER=clear returns the blob.
 func Open(key, blob, aad []byte) ([]byte, error) {
+	_, _ = keyState(key) // keeps the key's state alive while it is in use
 	switch dataInner(key) {
 	case wire.InnerClear:
 		return append([]byte(nil), blob...), nil
