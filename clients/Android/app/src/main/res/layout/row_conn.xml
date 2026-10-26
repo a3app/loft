@@ -2,78 +2,124 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:clipChildren="false"
     android:paddingLeft="12dp"
-    android:paddingTop="3dp"
+    android:paddingTop="4dp"
     android:paddingRight="12dp"
-    android:paddingBottom="3dp">
+    android:paddingBottom="4dp">
 
-    <LinearLayout
-        android:id="@+id/card"
+    <app.loft.android.RevealFrame
+        android:id="@+id/swipe"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_card"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingLeft="10dp"
-        android:paddingTop="8dp"
-        android:paddingRight="10dp"
-        android:paddingBottom="8dp">
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
-        <Button
-            android:id="@+id/mini"
-            style="@style/Widget.Loft.Mini"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:text="@string/connect" />
-
-        <LinearLayout
-            android:id="@+id/body"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="10dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+        <FrameLayout
+            android:id="@+id/behind"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
 
             <TextView
-                android:id="@+id/title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-medium"
+                android:id="@+id/act_edit"
+                android:layout_width="84dp"
+                android:layout_height="match_parent"
+                android:layout_gravity="start"
+                android:background="@drawable/bg_swipe_edit"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="@string/edit"
+                android:textColor="@color/ink"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="invisible" />
+
+            <TextView
+                android:id="@+id/act_del"
+                android:layout_width="84dp"
+                android:layout_height="match_parent"
+                android:layout_gravity="end"
+                android:background="@drawable/bg_swipe_del"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="@string/delete"
                 android:textColor="@color/snow"
-                android:textSize="13.5sp" />
-
-            <TextView
-                android:id="@+id/sub"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFamily="monospace"
-                android:maxLines="1"
-                android:textColor="@color/mute"
-                android:textSize="10.5sp" />
-        </LinearLayout>
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="invisible" />
+        </FrameLayout>
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:id="@+id/card"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="end"
-            android:orientation="vertical">
+            android:background="@drawable/bg_card"
+            android:outlineProvider="none"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="10dp"
+            android:paddingTop="8dp"
+            android:paddingRight="10dp"
+            android:paddingBottom="8dp">
 
-            <TextView
-                android:id="@+id/live"
+            <Button
+                android:id="@+id/mini"
+                style="@style/Widget.Loft.Mini"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="@string/connect" />
+
+            <LinearLayout
+                android:id="@+id/body"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:textColor="@color/snow"
+                    android:textSize="13.5sp" />
+
+                <TextView
+                    android:id="@+id/sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="monospace"
+                    android:maxLines="1"
+                    android:textColor="@color/mute"
+                    android:textSize="10.5sp" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/active"
-                android:textColor="@color/lamp"
-                android:textSize="11sp"
-                android:visibility="gone" />
+                android:gravity="end"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/kind"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/stone"
-                android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/live"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/active"
+                    android:textColor="@color/lamp"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/kind"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/stone"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </app.loft.android.RevealFrame>
 </FrameLayout>

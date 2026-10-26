@@ -6,8 +6,6 @@ import android.app.AlertDialog;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.net.Uri;
 import android.net.VpnService;
 import android.os.Build;
@@ -24,7 +22,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -116,7 +113,6 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         RecyclerView list = conns.findViewById(R.id.list);
         list.setLayoutManager(new LinearLayoutManager(this));
         list.setAdapter(adapter);
-        new ItemTouchHelper(new SwipeCb()).attachToRecyclerView(list);
         conns.findViewById(R.id.fab).setOnClickListener(v -> addSheet());
         adapter.reload();
     }
@@ -651,51 +647,6 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         return o.toString(StandardCharsets.UTF_8.name());
     }
 
-    /** Swipe on a connection row: left asks to delete, right opens the editor. The row snaps back. */
-    private final class SwipeCb extends ItemTouchHelper.SimpleCallback {
-        private final Paint paint = new Paint();
-
-        SwipeCb() {
-            super(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT);
-        }
-
-        @Override
-        public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder a,
-                              @NonNull RecyclerView.ViewHolder b) {
-            return false;
-        }
-
-        @Override
-        public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int dir) {
-            int pos = vh.getBindingAdapterPosition();
-            Profile pr = adapter.getItem(pos);
-            if (pr == null) {
-                return;
-            }
-            if (dir == ItemTouchHelper.LEFT) {
-                confirmDelete(pr);
-                adapter.notifyItemChanged(pos);
-            } else {
-                startActivity(new Intent(MainActivity.this, EditActivity.class).putExtra("id", pr.id));
-                adapter.notifyItemChanged(pos);
-            }
-        }
-
-        @Override
-        public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView rv,
-                                @NonNull RecyclerView.ViewHolder vh, float dx, float dy,
-                                int actionState, boolean active) {
-            View item = vh.itemView;
-            paint.setColor(dx > 0 ? 0xFFE8B84A : 0xFFE24B4B);
-            if (dx > 0) {
-                c.drawRect(item.getLeft(), item.getTop(), item.getLeft() + dx, item.getBottom(), paint);
-            } else if (dx < 0) {
-                c.drawRect(item.getRight() + dx, item.getTop(), item.getRight(), item.getBottom(), paint);
-            }
-            super.onChildDraw(c, rv, vh, dx, dy, actionState, active);
-        }
-    }
-
     private ArrayAdapter<String> spin(String... items) {
         ArrayAdapter<String> a = new ArrayAdapter<>(this, R.layout.spinner_item, items);
         a.setDropDownViewResource(R.layout.spinner_dropdown);
@@ -733,12 +684,17 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      * Connection list. The active profile is highlighted; its button stops the
      * session when up. Another profile's button makes it active, stops any
      * running session and connects. Tap edits, long-press opens a menu.
+     * Swipe parks the card at 84dp over Edit / Delete, as in the mock.
      */
     final class ConnAdapter extends RecyclerView.Adapter<ConnAdapter.Hold> {
         private List<Profile> data = new ArrayList<>();
+        private String openId;
+        private float openTx;
 
         void reload() {
             data = LoftApp.of(MainActivity.this).profiles().all();
+            openId = null;
+            openTx = 0;
             notifyDataSetChanged();
             boolean empty = data.isEmpty();
             conns.findViewById(R.id.list).setVisibility(empty ? View.GONE : View.VISIBLE);
@@ -747,6 +703,16 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
 
         Profile getItem(int i) {
             return i >= 0 && i < data.size() ? data.get(i) : null;
+        }
+
+        void closeOthers(Hold keep) {
+            RecyclerView rv = conns.findViewById(R.id.list);
+            for (int i = 0; i < getItemCount(); i++) {
+                RecyclerView.ViewHolder vh = rv.findViewHolderForAdapterPosition(i);
+                if (vh instanceof Hold && vh != keep) {
+                    ((Hold) vh).swipe.settleNow(0);
+                }
+            }
         }
 
         @NonNull
@@ -770,6 +736,31 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             h.mini.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
                     getColor(thisUp ? R.color.lamp : R.color.slate)));
             h.mini.setTextColor(getColor(thisUp ? R.color.ink : R.color.snow));
+            h.swipe.settleNow(p.id.equals(openId) ? openTx : 0);
+            h.swipe.setListener(new RevealFrame.Listener() {
+                @Override
+                public void onRevealStart(RevealFrame row) {
+                    closeOthers(h);
+                }
+
+                @Override
+                public void onSettled(RevealFrame row, float tx) {
+                    int pos = h.getBindingAdapterPosition();
+                    Profile cur = getItem(pos);
+                    if (cur == null) {
+                        return;
+                    }
+                    if (Math.abs(tx) < 1f) {
+                        if (cur.id.equals(openId)) {
+                            openId = null;
+                            openTx = 0;
+                        }
+                    } else {
+                        openId = cur.id;
+                        openTx = tx;
+                    }
+                }
+            });
             h.mini.setOnClickListener(x -> {
                 LoftApp.of(MainActivity.this).profiles().setActive(p.id);
                 if (thisUp) {
@@ -781,8 +772,27 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                     connect();
                 }
             });
-            h.body.setOnClickListener(x ->
-                    startActivity(new Intent(MainActivity.this, EditActivity.class).putExtra("id", p.id)));
+            h.body.setOnClickListener(x -> {
+                if (Math.abs(h.swipe.translation()) > 4) {
+                    h.swipe.close();
+                    openId = null;
+                    openTx = 0;
+                    return;
+                }
+                startActivity(new Intent(MainActivity.this, EditActivity.class).putExtra("id", p.id));
+            });
+            h.actEdit.setOnClickListener(x -> {
+                h.swipe.settleNow(0);
+                openId = null;
+                openTx = 0;
+                startActivity(new Intent(MainActivity.this, EditActivity.class).putExtra("id", p.id));
+            });
+            h.actDel.setOnClickListener(x -> {
+                h.swipe.close();
+                openId = null;
+                openTx = 0;
+                confirmDelete(p);
+            });
             h.itemView.setOnLongClickListener(x -> {
                 showConnMenu(p);
                 return true;
@@ -795,7 +805,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
 
         final class Hold extends RecyclerView.ViewHolder {
+            final RevealFrame swipe;
             final View card;
+            final View actEdit;
+            final View actDel;
             final Button mini;
             final View body;
             final TextView title;
@@ -805,7 +818,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
 
             Hold(View v) {
                 super(v);
+                swipe = v.findViewById(R.id.swipe);
                 card = v.findViewById(R.id.card);
+                actEdit = v.findViewById(R.id.act_edit);
+                actDel = v.findViewById(R.id.act_del);
                 mini = v.findViewById(R.id.mini);
                 body = v.findViewById(R.id.body);
                 title = v.findViewById(R.id.title);
