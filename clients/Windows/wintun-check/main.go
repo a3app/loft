@@ -150,22 +150,19 @@ func run(dir string) bool {
 		step("Номер интерфейса", false, err.Error())
 		return false
 	}
-	// Windows keeps a static address per adapter GUID, so a previous run's
-	// address is still there and "set" would fail with "already exists".
-	// Remove it now (an error just means there was none) and again on exit.
-	unaddr := func() {
+	defer func() {
+		clearAddress(luid, localIP, 24)
+		// Older versions of this test set the address with netsh, which also
+		// saves it in the registry for the adapter's GUID. Wipe that copy too.
 		exec.Command("netsh", "interface", "ipv4", "delete", "address",
-			fmt.Sprintf("name=%d", idx), "address="+localIP).Run()
-	}
-	unaddr()
-	defer unaddr()
-	cmd := exec.Command("netsh", "interface", "ipv4", "set", "address",
-		fmt.Sprintf("name=%d", idx), "source=static", "address="+localIP, "mask=255.255.255.0")
-	if b, err := cmd.CombinedOutput(); err != nil {
-		step("Адрес "+localIP+"/24", false, fmt.Sprintf("%v %s", err, oem(b)))
+			fmt.Sprintf("name=%d", idx), "address="+localIP, "store=persistent").Run()
+	}()
+	note, err := setAddress(luid, localIP, 24)
+	if err != nil {
+		step("Адрес "+localIP+"/24", false, fmt.Sprintf("%v %s", err, note))
 		return false
 	}
-	step("Адрес "+localIP+"/24", true, fmt.Sprintf("интерфейс %d", idx))
+	step("Адрес "+localIP+"/24", true, fmt.Sprintf("интерфейс %d %s", idx, note))
 
 	// ── 5. Session and ping ──
 	session, _, err := w.startSession.Call(adapter, 0x400000)
