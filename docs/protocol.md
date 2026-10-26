@@ -577,12 +577,15 @@ Each message `u32be length || u8 type || body`.
 | 6 | drain | id, u8 |
 | 7 | key_roll | KeyRoll (§10.4); sent before enrol_ok while the controller key changes |
 | 8 | state | to a standby controller only: the controller's state as named files (u8 n, then n × (u8 name_len \|\| name \|\| u32be len \|\| bytes)), after enrol_ok and again when it changes |
+| 9 | takeover | Takeover: the newest controller generation the sender knows. A relay sends it first, before `enrol_req`; the controller sends its own before `enrol_ok` |
 
 Slice (Ed25519 over the body): serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be, then pub and sig as in the roster. The `enrol_req` id MUST equal the relay id of the key the trunk authenticated with, so one relay cannot enrol as another. The relay MUST verify every slice with the controller public key it was installed with and MUST refuse a slice signed by any other key. Enrol deny: 1 unknown id, 2 bad form, 3 duplicate, 4 disabled. *Informative, not normative.* Configuration names for the relay list, relay keys, and per-relay overrides of URL, decoy, fronts, and weight are in [guide.md](guide.md).
 
 Provisioning of machines and certificates is outside this protocol.
 
 A standby controller is a relay that the controller marks as such. The controller MUST send `state` only to a trunk whose key belongs to a relay marked standby. *Informative, not normative.* What the state holds and how a standby takes over are deployment matters; this tree's are in [guide.md](guide.md).
+
+A standby that takes over holds the controller's own key, so signatures alone cannot tell it from the old controller. Each takeover therefore signs a Takeover with the controller key: `"lft-take" || u64be epoch || u64be at || u8 len || by || sig[64]`. `epoch` is one above the newest generation the standby knows, `at` is unix seconds, `by` is the standby id. A controller with a Takeover MUST send it as `takeover` before `enrol_ok`. A relay MUST keep the newest valid Takeover it has seen (signed by the key it pins) and MUST send it as the first `takeover` message on every ctl:1 stream. A controller that receives a valid Takeover with an epoch above its own has been replaced: it MUST stop serving as the controller. A relay MUST refuse a controller whose generation is below the newest it has seen. A relay with more than one controller address SHOULD periodically send its Takeover to each of them, so an old controller that comes back learns of the takeover even when no trunk lands on it.
 
 ### 10.3 Address lists
 

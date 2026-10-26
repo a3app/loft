@@ -577,12 +577,15 @@ repeat n:
 | 6 | drain | id, u8 |
 | 7 | key_roll | KeyRoll（§10.4）；控制器密钥更换期间在 enrol_ok 之前发送 |
 | 8 | state | 仅发给备用控制器：以命名文件表示的控制器状态（u8 n，然后 n × (u8 name_len \|\| name \|\| u32be len \|\| bytes)），在 enrol_ok 之后发送，任何变化时再次发送 |
+| 9 | takeover | Takeover：发送方所知的最新控制器代次。中继在 `enrol_req` 之前首先发送；控制器在 `enrol_ok` 之前发送自己的 |
 
 切片（体上的 Ed25519）：serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be，然后与名册相同的 pub 与 sig。`enrol_req` 的 id 必须等于干线所用密钥对应的中继 id，以免一个中继冒充另一个。中继必须用安装时拿到的控制器公钥校验每个切片，并必须拒绝由其他任何密钥签名的切片。登记拒绝：1 未知 id，2 格式错误，3 重复，4 停用。*说明，非规范。* 中继名单、中继密钥，以及按中继覆盖 URL、decoy、fronts、weight 的配置名，见 [guide_zh.md](guide_zh.md)。
 
 机器与证书的置备在本协议之外。
 
 备用控制器是被控制器标记为备用的中继。控制器必须只把 `state` 发给密钥属于被标记为备用的中继的干线。*说明，非规范。* 状态包含什么、备用如何接手属于部署问题；本仓库的做法见 [guide_zh.md](guide_zh.md)。
+
+接手的备用持有控制器自己的密钥，因此仅凭签名无法将其与旧控制器区分。为此每次提升都用控制器密钥签发一条 Takeover：`"lft-take" || u64be epoch || u64be at || u8 len || by || sig[64]`。`epoch` 比备用所知的最新代次大一，`at` 为 unix 秒，`by` 为备用 id。持有 Takeover 的控制器必须在 `enrol_ok` 之前以 `takeover` 消息发送它。中继必须保存所见过的最新有效 Takeover（由其固定信任的密钥签名），并必须在每个 ctl:1 流中把它作为第一条 `takeover` 消息发送。收到 epoch 高于自身的有效 Takeover 的控制器已被替换：它必须停止作为控制器工作。中继必须拒绝代次低于其所见最新代次的控制器。拥有多个控制器地址的中继应当定期向每个地址发送其 Takeover，使回来的旧控制器即使没有干线落到它上面也能得知被替换。
 
 ### 10.3 地址列表
 
