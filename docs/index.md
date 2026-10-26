@@ -40,6 +40,7 @@ flowchart LR
 |--|--|
 | [protocol.md](protocol.md) | The wire protocol. A third-party client or node may be implemented from it. |
 | [architecture.md](architecture.md) | This tree: controller, relay, client, overlay. |
+| [code-tour.md](code-tour.md) | Code tour: where to start reading, one connection end to end, glossary. |
 | [guide.md](guide.md) | Build, config, decoy, roster, Debian. |
 | [share.md](share.md) | Import URI: `loft://`, `.loft` (one or several connections), QR. |
 | [keenetic.md](keenetic.md) | KeeneticOS Entware client. |

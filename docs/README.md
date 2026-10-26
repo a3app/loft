@@ -8,6 +8,7 @@ loft/1.0. Software version is `../VERSION`. Apache License 2.0.
 |--|--|
 | [protocol.md](protocol.md) | The wire protocol. A third-party client or node may be implemented from it. |
 | [architecture.md](architecture.md) | This tree: controller, relay, client, overlay. |
+| [code-tour.md](code-tour.md) | Code tour: where to start reading, one connection end to end, glossary. |
 | [guide.md](guide.md) | Build, config, decoy, roster, Debian. |
 | [yandex-cdn_ru.md](yandex-cdn_ru.md) | Yandex Cloud CDN: где что завести (RU). |
 | [keenetic.md](keenetic.md) | KeeneticOS: OpkgTun, priorities, panel auth. |

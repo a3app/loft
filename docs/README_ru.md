@@ -39,6 +39,7 @@ flowchart LR
 |--|--|
 | [protocol_ru.md](protocol_ru.md) | Протокол. По нему можно написать сторонний клиент или ноду. |
 | [architecture_ru.md](architecture_ru.md) | Это дерево: controller, relay, клиент, оверлей. |
+| [code-tour_ru.md](code-tour_ru.md) | Путеводитель по коду: с чего начать читать, путь соединения, словарь. |
 | [guide_ru.md](guide_ru.md) | Сборка, конфиг, decoy, roster, Debian. |
 | [yandex-cdn_ru.md](yandex-cdn_ru.md) | Yandex Cloud CDN: пошаговая настройка. |
 | [keenetic_ru.md](keenetic_ru.md) | KeeneticOS: OpkgTun, приоритеты, вход в панель. |

@@ -91,6 +91,7 @@ flowchart LR
 |--|--|
 | [docs/protocol.md](docs/protocol.md) | The wire protocol. A third-party client or node may be implemented from it. |
 | [docs/architecture.md](docs/architecture.md) | Layout of this tree. |
+| [docs/code-tour.md](docs/code-tour.md) | Code tour: where to start reading, one connection end to end, glossary. |
 | [docs/guide.md](docs/guide.md) | Build, configuration, operation, Debian. |
 | [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN operator guide (RU). |
 | [docs/keenetic.md](docs/keenetic.md) | KeeneticOS Entware client (OpkgTun). Catalog: [clients/Keenetic/](clients/Keenetic/). |

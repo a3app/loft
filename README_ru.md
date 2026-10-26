@@ -91,6 +91,7 @@ flowchart LR
 |--|--|
 | [docs/protocol_ru.md](docs/protocol_ru.md) | Спецификация. По ней можно написать свою реализацию. |
 | [docs/architecture_ru.md](docs/architecture_ru.md) | Как устроен репозиторий. |
+| [docs/code-tour_ru.md](docs/code-tour_ru.md) | Путеводитель по коду: с чего начать читать, путь соединения, словарь. |
 | [docs/guide_ru.md](docs/guide_ru.md) | Сборка, настройка, запуск, Debian. |
 | [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN: как подключить. |
 | [docs/keenetic_ru.md](docs/keenetic_ru.md) | Клиент KeeneticOS (Entware, OpkgTun). Каталог: [clients/Keenetic/](clients/Keenetic/). |

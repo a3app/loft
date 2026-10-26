@@ -39,6 +39,7 @@ flowchart LR
 |--|--|
 | [protocol_zh.md](protocol_zh.md) | 线协议。照着就能写第三方客户端或节点。 |
 | [architecture_zh.md](architecture_zh.md) | 本仓库：控制器、中继、客户端、覆盖网。 |
+| [code-tour_zh.md](code-tour_zh.md) | 代码导读：从哪里读起、一个连接的完整路径、词汇表。 |
 | [guide_zh.md](guide_zh.md) | 编译、配置、诱饵、名册、Debian。 |
 | [yandex-cdn_zh.md](yandex-cdn_zh.md) | Yandex Cloud CDN：控制台怎么点。 |
 | [keenetic_zh.md](keenetic_zh.md) | KeeneticOS：OpkgTun、优先级、面板登录。 |

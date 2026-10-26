@@ -91,6 +91,7 @@ flowchart LR
 |--|--|
 | [docs/protocol_zh.md](docs/protocol_zh.md) | 线协议。照着就能写第三方客户端或节点。 |
 | [docs/architecture_zh.md](docs/architecture_zh.md) | 本仓库怎么摆。 |
+| [docs/code-tour_zh.md](docs/code-tour_zh.md) | 代码导读：从哪里读起、一个连接的完整路径、词汇表。 |
 | [docs/guide_zh.md](docs/guide_zh.md) | 编译、配置、跑起来、Debian。 |
 | [docs/yandex-cdn_zh.md](docs/yandex-cdn_zh.md) | Yandex Cloud CDN 运营指南。 |
 | [docs/keenetic_zh.md](docs/keenetic_zh.md) | KeeneticOS Entware 客户端（OpkgTun）。目录：[clients/Keenetic/](clients/Keenetic/)。 |
