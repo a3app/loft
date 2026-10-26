@@ -37,6 +37,30 @@ type relayRuntime struct {
 	conns   atomic.Int32
 	drain   atomic.Bool
 	decoy   *decoyListener
+	// ctlUp is true while ctl:1 to the controller is enrolled; downSince
+	// (unix nanoseconds) is when it last went down, or the start.
+	ctlUp     atomic.Bool
+	downSince atomic.Int64
+}
+
+// setCtlUp records whether this relay reaches the controller now.
+func (rt *relayRuntime) setCtlUp(up bool) {
+	if !up && rt.ctlUp.Load() {
+		rt.downSince.Store(time.Now().UnixNano())
+	}
+	rt.ctlUp.Store(up)
+}
+
+// downFor is how long the controller has been unreachable (0 while it is).
+func (rt *relayRuntime) downFor() time.Duration {
+	if rt.ctlUp.Load() {
+		return 0
+	}
+	since := rt.downSince.Load()
+	if since == 0 {
+		since = rt.started.UnixNano()
+	}
+	return time.Since(time.Unix(0, since))
 }
 
 // apply sets drain and, when present, replaces the decoy origin from the slice.
@@ -143,6 +167,8 @@ func relayCtlSession(ctx context.Context, sess *mux.Session, req wire.EnrolReq, 
 	if sl.BeatMS > 0 {
 		*beatMS = sl.BeatMS
 	}
+	rt.setCtlUp(true)
+	defer rt.setCtlUp(false)
 	// A standby controller keeps the state the controller sends after
 	// enrol_ok; the stream is read here while the loop below writes beats.
 	if standby != "" {

@@ -74,6 +74,12 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 		standby = filepath.Join(filepath.Dir(cfg.ControllerKey), "standby")
 	}
 	go runRelayCtl(ctx, h, cfg, rt, pin, standby)
+	if len(cfg.Witness) > 0 {
+		go witnessLoop(ctx, rt, cfg.ID, []byte(token), cfg.Witness)
+	}
+	if standby != "" {
+		go runStandby(ctx, cfg, rt, standby)
+	}
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return err

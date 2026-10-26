@@ -161,6 +161,9 @@ type ServerConfig struct {
 	Role          string              `yaml:"role"`           // controller | relay; empty = controller
 	Controller    string              `yaml:"controller"`     // relay: hub URL
 	ControllerAlt []string            `yaml:"controller_alt"` // relay: standby controllers' hub URLs, tried after Controller
+	Witness       []string            `yaml:"witness"`        // relay: standby witness addresses (host:port) it reports to
+	WitnessListen string              `yaml:"witness_listen"` // standby: where relays' witness reports arrive
+	PromoteAfter  int                 `yaml:"promote_after"`  // standby: seconds without the controller before auto-promote (default 300)
 	RelayToken    string              `yaml:"-"`              // relay: its own key, from {dir}/relay.key
 	ControllerPub string              `yaml:"controller_pub"` // relay: controller Ed25519 key (hex) that signs its slice
 	ControllerKey string              `yaml:"controller_key"` // path to ed25519 seed
@@ -177,16 +180,19 @@ type ServerConfig struct {
 
 // RelayEntry is one controller allowlist row for enrol: list.
 type RelayEntry struct {
-	ID        string   `yaml:"id"`
-	KeySHA256 string   `yaml:"key_sha256"` // SHA-256 of the relay's key; the key itself is in relays.keys
-	Replica   bool     `yaml:"replica"`    // a standby controller: it gets a copy of the controller's state
-	URL       string   `yaml:"url"`
-	Decoy     string   `yaml:"decoy"`
-	Fronts    []string `yaml:"fronts"`
-	Drain     bool     `yaml:"drain"`
-	Weight    byte     `yaml:"weight"`
-	Path      string   `yaml:"path"`
-	MaskPub   string   `yaml:"mask_pub"` // hex, optional
+	ID        string `yaml:"id"`
+	KeySHA256 string `yaml:"key_sha256"` // SHA-256 of the relay's key; the key itself is in relays.keys
+	Replica   bool   `yaml:"replica"`    // a standby controller: it gets a copy of the controller's state
+	// AutoPromote lets this standby become the controller by itself when it
+	// and most relays have lost the controller for PromoteAfter.
+	AutoPromote bool     `yaml:"auto_promote"`
+	URL         string   `yaml:"url"`
+	Decoy       string   `yaml:"decoy"`
+	Fronts      []string `yaml:"fronts"`
+	Drain       bool     `yaml:"drain"`
+	Weight      byte     `yaml:"weight"`
+	Path        string   `yaml:"path"`
+	MaskPub     string   `yaml:"mask_pub"` // hex, optional
 }
 
 // CanaryConfig is the path canary: how this node presents TLS so members

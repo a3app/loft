@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/a3app/loft/internal/startup"
@@ -56,6 +57,22 @@ func applyNode(c *ServerConfig, tok []string) error {
 		c.Advertise = tok[1]
 	case "enrol":
 		// Old node.conf only: a relay now enrols with its own key, no mode.
+	case "witness":
+		c.Witness = append([]string(nil), tok[1:]...)
+	case "witness_listen":
+		if len(tok) < 2 {
+			return fmt.Errorf("witness_listen wants host:port")
+		}
+		c.WitnessListen = tok[1]
+	case "promote_after":
+		if len(tok) < 2 {
+			return fmt.Errorf("promote_after wants seconds")
+		}
+		n, err := strconv.Atoi(tok[1])
+		if err != nil || n < 60 {
+			return fmt.Errorf("promote_after: seconds, at least 60")
+		}
+		c.PromoteAfter = n
 	case "controller_pub":
 		if len(tok) < 2 {
 			return fmt.Errorf("controller_pub wants 64 hex digits")
@@ -202,6 +219,10 @@ func applyRelay(c *ServerConfig, tok []string) error {
 			e.Replica = true
 			continue
 		}
+		if k == "auto_promote" {
+			e.AutoPromote = true
+			continue
+		}
 		if i+1 >= len(tok) {
 			return fmt.Errorf("relay %s: %s wants a value", e.ID, k)
 		}
@@ -311,6 +332,15 @@ func RenderCommands(c ServerConfig) string {
 		if c.ControllerPub != "" {
 			fmt.Fprintf(&b, "controller_pub %s\n", c.ControllerPub)
 		}
+		if len(c.Witness) > 0 {
+			fmt.Fprintf(&b, "witness %s\n", strings.Join(c.Witness, " "))
+		}
+		if c.WitnessListen != "" {
+			fmt.Fprintf(&b, "witness_listen %s\n", c.WitnessListen)
+		}
+		if c.PromoteAfter > 0 {
+			fmt.Fprintf(&b, "promote_after %d\n", c.PromoteAfter)
+		}
 	} else {
 		if c.RosterPath != "" {
 			fmt.Fprintf(&b, "roster_path %s\n", c.RosterPath)
@@ -367,6 +397,9 @@ func RenderCommands(c ServerConfig) string {
 		}
 		if e.Replica {
 			b.WriteString(" replica")
+		}
+		if e.AutoPromote {
+			b.WriteString(" auto_promote")
 		}
 		if e.Drain {
 			b.WriteString(" drain")
