@@ -158,7 +158,7 @@ func TestP2PRejectsReplayAndOldHello(t *testing.T) {
 	e := p2pKeys(t, 1)[0]
 	es, _ := e.ECDH(k[1].PublicKey())
 	static, _ := k[0].ECDH(k[1].PublicKey())
-	old := p2pHelloMsg(e.PublicKey().Bytes(), es, static, []byte{10, 8, 0, 2}, 22, uint64(time.Now().Add(-2*p2pSkew).Unix()), nil)
+	old := p2pHelloMsg(e.PublicKey().Bytes(), es, static, []byte{10, 8, 0, 2}, 22, uint64(time.Now().Add(-2*p2pSkew).Unix()), wire.InnerChaCha, nil)
 	c3, c4 := net.Pipe()
 	defer c3.Close()
 	go func() { c3.Write(old); io.Copy(io.Discard, c3) }()

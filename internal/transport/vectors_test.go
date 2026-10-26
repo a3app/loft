@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/a3app/loft/internal/wire"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -78,14 +79,14 @@ func TestP2PVector(t *testing.T) {
 	static, _ := local.ECDH(peer.PublicKey())
 	es, _ := e.ECDH(peer.PublicKey())
 	ee, _ := e.ECDH(r.PublicKey())
-	hello := p2pHelloMsg(ePub, es, static, []byte{10, 77, 0, 2}, 8080, 2524608000, []byte("pad"))
-	reply := p2pReplyMsg(rPub, es, ePub, nil)
+	hello := p2pHelloMsg(ePub, es, static, []byte{10, 77, 0, 2}, 8080, 2524608000, wire.InnerChaCha, []byte("pad"))
+	reply := p2pReplyMsg(rPub, es, ePub, wire.InnerChaCha, nil)
 	ir, _ := p2pDataKeys(ee, es, static, ePub, rPub)
 	var rec bytes.Buffer
 	pc := newP2PConn(&bufConn{&rec}, ir, ir)
 	pc.Write([]byte("ping"))
 	got := hex.EncodeToString(hello) + " " + hex.EncodeToString(reply) + " " + hex.EncodeToString(rec.Bytes())
-	const want = "1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acef59eae3000bdb7d97c5a83bbcb0f00b0f706164 24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543eca4bde80e88b6f53d067e8874af6450401 39b9fc9869bfe0580b40de9f12a7c1a3dd87f6469543822a1385ea6e9364ee21edd26e9e8d7b"
+	const want = "1222bc2690224afdf79af2353f4b1e6a413509a02b55edf17ee77b120c97f02ff329464388923d4616c229688f928cd3171fcbc3a2c9cda759cc35c2a7acedf68456d92f248fe6fa61b6abe0a6bb909c706164 24c5c85b756c65ee52638724ee40049b69916e77d878bc507b72d04211f5543ecb44343ff260d15fdd3a7e12c2cc6e8592c9 39b9fc9869bfe0580b40de9f12a7c1a3dd87f6469543822a1385ea6e9364ee21edd26e9e8d7b"
 	if got != want {
 		t.Fatalf("p2p\n got %s\nwant %s", got, want)
 	}

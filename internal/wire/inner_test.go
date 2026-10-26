@@ -70,6 +70,10 @@ func TestAgreeInner(t *testing.T) {
 	if set, id := AgreeInner(FrontWS, true, InnerClear, nil); set || id != InnerChaCha {
 		t.Fatalf("policy %v %d", set, id)
 	}
+	// The reserved id is not a cipher yet, even if a policy lists it.
+	if set, id := AgreeInner(FrontWS, true, InnerReserved, []byte{InnerReserved}); set || id != InnerChaCha {
+		t.Fatal("reserved id was confirmed")
+	}
 	if set, id := AgreeInner(FrontWS, true, InnerClear, allow); !set || id != InnerClear {
 		t.Fatalf("clear %v %d", set, id)
 	}

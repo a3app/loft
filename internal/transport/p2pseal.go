@@ -44,11 +44,13 @@ import (
 
 const (
 	// p2pHeadLen is the header plaintext: src_ipv4, dest_port, unix time,
-	// proof, padding length.
-	p2pHeadLen = 4 + 2 + 8 + 16 + 1
-	p2pTag     = 16
-	p2pSkew    = 60 * time.Second // header time allowed off the responder's clock
-	p2pRecMax  = 16 << 10         // largest data record
+	// proof, data cipher asked for, padding length.
+	p2pHeadLen = 4 + 2 + 8 + 16 + 1 + 1
+	// p2pReplyLen is the reply plaintext: data cipher chosen, padding length.
+	p2pReplyLen = 1 + 1
+	p2pTag      = 16
+	p2pSkew     = 60 * time.Second // header time allowed off the responder's clock
+	p2pRecMax   = 16 << 10         // largest data record
 )
 
 var errP2PHello = errors.New("p2p: hello")
@@ -132,24 +134,24 @@ func p2pDialAs(c net.Conn, my *ecdh.PrivateKey, src net.IP, port uint16, peerPub
 		return nil, err
 	}
 	ePub := p2pWirePub(e)
-	msg := p2pHelloMsg(ePub, es, static, src, port, uint64(time.Now().Unix()), p2pPad())
+	msg := p2pHelloMsg(ePub, es, static, src, port, uint64(time.Now().Unix()), wire.InnerChaCha, p2pPad())
 
 	_ = c.SetDeadline(time.Now().Add(2 * time.Second))
 	defer c.SetDeadline(time.Time{})
 	if _, err := c.Write(msg); err != nil {
 		return nil, err
 	}
-	reply := make([]byte, 32+1+p2pTag)
+	reply := make([]byte, 32+p2pReplyLen+p2pTag)
 	if _, err := io.ReadFull(c, reply); err != nil {
 		return nil, err
 	}
 	rPub := reply[:32]
 	k2 := p2pKDF(es, append(append([]byte(nil), ePub...), rPub...), "loft p2p reply", chacha20poly1305.KeySize)
 	n, err := p2pAEAD(k2).Open(nil, zeroNonce[:], reply[32:], rPub)
-	if err != nil {
+	if err != nil || n[0] != wire.InnerChaCha {
 		return nil, errP2PHello
 	}
-	if _, err := io.CopyN(io.Discard, c, int64(n[0])); err != nil {
+	if _, err := io.CopyN(io.Discard, c, int64(n[1])); err != nil {
 		return nil, err
 	}
 	ee, err := p2pECDH(e, rPub)
@@ -162,22 +164,24 @@ func p2pDialAs(c net.Conn, my *ecdh.PrivateKey, src net.IP, port uint16, peerPub
 
 // p2pHelloMsg is the initiator's first message: ePub || sealed header ||
 // pad. es is X25519(fresh, responder), static X25519(member, responder).
-func p2pHelloMsg(ePub, es, static, src []byte, port uint16, at uint64, pad []byte) []byte {
+// ask is the data cipher wanted, with the ids of the Hello inner byte.
+func p2pHelloMsg(ePub, es, static, src []byte, port uint16, at uint64, ask byte, pad []byte) []byte {
 	head := make([]byte, 0, p2pHeadLen)
 	head = append(head, src...)
 	head = binary.BigEndian.AppendUint16(head, port)
 	head = binary.BigEndian.AppendUint64(head, at)
 	head = append(head, p2pProof(static, ePub, src, port, at)...)
-	head = append(head, byte(len(pad)))
+	head = append(head, ask, byte(len(pad)))
 	k1 := p2pKDF(es, ePub, "loft p2p hello", chacha20poly1305.KeySize)
 	msg := append(append([]byte(nil), ePub...), p2pAEAD(k1).Seal(nil, zeroNonce[:], head, ePub)...)
 	return append(msg, pad...)
 }
 
-// p2pReplyMsg is the responder's answer: rPub || sealed pad length || pad.
-func p2pReplyMsg(rPub, es, ePub, pad []byte) []byte {
+// p2pReplyMsg is the responder's answer: rPub || sealed (chosen cipher,
+// pad length) || pad.
+func p2pReplyMsg(rPub, es, ePub []byte, chosen byte, pad []byte) []byte {
 	k2 := p2pKDF(es, append(append([]byte(nil), ePub...), rPub...), "loft p2p reply", chacha20poly1305.KeySize)
-	msg := append(append([]byte(nil), rPub...), p2pAEAD(k2).Seal(nil, zeroNonce[:], []byte{byte(len(pad))}, rPub)...)
+	msg := append(append([]byte(nil), rPub...), p2pAEAD(k2).Seal(nil, zeroNonce[:], []byte{chosen, byte(len(pad))}, rPub)...)
 	return append(msg, pad...)
 }
 
@@ -266,7 +270,7 @@ func p2pAcceptAs(c net.Conn, my *ecdh.PrivateKey, pubOf func(ip string) []byte) 
 	if !p2pFirstUse(ePub, now) {
 		return nil, 0, nil, errP2PHello
 	}
-	if _, err := io.CopyN(io.Discard, c, int64(head[30])); err != nil {
+	if _, err := io.CopyN(io.Discard, c, int64(head[31])); err != nil {
 		return nil, 0, nil, err
 	}
 	r, err := ecdh.X25519().GenerateKey(rand.Reader)
@@ -274,7 +278,10 @@ func p2pAcceptAs(c net.Conn, my *ecdh.PrivateKey, pubOf func(ip string) []byte) 
 		return nil, 0, nil, err
 	}
 	rPub := p2pWirePub(r)
-	if _, err := c.Write(p2pReplyMsg(rPub, es, ePub, p2pPad())); err != nil {
+	// ChaCha20-Poly1305 is the only data cipher on P2P for now; any other
+	// ask gets ChaCha (as with the Hello inner byte, clear is never chosen
+	// here: there is no TLS under a direct connection).
+	if _, err := c.Write(p2pReplyMsg(rPub, es, ePub, wire.InnerChaCha, p2pPad())); err != nil {
 		return nil, 0, nil, err
 	}
 	ee, err := p2pECDH(r, ePub)
