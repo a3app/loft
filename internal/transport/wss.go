@@ -481,6 +481,7 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer ss.releaseTicket()
 	}
 	applyInner(&st, wire.FrontWS, a.Rest)
+	applyCC(&st, wire.FrontWS, a.Rest, sockOf(r.Context()))
 	sealed, err := ecrypto.Seal(key, st.Encode(), nil)
 	if err != nil {
 		return

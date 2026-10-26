@@ -99,6 +99,21 @@ func applyNode(c *ServerConfig, tok []string) error {
 			return fmt.Errorf("inner wants clear, chacha, aes")
 		}
 		c.Inner = append([]string(nil), tok[1:]...)
+	case "cc":
+		if len(tok) < 2 {
+			return fmt.Errorf("cc wants off, bbr, fixed")
+		}
+		c.CC = append([]string(nil), tok[1:]...)
+	case "cc_max":
+		if len(tok) != 3 {
+			return fmt.Errorf("cc_max wants UP_MBPS DOWN_MBPS")
+		}
+		up, err1 := strconv.ParseUint(tok[1], 10, 32)
+		down, err2 := strconv.ParseUint(tok[2], 10, 32)
+		if err1 != nil || err2 != nil {
+			return fmt.Errorf("cc_max wants two numbers (Mbit/s, 0 = no cap)")
+		}
+		c.CCMaxUpMbps, c.CCMaxDownMbps = uint32(up), uint32(down)
 	case "decoy":
 		if len(tok) < 2 {
 			return fmt.Errorf("decoy wants host:port")
@@ -349,6 +364,12 @@ func RenderCommands(c ServerConfig) string {
 	}
 	if len(c.Inner) > 0 {
 		fmt.Fprintf(&b, "inner %s\n", strings.Join(c.Inner, " "))
+	}
+	if len(c.CC) > 0 {
+		fmt.Fprintf(&b, "cc %s\n", strings.Join(c.CC, " "))
+	}
+	if c.CCMaxUpMbps > 0 || c.CCMaxDownMbps > 0 {
+		fmt.Fprintf(&b, "cc_max %d %d\n", c.CCMaxUpMbps, c.CCMaxDownMbps)
 	}
 	fmt.Fprintf(&b, "canary fat_hello %s\n", onOff(c.Canary.Fat()))
 	fmt.Fprintf(&b, "canary split_hello %s\n", onOff(c.Canary.SplitHello))

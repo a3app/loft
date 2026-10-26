@@ -44,10 +44,13 @@ type ClientConfig struct {
 	Use           map[string]string `yaml:"use"`
 	Default       string            `yaml:"default"`
 	ListsURL      string            `yaml:"lists_url"`
-	P2P           *bool             `yaml:"p2p"`             // nil/true: try direct; false: only hub
-	Pause         string            `yaml:"pause,omitempty"` // empty | starlink — client draft pause, not on the wire
-	EdgeURL       string            `yaml:"edge,omitempty"`  // optional CDN URL; GET only. Not the node preset plain|tight
-	Inner         string            `yaml:"inner,omitempty"` // clear | chacha | aes. Empty omits the Hello byte (ChaCha)
+	P2P           *bool             `yaml:"p2p"`                    // nil/true: try direct; false: only hub
+	Pause         string            `yaml:"pause,omitempty"`        // empty | starlink — client draft pause, not on the wire
+	EdgeURL       string            `yaml:"edge,omitempty"`         // optional CDN URL; GET only. Not the node preset plain|tight
+	Inner         string            `yaml:"inner,omitempty"`        // clear | chacha | aes. Empty omits the Hello byte (ChaCha)
+	CC            string            `yaml:"cc,omitempty"`           // congestion control ask: off | bbr | fixed. Empty = off
+	CCUpMbps      uint32            `yaml:"cc_up_mbps,omitempty"`   // fixed: how fast this client may send, Mbit/s
+	CCDownMbps    uint32            `yaml:"cc_down_mbps,omitempty"` // fixed: how fast this client can receive, Mbit/s
 }
 
 // Published SOCKS5 (GUI / client.yaml). Debug CLI binds DebugSOCKS5 so the
@@ -172,8 +175,11 @@ type ServerConfig struct {
 	RosterPath    string              `yaml:"roster_path"`
 	ListsPath     string              `yaml:"lists_path"`
 	Lists         map[string][]string `yaml:"lists"`
-	Trace         string              `yaml:"trace"`           // session event log path; empty = off
-	Inner         []string            `yaml:"inner,omitempty"` // extra data ciphers: clear, aes. Empty = ChaCha only
+	Trace         string              `yaml:"trace"`                      // session event log path; empty = off
+	Inner         []string            `yaml:"inner,omitempty"`            // extra data ciphers: clear, aes. Empty = ChaCha only
+	CC            []string            `yaml:"cc,omitempty"`               // congestion control clients may ask for: bbr, fixed. Empty = off
+	CCMaxUpMbps   uint32              `yaml:"cc_max_up_mbps,omitempty"`   // fixed: cap on a client's sending rate; 0 = none
+	CCMaxDownMbps uint32              `yaml:"cc_max_down_mbps,omitempty"` // fixed: cap on the node's sending rate; 0 = none
 }
 
 // RelayEntry is one controller allowlist row for enrol: list.
@@ -344,6 +350,9 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 	if _, err := c.InnerIDs(); err != nil {
 		return nil, err
 	}
+	if _, err := c.CCIDs(); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -364,6 +373,47 @@ func (c *ClientConfig) InnerAsk() (set bool, id byte, err error) {
 		return false, id, nil
 	}
 	return true, id, nil
+}
+
+// CCAsk is the Hello congestion control ask and, for fixed, the two rates
+// in kbit/s (up = what the client sends, down = what it receives).
+func (c *ClientConfig) CCAsk() (id byte, up, down uint32, err error) {
+	if c == nil {
+		return wire.CCDefault, 0, 0, nil
+	}
+	id, err = wire.ParseCCName(c.CC)
+	if err != nil || id != wire.CCFixed {
+		return id, 0, 0, err
+	}
+	return id, c.CCUpMbps * 1000, c.CCDownMbps * 1000, nil
+}
+
+// CCIDs is the node's congestion control allow-list. Empty (or off) means
+// every session stays on the system default.
+func (c *ServerConfig) CCIDs() ([]byte, error) {
+	if c == nil {
+		return nil, nil
+	}
+	var out []byte
+	seen := map[byte]bool{}
+	for _, w := range c.CC {
+		for _, part := range strings.Split(w, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			id, err := wire.ParseCCName(part)
+			if err != nil {
+				return nil, err
+			}
+			if id == wire.CCDefault || seen[id] {
+				continue
+			}
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 // InnerIDs is the node's extra allow-list (clear and/or aes). ChaCha is always

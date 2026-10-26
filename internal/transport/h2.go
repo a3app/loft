@@ -246,7 +246,7 @@ func (s *H2Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.Flush()
 	}
 	conn := newHTTPConn(w, r.Body)
-	serveRawAs(conn, s.Info, s.Seen, s.frontName())
+	serveRawAs(conn, s.Info, s.Seen, s.frontName(), sockOf(r.Context()))
 }
 
 // corkBuf / corkWait match SSTP: coalesce DATA frames instead of Flush

@@ -427,13 +427,14 @@ func (s *l3Sess) readLoop(conn net.Conn, key []byte) {
 // This is the node side. Each packet from the client goes to
 // Overlay.DeliverL3; packets for this client come back through link, which
 // the overlay holds as this session's l3Sink. When the CONNECT ends, the
-// lease is released.
-func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth) {
+// lease is released. sock is the TCP connection under TLS, nil when unknown.
+func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth, sock net.Conn) {
 	defer conn.Close()
 	link := &l3Sess{conn: conn, key: a.Key, in: make(chan []byte, l3InCap), done: make(chan struct{})}
 	st := info.Status("l3")
 	finishStatusL3(&st, a.Token, a.Rest, link, conn.RemoteAddr())
 	applyInner(&st, wire.FrontL3, a.Rest)
+	applyCC(&st, wire.FrontL3, a.Rest, sock)
 	sealed, err := ecrypto.Seal(a.Key, st.Encode(), nil)
 	if err != nil {
 		return

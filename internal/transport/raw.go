@@ -218,7 +218,7 @@ func pumpMux(ms *mux.Session, conn io.Writer, key []byte, done <-chan struct{}, 
 
 // serveRaw authenticates, writes AEAD(Status), and relays mux on conn.
 func serveRaw(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces) {
-	serveRawAs(conn, info, seen, wire.FrontH2)
+	serveRawAs(conn, info, seen, wire.FrontH2, nil)
 }
 
 // serveRawAs is serveRaw tagged with the front that accepted conn (h2 or h3).
@@ -227,8 +227,9 @@ func serveRaw(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces) {
 // normal 0x02 handshake. A bad key or a replayed 0x02 just closes the
 // stream, so the node says nothing to a prober. On success the node adopts
 // a parked mux for the same member and instance if there is one, binds a
-// ticket so other fronts can attach, and sends sealed Status.
-func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string) {
+// ticket so other fronts can attach, and sends sealed Status. sock is the
+// TCP connection under TLS, nil when unknown.
+func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string, sock net.Conn) {
 	defer conn.Close()
 	raw, err := readMsg(conn)
 	if err != nil {
@@ -250,7 +251,7 @@ func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string
 	}
 	h, _ := wire.DecodeHello(a.Rest)
 	if h.Caps.Has(wire.CapL3) && info.Caps.Has(wire.CapL3) {
-		serveL3(conn, info, a)
+		serveL3(conn, info, a, sock)
 		return
 	}
 	if !info.Caps.Has(wire.CapH2) && !info.Caps.Has(wire.CapH3) {
@@ -267,6 +268,7 @@ func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string
 		defer ss.releaseTicket()
 	}
 	applyInner(&st, front, a.Rest)
+	applyCC(&st, front, a.Rest, sock)
 	sealed, err := ecrypto.Seal(key, st.Encode(), nil)
 	if err != nil {
 		return

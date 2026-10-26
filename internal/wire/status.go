@@ -30,6 +30,12 @@ type Hello struct {
 	// node can tell who has moved to a new key during a key roll. Empty when
 	// the client pins none.
 	ControllerPin []byte
+	// CC is the congestion control the client asks for (CCDefault, CCBBR,
+	// CCFixed). CCUp and CCDown are the line rates for fixed, kbit/s: what
+	// the client may send and what it can take.
+	CC     byte
+	CCUp   uint32
+	CCDown uint32
 }
 
 // PinOf is the first 8 bytes of SHA-256 of a controller public key.
@@ -111,6 +117,9 @@ type Status struct {
 	InnerSet     bool      // inner byte is present. Absent means ChaCha20-Poly1305
 	Inner        byte      // 0 clear, 1 ChaCha20-Poly1305, 2 AES-256-GCM
 	KeyRoll      []byte    // encoded KeyRoll while the controller key changes; empty otherwise
+	CC           byte      // congestion control both sides use; 0 = system default
+	CCUp         uint32    // fixed: client sending rate, kbit/s; 0 = that direction stays default
+	CCDown       uint32    // fixed: node sending rate, kbit/s; 0 = that direction stays default
 }
 
 // FrontEP is one Status front: name (get/ws/h2/h3/quic), HTTP path, optional URL.
@@ -202,20 +211,28 @@ func (h Hello) Encode() []byte {
 	b = b[:off+12]
 	b = append(b, putStr(h.Program)...)
 	b = append(b, putStr(h.Software)...)
-	if h.InnerSet || len(h.ControllerPin) > 0 {
+	needCC := h.CC != CCDefault
+	if h.InnerSet || len(h.ControllerPin) > 0 || needCC {
 		// Without a cipher request the byte is ChaCha20-Poly1305, the default.
 		in := h.Inner
 		if !h.InnerSet {
 			in = InnerChaCha
 		}
 		b = append(b, in)
-		if len(h.ControllerPin) > 0 {
+		if len(h.ControllerPin) > 0 || needCC {
 			pin := h.ControllerPin
 			if len(pin) > 32 {
 				pin = pin[:32]
 			}
 			b = append(b, byte(len(pin)))
 			b = append(b, pin...)
+			if needCC {
+				var r [9]byte
+				r[0] = h.CC
+				binary.BigEndian.PutUint32(r[1:5], h.CCUp)
+				binary.BigEndian.PutUint32(r[5:9], h.CCDown)
+				b = append(b, r[:]...)
+			}
 		}
 	}
 	return b
@@ -251,7 +268,14 @@ func DecodeHello(b []byte) (Hello, error) {
 				h.Inner = extra[end]
 				h.InnerSet = true
 				if p := extra[end+1:]; len(p) >= 1 && len(p) >= 1+int(p[0]) {
-					h.ControllerPin = append([]byte(nil), p[1:1+int(p[0])]...)
+					if p[0] > 0 {
+						h.ControllerPin = append([]byte(nil), p[1:1+int(p[0])]...)
+					}
+					if r := p[1+int(p[0]):]; len(r) >= 9 {
+						h.CC = r[0]
+						h.CCUp = binary.BigEndian.Uint32(r[1:5])
+						h.CCDown = binary.BigEndian.Uint32(r[5:9])
+					}
 				}
 			}
 		}
@@ -379,7 +403,8 @@ func (s Status) Encode() []byte {
 	needRoutes := len(s.Routes) > 0
 	needPolicy := s.Policy.Present || len(s.Policy.OwnTags) > 0 || s.Policy.ACLDefault > 0 || len(s.Policy.Rules) > 0 || len(s.Policy.Peers) > 0
 	needTTL := s.SessionTTLMS > 0
-	needRoll := len(s.KeyRoll) > 0
+	needCC := s.CC != CCDefault
+	needRoll := len(s.KeyRoll) > 0 || needCC
 	needInner := s.InnerSet || needRoll
 	needFronts := len(s.Fronts) > 0 || s.Edge > 0 || needInner
 	needRate := s.RateBPS > 0 || needFronts
@@ -435,6 +460,13 @@ func (s Status) Encode() []byte {
 													binary.BigEndian.PutUint16(rl[:], uint16(len(s.KeyRoll)))
 													tail = append(tail, rl[:]...)
 													tail = append(tail, s.KeyRoll...)
+													if needCC {
+														var cc [9]byte
+														cc[0] = s.CC
+														binary.BigEndian.PutUint32(cc[1:5], s.CCUp)
+														binary.BigEndian.PutUint32(cc[5:9], s.CCDown)
+														tail = append(tail, cc[:]...)
+													}
 												}
 											}
 										}
@@ -696,8 +728,16 @@ func DecodeStatus(b []byte) (Status, error) {
 														n := int(binary.BigEndian.Uint16(b[off : off+2]))
 														off += 2
 														if off+n <= len(b) {
-															s.KeyRoll = append([]byte(nil), b[off:off+n]...)
+															if n > 0 {
+																s.KeyRoll = append([]byte(nil), b[off:off+n]...)
+															}
 															off += n
+															if off+9 <= len(b) {
+																s.CC = b[off]
+																s.CCUp = binary.BigEndian.Uint32(b[off+1 : off+5])
+																s.CCDown = binary.BigEndian.Uint32(b[off+5 : off+9])
+																off += 9
+															}
 														}
 													}
 												}

@@ -66,25 +66,16 @@ var tlsSess = utls.NewLRUClientSessionCache(64)
 // the 0.5–2 s a 512 KiB–2 MiB send buffer used to add. TLS, prefixConn, and
 // other wrappers are unwrapped.
 func tuneTCP(c net.Conn) {
-	for i := 0; i < 8 && c != nil; i++ {
-		if t, ok := c.(*net.TCPConn); ok {
-			_ = t.SetNoDelay(true)
-			if n, pin := standTCP(); pin {
-				_ = t.SetReadBuffer(n)
-				_ = t.SetWriteBuffer(n)
-			}
-			standApplyLowat(t)
-			return
-		}
-		switch u := c.(type) {
-		case *prefixConn:
-			c = u.Conn
-		case interface{ NetConn() net.Conn }:
-			c = u.NetConn()
-		default:
-			return
-		}
+	t := tcpOf(c)
+	if t == nil {
+		return
 	}
+	_ = t.SetNoDelay(true)
+	if n, pin := standTCP(); pin {
+		_ = t.SetReadBuffer(n)
+		_ = t.SetWriteBuffer(n)
+	}
+	standApplyLowat(t)
 }
 
 // tcpTuneListener calls tuneTCP on every Accept.

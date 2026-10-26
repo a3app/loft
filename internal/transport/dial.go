@@ -65,6 +65,7 @@ func newClientHello(caps wire.Cap) wire.Hello {
 		h.Inner = id
 	}
 	h.ControllerPin = wire.PinOf(PinnedControllerPub())
+	stampCC(&h)
 	return h
 }
 
@@ -235,6 +236,11 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 			return err
 		}
 		setClientInner(set, id)
+		cc, up, down, err := cfg.CCAsk()
+		if err != nil {
+			return err
+		}
+		setClientCC(cc, up, down)
 	}
 	EnsureInstance()
 	if cfg != nil {

@@ -201,6 +201,18 @@ func main() {
 		log.Fatal(err)
 	}
 	transport.SetInnerAllow(innerIDs)
+	ccIDs, err := cfg.CCIDs()
+	if err != nil {
+		log.Fatal(err)
+	}
+	transport.SetCCPolicy(ccIDs, cfg.CCMaxUpMbps*1000, cfg.CCMaxDownMbps*1000)
+	if len(ccIDs) > 0 {
+		names := make([]string, len(ccIDs))
+		for i, id := range ccIDs {
+			names[i] = wire.CCName(id)
+		}
+		log.Printf("cc allow: %s", strings.Join(names, " "))
+	}
 	if len(innerIDs) > 0 {
 		names := make([]string, len(innerIDs))
 		for i, id := range innerIDs {

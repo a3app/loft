@@ -342,3 +342,44 @@ func TestValidIFName(t *testing.T) {
 		t.Fatal("want reject")
 	}
 }
+
+func TestCCCommand(t *testing.T) {
+	c, err := ParseCommands("listen :443\ncc bbr fixed\ncc_max 50 200\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := c.CCIDs()
+	if err != nil || len(ids) != 2 || ids[0] != wire.CCBBR || ids[1] != wire.CCFixed {
+		t.Fatalf("ids %v %v", ids, err)
+	}
+	if c.CCMaxUpMbps != 50 || c.CCMaxDownMbps != 200 {
+		t.Fatalf("max %d %d", c.CCMaxUpMbps, c.CCMaxDownMbps)
+	}
+	out := RenderCommands(*c)
+	if !strings.Contains(out, "cc bbr fixed\n") || !strings.Contains(out, "cc_max 50 200\n") {
+		t.Fatal(out)
+	}
+	for _, bad := range []string{"cc nope\n", "cc\n", "cc_max 1\n", "cc_max a b\n"} {
+		if _, err := ParseCommands("listen :443\n" + bad); err == nil {
+			t.Fatalf("accepted %q", bad)
+		}
+	}
+	if off, _ := ParseCommands("listen :443\ncc off\n"); off == nil {
+		t.Fatal("cc off")
+	} else if ids, _ := off.CCIDs(); len(ids) != 0 {
+		t.Fatalf("off %v", ids)
+	}
+	ask := &ClientConfig{CC: "fixed", CCUpMbps: 10, CCDownMbps: 100}
+	id, up, down, err := ask.CCAsk()
+	if err != nil || id != wire.CCFixed || up != 10000 || down != 100000 {
+		t.Fatalf("ask %d %d %d %v", id, up, down, err)
+	}
+	ask.CC = "bbr"
+	if id, up, _, _ := ask.CCAsk(); id != wire.CCBBR || up != 0 {
+		t.Fatal("bbr ask carries rates")
+	}
+	ask.CC = ""
+	if id, _, _, _ := ask.CCAsk(); id != wire.CCDefault {
+		t.Fatal("empty ask")
+	}
+}
