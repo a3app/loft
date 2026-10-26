@@ -2174,11 +2174,17 @@
   // ndAccess: the controller's public key (clients check signatures of the
   // roster and lists with it), the shared token, the node token change and
   // the session trace log.
+  // rollProgress is "moved N / M" over the devices connected now, from the
+  // controller key each client named in its Hello.
+  function rollProgress() {
+    const k = (L.pres || {}).keys || {}, cur = k.current || 0, tot = cur + (k.old || 0);
+    return tot ? ` ${'Уже перешли (из подключённых сейчас)'}: ${cur} / ${tot}.` : '';
+  }
   function ndAccess() {
     const d = L.ndDraft, own = L.can('node'), pub = L.nd.controller_pub || '';
     return blk('Ключ контроллера', 'Клиенты сверяют по нему подпись списка ретрансляторов и списков. Входит в файл .loft.',
         `<div class="uri" id="ctlpub" style="margin-bottom:12px">${pub ? 'ed25519:' + esc(pub) : '—'}</div>` +
-        (L.nd.key_roll_until ? `<p class="hint">${'Идёт смена ключа до'} ${new Date(L.nd.key_roll_until * 1000).toLocaleDateString(LOC())}. ${'Клиенты и ретрансляторы со старым ключом переходят на новый сами.'}</p>` : '') +
+        (L.nd.key_roll_until ? `<p class="hint">${'Идёт смена ключа до'} ${new Date(L.nd.key_roll_until * 1000).toLocaleDateString(LOC())}. ${'Клиенты и ретрансляторы со старым ключом переходят на новый сами.'}${rollProgress()}</p>` : '') +
         `<div class="acts"><button class="btn sm" type="button" onclick="LIVE.copy('#ctlpub')">Копировать</button>${own && pub ? `<button class="btn sm" type="button" onclick="LIVE.ctlRollAsk()">Сменить ключ…</button>` : ''}</div>`) +
       blk('Общий токен', 'Вход по одному токену вместо личных ключей. Работает, только пока в сети нет ни одного участника с ключом.',
         `<label class="sw"><input type="checkbox" ${d.auth_shared ? 'checked' : ''} ${dis()} aria-label="Общий токен" onchange="LIVE.ndSet('auth_shared',this.checked)"><i></i><span>Разрешить вход по общему токену</span></label>`) +

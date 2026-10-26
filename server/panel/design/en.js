@@ -7,6 +7,7 @@ window.LOFT_EN = {
   "копия": "state copy",
   "Резервный controller": "Standby controller",
   "Получает копию настроек и ключей этой ноды и может её заменить: на нём выполняют sudo loft-node -c /etc/loft/node.conf -promote и перезапускают loft-node.": "Gets a copy of this node's settings and keys and can replace it: run sudo loft-node -c /etc/loft/node.conf -promote on it and restart loft-node.",
+  "Уже перешли (из подключённых сейчас)": "Already moved (of those connected now)",
   "Идёт смена ключа до": "The key changes until",
   "Клиенты и ретрансляторы со старым ключом переходят на новый сами.": "Clients and relays with the old key move to the new one by themselves.",
   "Сменить ключ…": "Change key…",

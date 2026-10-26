@@ -27,6 +27,7 @@ type nodeStatus struct {
 		Since  time.Time `json:"since"`
 		Rx     uint64    `json:"rx,omitempty"`
 		Tx     uint64    `json:"tx,omitempty"`
+		Key    string    `json:"key,omitempty"` // "current" or "old" controller key; empty when unknown
 	} `json:"members"`
 	Relays []struct {
 		ID    string    `json:"id"`
@@ -125,7 +126,17 @@ func (s *Server) presenceGet(w http.ResponseWriter, r *http.Request) {
 		admFail(w, err)
 		return
 	}
-	ok(w, map[string]any{"at": st.At, "members": s.track(st), "relays": st.Relays})
+	// keys counts connected devices by the controller key their client
+	// trusts, to show how far a key roll has got.
+	keys := map[string]int{"current": 0, "old": 0}
+	if time.Since(st.At) < time.Minute {
+		for _, m := range st.Members {
+			if m.Key != "" {
+				keys[m.Key]++
+			}
+		}
+	}
+	ok(w, map[string]any{"at": st.At, "members": s.track(st), "relays": st.Relays, "keys": keys})
 }
 
 // SetSeenFile is where the last-seen times are kept (data dir).
