@@ -1721,6 +1721,7 @@ window.LOFT_EN = {
   "блокировать": "block",
   "в $": "in $",
   "в сети": "online",
+  "трафик": "traffic",
   "ведётся вручную — для DNS-01 нужен DNS-провайдер": "is managed by hand — DNS-01 needs a DNS provider",
   "ведётся вручную: внесите эти записи у регистратора.": "is managed by hand: add these records at the registrar.",
   "ведётся вручную: записи вносятся у регистратора": "is managed by hand: records are added at the registrar",

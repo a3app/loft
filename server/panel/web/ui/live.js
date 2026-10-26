@@ -2145,16 +2145,33 @@
     try { const l = await api('GET', '/api/nodecfg/log'); dialog('Журнал службы loft-node', 'Последние 300 строк.', `<div class="joblog" style="max-height:60vh;overflow:auto">${esc(l.text || '—')}</div>`, `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`); } catch (e) { toast(e.message); }
   };
 
-  /* who is online: the node's report, the panel's memory of last seen */
+  /* who is online: the node's report, the panel's memory of last seen.
+     EXTRA[3]: 0 offline, 1 online idle, 2 online with mux traffic since last sample. */
   // /api/presence fills the mock's EXTRA table, which the Members and
   // Segments screens read: [client and front, online / devices, last seen,
   // online flag]. Relays' live state comes in the same answer.
-  async function loadPresence() {
+  async function loadPresence(ledsOnly) {
     try { L.pres = await api('GET', '/api/presence'); } catch (e) { return; }
+    L.portBytes = L.portBytes || {};
+    L.portAct = L.portAct || {};
+    const now = Date.now();
     for (const id of Object.keys(L.pres.members || {})) {
       const x = L.pres.members[id];
-      EXTRA[id] = [x.front ? 'loft · ' + x.front : 'loft', `${x.online} / ${Math.max(x.devices, x.online)}`, x.online ? 'сейчас' : agoT(x.last), x.online ? 1 : 0];
+      const sum = (x.rx || 0) + (x.tx || 0);
+      const prev = L.portBytes[id];
+      if (x.online && prev != null && sum > prev) L.portAct[id] = now;
+      L.portBytes[id] = sum;
+      const act = x.online && L.portAct[id] && (now - L.portAct[id] < 20000);
+      EXTRA[id] = [x.front ? 'loft · ' + x.front : 'loft', `${x.online} / ${Math.max(x.devices, x.online)}`, x.online ? 'сейчас' : agoT(x.last), x.online ? (act ? 2 : 1) : 0];
     }
+    if (ledsOnly) paintPortLeds();
+  }
+  function paintPortLeds() {
+    document.querySelectorAll('.face .port[data-mid] i.led').forEach(el => {
+      const x = EXTRA[el.closest('.port').dataset.mid] || [];
+      el.classList.toggle('on', !!x[3]);
+      el.classList.toggle('act', x[3] === 2);
+    });
   }
   L.loadPresence = loadPresence;
 
@@ -3107,6 +3124,10 @@
   };
 
   // Who is online changes on its own: refresh it on the pages that show it.
+  // Segments keep the IP form: 5s only paints port LEDs; 30s still re-renders.
+  setInterval(() => {
+    if (L.me && S.route === 'segments' && !$('#dlgRoot').firstChild) loadPresence(true);
+  }, 5000);
   setInterval(() => {
     if (L.me && ['main', 'members', 'segments'].includes(S.route) && !$('#dlgRoot').firstChild) loadPresence().then(() => render());
   }, 30000);

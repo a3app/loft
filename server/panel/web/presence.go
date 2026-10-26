@@ -25,6 +25,8 @@ type nodeStatus struct {
 		From   string    `json:"from"`
 		Front  string    `json:"front,omitempty"`
 		Since  time.Time `json:"since"`
+		Rx     uint64    `json:"rx,omitempty"`
+		Tx     uint64    `json:"tx,omitempty"`
 	} `json:"members"`
 	Relays []struct {
 		ID    string    `json:"id"`
@@ -48,6 +50,8 @@ type memberPresence struct {
 	IP      string    `json:"ip,omitempty"`
 	From    string    `json:"from,omitempty"`
 	Front   string    `json:"front,omitempty"` // live bulk mux front from the node
+	Rx      uint64    `json:"rx,omitempty"`
+	Tx      uint64    `json:"tx,omitempty"`
 }
 
 func (s *Server) readPresence(ctx context.Context) (nodeStatus, error) {
@@ -90,6 +94,8 @@ func (s *Server) track(st nodeStatus) map[string]memberPresence {
 			x := out[m.Member]
 			x.Online++
 			x.IP, x.From, x.Front = m.IP, m.From, m.Front
+			x.Rx += m.Rx
+			x.Tx += m.Tx
 			out[m.Member] = x
 		}
 	}
