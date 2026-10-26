@@ -81,7 +81,8 @@ type liveRelay struct {
 	conns    uint32
 	gen      uint64
 	ctlClose func()
-	stateAt  time.Time // when a standby last got the controller's state
+	trunk    *mux.Session // the relay's trunk: closing it cuts every client through the relay
+	stateAt  time.Time    // when a standby last got the controller's state
 }
 
 // StateFn returns the files a standby controller needs (by name); the node
@@ -142,7 +143,7 @@ func (f *Fleet) evictSilent() {
 	}
 }
 
-// allowed is enrol:open or an id listed in relays: that is not drain.
+// allowed is an id listed in relays: that is not drained.
 func (f *Fleet) allowed(id string) bool {
 	if f.cfg == nil {
 		return false
@@ -202,6 +203,11 @@ func (f *Fleet) ServeCtl(st *mux.Stream) {
 		}
 	}
 	sl, gen := f.admit(req, func() { _ = st.Close() })
+	f.mu.Lock()
+	if r, ok := f.live[req.ID]; ok && r.gen == gen {
+		r.trunk = st.Sess()
+	}
+	f.mu.Unlock()
 	if err := writeMsg(st, wire.EncodeFlt(wire.FltEnrolOK, sl.Encode())); err != nil {
 		f.dropIf(req.ID, gen)
 		return
@@ -459,9 +465,21 @@ func (f *Fleet) SetRelays(rel []config.RelayEntry) {
 			gone = append(gone, id)
 		}
 	}
+	var cut []*mux.Session
+	for _, id := range gone {
+		if r := f.live[id]; r != nil && r.trunk != nil {
+			cut = append(cut, r.trunk)
+		}
+	}
 	f.mu.Unlock()
 	for _, id := range gone {
 		f.drop(id)
+	}
+	// A drained or removed relay loses its whole trunk, not only ctl:1, so
+	// the clients still going through it move to another entry point now;
+	// it cannot open a trunk again while it is drained.
+	for _, s := range cut {
+		s.Close()
 	}
 	f.mu.Lock()
 	f.serial++

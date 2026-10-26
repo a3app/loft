@@ -188,3 +188,40 @@ func TestStandbyGetsState(t *testing.T) {
 }
 
 func dirExists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+// TestDrainCutsTrunk: draining a relay closes its whole trunk, so clients
+// through it are cut, not only its control stream.
+func TestDrainCutsTrunk(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	prev := FleetCtl
+	FleetCtl = NewFleet(priv, &config.ServerConfig{Relays: []config.RelayEntry{{ID: "ru1"}}})
+	t.Cleanup(func() { FleetCtl = prev })
+	cli, srv := muxPair(t)
+	srv.SetRelay("ru1")
+	go func() {
+		for {
+			st, err := srv.Accept()
+			if err != nil {
+				return
+			}
+			go FleetCtl.ServeCtl(st)
+		}
+	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	beat := uint32(50)
+	go relayCtlSession(ctx, cli, wire.EnrolReq{ID: "ru1", URL: "https://r.example"}, &relayRuntime{started: time.Now()}, &beat, &relayPin{base: pub, cur: pub}, "")
+	for i := 0; i < 100 && len(FleetCtl.Live()) == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(FleetCtl.Live()) == 0 {
+		t.Fatal("relay did not enrol")
+	}
+	FleetCtl.SetRelays([]config.RelayEntry{{ID: "ru1", Drain: true}})
+	for i := 0; i < 100 && !srv.Closed(); i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !srv.Closed() {
+		t.Fatal("drained relay's trunk is still open")
+	}
+}
