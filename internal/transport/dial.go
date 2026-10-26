@@ -1,6 +1,15 @@
 package transport
 
 // Dialer start, front selection, replica/roster failover, and Supervise.
+//
+// This is the client's entry point. Supervise runs for the life of the
+// program: it calls StartSelected to bring a session up on the first front
+// that works, hands the Dialer to the caller (SOCKS5 / TUN), and when the
+// session drops or the network changes it parks the mux and dials again.
+// "Park" means the client keeps the mux and its streams in memory; the node
+// does the same for gap_hold_ms. A fresh 0x02 with the same instance_id
+// then picks the parked mux back up, so apps do not see their TCP
+// connections reset.
 
 import (
 	"context"
@@ -20,6 +29,8 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+// lastDial is the most recent StartSelected error, for UIs that need to say
+// why the connection did not come up.
 var (
 	lastDialMu sync.Mutex
 	lastDial   error
@@ -41,7 +52,8 @@ func rememberDial(err error) {
 // ClearDialError drops LastDialError. Engine.Start calls this.
 func ClearDialError() { rememberDial(nil) }
 
-// clientMemberID is stamped on Hello. Empty is shared-token mode.
+// clientMemberID is stamped on Hello. Empty is shared-token mode (one key
+// for everyone, no per-member id).
 var clientMemberID string
 
 // newClientHello builds Hello with caps, member id, instance, and version.
@@ -56,6 +68,8 @@ func newClientHello(caps wire.Cap) wire.Hello {
 }
 
 // Dialer is a live front session. Holder swaps one without tearing down inbound.
+// Open starts a new mux stream to target ("host:port"). Done is closed when
+// the session is dead and Supervise must replace it.
 type Dialer interface {
 	Open(target string) (net.Conn, error)
 	Session() *mux.Session
@@ -71,7 +85,9 @@ type IPPump interface {
 }
 
 // rebindable replaces front sockets after an egress change without Park.
-// GET does this (HTTP sid is not the client 4-tuple). ws/h2/quic/h3 do not.
+// GET does this (HTTP sid is not the client 4-tuple). ws/h2/quic/h3 do not:
+// their session is the socket itself, so a new local address means a new
+// session.
 type rebindable interface {
 	Rebind() error
 }
@@ -100,6 +116,8 @@ func Start(ctx context.Context, token string, o config.Outbound) (Dialer, error)
 }
 
 // startWithOffer retries once on AdaptError so SNI can match the node identity.
+// AdaptError means the ClientHello SNI did not match the node, and the
+// failed attempt cached the right origin, so a second try uses it.
 func startWithOffer(ctx context.Context, token string, o config.Outbound, offer wire.Cap) (Dialer, error) {
 	d, err := startFront(ctx, token, o, offer)
 	if err != nil {
@@ -113,6 +131,9 @@ func startWithOffer(ctx context.Context, token string, o config.Outbound, offer 
 }
 
 // startFront constructs get, ws, quic, h2, h3, or l3 and runs Start.
+// A CDN profile with no explicit type supplies the front. quic and h3 are
+// refused until mask_pub is known (see markReady). CapL3 is offered only on
+// the l3 front.
 func startFront(ctx context.Context, token string, o config.Outbound, offer wire.Cap) (Dialer, error) {
 	noteKEX("")
 	if o.CDN != "" {
@@ -186,12 +207,22 @@ func startFront(ctx context.Context, token string, o config.Outbound, offer wire
 
 // Supervise keeps a dialer up across metro / LTE drops: TUN stays.
 // GET rebinds HTTP/2 (same sid). Other fronts Park; resume is 0x02 + instance_id.
+// It returns only when ctx ends or the node reports an error that retrying
+// cannot fix (see fatalFront).
 func Supervise(ctx context.Context, cfg *config.ClientConfig, use func(Dialer, config.Outbound)) error {
 	return SuperviseOn(ctx, cfg, WatchPath(ctx), use)
 }
 
 // SuperviseOn is Supervise with an explicit path-change signal (mobile OS
 // notifies; WatchPath is wrong inside a full tunnel).
+//
+// The loop: dial; on failure move to the next front and back off 200 ms,
+// doubling until it passes 8 s (it stops at 12.8 s; a path change cuts the
+// wait short). On success call use, then wait for one of four events. The
+// session died: park and redial after 200 ms. The path changed: GET just
+// rebinds its sockets, any other front parks and redials at once. The
+// Status session TTL is 80 % spent: close cleanly and redial before the
+// node expires it. ctx ended: close and drop the client hold.
 func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan struct{}, use func(Dialer, config.Outbound)) error {
 	if cfg != nil {
 		clientMemberID = cfg.MemberID
@@ -309,6 +340,9 @@ func fatalFront(err error) bool {
 }
 
 // StartSelected tries filtered outbounds, then replicas, then the signed roster.
+// Replicas are other hosts of the same node that a Status listed. The roster
+// is a controller-signed list of live fronts and relays. Both are tried
+// right after a configured outbound fails, before the next outbound.
 func StartSelected(ctx context.Context, cfg *config.ClientConfig) (Dialer, config.Outbound, error) {
 	BootstrapRoster(ctx, cfg)
 	BootstrapLists(ctx, cfg)
@@ -355,7 +389,9 @@ func StartSelected(ctx context.Context, cfg *config.ClientConfig) (Dialer, confi
 		return d, o, nil
 	}
 	if other != nil {
-		// A close after 0x02 is auth_bad_key only when every front closed (§3.4).
+		// A close after 0x02 is auth_bad_key only when every front closed.
+		// If any front failed another way, report that error instead: the
+		// key may be fine and the path broken.
 		last = other
 	}
 	if last == nil {
@@ -388,6 +424,8 @@ func tryReplicas(ctx context.Context, try func(config.Outbound) (Dialer, error),
 }
 
 // tryRoster redials using live roster entries.
+// Each entry supplies its own URL, decoy, path and mask_pub. The outbound's
+// front is kept if the entry serves it, else the entry's first front is used.
 func tryRoster(ctx context.Context, try func(config.Outbound) (Dialer, error), o config.Outbound) (Dialer, config.Outbound, error) {
 	var last error
 	for _, e := range CachedRoster() {
@@ -462,6 +500,8 @@ const (
 
 // markReady is false for quic/h3 until mask_pub is known. A v2 Initial on a
 // mask node is spliced to decoy and the dial sits until HandshakeIdleTimeout.
+// (v2 is the session-id format keyed by the member key; a mask node only
+// recognises v3, which needs mask_pub.) Other fronts are always ready.
 func markReady(o config.Outbound) bool {
 	switch strings.ToLower(strings.TrimSpace(o.Type)) {
 	case wire.FrontQUIC, wire.FrontH3:

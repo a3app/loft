@@ -39,6 +39,9 @@ func wsDialURL(raw string) (string, error) {
 
 // isLocalUrl is the CodeQL request-forgery barrier (name matches
 // RedirectCheckBarrier). True only for a ws/wss URL with a host.
+// CodeQL (a static analyzer) flags dialing a URL that came from outside;
+// it accepts the URL as checked after a call to a function with this name.
+// The name is about the analyzer, not about the URL being local.
 func isLocalUrl(raw string) bool {
 	_, err := wsDialURL(raw)
 	return err == nil

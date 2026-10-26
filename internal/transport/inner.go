@@ -1,5 +1,13 @@
 package transport
 
+// Inner cipher choice. Every mux frame is sealed with the session key even
+// inside TLS. ChaCha20-Poly1305 is the default and always allowed. On a
+// direct front (TLS ends at the node) a client may ask for AES-256-GCM, or
+// for "clear" (no second layer; TLS still protects the bytes). The client
+// asks in Hello, the node confirms in Status, and both sides then bind that
+// cipher to the session key. GET never leaves ChaCha: its TLS ends at a
+// CDN, which would otherwise see the frames.
+
 import (
 	"sync/atomic"
 
@@ -12,7 +20,8 @@ import (
 // it already agreed.
 var innerAllow atomic.Value // []byte
 
-// clientInnerBits packs the Hello ask. Bit 8 set means the byte is sent.
+// clientInnerBits packs the Hello ask: the low byte is the cipher id, and
+// bit 8 set means the ask byte is sent at all.
 var clientInnerBits atomic.Uint32
 
 // SetInnerAllow replaces the node allow-list. ChaCha stays allowed either way.
@@ -39,7 +48,8 @@ func clientInnerAsk() (set bool, id byte) {
 }
 
 // applyInner writes the Status byte when policy confirms the Hello ask.
-// GET never confirms. Call this before Seal of Status.
+// GET never confirms. Call this before Seal of Status: Status itself is
+// still sealed with the default ChaCha; the new cipher starts after it.
 func applyInner(st *wire.Status, front string, hello []byte) {
 	if st == nil {
 		return
@@ -62,8 +72,9 @@ func commitInner(key []byte, st wire.Status) {
 	ecrypto.BindInner(key, st.Inner)
 }
 
-// takeInner binds the Status choice on a direct front. GET stays ChaCha
-// even when Status carries another id.
+// takeInner is the client side of commitInner: it binds the cipher Status
+// chose, on a direct front only. GET stays ChaCha even when Status carries
+// another id, and an unknown id is ignored (ChaCha stays).
 func takeInner(front string, key []byte, st wire.Status) {
 	if front == "" || front == wire.FrontGET || !st.InnerSet {
 		return

@@ -5,6 +5,13 @@ package transport
 // sid. One dispatcher Pulls. When the owner is GET, bulk leaves GET (the CDN
 // cookie path) and rides the lanes. When the owner is ws/h2/quic/h3, that
 // socket stays a lane too.
+//
+// Words used here. The ticket (sid) is the session id the node sends in
+// Status; a 0x04 message names it and proves the session key, so no new
+// handshake is needed. A lane (attachLink on the node, attachLane on the
+// client) is one attached socket. "Bulk" is the set of fronts that carry
+// mux traffic right now, written like "ws+h2"; plain "get" means no lanes.
+// This file is the node side; attach_client.go is the client side.
 
 import (
 	"io"
@@ -18,6 +25,9 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+// attachLink is one socket attached to a node session. write sends one
+// sealed batch on it; stop and done end its read loop. dead is set once the
+// socket is gone so the dispatcher stops using it.
 type attachLink struct {
 	id    int
 	front string
@@ -28,6 +38,9 @@ type attachLink struct {
 	dead  atomic.Bool
 }
 
+// setAttach adds a lane to the session and starts the dispatcher if it is
+// not running yet. From then on the dispatcher, not the GET handler, Pulls
+// the mux.
 func (ss *serverSess) setAttach(front string, conn io.Closer, write func([]byte) error, stop func(), done <-chan struct{}) *attachLink {
 	ss.mu.Lock()
 	ss.linkSeq++
@@ -47,6 +60,8 @@ func (ss *serverSess) setAttach(front string, conn io.Closer, write func([]byte)
 	return link
 }
 
+// joinBulk names the live lanes' fronts once each, joined with "+"
+// ("ws+h2"). No live lane gives "get".
 func joinBulk(links []*attachLink) string {
 	var b strings.Builder
 	seen := map[string]bool{}
@@ -66,6 +81,7 @@ func joinBulk(links []*attachLink) string {
 	return b.String()
 }
 
+// stopAttach closes one lane and waits for its read loop to finish.
 func stopAttach(att *attachLink) {
 	if att == nil {
 		return
@@ -81,6 +97,8 @@ func stopAttach(att *attachLink) {
 	}
 }
 
+// clearAttach removes one lane after its socket ended. The other lanes
+// keep going; with none left, bulk falls back to GET.
 func (ss *serverSess) clearAttach(link *attachLink) {
 	ss.mu.Lock()
 	var left []*attachLink
@@ -113,10 +131,14 @@ func (ss *serverSess) bulkFront() string {
 	return ss.bulk
 }
 
+// attachPulls is true while lanes carry the mux. The GET handler then only
+// feeds uplink and answers with a Report, and does not Pull downlink itself.
 func (ss *serverSess) attachPulls() bool {
 	return ss.bulkFront() != wire.FrontGET
 }
 
+// closeAttach drops every lane and gives the mux back to its owner: GET
+// Pulls again, and a ws/h2/quic/h3 owner's write loop resumes.
 func (ss *serverSess) closeAttach() {
 	ss.mu.Lock()
 	links := ss.links
@@ -200,6 +222,8 @@ func (ss *serverSess) liveLinkCount() int {
 	return n
 }
 
+// takeAttachNonce records the nonce of a 0x04 message and fails on a
+// repeat, so a recorded attach message cannot be replayed.
 func (ss *serverSess) takeAttachNonce(nonce []byte) error {
 	ss.mu.Lock()
 	if ss.seen == nil {
@@ -210,6 +234,7 @@ func (ss *serverSess) takeAttachNonce(nonce []byte) error {
 	return n.TakeAttach(nonce)
 }
 
+// lookupTicket finds the live session a 0x04 names, on any front.
 func lookupTicket(sid string) *serverSess {
 	if v, ok := ticketTab.Load(sid); ok {
 		return v.(*serverSess)
@@ -237,6 +262,8 @@ func forgetMuxTicket(ss *serverSess) {
 	}
 }
 
+// noopCloser stands in for a lane socket that must not be closed when the
+// lane ends, such as the owner socket, which the owner front still holds.
 type noopCloser struct{}
 
 func (noopCloser) Close() error { return nil }
@@ -270,6 +297,8 @@ func bindTicket(ms *mux.Session, key []byte, front string, write func([]byte) er
 	return ss
 }
 
+// releaseTicket forgets the ticket and drops every lane. Safe to call more
+// than once.
 func (ss *serverSess) releaseTicket() {
 	if ss == nil {
 		return
@@ -297,6 +326,13 @@ func (ss *serverSess) armOwner() {
 }
 
 // serveAttach binds conn to the GET session in blob (0x04).
+// The node checks that the front named inside the blob is the one it
+// arrived on, that the ticket is live, that the blob is sealed with the
+// session key, and that its nonce is new. Any failure just closes conn.
+// It then puts the owner socket in the fan (armOwner), answers with a
+// sealed Front frame naming this front, and reads uplink batches until the
+// socket ends. A Front frame naming "get" from the client means "stop using
+// lanes": every lane closes and GET carries the mux again.
 func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
 	defer conn.Close()
 	sid, gotFront, _, err := ecrypto.ParseAttach(blob)
@@ -377,6 +413,8 @@ func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
 	}
 }
 
+// pumpAttach Pulls ms onto one attached socket. Nothing calls it now:
+// dispatchAttach does this job for all lanes at once.
 func pumpAttach(ms *mux.Session, write func([]byte) error, key []byte, done <-chan struct{}) {
 	pumpWS(ms, 4*time.Millisecond, done, func() bool {
 		select {
@@ -394,6 +432,8 @@ func pumpAttach(ms *mux.Session, write func([]byte) error, key []byte, done <-ch
 	}, write, nil)
 }
 
+// writeAttach sends one sealed batch: a binary message on WebSocket, a
+// length-prefixed message on every other front.
 func writeAttach(w io.Writer, b []byte) error {
 	if ws, ok := w.(wsBinary); ok {
 		return ws.WriteBinary(b)
@@ -414,7 +454,8 @@ type wsBinary interface {
 	ReadBinary() ([]byte, error)
 }
 
-// wsConn adapts a websocket.Conn used as attach.
+// wsAttach adapts a websocket.Conn used as attach. Plain Read is not used:
+// messages come whole through ReadBinary.
 type wsAttach struct {
 	write func([]byte) error
 	read  func() ([]byte, error)

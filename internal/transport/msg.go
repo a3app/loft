@@ -1,6 +1,9 @@
 package transport
 
 // Length-prefixed messages (u32be length || payload, at most 1 MiB) for h2/quic/h3/ctl.
+// These fronts give a plain byte stream with no message boundaries, so every
+// sealed batch, the 0x02 handshake, Status and 0x04 attach travel with a
+// 4-byte big-endian length in front.
 
 import (
 	"encoding/binary"
@@ -18,6 +21,8 @@ func writeMsg(w io.Writer, b []byte) error {
 }
 
 // readMsg reads one length-prefixed message; n > 1 MiB is an error.
+// The cap stops a corrupt or hostile length from making us allocate
+// gigabytes before any byte is authenticated.
 func readMsg(r io.Reader) ([]byte, error) {
 	var hdr [4]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {

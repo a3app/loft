@@ -1,6 +1,17 @@
 package transport
 
 // uTLS dial, session_id inject, ClientHello split, and HTTP/2 client.
+//
+// The client's TLS must look like a browser's, so it is built with uTLS
+// (a library that copies the exact ClientHello of Chrome or Firefox). The
+// 32-byte TLS session_id field, which browsers fill with random bytes,
+// instead carries a value only a member can make. The node reads it from
+// the first packet and so tells loft from any other visitor before TLS
+// finishes; everyone else is handed to the decoy site.
+//   - sid v2 is an HMAC over the hello keyed by the member key.
+//   - sid v3 is bound to the node's mask_pub key and the hello's key share.
+//     A mask node (one that shows a certificate shaped like the decoy's)
+//     needs v3.
 
 import (
 	"context"
@@ -21,7 +32,9 @@ import (
 )
 
 // tlsToken is the secret for mask + session_id HMAC. A CDN hop is ordinary
-// TLS to the edge: no loft ClientHello, no borrowed-cert mask.
+// TLS to the edge: no loft ClientHello, no borrowed-cert mask. The CDN ends
+// TLS itself and never forwards the ClientHello, so a marked session_id
+// would be useless there.
 func tlsToken(o config.Outbound, token []byte) []byte {
 	if strings.TrimSpace(o.CDN) != "" {
 		return nil
@@ -41,7 +54,8 @@ func helloID(fp string) utls.ClientHelloID {
 	}
 }
 
-// tlsSess is the uTLS session cache.
+// tlsSess is the uTLS session cache, so a reconnect can resume TLS like a
+// browser instead of doing a full handshake.
 var tlsSess = utls.NewLRUClientSessionCache(64)
 
 // tuneTCP turns on TCP_NODELAY and leaves the kernel buffers alone.
@@ -113,6 +127,12 @@ func dialTLSALPN(addr, sni, fingerprint string, insecure bool, token []byte, alp
 }
 
 // dialTLSALPNContext is dialTLSALPN bound to ctx.
+// Order: if the SNI is the decoy site's name rather than the node's, the
+// node answers with mask records, so go straight to the mask dial.
+// Otherwise dial TCP, apply the canary policy cached for addr (Fat: use the
+// Chrome fingerprint instead of the small Go one; Split: send ClientHello in
+// two TLS records), stamp session_id, and handshake. If the handshake fails the
+// way a mask certificate makes ordinary TLS fail, retry once as mask.
 func dialTLSALPNContext(ctx context.Context, addr, sni, fingerprint string, insecure bool, token []byte, alpn []string) (net.Conn, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -158,6 +178,8 @@ func dialTLSALPNContext(ctx context.Context, addr, sni, fingerprint string, inse
 }
 
 // maskHandshake reports whether err looks like a mask CertificateVerify failure.
+// A mask certificate does not verify like an ordinary one, so plain TLS to
+// a mask node fails with one of these messages.
 func maskHandshake(err error) bool {
 	if err == nil {
 		return false
@@ -279,7 +301,8 @@ func buildUTLSHello(sni, fingerprint string, token, maskPub []byte, alpn []strin
 }
 
 // sidMaterial is the X25519 public and private sid v3 binds: the standalone
-// share, or the hybrid half when that is all the hello carries.
+// share, or the hybrid half when that is all the hello carries. (A hybrid
+// share is X25519MLKEM768: a post-quantum key joined with an X25519 key.)
 func sidMaterial(u *utls.UConn) (pub, priv []byte) {
 	pub = utlsShare(u)
 	priv = utlsSharePriv(u, pub)
@@ -393,6 +416,9 @@ func (s *splitHelloConn) Write(p []byte) (int, error) {
 }
 
 // httpClient is the HTTP/2 client GET uses. ReadIdleTimeout is 0 so idle ping cannot kill the conn.
+// TLS goes through dialTLSContext, so the GET front gets the same browser
+// ClientHello and session_id as the other fronts. A plain http:// URL (tests,
+// a local proxy) gets a stock transport.
 func httpClient(o config.Outbound, token string) (*http.Client, error) {
 	u, err := parseURL(o.URL)
 	if err != nil {

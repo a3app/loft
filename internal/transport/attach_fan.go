@@ -2,6 +2,13 @@ package transport
 
 // One mux, many fronts. Each stream stays on the front that took its first
 // frame so CmdData is not reordered across different RTTs.
+//
+// The "fan" is the code that spreads Pulled frames over the attached lanes.
+// Both sides use it: the client's dispatchLoop and the node's
+// dispatchAttach. The default mode is affinity (a stream sticks to its
+// lane). Test stands can pick rr or stripe with LOFT_STAND_FAN: frames go
+// round-robin, and stripe adds a per-frame sequence so the receiver can put
+// them back in order.
 
 import (
 	"sync"
@@ -11,12 +18,17 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+// fanLane is a snapshot of one live lane for a single send.
 type fanLane struct {
 	id    int
 	dead  *atomic.Bool
 	write func([]byte) error
 }
 
+// attachFan holds the per-session fan state. bind maps a stream id to the
+// lane id it is stuck to; rr is the next lane for a new stream; seq numbers
+// frames in stripe mode; qs are per-lane write queues, used only when a test
+// stand sets LOFT_STAND_DISPATCH.
 type attachFan struct {
 	key  []byte
 	mu   sync.Mutex
@@ -27,6 +39,8 @@ type attachFan struct {
 	qs   map[int]chan standWrite
 }
 
+// sealFrames encodes one lane's share of frames (as a stripe batch in
+// stripe mode) and seals it with the session key.
 func sealFrames(key []byte, frames []wire.Frame, seqs []uint32) ([]byte, error) {
 	var raw []byte
 	var err error
@@ -86,6 +100,10 @@ func (f *attachFan) send(lanes []fanLane, frames []wire.Frame) {
 	wg.Wait()
 }
 
+// pickLocked returns the index in lanes for frame fr, or -1 if no lane is
+// live. A stream keeps its lane while that lane lives; a new stream, or one
+// whose lane died, takes the next live lane round-robin. Frames with no
+// stream (StreamID 0) just take the next lane. f.mu must be held.
 func (f *attachFan) pickLocked(lanes []fanLane, fr wire.Frame) int {
 	if standSpread() {
 		return f.pickRR(lanes)

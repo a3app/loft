@@ -1,6 +1,12 @@
 package transport
 
 // Length-prefixed auth, AEAD(Status), and AEAD(mux) over a byte stream.
+//
+// h2 and h3 open one HTTP CONNECT stream and then treat it as a plain pipe.
+// Both sides run the same exchange on it: the client writes 0x02 + Hello,
+// the node answers with sealed Status, and from then on each message is one
+// sealed batch of mux frames (see msg.go for the framing). The client half
+// is rawSess/startRaw, the node half is serveRaw.
 
 import (
 	"context"
@@ -16,6 +22,10 @@ import (
 )
 
 // rawSess runs mux over a bidirectional byte stream (h2 CONNECT, h3 CONNECT).
+// holdGen identifies this session's claim on the client hold (the mux kept
+// across reconnects); only the current holder may send Leave or close it.
+// lanes is the extra fronts attached to this session with 0x04, if any.
+// gate lets those lanes take over Pull from writeLoop.
 type rawSess struct {
 	conn    net.Conn
 	sess    *mux.Session
@@ -42,6 +52,8 @@ func (r *rawSess) Open(target string) (net.Conn, error) {
 }
 
 // Park drops the stream without Leave or mux.Close.
+// The mux stays in the client hold, so the next session picks up the same
+// streams, and the node keeps its side parked for the hold window.
 func (r *rawSess) Park() error {
 	if r.lanes != nil {
 		r.lanes.closeAttach()
@@ -81,6 +93,10 @@ func (r *rawSess) Close() error {
 }
 
 // startRaw writes auth, reads AEAD(Status), and starts mux loops.
+// A clean close instead of Status is read as a refused key (afterProof).
+// After Status it caches what the node said (overlay address, DNS, peers,
+// decoy), reuses the held mux if one is parked, binds the inner cipher, and
+// starts extra 0x04 lanes when the node offers a ticket.
 func startRaw(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, addr, sni string, cfg config.Outbound, front string) (*rawSess, error) {
 	hello := newClientHello(offer)
 	proof, nonce, sk, err := ecrypto.MakeAuth(token)
@@ -134,6 +150,8 @@ func startRaw(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, 
 }
 
 // readLoop decrypts length-prefixed batches and pushes them into mux.
+// A batch that fails to open is skipped, not fatal. When the stream ends
+// and the mux is held, the mux is left alive for the next session.
 func (r *rawSess) readLoop() {
 	for {
 		raw, err := readMsg(r.conn)
@@ -204,6 +222,12 @@ func serveRaw(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces) {
 }
 
 // serveRawAs is serveRaw tagged with the front that accepted conn (h2 or h3).
+// The first message decides what this stream is: a 0x04 attach (join an
+// existing session as an extra lane), an l3 session (raw IP packets), or a
+// normal 0x02 handshake. A bad key or a replayed 0x02 just closes the
+// stream, so the node says nothing to a prober. On success the node adopts
+// a parked mux for the same member and instance if there is one, binds a
+// ticket so other fronts can attach, and sends sealed Status.
 func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string) {
 	defer conn.Close()
 	raw, err := readMsg(conn)

@@ -3,6 +3,14 @@ package transport
 // Client attach: after Status.ticket, open the other mux fronts with 0x04.
 // The front that finished 0x02 owns the mux. Extra fronts are lanes. The
 // owner socket joins the fan once a lane stays up, except a real GET.
+//
+// Why: GET is the front most likely to get through (it passes a CDN) but
+// slow for uplink, since every uplink byte rides a Cookie header. So the client
+// logs in over GET and then tries to add faster direct fronts (ws, h2, quic,
+// h3) to the same session. If any come up, bulk traffic moves to them; if
+// they all drop, GET carries everything again. The lane state lives on the
+// GET value; for a session whose owner is not GET, a "shadow" GET value
+// holds the lanes and never speaks HTTP.
 
 import (
 	"context"
@@ -27,6 +35,8 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
+// pairCloser closes a stream and then the connection under it (the HTTP/2
+// or QUIC connection that carries a single CONNECT stream).
 type pairCloser struct {
 	io.ReadWriteCloser
 	extra io.Closer
@@ -40,6 +50,9 @@ func (p pairCloser) Close() error {
 	return err
 }
 
+// closeAttach drops every lane and waits for their goroutines. The next
+// uplink tells the node to return to GET (dropToGET), and a non-GET owner
+// resumes its own write loop (ownerDown).
 func (g *GET) closeAttach() {
 	g.attachOff.Store(true)
 	g.holdDispatch.Store(false)
@@ -67,6 +80,8 @@ func (g *GET) closeAttach() {
 	}
 }
 
+// ticketSID is the session id a 0x04 names: Status.ticket, or the GET sid
+// when the node sent no ticket.
 func (g *GET) ticketSID() string {
 	if len(g.ticket) > 0 {
 		return string(g.ticket)
@@ -86,6 +101,9 @@ func (g *GET) attachStopped() bool {
 	}
 }
 
+// unbindAttach marks the lane on socket c dead. When it was the last one
+// and nothing else is in progress, bulk returns to the owner and a new
+// round of attachExtras starts in the background.
 func (g *GET) unbindAttach(c io.Closer) {
 	g.attachMu.Lock()
 	for _, ln := range g.lanes {
@@ -162,6 +180,8 @@ func laneCtx(ctx context.Context, done <-chan struct{}) context.Context {
 	return out
 }
 
+// noteLiveBulk publishes the fan state for LiveBulk / LiveLaneCount. An
+// empty s clears it, but only if g is the session that set it.
 func noteLiveBulk(g *GET, s string) {
 	if s == "" {
 		if liveOwner.Load() == g {
@@ -301,6 +321,8 @@ func (g *GET) armOwnerLane() {
 	g.ownerArm(g)
 }
 
+// finishAttach ends one attachExtras round: if any lane is up, the
+// dispatcher starts and bulk moves onto the lanes.
 func (g *GET) finishAttach() {
 	if g.attachStopped() || g.attachOff.Load() || g.liveCount() == 0 {
 		return
@@ -314,6 +336,9 @@ func (g *GET) finishAttach() {
 	}
 }
 
+// attachNames lists the fronts to try as lanes: those the node listed in
+// Status, minus get, connect, l3 and the owner's own front. With no list,
+// try h2, ws, quic, h3 in that order.
 func (g *GET) attachNames() []string {
 	order := []string{wire.FrontH2, wire.FrontWS, wire.FrontQUIC, wire.FrontH3}
 	if len(g.fronts) == 0 {
@@ -332,6 +357,9 @@ func (g *GET) attachNames() []string {
 	return out
 }
 
+// attachFront dials one lane of the given front and runs the 0x04 exchange.
+// A clear-cipher session is never attached over GET: the CDN would see the
+// frames.
 func (g *GET) attachFront(ctx context.Context, front string) error {
 	if front == wire.FrontGET && ecrypto.InnerOf(g.key) == wire.InnerClear {
 		return fmt.Errorf("get: inner clear")
@@ -356,6 +384,7 @@ func (g *GET) attachFront(ctx context.Context, front string) error {
 }
 
 // directNode is the profile URL (-url). Edge GET's cfg.URL is the CDN host.
+// Lanes must dial the node itself, since the CDN only forwards GET.
 var directNode atomic.Value // string
 
 // SetDirectNode is the node origin extra fronts dial. Empty keeps cfg.URL.
@@ -368,6 +397,9 @@ func directNodeURL() string {
 	return s
 }
 
+// attachOutbound builds the outbound for one lane: the GET outbound's
+// settings, the direct node URL if set, and the path from Status (only if
+// it is a safe path), else the default path for that front.
 func attachOutbound(get config.Outbound, front string, learned []wire.FrontEP) config.Outbound {
 	o := get
 	o.Type = front
@@ -410,6 +442,7 @@ func attachOutbound(get config.Outbound, front string, learned []wire.FrontEP) c
 	return o
 }
 
+// frontEP returns the path and URL Status gave for front name.
 func frontEP(learned []wire.FrontEP, name string) (path, rawURL string) {
 	for _, e := range learned {
 		if e.Name == name {
@@ -420,11 +453,17 @@ func frontEP(learned []wire.FrontEP, name string) (path, rawURL string) {
 }
 
 // okFrontPath is a Status path that cannot move the host (no @, no scheme).
+// Status comes from the node, but a path is glued onto our URL, so it must
+// not be able to point the dial somewhere else.
 func okFrontPath(p string) bool {
 	p = strings.TrimSpace(p)
 	return p != "" && p[0] == '/' && !strings.Contains(p, "@") && !strings.Contains(p, "://")
 }
 
+// runAttach does the 0x04 exchange on a length-prefixed stream: send the
+// attach blob, read the sealed ack, and check that it names this front.
+// Frames that came with the ack go into the mux. Then the socket becomes a
+// lane.
 func (g *GET) runAttach(ctx context.Context, conn io.ReadWriteCloser, front string) error {
 	if g.attachStopped() {
 		conn.Close()
@@ -472,6 +511,8 @@ func (g *GET) runAttach(ctx context.Context, conn io.ReadWriteCloser, front stri
 	return nil
 }
 
+// attachLane is one client lane: an attached socket and how to write a
+// sealed batch on it.
 type attachLane struct {
 	id    int
 	front string
@@ -480,6 +521,8 @@ type attachLane struct {
 	dead  atomic.Bool
 }
 
+// arm starts the lane's read loop (which unbinds the lane when it ends) and
+// adds the lane.
 func (g *GET) arm(conn io.Closer, write func([]byte) error, read func(), front string) {
 	g.attachWG.Add(1)
 	go func() {
@@ -491,6 +534,8 @@ func (g *GET) arm(conn io.Closer, write func([]byte) error, read func(), front s
 	g.adoptLane(conn, write, front)
 }
 
+// adoptLane adds a lane. While attachExtras is still dialing (holdDispatch)
+// it only records it; otherwise bulk moves onto lanes at once.
 func (g *GET) adoptLane(conn io.Closer, write func([]byte) error, front string) {
 	ln := &attachLane{
 		id:    int(g.nextLane.Add(1)),
@@ -555,6 +600,8 @@ func (g *GET) fanLanes() []fanLane {
 	return out
 }
 
+// kickDispatch starts dispatchLoop unless it runs already, and restarts it
+// if it stops while lanes are still live.
 func (g *GET) kickDispatch() {
 	if g.attachOff.Load() || g.attachStopped() || g.liveCount() == 0 {
 		return
@@ -573,6 +620,9 @@ func (g *GET) kickDispatch() {
 	}()
 }
 
+// dispatchLoop is the client Puller while lanes are up (GET's pump stops
+// pulling then). When control frames wait in the priority queue it pulls a
+// small batch at once; during a draft pause it pulls only those.
 func (g *GET) dispatchLoop() {
 	fan := &attachFan{key: g.key, bind: map[uint32]int{}}
 	for {
@@ -605,6 +655,9 @@ func (g *GET) dispatchLoop() {
 	}
 }
 
+// attachRead reads sealed batches from one lane into the mux until the
+// socket ends or the node sends a Front frame naming "get" (back to GET).
+// A batch that fails to open is skipped.
 func (g *GET) attachRead(conn io.Reader, read func(io.Reader) ([]byte, error)) {
 	for {
 		raw, err := read(conn)
@@ -639,6 +692,9 @@ func (g *GET) attachRead(conn io.Reader, read func(io.Reader) ([]byte, error)) {
 	}
 }
 
+// attachWS opens a WebSocket lane. It forces HTTP/1.1 (an h2 socket cannot
+// upgrade to WebSocket) and uses the same browser TLS as other fronts. Each
+// sealed batch is one binary message.
 func (g *GET) attachWS(ctx context.Context, o config.Outbound) error {
 	wsURL, err := wsDialURL(o.URL)
 	if err != nil {
@@ -735,12 +791,14 @@ func (g *GET) attachWS(ctx context.Context, o config.Outbound) error {
 	return nil
 }
 
+// wsReader lets attachRead take a whole-message WebSocket reader.
 type wsReader struct {
 	read func() ([]byte, error)
 }
 
 func (w *wsReader) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
 
+// attachQUIC opens a QUIC lane: one stream on a new QUIC connection.
 func (g *GET) attachQUIC(ctx context.Context, o config.Outbound) error {
 	addr, sni, insecure, err := resolveTLS(o)
 	if err != nil {
@@ -769,6 +827,8 @@ type quicCloser struct{ c *quic.Conn }
 
 func (q quicCloser) Close() error { return q.c.CloseWithError(0, "") }
 
+// attachH3 opens an h3 lane: an HTTP/3 CONNECT request whose request and
+// response bodies form the stream.
 func (g *GET) attachH3(ctx context.Context, o config.Outbound) error {
 	addr, sni, insecure, err := resolveTLS(o)
 	if err != nil {

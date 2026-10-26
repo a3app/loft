@@ -1,6 +1,11 @@
 package transport
 
 // Client overlay instance id: persisted locally, stamped on Hello, stored from Status.
+//
+// instance_id names one client install. The node uses it to recognise
+// "the same" client after a reconnect: a fresh 0x02 with the same member key
+// and instance_id gets back the parked mux, so inner connections survive.
+// It must survive restarts too, so it lives in a file.
 
 import (
 	"crypto/rand"
@@ -43,7 +48,8 @@ func ClientInstance() string {
 	return instID
 }
 
-// RememberInstance stores the overlay instance from Status and writes the file.
+// RememberInstance stores the overlay instance from Status (or from the
+// client config) and writes the file when the id changed.
 func RememberInstance(id string) {
 	id = strings.TrimSpace(id)
 	if id == "" {

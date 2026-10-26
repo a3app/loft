@@ -1,6 +1,27 @@
 package transport
 
 // GET + header-uplink front. Inflight, exclusive Puller, and pad hold are here.
+//
+// The GET front exists because many CDNs and proxies forward only plain GET
+// requests. Everything rides those:
+//   - Each request is GET {base}{path}/{sid}/{seq}{ext}, for example
+//     .../{sid}/17.js, so it looks like a static file fetch. sid is the
+//     session id, seq counts requests 1, 2, 3, ...
+//   - Uplink (client to node) is a sealed batch of mux frames in the Cookie
+//     header "session=". The very first request carries 0x02 + Hello there.
+//   - Downlink (node to client) is the sealed response body.
+//   - With nothing to send, the client still sends small Pad requests so the
+//     node always has an open request to answer with downlink.
+//
+// The client keeps several GETs in flight ("inflight"). They can finish in
+// any order, so both sides reorder by seq before touching the mux: a frame
+// applied out of order would corrupt the byte streams inside it (apps then
+// see TLS errors). On the node only one GET at a time may Pull downlink
+// from the mux (the "Puller"), in seq order, for the same reason. Each
+// response starts with a Report frame that says up to which seq the node
+// has applied uplink. Lost requests are retried on the same seq with only
+// their resin frames (those that must arrive); draft frames (Data, Pad) are
+// not resent.
 
 import (
 	"bytes"
@@ -29,6 +50,14 @@ import (
 
 // GET is the GET + header-uplink transport. Any CDN/proxy that only
 // forwards GET can sit in front; which vendor is node config, not protocol.
+// It is the client side. It also serves as the lane host for 0x04 attach
+// (see attach_client.go), even when the session owner is another front.
+//
+// sid is the session id in the URL and seq the last seq handed out.
+// nextSeq is the next downlink seq to apply; held keeps bodies that arrived
+// early until the gap before them fills. busy means the last applied
+// downlink carried real traffic, upBusy the same for uplink; both keep the
+// pump filling inflight.
 type GET struct {
 	prof         cdn.Profile
 	cfg          config.Outbound
@@ -150,6 +179,8 @@ func (g *GET) TripSummary() string {
 	)
 }
 
+// noteTrip files one GET's timing: as "up" when the Cookie carried at least
+// 2 KiB, as "bulk" when the body was at least 8 KiB, else as "pad".
 func (g *GET) noteTrip(ttfb, total time.Duration, up, down int, err error) {
 	if err != nil {
 		g.trips.errN.Add(1)
@@ -172,6 +203,9 @@ func (g *GET) noteTrip(ttfb, total time.Duration, up, down int, err error) {
 }
 
 // NewGET builds a GET client from o. Handshake runs in Start.
+// Unset path, header budget and inflight come from the CDN profile. If a
+// GET session is parked from before a drop (client hold), its sid, key and
+// seq are reused, so Start can continue it without a new 0x02.
 func NewGET(token string, o config.Outbound) (*GET, error) {
 	prof, err := cdn.Lookup(o.CDN)
 	if err != nil {
@@ -231,6 +265,11 @@ func NewGET(token string, o config.Outbound) (*GET, error) {
 }
 
 // Start sends the first GET (0x02 Cookie, client-chosen sid) and starts the inflight pump.
+// With a parked sid and key it skips the handshake and just restarts the
+// pump. Otherwise it reads Status from the first response body: a 404
+// there means the node refused the key. Status sets keepalive, the edge
+// preset, the Cookie encoding, how many HTTP/2 connections to use, and the
+// ticket and fronts that attach needs.
 func (g *GET) Start(ctx context.Context) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -538,6 +577,16 @@ type getJob struct {
 // workers run in parallel. Extra loops used to Pull concurrently and
 // g.seq.Add in a different order than mux.out — origin TLS saw reordered
 // records (bad record MAC) and Yandex upload sat at ~100 kbit/s.
+//
+// Each round it decides how long to wait (pace), Pulls up to one Cookie's
+// worth of frames, adds any queued Tune note, and splits the result into
+// one or more GETs (SplitUplink keeps resin, Data and Close apart). Empty
+// rounds become Pad GETs: paced keepalives when idle, back to back while
+// downlink is busy or a catch-up window is open. Pads never take more than
+// a quarter of the inflight slots (at least 4), so real uplink is not left
+// waiting a round trip for a free worker. While attach lanes carry the mux
+// it does not Pull at all; it only keeps GETs going so the node can still
+// reach the client.
 func (g *GET) pump(ctx context.Context, inflight int) {
 	jobs := make(chan getJob, inflight)
 	var wg sync.WaitGroup
@@ -653,6 +702,13 @@ func (g *GET) pump(ctx context.Context, inflight int) {
 }
 
 // worker runs one inflight HTTP GET per job and retries on front reset.
+// A job is done when its GET returns or a Report says the node already
+// applied its seq. On failure the worker retries the same seq with only the
+// resin frames, backs off, and reports the trouble to the node as a Tune
+// note (413, 404, 429, CALM, reset, GOAWAY). It gives up (kills the
+// session) after getRetryMax tries or getRetryWindow (one extra window if
+// other GETs still succeed), or when three retries of the same seq all get
+// 404, which means the node no longer knows the sid.
 func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 	for {
 		select {
@@ -784,6 +840,9 @@ func (g *GET) worker(ctx context.Context, jobs <-chan getJob) {
 	}
 }
 
+// Worker retry limits. getHoldMax is how many extra retry windows a seq may
+// get while other GETs still succeed; frontAliveWindow is how recent such a
+// success must be.
 const (
 	getRetryMax      = 8
 	getRetryWindow   = 12 * time.Second
@@ -800,6 +859,8 @@ func sameSeqLost(tries int) bool { return tries >= 3 }
 // edge 504 does not resume the session while the rest of the pool works.
 func (g *GET) noteFrontOK() { g.lastOK.Store(time.Now().UnixNano()) }
 
+// frontAlive is true when some GET returned a body in the last
+// frontAliveWindow.
 func (g *GET) frontAlive(now time.Time) bool {
 	ns := g.lastOK.Load()
 	if ns == 0 {
@@ -847,6 +908,8 @@ func getGiveUp(tries int, t0 time.Time) bool {
 	return tries > getRetryMax || time.Since(t0) > getRetryWindow
 }
 
+// enhanceCalm reports an HTTP/2 ENHANCE_YOUR_CALM: the edge says the client
+// is too aggressive and closes the connection.
 func enhanceCalm(err error) bool {
 	if err == nil {
 		return false
@@ -909,6 +972,8 @@ func (g *GET) dropIdleFront() {
 	}
 }
 
+// closeIdleFront closes idle connections of every client in the pool and in
+// drain. Used after a failed handshake so the node session can end.
 func (g *GET) closeIdleFront() {
 	g.poolMu.Lock()
 	cs := append([]*http.Client(nil), g.clients...)
@@ -958,6 +1023,7 @@ func (g *GET) pickClient() *http.Client {
 	return list[i]
 }
 
+// growClientsLocked adds HTTP/2 clients up to n (at most 4). poolMu held.
 func (g *GET) growClientsLocked(n int) {
 	if n > 4 {
 		n = 4
@@ -973,6 +1039,8 @@ func (g *GET) growClientsLocked(n int) {
 	}
 }
 
+// getH2Drain is a retired HTTP/2 client and when it was retired. Its
+// in-flight GETs may still finish; it is closed after h2DrainTTL.
 type getH2Drain struct {
 	c *http.Client
 	t time.Time
@@ -985,6 +1053,8 @@ const (
 	h2DrainCap  = 8
 )
 
+// parseH2MaxAge turns h2_max_age_ms into a duration clamped to
+// [h2MaxAgeMin, h2MaxAgeMax]. Zero or less turns rotation off.
 func parseH2MaxAge(ms int) time.Duration {
 	if ms <= 0 {
 		return 0
@@ -1027,6 +1097,8 @@ func (g *GET) rotateLocked() {
 	}
 }
 
+// parkDrainLocked moves c to drain, closing the oldest when more than
+// h2DrainCap wait there. poolMu held.
 func (g *GET) parkDrainLocked(c *http.Client, now time.Time) {
 	if c == nil {
 		return
@@ -1041,6 +1113,7 @@ func (g *GET) parkDrainLocked(c *http.Client, now time.Time) {
 	}
 }
 
+// sweepDrainLocked closes drained clients older than h2DrainTTL. poolMu held.
 func (g *GET) sweepDrainLocked(now time.Time) {
 	if len(g.drain) == 0 {
 		return
@@ -1172,6 +1245,7 @@ func (g *GET) sleepCtx(ctx context.Context, d time.Duration) bool {
 // on pushOrdered. Pump does not call it: jobs+workers over-subscribe so
 // a pad is waiting to be exclusive Puller. Capping at Inflight starved a
 // 4 MB GET (2.1/4 MB, 2.6s gap). Extra loops can stampede HTTP/1.1.
+// Only tests call it now.
 func (g *GET) pipelineSlot() bool {
 	n := g.cfg.Inflight
 	if n < 1 {
@@ -1187,6 +1261,7 @@ func (g *GET) pipelineSlot() bool {
 }
 
 // muxBusy is true when frames carry Open, Data, Dgram, Leave, or Close (not Pad/Ping/Pong).
+// Precisely: any frame other than Pad, Ping, Pong, Tune and Report.
 func muxBusy(frames []wire.Frame) bool {
 	for _, f := range frames {
 		switch f.Cmd {
@@ -1199,6 +1274,7 @@ func muxBusy(frames []wire.Frame) bool {
 	return false
 }
 
+// slots is the live inflight limit (from Status or Tune), at least 1.
 func (g *GET) slots() int {
 	n := int(g.liveInflight.Load())
 	if n < 1 {
@@ -1207,10 +1283,15 @@ func (g *GET) slots() int {
 	return n
 }
 
+// packNote packs a Tune note into one word so it fits an atomic: event in
+// the top byte, then inflight, then the 16-bit budget.
 func packNote(ev, inflight byte, budget uint16) uint32 {
 	return uint32(ev)<<24 | uint32(inflight)<<16 | uint32(budget)
 }
 
+// queueNote asks the next GET to carry a Tune note telling the node what
+// went wrong (ev) and the client's current inflight and budget. Only one
+// note waits at a time; a newer one is dropped while the first is queued.
 func (g *GET) queueNote(ev byte) {
 	if ev == 0 {
 		return
@@ -1230,6 +1311,7 @@ func (g *GET) queueNote(ev byte) {
 	g.note.CompareAndSwap(0, packNote(ev, inf, bud))
 }
 
+// takeNoteFrame takes the queued note as a Tune frame, if any.
 func (g *GET) takeNoteFrame() []wire.Frame {
 	v := g.note.Swap(0)
 	if v == 0 {
@@ -1238,6 +1320,7 @@ func (g *GET) takeNoteFrame() []wire.Frame {
 	return []wire.Frame{wire.TuneFrame(byte(v>>24), byte(v>>16), uint16(v))}
 }
 
+// restoreNote puts a taken note back when the pump did not send it.
 func (g *GET) restoreNote(note []wire.Frame) {
 	if len(note) == 0 || note[0].Cmd != wire.CmdTune {
 		return
@@ -1249,6 +1332,8 @@ func (g *GET) restoreNote(note []wire.Frame) {
 	g.note.CompareAndSwap(0, packNote(t.Event, t.Inflight, t.Budget))
 }
 
+// applyTune applies a TuneSet from the node: new budget, inflight and
+// number of HTTP/2 connections (at most 4). Other events are ignored.
 func (g *GET) applyTune(t wire.Tune) {
 	if t.Event != wire.TuneSet {
 		return
@@ -1284,7 +1369,10 @@ func (g *GET) noteApplied(n uint64) {
 	}
 }
 
-// frontReset reports a dropped HTTP connection that the worker should retry.
+// radioGap reports a network-level failure: no route, a timeout, a reset or
+// an unexpected EOF, as when the radio drops or the network changes.
+// Errors are matched by text because they come wrapped from several layers
+// (net, TLS, HTTP/2) with no common type.
 func radioGap(err error) bool {
 	if err == nil {
 		return false
@@ -1305,6 +1393,8 @@ func radioGap(err error) bool {
 		strings.Contains(s, ": eof")
 }
 
+// frontReset reports a dropped HTTP connection that the worker should retry:
+// any radioGap, plus a refused connection, GOAWAY or an HTTP/2 stream error.
 func frontReset(err error) bool {
 	if err == nil {
 		return false
@@ -1373,7 +1463,8 @@ func status429(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "status 429")
 }
 
-// halveBudget is HTTP 413: spec says halve the header budget, floor 1024, and split.
+// halveBudget is HTTP 413: the protocol says halve the header budget, floor
+// 1024, and split the uplink over more GETs.
 func (g *GET) halveBudget() int {
 	for {
 		cur := int(g.budget.Load())
@@ -1404,6 +1495,12 @@ func (g *GET) roundTrip(ctx context.Context, auth, uplink []byte) ([]byte, http.
 }
 
 // roundTripAt issues one GET. Auth and later uplink both use Cookie session=.
+// An empty uplink becomes a Pad of random size.
+// Uplink is sealed with the session key and the sid as associated data.
+// The request carries browser headers (Sec-Fetch-*, Origin, Referer). The
+// timer is reset on the first response byte and on every body read, so it
+// limits silence, not total time. A downlink body is opened and applied in
+// seq order (finishMux). seq 0 means take the next seq.
 func (g *GET) roundTripAt(ctx context.Context, auth, uplink []byte, seq uint64) ([]byte, http.Header, uint64, error) {
 	var blob []byte
 	var err error
@@ -1541,6 +1638,8 @@ func (r idleReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// tripTimeout is how long one GET may stay silent: 20 s for the handshake,
+// else the profile's TripTimeout, else 15 s.
 func (g *GET) tripTimeout(auth bool) time.Duration {
 	if auth {
 		return 20 * time.Second
@@ -1665,6 +1764,9 @@ func jitterDur(d time.Duration) time.Duration {
 }
 
 // GETServer is the origin for the GET front (CDN or direct).
+// It is the node side: it answers the handshake GET, then every later GET
+// of the session. Answers look like static files (default font/woff2) and
+// are never cacheable.
 type GETServer struct {
 	Profile cdn.Profile
 	Token   []byte
@@ -1682,6 +1784,15 @@ type GETServer struct {
 }
 
 // serverSess is one GET session: ordered uplink, exclusive downlink Puller.
+// It is also the ticket record other fronts attach to with 0x04.
+//
+// Uplink: nextSeq is the next seq to Push into the mux; held keeps early
+// arrivals. Downlink: downSeq is the seq whose GET may Pull next, pulling
+// is true while it does, and replied is the last seq answered. skipPull
+// marks seqs that already returned without pulling, so downSeq can step
+// over them. replies caches the last replyCacheN sealed bodies by seq: a
+// retried GET gets the same body again rather than new data, so nothing is
+// lost or doubled.
 type serverSess struct {
 	id         string
 	key        []byte
@@ -1715,6 +1826,8 @@ type serverSess struct {
 	relOnce    sync.Once
 }
 
+// ticketTab maps every live ticket (sid) to its session, for 0x04 lookups
+// from any front.
 var ticketTab sync.Map // GET sid → *serverSess
 
 // sessionBulkFront is the live bulk mux front for sess (ticket table).
@@ -1735,6 +1848,7 @@ func sessionBulkFront(sess *mux.Session) string {
 	return name
 }
 
+// replyCacheN is how many sealed replies a session keeps for retries.
 const replyCacheN = 32
 
 // NewGETServer builds a GET origin with the generic CDN profile.
@@ -1778,6 +1892,18 @@ func (s *GETServer) Match(p string) bool {
 }
 
 // ServeHTTP handles the first GET (auth) and later GETs (header uplink, exclusive Puller).
+//
+// Handshake: a Cookie that looks like 0x02 is checked against the member
+// keys. A wrong key gets a plain 404. A repeated 0x02 (the client retrying
+// a lost response) gets the same Status again. A good one creates the
+// session (or reuses a parked mux for the same member and instance) and
+// answers with sealed Status.
+//
+// Later GETs: open the Cookie, apply Front and Tune notes, then either
+// replay the cached reply for a retried seq, or apply uplink in seq order
+// and, when this GET's turn as Puller comes, Pull downlink into the body.
+// A GET that is not Puller in time answers with just a Report and pad.
+// While attach lanes carry the mux, GET only feeds uplink.
 func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
@@ -1796,8 +1922,9 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			ss = s.get(sid)
 			if ss == nil {
-				// A wrong key is an ordinary miss (§3.4). A sealed reject
-				// lets a prober that chose eph_c confirm a loft node.
+				// A wrong key is an ordinary miss, as the protocol requires.
+				// A sealed reject lets a prober that chose eph_c confirm a
+				// loft node.
 				http.NotFound(w, r)
 				traceMISS(sid, seq, "auth", r)
 				return
@@ -1997,6 +2124,9 @@ func (s *GETServer) writeGET(w http.ResponseWriter, r *http.Request, ss *serverS
 	s.writeSealed(w, r, sealed)
 }
 
+// sealDown seals a downlink batch with the sid as associated data. A batch
+// under 400 bytes gets a Pad that brings it to 400 bytes plus a random
+// amount, so short answers do not all have the same small size.
 func (s *GETServer) sealDown(ss *serverSess, down []wire.Frame) ([]byte, error) {
 	rawSize := 0
 	for _, f := range down {
@@ -2346,6 +2476,8 @@ func (ss *serverSess) ingestAndPull(seq uint64, frames []wire.Frame, waitTurn ti
 	return down, true
 }
 
+// endPull ends seq's turn as Puller: marks it replied, moves downSeq on and
+// wakes the GETs waiting for their turn.
 func (ss *serverSess) endPull(seq uint64) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
@@ -2363,6 +2495,9 @@ func (ss *serverSess) endPull(seq uint64) {
 	}
 }
 
+// rememberReply caches body as the reply for seq and returns what to send.
+// If seq already has a reply, that one wins, so two attempts at one seq
+// always get identical bytes.
 func (ss *serverSess) rememberReply(seq uint64, body []byte) []byte {
 	if seq == 0 || len(body) == 0 {
 		return body
@@ -2385,6 +2520,7 @@ func (ss *serverSess) rememberReply(seq uint64, body []byte) []byte {
 	return body
 }
 
+// replayReply returns the cached reply for seq, or nil.
 func (ss *serverSess) replayReply(seq uint64) []byte {
 	if seq == 0 {
 		return nil

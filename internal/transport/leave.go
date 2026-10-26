@@ -1,6 +1,8 @@
 package transport
 
 // CmdLeave batch helpers: encode and AEAD-seal a Leave so GET/WS can end the session.
+// Leave tells the node "I am gone on purpose": it releases the mux at once
+// instead of holding (parking) it for a reconnect that will never come.
 
 import (
 	ecrypto "github.com/a3app/loft/internal/crypto"
