@@ -10,13 +10,19 @@ package transport
 // outage only wastes it, so the client holds draft back for those moments
 // and lets resin through.
 
-import "time"
+import (
+	"sync/atomic"
+	"time"
+)
 
 // pauseSchedule is set from client.yaml `pause:` (starlink, or empty).
-var pauseSchedule string
+// The pump reads it while SuperviseOn may replace it.
+var pauseSchedule atomic.Value // string
+
+func init() { pauseSchedule.Store("") }
 
 // SetPauseSchedule installs a draft-pause calendar. Unknown names are off.
-func SetPauseSchedule(name string) { pauseSchedule = name }
+func SetPauseSchedule(name string) { pauseSchedule.Store(name) }
 
 // DraftPaused is true when the client must not send mux Data/ordinary UDP.
 func DraftPaused() bool {
@@ -24,7 +30,8 @@ func DraftPaused() bool {
 }
 
 func draftPausedAt(now time.Time) bool {
-	switch pauseSchedule {
+	name, _ := pauseSchedule.Load().(string)
+	switch name {
 	case "starlink":
 		// Starlink GSL handover: :12 :27 :42 :57 of each UTC minute, ~400ms.
 		// GSL is the ground-to-satellite link; it switches satellites on

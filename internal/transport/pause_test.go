@@ -6,7 +6,7 @@ import (
 )
 
 func TestStarlinkPauseWindows(t *testing.T) {
-	t.Cleanup(func() { pauseSchedule = "" })
+	t.Cleanup(func() { SetPauseSchedule("") })
 	SetPauseSchedule("starlink")
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	if draftPausedAt(base.Add(11 * time.Second)) {
