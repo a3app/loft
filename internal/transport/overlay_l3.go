@@ -91,7 +91,7 @@ func (o *Overlay) DeliverL3(from l3Sink, pkt []byte) {
 	if dstIP.IsLoopback() || dstIP.IsMulticast() || dstIP.IsUnspecified() || dstIP.IsLinkLocalUnicast() {
 		return
 	}
-	l3Inet(o.l3Reply(srcP.ip), net.ParseIP(srcP.ip).To4(), pkt)
+	l3Inet(o.l3Reply(srcP.ip), o.whoMember(srcP.member), net.ParseIP(srcP.ip).To4(), pkt)
 }
 
 // l3Reply looks up the live L3 sink by overlay IP so NAT survives CONNECT replace.

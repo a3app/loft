@@ -57,6 +57,12 @@ func (o *Overlay) Who(sess *mux.Session) egress.Who {
 		member = p.member
 	}
 	o.mu.Unlock()
+	return o.whoMember(member)
+}
+
+// whoMember is the egress identity of a member id: the id, its tags and its
+// overlay VLAN, as the exit rules match them.
+func (o *Overlay) whoMember(member string) egress.Who {
 	w := egress.Who{Member: member}
 	if n := o.N(); member != "" && n != nil {
 		if m := n.MemberByID(member); m != nil {

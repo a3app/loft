@@ -15,6 +15,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/a3app/loft/internal/egress"
@@ -52,6 +53,7 @@ type l3Tuple struct {
 // cwin the client's advertised window (scaled by wshift). pend holds data
 // the client sent before the outbound connection was up.
 type l3TCPFlow struct {
+	who           egress.Who // the member, so its exit rules apply
 	src, dst      net.IP
 	sport, dport  uint16
 	iss, snd, rcv uint32
@@ -66,11 +68,15 @@ type l3TCPFlow struct {
 	ack           chan struct{}
 }
 
-// l3UDPFlow is one proxied UDP flow with its own node socket.
+// l3UDPFlow is one proxied UDP flow. With exit rules configured it goes out
+// through egress (eu) like a mux datagram of the same member; without them
+// it has its own node socket (pc).
 type l3UDPFlow struct {
 	src, dst     net.IP
 	sport, dport uint16
 	pc           net.PacketConn
+	eu           *egress.UDP
+	last         atomic.Int64 // unix nanoseconds of the last packet either way
 	reply        func([]byte) error
 }
 
@@ -94,7 +100,9 @@ func l3FlowKey(src, dst net.IP, sport, dport uint16) (k l3Tuple, ok bool) {
 }
 
 // l3Inet emits pkt from overlay src toward an internet dest, replies via reply.
-func l3Inet(reply func([]byte) error, src net.IP, pkt []byte) {
+// who is the member behind src: TCP and UDP leave by that member's exit
+// rules, the same as its mux streams and datagrams.
+func l3Inet(reply func([]byte) error, who egress.Who, src net.IP, pkt []byte) {
 	if reply == nil || src == nil || len(pkt) < 20 {
 		return
 	}
@@ -110,9 +118,9 @@ func l3Inet(reply func([]byte) error, src net.IP, pkt []byte) {
 	case ipProtoICMP:
 		l3InetICMP(reply, src, dst, pkt, ihl)
 	case ipProtoUDP:
-		l3InetUDP(reply, src, dst, pkt, ihl)
+		l3InetUDP(reply, who, src, dst, pkt, ihl)
 	case ipProtoTCP:
-		l3InetTCP(reply, src, dst, pkt, ihl)
+		l3InetTCP(reply, who, src, dst, pkt, ihl)
 	}
 }
 
@@ -145,9 +153,10 @@ func l3InetICMP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) 
 	}()
 }
 
-// l3InetUDP sends the UDP payload from the flow's node socket, opening the
-// socket (and its reader) on the first packet of a flow.
-func l3InetUDP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
+// l3InetUDP sends the UDP payload of one flow, opening the flow on its
+// first packet: through egress when exit rules are configured, else from a
+// node socket with its own reader.
+func l3InetUDP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []byte, ihl int) {
 	if len(pkt) < ihl+8 {
 		return
 	}
@@ -168,18 +177,52 @@ func l3InetUDP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 			l3UDPMu.Unlock()
 			return
 		}
-		pc, err := net.ListenPacket("udp4", "0.0.0.0:0")
-		if err != nil {
-			l3UDPMu.Unlock()
-			return
+		f = &l3UDPFlow{src: src, dst: dst, sport: sport, dport: dport, reply: reply}
+		f.last.Store(time.Now().UnixNano())
+		if r := Egress.Load(); r != nil {
+			f.eu = r.NewUDP(who, func(_ string, b []byte) {
+				f.last.Store(time.Now().UnixNano())
+				if out := encapsulateIPv4UDP(f.dst, f.src, f.dport, f.sport, b); len(out) > 0 {
+					_ = f.reply(out)
+				}
+			})
+			l3UDP[key] = f
+			go l3UDPIdleClose(key, f)
+		} else {
+			pc, err := net.ListenPacket("udp4", "0.0.0.0:0")
+			if err != nil {
+				l3UDPMu.Unlock()
+				return
+			}
+			f.pc = pc
+			l3UDP[key] = f
+			go l3UDPRead(key, f)
 		}
-		f = &l3UDPFlow{src: src, dst: dst, sport: sport, dport: dport, pc: pc, reply: reply}
-		l3UDP[key] = f
-		go l3UDPRead(key, f)
 	}
 	l3UDPMu.Unlock()
+	f.last.Store(time.Now().UnixNano())
+	if f.eu != nil {
+		f.eu.Send(net.JoinHostPort(dst.String(), strconv.Itoa(int(dport))), payload)
+		return
+	}
 	_ = f.pc.SetWriteDeadline(time.Now().Add(3 * time.Second))
 	_, _ = f.pc.WriteTo(payload, &net.UDPAddr{IP: dst, Port: int(dport)})
+}
+
+// l3UDPIdleClose ends an egress UDP flow after l3UDPIdle with no packet in
+// either direction.
+func l3UDPIdleClose(key l3Tuple, f *l3UDPFlow) {
+	t := time.NewTicker(l3UDPIdle / 4)
+	defer t.Stop()
+	for range t.C {
+		if time.Since(time.Unix(0, f.last.Load())) > l3UDPIdle {
+			break
+		}
+	}
+	f.eu.Close()
+	l3UDPMu.Lock()
+	delete(l3UDP, key)
+	l3UDPMu.Unlock()
 }
 
 // l3UDPRead wraps each reply from the internet into a UDP/IPv4 packet back
@@ -224,10 +267,18 @@ func encapsulateIPv4UDP(src, dst net.IP, sport, dport uint16, payload []byte) []
 
 // l3InetTCP handles one TCP segment from the member. A bare SYN starts a
 // flow and an outbound dial; RST ends the flow; ACK updates the send window;
-// FIN half-closes the outbound connection; payload is written to it (or
-// buffered until the dial completes) and acknowledged at once. Segments are
-// taken in arrival order; sequence numbers are not checked.
-func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
+// payload is written to the outbound connection (or buffered until the dial
+// completes) and acknowledged at once; FIN, after the payload of the same
+// segment, half-closes the outbound connection.
+//
+// Only bytes at the expected sequence number are taken. The link to the
+// member is a reliable stream, so segments do not arrive out of order, but
+// the member's TCP may still resend a segment whose ACK was slow (common on
+// mobile links). Writing it again would duplicate bytes in the outbound
+// stream (inside TLS that is a fatal "bad record MAC") and acknowledge bytes
+// the member never sent. A resent segment is only acknowledged again; a
+// segment from beyond a gap is dropped and the member resends it.
+func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []byte, ihl int) {
 	if len(pkt) < ihl+20 {
 		return
 	}
@@ -269,7 +320,7 @@ func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 			cwin = 65535
 		}
 		f = &l3TCPFlow{
-			src: src, dst: dst, sport: sport, dport: dport,
+			who: who, src: src, dst: dst, sport: sport, dport: dport,
 			iss: binary.BigEndian.Uint32(iss[:]), rcv: seq + 1, reply: reply,
 			wshift: shift, cwin: cwin, ack: make(chan struct{}, 1),
 		}
@@ -293,21 +344,20 @@ func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 		}
 		f.mu.Unlock()
 	}
-	if flags&tcpFIN != 0 {
-		f.mu.Lock()
-		f.rcv++
-		c := f.conn
-		rep := f.reply
-		f.mu.Unlock()
-		if cw, ok := c.(interface{ CloseWrite() error }); ok {
-			_ = cw.CloseWrite()
-		}
-		_ = rep(f.segment(tcpACK, nil))
-		return
-	}
 	f.mu.Lock()
 	if !f.up && flags&tcpACK != 0 {
 		f.up = true
+	}
+	payload, inOrder := l3TCPTrim(seq, f.rcv, payload)
+	fin := flags&tcpFIN != 0 && inOrder
+	if len(payload) == 0 && !fin {
+		resend := len(th[dataOff:]) > 0 || flags&tcpFIN != 0
+		rep := f.reply
+		f.mu.Unlock()
+		if resend {
+			_ = rep(f.segment(tcpACK, nil)) // duplicate or beyond a gap: ACK what we have
+		}
+		return
 	}
 	if len(payload) > 0 {
 		f.rcv += uint32(len(payload))
@@ -316,22 +366,47 @@ func l3InetTCP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 		} else {
 			f.pend = append(f.pend, payload...)
 		}
-		rep := f.reply
-		f.mu.Unlock()
-		_ = rep(f.segment(tcpACK, nil))
-		return
 	}
+	var c net.Conn
+	if fin {
+		f.rcv++
+		c = f.conn
+	}
+	rep := f.reply
 	f.mu.Unlock()
+	if c != nil {
+		if cw, ok := c.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		}
+	}
+	_ = rep(f.segment(tcpACK, nil))
+}
+
+// l3TCPTrim returns the part of payload (sent at seq) that starts at the
+// expected sequence number rcv, and whether the segment's end lines up with
+// rcv after that (so a FIN in it is in order). Bytes before rcv were
+// received already; a segment starting after rcv is beyond a gap and gives
+// nothing. Sequence numbers wrap, so the comparison is on the difference.
+func l3TCPTrim(seq, rcv uint32, payload []byte) ([]byte, bool) {
+	ahead := int32(seq - rcv)
+	if ahead > 0 {
+		return nil, false
+	}
+	skip := uint32(-ahead)
+	if skip >= uint32(len(payload)) {
+		return nil, skip == uint32(len(payload))
+	}
+	return payload[skip:], true
 }
 
 // l3TCPDial connects to the destination and only then answers the SYN, so
 // a refused dial reaches the member as RST, like a real host would. It then
 // copies data from the internet into TCP segments, never sending more than
 // the member's window allows; when the window is full it waits for an ACK
-// (or 50 ms) and tries again. The outbound dial uses the default exit rule
-// (no member identity).
+// (or 50 ms) and tries again. The outbound dial follows the member's exit
+// rules, like its mux streams.
 func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
-	c, err := dialOut(egress.Who{}, net.JoinHostPort(f.dst.String(), strconv.Itoa(int(f.dport))))
+	c, err := dialOut(f.who, net.JoinHostPort(f.dst.String(), strconv.Itoa(int(f.dport))))
 	if err != nil {
 		_ = f.reply(f.segment(tcpRST|tcpACK, nil))
 		l3TCPMu.Lock()

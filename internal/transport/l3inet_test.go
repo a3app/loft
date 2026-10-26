@@ -5,6 +5,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/a3app/loft/internal/egress"
 )
 
 func TestL3InetTCPEcho(t *testing.T) {
@@ -33,7 +35,7 @@ func TestL3InetTCPEcho(t *testing.T) {
 		return nil
 	}
 	syn := l3TCPSyn(src, dst, 40000, uint16(addr.Port), 1000)
-	l3Inet(reply, src, syn)
+	l3Inet(reply, egress.Who{}, src, syn)
 	var synack []byte
 	select {
 	case synack = <-replies:
@@ -47,10 +49,10 @@ func TestL3InetTCPEcho(t *testing.T) {
 	iss := uint32(1000)
 	ackn := be32(synack[ihl+4 : ihl+8])
 	ack := l3TCPAck(src, dst, 40000, uint16(addr.Port), iss+1, ackn+1)
-	l3Inet(reply, src, ack)
+	l3Inet(reply, egress.Who{}, src, ack)
 	payload := []byte("hello-l3")
 	data := l3TCPData(src, dst, 40000, uint16(addr.Port), iss+1, ackn+1, payload)
-	l3Inet(reply, src, data)
+	l3Inet(reply, egress.Who{}, src, data)
 	deadline := time.After(2 * time.Second)
 	for {
 		select {
@@ -94,7 +96,7 @@ func TestL3TCPSynAckOptions(t *testing.T) {
 		return nil
 	}
 	syn := l3TCPSynWScale(src, addr.IP, 40001, uint16(addr.Port), 1000, 7)
-	l3Inet(reply, src, syn)
+	l3Inet(reply, egress.Who{}, src, syn)
 	var synack []byte
 	select {
 	case synack = <-replies:

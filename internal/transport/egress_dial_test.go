@@ -130,7 +130,7 @@ func TestL3UDPDropsLoopback(t *testing.T) {
 		LoopbackOpen = open
 		t.Cleanup(func() { LoopbackOpen = true })
 		pkt[21]++ // a fresh flow each round
-		l3Inet(reply, src, pkt)
+		l3Inet(reply, egress.Who{}, src, pkt)
 		_ = pc.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
 		buf := make([]byte, 8)
 		_, _, err := pc.ReadFrom(buf)
