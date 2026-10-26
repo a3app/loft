@@ -152,7 +152,9 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 编码前仍需决定：
 
 1. **Go 与 Windows 7。** 会话由 Go 进程 `loft-front` 运行。Go 1.21 及以上不支持 Windows 7 / 8：需用 Go 1.20.x 或打补丁的工具链构建。
-2. **TUN 驱动。** 必须能在 Windows 7（x86 和 x64）上运行：TAP-Windows6 或合适版本的 Wintun。选择前先确认 Windows 7 支持。
+2. **TUN 驱动。** 方案：**所有版本均用 Wintun**（Go：`golang.zx2c4.com/wireguard/tun`，L3，无需模拟以太网）。微软已不再为 Windows 7 签名新的内核驱动，因此安装程序内置固定版本的已签名二进制；我们不自行构建驱动。
+   编码前验证：最新的已签名 Wintun 版本能在 Windows 7 SP1 x86 和 x64（装有 SHA-2 更新 KB4474419）上安装并建立接口。
+   若不行：Windows 7 上用已签名的 TAP-Windows6 9.24.x，8 及以上用 Wintun。备选方案的代价：两套接口代码，以及 TAP ≤ 9.26 中的 CVE-2024-1305 且没有修复的 Windows 7 版本。
 3. **特权部分。** 路由、hold 和重置由 Windows 服务设置（对应 `loft-priv`）。服务名和安装方式（MSI / 自有安装程序）未定。
 4. **密钥存储。** Windows 凭据管理器，或文件中的 DPAPI（`CryptProtectData`）。
 
