@@ -127,6 +127,7 @@ func TestServeSpliceRejectsNoAuth(t *testing.T) {
 
 // TestServeSpliceRejectsLoopback is 403 for 127.0.0.1 even with 0x02.
 func TestServeSpliceRejectsLoopback(t *testing.T) {
+	shutLoopback(t)
 	ts := httptest.NewServer(spliceHandler())
 	defer ts.Close()
 	c, err := net.DialTimeout("tcp", ts.Listener.Addr().String(), 3*time.Second)

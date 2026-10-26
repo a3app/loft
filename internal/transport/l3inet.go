@@ -130,6 +130,9 @@ func l3InetUDP(reply func([]byte) error, src, dst net.IP, pkt []byte, ihl int) {
 	sport := binary.BigEndian.Uint16(pkt[ihl : ihl+2])
 	dport := binary.BigEndian.Uint16(pkt[ihl+2 : ihl+4])
 	payload := pkt[ihl+8:]
+	if spliceIPDenied(dst) { // same drop as a mux Open
+		return
+	}
 	key, ok := l3FlowKey(src, dst, sport, dport)
 	if !ok {
 		return

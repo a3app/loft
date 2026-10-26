@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -38,6 +39,9 @@ type Options struct {
 	SysNet string // /sys/class/net (tests)
 	Log    func(string, ...any)
 	TLS    *tls.Config // nil = system roots; tests pass InsecureSkipVerify
+	// Deny refuses a destination on the direct and interface steps. It sees
+	// the address being connected or sent to, after name resolution.
+	Deny func(net.IP) bool
 }
 
 // Who is the member a connection belongs to; empty for traffic without one.
@@ -322,7 +326,7 @@ func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn,
 				}
 				continue
 			}
-			c, err := (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, "tcp4", target)
+			c, err := (&net.Dialer{Timeout: dialTimeout, Control: r.control("")}).DialContext(ctx, "tcp4", target)
 			if err == nil {
 				return c, Direct, nil
 			}
@@ -359,7 +363,7 @@ func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn,
 func (r *Router) dialOn(ctx context.Context, cs *chanState, target string) (net.Conn, error) {
 	switch cs.ch.Kind {
 	case KindDev:
-		return (&net.Dialer{Control: bindDev(cs.ch.Dev)}).DialContext(ctx, "tcp4", target)
+		return (&net.Dialer{Control: r.control(cs.ch.Dev)}).DialContext(ctx, "tcp4", target)
 	case KindSOCKS5:
 		return socksDial(ctx, r.under(cs.ch.Via), &cs.ch, target)
 	case KindHTTP:
@@ -374,6 +378,29 @@ func (r *Router) dialOn(ctx context.Context, cs *chanState, target string) (net.
 		return s.Open(target)
 	}
 	return nil, fmt.Errorf("unknown channel kind %q", cs.ch.Kind)
+}
+
+var errDenied = errors.New("destination refused")
+
+// control is bindDev plus Deny on the address the socket connects to.
+func (r *Router) control(dev string) func(network, address string, c syscall.RawConn) error {
+	bind := bindDev(dev)
+	if r.opt.Deny == nil {
+		return bind
+	}
+	return func(network, address string, c syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+		if r.opt.Deny(net.ParseIP(host)) {
+			return errDenied
+		}
+		if bind != nil {
+			return bind(network, address, c)
+		}
+		return nil
+	}
 }
 
 // under is how a proxy itself is reached: directly or through via.

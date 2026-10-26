@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"errors"
 	"net"
 	"sync/atomic"
 	"time"
@@ -30,7 +29,7 @@ func whoOf(sess *mux.Session) egress.Who {
 func dialOut(who egress.Who, target string) (net.Conn, error) {
 	host, _, err := net.SplitHostPort(target)
 	if err != nil || spliceDenied(host) {
-		return nil, errors.New("drop")
+		return nil, errDenied
 	}
 	if r := Egress.Load(); r != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -38,7 +37,7 @@ func dialOut(who egress.Who, target string) (net.Conn, error) {
 		c, _, err := r.DialTCP(ctx, who, target)
 		return c, err
 	}
-	return net.DialTimeout("tcp4", target, 10*time.Second)
+	return (&net.Dialer{Timeout: 10 * time.Second, Control: dialGuard}).Dial("tcp4", target)
 }
 
 // Who returns the member attached on sess, its tags and overlay VLAN.

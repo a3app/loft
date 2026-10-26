@@ -35,7 +35,7 @@ func loadEgress(dir string, cfg *config.ServerConfig) error {
 	if err != nil {
 		return fmt.Errorf("egress.conf: %w", err)
 	}
-	r := egress.New(c, egress.Options{Lists: cfg.Lists, SSTP: dialSSTP, Log: log.Printf})
+	r := egress.New(c, egress.Options{Lists: cfg.Lists, SSTP: dialSSTP, Log: log.Printf, Deny: transport.DeniedIP})
 	if old := transport.Egress.Swap(r); old != nil {
 		old.Close()
 	}

@@ -7,9 +7,10 @@ package transport
 // Remaining datagrams are internet UDP.
 
 import (
-	"github.com/a3app/loft/internal/egress"
 	"net"
+	"strings"
 
+	"github.com/a3app/loft/internal/egress"
 	"github.com/a3app/loft/internal/mux"
 )
 
@@ -98,8 +99,12 @@ func serveDgrams(ms *mux.Session) {
 			o.DeliverDNS(ms, addr, data)
 			continue
 		}
-		// Same drop as CONNECT: loopback, link-local, metadata names.
-		if err != nil || spliceDenied(host) {
+		// Same drop as CONNECT: loopback, link-local, metadata names. No
+		// lookup per datagram; the resolved address is checked on send.
+		if err != nil {
+			continue
+		}
+		if denied, _ := spliceNameDenied(strings.ToLower(strings.TrimSuffix(host, "."))); denied {
 			continue
 		}
 		if r := Egress.Load(); r != nil {
@@ -114,7 +119,7 @@ func serveDgrams(ms *mux.Session) {
 			continue
 		}
 		uaddr, err := net.ResolveUDPAddr("udp", addr)
-		if err != nil {
+		if err != nil || spliceIPDenied(uaddr.IP) {
 			continue
 		}
 		_, _ = pc.WriteTo(data, uaddr)

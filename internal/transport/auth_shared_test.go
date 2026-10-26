@@ -9,9 +9,11 @@ import (
 	"github.com/a3app/loft/internal/identity"
 )
 
-// TestMain keeps front tests on the old empty-ring shortcut (GET/WS lab nodes).
+// TestMain keeps front tests on the old empty-ring shortcut (GET/WS lab nodes)
+// and lets them reach echo servers on 127.0.0.1.
 func TestMain(m *testing.M) {
 	AuthShared = true
+	LoopbackOpen = true
 	os.Exit(m.Run())
 }
 

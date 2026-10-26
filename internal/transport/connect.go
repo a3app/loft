@@ -4,12 +4,14 @@ package transport
 // Origin mounts this only when fronts lists connect. Every CONNECT carries 0x02.
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	ecrypto "github.com/a3app/loft/internal/crypto"
@@ -116,16 +118,18 @@ func ServeSplice(w http.ResponseWriter, r *http.Request, token []byte, seen *ecr
 	spliceRelay(newHTTPConn(w, r.Body), conn)
 }
 
+// LoopbackOpen lets members dial the node's loopback. Only tests set it:
+// their echo servers listen on 127.0.0.1.
+var LoopbackOpen bool
+
+var errDenied = errors.New("drop")
+
 // spliceDenied is loopback, link-local (includes 169.254.169.254), multicast,
 // unspecified, localhost, and cloud metadata names.
 func spliceDenied(host string) bool {
-	h := strings.ToLower(strings.Trim(host, "[]"))
-	if h == "localhost" || strings.HasSuffix(h, ".localhost") ||
-		h == "metadata.google.internal" || h == "metadata" {
-		return true
-	}
-	if ip := net.ParseIP(h); ip != nil {
-		return spliceIPDenied(ip)
+	h := strings.ToLower(strings.TrimSuffix(strings.Trim(host, "[]"), "."))
+	if denied, known := spliceNameDenied(h); known {
+		return denied
 	}
 	ips, err := spliceLookup(h)
 	if err != nil || len(ips) == 0 {
@@ -139,8 +143,40 @@ func spliceDenied(host string) bool {
 	return false
 }
 
+// spliceNameDenied decides without a lookup: an IP literal, localhost, or a
+// metadata name. known is false for any other name.
+func spliceNameDenied(h string) (denied, known bool) {
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") ||
+		h == "metadata.google.internal" || h == "metadata" {
+		return true, true
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return spliceIPDenied(ip), true
+	}
+	return false, false
+}
+
 func spliceIPDenied(ip net.IP) bool {
-	return ip == nil || ip.IsLoopback() || ip.IsMulticast() || ip.IsUnspecified() || ip.IsLinkLocalUnicast()
+	if ip != nil && ip.IsLoopback() {
+		return !LoopbackOpen
+	}
+	return ip == nil || ip.IsMulticast() || ip.IsUnspecified() || ip.IsLinkLocalUnicast()
+}
+
+// DeniedIP is the address check egress applies at connect and send time.
+func DeniedIP(ip net.IP) bool { return spliceIPDenied(ip) }
+
+// dialGuard checks the address the socket really connects to, so a name
+// that resolves differently on the second lookup still drops.
+func dialGuard(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	if spliceIPDenied(net.ParseIP(host)) {
+		return errDenied
+	}
+	return nil
 }
 
 // spliceRelay copies both directions until either side ends.

@@ -98,13 +98,13 @@ func (u *UDP) way(s string) (udpWay, error) {
 		if err != nil {
 			return nil, err
 		}
-		w = &pcWay{pc: pc}
+		w = &pcWay{pc: pc, deny: u.r.opt.Deny}
 	case cs.ch.Kind == KindDev:
 		pc, err := (&net.ListenConfig{Control: bindDev(cs.ch.Dev)}).ListenPacket(context.Background(), "udp4", ":0")
 		if err != nil {
 			return nil, err
 		}
-		w = &pcWay{pc: pc}
+		w = &pcWay{pc: pc, deny: u.r.opt.Deny}
 	case cs.ch.Kind == KindSOCKS5:
 		ctx, cancel := context.WithTimeout(u.r.ctx, dialTimeout)
 		su, err := socksAssociate(ctx, u.r.under(cs.ch.Via), &cs.ch)
@@ -173,12 +173,20 @@ func (u *UDP) read(s string, w udpWay, cs *chanState) {
 	}
 }
 
-type pcWay struct{ pc net.PacketConn }
+// pcWay is a local socket; deny (direct and interface ways) checks the
+// resolved destination.
+type pcWay struct {
+	pc   net.PacketConn
+	deny func(net.IP) bool
+}
 
 func (p *pcWay) send(target string, data []byte) error {
 	a, err := net.ResolveUDPAddr("udp4", target)
 	if err != nil {
 		return err
+	}
+	if p.deny != nil && p.deny(a.IP) {
+		return errDenied
 	}
 	_, err = p.pc.WriteTo(data, a)
 	return err
