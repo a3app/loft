@@ -556,7 +556,7 @@ type ChannelsView struct {
 	DirectCheck *ChanCheck      `json:"direct_check,omitempty"` // WAN ping-check; nil = off
 }
 
-// Relay is one allowlisted relay (enrol list).
+// Relay is one relay the controller lets enrol, with the hash of its key.
 type Relay struct {
 	ID     string   `json:"id"`
 	URL    string   `json:"url"`

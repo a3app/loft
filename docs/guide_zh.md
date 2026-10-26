@@ -168,9 +168,8 @@ export LOFT_TOKEN='long-secret'
 | `role` | `controller` |
 | `advertise` | 这条前置在名册里的公网 URL |
 | `roster_path` | 公开 GET，默认 `/static/v3/manifest.json` |
-| `enrol` | `list`：id 必须在 `relays:` 里。`open`：任何 `CapRelay` 干线 |
 | `auth shared` | `enable`：`members.keys` 空时把 `LOFT_TOKEN` 当客户端密钥。默认 `disable`。 |
-| `relays` | 允许名单：id、url、decoy、fronts、weight、path。这里写了的字段覆盖该中继的 url、decoy、fronts 和 weight |
+| `relays` | 允许登记的中继：id、url、decoy、fronts、weight、path、`key_sha256`。这里写的字段覆盖该中继的 url、decoy、fronts、weight。中继密钥本身在 `{dir}/relays.keys`（id → 密钥，权限 0600） |
 | `lists` | 名字 → 地址。前导 `.` 或 `*.` 是后缀；CIDR 字符串是 kind 3；其他字符串是精确域名 |
 | `lists_path` | 公开 GET，默认 `/static/v3/lists.json` |
 | `canary` | 路径金丝雀：`fat_hello`、`split_hello`、`pad` |
@@ -197,11 +196,12 @@ export LOFT_TOKEN='long-secret'
 | 字段 | 意思 |
 |-------|---------|
 | `role` | `relay` |
-| `id` | `enrol: list` 时必须对上 `relays[].id` |
+| `id` | 必须对上控制器上的 `relays[].id`，也就是该中继密钥签发时的 id |
 | `controller` | 枢纽 URL：`wss://host/api/v1/sync` 或 `https://host` |
 | `advertise` | 客户端走这个边缘的 URL |
 | `decoy` `mask` | 这个 IP 的身份 |
-| `token` | 和控制器一样，或者两边都用 `relay_token` |
+| `controller_pub` | 控制器公钥（64 hex）；其他密钥签名的切片会被拒绝 |
+| `{dir}/relay.key` | 控制器为这个中继签发的密钥（权限 0600）。这里的 `LOFT_TOKEN` 是中继自己的密钥（伪装），不是控制器的 |
 | `fronts` | 这个边缘提供的前置 |
 | `cert` `key` | 这个 IP 的公网 TLS |
 
@@ -340,7 +340,7 @@ use:
 | `network disabled` | `network.conf` 里的 `enable` |
 | TLS 挂住 | 诱饵 SNI、伪装、证书、`session_id` |
 | 清单是别人的 HTML | bootstrap 打到没有 HMAC 的诱饵 IP |
-| 中继 `enrol_no id` | `enrol: list` 时 id 不在 `relays:` 里 |
+| 中继 `enrol_no id` | id 不在 `relays:` 里、已下线（drain），或中继密钥是为别的 id 签发的 |
 | `auth_already_online` | 另一个实例占着密钥；开 `multi` 或停掉另一个 |
 | `auth_limit` | `multi_limit` |
 | `policy_drop` | `peers: hub` 下的覆盖网 Open，或 ACL drop |

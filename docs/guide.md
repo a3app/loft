@@ -168,9 +168,8 @@ export LOFT_TOKEN='long-secret'
 | `role` | `controller` |
 | `advertise` | Public URL of this front in the roster |
 | `roster_path` | Public GET, default `/static/v3/manifest.json` |
-| `enrol` | `list`: id must be in `relays:`. `open`: any `CapRelay` trunk |
 | `auth shared` | `enable`: `LOFT_TOKEN` as client secret when `members.keys` is empty. Default `disable`. |
-| `relays` | Allowlist: id, url, decoy, fronts, weight, path. Fields set here override that relay’s url, decoy, fronts, and weight |
+| `relays` | Relays allowed to enrol: id, url, decoy, fronts, weight, path, `key_sha256`. Fields set here override that relay’s url, decoy, fronts, and weight. The relay keys themselves are in `{dir}/relays.keys` (id → key, mode 0600) |
 | `lists` | Name → addresses. A leading `.` or `*.` is a suffix; a CIDR is kind 3; any other string is an exact domain |
 | `lists_path` | Public GET, default `/static/v3/lists.json` |
 | `canary` | Path canary: `fat_hello`, `split_hello`, `pad` |
@@ -197,11 +196,12 @@ Example: `server/configs/relay.yaml`.
 | Field | Meaning |
 |-------|---------|
 | `role` | `relay` |
-| `id` | Must match `relays[].id` when `enrol: list` |
+| `id` | Must match `relays[].id` on the controller and the id its key was issued for |
 | `controller` | Hub URL: `wss://host/api/v1/sync` or `https://host` |
 | `advertise` | URL clients use for this edge |
 | `decoy` `mask` | Identity of this IP |
-| `token` | Same as the controller, or `relay_token` on both |
+| `controller_pub` | The controller’s public key (64 hex); slices signed by any other key are refused |
+| `{dir}/relay.key` | The key the controller issued for this relay (mode 0600). `LOFT_TOKEN` here is this relay’s own secret (mask), not the controller’s |
 | `fronts` | Fronts this edge serves |
 | `cert` `key` | Public TLS of this IP |
 
@@ -340,7 +340,7 @@ A typical deployment:
 | `network disabled` | `enable` in `network.conf` |
 | TLS hangs | decoy SNI, mask, certificate, `session_id` |
 | Manifest is foreign HTML | bootstrap hit a decoy IP without HMAC |
-| Relay `enrol_no id` | id missing from `relays:` with `enrol: list` |
+| Relay `enrol_no id` | id missing from `relays:`, drained, or not the id the relay key was issued for |
 | `auth_already_online` | another instance holds the key; enable `multi` or stop the other |
 | `auth_limit` | `multi_limit` |
 | `policy_drop` | overlay Open under `peers: hub`, or an ACL drop |

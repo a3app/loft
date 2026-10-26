@@ -562,7 +562,6 @@ h3_path /api/v1/tunnel
 advertise $ADVERTISE
 roster_path /static/v3/manifest.json
 lists_path /static/v3/lists.json
-enrol list
 auth shared disable
 ${DECOY_BLOCK}${MASK_LINE}
 canary fat_hello enable

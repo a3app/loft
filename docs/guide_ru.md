@@ -168,9 +168,8 @@ export LOFT_TOKEN='long-secret'
 | `role` | `controller` |
 | `advertise` | Публичный URL этого фронта для roster |
 | `roster_path` | Публичный GET, по умолчанию `/static/v3/manifest.json` |
-| `enrol` | `list`: id должен быть в `relays:`. `open`: принимается любой транк с `CapRelay` |
 | `auth shared` | `enable`: `LOFT_TOKEN` служит секретом клиента, пока `members.keys` пуст. По умолчанию `disable`. |
-| `relays` | Список допущенных relay: id, url, decoy, fronts, weight, path. Поля, заданные здесь, перекрывают url, decoy, fronts и weight этого relay |
+| `relays` | Relay, которым разрешён enrol: id, url, decoy, fronts, weight, path, `key_sha256`. Поля, заданные здесь, перекрывают url, decoy, fronts и weight этого relay. Сами ключи relay лежат в `{dir}/relays.keys` (id → ключ, режим 0600) |
 | `lists` | Имя → адреса. Ведущая `.` или `*.` означает суффикс; строка CIDR — kind 3; любая другая строка — точный домен |
 | `lists_path` | Публичный GET, по умолчанию `/static/v3/lists.json` |
 | `canary` | Канарейки пути: `fat_hello`, `split_hello`, `pad` |
@@ -197,11 +196,12 @@ Seed подписи хранится в `{dir}/controller.seed`. Он случа
 | Поле | Смысл |
 |------|--------|
 | `role` | `relay` |
-| `id` | Должен совпадать с `relays[].id` при `enrol: list` |
+| `id` | Должен совпадать с `relays[].id` на контроллере и с id, для которого выпущен ключ |
 | `controller` | URL хаба: `wss://host/api/v1/sync` или `https://host` |
 | `advertise` | URL, по которому клиенты приходят на этот край |
 | `decoy` `mask` | Личность этого IP |
-| `token` | Тот же, что у контроллера, или `relay_token` на обоих |
+| `controller_pub` | Открытый ключ контроллера (64 hex); slice, подписанный другим ключом, отклоняется |
+| `{dir}/relay.key` | Ключ, выпущенный контроллером для этого relay (режим 0600). `LOFT_TOKEN` здесь — собственный секрет relay (mask), а не токен контроллера |
 | `fronts` | Фронты, которые обслуживает этот край |
 | `cert` `key` | Публичный TLS этого IP |
 
@@ -340,7 +340,7 @@ use:
 | `network disabled` | `enable` в `network.conf` |
 | TLS висит | decoy SNI, mask, сертификат, `session_id` |
 | Манифест — чужой HTML | bootstrap попал на IP decoy без HMAC |
-| Relay `enrol_no id` | id нет в `relays:` при `enrol: list` |
+| Relay `enrol_no id` | id нет в `relays:`, relay выведен (drain) или ключ выпущен для другого id |
 | `auth_already_online` | ключ занят другим экземпляром; включите `multi` или остановите другой экземпляр |
 | `auth_limit` | `multi_limit` |
 | `policy_drop` | overlay Open при `peers: hub` или drop в ACL |

@@ -4,7 +4,11 @@ id: ru1
 listen: ":443"
 advertise: https://203.0.113.10
 controller: wss://10.0.0.2/api/v1/sync
-token: "change-me-long-random"
+# The controller's public key (loft-node -print-pub on it, or its panel):
+# the relay accepts only slices signed by this key. The relay's own key,
+# issued by the controller for this id, is in relay.key next to the node
+# files (-dir). LOFT_TOKEN on this host is only the relay's own mask secret.
+controller_pub: "0000000000000000000000000000000000000000000000000000000000000000"
 cert: /etc/loft/fullchain.pem
 key: /etc/loft/privkey.pem
 

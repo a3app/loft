@@ -529,7 +529,7 @@ ACL 规则为首次匹配，`accept` 或 `drop`。空规则仍应用 `peers`。�
 
 ## 10. 控制器与中继
 
-控制器持有密钥、租约、ACL 与签名。中继终结外部 TLS，并把 TLS 之后的 HTTP 复制到干线会话：Open `hub:1` 或 `hub:2`。内部 mux AEAD 与 FinishAuth 留在控制器上；中继不解密覆盖网帧，不存储成员密钥。只有带能力 `relay` 的 Hello 可以 Open `hub:*` 或 `ctl:1`。成员不得置该位（它不是前置）。中继置该位。控制器处于允许名单模式时，已认证成员 id 必须在该名单上。空的 Hello 成员 id 是共享令牌中继；enrol 检查仍作用于该 id。能力 `hold` 与续上 `0x02` 独立于该位。*说明，非规范。* 一种客户端在 Hello 中省略该位。中继角色的 Go 节点经 ExtraCaps 置位。允许名单模式是 `enrol: list`，名单是 `relays:`。见 [guide_zh.md](guide_zh.md)。成员认证与覆盖网 IP 仍在控制器上。
+控制器持有密钥、租约、ACL 与签名。中继终结外部 TLS，并把 TLS 之后的 HTTP 复制到干线会话：Open `hub:1` 或 `hub:2`。内部 mux AEAD 与 FinishAuth 留在控制器上；中继不解密覆盖网帧，不存储成员密钥。只有带能力 `relay` 的 Hello 可以 Open `hub:*` 或 `ctl:1`。成员不得置该位（它不是前置）。中继置该位。中继用中继密钥通过 `0x02`：控制器为某一个中继 id 签发、并与成员密钥分开保存的密钥。控制器必须只为其中继名单上 id 的中继密钥、且 Hello 带能力 `relay` 时开干线；不得把中继密钥当成员密钥接受，也不得把成员密钥当干线接受。干线不获得覆盖网地址。能力 `hold` 与续上 `0x02` 独立于该位。*说明，非规范。* 一种客户端在 Hello 中省略该位。中继角色的 Go 节点经 ExtraCaps 置位，并从 `relay.key` 读取自己的密钥；控制器把中继密钥存在 `relays.keys`，其 SHA-256 写在 `node.conf` 的 `relay` 行上。见 [guide_zh.md](guide_zh.md)。成员认证与覆盖网 IP 仍在控制器上。
 
 ```
 client ──TLS──► relay ──trunk (mux hub:1|hub:2, ctl:1)──► controller
@@ -574,7 +574,7 @@ repeat n:
 | 5 | slice | 经签名的切片 |
 | 6 | drain | id, u8 |
 
-切片（体上的 Ed25519）：serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be，然后与名册相同的 pub 与 sig。允许名单模式要求 id 在控制器的中继名单上。开放模式接受任何已认证干线。登记拒绝：1 未知 id，2 格式错误，3 重复，4 停用。*说明，非规范。* 允许名单模式、开放模式，以及按中继覆盖 URL、decoy、fronts、weight 的配置名，见 [guide_zh.md](guide_zh.md)。
+切片（体上的 Ed25519）：serial, id, url, decoy, fronts, drain, weight, beat_ms u32be, expires unix u64be，然后与名册相同的 pub 与 sig。`enrol_req` 的 id 必须等于干线所用密钥对应的中继 id，以免一个中继冒充另一个。中继必须用安装时拿到的控制器公钥校验每个切片，并必须拒绝由其他任何密钥签名的切片。登记拒绝：1 未知 id，2 格式错误，3 重复，4 停用。*说明，非规范。* 中继名单、中继密钥，以及按中继覆盖 URL、decoy、fronts、weight 的配置名，见 [guide_zh.md](guide_zh.md)。
 
 机器与证书的置备在本协议之外。
 
