@@ -336,9 +336,13 @@
     window.openPicker = () => { if (L.pk) { L.P.pick = null; L.P.q = ''; picker(); } };
     // EXTRA is the mock's per-member sample (client, traffic, last seen,
     // online). Empty it; any member not filled in by loadPresence reads as
-    // "never seen, offline".
+    // "never seen, offline". NETS is the mock switch (Основная, alice-phone…):
+    // wipe it so a down node never paints design ports.
     for (const k of Object.keys(EXTRA)) delete EXTRA[k];
     Object.setPrototypeOf(EXTRA, new Proxy({}, { get: () => ['loft', '0 / 0', 'никогда', 0] }));
+    NETS.length = 0;
+    Object.keys(APPLIED).forEach(k => delete APPLIED[k]);
+    Object.keys(CFG).forEach(k => delete CFG[k]);
 
     // Overview: cards for the node, members, internet addresses, domains,
     // the server's load and recent events. Data: L.node (/api/node),
@@ -496,12 +500,12 @@
     if (node.status === 'fulfilled') L.node = node.value;
     if (wz && wz.status === 'fulfilled') { L.wz = wz.value; L.info = wz.value.node || null; }
     showHost();
+    NETS.length = 0;
+    Object.keys(APPLIED).forEach(k => delete APPLIED[k]);
+    Object.keys(CFG).forEach(k => delete CFG[k]);
     if (net.status === 'fulfilled') {
       const n = net.value;
       L.sha = n.sha256 || '';
-      NETS.length = 0;
-      Object.keys(APPLIED).forEach(k => delete APPLIED[k]);
-      Object.keys(CFG).forEach(k => delete CFG[k]);
       if (n.text) {
         try {
           const p = parseConf(n.text);

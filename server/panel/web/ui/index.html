@@ -578,6 +578,7 @@ V.main=()=>pageHead('Обзор','Состояние сервера и ноды 
 </div>`;
 
 V.members=()=>{
+ if(!NETS.length) return pageHead('Участники сети','Устройства и люди, которые подключаются к этому серверу. Каждому выдаётся свой ключ и профиль; протоколы включаются галочками. Участник сети — это порт свитча в <a href="#segments">Сегментах сети</a>.')+`<div class="empty"><b>Сеть не прочитана</b><p>Участники появятся, когда нода отдаст network.conf.</p></div>`;
  const all=NETS.flatMap(n=>n.members.map(m=>[n,m]));
  return pageHead('Участники сети','Устройства и люди, которые подключаются к этому серверу. Каждому выдаётся свой ключ и профиль; протоколы включаются галочками. Участник сети — это порт свитча в <a href="#segments">Сегментах сети</a>.')+pendNet()+
  blk('Участники сети',`${all.filter(([,m])=>m.authorized).length} включено · сети ${NETS.map(n=>n.id).join(' и ')}`,
@@ -1502,6 +1503,7 @@ const segsOf=(n)=>{n=n||curNet();if(!n)return[];
 };
 const segTitle=id=>{const s=segsOf().find(x=>String(x.id)===String(id));return s?s.name:'VLAN '+id};
 V.segments=()=>{
+ if(!NETS.length) return pageHead('Сегменты сети','Сеть loft — свитч: сегмент это мост со своим IP, DHCP, DNS и шлюзом. Участник сети — порт. Вкладки сверху — сегменты, плюс добавляет новый.')+`<div class="empty"><b>Сеть не прочитана</b><p>Порты появятся, когда нода отдаст network.conf.</p></div>`;
  const n=curNet();
  const err=CFG[n.id]&&CFG[n.id].err;
  const named=S.arg!=='';
