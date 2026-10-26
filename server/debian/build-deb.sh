@@ -40,11 +40,13 @@ mkdir -p \
 	"$pkg/usr/share/loft-node" \
 	"$pkg/usr/share/doc/loft-node" \
 	"$pkg/lib/systemd/system" \
-	"$pkg/etc/sysctl.d"
+	"$pkg/etc/sysctl.d" \
+	"$pkg/etc/modules-load.d"
 
 install -m 0755 "$BIN" "$pkg/usr/bin/loft-node"
 install -m 0644 "$HERE/loft-node.service" "$pkg/lib/systemd/system/loft-node.service"
 install -m 0644 "$HERE/sysctl.d/99-loft.conf" "$pkg/etc/sysctl.d/99-loft.conf"
+install -m 0644 "$HERE/modules-load.d/loft.conf" "$pkg/etc/modules-load.d/loft.conf"
 install -m 0644 "$HERE/configs/controller.conf" "$pkg/usr/share/loft-node/controller.conf"
 install -m 0644 "$HERE/configs/relay.conf" "$pkg/usr/share/loft-node/relay.conf"
 install -m 0644 "$HERE/configs/network.conf" "$pkg/usr/share/loft-node/network.conf"
