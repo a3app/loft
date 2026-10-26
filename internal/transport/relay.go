@@ -13,6 +13,8 @@ package transport
 // controller.
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -24,6 +26,7 @@ import (
 	"time"
 
 	"github.com/a3app/loft/internal/config"
+	"github.com/a3app/loft/internal/identity"
 	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/wire"
 )
@@ -80,11 +83,17 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 		standby = filepath.Join(filepath.Dir(cfg.ControllerKey), "standby")
 	}
 	go runRelayCtl(ctx, h, cfg, rt, pin, standby)
-	if len(cfg.Witness) > 0 {
-		go witnessLoop(ctx, rt, cfg.ID, []byte(token), cfg.Witness)
+	// Every relay is a witness for the standbys in its controller list.
+	if len(cfg.ControllerAlt) > 0 {
+		witnessLoop(ctx, rt, cfg.ID, []byte(token), cfg.ControllerAlt)
 	}
+	var wit *witnessSink
 	if standby != "" {
-		go runStandby(ctx, cfg, rt, standby)
+		if RelayKeys == nil {
+			RelayKeys = identity.NewRing()
+		}
+		wit = &witnessSink{book: &witnessBook{}, standby: standby}
+		go runStandby(ctx, cfg, rt, wit)
 	}
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -103,7 +112,7 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 			c.Close()
 			return
 		}
-		pipeHub(h, rt, c)
+		relayConn(h, rt, c, wit)
 	}
 	ln = wrapRelayDecoy(ln, []byte(cfg.Token), cfg.Decoy, mask, pipe, PublicSNIs(cfg.Advertise, cfg.CertFile))
 	ApplyDecoyProxy(ln, cfg.DecoyProxy)
@@ -132,8 +141,50 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 			c.Close()
 			continue
 		}
-		go pipeHub(h, rt, c)
+		go relayConn(h, rt, c, wit)
 	}
+}
+
+// relayConn handles one loft connection after TLS: on a standby a witness
+// report is taken here, anything else goes to the controller.
+func relayConn(h *Holder, rt *relayRuntime, c net.Conn, wit *witnessSink) {
+	if wit == nil || alpnOf(c) == "h2" {
+		pipeHub(h, rt, c)
+		return
+	}
+	br := bufio.NewReader(c)
+	_ = c.SetReadDeadline(time.Now().Add(15 * time.Second))
+	head, _ := br.Peek(len(witnessPrefix))
+	_ = c.SetReadDeadline(time.Time{})
+	if bytes.Equal(head, witnessPrefix) {
+		wit.serve(c, br)
+		return
+	}
+	pipeHub(h, rt, &peekedConn{Conn: c, r: br})
+}
+
+// alpnOf is the ALPN protocol TLS agreed on c, or "".
+func alpnOf(c net.Conn) string {
+	if cs, ok := c.(interface{ ConnectionState() tls.ConnectionState }); ok {
+		return cs.ConnectionState().NegotiatedProtocol
+	}
+	return ""
+}
+
+// peekedConn reads first what was peeked from its Conn.
+type peekedConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (p *peekedConn) Read(b []byte) (int, error) { return p.r.Read(b) }
+
+// ConnectionState passes through the TLS state, so pipeHub still sees ALPN.
+func (p *peekedConn) ConnectionState() tls.ConnectionState {
+	if cs, ok := p.Conn.(interface{ ConnectionState() tls.ConnectionState }); ok {
+		return cs.ConnectionState()
+	}
+	return tls.ConnectionState{}
 }
 
 // wrapRelayDecoy splices non-loft ClientHello to origins and hands loft TCP to onLoft.
@@ -156,10 +207,8 @@ func pipeHub(h *Holder, rt *relayRuntime, c net.Conn) {
 		defer rt.conns.Add(-1)
 	}
 	port := wire.HubHTTPPort
-	if cs, ok := c.(interface{ ConnectionState() tls.ConnectionState }); ok {
-		if cs.ConnectionState().NegotiatedProtocol == "h2" {
-			port = wire.HubH2Port
-		}
+	if alpnOf(c) == "h2" {
+		port = wire.HubH2Port
 	}
 	sess := waitSession(h, 15*time.Second)
 	if sess == nil {

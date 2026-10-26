@@ -20,6 +20,10 @@ import (
 
 const witnessMagic = "lft-wit"
 
+// WitnessPath is where a relay POSTs its reports to a standby, over TLS on
+// the standby's public address. Inside TLS it looks like a health check.
+const WitnessPath = "/api/v1/health"
+
 // Witness is one report: relay ID, when, and whether it reaches the controller.
 type Witness struct {
 	ID   string

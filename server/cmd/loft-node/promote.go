@@ -118,7 +118,7 @@ func mergePromoted(mine *config.ServerConfig, ctlConf []byte) (*config.ServerCon
 	c.Listen, c.Advertise, c.CertFile, c.KeyFile = mine.Listen, mine.Advertise, mine.CertFile, mine.KeyFile
 	c.Decoy, c.Mask, c.DecoyProxy = mine.Decoy, mine.Mask, mine.DecoyProxy
 	c.ID, c.Controller, c.ControllerAlt, c.ControllerPub = "", "", nil, ""
-	c.Witness, c.WitnessListen, c.PromoteAfter = nil, "", 0
+	c.PromoteAfter = 0
 	c.Relays = slices.DeleteFunc(c.Relays, func(e config.RelayEntry) bool { return e.ID == mine.ID })
 	return c, nil
 }

@@ -57,13 +57,6 @@ func applyNode(c *ServerConfig, tok []string) error {
 		c.Advertise = tok[1]
 	case "enrol":
 		// Old node.conf only: a relay now enrols with its own key, no mode.
-	case "witness":
-		c.Witness = append([]string(nil), tok[1:]...)
-	case "witness_listen":
-		if len(tok) < 2 {
-			return fmt.Errorf("witness_listen wants host:port")
-		}
-		c.WitnessListen = tok[1]
 	case "promote_after":
 		if len(tok) < 2 {
 			return fmt.Errorf("promote_after wants seconds")
@@ -331,12 +324,6 @@ func RenderCommands(c ServerConfig) string {
 		}
 		if c.ControllerPub != "" {
 			fmt.Fprintf(&b, "controller_pub %s\n", c.ControllerPub)
-		}
-		if len(c.Witness) > 0 {
-			fmt.Fprintf(&b, "witness %s\n", strings.Join(c.Witness, " "))
-		}
-		if c.WitnessListen != "" {
-			fmt.Fprintf(&b, "witness_listen %s\n", c.WitnessListen)
 		}
 		if c.PromoteAfter > 0 {
 			fmt.Fprintf(&b, "promote_after %d\n", c.PromoteAfter)

@@ -161,8 +161,6 @@ type ServerConfig struct {
 	Role          string              `yaml:"role"`           // controller | relay; empty = controller
 	Controller    string              `yaml:"controller"`     // relay: hub URL
 	ControllerAlt []string            `yaml:"controller_alt"` // relay: standby controllers' hub URLs, tried after Controller
-	Witness       []string            `yaml:"witness"`        // relay: standby witness addresses (host:port) it reports to
-	WitnessListen string              `yaml:"witness_listen"` // standby: where relays' witness reports arrive
 	PromoteAfter  int                 `yaml:"promote_after"`  // standby: seconds without the controller before auto-promote (default 300)
 	RelayToken    string              `yaml:"-"`              // relay: its own key, from {dir}/relay.key
 	ControllerPub string              `yaml:"controller_pub"` // relay: controller Ed25519 key (hex) that signs its slice
