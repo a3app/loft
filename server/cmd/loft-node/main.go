@@ -38,6 +38,8 @@ func main() {
 	showVer := flag.Bool("version", false, "print program and protocol versions")
 	printPub := flag.Bool("print-pub", false, "print controller Ed25519 public key (64 hex) and exit")
 	tracePath := flag.String("trace", "", "session event log (GET seq); empty = off")
+	promoteNow := flag.Bool("promote", false, "standby only, as root: become the controller from the copy of its state (restart loft-node after)")
+	envPath := flag.String("env", "/etc/loft/loft.env", "environment file with LOFT_TOKEN (for -promote)")
 	rollKey := flag.Int("roll-key", 0, "replace the controller key; pinned clients and relays follow for this many days (restart the node after)")
 	flag.Parse()
 	if *showVer {
@@ -48,6 +50,13 @@ func main() {
 		if err := printControllerPub(*dir, *cfgPath); err != nil {
 			log.Fatal(err)
 		}
+		return
+	}
+	if *promoteNow {
+		if err := promote(*dir, *cfgPath, *envPath); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("promoted: this node is the controller now. Restart loft-node, and do not start the old controller as a controller again.")
 		return
 	}
 	if *rollKey > 0 {
@@ -130,6 +139,7 @@ func main() {
 		}
 		cfg.RelayToken = strings.TrimSpace(string(key))
 	} else {
+		transport.StateFn = func() map[string][]byte { return controllerState(*dir, *cfgPath, cfg) }
 		rk, err := loadRelayKeys(*dir, cfg.Relays)
 		if err != nil {
 			log.Fatal(err)
