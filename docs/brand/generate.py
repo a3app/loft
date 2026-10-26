@@ -560,7 +560,7 @@ def menubar_outline(size: int) -> Image.Image:
 
 
 def build_icns_ico() -> None:
-    """Build loft.icns (iconutil) and loft.ico from the 1024 px app icon."""
+    """Build loft.icns (iconutil) from the 1024 px app icon. Windows .ico: build_windows."""
     # iconset
     iconset = APP / "loft.iconset"
     if iconset.exists():
@@ -590,12 +590,6 @@ def build_icns_ico() -> None:
     # proper 16
     icon16.save(iconset / "icon_16x16.png")
     subprocess.run(["iconutil", "-c", "icns", "-o", str(APP / "loft.icns"), str(iconset)], check=True)
-
-    src1024.save(
-        APP / "loft.ico",
-        format="ICO",
-        sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (256, 256)],
-    )
 
 
 def make_app_pixel(size: int) -> Image.Image:
@@ -726,15 +720,189 @@ def write_previews() -> None:
             save(base.convert("RGB"), PNG / f"preview-{Path(name).stem}-{tag}.png")
 
 
+# --- Windows icon set: app, tray, .loft file, Store tiles ---
+
+WIN = ROOT / "windows"
+ERR = "#E24B4B"  # tray window when a session failed (clients/Windows/design §2)
+
+# 16 px .loft document: o outline, p paper, f fold, then the small mark on top.
+FILE16 = [
+    "..ooooooooo.....",
+    "..opppppppoo....",
+    "..opppppppofo...",
+    "..opppppppoffo..",
+    "..opppppppoooo..",
+] + ["..oppppppppppo.."] * 10 + ["..oooooooooooo.."]
+# 7×7 mark for the page: roof over the stem, foot to the right.
+MARK7 = [
+    ".11....",
+    "1111...",
+    "1221...",
+    "1221...",
+    "1111...",
+    "1111111",
+    "1111111",
+]
+
+
+def ico_write(path: Path, images) -> None:
+    """Write a .ico: 32-bit BMP entries below 256 px, PNG at 256. Windows 7 reads both."""
+    import io
+    import struct
+
+    entries = []
+    for im in sorted(images, key=lambda i: i.width):
+        im = im.convert("RGBA")
+        w = im.width
+        if w >= 256:
+            buf = io.BytesIO()
+            im.save(buf, "PNG")
+            data = buf.getvalue()
+        else:
+            hdr = struct.pack("<IiiHHIIiiII", 40, w, w * 2, 1, 32, 0, 0, 0, 0, 0, 0)
+            flip = im.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+            px = flip.tobytes("raw", "BGRA")
+            # AND mask: 1 where the pixel is fully clear, for systems that ignore alpha
+            row = ((w + 31) // 32) * 4
+            mask = bytearray(row * w)
+            alpha = flip.getchannel("A").load()
+            for y in range(w):
+                for x in range(w):
+                    if alpha[x, y] == 0:
+                        mask[y * row + x // 8] |= 0x80 >> (x % 8)
+            data = hdr + px + bytes(mask)
+        entries.append((w, data))
+    out = struct.pack("<HHH", 0, 1, len(entries))
+    off = 6 + 16 * len(entries)
+    for w, data in entries:
+        out += struct.pack("<BBBBHHII", w % 256, w % 256, 0, 0, 1, 32, len(data), off)
+        off += len(data)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(out + b"".join(d for _, d in entries))
+
+
+def tray_img(size: int, body: str, lamp: str) -> Image.Image:
+    """Tray mark: pixel grid at 16 and 32, polygon otherwise (rule 2)."""
+    if size in (16, 32):
+        return paint_grid(PIX16, hex_rgba(body), hex_rgba(lamp), size // 16)
+    return raster_supersampled(size, hex_rgba(body), hex_rgba(lamp))
+
+
+def app_img(size: int) -> Image.Image:
+    """App icon at size: pixel squircle at 16, the 1024 render downsampled above."""
+    if size == 16:
+        return make_app_pixel(16)
+    src = Image.open(APP / "icon_1024.png").convert("RGBA")
+    return src.resize((size, size), Image.Resampling.LANCZOS)
+
+
+def file_img(size: int) -> Image.Image:
+    """.loft document: paper sheet with a folded corner and the lit mark."""
+    if size in (16, 32):
+        colors = {
+            "o": hex_rgba(MUTE), "p": hex_rgba(PAPER), "f": hex_rgba(STONE),
+            "1": hex_rgba(INK), "2": hex_rgba(LAMP),
+        }
+        grid = [list(r) for r in FILE16]
+        for y, row in enumerate(MARK7):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    grid[7 + y][4 + x] = ch
+        s = size // 16
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        dr = ImageDraw.Draw(img)
+        for y, row in enumerate(grid):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    dr.rectangle((x * s, y * s, x * s + s - 1, y * s + s - 1), fill=colors[ch])
+        return img
+    over = size * 8
+    img = Image.new("RGBA", (over, over), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    x0, x1, y0, y1 = 0.16 * over, 0.84 * over, 0.04 * over, 0.96 * over
+    f = 0.26 * (x1 - x0)
+    lw = max(round(over / 40), 8)
+    page = [(x0, y0), (x1 - f, y0), (x1, y0 + f), (x1, y1), (x0, y1)]
+    dr.polygon(page, fill=hex_rgba(PAPER), outline=hex_rgba(MUTE), width=lw)
+    fold = [(x1 - f, y0), (x1 - f, y0 + f), (x1, y0 + f)]
+    dr.polygon(fold, fill=hex_rgba(STONE), outline=hex_rgba(MUTE), width=lw)
+    m = int(0.46 * over)
+    mark = raster_supersampled(m, hex_rgba(INK), hex_rgba(LAMP), pad=0.0)
+    img.alpha_composite(mark, (int((over - m) / 2 - 0.03 * over), int(y1 - m - 0.08 * over)))
+    return img.resize((size, size), Image.Resampling.LANCZOS)
+
+
+def tile_img(w: int, h: int, share: float) -> Image.Image:
+    """Store tile: Ink plate, Stone mark with the lamp centred by its own box."""
+    img = Image.new("RGBA", (w, h), hex_rgba(INK))
+    m = max(int(min(w, h) * share), 8)
+    mark = raster_supersampled(m * 2, hex_rgba(STONE), hex_rgba(LAMP), pad=0.0)
+    mark = mark.crop(mark.getbbox())
+    k = m / mark.height
+    mark = mark.resize((max(round(mark.width * k), 1), m), Image.Resampling.LANCZOS)
+    img.alpha_composite(mark, ((w - mark.width) // 2, (h - mark.height) // 2))
+    return img
+
+
+def build_windows() -> None:
+    """Write the Windows set into windows/: .ico files, tray PNGs, Store assets."""
+    app_sizes = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
+    ico_write(WIN / "loft.ico", [app_img(s) for s in app_sizes])
+    ico_write(WIN / "loft-file.ico", [file_img(s) for s in (16, 20, 24, 32, 40, 48, 64, 96, 256)])
+    for s in (16, 32, 48, 256):
+        save(file_img(s), WIN / "png" / f"loft-file-{s}.png")
+
+    # Tray: default copper (Win7, dark taskbar), light = ink body for a light taskbar.
+    tray_sizes = (16, 20, 24, 32, 40, 48)
+    for theme, body in (("", COPPER), ("-light", INK)):
+        for state, lamp in (("", LAMP), ("-off", body), ("-err", ERR)):
+            name = f"loft-tray{theme}{state}"
+            imgs = [tray_img(s, body, lamp) for s in tray_sizes]
+            ico_write(WIN / f"{name}.ico", imgs)
+            for im in imgs[:4]:  # 100/125/150/200 %, what tray.c loads from tray/
+                save(im, TRAY / f"{name}-{im.width}.png")
+
+    # MSIX assets. Square44 doubles as the taskbar icon, so it is the app icon itself.
+    store = WIN / "store"
+    if store.exists():
+        shutil.rmtree(store)
+    scales = (100, 125, 150, 200, 400)
+    for t in (16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256):
+        im = app_img(t)
+        save(im, store / f"Square44x44Logo.targetsize-{t}.png")
+        save(im, store / f"Square44x44Logo.targetsize-{t}_altform-unplated.png")
+    tiles = (
+        ("Square44x44Logo", 44, 44, None),
+        ("Square71x71Logo", 71, 71, 0.56),
+        ("Square150x150Logo", 150, 150, 0.48),
+        ("Wide310x150Logo", 310, 150, 0.5),
+        ("Square310x310Logo", 310, 310, 0.44),
+        ("StoreLogo", 50, 50, 0.66),
+        ("SplashScreen", 620, 300, 0.4),
+    )
+    for name, w, h, share in tiles:
+        for sc in scales:
+            sw, sh = round(w * sc / 100), round(h * sc / 100)
+            im = app_img(sw) if share is None else tile_img(sw, sh, share)
+            save(im, store / f"{name}.scale-{sc}.png")
+    print("windows set →", WIN)
+
+
 def main() -> None:
     """Generate the full brand kit into this directory."""
     write_svgs()
     build_rasters()
     build_icns_ico()
+    build_windows()
     write_previews()
     write_readme()
     print("brand kit →", ROOT)
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if sys.argv[1:] == ["windows"]:
+        build_windows()
+    else:
+        main()

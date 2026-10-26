@@ -59,9 +59,14 @@ Ultra Light, Heavy и курсив в lockup не использовать.
 | `svg/loft-favicon.svg` | 32px |
 | `svg/loft-menubar-template.svg` | шаблон macOS `NSStatusItem` |
 | `app/loft.icns` | бандл macOS |
-| `app/loft.ico` | приложение Windows |
+| `windows/loft.ico` | приложение Windows: `loft.exe`, установщик, ярлыки. 16–256 px, 16 из пиксельной сетки |
+| `windows/loft-file.ico` | файлы `.loft` в Проводнике: бумажный лист с горящим знаком |
+| `windows/loft-tray{,-off,-err}.ico` | трей Windows ресурсами: подключено, отключено, ошибка (окно `#E24B4B`) |
+| `windows/loft-tray-light{,-off,-err}.ico` | то же с телом Ink для светлой панели задач |
+| `windows/store/` | ресурсы MSIX: `Square44x44Logo` (targetsize + unplated), `Square71x71`, `Square150x150`, `Wide310x150`, `Square310x310`, `StoreLogo`, `SplashScreen`, масштаб 100–400 |
 | `tray/loft-tray-16.png` | область уведомлений Windows, подключено |
 | `tray/loft-tray-off-16.png` | область уведомлений Windows, отключено |
+| `tray/loft-tray{,-light}{,-off,-err}-{16,20,24,32}.png` | все состояния трея для 100 / 125 / 150 / 200 %, их читает `tray.c` |
 | `menubar/loftTemplate.png` (`@2x` `@3x`) | строка меню macOS, подключено |
 | `menubar/loftTemplate-off-*.png` | строка меню macOS, отключено |
 
@@ -76,4 +81,4 @@ Ultra Light, Heavy и курсив в lockup не использовать.
 7. Слоган — рекурсивная аббревиатура *Loft Overlay For TLS* (LOFT). Title case. Вордмарк остаётся строчным `loft`.
 8. Колофон только по-английски: `Made with love` + пиксельное сердце + `by A³`. Сердце — 7×6 клеток лампы. A³ — знак автора, а не знак протокола.
 
-Пересборка: `/tmp/loft-brand/bin/python generate.py`
+Пересборка: `/tmp/loft-brand/bin/python generate.py`. Только набор Windows, без Chrome: `generate.py windows`

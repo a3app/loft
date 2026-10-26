@@ -59,9 +59,14 @@ macOS 上这是系统字体，带西里尔文。Windows 上要像素级一样的
 | `svg/loft-favicon.svg` | 32px |
 | `svg/loft-menubar-template.svg` | macOS `NSStatusItem` 模板 |
 | `app/loft.icns` | macOS bundle |
-| `app/loft.ico` | Windows 应用 |
+| `windows/loft.ico` | Windows 应用：`loft.exe`、安装程序、快捷方式。16–256 px，16 px 来自像素网格 |
+| `windows/loft-file.ico` | 资源管理器中的 `.loft` 文件：纸张加点亮的标志 |
+| `windows/loft-tray{,-off,-err}.ico` | Windows 托盘资源：已连接、已断开、错误（窗口 `#E24B4B`） |
+| `windows/loft-tray-light{,-off,-err}.ico` | 同上，墨色主体，用于浅色任务栏 |
+| `windows/store/` | MSIX 资源：`Square44x44Logo`（targetsize + unplated）、`Square71x71`、`Square150x150`、`Wide310x150`、`Square310x310`、`StoreLogo`、`SplashScreen`，缩放 100–400 |
 | `tray/loft-tray-16.png` | Windows 通知，已打开 |
 | `tray/loft-tray-off-16.png` | Windows 通知，已断开 |
+| `tray/loft-tray{,-light}{,-off,-err}-{16,20,24,32}.png` | 全部托盘状态，100 / 125 / 150 / 200 %，由 `tray.c` 读取 |
 | `menubar/loftTemplate.png`（`@2x` `@3x`） | macOS 菜单栏，已打开 |
 | `menubar/loftTemplate-off-*.png` | macOS 菜单栏，已断开 |
 
@@ -76,4 +81,4 @@ macOS 上这是系统字体，带西里尔文。Windows 上要像素级一样的
 7. 标语是递归缩写 *Loft Overlay For TLS*（LOFT）。Title case。wordmark 仍为小写 `loft`。
 8. Colophon 只用英文：`Made with love` + 像素心 + `by A³`。心是 7×6 灯格。A³ 是出品标志，不是协议标志。
 
-重新生成：`/tmp/loft-brand/bin/python generate.py`
+重新生成：`/tmp/loft-brand/bin/python generate.py`。仅 Windows 套件，无需 Chrome：`generate.py windows`

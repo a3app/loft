@@ -59,9 +59,14 @@ On macOS the font is system and includes Cyrillic. On Windows, identical wordmar
 | `svg/loft-favicon.svg` | 32px |
 | `svg/loft-menubar-template.svg` | macOS `NSStatusItem` template |
 | `app/loft.icns` | macOS bundle |
-| `app/loft.ico` | Windows app |
+| `windows/loft.ico` | Windows app: `loft.exe`, setup, shortcuts. 16–256 px, 16 from the pixel grid |
+| `windows/loft-file.ico` | `.loft` files in Explorer: paper sheet with the lit mark |
+| `windows/loft-tray{,-off,-err}.ico` | Windows tray as resources: connected, disconnected, error (`#E24B4B` window) |
+| `windows/loft-tray-light{,-off,-err}.ico` | the same with an ink body for a light taskbar |
+| `windows/store/` | MSIX assets: `Square44x44Logo` (targetsize + unplated), `Square71x71`, `Square150x150`, `Wide310x150`, `Square310x310`, `StoreLogo`, `SplashScreen`, scale 100–400 |
 | `tray/loft-tray-16.png` | Windows notify, connected |
 | `tray/loft-tray-off-16.png` | Windows notify, disconnected |
+| `tray/loft-tray{,-light}{,-off,-err}-{16,20,24,32}.png` | all tray states for 100 / 125 / 150 / 200 %, what `tray.c` loads |
 | `menubar/loftTemplate.png` (`@2x` `@3x`) | macOS menu bar, connected |
 | `menubar/loftTemplate-off-*.png` | macOS menu bar, disconnected |
 
@@ -76,4 +81,4 @@ On macOS the font is system and includes Cyrillic. On Windows, identical wordmar
 7. The tagline is the recursive acronym *Loft Overlay For TLS* (LOFT). Title case. The wordmark stays lowercase `loft`.
 8. Colophon is English only: `Made with love` + pixel heart + `by A³`. Heart is 7×6 lamp cells. A³ is the maker mark, not the protocol mark.
 
-Rebuild: `/tmp/loft-brand/bin/python generate.py`
+Rebuild: `/tmp/loft-brand/bin/python generate.py`. Windows set only, no Chrome: `generate.py windows`
