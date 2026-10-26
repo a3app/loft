@@ -23,10 +23,10 @@ func TestParkOrCloseDeadMuxCloses(t *testing.T) {
 
 func TestParkOrCloseLiveParks(t *testing.T) {
 	t.Cleanup(func() {
-		visCaps = 0
-		visGapMS = 0
+		visCaps.Store(0)
+		visGapMS.Store(0)
 	})
-	visCaps = wire.CapHold
+	visCaps.Store(uint64(wire.CapHold))
 	ms := mux.NewClient()
 	ms.SetHold(true)
 	d := &sessDialer{sess: ms, done: make(chan struct{})}

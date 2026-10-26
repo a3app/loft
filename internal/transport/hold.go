@@ -14,6 +14,7 @@ package transport
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/a3app/loft/internal/mux"
@@ -42,16 +43,16 @@ var (
 		until time.Time
 	}
 	// visGapMS and visCaps are what the client last saw in Status.
-	visGapMS  uint32
-	visCaps   wire.Cap
+	visGapMS  atomic.Uint32
+	visCaps   atomic.Uint64
 	gapHoldFn = defaultGapHold
 )
 
 // defaultGapHold is the park time: the node's gap_hold_ms from Status on a
 // client, the overlay session settings on a node, else the built-in default.
 func defaultGapHold() time.Duration {
-	if visGapMS > 0 {
-		return time.Duration(visGapMS) * time.Millisecond
+	if ms := visGapMS.Load(); ms > 0 {
+		return time.Duration(ms) * time.Millisecond
 	}
 	if o := NetSwitch(); o != nil && o.N() != nil {
 		return o.N().Session.Gap()
@@ -64,14 +65,15 @@ func gapHoldDuration() time.Duration { return gapHoldFn() }
 // rememberHold keeps gap_hold_ms and the node caps from Status.
 func rememberHold(st wire.Status) {
 	if st.GapHoldMS > 0 {
-		visGapMS = st.GapHoldMS
+		visGapMS.Store(st.GapHoldMS)
 	}
-	visCaps = st.Caps
+	visCaps.Store(uint64(st.Caps))
 }
 
 // clientHolds reports whether the node supports hold (unknown counts as yes).
 func clientHolds() bool {
-	return visCaps == 0 || visCaps.Has(wire.CapHold)
+	c := wire.Cap(visCaps.Load())
+	return c == 0 || c.Has(wire.CapHold)
 }
 
 // clientHoldMux is the mux that SOCKS/TUN streams sit on. Reused across
