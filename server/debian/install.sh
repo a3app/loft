@@ -6,7 +6,8 @@
 #   ./install.sh
 #   ./install.sh --dry-run
 #   ./install.sh --unattended
-#   ./install.sh --role relay --controller wss://10.0.0.2/api/v1/sync --id ru1
+#   ./install.sh --role relay --controller wss://10.0.0.2/api/v1/sync --id ru1 \
+#       --relay-key lt_… --controller-pub <64 hex>   (both from the controller's panel)
 #   ./install.sh --uninstall
 #   ./install.sh --remove
 #
@@ -44,6 +45,8 @@ LISTEN=":443"
 ADVERTISE=""
 CONTROLLER=""
 RELAY_ID=""
+RELAY_KEY=""
+CTL_PUB=""
 DECOY=""
 CERT=""
 KEY=""
@@ -60,7 +63,7 @@ while [ $# -gt 0 ]; do
 		--no-firewall) NO_FIREWALL=1 ;;
 		--no-sysctl) NO_SYSCTL=1 ;;
 		--mask) MASK=1 ;;
-		--role|--listen|--advertise|--controller|--id|--decoy|--cert|--key|--peers|--token)
+		--role|--listen|--advertise|--controller|--id|--relay-key|--controller-pub|--decoy|--cert|--key|--peers|--token)
 			[ $# -gt 0 ] || { echo "$a needs a value" >&2; exit 2; }
 			v=$1; shift
 			case "$a" in
@@ -69,6 +72,8 @@ while [ $# -gt 0 ]; do
 				--advertise) ADVERTISE=$v ;;
 				--controller) CONTROLLER=$v ;;
 				--id) RELAY_ID=$v ;;
+				--relay-key) RELAY_KEY=$v ;;
+				--controller-pub) CTL_PUB=$v ;;
 				--decoy) DECOY=$v ;;
 				--cert) CERT=$v ;;
 				--key) KEY=$v ;;
@@ -80,6 +85,8 @@ while [ $# -gt 0 ]; do
 		--advertise=*) ADVERTISE="${a#--advertise=}" ;;
 		--controller=*) CONTROLLER="${a#--controller=}" ;;
 		--id=*) RELAY_ID="${a#--id=}" ;;
+		--relay-key=*) RELAY_KEY="${a#--relay-key=}" ;;
+		--controller-pub=*) CTL_PUB="${a#--controller-pub=}" ;;
 		--decoy=*) DECOY="${a#--decoy=}" ;;
 		--cert=*) CERT="${a#--cert=}" ;;
 		--key=*) KEY="${a#--key=}" ;;
@@ -448,6 +455,10 @@ ok "advertise $ADVERTISE"
 if [ "$ROLE" = "relay" ]; then
 	[ -n "$CONTROLLER" ] || die "relay needs --controller=wss://host/api/v1/sync"
 	[ -n "$RELAY_ID" ] || RELAY_ID=$(hostname -s 2>/dev/null || echo relay)
+	# The controller issues one key per relay and signs this relay's settings
+	# with its own key; both come from the controller's panel (Relays).
+	[ -n "$RELAY_KEY" ] || [ -f "$LOFT_HOME/relay.key" ] || die "relay needs --relay-key=lt_… from the controller's panel"
+	[ -n "$CTL_PUB" ] || die "relay needs --controller-pub=<64 hex> from the controller's panel"
 	ok "relay id=$RELAY_ID controller=$CONTROLLER"
 fi
 
@@ -509,6 +520,12 @@ EOF
 	ok "wrote $NET and $KEYS"
 fi
 
+if [ "$ROLE" = "relay" ] && [ -n "$RELAY_KEY" ]; then
+	printf '%s\n' "$RELAY_KEY" | write_file "$LOFT_HOME/relay.key" 0600
+	[ "$DRY" = 1 ] || chown "$LOFT_USER":"$LOFT_USER" "$LOFT_HOME/relay.key"
+	ok "wrote $LOFT_HOME/relay.key"
+fi
+
 if [ -f "$LOFT_YAML" ] || [ -f "/etc/loft/node.yaml" ]; then
 	ok "$LOFT_YAML already present — leaving it"
 else
@@ -525,6 +542,7 @@ id $RELAY_ID
 listen $LISTEN
 advertise $ADVERTISE
 controller $CONTROLLER
+controller_pub $CTL_PUB
 cert $LOFT_TLS/fullchain.pem
 key $LOFT_TLS/privkey.pem
 ${DECOY_BLOCK}${MASK_LINE}
