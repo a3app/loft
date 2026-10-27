@@ -46,6 +46,11 @@ const (
 	// L3Net, the TUN queue in the OS) dropped packets.
 	l3RcvWin = 1 << 20
 	l3OOOMax = 1 << 20
+	// l3SndMax caps the bytes in flight to the member, whatever window it
+	// offers (gVisor and OS stacks offer several MB). The tunnel delivers
+	// such a burst faster than the member's stack takes it in, and the
+	// overflow was dropped; the node does not resend, so the flow hung.
+	l3SndMax = 1 << 20
 )
 
 // l3Tuple identifies one NAT flow: member overlay address and port, and the
@@ -470,10 +475,11 @@ func l3TCPTrim(seq, rcv uint32, payload []byte) ([]byte, bool) {
 
 // l3TCPDial connects to the destination and only then answers the SYN, so
 // a refused dial reaches the member as RST, like a real host would. It then
-// copies data from the internet into TCP segments, never sending more than
-// the member's window allows; when the window is full it waits for an ACK
-// (or 50 ms) and tries again. The outbound dial follows the member's exit
-// rules, like its mux streams.
+// copies data from the internet into TCP segments, never having more in
+// flight than the member's window allows, and at most l3SndMax; when that
+// is full it waits for an ACK (or 50 ms) and tries again. The outbound dial
+// follows the member's exit rules, like its mux streams. It sends each
+// segment once: a segment lost on the member's side is not resent yet.
 func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 	c, err := dialOut(f.who, net.JoinHostPort(f.dst.String(), strconv.Itoa(int(f.dport))))
 	if err != nil {
@@ -503,7 +509,7 @@ func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 			for off < n {
 				f.mu.Lock()
 				inFlight := f.snd - f.una
-				room := int(f.cwin)
+				room := int(min(f.cwin, l3SndMax))
 				if room > int(inFlight) {
 					room -= int(inFlight)
 				} else {
