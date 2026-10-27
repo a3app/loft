@@ -172,7 +172,7 @@ static int parse_loft(const char *uri, LoftParsed *d) {
             qget(query + 1, "type", d->p.kind, sizeof d->p.kind);
             if (!d->p.kind[0]) loft_strlcpy(d->p.kind, sizeof d->p.kind, "get");
             loft_lower(d->p.kind);
-            if (*path == '/') urldec(path, query ? (size_t)(query - path) : strlen(path), d->p.path, sizeof d->p.path);
+            if (*path == '/') urldec(path, (size_t)(query - path), d->p.path, sizeof d->p.path);
             if (loft_streq(d->p.path, "/")) d->p.path[0] = 0;
             if (loft_streq(d->p.kind, "get") && !d->p.path[0])
                 loft_strlcpy(d->p.path, sizeof d->p.path, "/static/v3/build");
