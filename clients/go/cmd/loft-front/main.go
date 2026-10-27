@@ -245,6 +245,12 @@ func main() {
 		tunMu.Lock()
 		defer tunMu.Unlock()
 		if tunDev != nil {
+			// After a reconnect the node may have given another overlay
+			// address; the interface must take it before traffic flows,
+			// or the system drops every reply sent to the new address.
+			if err := tunDev.Readdress(ip); err != nil {
+				fmt.Fprintf(os.Stderr, "tun readdress %s: %v\n", ip, err)
+			}
 			tunDev.Attach(h)
 			return
 		}

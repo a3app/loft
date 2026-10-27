@@ -27,6 +27,11 @@ type Device struct {
 	l3   *l3Pump
 	ifc  tunIO
 	undo func()
+	// addr is the overlay address this process put on the interface, with
+	// its prefix. It is nil when someone else owns the address (the system's
+	// network manager, a router, the app around us); then Readdress does
+	// nothing and that owner must follow the "ip=" of the STATUS line.
+	addr *net.IPNet
 }
 
 // Attach hooks ICMP/UDP datagrams on the current mux session, or an L3 IP pump.
@@ -117,7 +122,45 @@ func OverlayCIDR(overlayIP, tunAddr string) string {
 
 // StartTUN brings up a real utun/tun, userspace stack, and optional kill-switch.
 func StartTUN(device, cidr string, killSwitch bool, d transport.Dialer, exclude []string) (*Device, error) {
-	return openTUN(device, cidr, killSwitch, d, exclude, false)
+	dev, err := openTUN(device, cidr, killSwitch, d, exclude, false)
+	if err != nil {
+		return nil, err
+	}
+	// Only here did we put the address on the interface ourselves, so only
+	// here may Readdress change it later.
+	if cidr == "" {
+		cidr = OverlayCIDR(transport.OverlayIP(), "")
+	}
+	if ip, n, err := net.ParseCIDR(cidr); err == nil {
+		dev.addr = &net.IPNet{IP: ip.To4(), Mask: n.Mask}
+	}
+	return dev, nil
+}
+
+// Readdress moves the interface to a new overlay IP after a reconnect.
+//
+// Why: the node can hand out another overlay address when the member
+// reconnects (it restarted and lost its leases, the old address was taken,
+// the client moved to another node). The kernel accepts a packet only when
+// its destination is an address of the interface, so with the old address
+// left in place every reply to the new one is dropped and the member stays
+// cut off until the client restarts.
+//
+// It keeps the prefix length the interface had and does nothing when the
+// address is the same or not ours to change (see Device.addr).
+func (d *Device) Readdress(ip string) error {
+	if d == nil || d.addr == nil || d.ifc == nil {
+		return nil
+	}
+	nip := net.ParseIP(ip).To4()
+	if nip == nil || nip.Equal(d.addr.IP) {
+		return nil
+	}
+	if err := readdressTUN(d.ifc.Name(), d.addr.IP, nip, d.addr.Mask); err != nil {
+		return err
+	}
+	d.addr = &net.IPNet{IP: nip, Mask: d.addr.Mask}
+	return nil
 }
 
 // StartRoutedTUN opens a named TUN and the userspace stack, and does not
@@ -378,6 +421,43 @@ func configureTUN(name string, ip net.IP, n *net.IPNet) error {
 			return err
 		}
 		return run("ip", "link", "set", "dev", name, "up", "mtu", "1280")
+	default:
+		return fmt.Errorf("tun: os %s", runtime.GOOS)
+	}
+}
+
+// readdressTUN replaces the address old with nip on the interface name,
+// keeping the prefix mask. The routes into the TUN (split default, managed
+// CIDRs) point at the interface, not at the address, so they stay.
+func readdressTUN(name string, old, nip net.IP, mask net.IPMask) error {
+	ones, _ := mask.Size()
+	switch runtime.GOOS {
+	case "darwin":
+		// Without "alias", BSD ifconfig removes the interface's address
+		// before it sets the new one, so this one command is a replace.
+		// The route to the overlay subnet can go with the old address:
+		// add it again; "already exists" is fine and ignored.
+		if err := run("ifconfig", name, "inet", nip.String(), nip.String(), "netmask", "255.255.255.255", "up"); err != nil {
+			return err
+		}
+		netn := nip.Mask(mask).String() + "/" + strconv.Itoa(ones)
+		_ = run("route", "-n", "add", "-inet", netn, "-interface", name)
+		return nil
+	case "linux":
+		// The order matters, both ways round lose something:
+		//   - delete first: with no IPv4 address left, Linux removes every
+		//     route through the interface, the split default among them;
+		//   - add first: in the same subnet the new address becomes a
+		//     "secondary" one, and by default Linux deletes secondaries
+		//     together with the primary.
+		// So: let this interface promote a secondary to primary instead of
+		// deleting it, add the new address, then delete the old one.
+		_ = run("sysctl", "-qw", "net.ipv4.conf."+name+".promote_secondaries=1")
+		suffix := "/" + strconv.Itoa(ones)
+		if err := run("ip", "addr", "add", nip.String()+suffix, "dev", name); err != nil {
+			return err
+		}
+		return run("ip", "addr", "del", old.String()+suffix, "dev", name)
 	default:
 		return fmt.Errorf("tun: os %s", runtime.GOOS)
 	}
