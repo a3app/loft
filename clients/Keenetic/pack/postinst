@@ -1,0 +1,12 @@
+#!/bin/sh
+# Copy the sample only when client.yaml is missing. Always start.
+PATH=/opt/sbin:/opt/bin:/usr/sbin:/usr/bin:/sbin:/bin
+mkdir -p /opt/etc/loft /opt/var/log /opt/var/run /opt/tmp
+if [ ! -f /opt/etc/loft/client.yaml ]; then
+	cp /opt/etc/loft/client.yaml.sample /opt/etc/loft/client.yaml
+	chmod 600 /opt/etc/loft/client.yaml
+fi
+if [ -x /opt/etc/init.d/S99loft ]; then
+	/opt/etc/init.d/S99loft start
+fi
+exit 0

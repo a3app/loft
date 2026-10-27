@@ -2,9 +2,9 @@
 
 [English](keenetic.md) · **Русский** · [中文](keenetic_zh.md)
 
-Как loft работает на роутере Keenetic. Каталог: [clients/Keenetic/](../clients/Keenetic/). План: [clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md). Макет: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
+Как loft работает на роутере Keenetic. Клиент: [clients/Keenetic/](../clients/Keenetic/). План: [clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md). Макет: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
 
-Пакет пока не собирается. Этот файл — спецификация интеграции.
+Сборка: `make -C clients/Keenetic ipk` (aarch64) или `make -C clients/Keenetic ipk-all`. Ставится через `opkg`. Страница: `http://<lan>:8090/`. KeeneticOS 5.0+, компоненты OPKG и TUN/TAP, Entware в NAND или на USB EXT4.
 
 ---
 
@@ -40,7 +40,7 @@ interface OpkgTun0 up
 
 Только через `ndmc`. Никогда не используйте `ip route` из шелла: NDM пересобирает таблицы.
 
-Процесс loft **не должен** устанавливать ни `0/0`, ни kill-switch. Достаточно `listen.tun: auto`.
+Процесс loft не ставит ни `0/0`, ни kill-switch. Он открывает именованный `opkgtunN` и оставляет таблицу маршрутов `ndmc`.
 
 ## 3. Раздельная маршрутизация
 

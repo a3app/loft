@@ -147,7 +147,7 @@ flowchart LR
 | [docs/code-tour_zh.md](docs/code-tour_zh.md) | 代码导读：从哪里读起、一个连接的完整路径、词汇表。 |
 | [docs/guide_zh.md](docs/guide_zh.md) | 编译、配置、跑起来、Debian。 |
 | [docs/yandex-cdn_zh.md](docs/yandex-cdn_zh.md) | Yandex Cloud CDN 运营指南。 |
-| [docs/keenetic_zh.md](docs/keenetic_zh.md) | KeeneticOS Entware 客户端（OpkgTun）。目录：[clients/Keenetic/](clients/Keenetic/)。 |
+| [docs/keenetic_zh.md](docs/keenetic_zh.md) | KeeneticOS Entware 客户端（OpkgTun）。[clients/Keenetic/](clients/Keenetic/)。 |
 | [docs/mikrotik_zh.md](docs/mikrotik_zh.md) | RouterOS 7 容器客户端。目录：[clients/MikroTik/](clients/MikroTik/)。 |
 | [docs/ios_zh.md](docs/ios_zh.md) | iOS Packet Tunnel 客户端。目录：[clients/iOS/](clients/iOS/)。 |
 | [docs/android_zh.md](docs/android_zh.md) | Android VpnService 客户端。目录：[clients/Android/](clients/Android/)。 |
@@ -165,7 +165,7 @@ server/           loft-node（控制器或中继）
 server/panel      loft-panel 网页面板
 clients/go        loft, loft-front, loft-probe
 clients/macOS     菜单栏应用（拉起 loft-front）
-clients/Keenetic  Entware / OpkgTun（方案和模型）
+clients/Keenetic  Entware / OpkgTun（loft-keenetic）
 clients/MikroTik  RouterOS 7 容器（镜像 + .rsc）
 clients/iOS       Packet Tunnel（薄宿主 + appex）
 clients/Android   VpnService（薄 Java 宿主）

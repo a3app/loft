@@ -1,4 +1,5 @@
-// Package lanui is the LAN operator page for loft (MikroTik :8090).
+// Package lanui is the LAN operator page for loft on MikroTik (:8090).
+// Keenetic uses clients/Keenetic (many OpkgTun sessions, web-admin cookie).
 //
 // When the loft client runs as a container on a MikroTik router, there is no
 // GUI. This package serves a small web page inside the container (listen.http

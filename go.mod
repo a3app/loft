@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/coder/websocket v1.8.13
+	github.com/liyue201/goqr v0.0.0-20200803022322-df443203d4ea
 	github.com/pkg/sftp v1.13.9
 	github.com/quic-go/quic-go v0.59.1
 	github.com/refraction-networking/utls v1.8.2

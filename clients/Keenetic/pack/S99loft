@@ -1,0 +1,46 @@
+#!/bin/sh
+# Entware init. Self-contained: no rc.func.
+# The parent gets SIGTERM and asks each child to bring its OpkgTun down.
+PATH=/opt/sbin:/opt/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PID=/opt/var/run/loft-keenetic.pid
+LOG=/opt/var/log/loft.log
+BIN=/opt/bin/loft-keenetic
+
+alive() {
+	[ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null
+}
+
+start() {
+	if alive; then
+		return 0
+	fi
+	mkdir -p /opt/var/run /opt/var/log /opt/etc/loft
+	"$BIN" -c /opt/etc/loft/client.yaml >>"$LOG" 2>&1 &
+	echo $! >"$PID"
+}
+
+stop() {
+	if alive; then
+		kill "$(cat "$PID")" 2>/dev/null
+		i=0
+		while alive && [ "$i" -lt 20 ]; do
+			sleep 1
+			i=$((i + 1))
+		done
+		if alive; then
+			kill -9 "$(cat "$PID")" 2>/dev/null
+		fi
+	fi
+	if command -v killall >/dev/null 2>&1; then
+		killall loft-keenetic 2>/dev/null
+	fi
+	rm -f "$PID"
+}
+
+case "$1" in
+start) start ;;
+stop) stop ;;
+restart) stop; start ;;
+*) echo "usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
+exit 0

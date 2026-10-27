@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --slate: #3A332E;
+      --stone: #B7A99A;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --lamp-hi: #F3D27A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--ui); background: #0e0c0b; color: var(--snow);
+      display: flex; justify-content: center; padding: 28px 16px 48px;
+    }
+    .wrap { width: 440px; max-width: 100%; }
+    .lang { display: flex; gap: 4px; margin: 0 0 12px; }
+    .lang button, nav button {
+      flex: 1; border: 0; border-radius: 8px; padding: 6px 0; cursor: pointer;
+      background: #1e1a17; color: var(--stone); font: 600 12px var(--ui);
+    }
+    .lang button.on, nav button.on { background: var(--lamp); color: var(--ink); }
+    nav { display: flex; gap: 4px; margin: 0 0 12px; }
+    .card {
+      background: #181512; border: 1px solid #2e2824; border-radius: 16px;
+      overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.45); margin-bottom: 12px;
+    }
+    header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--line);
+    }
+    header .t { font-weight: 600; letter-spacing: -0.03em; }
+    header .sub { margin-left: auto; color: var(--mute); font: 12px var(--mono); }
+    .mark { width: 28px; height: 28px; flex: none; }
+    .mark .body { fill: var(--stone); }
+    .mark .lamp { fill: var(--slate); }
+    .mark.on .lamp { fill: var(--lamp); }
+    .mark.err .lamp { fill: var(--err); }
+    .body { padding: 16px 18px 18px; }
+    .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 0 0 12px; }
+    .strip {
+      display: block; width: 100%; text-align: left; cursor: pointer;
+      background: rgba(232,184,74,.12); color: var(--lamp);
+      border: 0; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px;
+      font: 600 13px var(--ui);
+    }
+    .item {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      background: transparent; border: 0; border-bottom: 1px solid var(--line);
+      color: inherit; text-align: left; padding: 10px 0; cursor: pointer;
+    }
+    .item:last-child { border-bottom: 0; }
+    .item .nm { font-weight: 600; font-size: 14px; }
+    .item .meta { color: var(--mute); font: 11px var(--mono); margin-top: 2px; }
+    .grow { flex: 1; min-width: 0; }
+    .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #2a2420; color: var(--stone); white-space: nowrap; }
+    .tag.ok { background: rgba(125,186,106,.15); color: var(--ok); }
+    .tag.wait { background: rgba(232,184,74,.12); color: var(--lamp); }
+    .tag.bad { background: rgba(226,75,75,.15); color: var(--err); }
+    .sw { width: 36px; height: 22px; accent-color: var(--lamp); cursor: pointer; flex: none; }
+    .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 13px; }
+    .row .k { color: var(--mute); font-size: 12px; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
+    label.field input, label.field select, textarea {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 8px; padding: 8px 10px; font: 400 13px var(--ui);
+    }
+    textarea { font-family: var(--mono); font-size: 11px; min-height: 96px; resize: vertical; }
+    .seg { display: flex; gap: 4px; margin: 0 0 12px; }
+    .seg button {
+      flex: 1; border: 0; border-radius: 8px; padding: 7px 0; cursor: pointer;
+      background: #1e1a17; color: var(--stone); font: 600 12px var(--ui);
+    }
+    .seg button.on { background: var(--lamp); color: var(--ink); }
+    .checks { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0 0 12px; font-size: 13px; }
+    .checks label { display: flex; align-items: center; gap: 6px; }
+    .btns { display: flex; gap: 8px; }
+    .btns button, .go, .ghost, .danger {
+      flex: 1; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      font: 600 13px var(--ui);
+    }
+    .go { background: var(--lamp); color: var(--ink); }
+    .ghost { background: #2a2420; color: var(--snow); }
+    .danger { background: #3a2422; color: var(--err); }
+    .msg { font-size: 12px; margin-top: 10px; min-height: 1em; }
+    .msg.err { color: var(--err); }
+    .msg.ok { color: var(--ok); }
+    .log {
+      background: #1a1714; color: var(--paper); font: 11px/1.5 var(--mono);
+      padding: 10px 12px; border-radius: 8px; max-height: 360px; overflow: auto; white-space: pre-wrap;
+    }
+    .drop {
+      border: 1px dashed #3a332e; border-radius: 12px; padding: 22px 12px; text-align: center;
+      color: var(--stone); font-size: 13px; margin: 0 0 12px;
+    }
+    .foot { padding: 4px 4px 0; color: var(--mute); font-size: 11px; font-family: var(--mono); }
+    .hidden { display: none !important; }
+    h2 { font-size: 13px; font-weight: 600; margin: 4px 0 10px; color: var(--paper); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="lang">
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+      <button type="button" id="lang-ru" onclick="setLang('ru')">RU</button>
+      <button type="button" id="lang-zh" onclick="setLang('zh')">中文</button>
+    </div>
+    <nav>
+      <button type="button" id="nav-list" onclick="show('list')" data-i="connections">Connections</button>
+      <button type="button" id="nav-log" onclick="show('log')" data-i="journal">Journal</button>
+      <button type="button" id="nav-pkg" onclick="show('pkg')" data-i="package">Package</button>
+    </nav>
+
+    <div class="card" id="scr-list">
+      <header>
+        <svg viewBox="0 0 96 96" class="mark" id="mark-list" aria-hidden="true"><path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/><path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/></svg>
+        <div class="t">loft</div>
+        <div class="sub" id="ver">OpkgTun</div>
+      </header>
+      <div class="body">
+        <button type="button" class="strip hidden" id="strip" onclick="show('pkg')"></button>
+        <p class="hint" data-i="hint">Every enabled connection keeps its session up. Keenetic priorities pick which one carries traffic.</p>
+        <div id="list"></div>
+        <p class="hint hidden" id="empty" data-i="empty">No connections yet.</p>
+        <div class="btns">
+          <button type="button" class="ghost" onclick="show('import')" data-i="import">Import</button>
+          <button type="button" class="go" onclick="openEdit(null)" data-i="add">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="scr-status">
+      <header>
+        <svg viewBox="0 0 96 96" class="mark" id="mark-st" aria-hidden="true"><path class="body" d="M37.76 6.72 A0.96 0.96 0 0 1 39.01 6.74 L57.6 29.52 L57.6 63.76 A4.4 4.4 0 0 0 62 68.16 L84.8 68.16 A3.2 3.2 0 0 1 88 71.36 L88 86.16 A3.84 3.84 0 0 1 84.16 90 L21.44 90 A3.84 3.84 0 0 1 17.6 86.16 L17.6 29.52 Z"/><path class="lamp" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/></svg>
+        <div class="t" id="st-name">loft</div>
+        <div class="sub" id="st-opkg">OpkgTun0</div>
+      </header>
+      <div class="body">
+        <div class="row"><span class="k" data-i="state">State</span><span class="tag" id="st-state">—</span></div>
+        <div class="row"><span class="k" data-i="overlay">Overlay</span><span class="mono" id="st-ip">—</span></div>
+        <div class="row"><span class="k" data-i="gateway">Gateway</span><span class="mono" id="st-gw">—</span></div>
+        <div class="row"><span class="k">MTU</span><span class="mono" id="st-mtu">—</span></div>
+        <div class="row"><span class="k" data-i="node">Node</span><span class="mono" id="st-node">—</span></div>
+        <div class="row"><span class="k" data-i="front">Front</span><span class="mono" id="st-front">—</span></div>
+        <div class="row"><span class="k">QUIC</span><span class="mono" id="st-quic">—</span></div>
+        <div class="row"><span class="k" data-i="bytes">Bytes</span><span class="mono" id="st-bytes">—</span></div>
+        <p class="hint" id="st-err"></p>
+        <p class="hint" data-i="split">Split routing and fallback live in Keenetic</p>
+        <div class="btns">
+          <button type="button" class="ghost" onclick="stopConn()" data-i="stop">Stop</button>
+          <button type="button" class="ghost" onclick="openFronts()" data-i="fronts">Fronts</button>
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button type="button" class="go" onclick="priorities()" data-i="priorities">Keenetic priorities</button>
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button type="button" class="ghost" onclick="show('list')" data-i="back">Back</button>
+          <button type="button" class="danger" onclick="removeConn()" data-i="delete">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="scr-edit">
+      <header>
+        <div class="t" id="ed-title" data-i="add">Add</div>
+      </header>
+      <div class="body">
+        <label class="field"><span data-i="name">Name</span><input id="f-name" maxlength="32" /></label>
+        <div class="seg" id="seg-kind">
+          <button type="button" data-kind="loft" onclick="setKind('loft')">loft</button>
+          <button type="button" data-kind="vless" onclick="setKind('vless')">VLESS</button>
+          <button type="button" data-kind="trojan" onclick="setKind('trojan')">Trojan</button>
+        </div>
+        <div class="seg" id="seg-mode">
+          <button type="button" data-mode="link" onclick="setMode('link')" data-i="link">Link</button>
+          <button type="button" data-mode="manual" onclick="setMode('manual')" data-i="manual">Manual</button>
+        </div>
+        <p class="hint hidden" id="ed-imported" data-i="imported">Imported profile. Saving the form replaces it.</p>
+        <label class="field" id="box-link"><span id="link-label" data-i="loftAddr">loft:// address</span><textarea id="f-link"></textarea></label>
+        <label class="field loft-m" id="box-token"><span data-i="key">Access key</span><input id="f-token" autocomplete="off" /></label>
+        <label class="field vless-m"><span>UUID</span><input id="f-uuid" autocomplete="off" /></label>
+        <label class="field trojan-m"><span data-i="password">Password</span><input id="f-password" type="password" autocomplete="off" /></label>
+        <label class="field manual"><span data-i="host">Host</span><input id="f-host" /></label>
+        <label class="field manual"><span data-i="port">Port</span><input id="f-port" inputmode="numeric" value="443" /></label>
+        <label class="field proxy-m"><span data-i="security">TLS</span>
+          <select id="f-security"><option value="tls">TLS</option><option value="reality">REALITY</option><option value="none">none</option></select>
+        </label>
+        <label class="field proxy-m"><span data-i="network">Transport</span>
+          <select id="f-network"><option value="tcp">TCP</option><option value="xhttp">XHTTP</option></select>
+        </label>
+        <label class="field vless-m checks"><input id="f-vision" type="checkbox" /> Vision</label>
+        <h2 data-i="advanced">Advanced</h2>
+        <div class="loft-m" id="box-fronts">
+          <div class="hint" data-i="how">How to connect</div>
+          <div class="checks" id="fronts"></div>
+        </div>
+        <label class="field"><span data-i="path">Path</span><input id="f-path" /></label>
+        <label class="field loft-only"><span>QUIC</span>
+          <select id="f-cc"><option value="off">off</option><option value="bbr">bbr</option><option value="fixed">fixed</option></select>
+        </label>
+        <label class="field loft-only cc-fixed"><span data-i="up">Up, Mbit/s</span><input id="f-up" inputmode="numeric" /></label>
+        <label class="field loft-only cc-fixed"><span data-i="down">Down, Mbit/s</span><input id="f-down" inputmode="numeric" /></label>
+        <label class="field"><span>SNI</span><input id="f-sni" /></label>
+        <label class="field"><span data-i="fp">Fingerprint</span><input id="f-fp" placeholder="chrome" /></label>
+        <label class="field"><span data-i="pbk">Public key</span><input id="f-pbk" autocomplete="off" /></label>
+        <label class="field"><span data-i="sid">Short ID</span><input id="f-sid" /></label>
+        <div class="btns">
+          <button type="button" class="ghost" onclick="show(backTo)" data-i="cancel">Cancel</button>
+          <button type="button" class="go" onclick="saveEdit()" data-i="save">Save</button>
+        </div>
+        <div class="msg" id="ed-msg"></div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="scr-import">
+      <header><div class="t" data-i="import">Import</div></header>
+      <div class="body">
+        <div class="drop" id="drop" data-i="drop">Drop client.yaml, .loft, .vpn or a QR picture</div>
+        <input id="file" type="file" class="hidden" />
+        <label class="field"><span data-i="paste">Paste</span><textarea id="f-paste"></textarea></label>
+        <p class="hint" data-i="sstp">SSTP is the stock Keenetic client</p>
+        <div class="btns">
+          <button type="button" class="ghost" onclick="show('list')" data-i="back">Back</button>
+          <button type="button" class="go" onclick="doImport()" data-i="import">Import</button>
+        </div>
+        <div class="msg" id="im-msg"></div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="scr-log">
+      <header><div class="t" data-i="journal">Journal</div></header>
+      <div class="body"><div class="log" id="log">—</div></div>
+    </div>
+
+    <div class="card hidden" id="scr-pkg">
+      <header><div class="t" data-i="package">Package</div></header>
+      <div class="body">
+        <div class="row"><span class="k" data-i="version">Version</span><span class="mono" id="pk-ver">—</span></div>
+        <div class="row"><span class="k" data-i="arch">Arch</span><span class="mono" id="pk-arch">—</span></div>
+        <div class="row"><span class="k" data-i="latest">GitHub latest</span><span class="mono" id="pk-latest">—</span></div>
+        <label class="checks"><input id="pk-auto" type="checkbox" onchange="setAuto(this.checked)" /> <span data-i="auto">Check for updates</span></label>
+        <div class="btns">
+          <button type="button" class="ghost" onclick="checkPkg()" data-i="check">Check</button>
+          <button type="button" class="go" onclick="installPkg()" data-i="update">Update</button>
+        </div>
+        <div class="msg" id="pk-msg"></div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="scr-gate">
+      <div class="body">
+        <p class="hint" data-i="gate">Checking Keenetic session…</p>
+        <div class="btns"><button type="button" class="go" id="gate-go" onclick="goLogin()" data-i="signin">Sign in</button></div>
+      </div>
+    </div>
+
+    <div class="foot" id="foot"></div>
+  </div>
+  <script>
+    const I18N = {
+      en: {
+        connections:"Connections", import:"Import", add:"Add", journal:"Journal", package:"Package",
+        hint:"Every enabled connection keeps its session up. Keenetic priorities pick which one carries traffic.",
+        split:"Split routing and fallback live in Keenetic",
+        empty:"No connections yet. Each connection is an OpkgTun.",
+        available:"Available {v}", update:"Update", state:"State", overlay:"Overlay", gateway:"Gateway",
+        node:"Node", front:"Front", fronts:"Fronts", bytes:"Bytes", stop:"Stop", priorities:"Keenetic priorities",
+        back:"Back", delete:"Delete", name:"Name", link:"Link", manual:"Manual",
+        loftAddr:"loft:// address", key:"Access key", how:"How to connect",
+        vlessLink:"vless:// link", trojanLink:"trojan:// link", host:"Host", port:"Port", password:"Password",
+        security:"TLS", network:"Transport", advanced:"Advanced", path:"Path",
+        up:"Up, Mbit/s", down:"Down, Mbit/s", fp:"Fingerprint", pbk:"Public key", sid:"Short ID",
+        save:"Save", cancel:"Cancel", drop:"Drop client.yaml, .loft, .vpn or a QR picture", paste:"Paste",
+        sstp:"SSTP is the stock Keenetic client", version:"Version", arch:"Arch", latest:"GitHub latest",
+        auto:"Check for updates", check:"Check", lan:"LAN only",
+        gate:"Checking Keenetic session…", signin:"Sign in",
+        upS:"up", error:"error", off:"off", connecting:"connecting",
+        reserve:"{n} more in reserve", imported:"Imported profile. Saving the form replaces it.",
+        saved:"Saved", none:"—"
+      },
+      ru: {
+        connections:"Подключения", import:"Импорт", add:"Добавить", journal:"Журнал", package:"Пакет",
+        hint:"Включённые подключения держат сессию все сразу. Какое из них использовать, решают приоритеты Keenetic.",
+        split:"Раздельная маршрутизация и запасной канал — в Keenetic",
+        empty:"Подключений нет. Каждое подключение — это OpkgTun.",
+        available:"Доступна {v}", update:"Обновить", state:"Состояние", overlay:"Оверлей", gateway:"Шлюз",
+        node:"Нода", front:"Фронт", fronts:"Фронты", bytes:"Трафик", stop:"Стоп", priorities:"Приоритеты Keenetic",
+        back:"Назад", delete:"Удалить", name:"Имя", link:"Ссылка", manual:"Вручную",
+        loftAddr:"Адрес loft://", key:"Ключ доступа", how:"Как подключаться",
+        vlessLink:"Ссылка vless://", trojanLink:"Ссылка trojan://", host:"Хост", port:"Порт", password:"Пароль",
+        security:"TLS", network:"Транспорт", advanced:"Расширенные", path:"Путь",
+        up:"Вверх, Мбит/с", down:"Вниз, Мбит/с", fp:"Отпечаток", pbk:"Публичный ключ", sid:"Short ID",
+        save:"Сохранить", cancel:"Отмена", drop:"Перетащите client.yaml, .loft, .vpn или QR", paste:"Вставить",
+        sstp:"SSTP — штатный клиент Keenetic", version:"Версия", arch:"Архитектура", latest:"Последний на GitHub",
+        auto:"Проверять обновления", check:"Проверить", lan:"только LAN",
+        gate:"Проверяем сессию Keenetic…", signin:"Войти",
+        upS:"в сети", error:"ошибка", off:"выкл", connecting:"подключение",
+        reserve:"ещё {n} в запасе", imported:"Профиль импортирован. Сохранение формы его заменит.",
+        saved:"Сохранено", none:"—"
+      },
+      zh: {
+        connections:"连接", import:"导入", add:"添加", journal:"日志", package:"软件包",
+        hint:"所有已启用的连接同时保持会话。走哪一条，由 Keenetic 优先级决定。",
+        split:"分流和备用通道在 Keenetic",
+        empty:"还没有连接。每个连接是一个 OpkgTun。",
+        available:"可用 {v}", update:"更新", state:"状态", overlay:"覆盖网", gateway:"网关",
+        node:"节点", front:"前端", fronts:"前端", bytes:"流量", stop:"停止", priorities:"Keenetic 优先级",
+        back:"返回", delete:"删除", name:"名称", link:"链接", manual:"手动",
+        loftAddr:"loft:// 地址", key:"访问密钥", how:"如何连接",
+        vlessLink:"vless:// 链接", trojanLink:"trojan:// 链接", host:"主机", port:"端口", password:"密码",
+        security:"TLS", network:"传输", advanced:"高级", path:"路径",
+        up:"上行，Mbit/s", down:"下行，Mbit/s", fp:"指纹", pbk:"公钥", sid:"Short ID",
+        save:"保存", cancel:"取消", drop:"拖入 client.yaml、.loft、.vpn 或二维码", paste:"粘贴",
+        sstp:"SSTP 是 Keenetic 原装客户端", version:"版本", arch:"架构", latest:"GitHub 最新",
+        auto:"检查更新", check:"检查", lan:"仅 LAN",
+        gate:"正在检查 Keenetic 会话…", signin:"登录",
+        upS:"在线", error:"错误", off:"关闭", connecting:"连接中",
+        reserve:"另有 {n} 个备用", imported:"已导入配置。保存表单会替换它。",
+        saved:"已保存", none:"—"
+      }
+    };
+    const FRONTS = ["get","ws","h2","quic","h3","l3"];
+    let lang = "en";
+    let screen = "list";
+    let status = null;
+    let cur = null;
+    let kind = "loft";
+    let mode = "link";
+    let backTo = "list";
+    let loginURL = "";
+    let poll;
+
+    function t(k, map) {
+      let s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+      if (map) Object.keys(map).forEach(function (key) { s = s.replace("{"+key+"}", map[key]); });
+      return s;
+    }
+    function setLang(l) {
+      lang = I18N[l] ? l : "en";
+      try { localStorage.setItem("loft-lang", lang); } catch (e) {}
+      document.documentElement.lang = lang === "zh" ? "zh" : lang;
+      document.querySelectorAll("[data-i]").forEach(function (n) {
+        const k = n.getAttribute("data-i");
+        if (I18N.en[k]) n.textContent = t(k);
+      });
+      document.querySelectorAll(".lang button").forEach(function (b) {
+        b.classList.toggle("on", b.id === "lang-"+lang);
+      });
+      paint();
+    }
+    function pickLang() {
+      let s = "";
+      try { s = localStorage.getItem("loft-lang") || ""; } catch (e) {}
+      if (I18N[s]) return s;
+      const n = (navigator.language || "").toLowerCase();
+      if (n.indexOf("ru") === 0) return "ru";
+      if (n.indexOf("zh") === 0) return "zh";
+      return "en";
+    }
+    function show(name) {
+      screen = name;
+      ["list","status","edit","import","log","pkg","gate"].forEach(function (id) {
+        document.getElementById("scr-"+id).classList.toggle("hidden", id !== name);
+      });
+      document.getElementById("nav-list").classList.toggle("on", name === "list" || name === "status" || name === "edit" || name === "import");
+      document.getElementById("nav-log").classList.toggle("on", name === "log");
+      document.getElementById("nav-pkg").classList.toggle("on", name === "pkg");
+      if (name === "log") loadLog();
+      if (name === "list" || name === "pkg" || name === "status") refresh();
+    }
+    async function api(path, opt) {
+      opt = opt || {};
+      opt.headers = opt.headers || {};
+      if (opt.method && opt.method !== "GET") opt.headers["X-Loft"] = "1";
+      const r = await fetch(path, opt);
+      if (r.status === 401) {
+        const j = await r.json().catch(function () { return {}; });
+        loginURL = j.login || "";
+        show("gate");
+        throw new Error("auth");
+      }
+      if (r.status === 204) return null;
+      const text = await r.text();
+      if (!r.ok) throw new Error(text || r.status);
+      if (!text) return null;
+      try { return JSON.parse(text); } catch (e) { return text; }
+    }
+    function lamp(node, state) {
+      node.classList.remove("on","err");
+      if (state === "up") node.classList.add("on");
+      else if (state === "error") node.classList.add("err");
+    }
+    function tag(node, state) {
+      node.className = "tag";
+      const key = state === "up" ? "upS" : (state === "error" || state === "off" || state === "connecting" ? state : "off");
+      node.textContent = t(key);
+      if (state === "up") node.classList.add("ok");
+      else if (state === "connecting") node.classList.add("wait");
+      else if (state === "error") node.classList.add("bad");
+    }
+    function bytes(n) {
+      n = Number(n) || 0;
+      if (n < 1024) return n + " B";
+      if (n < 1048576) return (n/1024).toFixed(1) + " KiB";
+      if (n < 1073741824) return (n/1048576).toFixed(1) + " MiB";
+      return (n/1073741824).toFixed(2) + " GiB";
+    }
+    function paint() {
+      const foot = location.origin + "/ · " + t("lan");
+      document.getElementById("foot").textContent = foot;
+      if (!status) return;
+      document.getElementById("ver").textContent = status.version || "OpkgTun";
+      const up = status.update || {};
+      const strip = document.getElementById("strip");
+      if (up.ready && up.latest) {
+        strip.classList.remove("hidden");
+        strip.textContent = t("available", {v: up.latest}) + " · " + t("update");
+      } else strip.classList.add("hidden");
+      const list = document.getElementById("list");
+      list.textContent = "";
+      const rows = status.connections || [];
+      document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
+      let any = "off";
+      rows.forEach(function (c) {
+        if (c.state === "up") any = "up";
+        else if (any !== "up" && c.state === "error") any = "error";
+        const b = document.createElement("div");
+        b.className = "item";
+        const mk = document.getElementById("mark-list").cloneNode(true);
+        mk.removeAttribute("id");
+        lamp(mk, c.state);
+        const g = document.createElement("div");
+        g.className = "grow";
+        const nm = document.createElement("div");
+        nm.className = "nm";
+        nm.textContent = c.name || "";
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = c.meta || "";
+        g.appendChild(nm); g.appendChild(meta);
+        const tg = document.createElement("span");
+        tag(tg, c.state);
+        const sw = document.createElement("input");
+        sw.type = "checkbox"; sw.className = "sw"; sw.checked = !!c.enabled;
+        sw.addEventListener("click", function (ev) { ev.stopPropagation(); });
+        sw.addEventListener("change", function () { toggle(c.id, sw.checked); });
+        b.appendChild(mk); b.appendChild(g); b.appendChild(tg); b.appendChild(sw);
+        b.addEventListener("click", function () { openStatus(c.id); });
+        list.appendChild(b);
+      });
+      lamp(document.getElementById("mark-list"), any);
+      document.getElementById("pk-ver").textContent = status.version || t("none");
+      document.getElementById("pk-arch").textContent = status.arch || t("none");
+      document.getElementById("pk-latest").textContent = (up.latest || t("none"));
+      document.getElementById("pk-auto").checked = !!status.check_updates;
+    }
+    async function refresh() {
+      try {
+        status = await api("/api/status");
+        paint();
+        if (screen === "status" && cur && cur.id) fillStatus();
+      } catch (e) {
+        if (String(e.message) !== "auth") document.getElementById("foot").textContent = e.message;
+      }
+    }
+    async function toggle(id, on) {
+      try { await api("/api/conn/toggle", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({id:id, enabled:on})}); }
+      catch (e) {}
+      refresh();
+    }
+    async function openStatus(id) {
+      show("status");
+      const j = await api("/api/conn?id=" + encodeURIComponent(id));
+      cur = j.conn; cur.snap = j.snap || {};
+      fillStatus();
+    }
+    function fillStatus() {
+      const c = cur || {};
+      const s = c.snap || {};
+      const state = c.enabled ? (s.state || "off") : "off";
+      document.getElementById("st-name").textContent = c.name || "";
+      document.getElementById("st-opkg").textContent = s.opkg || ("OpkgTun" + (c.opkg || 0));
+      tag(document.getElementById("st-state"), state);
+      lamp(document.getElementById("mark-st"), state);
+      document.getElementById("st-ip").textContent = s.overlay || t("none");
+      document.getElementById("st-gw").textContent = s.gateway || t("none");
+      document.getElementById("st-mtu").textContent = s.mtu || "1280";
+      let node = s.node || t("none");
+      if (s.reserve > 0) node += " · " + t("reserve", {n: s.reserve});
+      document.getElementById("st-node").textContent = node;
+      document.getElementById("st-front").textContent = s.front || c.connect || c.kind || t("none");
+      document.getElementById("st-quic").textContent = s.quic || c.cc || "off";
+      document.getElementById("st-bytes").textContent = bytes(s.rx) + " ↓  " + bytes(s.tx) + " ↑";
+      document.getElementById("st-err").textContent = s.err || "";
+    }
+    function priorities() {
+      location.href = "http://" + location.hostname + "/";
+    }
+    async function stopConn() {
+      if (!cur) return;
+      await toggle(cur.id, false);
+      cur.enabled = false;
+      fillStatus();
+    }
+    async function removeConn() {
+      if (!cur) return;
+      await api("/api/conn?id=" + encodeURIComponent(cur.id), {method:"DELETE"});
+      cur = null;
+      show("list");
+    }
+    function openFronts() {
+      backTo = "status";
+      openEdit(cur, true);
+    }
+    function openEdit(c, advanced) {
+      cur = c ? Object.assign({}, c) : {kind:"loft", mode:"link", enabled:true, opkg:-1, fronts:["get"], port:443, cc:"off"};
+      if (cur.snap) delete cur.snap;
+      kind = cur.kind || "loft";
+      mode = cur.mode === "link" || cur.link ? "link" : "manual";
+      if (cur.mode === "file") mode = cur.link ? "link" : "manual";
+      document.getElementById("f-name").value = cur.name || "";
+      document.getElementById("f-link").value = cur.link || "";
+      document.getElementById("f-token").value = cur.token || "";
+      document.getElementById("f-uuid").value = cur.uuid || "";
+      document.getElementById("f-password").value = cur.password || "";
+      document.getElementById("f-host").value = cur.host || "";
+      document.getElementById("f-port").value = cur.port || 443;
+      document.getElementById("f-security").value = cur.security || "tls";
+      document.getElementById("f-network").value = cur.network || "tcp";
+      document.getElementById("f-vision").checked = !!cur.vision;
+      document.getElementById("f-path").value = cur.path || "";
+      document.getElementById("f-cc").value = cur.cc || "off";
+      document.getElementById("f-up").value = cur.cc_up_mbps || "";
+      document.getElementById("f-down").value = cur.cc_down_mbps || "";
+      document.getElementById("f-sni").value = cur.sni || "";
+      document.getElementById("f-fp").value = cur.fp || "";
+      document.getElementById("f-pbk").value = cur.public_key || "";
+      document.getElementById("f-sid").value = cur.short_id || "";
+      document.getElementById("ed-imported").classList.toggle("hidden", cur.mode !== "file");
+      document.getElementById("ed-title").textContent = cur.id ? (cur.name || t("save")) : t("add");
+      document.getElementById("ed-msg").textContent = "";
+      const box = document.getElementById("fronts");
+      box.textContent = "";
+      const have = {};
+      (cur.fronts || []).forEach(function (f) { have[f] = true; });
+      if (!cur.id && kind === "loft") have.get = true;
+      FRONTS.forEach(function (f) {
+        const lab = document.createElement("label");
+        const inp = document.createElement("input");
+        inp.type = "checkbox"; inp.value = f; inp.checked = !!have[f];
+        lab.appendChild(inp);
+        lab.appendChild(document.createTextNode(" " + f));
+        box.appendChild(lab);
+      });
+      setKind(kind);
+      setMode(mode);
+      show("edit");
+      if (advanced) document.getElementById("box-fronts").scrollIntoView();
+    }
+    function setKind(k) {
+      kind = k;
+      document.querySelectorAll("#seg-kind button").forEach(function (b) {
+        b.classList.toggle("on", b.getAttribute("data-kind") === k);
+      });
+      applyMode();
+    }
+    function setMode(m) {
+      mode = m;
+      document.querySelectorAll("#seg-mode button").forEach(function (b) {
+        b.classList.toggle("on", b.getAttribute("data-mode") === m);
+      });
+      applyMode();
+    }
+    function applyMode() {
+      const link = mode === "link";
+      document.getElementById("box-link").classList.toggle("hidden", !link);
+      const label = kind === "vless" ? "vlessLink" : (kind === "trojan" ? "trojanLink" : "loftAddr");
+      document.getElementById("link-label").textContent = t(label);
+      document.querySelectorAll(".manual").forEach(function (n) { n.classList.toggle("hidden", link); });
+      document.querySelectorAll(".loft-m").forEach(function (n) { n.classList.toggle("hidden", link || kind !== "loft"); });
+      document.querySelectorAll(".vless-m").forEach(function (n) { n.classList.toggle("hidden", link || kind !== "vless"); });
+      document.querySelectorAll(".trojan-m").forEach(function (n) { n.classList.toggle("hidden", link || kind !== "trojan"); });
+      document.querySelectorAll(".proxy-m").forEach(function (n) { n.classList.toggle("hidden", link || kind === "loft"); });
+      document.querySelectorAll(".loft-only").forEach(function (n) { n.classList.toggle("hidden", kind !== "loft"); });
+      const fixed = document.getElementById("f-cc").value === "fixed";
+      document.querySelectorAll(".cc-fixed").forEach(function (n) {
+        n.classList.toggle("hidden", kind !== "loft" || !fixed);
+      });
+    }
+    document.getElementById("f-cc").addEventListener("change", applyMode);
+    function num(id) {
+      const n = parseInt(document.getElementById(id).value, 10);
+      return isNaN(n) ? 0 : n;
+    }
+    async function saveEdit() {
+      const msg = document.getElementById("ed-msg");
+      msg.className = "msg";
+      const fronts = [];
+      document.querySelectorAll("#fronts input").forEach(function (inp) { if (inp.checked) fronts.push(inp.value); });
+      const body = {
+        id: cur && cur.id || "",
+        name: document.getElementById("f-name").value.trim(),
+        enabled: cur && cur.id ? !!cur.enabled : true,
+        opkg: cur && cur.id ? cur.opkg : -1,
+        kind: kind,
+        mode: mode,
+        link: mode === "link" ? document.getElementById("f-link").value.trim() : "",
+        token: document.getElementById("f-token").value,
+        host: document.getElementById("f-host").value.trim(),
+        port: num("f-port") || 443,
+        path: document.getElementById("f-path").value.trim(),
+        connect: fronts[0] || kind,
+        fronts: fronts,
+        cc: document.getElementById("f-cc").value,
+        cc_up_mbps: num("f-up"),
+        cc_down_mbps: num("f-down"),
+        uuid: document.getElementById("f-uuid").value.trim(),
+        password: document.getElementById("f-password").value,
+        security: document.getElementById("f-security").value,
+        network: document.getElementById("f-network").value,
+        sni: document.getElementById("f-sni").value.trim(),
+        fp: document.getElementById("f-fp").value.trim(),
+        public_key: document.getElementById("f-pbk").value.trim(),
+        short_id: document.getElementById("f-sid").value.trim(),
+        vision: document.getElementById("f-vision").checked
+      };
+      try {
+        const saved = await api("/api/conn", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+        msg.classList.add("ok");
+        msg.textContent = t("saved");
+        if (backTo === "status" && saved && saved.id) { await openStatus(saved.id); return; }
+        show("list");
+      } catch (e) {
+        msg.classList.add("err");
+        msg.textContent = e.message;
+      }
+    }
+    async function doImport() {
+      const msg = document.getElementById("im-msg");
+      msg.className = "msg";
+      try {
+        const res = await api("/api/import", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text: document.getElementById("f-paste").value})});
+        const n = (res.added || []).length;
+        const skip = (res.skipped || []).join("; ");
+        msg.classList.add("ok");
+        msg.textContent = String(n) + (skip ? " · " + skip : "");
+        if (n) show("list");
+      } catch (e) {
+        msg.classList.add("err");
+        msg.textContent = e.message;
+      }
+    }
+    async function sendFile(file) {
+      const msg = document.getElementById("im-msg");
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const res = await api("/api/import", {method:"POST", body: fd});
+        msg.className = "msg ok";
+        msg.textContent = String((res.added || []).length);
+        show("list");
+      } catch (e) {
+        msg.className = "msg err";
+        msg.textContent = e.message;
+      }
+    }
+    const drop = document.getElementById("drop");
+    drop.addEventListener("click", function () { document.getElementById("file").click(); });
+    drop.addEventListener("dragover", function (e) { e.preventDefault(); });
+    drop.addEventListener("drop", function (e) {
+      e.preventDefault();
+      if (e.dataTransfer.files[0]) sendFile(e.dataTransfer.files[0]);
+    });
+    document.getElementById("file").addEventListener("change", function () {
+      if (this.files[0]) sendFile(this.files[0]);
+    });
+    async function loadLog() {
+      try {
+        const lines = await api("/api/log");
+        document.getElementById("log").textContent = (lines || []).join("\n") || t("none");
+      } catch (e) {
+        document.getElementById("log").textContent = e.message;
+      }
+    }
+    async function setAuto(on) {
+      try { await api("/api/package/auto", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({on: !!on})}); }
+      catch (e) { document.getElementById("pk-msg").textContent = e.message; }
+    }
+    async function checkPkg() {
+      const msg = document.getElementById("pk-msg");
+      msg.className = "msg";
+      try {
+        const up = await api("/api/package/check", {method:"POST"});
+        msg.classList.add("ok");
+        msg.textContent = (up.latest || t("none")) + (up.ready ? " · " + t("update") : "");
+        refresh();
+      } catch (e) {
+        msg.classList.add("err");
+        msg.textContent = e.message;
+      }
+    }
+    async function installPkg() {
+      const msg = document.getElementById("pk-msg");
+      msg.className = "msg";
+      try {
+        await api("/api/package/update", {method:"POST"});
+        msg.classList.add("ok");
+        msg.textContent = t("saved");
+      } catch (e) {
+        msg.classList.add("err");
+        msg.textContent = e.message;
+      }
+    }
+    function goLogin() { if (loginURL) location.href = loginURL; }
+    setLang(pickLang());
+    document.getElementById("foot").textContent = location.origin + "/ · " + t("lan");
+    refresh();
+    poll = setInterval(function () {
+      if (screen === "list" || screen === "status" || screen === "pkg") refresh();
+      if (screen === "log") loadLog();
+    }, 3000);
+  </script>
+</body>
+</html>

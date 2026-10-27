@@ -2,9 +2,9 @@
 
 **English** · [Русский](keenetic_ru.md) · [中文](keenetic_zh.md)
 
-How loft runs on a Keenetic router. Catalog: [clients/Keenetic/](../clients/Keenetic/). Plan: [clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md). Mock: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Protocol: [protocol.md](protocol.md).
+How loft runs on a Keenetic router. Client: [clients/Keenetic/](../clients/Keenetic/). Plan: [clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md). Mock: [clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html). Protocol: [protocol.md](protocol.md).
 
-The package is not built yet. This file is the integration specification.
+Build `make -C clients/Keenetic ipk` (aarch64) or `make -C clients/Keenetic ipk-all`. Install with `opkg`. The page is `http://<lan>:8090/`. KeeneticOS 5.0+, components OPKG and TUN/TAP, Entware on NAND or USB EXT4.
 
 ---
 
@@ -40,7 +40,7 @@ interface OpkgTun0 up
 
 `ndmc` only. Never `ip route` from the shell — NDM rebuilds tables.
 
-The loft process **must not** install `0/0` or a kill-switch. `listen.tun: auto` is enough.
+The loft process **must not** install `0/0` or a kill-switch. It opens a named `opkgtunN` and leaves the routing table to `ndmc`.
 
 ## 3. Split routing
 

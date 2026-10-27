@@ -2,9 +2,9 @@
 
 [English](keenetic.md) · [Русский](keenetic_ru.md) · **中文**
 
-loft 在 Keenetic 路由器上怎么跑。目录：[clients/Keenetic/](../clients/Keenetic/)。计划：[clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md)。模型：[clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。
+loft 在 Keenetic 路由器上怎么跑。客户端：[clients/Keenetic/](../clients/Keenetic/)。计划：[clients/Keenetic/PLAN.md](../clients/Keenetic/PLAN.md)。模型：[clients/Keenetic/design/index.html](../clients/Keenetic/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。
 
-包还没打。这份文件是对接规格。
+构建：`make -C clients/Keenetic ipk`（aarch64）或 `make -C clients/Keenetic ipk-all`。用 `opkg` 安装。页面是 `http://<lan>:8090/`。KeeneticOS 5.0+，组件 OPKG 和 TUN/TAP，Entware 在 NAND 或 USB EXT4。
 
 ---
 
@@ -40,7 +40,7 @@ interface OpkgTun0 up
 
 只用 `ndmc`。千万别在 shell 里 `ip route`——NDM 会重建表。
 
-loft 进程**不得**装 `0/0` 或 kill-switch。`listen.tun: auto` 就够。
+loft 进程不装 `0/0`，也不开 kill-switch。它打开具名的 `opkgtunN`，路由表交给 `ndmc`。
 
 ## 3. 分流
 

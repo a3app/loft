@@ -44,7 +44,7 @@ clients/
   macOS/pack          DMG（Applications 符号链接）、签名、entitlements
   macOS/design        UX 规范和模型
   macOS/tests         RFC 8439 AEAD 向量（make -C clients/macOS test-crypto）
-  Keenetic/           Entware OpkgTun 目录（方案和模型；还没有二进制）
+  Keenetic/           Entware OpkgTun 客户端（loft-keenetic，LAN :8090）
   MikroTik/           RouterOS 7 容器（镜像 + .rsc；先 SOCKS；不进 Dist）
   iOS/                Packet Tunnel（薄宿主 + appex；gomobile xcframework；Apple TV 在 PLAN 第 6 阶段）
   Android/            VpnService（薄 Java 宿主；gomobile AAR；手机和电视 flavor）

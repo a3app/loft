@@ -9,7 +9,7 @@
 | [`go/cmd/loft-probe`](go/cmd/loft-probe/) | ICMP/TCP/UDP/DNS/HTTP через сессию |
 | [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Автоматический замер пропускной способности GET/WS в сравнении с путём connect на macOS |
 | [`macOS/`](macOS/) | Приложение в строке меню. UX: [`macOS/design/DESIGN_ru.md`](macOS/design/DESIGN_ru.md) |
-| [`Keenetic/`](Keenetic/) | Entware / OpkgTun. План: [`Keenetic/PLAN.md`](Keenetic/PLAN.md). Макет: [`Keenetic/design/index.html`](Keenetic/design/index.html) |
+| [`Keenetic/`](Keenetic/) | Entware / OpkgTun. `make -C clients/Keenetic ipk`. Страница `http://<lan>:8090/`. |
 | [`MikroTik/`](MikroTik/) | Контейнер RouterOS 7. Макет: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Тонкое приложение-хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md), фаза 6 |
 | [`Android/`](Android/) | VpnService. Тонкий хост на Java. Flavor для телефона и для TV. Макет: [`Android/design/index.html`](Android/design/index.html) |

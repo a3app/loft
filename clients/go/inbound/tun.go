@@ -120,6 +120,25 @@ func StartTUN(device, cidr string, killSwitch bool, d transport.Dialer, exclude 
 	return openTUN(device, cidr, killSwitch, d, exclude, false)
 }
 
+// StartRoutedTUN opens a named TUN and the userspace stack, and does not
+// install an address, a default route, a split default, or DNS. KeeneticOS
+// owns the routing table: the device is opkgtunN and ndmc registers OpkgTunN.
+// "auto" is refused so a desktop utun is never created by mistake.
+func StartRoutedTUN(device, cidr string, d transport.Dialer) (*Device, error) {
+	if device == "" || device == "auto" {
+		return nil, fmt.Errorf("tun: routed mode needs a device name")
+	}
+	return openTUN(device, cidr, false, d, nil, true)
+}
+
+// Name is the kernel interface (opkgtun0, utun6). Empty after Close.
+func (d *Device) Name() string {
+	if d == nil || d.ifc == nil {
+		return ""
+	}
+	return d.ifc.Name()
+}
+
 // StartTUNIO runs the userspace stack on a device the caller already opened.
 // Address, DNS, and routes stay with the caller. The Windows service uses
 // this with a named pipe of IP packets in front of Wintun.

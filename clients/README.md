@@ -9,7 +9,7 @@
 | [`go/cmd/loft-probe`](go/cmd/loft-probe/) | ICMP/TCP/UDP/DNS/HTTP through a session |
 | [`go/cmd/loft-bench`](go/cmd/loft-bench/) | Automated GET/WS throughput vs the macOS connect path |
 | [`macOS/`](macOS/) | Menu-bar app. UX: [`macOS/design/DESIGN.md`](macOS/design/DESIGN.md) |
-| [`Keenetic/`](Keenetic/) | Entware / OpkgTun. Plan: [`Keenetic/PLAN.md`](Keenetic/PLAN.md). Mock: [`Keenetic/design/index.html`](Keenetic/design/index.html) |
+| [`Keenetic/`](Keenetic/) | Entware / OpkgTun. `make -C clients/Keenetic ipk`. Page `http://<lan>:8090/`. |
 | [`MikroTik/`](MikroTik/) | RouterOS 7 container. Mock: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Thin host + appex. Mock: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md) phase 6 |
 | [`Android/`](Android/) | VpnService. Thin Java host. Phone + TV flavors. Mock: [`Android/design/index.html`](Android/design/index.html) |

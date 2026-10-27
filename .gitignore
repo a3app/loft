@@ -17,6 +17,9 @@ clients/Sailfish/bin/
 clients/Sailfish/build/
 clients/MikroTik/pack/loft
 clients/MikroTik/pack/*.tar
+clients/Keenetic/pack/loft-keenetic
+clients/Keenetic/pack/*.ipk
+clients/Keenetic/pack/*.sha256
 docs/brand/__pycache__/
 docs/brand/concepts/
 .DS_Store

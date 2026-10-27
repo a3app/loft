@@ -1,0 +1,27 @@
+#!/bin/sh
+# opkg calls prerm on upgrade and on remove. Interfaces stay across an
+# upgrade so connection priorities that name OpkgTunN are not dropped.
+PATH=/opt/sbin:/opt/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+stop_svc() {
+	if [ -x /opt/etc/init.d/S99loft ]; then
+		/opt/etc/init.d/S99loft stop
+	fi
+}
+
+case "$1" in
+upgrade)
+	stop_svc
+	;;
+*)
+	stop_svc
+	i=0
+	while [ "$i" -le 15 ]; do
+		ndmc -c "interface OpkgTun$i down" >/dev/null 2>&1
+		ndmc -c "no interface OpkgTun$i" >/dev/null 2>&1
+		i=$((i + 1))
+	done
+	ndmc -c "system configuration save" >/dev/null 2>&1
+	;;
+esac
+exit 0
