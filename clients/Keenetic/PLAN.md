@@ -4,14 +4,14 @@ Software 1.0.0. Protocol 1.0. This plan does not raise either version.
 
 ## Goal
 
-A routed loft client on Keenetic that shows up as **one connection** in Connection Priorities and split routing. Operators set token and fronts on a LAN page gated by the Keenetic web-admin session.
+A routed loft client on Keenetic where every connection (loft profile or VLESS) shows up as **its own connection** in Connection Priorities and split routing. Operators set token and fronts on a LAN page gated by the Keenetic web-admin session.
 
 ## Out of scope
 
 - Native “Add loft” type next to WireGuard in KeeneticOS (needs an NDM component from Keenetic).
 - Patching stock `:80` JS as the settings form.
 - SSTP / WireGuard / OpenVPN in this package.
-- loft named lists as the router’s split brain (Keenetic DNS routes and policies do that).
+- loft named lists and node route profiles as the router’s split brain. Keenetic DNS-based routes and policies do that; the panel never writes them.
 
 ## Phases
 
@@ -24,9 +24,9 @@ Docs, plan, HTML mock. No daemon.
 Cross-compile `loft` for linux `aarch64` / `armv7` / `mipsel` (`CGO_ENABLED=0`). Init script in `/opt/etc/init.d/`. YAML in `/opt/etc/loft/client.yaml`.
 
 - `listen.tun: auto`, `default_route` / kill-switch **off**.
-- After Status: `ndmc` creates/updates `OpkgTun0` (description Loft, overlay IP, MTU, `up`).
+- After Status: `ndmc` creates/updates the connection’s `OpkgTunN` (description = connection name, overlay IP, MTU, `up`).
 - Host routes for outbound IPs via the ISP interface (no hairpin).
-- Stop: `OpkgTun0` down, process gone.
+- Stop: that `OpkgTunN` down, its session gone.
 
 Smoke: ping overlay gateway; Keenetic shows Loft in priorities.
 
@@ -41,21 +41,21 @@ HTTP on LAN only (`:8090` default). No loft password.
 
 KeeneticOS 5.2: if `/auth` advertises `x-ndw4-authenticate`, use the one-shot redirect token.
 
-UI v1: status (up/down, overlay IP, front, bytes), edit (token, URL, type, path, cdn, fingerprint), start/stop. Fronts are loft only.
+UI: shared `lanui` v2. Connection list with on/off per connection; add by link (`loft://`, `vless://`), manual fields, or import (`client.yaml`, `.loft`, `.vpn`, QR picture); per-connection status (overlay, node and reserve, front, bytes), fronts, journal. See design/DESIGN.md.
 
 ### 3. Package
 
-`.ipk` for the three Entware arches. `postinst` registers OpkgTun once. `prerm` removes it. README with OPKG/TUN/TAP and KeeneticOS 5.0+. Optional GitHub Actions job later; not in the first tag.
+`.ipk` for the three Entware arches. Each connection takes the next free OpkgTunN when it is created; deleting it removes the interface. `prerm` removes all of them. README with OPKG/TUN/TAP and KeeneticOS 5.0+. Optional GitHub Actions job later; not in the first tag.
 
 ### 4. VLESS
 
-Second outbound type in the same process and the same OpkgTun. Panel grows a VLESS block (UUID, SNI, reality). loft remains default. No extra NDM interface.
+A separate connection with its own OpkgTun, edited like loft: link or manual (UUID, host, port, TLS / REALITY, TCP / XHTTP, SNI, fingerprint, public key, short ID, Vision).
 
 ## Order of work in the Go tree
 
 1. Flag or YAML: “Keenetic mode” = TUN up, no default route, call a hook with overlay IP/MTU/gateway.
 2. `RememberGateway` already exists; reuse for the exclude-host pin.
-3. Panel is a new `clients/Keenetic/cmd` (or `loft -panel`) so `loft-front` stays the macOS helper.
+3. Panel is `clients/go/lanui` v2 with a Keenetic block (OpkgTun names, priorities link, web-admin session login). MikroTik keeps its uplink block on the same page.
 
 ## Risks
 

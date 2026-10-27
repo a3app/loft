@@ -73,7 +73,7 @@
 
     /* loft panel */
     .panel {
-      width: 420px; background: #181512; border: 1px solid #2e2824;
+      width: 440px; background: #181512; border: 1px solid #2e2824;
       border-radius: 16px; overflow: hidden;
       box-shadow: 0 24px 60px rgba(0,0,0,.45);
     }
@@ -86,13 +86,13 @@
     .body { padding: 16px 18px 18px; }
     .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; }
     .row .k { color: var(--mute); font-size: 12px; }
-    .row .v { font-size: 13px; }
+    .row .v { font-size: 13px; text-align: right; }
     .mono { font-family: var(--mono); font-size: 12px; }
     .lamp {
-      width: 10px; height: 10px; border-radius: 3px; background: var(--mute);
-      box-shadow: none;
+      width: 10px; height: 10px; border-radius: 3px; background: var(--mute); flex: none;
     }
     .lamp.on { background: var(--lamp); box-shadow: 0 0 10px rgba(232,184,74,.55); }
+    .lamp.err { background: var(--err); }
     label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
     label.field input, label.field select {
       display: block; width: 100%; margin-top: 4px;
@@ -100,6 +100,7 @@
       border-radius: 8px; padding: 8px 10px; font: 400 13px var(--ui);
     }
     label.field input.mono { font-family: var(--mono); font-size: 12px; }
+    .pair { display: grid; grid-template-columns: 1fr 90px; gap: 10px; }
     .btns { display: flex; gap: 8px; margin-top: 14px; }
     .btns button {
       flex: 1; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer;
@@ -107,28 +108,62 @@
     }
     .go { background: var(--lamp); color: var(--ink); }
     .ghost { background: #2a2420; color: var(--snow); }
+    .del { background: none; color: var(--copper); }
     .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 8px 0 0; }
     .tag {
       display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
-      background: #2a2420; color: var(--stone);
+      background: #2a2420; color: var(--stone); white-space: nowrap;
     }
     .tag.ok { background: rgba(125,186,106,.15); color: var(--ok); }
     .tag.wait { background: rgba(232,184,74,.12); color: var(--lamp); }
+    .tag.bad { background: rgba(226,75,75,.14); color: var(--err); }
     .checks { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
     .checks label {
       display: flex; align-items: center; gap: 6px;
       background: #211c19; border: 1px solid #2e2824; border-radius: 8px;
       padding: 6px 10px; font-size: 12px; cursor: pointer;
     }
-    .soon {
-      opacity: .55; pointer-events: none;
-      border: 1px dashed #3a332e; border-radius: 10px; padding: 12px; margin-top: 8px;
+    .seg {
+      display: flex; background: #211c19; border: 1px solid #2e2824; border-radius: 9px;
+      padding: 2px; gap: 2px; margin: 0 0 12px;
     }
+    .seg button {
+      flex: 1; border: 0; background: none; color: var(--stone); border-radius: 7px;
+      padding: 6px 4px; font: 500 12px var(--ui); cursor: pointer;
+    }
+    .seg button.on { background: #3a332e; color: var(--snow); }
+    .seg-cap { font-size: 12px; color: var(--mute); margin: 0 0 4px; }
     .foot { padding: 10px 18px 14px; color: var(--mute); font-size: 11px; font-family: var(--mono); }
+
+    /* connection list */
+    .conn {
+      display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center;
+      padding: 10px 12px; border: 1px solid #2e2824; border-radius: 10px; background: #1d1916;
+      margin-bottom: 8px; cursor: pointer;
+    }
+    .conn:hover { border-color: #3a332e; }
+    .conn .n { font-weight: 600; font-size: 13px; }
+    .conn .m { color: var(--mute); font-size: 11.5px; font-family: var(--mono); margin-top: 2px; }
+    .sw-d {
+      width: 34px; height: 20px; border-radius: 10px; background: #3a332e; position: relative; flex: none;
+    }
+    .sw-d i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--stone); }
+    .sw-d.on { background: var(--lamp); }
+    .sw-d.on i { left: 16px; background: var(--ink); }
+
+    .drop {
+      border: 1px dashed #3a332e; border-radius: 12px; padding: 26px 16px; text-align: center;
+      color: var(--mute); font-size: 12.5px; line-height: 1.45; margin: 4px 0 4px;
+    }
+    .log {
+      background: #120f0d; border: 1px solid #2e2824; border-radius: 10px; padding: 10px 12px;
+      font: 11px/1.6 var(--mono); color: var(--stone); white-space: pre; overflow: hidden; height: 230px;
+    }
+    .log .w { color: var(--lamp); }
 
     /* Keenetic frame */
     .kn {
-      width: 640px; height: 420px; background: var(--kn-bg); color: var(--kn-ink);
+      width: 680px; min-height: 440px; background: var(--kn-bg); color: var(--kn-ink);
       border-radius: 12px; overflow: hidden; display: grid;
       grid-template-columns: 176px 1fr;
       box-shadow: 0 24px 60px rgba(0,0,0,.4);
@@ -162,7 +197,7 @@
     .sw.on { background: var(--kn-teal); }
     .sw.on i { left: 18px; }
     .prio {
-      background: #fff; border: 1px dashed var(--kn-line); border-radius: 10px; padding: 12px;
+      background: #fff; border: 1px dashed var(--kn-line); border-radius: 10px; padding: 12px; margin-bottom: 10px;
     }
     .prio h3 { margin: 0 0 8px; font-size: 13px; }
     .prio .item {
@@ -170,6 +205,7 @@
       background: #f7f9fb; border: 1px solid var(--kn-line);
     }
     .prio .item.loft { background: #e6f6f5; border-color: #b7e4e3; font-weight: 600; }
+    .prio .item .x { color: var(--kn-mute); font-weight: 400; }
     .badge { font-size: 11px; color: var(--kn-teal-d); }
 
     .gate {
@@ -193,23 +229,27 @@
       </svg>
       loft
     </div>
-    <p data-i="navCap">Макет панели на Keenetic. Приоритеты — у них, сессия — у нас.</p>
+    <p data-i="navCap">Макет панели на Keenetic. Маршруты и приоритеты — у Keenetic, сессии — у нас.</p>
     <div class="lang">
       <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
       <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
     </div>
     <h4 data-i="hKeen">Keenetic</h4>
-    <button type="button" class="on" data-go="keenetic" data-i="nPrio">Приоритеты</button>
+    <button type="button" class="on" data-go="keenetic" data-i="nOther">Другие подключения</button>
+    <button type="button" data-go="prio" data-i="nPrio">Приоритеты</button>
     <h4 data-i="hPanel">Панель :8090</h4>
     <button type="button" data-go="gate" data-i="nGate">Сессия</button>
+    <button type="button" data-go="list" data-i="nList">Подключения</button>
     <button type="button" data-go="status" data-i="nStatus">Статус</button>
-    <button type="button" data-go="edit" data-i="nEdit">Подключение</button>
+    <button type="button" data-go="edit" data-i="nEdit">Подключение · loft</button>
+    <button type="button" data-go="editvless" data-i="nEditVless">Подключение · VLESS</button>
+    <button type="button" data-go="import" data-i="nImport">Импорт</button>
     <button type="button" data-go="fronts" data-i="nFronts">Фронты loft</button>
-    <button type="button" data-go="vless" data-i="nVless">VLESS</button>
+    <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
   </nav>
 
   <div class="stage-wrap">
-    <!-- Keenetic -->
+    <!-- Keenetic · Other connections -->
     <div class="kn screen" id="keenetic">
       <aside>
         <div class="logo">Keenetic</div>
@@ -220,10 +260,10 @@
       </aside>
       <main>
         <h2 data-i="kTitle">Другие подключения</h2>
-        <p class="cap" data-i="kCap">OpkgTun из Entware. Маршруты задаёт KeeneticOS.</p>
+        <p class="cap" data-i="kCap">Каждое подключение loft — свой OpkgTun из Entware. Маршруты задаёт KeeneticOS.</p>
         <div class="kn-card">
           <div>
-            <div class="name">Loft</div>
+            <div class="name">Loft Home</div>
             <div class="meta">OpkgTun0 · 10.8.0.14 · MTU 1280 · loft get</div>
           </div>
           <span class="badge" data-i="kUse">для интернета</span>
@@ -231,8 +271,16 @@
         </div>
         <div class="kn-card">
           <div>
+            <div class="name">VLESS NL</div>
+            <div class="meta">OpkgTun1 · 172.19.0.2 · MTU 1400 · vless reality</div>
+          </div>
+          <span class="badge" data-i="kUse">для интернета</span>
+          <div class="sw on"><i></i></div>
+        </div>
+        <div class="kn-card">
+          <div>
             <div class="name">WireGuard Home</div>
-            <div class="meta">Wireguard0 · штатный компонент</div>
+            <div class="meta" data-i="kWg">Wireguard0 · штатный компонент</div>
           </div>
           <span></span>
           <div class="sw"><i></i></div>
@@ -245,11 +293,33 @@
           <span></span>
           <div class="sw"><i></i></div>
         </div>
+      </main>
+    </div>
+
+    <!-- Keenetic · Priorities -->
+    <div class="kn screen hidden" id="prio">
+      <aside>
+        <div class="logo">Keenetic</div>
+        <a href="#" data-i="kNet">Интернет</a>
+        <a href="#" data-i="kOther">Другие подключения</a>
+        <a href="#" data-i="kRules">Сетевые правила</a>
+        <a href="#" class="on" data-i="kPrio">Приоритеты</a>
+      </aside>
+      <main>
+        <h2 data-i="kPrioTitle">Приоритеты подключений</h2>
+        <p class="cap" data-i="kPrioCap">Какое подключение использовать и на что падать при обрыве, решает Keenetic. Панель loft это не трогает.</p>
         <div class="prio">
-          <h3 data-i="kPolicy">Политика «Через Loft»</h3>
-          <div class="item loft"><span>Loft</span><span data-i="kFirst">1</span></div>
+          <h3 data-i="kPolLaptop">Политика «Ноутбуки»</h3>
+          <div class="item loft"><span>Loft Home</span><span>1</span></div>
+          <div class="item loft"><span>VLESS NL</span><span>2</span></div>
+          <div class="item"><span class="x">ISP · GigabitEthernet0</span><span class="x" data-i="kOff">выкл</span></div>
+        </div>
+        <div class="prio">
+          <h3 data-i="kPolTv">Политика «ТВ»</h3>
+          <div class="item loft"><span>VLESS NL</span><span>1</span></div>
           <div class="item"><span>ISP · GigabitEthernet0</span><span>2</span></div>
         </div>
+        <p class="cap" style="margin:0" data-i="kDns">Раздельная маршрутизация — в «Сетевые правила → DNS-маршруты»: списку доменов выбирается интерфейс Loft Home или VLESS NL.</p>
       </main>
     </div>
 
@@ -268,66 +338,203 @@
       <div class="foot">http://192.168.1.1:8090/</div>
     </div>
 
+    <!-- Connections -->
+    <div class="panel screen hidden" id="list">
+      <header>
+        <div class="lamp on"></div>
+        <div class="t" data-i="lTitle">Подключения</div>
+        <div class="sub">loft</div>
+      </header>
+      <div class="body">
+        <div class="conn" data-go="status">
+          <div class="lamp on"></div>
+          <div><div class="n">Loft Home</div><div class="m">loft · get · OpkgTun0</div></div>
+          <span class="tag ok" data-i="stUp">в сети</span>
+          <div class="sw-d on"><i></i></div>
+        </div>
+        <div class="conn" data-go="editvless">
+          <div class="lamp on"></div>
+          <div><div class="n">VLESS NL</div><div class="m">vless · reality · OpkgTun1</div></div>
+          <span class="tag ok" data-i="stUp">в сети</span>
+          <div class="sw-d on"><i></i></div>
+        </div>
+        <div class="conn" data-go="edit">
+          <div class="lamp err"></div>
+          <div><div class="n">Loft Office</div><div class="m">loft · h2 · OpkgTun2</div></div>
+          <span class="tag bad" data-i="stErr">ошибка</span>
+          <div class="sw-d on"><i></i></div>
+        </div>
+        <div class="conn" data-go="edit">
+          <div class="lamp"></div>
+          <div><div class="n">Loft Backup</div><div class="m">loft · quic · OpkgTun3</div></div>
+          <span class="tag" data-i="stOff">выкл</span>
+          <div class="sw-d"><i></i></div>
+        </div>
+        <p class="hint" data-i="lHint">Включённые подключения держат сессию все сразу. Какое из них использовать, решают приоритеты Keenetic.</p>
+        <div class="btns">
+          <button type="button" class="ghost" data-go="import" data-i="lImport">Импорт</button>
+          <button type="button" class="go" data-go="edit" data-i="lAdd">Добавить</button>
+        </div>
+      </div>
+      <div class="foot">/opt/etc/loft/</div>
+    </div>
+
     <!-- Status -->
     <div class="panel screen hidden" id="status">
       <header>
         <div class="lamp on"></div>
-        <div class="t">loft</div>
-        <div class="sub">loft</div>
+        <div class="t">Loft Home</div>
+        <div class="sub">OpkgTun0</div>
       </header>
       <div class="body">
-        <div class="row"><span class="k" data-i="sState">Состояние</span><span class="tag ok" data-i="sUp">в сети</span></div>
-        <div class="row"><span class="k">OpkgTun</span><span class="mono">OpkgTun0</span></div>
+        <div class="row"><span class="k" data-i="sState">Состояние</span><span class="tag ok" data-i="stUp">в сети</span></div>
         <div class="row"><span class="k" data-i="sIp">Оверлей</span><span class="mono">10.8.0.14 · gw 10.8.0.1</span></div>
         <div class="row"><span class="k">MTU</span><span class="mono">1280</span></div>
-        <div class="row"><span class="k" data-i="sFront">Фронт</span><span>get · cdn.example.com</span></div>
+        <div class="row"><span class="k" data-i="sNode">Нода</span><span class="v">de1.example.com <span class="tag" data-i="sSpare">ещё 2 в запасе</span></span></div>
+        <div class="row"><span class="k" data-i="sFront">Фронт</span><span class="v">get · cdn.example.com</span></div>
         <div class="row"><span class="k" data-i="sBytes">Трафик</span><span class="mono">↓ 42.1 MiB  ↑ 3.4 MiB</span></div>
-        <p class="hint" data-i="sHint">Маршруты устройств — в приоритетах Keenetic. Эта панель только сессию.</p>
+        <p class="hint" data-i="sHint">Раздельная маршрутизация и запасной канал — в Keenetic: DNS-маршруты и приоритеты для интерфейса Loft Home.</p>
         <div class="btns">
           <button type="button" class="ghost" data-i="sStop">Стоп</button>
-          <button type="button" class="go" data-i="sKeen">Приоритеты Keenetic</button>
+          <button type="button" class="ghost" data-go="fronts" data-i="sFronts">Фронты</button>
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button type="button" class="go" data-go="prio" data-i="sKeen">Приоритеты Keenetic</button>
         </div>
       </div>
       <div class="foot">http://192.168.1.1:8090/</div>
     </div>
 
-    <!-- Edit -->
+    <!-- Edit · loft -->
     <div class="panel screen hidden" id="edit">
       <header>
         <div class="lamp on"></div>
         <div class="t" data-i="eTitle">Подключение</div>
-        <div class="sub">loft</div>
+        <div class="sub">OpkgTun0</div>
       </header>
       <div class="body">
         <label class="field"><span data-i="eName">Имя</span>
-          <input value="Home" />
+          <input value="Loft Home" />
         </label>
-        <label class="field"><span data-i="eKey">Ключ участника</span>
-          <input class="mono" type="password" value="lt_••••••••••••" />
-        </label>
-        <label class="field">URL
-          <input class="mono" value="https://cdn.example.com" />
-        </label>
-        <label class="field"><span data-i="eType">Тип</span>
-          <select>
-            <option>get</option>
-            <option>ws</option>
-            <option>h2</option>
-            <option>quic</option>
-            <option>h3</option>
-            <option>l3</option>
-          </select>
-        </label>
-        <label class="field"><span data-i="ePath">Путь</span>
-          <input class="mono" value="/static/v3/build" />
-        </label>
-        <p class="hint" data-i="eHint">SNI клиент не выбирает. Его объявляет нода. CDN сохраняет hostname CDN.</p>
+        <div class="seg-cap" data-i="eKind">Тип</div>
+        <div class="seg">
+          <button type="button" class="on" data-go="edit">loft</button>
+          <button type="button" data-go="editvless">VLESS</button>
+        </div>
+        <div class="seg" data-mode="loft">
+          <button type="button" class="on" data-m="link" data-i="mLink">Ссылка</button>
+          <button type="button" data-m="manual" data-i="mManual">Вручную</button>
+        </div>
+        <div data-pane="loft-link">
+          <label class="field"><span data-i="eUri">Адрес loft://</span>
+            <input class="mono" value="loft://lt_…@cdn.example.com" />
+          </label>
+        </div>
+        <div data-pane="loft-manual" class="hidden">
+          <label class="field"><span data-i="eKey">Ключ доступа</span>
+            <input class="mono" type="password" value="lt_••••••••••••" />
+          </label>
+          <div class="pair">
+            <label class="field"><span data-i="eHost">Адрес</span><input class="mono" value="cdn.example.com" /></label>
+            <label class="field"><span data-i="ePort">Порт</span><input class="mono" value="443" /></label>
+          </div>
+          <div class="seg-cap" data-i="eType">Как подключаться</div>
+          <div class="seg">
+            <button type="button" class="on">GET</button><button type="button">WS</button><button type="button">H2</button>
+            <button type="button">QUIC</button><button type="button">H3</button><button type="button">L3</button>
+          </div>
+          <label class="field"><span data-i="ePath">Путь (если давали)</span>
+            <input class="mono" value="/static/v3/build" />
+          </label>
+        </div>
         <div class="btns">
-          <button type="button" class="ghost" data-i="eSave">Сохранить</button>
-          <button type="button" class="go" data-i="eStart">Старт</button>
+          <button type="button" class="ghost" data-go="list" data-i="eBack">Назад</button>
+          <button type="button" class="go" data-go="list" data-i="eSave">Сохранить</button>
+        </div>
+        <div class="btns" style="margin-top:6px">
+          <button type="button" class="del" data-i="eDel">Удалить</button>
         </div>
       </div>
-      <div class="foot">/opt/etc/loft/client.yaml</div>
+      <div class="foot">/opt/etc/loft/home.yaml</div>
+    </div>
+
+    <!-- Edit · VLESS -->
+    <div class="panel screen hidden" id="editvless">
+      <header>
+        <div class="lamp on"></div>
+        <div class="t" data-i="eTitle">Подключение</div>
+        <div class="sub">OpkgTun1</div>
+      </header>
+      <div class="body">
+        <label class="field"><span data-i="eName">Имя</span>
+          <input value="VLESS NL" />
+        </label>
+        <div class="seg-cap" data-i="eKind">Тип</div>
+        <div class="seg">
+          <button type="button" data-go="edit">loft</button>
+          <button type="button" class="on" data-go="editvless">VLESS</button>
+        </div>
+        <div class="seg" data-mode="vless">
+          <button type="button" class="on" data-m="link" data-i="mLink">Ссылка</button>
+          <button type="button" data-m="manual" data-i="mManual">Вручную</button>
+        </div>
+        <div data-pane="vless-link">
+          <label class="field"><span data-i="vUrl">Ссылка vless://</span>
+            <input class="mono" value="vless://11111111-1111-1111-1111-111111111111@nl1.example.com:443?security=reality&amp;sni=www.example.com&amp;fp=chrome&amp;pbk=…&amp;sid=abcd" />
+          </label>
+        </div>
+        <div data-pane="vless-manual" class="hidden">
+          <label class="field">UUID
+            <input class="mono" value="11111111-1111-1111-1111-111111111111" />
+          </label>
+          <div class="pair">
+            <label class="field"><span data-i="eHost">Адрес</span><input class="mono" value="nl1.example.com" /></label>
+            <label class="field"><span data-i="ePort">Порт</span><input class="mono" value="443" /></label>
+          </div>
+          <div class="seg-cap" data-i="vSec">Защита</div>
+          <div class="seg"><button type="button">TLS</button><button type="button" class="on">REALITY</button></div>
+          <div class="seg-cap" data-i="vNet">Транспорт</div>
+          <div class="seg"><button type="button" class="on">TCP</button><button type="button">XHTTP</button></div>
+          <div class="pair" style="grid-template-columns:1fr 1fr">
+            <label class="field"><span data-i="vSni">Имя хоста TLS</span><input class="mono" value="www.example.com" /></label>
+            <label class="field"><span data-i="vFp">Отпечаток TLS</span><input class="mono" value="chrome" /></label>
+          </div>
+          <div class="pair">
+            <label class="field"><span data-i="vPbk">Публичный ключ</span><input class="mono" placeholder="pbk" /></label>
+            <label class="field">Short ID<input class="mono" value="abcd" /></label>
+          </div>
+          <div class="row" style="align-items:center">
+            <div><div style="font-size:13px">Vision</div><div class="k" data-i="vVisionD">xtls-rprx-vision на TCP.</div></div>
+            <div class="sw-d"><i></i></div>
+          </div>
+        </div>
+        <div class="btns">
+          <button type="button" class="ghost" data-go="list" data-i="eBack">Назад</button>
+          <button type="button" class="go" data-go="list" data-i="eSave">Сохранить</button>
+        </div>
+        <div class="btns" style="margin-top:6px">
+          <button type="button" class="del" data-i="eDel">Удалить</button>
+        </div>
+      </div>
+      <div class="foot">/opt/etc/loft/vless-nl.yaml</div>
+    </div>
+
+    <!-- Import -->
+    <div class="panel screen hidden" id="import">
+      <header>
+        <div class="lamp on"></div>
+        <div class="t" data-i="iTitle">Импорт</div>
+        <div class="sub">loft</div>
+      </header>
+      <div class="body">
+        <p class="hint" style="margin-top:0" data-i="iBody">Файл с ключом и адресом, который вам выдали.</p>
+        <div class="drop" data-i="iDrop">Перетащите сюда client.yaml, .loft, .vpn или QR-картинку</div>
+        <div class="btns">
+          <button type="button" class="ghost" data-go="list" data-i="eBack">Назад</button>
+          <button type="button" class="go" data-go="list" data-i="iPick">Выбрать файл</button>
+        </div>
+      </div>
+      <div class="foot">→ OpkgTun4</div>
     </div>
 
     <!-- Fronts -->
@@ -335,97 +542,115 @@
       <header>
         <div class="lamp on"></div>
         <div class="t" data-i="fTitle">Фронты loft</div>
-        <div class="sub">select: auto</div>
+        <div class="sub">Loft Home</div>
       </header>
       <div class="body">
-        <p class="hint" data-i="fHint">Это не отдельные подключения Keenetic. Один OpkgTun, порядок попыток внутри loft.</p>
+        <p class="hint" style="margin-top:0" data-i="fHint">Порядок попыток внутри одного подключения. Не отдельные строки в Keenetic.</p>
         <div class="checks">
           <label><input type="checkbox" checked /> get</label>
           <label><input type="checkbox" checked /> ws</label>
           <label><input type="checkbox" checked /> h2</label>
           <label><input type="checkbox" /> quic</label>
           <label><input type="checkbox" /> h3</label>
+          <label><input type="checkbox" /> l3</label>
         </div>
         <div class="row"><span class="k" data-i="fLive">Живой</span><span>get</span></div>
-        <div class="row"><span class="k">caps ∩</span><span class="mono">get ws h2</span></div>
+        <div class="row"><span class="k">caps ∩</span><span class="mono">get ws h2 l3</span></div>
         <p class="hint" data-i="fCdn">Профиль CDN (yandex / cloudflare) — порядок заголовков, не возможность протокола.</p>
       </div>
       <div class="foot">Hello caps · Status intersection</div>
     </div>
 
-    <!-- VLESS -->
-    <div class="panel screen hidden" id="vless">
+    <!-- Journal -->
+    <div class="panel screen hidden" id="journal">
       <header>
-        <div class="lamp"></div>
-        <div class="t">VLESS</div>
-        <div class="sub" data-i="vLater">позже</div>
+        <div class="lamp on"></div>
+        <div class="t" data-i="jTitle">Журнал</div>
+        <div class="sub">80</div>
       </header>
       <div class="body">
-        <p class="hint" data-i="vHint">Тот же OpkgTun, второй исходящий loft, когда loft режут. Не отдельная строка в Keenetic.</p>
-        <div class="soon">
-          <label class="field">UUID
-            <input class="mono" placeholder="00000000-0000-4000-8000-000000000000" disabled />
-          </label>
-          <label class="field">SNI
-            <input class="mono" placeholder="www.example.com" disabled />
-          </label>
-          <span class="tag wait" data-i="vTag">фаза 4 плана</span>
-        </div>
-        <p class="hint" data-i="vSstp">SSTP на роутере не дублируем: в Keenetic уже есть свой клиент в «Другие подключения».</p>
+        <div class="log">13:04:11 Loft Home   front get cdn.example.com
+13:04:11 Loft Home   hello ok · lt_8f2c…
+13:04:12 Loft Home   status 10.8.0.14/32 gw 10.8.0.1 mtu 1280
+13:04:12 Loft Home   ndmc OpkgTun0 up
+13:04:12 VLESS NL    reality nl1.example.com:443
+13:04:13 VLESS NL    ndmc OpkgTun1 up
+<span class="w">13:05:40 Loft Office h2 dial: tls handshake timeout</span>
+<span class="w">13:05:40 Loft Office retry in 8s</span>
+13:06:02 Loft Home   roster 3 nodes · de1 active</div>
+        <p class="hint" data-i="jHint">Строки фронта и сессии всех подключений. Ключ сокращается.</p>
       </div>
-      <div class="foot">same process · same tun</div>
+      <div class="foot">/opt/var/log/loft.log</div>
     </div>
   </div>
 
   <script>
     const I = {
       ru: {
-        navCap: "Макет панели на Keenetic. Приоритеты — у них, сессия — у нас.",
-        hKeen: "Keenetic", nPrio: "Приоритеты", hPanel: "Панель :8090",
-        nGate: "Сессия", nStatus: "Статус", nEdit: "Подключение", nFronts: "Фронты loft", nVless: "VLESS",
+        navCap: "Макет панели на Keenetic. Маршруты и приоритеты — у Keenetic, сессии — у нас.",
+        hKeen: "Keenetic", nOther: "Другие подключения", nPrio: "Приоритеты", hPanel: "Панель :8090",
+        nGate: "Сессия", nList: "Подключения", nStatus: "Статус", nEdit: "Подключение · loft",
+        nEditVless: "Подключение · VLESS", nImport: "Импорт", nFronts: "Фронты loft", nJournal: "Журнал",
         kNet: "Интернет", kOther: "Другие подключения", kRules: "Сетевые правила", kPrio: "Приоритеты",
-        kTitle: "Другие подключения", kCap: "OpkgTun из Entware. Маршруты задаёт KeeneticOS.",
-        kUse: "для интернета", kSstp: "штатный клиент Keenetic — не пакет loft",
-        kPolicy: "Политика «Через Loft»", kFirst: "1",
+        kTitle: "Другие подключения",
+        kCap: "Каждое подключение loft — свой OpkgTun из Entware. Маршруты задаёт KeeneticOS.",
+        kUse: "для интернета", kWg: "Wireguard0 · штатный компонент", kSstp: "штатный клиент Keenetic — не пакет loft",
+        kPrioTitle: "Приоритеты подключений",
+        kPrioCap: "Какое подключение использовать и на что падать при обрыве, решает Keenetic. Панель loft это не трогает.",
+        kPolLaptop: "Политика «Ноутбуки»", kPolTv: "Политика «ТВ»", kOff: "выкл",
+        kDns: "Раздельная маршрутизация — в «Сетевые правила → DNS-маршруты»: списку доменов выбирается интерфейс Loft Home или VLESS NL.",
         gateT: "Проверяем сессию Keenetic…",
         gateP: "Cookie вебадминки. Своего пароля нет. 401 — вход на :80 и возврат сюда.",
-        sState: "Состояние", sUp: "в сети", sIp: "Оверлей", sFront: "Фронт", sBytes: "Трафик",
-        sHint: "Маршруты устройств — в приоритетах Keenetic. Эта панель только сессию.",
-        sStop: "Стоп", sKeen: "Приоритеты Keenetic",
-        eTitle: "Подключение", eName: "Имя", eKey: "Ключ участника", eType: "Тип", ePath: "Путь",
-        eHint: "SNI клиент не выбирает. Его объявляет нода. CDN сохраняет hostname CDN.",
-        eSave: "Сохранить", eStart: "Старт",
+        lTitle: "Подключения", stUp: "в сети", stErr: "ошибка", stOff: "выкл",
+        lHint: "Включённые подключения держат сессию все сразу. Какое из них использовать, решают приоритеты Keenetic.",
+        lImport: "Импорт", lAdd: "Добавить",
+        sState: "Состояние", sIp: "Оверлей", sNode: "Нода", sSpare: "ещё 2 в запасе", sFront: "Фронт", sBytes: "Трафик",
+        sHint: "Раздельная маршрутизация и запасной канал — в Keenetic: DNS-маршруты и приоритеты для интерфейса Loft Home.",
+        sStop: "Стоп", sFronts: "Фронты", sKeen: "Приоритеты Keenetic",
+        eTitle: "Подключение", eName: "Имя", eKind: "Тип", mLink: "Ссылка", mManual: "Вручную",
+        eUri: "Адрес loft://", eKey: "Ключ доступа", eHost: "Адрес", ePort: "Порт",
+        eType: "Как подключаться", ePath: "Путь (если давали)",
+        eBack: "Назад", eSave: "Сохранить", eDel: "Удалить",
+        vUrl: "Ссылка vless://", vSec: "Защита", vNet: "Транспорт", vSni: "Имя хоста TLS", vFp: "Отпечаток TLS", vPbk: "Публичный ключ", vVisionD: "xtls-rprx-vision на TCP.",
+        iTitle: "Импорт", iBody: "Файл с ключом и адресом, который вам выдали.",
+        iDrop: "Перетащите сюда client.yaml, .loft, .vpn или QR-картинку", iPick: "Выбрать файл",
         fTitle: "Фронты loft",
-        fHint: "Это не отдельные подключения Keenetic. Один OpkgTun, порядок попыток внутри loft.",
+        fHint: "Порядок попыток внутри одного подключения. Не отдельные строки в Keenetic.",
         fLive: "Живой", fCdn: "Профиль CDN (yandex / cloudflare) — порядок заголовков, не возможность протокола.",
-        vLater: "позже",
-        vHint: "Тот же OpkgTun, второй исходящий loft, когда loft режут. Не отдельная строка в Keenetic.",
-        vTag: "фаза 4 плана",
-        vSstp: "SSTP на роутере не дублируем: в Keenetic уже есть свой клиент в «Другие подключения»."
+        jTitle: "Журнал", jHint: "Строки фронта и сессии всех подключений. Ключ сокращается."
       },
       en: {
-        navCap: "Keenetic panel mock. Priorities stay in Keenetic; the session is ours.",
-        hKeen: "Keenetic", nPrio: "Priorities", hPanel: "Panel :8090",
-        nGate: "Session", nStatus: "Status", nEdit: "Connection", nFronts: "loft fronts", nVless: "VLESS",
+        navCap: "Keenetic panel mock. Routes and priorities stay in Keenetic; sessions are ours.",
+        hKeen: "Keenetic", nOther: "Other connections", nPrio: "Priorities", hPanel: "Panel :8090",
+        nGate: "Session", nList: "Connections", nStatus: "Status", nEdit: "Connection · loft",
+        nEditVless: "Connection · VLESS", nImport: "Import", nFronts: "loft fronts", nJournal: "Journal",
         kNet: "Internet", kOther: "Other connections", kRules: "Network rules", kPrio: "Priorities",
-        kTitle: "Other connections", kCap: "OpkgTun from Entware. KeeneticOS owns the routes.",
-        kUse: "use for internet", kSstp: "stock Keenetic client — not the loft package",
-        kPolicy: "Policy “Via Loft”", kFirst: "1",
+        kTitle: "Other connections",
+        kCap: "Each loft connection is its own OpkgTun from Entware. KeeneticOS owns the routes.",
+        kUse: "use for internet", kWg: "Wireguard0 · stock component", kSstp: "stock Keenetic client — not the loft package",
+        kPrioTitle: "Connection priorities",
+        kPrioCap: "Keenetic decides which connection to use and what to fall back to. The loft panel does not touch this.",
+        kPolLaptop: "Policy “Laptops”", kPolTv: "Policy “TV”", kOff: "off",
+        kDns: "Split routing lives in “Network rules → DNS-based routes”: a domain list gets the Loft Home or VLESS NL interface.",
         gateT: "Checking Keenetic session…",
         gateP: "Web-admin cookie. No loft password. 401 → login on :80, then back here.",
-        sState: "State", sUp: "up", sIp: "Overlay", sFront: "Front", sBytes: "Traffic",
-        sHint: "Device routes live in Keenetic priorities. This panel is the session only.",
-        sStop: "Stop", sKeen: "Keenetic priorities",
-        eTitle: "Connection", eName: "Name", eKey: "Member key", eType: "Type", ePath: "Path",
-        eHint: "The client does not pick SNI. The node advertises it. A CDN front keeps the CDN hostname.",
-        eSave: "Save", eStart: "Start",
+        lTitle: "Connections", stUp: "up", stErr: "error", stOff: "off",
+        lHint: "Every enabled connection keeps its session up. Keenetic priorities pick which one carries traffic.",
+        lImport: "Import", lAdd: "Add",
+        sState: "State", sIp: "Overlay", sNode: "Node", sSpare: "2 more in reserve", sFront: "Front", sBytes: "Traffic",
+        sHint: "Split routing and fallback live in Keenetic: DNS-based routes and priorities for the Loft Home interface.",
+        sStop: "Stop", sFronts: "Fronts", sKeen: "Keenetic priorities",
+        eTitle: "Connection", eName: "Name", eKind: "Type", mLink: "Link", mManual: "Manual",
+        eUri: "loft:// address", eKey: "Access key", eHost: "Host", ePort: "Port",
+        eType: "How to connect", ePath: "Path (if given)",
+        eBack: "Back", eSave: "Save", eDel: "Delete",
+        vUrl: "vless:// link", vSec: "Security", vNet: "Transport", vSni: "TLS host name", vFp: "TLS fingerprint", vPbk: "Public key", vVisionD: "xtls-rprx-vision on TCP.",
+        iTitle: "Import", iBody: "The file with the key and address you were given.",
+        iDrop: "Drop client.yaml, .loft, .vpn or a QR picture here", iPick: "Choose file",
         fTitle: "loft fronts",
-        fHint: "Not extra Keenetic connections. One OpkgTun; try order inside loft.",
+        fHint: "Try order inside one connection. Not extra Keenetic rows.",
         fLive: "Live", fCdn: "CDN profile (yandex / cloudflare) is header order, not a protocol cap.",
-        vLater: "later",
-        vHint: "Same OpkgTun, a second loft outbound when loft is filtered. Not a new Keenetic row.",
-        vTag: "plan phase 4",
-        vSstp: "We do not ship SSTP here: Keenetic already has a client under Other connections."
+        jTitle: "Journal", jHint: "Front and session lines of every connection. Keys are shortened."
       }
     };
 
@@ -448,10 +673,21 @@
       });
     }
 
-    document.querySelectorAll("nav button[data-go]").forEach((b) => {
+    document.querySelectorAll("[data-go]").forEach((b) => {
       b.addEventListener("click", () => show(b.getAttribute("data-go")));
     });
-    document.querySelector("[data-i=sKeen]")?.addEventListener("click", () => show("keenetic"));
+
+    // Link / Manual switch on both edit screens.
+    document.querySelectorAll(".seg[data-mode]").forEach((seg) => {
+      const kind = seg.dataset.mode;
+      seg.querySelectorAll("button[data-m]").forEach((b) => {
+        b.addEventListener("click", () => {
+          seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+          document.querySelector(`[data-pane="${kind}-link"]`).classList.toggle("hidden", b.dataset.m !== "link");
+          document.querySelector(`[data-pane="${kind}-manual"]`).classList.toggle("hidden", b.dataset.m !== "manual");
+        });
+      });
+    });
   </script>
 </body>
 </html>

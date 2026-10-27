@@ -21,7 +21,7 @@ LAN host
                   → TLS 1.3 → CDN or node
 ```
 
-VLESS, when added, is another loft outbound on the same OpkgTun. SSTP stays the stock Keenetic client.
+Each connection (a loft profile or VLESS) gets its own OpkgTun: OpkgTun0, OpkgTun1, … All enabled connections stay up; Keenetic priorities pick one. SSTP stays the stock Keenetic client.
 
 ## 2. OpkgTun
 

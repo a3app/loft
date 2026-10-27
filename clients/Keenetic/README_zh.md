@@ -2,7 +2,7 @@
 
 [English](README.md) · [Русский](README_ru.md) · **中文**
 
-Entware 客户端：一个 **OpkgTun** 接口，KeeneticOS 拿它进连接优先级和策略路由。设置在 LAN 口上；登录是 Keenetic 网页管理会话。
+Entware 客户端：每个连接一个 **OpkgTun** 接口，KeeneticOS 拿它们进连接优先级和策略路由。设置在 LAN 口上；登录是 Keenetic 网页管理会话。
 
 协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/keenetic_zh.md](../../docs/keenetic_zh.md)。计划：[PLAN.md](PLAN.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
 
@@ -12,8 +12,8 @@ Entware 客户端：一个 **OpkgTun** 接口，KeeneticOS 拿它进连接优先
 
 | 路由器上 | 角色 |
 |---------------|------|
-| loft（get / ws / h2 / quic / h3 / l3） | loft 覆盖网。一个 OpkgTun。 |
-| VLESS | 以后。loft 被滤时的第二条 loft 出站。 |
+| loft（get / ws / h2 / quic / h3 / l3） | loft 覆盖网。每个连接一个 OpkgTun。 |
+| VLESS | 单独的连接，有自己的 OpkgTun。 |
 | SSTP、WireGuard、OpenVPN、IPsec、OpenConnect | 系统自带 KeeneticOS。不是这个包。 |
 
 客户端 **不得** 装默认路由。表归 NDM。前置 IP 留在运营商路径上，会话才不会发夹。

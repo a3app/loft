@@ -2,7 +2,7 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-Клиент для Entware: один интерфейс **OpkgTun**, который KeeneticOS использует в приоритетах подключений и политиках маршрутизации. Настройки доступны на LAN-порту, вход — через сессию веб-админки Keenetic.
+Клиент для Entware: по интерфейсу **OpkgTun** на подключение, их KeeneticOS использует в приоритетах подключений и политиках маршрутизации. Настройки доступны на LAN-порту, вход — через сессию веб-админки Keenetic.
 
 Протокол: [docs/protocol_ru.md](../../docs/protocol_ru.md). Интеграция: [docs/keenetic_ru.md](../../docs/keenetic_ru.md). План: [PLAN.md](PLAN.md). UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Макет: [design/index.html](design/index.html).
 
@@ -12,8 +12,8 @@
 
 | На роутере | Роль |
 |------------|------|
-| loft (get / ws / h2 / quic / h3 / l3) | оверлей loft. Один OpkgTun. |
-| VLESS | Позже. Второй исходящий канал loft на случай, если loft фильтруют. |
+| loft (get / ws / h2 / quic / h3 / l3) | оверлей loft. Свой OpkgTun на каждое подключение. |
+| VLESS | Отдельное подключение со своим OpkgTun. |
 | SSTP, WireGuard, OpenVPN, IPsec, OpenConnect | Штатные средства KeeneticOS, не этот пакет. |
 
 Клиент **не** ставит маршрут по умолчанию: таблицей маршрутизации управляет NDM. IP-адреса фронтов остаются на маршруте через провайдера, иначе сессия зациклится.
