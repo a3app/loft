@@ -241,14 +241,3 @@ func TestMailOwnRec(t *testing.T) {
 		}
 	}
 }
-
-// TestShiftIDs: on a position-id provider (Namecheap) the panel's ids move
-// down past every deleted position below them.
-func TestShiftIDs(t *testing.T) {
-	ours := []ourRec{{ID: "0"}, {ID: "3"}, {ID: "7"}, {ID: "x"}}
-	shiftIDs(ours, []int{5, 1, 2})
-	got := []string{ours[0].ID, ours[1].ID, ours[2].ID, ours[3].ID}
-	if strings.Join(got, ",") != "0,1,4,x" {
-		t.Fatalf("%v", got)
-	}
-}

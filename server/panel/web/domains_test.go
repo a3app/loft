@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -249,5 +250,124 @@ func TestNamecheapRefusalNamesTheCause(t *testing.T) {
 	err := n.Check(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "account name, not the e-mail") {
 		t.Fatalf("err %v", err)
+	}
+}
+
+// fakeNamecheap is a Namecheap XML API for one zone that keeps HostIds the
+// way the real one does: a record written back unchanged by setHosts keeps
+// its HostId, a new record gets a fresh one.
+type fakeNamecheap struct {
+	mu    sync.Mutex
+	hosts []Record // ID is the HostId
+	next  int
+	sets  int
+}
+
+func (f *fakeNamecheap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch r.Form.Get("Command") {
+	case "namecheap.domains.dns.getHosts":
+		var b strings.Builder
+		b.WriteString(`<?xml version="1.0"?><ApiResponse Status="OK"><CommandResponse><DomainDNSGetHostsResult>`)
+		for _, h := range f.hosts {
+			fmt.Fprintf(&b, `<host HostId=%q Name=%q Type=%q Address=%q MXPref="%d" TTL="1799" />`, h.ID, h.Name, h.Type, h.Value, h.Priority)
+		}
+		b.WriteString(`</DomainDNSGetHostsResult></CommandResponse></ApiResponse>`)
+		io.WriteString(w, b.String())
+	case "namecheap.domains.dns.setHosts":
+		f.sets++
+		old := f.hosts
+		used := map[string]bool{}
+		var out []Record
+		for i := 1; r.Form.Get("HostName"+strconv.Itoa(i)) != ""; i++ {
+			k := strconv.Itoa(i)
+			h := Record{Name: r.Form.Get("HostName" + k), Type: r.Form.Get("RecordType" + k), Value: r.Form.Get("Address" + k)}
+			for _, o := range old {
+				if !used[o.ID] && o.Name == h.Name && o.Type == h.Type && o.Value == h.Value {
+					h.ID = o.ID
+					used[o.ID] = true
+					break
+				}
+			}
+			if h.ID == "" {
+				f.next++
+				h.ID = strconv.Itoa(900000 + f.next)
+			}
+			out = append(out, h)
+		}
+		f.hosts = out
+		io.WriteString(w, `<?xml version="1.0"?><ApiResponse Status="OK"></ApiResponse>`)
+	}
+}
+
+// TestNamecheapHostIDs: ids are HostIds, so deleting one record leaves the
+// ids of the others valid. With positions as ids (the old way), deleting
+// the first record made the third one's saved id point at the fourth.
+func TestNamecheapHostIDs(t *testing.T) {
+	fn := &fakeNamecheap{hosts: []Record{
+		{ID: "11", Type: "A", Name: "www", Value: "203.0.113.1"},
+		{ID: "12", Type: "A", Name: "a", Value: "203.0.113.2"},
+		{ID: "13", Type: "TXT", Name: "@", Value: "keep-me"},
+		{ID: "14", Type: "A", Name: "b", Value: "203.0.113.4"},
+	}}
+	ts := httptest.NewServer(fn)
+	defer ts.Close()
+	n := &Namecheap{User: "acct", Key: "k", ClientIP: "203.0.113.10", Base: ts.URL}
+	ctx := context.Background()
+	id, err := n.Create(ctx, "example.net", Record{Type: "TXT", Name: "_acme-challenge", Value: "token", TTL: 60})
+	if err != nil || id == "" || id == "11" {
+		t.Fatalf("create id %q err %v", id, err)
+	}
+	if err := n.Delete(ctx, "example.net", "11"); err != nil {
+		t.Fatal(err)
+	}
+	// The challenge created before that delete is still found by its id.
+	if err := n.Delete(ctx, "example.net", id); err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	if err := n.Update(ctx, "example.net", Record{ID: "14", Type: "A", Name: "b", Value: "203.0.113.40"}); err != nil {
+		t.Fatal(err)
+	}
+	recs, _ := n.Records(ctx, "example.net")
+	var got []string
+	for _, r := range recs {
+		got = append(got, r.Name+"="+r.Value)
+	}
+	if strings.Join(got, ",") != "a=203.0.113.2,@=keep-me,b=203.0.113.40" {
+		t.Fatalf("zone now %v", got)
+	}
+	if err := n.Delete(ctx, "example.net", "11"); err == nil {
+		t.Fatal("deleting a gone record must fail, not hit another one")
+	}
+}
+
+// TestReconcileOurs repairs saved ids that name no record: by type and
+// name when exactly one record matches, else the id is cleared.
+func TestReconcileOurs(t *testing.T) {
+	have := []Record{
+		{ID: "501", Type: "A", Name: "mail", Value: "203.0.113.1"},
+		{ID: "502", Type: "TXT", Name: "@", Value: "v=spf1 mx -all"},
+		{ID: "503", Type: "TXT", Name: "@", Value: "other"},
+		{ID: "504", Type: "MX", Name: "@", Value: "mail.example.net"},
+	}
+	z := &zoneRec{Ours: []ourRec{
+		{Type: "A", Name: "mail", ID: "3"}, // old position id
+		{Type: "TXT", Name: "@", ID: "4"},  // two TXT at @: cannot tell
+		{Type: "MX", Name: "@", ID: "504"}, // already right
+		{Type: "CAA", Name: "@", ID: "7"},  // gone
+	}}
+	if !z.reconcileOurs(have) {
+		t.Fatal("nothing changed")
+	}
+	want := []string{"501", "", "504", ""}
+	for i, o := range z.Ours {
+		if o.ID != want[i] {
+			t.Fatalf("ours %v", z.Ours)
+		}
+	}
+	if z.reconcileOurs(have) {
+		t.Fatal("second pass changed again")
 	}
 }

@@ -218,6 +218,7 @@ func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
 	if err != nil {
 		return 0, "DNS records not removed: " + err.Error()
 	}
+	z.reconcileOurs(have)
 	byID := map[string]Record{}
 	for _, rec := range have {
 		byID[rec.ID] = rec
@@ -235,6 +236,10 @@ func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
 		}
 		rec, ok := byID[o.ID]
 		switch {
+		case o.ID == "":
+			// Not found unambiguously (reconcileOurs): leave it be.
+			skipped++
+			keep = append(keep, o)
 		case !ok:
 		case rec.Type == o.Type && rec.Name == o.Name && mailOwnRec(rec.Type, fqdn(rec.Name, z.Name), rec.Value, d, true):
 			del = append(del, rec)
@@ -243,11 +248,6 @@ func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
 			keep = append(keep, o)
 		}
 	}
-	// Delete from the highest id down: on providers where the id is the
-	// record's position (Namecheap) a deletion moves every later record up
-	// by one, and this order keeps the ids still to delete valid.
-	sort.Slice(del, func(i, j int) bool { return recIDDesc(del[i], del[j]) })
-	var gone []int
 	removed := 0
 	note := ""
 	for _, rec := range del {
@@ -258,12 +258,6 @@ func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
 			continue
 		}
 		removed++
-		if n, err := strconv.Atoi(rec.ID); err == nil {
-			gone = append(gone, n)
-		}
-	}
-	if _, positional := api.(*Namecheap); positional {
-		shiftIDs(keep, gone)
 	}
 	z.Ours = keep
 	if note == "" && skipped > 0 {
@@ -297,25 +291,6 @@ func mailOwnRec(typ, name, value, d string, checkValue bool) bool {
 		return txt("v=DMARC1")
 	}
 	return false
-}
-
-// shiftIDs renumbers position ids in ours after the records at the
-// positions in gone were deleted: each id moves down by the number of
-// deleted positions below it.
-func shiftIDs(ours []ourRec, gone []int) {
-	for i := range ours {
-		n, err := strconv.Atoi(ours[i].ID)
-		if err != nil {
-			continue
-		}
-		below := 0
-		for _, g := range gone {
-			if g < n {
-				below++
-			}
-		}
-		ours[i].ID = strconv.Itoa(n - below)
-	}
 }
 
 // mailBox adds, changes or deletes a mailbox. A new password is hashed here,
@@ -806,6 +781,7 @@ func (s *Server) mailDNSCreate(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	z.reconcileOurs(have)
 	// Write each record, re-reading the provider's list after every change so
 	// the next decision sees it.
 	made := 0

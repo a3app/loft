@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -461,8 +462,13 @@ func (d *DigitalOcean) Delete(ctx context.Context, zone, id string) error {
 }
 
 // Namecheap is the Namecheap XML API: the user's API key, the API user, and
-// the server's public IP on the account's allowlist. It replaces a zone's
-// records as a whole (setHosts), so record IDs are positions in getHosts.
+// the server's public IP on the account's allowlist. It can only replace a
+// zone's records as a whole (setHosts), so every change reads the list,
+// edits it and writes it all back. A record's ID is Namecheap's HostId:
+// Namecheap keeps it for a record that is written back unchanged, so it
+// stays valid when other records come and go. (Earlier versions used the
+// record's position in the list, which moved whenever a record before it
+// was deleted; reconcileOurs repairs ids saved that way.)
 type Namecheap struct {
 	User, Key, ClientIP string
 	Base                string
@@ -478,6 +484,7 @@ type ncResponse struct {
 		Msg    string `xml:",chardata"`
 	} `xml:"Errors>Error"`
 	Hosts []struct {
+		HostID  string `xml:"HostId,attr"`
 		Name    string `xml:"Name,attr"`
 		Type    string `xml:"Type,attr"`
 		Address string `xml:"Address,attr"`
@@ -556,8 +563,9 @@ func (n *Namecheap) Zones(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
-// Records lists a zone's records. A record's id is its position in the
-// list, and TTL 1799 (Namecheap's automatic) is shown as 0.
+// Records lists a zone's records. A record's id is its HostId (a host
+// without one, which Namecheap does not send, gets "#" and its position),
+// and TTL 1799 (Namecheap's automatic) is shown as 0.
 func (n *Namecheap) Records(ctx context.Context, zone string) ([]Record, error) {
 	sld, tld := splitZone(zone)
 	r, err := n.call(ctx, "namecheap.domains.dns.getHosts", url.Values{"SLD": {sld}, "TLD": {tld}})
@@ -570,7 +578,11 @@ func (n *Namecheap) Records(ctx context.Context, zone string) ([]Record, error) 
 		if ttl == 1799 {
 			ttl = 0 // Namecheap's automatic
 		}
-		out = append(out, Record{ID: strconv.Itoa(i), Type: h.Type, Name: firstNonEmpty(h.Name, "@"), Value: h.Address, Priority: h.MXPref, TTL: ttl})
+		id := h.HostID
+		if id == "" {
+			id = "#" + strconv.Itoa(i)
+		}
+		out = append(out, Record{ID: id, Type: h.Type, Name: firstNonEmpty(h.Name, "@"), Value: h.Address, Priority: h.MXPref, TTL: ttl})
 	}
 	return out, nil
 }
@@ -599,42 +611,77 @@ func (n *Namecheap) set(ctx context.Context, zone string, recs []Record) error {
 	return err
 }
 
-// Create reads the zone, appends r and writes the whole zone back.
+// Create reads the zone, appends r and writes the whole zone back. Namecheap
+// gives the new record its HostId only when it saves it, so the zone is read
+// once more to find it: the record of r's type, name and value that was not
+// there before. If it cannot be told apart (an exact copy already existed),
+// the id is empty and the panel finds the record by type and name later.
 func (n *Namecheap) Create(ctx context.Context, zone string, r Record) (string, error) {
 	recs, err := n.Records(ctx, zone)
 	if err != nil {
 		return "", err
 	}
-	recs = append(recs, r)
-	return strconv.Itoa(len(recs) - 1), n.set(ctx, zone, recs)
+	before := map[string]bool{}
+	for _, x := range recs {
+		before[x.ID] = true
+	}
+	if err := n.set(ctx, zone, append(recs, r)); err != nil {
+		return "", err
+	}
+	after, err := n.Records(ctx, zone)
+	if err != nil {
+		return "", nil // written; only the id is unknown
+	}
+	for _, x := range after {
+		if !before[x.ID] && sameRecord(x, r) {
+			return x.ID, nil
+		}
+	}
+	return "", nil
 }
 
-// Update reads the zone, replaces the record at position r.ID and writes
-// the whole zone back. A position that no longer exists means the zone
-// changed since the page loaded.
+// sameRecord compares type, name and value the way Namecheap stores them:
+// names and hosts without a final dot and in lower case, TXT without quotes.
+func sameRecord(a, b Record) bool {
+	norm := func(v string) string {
+		return strings.TrimSuffix(strings.ToLower(strings.Trim(strings.TrimSpace(v), `"`)), ".")
+	}
+	return strings.EqualFold(a.Type, b.Type) && norm(firstNonEmpty(a.Name, "@")) == norm(firstNonEmpty(b.Name, "@")) && norm(a.Value) == norm(b.Value)
+}
+
+// find returns the position of the record with id in recs, or -1.
+func (n *Namecheap) find(recs []Record, id string) int {
+	return slices.IndexFunc(recs, func(x Record) bool { return x.ID == id })
+}
+
+// errNCChanged means the record the page or the panel knew is no longer in
+// the zone at Namecheap: someone changed the zone since.
+var errNCChanged = errors.New("the record changed at Namecheap: reload")
+
+// Update reads the zone, replaces the record with r.ID and writes the whole
+// zone back.
 func (n *Namecheap) Update(ctx context.Context, zone string, r Record) error {
 	recs, err := n.Records(ctx, zone)
 	if err != nil {
 		return err
 	}
-	i, err := strconv.Atoi(r.ID)
-	if err != nil || i < 0 || i >= len(recs) {
-		return errors.New("the record changed at Namecheap: reload")
+	i := n.find(recs, r.ID)
+	if i < 0 {
+		return errNCChanged
 	}
 	recs[i] = r
 	return n.set(ctx, zone, recs)
 }
 
-// Delete reads the zone, drops the record at position id and writes the
-// rest back.
+// Delete reads the zone, drops the record with id and writes the rest back.
 func (n *Namecheap) Delete(ctx context.Context, zone, id string) error {
 	recs, err := n.Records(ctx, zone)
 	if err != nil {
 		return err
 	}
-	i, err := strconv.Atoi(id)
-	if err != nil || i < 0 || i >= len(recs) {
-		return errors.New("the record changed at Namecheap: reload")
+	i := n.find(recs, id)
+	if i < 0 {
+		return errNCChanged
 	}
-	return n.set(ctx, zone, append(recs[:i], recs[i+1:]...))
+	return n.set(ctx, zone, slices.Delete(recs, i, i+1))
 }
