@@ -13,7 +13,7 @@ loft рассчитан на сети, где обычные VPN-протоко�
 
 Протокол **loft/1.0**. Ссылка **`loft://`**. В YAML `kind: loft`.
 
-В этом репозитории лежат открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.30`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
+В этом репозитории лежат открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.31`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
 
 ## Содержание
 
@@ -33,19 +33,19 @@ loft рассчитан на сети, где обычные VPN-протоко�
 
 ## Скачать
 
-Сборки опубликованы в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла указана версия (`loft-1.0.30-macos-arm64.dmg`).
+Сборки опубликованы в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла указана версия (`loft-1.0.31-macos-arm64.dmg`).
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS, приложение | [DMG](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-macos-x86_64.dmg) |
-| macOS, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-darwin-amd64.tar.gz) |
-| Linux, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-linux-amd64.tar.gz) |
-| Нода | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node-1.0.30-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node_1.0.30_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node-1.0.30-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node_1.0.30_amd64.deb) |
-| Панель | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel-1.0.30-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel_1.0.30_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel-1.0.30-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel_1.0.30_amd64.deb) |
-| Android | [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-android-tv.apk) | те же fat APK |
+| macOS, приложение | [DMG](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-macos-x86_64.dmg) |
+| macOS, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-darwin-amd64.tar.gz) |
+| Linux, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-linux-amd64.tar.gz) |
+| Нода | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node_1.0.31_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node_1.0.31_amd64.deb) |
+| Панель | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel_1.0.31_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel_1.0.31_amd64.deb) |
+| Android | [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android-tv.apk) | те же fat APK |
 | iOS | только исходники ([clients/iOS/](clients/iOS/)); в разработке и на публикации в App Store | в Dist нет |
 
-Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.30/loft-clients-1.0.30-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node-1.0.30-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel-1.0.30-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.30/loft-android-1.0.30-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления.
+Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления.
 
 ## Приложение
 

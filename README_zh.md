@@ -13,7 +13,7 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 
 协议 **loft/1.0**。分享链接 **`loft://`**。YAML 里 `kind: loft`。
 
-本仓库是开放规范，加上参考节点、网页面板和客户端（macOS 应用、Android 手机和电视、Linux / macOS CLI）。软件版本 `1.0.30`。第三方按 [docs/protocol_zh.md](docs/protocol_zh.md) 就能自己实现 loft。
+本仓库是开放规范，加上参考节点、网页面板和客户端（macOS 应用、Android 手机和电视、Linux / macOS CLI）。软件版本 `1.0.31`。第三方按 [docs/protocol_zh.md](docs/protocol_zh.md) 就能自己实现 loft。
 
 ## 目录
 
@@ -33,19 +33,19 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 
 ## 下载
 
-文件在 [最新 GitHub Release](https://github.com/a3app/loft/releases/latest)。文件名带版本（`loft-1.0.30-macos-arm64.dmg`）。
+文件在 [最新 GitHub Release](https://github.com/a3app/loft/releases/latest)。文件名带版本（`loft-1.0.31-macos-arm64.dmg`）。
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS 应用 | [DMG](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-macos-x86_64.dmg) |
-| macOS CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-darwin-amd64.tar.gz) |
-| Linux CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-linux-amd64.tar.gz) |
-| 节点 | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node-1.0.30-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node_1.0.30_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node-1.0.30-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node_1.0.30_amd64.deb) |
-| 面板 | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel-1.0.30-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel_1.0.30_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel-1.0.30-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel_1.0.30_amd64.deb) |
-| Android | [手机 APK](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-android.apk) · [电视 APK](https://github.com/a3app/loft/releases/download/v1.0.30/loft-1.0.30-android-tv.apk) | 同一套 fat APK |
+| macOS 应用 | [DMG](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-macos-x86_64.dmg) |
+| macOS CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-darwin-amd64.tar.gz) |
+| Linux CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-linux-amd64.tar.gz) |
+| 节点 | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node_1.0.31_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node_1.0.31_amd64.deb) |
+| 面板 | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel_1.0.31_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel_1.0.31_amd64.deb) |
+| Android | [手机 APK](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android.apk) · [电视 APK](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android-tv.apk) | 同一套 fat APK |
 | iOS | 只有源码（[clients/iOS/](clients/iOS/)）；开发中，正在上架 App Store | Dist 没有包 |
 
-校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.30/loft-clients-1.0.30-SHA256SUMS.txt) · [节点](https://github.com/a3app/loft/releases/download/v1.0.30/loft-node-1.0.30-SHA256SUMS.txt) · [面板](https://github.com/a3app/loft/releases/download/v1.0.30/loft-panel-1.0.30-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.30/loft-android-1.0.30-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。
+校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [节点](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [面板](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。
 
 ## 应用
 

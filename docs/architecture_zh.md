@@ -2,7 +2,7 @@
 
 [English](architecture.md) · [Русский](architecture_ru.md) · **中文**
 
-软件 1.0.30。协议 1.0（loft/1.0）。规范：[protocol_zh.md](protocol_zh.md)。运营：[guide_zh.md](guide_zh.md)。第一次读代码：[code-tour_zh.md](code-tour_zh.md)。
+软件 1.0.31。协议 1.0（loft/1.0）。规范：[protocol_zh.md](protocol_zh.md)。运营：[guide_zh.md](guide_zh.md)。第一次读代码：[code-tour_zh.md](code-tour_zh.md)。
 
 本文描述本仓库的 Go 树。第三方实现可以换目录结构，照样走协议。
 

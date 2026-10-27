@@ -2,7 +2,7 @@
 
 **English** · [Русский](architecture_ru.md) · [中文](architecture_zh.md)
 
-Software 1.0.30. Protocol 1.0 (loft/1.0). Spec: [protocol.md](protocol.md). Operation: [guide.md](guide.md). New to the code: [code-tour.md](code-tour.md).
+Software 1.0.31. Protocol 1.0 (loft/1.0). Spec: [protocol.md](protocol.md). Operation: [guide.md](guide.md). New to the code: [code-tour.md](code-tour.md).
 
 The Go tree in this repository is described. A third-party implementation MAY differ in layout and still speak the protocol.
 
