@@ -1,5 +1,11 @@
 package web
 
+// This file holds the DNS provider clients behind the Domains screen:
+// Cloudflare, DigitalOcean and Namecheap, each turned into the common
+// DNSProvider interface with records in one shared Record shape. A zone is
+// a domain the provider hosts (e.g. example.com). domains.go decides what
+// to create or change; acme.go uses these clients for DNS-01 TXT records.
+
 import (
 	"bytes"
 	"context"
@@ -50,6 +56,8 @@ type DNSProvider interface {
 // RecordTypes the panel edits.
 var RecordTypes = []string{"A", "AAAA", "CNAME", "MX", "TXT", "CAA", "SRV", "NS"}
 
+// fqdn turns a zone-relative name into a full one ("www" + "example.com" →
+// "www.example.com"; "@" or "" is the zone itself).
 func fqdn(name, zone string) string {
 	if name == "" || name == "@" {
 		return zone
@@ -57,6 +65,7 @@ func fqdn(name, zone string) string {
 	return name + "." + zone
 }
 
+// relName is the reverse of fqdn: it makes a full name relative to the zone.
 func relName(full, zone string) string {
 	full = strings.TrimSuffix(strings.ToLower(full), ".")
 	if full == zone {
@@ -65,12 +74,17 @@ func relName(full, zone string) string {
 	return strings.TrimSuffix(full, "."+zone)
 }
 
+// httpAPI is a small JSON-over-HTTPS client shared by the providers with a
+// REST API: a base URL and a function that adds the auth header.
 type httpAPI struct {
 	c    *http.Client
 	base string
 	auth func(*http.Request)
 }
 
+// do sends body as JSON and decodes the reply into out. 401/403 are
+// reported as a refused token, other error statuses with the provider's
+// own message (see apiMessage).
 func (a httpAPI) do(ctx context.Context, method, path string, body, out any) error {
 	var rd io.Reader
 	if body != nil {
@@ -105,6 +119,9 @@ func (a httpAPI) do(ctx context.Context, method, path string, body, out any) err
 	return nil
 }
 
+// apiMessage pulls a readable error out of a provider's error body:
+// Cloudflare's errors[0].message, DigitalOcean's message, or else the
+// first 200 bytes as they are.
 func apiMessage(b []byte) string {
 	var m struct {
 		Errors []struct {
@@ -134,10 +151,12 @@ type Cloudflare struct {
 	ids   map[string]string // zone → zone id
 }
 
+// api returns the HTTP client set up with the Cloudflare token.
 func (c *Cloudflare) api() httpAPI {
 	return httpAPI{c: c.HTTP, base: firstNonEmpty(c.Base, "https://api.cloudflare.com/client/v4"), auth: func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+c.Token) }}
 }
 
+// Check asks Cloudflare whether the token is valid.
 func (c *Cloudflare) Check(ctx context.Context) error {
 	var r struct {
 		Success bool `json:"success"`
@@ -151,6 +170,8 @@ func (c *Cloudflare) Check(ctx context.Context) error {
 	return nil
 }
 
+// Zones lists the account's zones (up to 50) and remembers their ids,
+// because every record call needs the zone id, not its name.
 func (c *Cloudflare) Zones(ctx context.Context) ([]string, error) {
 	var r struct {
 		Result []struct {
@@ -173,6 +194,7 @@ func (c *Cloudflare) Zones(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
+// zoneID returns the Cloudflare id of a zone, from the cache or by asking.
 func (c *Cloudflare) zoneID(ctx context.Context, zone string) (string, error) {
 	if id := c.ids[zone]; id != "" {
 		return id, nil
@@ -195,6 +217,8 @@ func (c *Cloudflare) zoneID(ctx context.Context, zone string) (string, error) {
 	return r.Result[0].ID, nil
 }
 
+// cfRecord is a record as the Cloudflare API sends and expects it. CAA and
+// SRV values go in Data as separate fields instead of one Content string.
 type cfRecord struct {
 	ID       string         `json:"id,omitempty"`
 	Type     string         `json:"type"`
@@ -205,6 +229,8 @@ type cfRecord struct {
 	Data     map[string]any `json:"data,omitempty"`
 }
 
+// toCF converts a panel Record to Cloudflare's form: full name, TTL 1 for
+// "automatic", and CAA/SRV values split into their fields.
 func toCF(zone string, r Record) cfRecord {
 	x := cfRecord{Type: r.Type, Name: fqdn(r.Name, zone), Content: r.Value, TTL: r.TTL}
 	if x.TTL == 0 {
@@ -231,6 +257,9 @@ func toCF(zone string, r Record) cfRecord {
 	return x
 }
 
+// Records lists a zone's records (up to 500) in the panel's form: relative
+// names, TTL 0 for automatic, CAA/SRV joined back into one value string,
+// TXT without surrounding quotes.
 func (c *Cloudflare) Records(ctx context.Context, zone string) ([]Record, error) {
 	id, err := c.zoneID(ctx, zone)
 	if err != nil {
@@ -270,6 +299,7 @@ func (c *Cloudflare) Records(ctx context.Context, zone string) ([]Record, error)
 	return out, nil
 }
 
+// Create adds a record and returns its new id.
 func (c *Cloudflare) Create(ctx context.Context, zone string, r Record) (string, error) {
 	id, err := c.zoneID(ctx, zone)
 	if err != nil {
@@ -286,6 +316,7 @@ func (c *Cloudflare) Create(ctx context.Context, zone string, r Record) (string,
 	return out.Result.ID, nil
 }
 
+// Update replaces the record with id r.ID.
 func (c *Cloudflare) Update(ctx context.Context, zone string, r Record) error {
 	id, err := c.zoneID(ctx, zone)
 	if err != nil {
@@ -294,6 +325,7 @@ func (c *Cloudflare) Update(ctx context.Context, zone string, r Record) error {
 	return c.api().do(ctx, "PUT", "/zones/"+id+"/dns_records/"+url.PathEscape(r.ID), toCF(zone, r), nil)
 }
 
+// Delete removes the record with id rid.
 func (c *Cloudflare) Delete(ctx context.Context, zone, rid string) error {
 	id, err := c.zoneID(ctx, zone)
 	if err != nil {
@@ -309,14 +341,17 @@ type DigitalOcean struct {
 	HTTP  *http.Client
 }
 
+// api returns the HTTP client set up with the DigitalOcean token.
 func (d *DigitalOcean) api() httpAPI {
 	return httpAPI{c: d.HTTP, base: firstNonEmpty(d.Base, "https://api.digitalocean.com/v2"), auth: func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+d.Token) }}
 }
 
+// Check proves the token works by reading the account.
 func (d *DigitalOcean) Check(ctx context.Context) error {
 	return d.api().do(ctx, "GET", "/account", nil, nil)
 }
 
+// Zones lists the account's domains (up to 200), sorted.
 func (d *DigitalOcean) Zones(ctx context.Context) ([]string, error) {
 	var r struct {
 		Domains []struct {
@@ -334,6 +369,8 @@ func (d *DigitalOcean) Zones(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
+// doRecord is a record as the DigitalOcean API sends and expects it; CAA
+// and SRV parts are separate fields.
 type doRecord struct {
 	ID       int    `json:"id,omitempty"`
 	Type     string `json:"type"`
@@ -347,6 +384,8 @@ type doRecord struct {
 	Tag      string `json:"tag,omitempty"`
 }
 
+// toDO converts a panel Record to DigitalOcean's form. DigitalOcean has no
+// "automatic" TTL, so TTL 0 becomes 1800 seconds.
 func toDO(r Record) doRecord {
 	x := doRecord{Type: r.Type, Name: firstNonEmpty(r.Name, "@"), Data: r.Value, TTL: r.TTL}
 	if x.TTL == 0 {
@@ -374,6 +413,8 @@ func toDO(r Record) doRecord {
 	return x
 }
 
+// Records lists a zone's records (up to 200) in the panel's form, joining
+// CAA and SRV parts back into one value string.
 func (d *DigitalOcean) Records(ctx context.Context, zone string) ([]Record, error) {
 	var r struct {
 		Records []doRecord `json:"domain_records"`
@@ -398,6 +439,7 @@ func (d *DigitalOcean) Records(ctx context.Context, zone string) ([]Record, erro
 	return out, nil
 }
 
+// Create adds a record and returns its new id.
 func (d *DigitalOcean) Create(ctx context.Context, zone string, r Record) (string, error) {
 	var out struct {
 		Record doRecord `json:"domain_record"`
@@ -408,10 +450,12 @@ func (d *DigitalOcean) Create(ctx context.Context, zone string, r Record) (strin
 	return strconv.Itoa(out.Record.ID), nil
 }
 
+// Update replaces the record with id r.ID.
 func (d *DigitalOcean) Update(ctx context.Context, zone string, r Record) error {
 	return d.api().do(ctx, "PUT", "/domains/"+url.PathEscape(zone)+"/records/"+url.PathEscape(r.ID), toDO(r), nil)
 }
 
+// Delete removes the record with the given id.
 func (d *DigitalOcean) Delete(ctx context.Context, zone, id string) error {
 	return d.api().do(ctx, "DELETE", "/domains/"+url.PathEscape(zone)+"/records/"+url.PathEscape(id), nil, nil)
 }
@@ -425,6 +469,8 @@ type Namecheap struct {
 	HTTP                *http.Client
 }
 
+// ncResponse is the part of a Namecheap XML reply the panel reads: the
+// status, errors, and the host or domain lists.
 type ncResponse struct {
 	Status string `xml:"Status,attr"`
 	Errors []struct {
@@ -443,6 +489,9 @@ type ncResponse struct {
 	} `xml:"CommandResponse>DomainGetListResult>Domain"`
 }
 
+// call runs one Namecheap API command with the account's credentials and
+// returns the parsed reply, or an error when its status is not OK. The
+// common "wrong user/key/API off" error gets a clearer hint.
 func (n *Namecheap) call(ctx context.Context, cmd string, extra url.Values) (ncResponse, error) {
 	v := url.Values{"ApiUser": {n.User}, "ApiKey": {n.Key}, "UserName": {n.User}, "ClientIp": {n.ClientIP}, "Command": {cmd}}
 	for k, x := range extra {
@@ -478,6 +527,8 @@ func (n *Namecheap) call(ctx context.Context, cmd string, extra url.Values) (ncR
 	return out, nil
 }
 
+// splitZone splits a zone at its first dot into the two parts Namecheap
+// wants: "example.co.uk" → "example", "co.uk".
 func splitZone(zone string) (sld, tld string) {
 	i := strings.IndexByte(zone, '.')
 	if i < 0 {
@@ -486,11 +537,13 @@ func splitZone(zone string) (sld, tld string) {
 	return zone[:i], zone[i+1:]
 }
 
+// Check proves the credentials and the IP allowlist work by listing domains.
 func (n *Namecheap) Check(ctx context.Context) error {
 	_, err := n.call(ctx, "namecheap.domains.getList", nil)
 	return err
 }
 
+// Zones lists the account's domains (up to 100).
 func (n *Namecheap) Zones(ctx context.Context) ([]string, error) {
 	r, err := n.call(ctx, "namecheap.domains.getList", url.Values{"PageSize": {"100"}})
 	if err != nil {
@@ -503,6 +556,8 @@ func (n *Namecheap) Zones(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
+// Records lists a zone's records. A record's id is its position in the
+// list, and TTL 1799 (Namecheap's automatic) is shown as 0.
 func (n *Namecheap) Records(ctx context.Context, zone string) ([]Record, error) {
 	sld, tld := splitZone(zone)
 	r, err := n.call(ctx, "namecheap.domains.dns.getHosts", url.Values{"SLD": {sld}, "TLD": {tld}})
@@ -520,6 +575,9 @@ func (n *Namecheap) Records(ctx context.Context, zone string) ([]Record, error) 
 	return out, nil
 }
 
+// set replaces ALL records of the zone with recs (setHosts has no way to
+// change just one). TTL 0 is sent as 1799 (automatic), anything else is
+// at least 60 seconds.
 func (n *Namecheap) set(ctx context.Context, zone string, recs []Record) error {
 	sld, tld := splitZone(zone)
 	v := url.Values{"SLD": {sld}, "TLD": {tld}}
@@ -541,6 +599,7 @@ func (n *Namecheap) set(ctx context.Context, zone string, recs []Record) error {
 	return err
 }
 
+// Create reads the zone, appends r and writes the whole zone back.
 func (n *Namecheap) Create(ctx context.Context, zone string, r Record) (string, error) {
 	recs, err := n.Records(ctx, zone)
 	if err != nil {
@@ -550,6 +609,9 @@ func (n *Namecheap) Create(ctx context.Context, zone string, r Record) (string, 
 	return strconv.Itoa(len(recs) - 1), n.set(ctx, zone, recs)
 }
 
+// Update reads the zone, replaces the record at position r.ID and writes
+// the whole zone back. A position that no longer exists means the zone
+// changed since the page loaded.
 func (n *Namecheap) Update(ctx context.Context, zone string, r Record) error {
 	recs, err := n.Records(ctx, zone)
 	if err != nil {
@@ -563,6 +625,8 @@ func (n *Namecheap) Update(ctx context.Context, zone string, r Record) error {
 	return n.set(ctx, zone, recs)
 }
 
+// Delete reads the zone, drops the record at position id and writes the
+// rest back.
 func (n *Namecheap) Delete(ctx context.Context, zone, id string) error {
 	recs, err := n.Records(ctx, zone)
 	if err != nil {

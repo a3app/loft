@@ -1,5 +1,14 @@
 package web
 
+// This file holds the Domains screen: DNS providers (accounts at
+// Cloudflare, DigitalOcean or Namecheap, see dns.go), zones (the domains
+// the panel manages, through a provider or "manual" = edited by hand at the
+// registrar), their records, and TLS certificates (issued by acme.go or
+// uploaded). Certificates for the node (loft-node, the server that clients
+// connect to) and the panel are installed by the helper (loft-panel-adm, via admproto);
+// extra ones are kept here for mail. It also keeps the panel's own A/AAAA
+// records in step when the server's addresses change.
+
 import (
 	"context"
 	"crypto/rand"
@@ -30,6 +39,7 @@ import (
 // domains.json in the panel's data directory (0600); the page never gets
 // a secret back.
 
+// dnsProv is one saved DNS provider account and its secret token.
 type dnsProv struct {
 	ID    string `json:"id"`
 	Kind  string `json:"kind"` // cloudflare | digitalocean | namecheap
@@ -37,6 +47,9 @@ type dnsProv struct {
 	User  string `json:"user,omitempty"` // Namecheap API user
 }
 
+// ourRec marks a record the panel created in a zone, so the page can show
+// it as the panel's and followIPs can update it. ID is the provider's
+// record id (empty for old entries, then type+name identify it).
 type ourRec struct {
 	Type string `json:"type"`
 	Name string `json:"name"`
@@ -44,6 +57,9 @@ type ourRec struct {
 	Auto bool   `json:"auto,omitempty"` // follows the server's addresses
 }
 
+// zoneRec is one zone on the Domains screen: who serves it, which records
+// are the panel's, the hand-kept records of a manual zone, and the
+// registration end date learnt from RDAP (the public whois successor).
 type zoneRec struct {
 	Name       string    `json:"name"`
 	Provider   string    `json:"provider"` // provider id or "manual"
@@ -53,6 +69,10 @@ type zoneRec struct {
 	RegChecked time.Time `json:"reg_checked,omitzero"`
 }
 
+// certRec is an extra certificate kept by the panel (today: for mail),
+// with its PEM chain and key so it can be renewed and handed to the mail
+// server. The node's and the panel's own certificates live in the settings
+// instead.
 type certRec struct {
 	ID        string    `json:"id"`
 	Names     []string  `json:"names"`
@@ -64,6 +84,7 @@ type certRec struct {
 	Key       string    `json:"key"`
 }
 
+// domainsFile is the whole content of domains.json.
 type domainsFile struct {
 	Providers []dnsProv `json:"providers"`
 	Zones     []zoneRec `json:"zones"`
@@ -71,6 +92,8 @@ type domainsFile struct {
 	IPs       []string  `json:"ips,omitempty"` // the addresses auto records point at
 }
 
+// domains is the in-memory copy of domains.json. mu guards f; the file is
+// read lazily on first use (load) and written after each change (save).
 type domains struct {
 	mu   sync.Mutex
 	path string
@@ -84,6 +107,8 @@ type domains struct {
 // SetDomainsFile is where zones and certificates are kept.
 func (s *Server) SetDomainsFile(dir string) { s.dom.path = filepath.Join(dir, "domains.json") }
 
+// load reads domains.json once; later calls do nothing. A missing or broken
+// file leaves the lists empty. The caller holds d.mu.
 func (d *domains) load() {
 	if d.read {
 		return
@@ -97,6 +122,8 @@ func (d *domains) load() {
 	}
 }
 
+// save writes domains.json atomically with mode 0600 (it holds tokens and
+// private keys). The caller holds d.mu.
 func (d *domains) save() error {
 	if d.path == "" {
 		return nil
@@ -105,6 +132,9 @@ func (d *domains) save() error {
 	return store.WriteAtomic(d.path, append(b, '\n'), 0o600)
 }
 
+// providerAPI builds the client for a saved provider. Namecheap also needs
+// the server's public IPv4, which must be on the account's API allowlist.
+// Tests replace the real APIs through s.dom.provider.
 func (s *Server) providerAPI(p dnsProv) DNSProvider {
 	if s.dom.provider != nil {
 		return s.dom.provider(p)
@@ -127,6 +157,8 @@ func (s *Server) providerAPI(p dnsProv) DNSProvider {
 	return nil
 }
 
+// zone finds a zone by exact name and returns a pointer into the list, or
+// nil. The caller holds d.mu.
 func (d *domains) zone(name string) *zoneRec {
 	for i := range d.f.Zones {
 		if d.f.Zones[i].Name == name {
@@ -136,6 +168,7 @@ func (d *domains) zone(name string) *zoneRec {
 	return nil
 }
 
+// prov finds a provider by id, or nil (also for "manual" zones).
 func (d *domains) prov(id string) *dnsProv {
 	for i := range d.f.Providers {
 		if d.f.Providers[i].ID == id {
@@ -145,6 +178,8 @@ func (d *domains) prov(id string) *dnsProv {
 	return nil
 }
 
+// remember records rec as one of the panel's own records in the zone,
+// updating the existing entry when it is already known.
 func (z *zoneRec) remember(rec Record, auto bool) {
 	for i, o := range z.Ours {
 		if o.ID == rec.ID || (o.ID == "" && o.Type == rec.Type && o.Name == rec.Name) {
@@ -168,8 +203,10 @@ func (d *domains) zoneFor(name string) *zoneRec {
 	return best
 }
 
+// zoneRe matches a DNS host name with at least two labels, like example.com.
 var zoneRe = regexp.MustCompile(`^(?i)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
 
+// provView is a provider as the page sees it: no token, only a hint.
 type provView struct {
 	ID    string   `json:"id"`
 	Kind  string   `json:"kind"`
@@ -178,6 +215,9 @@ type provView struct {
 	Zones []string `json:"zones"`
 }
 
+// zoneView is one zone in the zone list. Records is -1 for provider zones
+// because counting them would need an API call per zone; the page asks
+// for them when the zone is opened.
 type zoneView struct {
 	Name     string    `json:"name"`
 	Provider string    `json:"provider"`
@@ -186,6 +226,7 @@ type zoneView struct {
 	RegUntil time.Time `json:"reg_until,omitzero"`
 }
 
+// certView is one certificate in the list, without its private key.
 type certView struct {
 	ID     string    `json:"id"`
 	Names  []string  `json:"names"`
@@ -197,6 +238,8 @@ type certView struct {
 	Fixed  bool      `json:"fixed,omitempty"` // the node's or the panel's: issued in the wizard
 }
 
+// tokenHint shows the first and last 4 characters of a token, enough to
+// tell tokens apart without revealing them.
 func tokenHint(t string) string {
 	if len(t) < 8 {
 		return "…"
@@ -204,6 +247,8 @@ func tokenHint(t string) string {
 	return t[:4] + "…" + t[len(t)-4:]
 }
 
+// certInfo reads the first certificate of a PEM chain: expiry, issuer, key
+// type and DNS names. All are zero when the PEM cannot be parsed.
 func certInfo(fullchain string) (until time.Time, issuer, key string, names []string) {
 	blk, _ := pem.Decode([]byte(fullchain))
 	if blk == nil {
@@ -220,6 +265,9 @@ func certInfo(fullchain string) (until time.Time, issuer, key string, names []st
 	return c.NotAfter, firstOf(strings.Join(c.Issuer.Organization, ", "), c.Issuer.CommonName), key, c.DNSNames
 }
 
+// domainsView builds the Domains page data: providers, zones, certificates
+// (the node's and the panel's come from the settings, the extra ones from
+// domains.json) and the server's public addresses.
 func (s *Server) domainsView(ctx context.Context) map[string]any {
 	st, _ := s.Settings.Get()
 	s.dom.mu.Lock()
@@ -259,6 +307,8 @@ func (s *Server) domainsView(ctx context.Context) map[string]any {
 	return map[string]any{"providers": provs, "zones": zones, "certs": certs, "server_ips": append([]string{}, ipList2(ServerIPs())...), "node": st.Domain, "panel": firstOf(st.PanelDomain, st.Domain)}
 }
 
+// firstNames returns names, or just d when names is empty (settings saved
+// before certificate names were recorded).
 func firstNames(names []string, d string) []string {
 	if len(names) > 0 {
 		return names
@@ -266,10 +316,12 @@ func firstNames(names []string, d string) []string {
 	return []string{d}
 }
 
+// domainsGet serves the Domains page data.
 func (s *Server) domainsGet(w http.ResponseWriter, r *http.Request) {
 	ok(w, s.domainsView(r.Context()))
 }
 
+// newID makes a short random id such as "p-1a2b3c4d" for saved items.
 func newID(prefix string) string {
 	b := make([]byte, 4)
 	rand.Read(b)
@@ -367,6 +419,8 @@ func (s *Server) zoneSave(w http.ResponseWriter, r *http.Request) {
 		ok(w, struct{}{})
 		return
 	}
+	// 1. Check the name and, for a provider zone, that the provider really
+	// serves it (by listing its records).
 	if !zoneRe.MatchString(in.Name) {
 		fail(w, http.StatusBadRequest, "zone: a domain like example.com")
 		return
@@ -384,6 +438,7 @@ func (s *Server) zoneSave(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 2. Add the zone or move it to the new provider.
 	z := s.dom.zone(in.Name)
 	if z == nil {
 		s.dom.f.Zones = append(s.dom.f.Zones, zoneRec{Name: in.Name})
@@ -395,6 +450,9 @@ func (s *Server) zoneSave(w http.ResponseWriter, r *http.Request) {
 	if len(hosts) == 0 {
 		hosts = uniq([]string{st.Domain, st.PanelDomain})
 	}
+	// 3. Create the records asked for: A/AAAA for the server's names that
+	// fall inside this zone (marked automatic, so followIPs keeps them up to
+	// date), and a CAA record allowing only Let's Encrypt to issue.
 	var want []Record
 	if slices.Contains(in.Create, "addr") {
 		for _, host := range uniq(hosts) {
@@ -413,6 +471,7 @@ func (s *Server) zoneSave(w http.ResponseWriter, r *http.Request) {
 			errs = append(errs, rec.Type+" "+rec.Name+": "+err.Error())
 		}
 	}
+	// 4. Save, and look up the registration end date in the background.
 	s.dom.f.IPs = ipList2(ServerIPs())
 	if err := s.dom.save(); err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
@@ -426,6 +485,7 @@ func (s *Server) zoneSave(w http.ResponseWriter, r *http.Request) {
 	ok(w, struct{}{})
 }
 
+// uniq drops empty strings and duplicates, keeping the first order.
 func uniq(l []string) []string {
 	var out []string
 	for _, x := range l {
@@ -436,6 +496,7 @@ func uniq(l []string) []string {
 	return out
 }
 
+// ipList2 formats addresses as strings (for JSON and comparisons).
 func ipList2(ips []net.IP) []string {
 	var out []string
 	for _, ip := range ips {
@@ -475,6 +536,8 @@ func (s *Server) putRecord(ctx context.Context, z *zoneRec, api DNSProvider, rec
 	return nil
 }
 
+// recView is one record on the zone page, with flags for records the panel
+// made (Ours) and that follow the server's addresses (Auto).
 type recView struct {
 	Record
 	Ours bool `json:"ours,omitempty"`
@@ -669,6 +732,8 @@ func (s *Server) recordSave(w http.ResponseWriter, r *http.Request) {
 	ok(w, struct{}{})
 }
 
+// checkValue checks that a record's value fits its type (an IPv4 for A, a
+// host name for CNAME, and so on) before it is sent to a provider.
 func checkValue(r Record) error {
 	v := r.Value
 	switch r.Type {
@@ -704,7 +769,7 @@ func checkValue(r Record) error {
 	return nil
 }
 
-// FollowIPs points the panel's automatic records at the server's addresses
+// followIPs points the panel's automatic records at the server's addresses
 // when they change.
 func (s *Server) followIPs(ctx context.Context) {
 	ips := ipList2(ServerIPs())
@@ -721,6 +786,9 @@ func (s *Server) followIPs(ctx context.Context) {
 		}
 		return
 	}
+	// The addresses changed: in every provider zone, delete the automatic
+	// records and create new ones for the same names with the new addresses.
+	// Manual zones are skipped; the admin edits those at the registrar.
 	s.logf("server addresses changed %v → %v: updating the panel's DNS records", s.dom.f.IPs, ips)
 	s.sysEvent("dns-ips", strings.Join(ips, ", "))
 	for i := range s.dom.f.Zones {
@@ -807,6 +875,8 @@ func (s *Server) watchDomains(ctx context.Context) {
 			stale = append(stale, z.Name)
 		}
 	}
+	// Extra certificates (not uploaded ones) are renewed when less than 30
+	// days are left; a failed try waits 12 hours before the next one.
 	var due []certRec
 	if s.dom.tried == nil {
 		s.dom.tried = map[string]time.Time{}
@@ -940,6 +1010,8 @@ func (s *Server) useCert(ctx context.Context, by string, names []string, method,
 	return nil
 }
 
+// nameCovers reports whether a certificate for names is valid for host,
+// either by exact name or by a wildcard "*.zone" one level above host.
 func nameCovers(names []string, host string) bool {
 	for _, n := range names {
 		if n == host || (strings.HasPrefix(n, "*.") && strings.Count(host, ".") == strings.Count(n, ".") && strings.HasSuffix(host, n[1:])) {
@@ -949,6 +1021,8 @@ func nameCovers(names []string, host string) bool {
 	return false
 }
 
+// cleanNames normalises the names typed for a certificate (lower case, no
+// trailing dot, no duplicates; "*." allowed) and allows 1 to 50 of them.
 func cleanNames(in []string) ([]string, error) {
 	var out []string
 	for _, n := range in {
@@ -1037,6 +1111,8 @@ func (s *Server) certUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// certDelete forgets an extra certificate and refreshes the mail server's
+// certificate list.
 func (s *Server) certDelete(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ID string `json:"id"`

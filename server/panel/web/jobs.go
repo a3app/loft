@@ -1,5 +1,11 @@
 package web
 
+// This file runs the panel's own background jobs: work that outlives the
+// HTTP request that started it (node restarts, ACME orders, downloading a
+// backup copy). Jobs live only in memory, so a panel restart forgets them.
+// These are separate from the helper's jobs (admproto.Job), which run in
+// loft-panel-adm.
+
 import (
 	"context"
 	"crypto/rand"
@@ -23,6 +29,7 @@ type job struct {
 	ended  time.Time
 }
 
+// jobs is the table of running and recently finished jobs, by id.
 type jobs struct {
 	mu sync.Mutex
 	m  map[string]*job
@@ -31,6 +38,10 @@ type jobs struct {
 // jobTimeout bounds one job (two node restarts, an ACME order).
 const jobTimeout = 3 * time.Minute
 
+// startJob runs fn in the background (with jobTimeout) and answers the
+// request at once with 202 and {"job": id}. Whatever fn returns becomes the
+// job's result or error, read later with jobGet. Finished jobs older than
+// 10 minutes are cleaned up here, so the table stays small.
 func (s *Server) startJob(w http.ResponseWriter, user string, fn func(ctx context.Context) (any, error)) {
 	b := make([]byte, 12)
 	rand.Read(b)
@@ -67,6 +78,8 @@ func (s *Server) startJob(w http.ResponseWriter, user string, fn func(ctx contex
 	json.NewEncoder(w).Encode(map[string]string{"job": j.ID})
 }
 
+// jobGet serves GET /api/jobs/{id}. A user only sees their own jobs; any
+// other id answers 404 as if it did not exist.
 func (s *Server) jobGet(w http.ResponseWriter, r *http.Request) {
 	s.jobs.mu.Lock()
 	j, found := s.jobs.m[r.PathValue("id")]

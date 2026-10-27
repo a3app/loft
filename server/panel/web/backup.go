@@ -1,5 +1,12 @@
 package web
 
+// This file holds the panel's HTTP handlers and background loop for backups.
+// The panel runs without root, so the work that needs privileges (making a
+// copy, restoring it, writing a directory store) is done by the helper,
+// loft-panel-adm, reached through admproto calls (s.Adm(...).Call). The panel
+// keeps its own settings and history in backup.json; dest.go knows how to
+// talk to the S3 and SFTP stores; jobs.go runs the panel's own long jobs.
+
 import (
 	"bufio"
 	"context"
@@ -28,6 +35,10 @@ import (
 // carries it to S3 or SFTP and keeps the newest Keep there. A directory
 // store is written by the helper itself.
 
+// backupStore is one place where copies are kept, as saved in backup.json.
+// Which fields matter depends on Kind: S3 uses the endpoint/bucket/keys,
+// SFTP uses host/user/dir and pins the server's host key, and a "dir" store
+// is a directory on this server that only the helper writes to.
 type backupStore struct {
 	ID   string `json:"id"`
 	Kind string `json:"kind"` // s3 | sftp | dir
@@ -45,6 +56,10 @@ type backupStore struct {
 	HostKey string `json:"host_key,omitempty"`
 }
 
+// backupRun is one line of the backup history shown in the panel: a backup
+// or a restore, who started it, what it contained and how it ended. While
+// the helper is still working, Job holds the helper's job id so the run can
+// be followed (also after a panel restart).
 type backupRun struct {
 	ID     string    `json:"id"`
 	Kind   string    `json:"kind"` // backup | restore
@@ -60,6 +75,8 @@ type backupRun struct {
 	Upload bool      `json:"upload,omitempty"` // being carried to the store
 }
 
+// backupConf is the whole content of backup.json: the schedule, how many
+// copies to keep, the chosen store, the list of stores and the recent runs.
 type backupConf struct {
 	Schedule string        `json:"schedule"` // daily | weekly | off
 	Keep     int           `json:"keep"`
@@ -70,6 +87,8 @@ type backupConf struct {
 	LastAuto time.Time     `json:"last_auto,omitzero"`
 }
 
+// backups is the panel's in-memory backup state. mu guards every read-modify-
+// write of backup.json; busy makes sure only one followBackups loop runs.
 type backups struct {
 	mu   sync.Mutex
 	dir  string
@@ -79,8 +98,12 @@ type backups struct {
 // SetBackupDir is the panel's data directory: backup.json and backup/.
 func (s *Server) SetBackupDir(dir string) { s.bk.dir = dir }
 
+// backupPath returns name inside the panel's data directory.
 func (s *Server) backupPath(name string) string { return filepath.Join(s.bk.dir, name) }
 
+// loadBackup reads backup.json. A missing or broken file gives the defaults
+// (daily, keep 14, include mail), so the page always has something to show.
+// The caller holds s.bk.mu.
 func (s *Server) loadBackup() backupConf {
 	c := backupConf{Schedule: "daily", Keep: 14, Mail: true}
 	if b, err := os.ReadFile(s.backupPath("backup.json")); err == nil {
@@ -95,6 +118,9 @@ func (s *Server) loadBackup() backupConf {
 	return c
 }
 
+// saveBackup writes backup.json atomically (a crash cannot leave half a file)
+// and keeps only the 60 newest runs so the history does not grow forever.
+// The caller holds s.bk.mu.
 func (s *Server) saveBackup(c backupConf) error {
 	if len(c.Runs) > 60 {
 		c.Runs = c.Runs[:60]
@@ -103,6 +129,8 @@ func (s *Server) saveBackup(c backupConf) error {
 	return store.WriteAtomic(s.backupPath("backup.json"), append(b, '\n'), 0o600)
 }
 
+// store finds a store by id and returns a pointer into c.Stores (so the
+// caller can change it in place), or nil when there is none.
 func (c *backupConf) store(id string) *backupStore {
 	i := slices.IndexFunc(c.Stores, func(x backupStore) bool { return x.ID == id })
 	if i < 0 {
@@ -111,6 +139,9 @@ func (c *backupConf) store(id string) *backupStore {
 	return &c.Stores[i]
 }
 
+// destOf builds the client for a remote store (S3 or SFTP). SFTP logs in
+// with the panel's own SSH key. A "dir" store has no client here because
+// only the helper may write to it.
 func (s *Server) destOf(st backupStore) (dest, error) {
 	switch st.Kind {
 	case "s3":
@@ -132,6 +163,8 @@ type storeView struct {
 	Label     string `json:"label"`
 }
 
+// storeLabel is the short human name of a store, e.g. "bucket · host/prefix"
+// or "user@host:dir", used in the page and in the audit log.
 func storeLabel(st backupStore) string {
 	switch st.Kind {
 	case "s3":
@@ -143,6 +176,10 @@ func storeLabel(st backupStore) string {
 	return st.Dir
 }
 
+// backupGet returns everything the Backups page shows: settings, stores
+// (without secret keys), history, the helper's view (recovery key, copies on
+// this server), the panel's SSH public key to add on an SFTP server, and the
+// helper's current job when it is a backup or a restore.
 func (s *Server) backupGet(w http.ResponseWriter, r *http.Request) {
 	s.bk.mu.Lock()
 	c := s.loadBackup()
@@ -172,6 +209,7 @@ func (s *Server) backupGet(w http.ResponseWriter, r *http.Request) {
 	ok(w, out)
 }
 
+// hostName is the panel's domain from the settings (may be empty).
 func (s *Server) hostName() string {
 	st, _ := s.Settings.Get()
 	return st.Domain
@@ -223,6 +261,9 @@ func (s *Server) backupPhrase(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]string{"phrase": phrase})
 }
 
+// cleanStore tidies a store sent by the browser (trims spaces, adds https://
+// to a bare S3 endpoint, splits "bucket/path") and rejects one that is
+// missing required fields or holds whitespace. It does not contact the store.
 func cleanStore(in backupStore) (backupStore, error) {
 	t := strings.TrimSpace
 	in.Endpoint, in.Bucket, in.Prefix, in.AccessKey, in.Region = t(in.Endpoint), t(in.Bucket), strings.Trim(t(in.Prefix), "/"), t(in.AccessKey), t(in.Region)
@@ -296,6 +337,8 @@ func (s *Server) backupStoreSave(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "S3 needs the secret key")
 		return
 	}
+	// Contact the store. A new SFTP host key is learnt here (pin) and an S3
+	// region is taken from the store's reply, so both are saved below.
 	ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
 	defer cancel()
 	// Every store is checked by writing to it before it is saved.
@@ -331,6 +374,7 @@ func (s *Server) backupStoreSave(w http.ResponseWriter, r *http.Request) {
 		ok(w, map[string]string{"host_key": st.HostKey})
 		return
 	}
+	// Save: a new store gets an id; the first store becomes the default.
 	auditTarget(r, storeLabel(st))
 	s.bk.mu.Lock()
 	defer s.bk.mu.Unlock()
@@ -397,6 +441,7 @@ func (s *Server) startBackup(ctx context.Context, by string, manual bool) (backu
 	return run, nil
 }
 
+// backupRunNow is the "Back up now" button: it starts a manual backup.
 func (s *Server) backupRunNow(w http.ResponseWriter, r *http.Request) {
 	run, err := s.startBackup(r.Context(), userOf(r).Login, true)
 	if err != nil {
@@ -422,6 +467,7 @@ func (s *Server) followBackups(ctx context.Context) {
 		s.bk.mu.Lock()
 		c := s.loadBackup()
 		s.bk.mu.Unlock()
+		// 1. Take the next run still waiting for its helper job; stop when none.
 		i := slices.IndexFunc(c.Runs, func(x backupRun) bool { return x.Job != "" })
 		if i < 0 {
 			return
@@ -436,6 +482,9 @@ func (s *Server) followBackups(ctx context.Context) {
 			}
 			continue
 		}
+		// 2. Still running: poll again shortly. Otherwise record how it ended.
+		// The helper runs one job at a time, so a different job id means ours
+		// was replaced.
 		if j.ID == run.Job && j.State == "running" {
 			time.Sleep(2 * time.Second)
 			continue
@@ -456,6 +505,8 @@ func (s *Server) followBackups(ctx context.Context) {
 			}
 			run.OK = true
 		}
+		// 3. A finished backup for a remote store is uploaded now; Upload marks
+		// the run as "being carried" so the page can show it.
 		if run.OK && run.Kind == "backup" {
 			if st := c.store(run.Store); st != nil && st.Kind != "dir" {
 				run.Upload = true
@@ -467,6 +518,7 @@ func (s *Server) followBackups(ctx context.Context) {
 			}
 		}
 		s.putRun(run)
+		// 4. Tell the admin when a scheduled backup failed (nobody is watching it).
 		if !run.OK && run.By == "schedule" {
 			st, _ := s.Settings.Get()
 			if eventOn(st, EventBackup) {
@@ -476,6 +528,8 @@ func (s *Server) followBackups(ctx context.Context) {
 	}
 }
 
+// putRun replaces the saved run with the same id, so the history shows the
+// latest state of a run while it is being followed.
 func (s *Server) putRun(run backupRun) {
 	s.bk.mu.Lock()
 	defer s.bk.mu.Unlock()
@@ -535,6 +589,9 @@ func (s *Server) watchBackups(ctx context.Context) {
 	if c.Schedule == "off" {
 		return
 	}
+	// The due time is today at 04:00 (for weekly: last Sunday at 04:00). A run
+	// starts only within 6 hours after it and only if none ran since, so a panel
+	// that was down at 04:00 still catches up the same morning.
 	now := time.Now()
 	due := time.Date(now.Year(), now.Month(), now.Day(), 4, 0, 0, 0, time.Local)
 	if c.Schedule == "weekly" {
@@ -582,6 +639,8 @@ func (s *Server) backupFetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auditSkip(r)
+	// A remote copy is downloaded in a panel job: it is written to a ".part"
+	// file and renamed at the end, so a broken download never looks like a copy.
 	stc := *st
 	s.startJob(w, userOf(r).Login, func(ctx context.Context) (any, error) {
 		d, err := s.destOf(stc)
@@ -637,6 +696,8 @@ func (s *Server) backupUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	dir := s.backupPath("backup")
 	os.MkdirAll(dir, 0o700)
+	// Stream to a temporary file, then rename to upload.lpbak and read its
+	// header so the page can show where and when the copy was made.
 	tmp := filepath.Join(dir, ".upload.part")
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {

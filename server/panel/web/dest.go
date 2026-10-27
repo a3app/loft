@@ -1,5 +1,11 @@
 package web
 
+// This file holds the clients for remote backup stores: S3 (any S3-compatible
+// service, signed by hand with AWS Signature V4, no SDK) and SFTP (logged in
+// with the panel's own SSH key). backup.go uses them through the dest
+// interface to upload, list, fetch and prune copies. It also has the name
+// checks that keep a copy's file name from escaping its directory.
+
 import (
 	"context"
 	"crypto/ed25519"
@@ -33,6 +39,9 @@ import (
 // Stores for copies the panel carries away itself: S3 and SFTP. A directory
 // on the server is the helper's (root writes it), not here.
 
+// dest is what backup.go needs from a remote store. Copies are addressed
+// by file name only; each store decides where under its bucket or directory
+// they go.
 type dest interface {
 	Check(ctx context.Context) error // writes and removes a probe
 	Put(ctx context.Context, name string, body io.Reader, size int64) error
@@ -41,6 +50,9 @@ type dest interface {
 	Delete(ctx context.Context, name string) error
 }
 
+// copyRe matches the file name of a backup copy ("a copy"):
+// loft-<host>-<YYYYMMDD>-<HHMMSS>[-before-restore].lpbak. Anything else in a
+// store is ignored, and names from the browser must match it.
 var copyRe = regexp.MustCompile(`^loft-[a-z0-9.-]{1,100}-\d{8}-\d{6}(-before-restore)?\.lpbak$`)
 
 // copyIn maps a copy's name onto a path inside dir. The name must be a
@@ -83,6 +95,9 @@ func fileIn(dir, name string) (string, error) {
 
 /* ── S3 ── */
 
+// s3dest talks to one S3 bucket. path tells how the bucket is addressed:
+// in the URL path (MinIO and most S3 clones) or as part of the host name
+// (Amazon itself). region may be corrected from the server's answer.
 type s3dest struct {
 	st     backupStore
 	scheme string
@@ -101,6 +116,11 @@ var (
 	s3RegionRe = regexp.MustCompile(`^[a-z0-9-]+$`)
 )
 
+// newS3 checks a store's S3 settings and builds its client. The endpoint is
+// admin input, so it is validated strictly and the HTTP client neither
+// follows redirects nor uses a proxy, and dials only through s3Dial (see
+// s3DialIP). For an *.amazonaws.com endpoint the region is read from the
+// host name and the bucket goes into the host.
 func newS3(st backupStore) (*s3dest, error) {
 	if st.AccessKey == "" || st.SecretKey == "" || st.Bucket == "" {
 		return nil, errors.New("S3 needs an address, a bucket and both keys")
@@ -158,6 +178,9 @@ func s3DialIP(ip net.IP) bool {
 	return (ip.IsGlobalUnicast() || ip.IsLoopback() || ip.IsPrivate()) && !ip.IsLinkLocalUnicast() && !ip.IsMulticast() && !ip.IsUnspecified()
 }
 
+// s3Dial resolves the S3 host itself and connects only to addresses that
+// s3DialIP allows, so a DNS name cannot point the panel at a forbidden
+// address such as the cloud metadata service.
 func s3Dial(ctx context.Context, network, addr string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -186,6 +209,7 @@ func s3Dial(ctx context.Context, network, addr string) (net.Conn, error) {
 	return nil, last
 }
 
+// key is the object key for a copy: the store's prefix, a slash, the name.
 func (d *s3dest) key(name string) string {
 	if p := strings.Trim(d.st.Prefix, "/"); p != "" {
 		return p + "/" + name
@@ -193,6 +217,8 @@ func (d *s3dest) key(name string) string {
 	return name
 }
 
+// reqURL builds the request URL for an object key (empty key: the bucket
+// itself), with the bucket in the path or in the host as d.path says.
 func (d *s3dest) reqURL(key string, q url.Values) url.URL {
 	u := url.URL{Scheme: d.scheme, Host: d.host}
 	var segs []string
@@ -224,6 +250,11 @@ func (d *s3dest) reqURL(key string, q url.Values) url.URL {
 // (AuthorizationHeaderMalformed names it).
 var wrongRegion = regexp.MustCompile(`expecting '([a-z0-9-]+)'`)
 
+// do sends one signed S3 request and returns the response for any 2xx
+// status (the caller closes the body). On an error status it returns the
+// S3 error text. When the server says the request was signed for the wrong
+// region, do switches to the region it names and retries once, but only
+// when there is no body to resend.
 func (d *s3dest) do(ctx context.Context, method, key string, q url.Values, body io.Reader, size int64) (*http.Response, error) {
 	for try := 0; ; try++ {
 		u := d.reqURL(key, q)
@@ -253,6 +284,8 @@ func (d *s3dest) do(ctx context.Context, method, key string, q url.Values, body 
 	}
 }
 
+// s3Reason turns an S3 error body (XML with Code and Message) into a short
+// readable reason; non-XML bodies are returned as they are.
 func s3Reason(raw []byte) string {
 	var e struct {
 		Code    string `xml:"Code"`
@@ -294,12 +327,15 @@ func (d *s3dest) sign(req *http.Request, q url.Values) {
 		d.st.AccessKey, scope, strings.Join(names, ";"), hex.EncodeToString(mac(k, toSign))))
 }
 
+// mac is HMAC-SHA256, the building block of the Signature V4 key chain.
 func mac(key []byte, data string) []byte {
 	h := hmac.New(sha256.New, key)
 	h.Write([]byte(data))
 	return h.Sum(nil)
 }
 
+// Check proves the store works: it lists the bucket, writes a small probe
+// object and removes it again.
 func (d *s3dest) Check(ctx context.Context) error {
 	// A listing first: it carries no body, so a wrong region is learnt
 	// from the answer and the probe below is signed right.
@@ -320,6 +356,7 @@ func (d *s3dest) Check(ctx context.Context) error {
 	return nil
 }
 
+// Put uploads a copy in a single PUT request, which S3 limits to 5 GB.
 func (d *s3dest) Put(ctx context.Context, name string, body io.Reader, size int64) error {
 	if size > 5<<30 {
 		return errors.New("the copy is over 5 GB, the most one S3 upload takes")
@@ -335,6 +372,7 @@ func (d *s3dest) Put(ctx context.Context, name string, body io.Reader, size int6
 	return resp.Body.Close()
 }
 
+// Get opens a copy for download; the caller closes it.
 func (d *s3dest) Get(ctx context.Context, name string) (io.ReadCloser, error) {
 	resp, err := d.do(ctx, http.MethodGet, d.key(name), nil, nil, 0)
 	if err != nil {
@@ -343,6 +381,7 @@ func (d *s3dest) Get(ctx context.Context, name string) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
+// Delete removes one copy from the bucket.
 func (d *s3dest) Delete(ctx context.Context, name string) error {
 	resp, err := d.do(ctx, http.MethodDelete, d.key(name), nil, nil, 0)
 	if err != nil {
@@ -351,6 +390,9 @@ func (d *s3dest) Delete(ctx context.Context, name string) error {
 	return resp.Body.Close()
 }
 
+// List returns the copies under the store's prefix, newest first (the name
+// ends in the date, so sorting by name sorts by time). It follows S3's
+// continuation tokens because one listing returns at most 1000 objects.
 func (d *s3dest) List(ctx context.Context) ([]admproto.BackupFile, error) {
 	out := []admproto.BackupFile{}
 	token := ""
@@ -417,6 +459,7 @@ func (s *Server) sftpKey() (ssh.Signer, error) {
 	return ssh.NewSignerFromKey(priv)
 }
 
+// sftpDest is a directory on a remote SSH server, reached over SFTP.
 type sftpDest struct {
 	st     backupStore
 	signer ssh.Signer
@@ -425,6 +468,8 @@ type sftpDest struct {
 	pin func(fp string)
 }
 
+// addr is the store's host with port 22 added when none (or a bad one) is
+// given.
 func (d *sftpDest) addr() string {
 	h, p, err := net.SplitHostPort(d.st.Host)
 	if err != nil {
@@ -436,6 +481,11 @@ func (d *sftpDest) addr() string {
 	return d.st.Host
 }
 
+// dial opens an SSH connection with the panel's key and starts SFTP on it.
+// The server's host key is trusted on first use: the first connection
+// records its fingerprint (through pin), later ones must match it. That
+// stops a server that took over the address from receiving the copies.
+// The caller closes both clients.
 func (d *sftpDest) dial(ctx context.Context) (*ssh.Client, *sftp.Client, error) {
 	cfg := &ssh.ClientConfig{User: d.st.User, Auth: []ssh.AuthMethod{ssh.PublicKeys(d.signer)}, Timeout: 20 * time.Second,
 		HostKeyCallback: func(_ string, _ net.Addr, k ssh.PublicKey) error {
@@ -470,8 +520,11 @@ func (d *sftpDest) dial(ctx context.Context) (*ssh.Client, *sftp.Client, error) 
 	return cli, fs, nil
 }
 
+// dir is the store's directory; "." (the login directory) when empty.
 func (d *sftpDest) dir() string { return firstOf(strings.TrimRight(d.st.Dir, "/"), ".") }
 
+// Check proves the store works: it logs in, creates the directory if
+// needed, writes a probe file and removes it.
 func (d *sftpDest) Check(ctx context.Context) error {
 	cli, fs, err := d.dial(ctx)
 	if err != nil {
@@ -493,6 +546,8 @@ func (d *sftpDest) Check(ctx context.Context) error {
 	return nil
 }
 
+// Put uploads to "<name>.part" and renames it at the end, so a broken upload
+// never looks like a finished copy.
 func (d *sftpDest) Put(ctx context.Context, name string, body io.Reader, _ int64) error {
 	cli, fs, err := d.dial(ctx)
 	if err != nil {
@@ -522,12 +577,15 @@ func (d *sftpDest) Put(ctx context.Context, name string, body io.Reader, _ int64
 	return fs.Rename(tmp, final)
 }
 
+// sftpFile is a remote file being read that also owns its SFTP and SSH
+// connections, so closing the file closes them too.
 type sftpFile struct {
 	*sftp.File
 	fs  *sftp.Client
 	cli *ssh.Client
 }
 
+// Close closes the file, then the SFTP session and the SSH connection.
 func (f *sftpFile) Close() error {
 	err := f.File.Close()
 	f.fs.Close()
@@ -535,6 +593,7 @@ func (f *sftpFile) Close() error {
 	return err
 }
 
+// Get opens a copy for download; closing it ends the connection.
 func (d *sftpDest) Get(ctx context.Context, name string) (io.ReadCloser, error) {
 	cli, fs, err := d.dial(ctx)
 	if err != nil {
@@ -549,6 +608,8 @@ func (d *sftpDest) Get(ctx context.Context, name string) (io.ReadCloser, error) 
 	return &sftpFile{File: f, fs: fs, cli: cli}, nil
 }
 
+// List returns the copies in the directory, newest first. A directory that
+// cannot be read (for example, not created yet) counts as empty.
 func (d *sftpDest) List(ctx context.Context) ([]admproto.BackupFile, error) {
 	cli, fs, err := d.dial(ctx)
 	if err != nil {
@@ -570,6 +631,7 @@ func (d *sftpDest) List(ctx context.Context) ([]admproto.BackupFile, error) {
 	return out, nil
 }
 
+// Delete removes one copy from the directory.
 func (d *sftpDest) Delete(ctx context.Context, name string) error {
 	cli, fs, err := d.dial(ctx)
 	if err != nil {
