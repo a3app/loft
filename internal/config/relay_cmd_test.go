@@ -45,4 +45,15 @@ func TestListsFile(t *testing.T) {
 	if _, err := LoadLists(p); err == nil {
 		t.Fatal("bad line parsed")
 	}
+	os.WriteFile(p, []byte("@ @label RU direct\nru @dir direct\nru @label Russia\nru .yandex.ru\n"), 0o644)
+	got, err = LoadLists(p)
+	if err != nil || got["@"][0] != "@label RU direct" || got["ru"][0] != "@dir direct" || got["ru"][1] != "@label Russia" || got["ru"][2] != ".yandex.ru" {
+		t.Fatalf("meta %v %v", got, err)
+	}
+	round := RenderLists(got)
+	os.WriteFile(p, []byte(round), 0o644)
+	got2, err := LoadLists(p)
+	if err != nil || got2["@"][0] != "@label RU direct" || got2["ru"][1] != "@label Russia" {
+		t.Fatalf("round-trip %v %v\n%s", got2, err, round)
+	}
 }

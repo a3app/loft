@@ -417,8 +417,9 @@ func RenderCommands(c ServerConfig) string {
 	return b.String()
 }
 
-// LoadLists reads lists.conf: "NAME ENTRY" per line (domain, .suffix or
-// CIDR), # comments. A missing file is no lists.
+// LoadLists reads lists.conf: first token is the list name, the rest of
+// the line is the entry (domain, .suffix, CIDR, or @dir/@label/@dns/@name
+// so labels may contain spaces). # comments. A missing file is no lists.
 func LoadLists(path string) (map[string][]string, error) {
 	b, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -433,11 +434,11 @@ func LoadLists(path string) (map[string][]string, error) {
 		if ln == "" || strings.HasPrefix(ln, "#") {
 			continue
 		}
-		f := strings.Fields(ln)
-		if len(f) != 2 {
+		name, rest, ok := strings.Cut(ln, " ")
+		if !ok || name == "" || strings.TrimSpace(rest) == "" {
 			return nil, fmt.Errorf("%s line %d: NAME ENTRY", path, i+1)
 		}
-		m[f[0]] = append(m[f[0]], f[1])
+		m[name] = append(m[name], strings.TrimSpace(rest))
 	}
 	return m, nil
 }
@@ -450,7 +451,7 @@ func RenderLists(m map[string][]string) string {
 	}
 	sort.Strings(names)
 	var b strings.Builder
-	b.WriteString("# Address lists the node signs and serves: NAME ENTRY (domain, .suffix, CIDR).\n")
+	b.WriteString("# Address lists the node signs and serves: NAME ENTRY (domain, .suffix, CIDR, @dir/@label/@dns/@name). Reserved name @ is the profile header.\n")
 	for _, n := range names {
 		for _, e := range m[n] {
 			fmt.Fprintf(&b, "%s %s\n", n, e)
