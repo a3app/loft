@@ -45,7 +45,7 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 | Android | [手机 APK](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android.apk) · [电视 APK](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android-tv.apk) | 同一套 fat APK |
 | iOS | 只有源码（[clients/iOS/](clients/iOS/)）；开发中，正在上架 App Store | Dist 没有包 |
 
-校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [节点](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [面板](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。
+校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [节点](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [面板](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`、`loft-reach`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。
 
 ## 应用
 
@@ -112,7 +112,7 @@ docs/brand        标志和图标
 internal/         wire, mux, crypto, transport, overlay
 server/           loft-node（控制器或中继）
 server/panel      loft-panel 网页面板
-clients/go        loft, loft-front, loft-probe
+clients/go        loft, loft-front, loft-probe, loft-bench, loft-reach
 clients/macOS     菜单栏应用（拉起 loft-front）
 clients/Keenetic  Entware / OpkgTun（方案和模型）
 clients/MikroTik  RouterOS 7 容器（镜像 + .rsc）

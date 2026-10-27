@@ -406,6 +406,14 @@ go test ./internal/wire ./internal/crypto ./internal/mux ./internal/netconf ./in
 
 Тесты протокола покрывают кадры, Hello/Status, подмену roster, списки и флот. Тесты транспорта — decoy `session_id`, запрос roster и политику оверлея. Mask на TCP loopback **может** пропускаться на части хостов. `make test` также запускает `server/debian/install_os_test.sh`.
 
+**Доступность Tor.** `loft-reach` (`make reach`) проверяет, может ли Tor дотянуться до своей сети с текущей линии: без мостов, через каждый из встроенных мостов Tor Browser (obfs4, snowflake, meek, ...), через мосты из файла (`-bridges`) и через запущенный клиент loft (`-loft-socks`, по умолчанию `127.0.0.1:1080`). Каждый случай запускает свой tor с пустой папкой данных, ждёт `Bootstrapped 100%` и спрашивает check.torproject.org, вышел ли запрос из Tor. tor и транспорты берутся из Tor Browser (`-tor-browser`, по умолчанию ищется в обычных местах установки). Результаты — `loft-reach-<время UTC>/report.md` и `logs/<случай>.log`; IP-адреса, отпечатки и сертификаты мостов и домашняя папка в них заменены.
+
+```bash
+loft-reach -network "МТС мобильный 4G" -place Москва
+loft-reach -cases direct,builtin:obfs4,loft -timeout 5m
+loft-reach -list
+```
+
 ---
 
 ## 12. GitHub Actions

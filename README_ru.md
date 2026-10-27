@@ -45,7 +45,7 @@ loft рассчитан на сети, где обычные VPN-протоко�
 | Android | [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android-tv.apk) | те же fat APK |
 | iOS | только исходники ([clients/iOS/](clients/iOS/)); в разработке и на публикации в App Store | в Dist нет |
 
-Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления.
+Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`, `loft-reach`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления.
 
 ## Приложение
 
@@ -112,7 +112,7 @@ docs/brand        логотип и иконки
 internal/         протокол, mux, crypto, транспорт, оверлей
 server/           loft-node (controller или relay)
 server/panel      веб-панель loft-panel
-clients/go        loft, loft-front, loft-probe
+clients/go        loft, loft-front, loft-probe, loft-bench, loft-reach
 clients/macOS     приложение в строке меню (запускает loft-front)
 clients/Keenetic  Entware / OpkgTun (план и макет)
 clients/MikroTik  контейнер RouterOS 7 (образ + .rsc)

@@ -45,7 +45,7 @@ Binaries are published in the [latest GitHub Release](https://github.com/a3app/l
 | Android | [phone APK](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android.apk) · [TV APK](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android-tv.apk) | same fat APKs |
 | iOS | source only ([clients/iOS/](clients/iOS/)); in development and App Store publication | no Dist binary |
 
-Checksums: [clients](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [node](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [panel](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt). The macOS DMG is the menu-bar application (ad-hoc signed). CLI archives contain `loft`, `loft-front`, `loft-probe`, and `loft-bench`. GitHub Android is sideload and self-updates from Dist; Play builds compile the updater out.
+Checksums: [clients](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [node](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [panel](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt). The macOS DMG is the menu-bar application (ad-hoc signed). CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`, and `loft-reach`. GitHub Android is sideload and self-updates from Dist; Play builds compile the updater out.
 
 ## App
 
@@ -112,7 +112,7 @@ docs/brand        mark and icons
 internal/         wire, mux, crypto, transport, overlay
 server/           loft-node (controller or relay)
 server/panel      loft-panel web admin
-clients/go        loft, loft-front, loft-probe
+clients/go        loft, loft-front, loft-probe, loft-bench, loft-reach
 clients/macOS     menu-bar app (launches loft-front)
 clients/Keenetic  Entware / OpkgTun (plan and mock)
 clients/MikroTik  RouterOS 7 container (image + .rsc)

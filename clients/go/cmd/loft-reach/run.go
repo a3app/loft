@@ -118,7 +118,7 @@ func runCase(ctx context.Context, env *torEnv, c torCase, timeout time.Duration,
 		sc := bufio.NewScanner(stdout)
 		sc.Buffer(make([]byte, 64<<10), 1<<20)
 		for sc.Scan() {
-			line := redact(sc.Text())
+			line := strings.ReplaceAll(redact(sc.Text()), tmp, "<tmp>")
 			at := time.Since(start)
 			mu.Lock()
 			fmt.Fprintf(&log, "+%7.1fs %s\n", at.Seconds(), line)

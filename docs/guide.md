@@ -406,6 +406,14 @@ go test ./internal/wire ./internal/crypto ./internal/mux ./internal/netconf ./in
 
 Wire tests cover frames, Hello/Status, roster tamper, lists, fleet. Transport tests cover decoy session_id, roster fetch, overlay policy. Mask on TCP loopback MAY skip on some hosts. `make test` also runs `server/debian/install_os_test.sh`.
 
+**Tor reachability.** `loft-reach` (`make reach`) checks whether Tor can reach its network from the current line: with no bridges, through each of Tor Browser's built-in bridges (obfs4, snowflake, meek, ...), through bridges from a file (`-bridges`), and through a running loft client (`-loft-socks`, default `127.0.0.1:1080`). Every case starts its own tor with an empty data directory, waits for `Bootstrapped 100%`, then asks check.torproject.org whether the request came out of Tor. tor and the transports are taken from Tor Browser (`-tor-browser`, found in the usual install places by default). The results go to `loft-reach-<UTC time>/report.md` and `logs/<case>.log`; IP addresses, bridge fingerprints and certificates, and the home folder are replaced in both.
+
+```bash
+loft-reach -network "MTS mobile 4G" -place Moscow
+loft-reach -cases direct,builtin:obfs4,loft -timeout 5m
+loft-reach -list
+```
+
 ---
 
 ## 12. GitHub Actions

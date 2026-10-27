@@ -7,9 +7,9 @@ DEBDIR := server/debian
 ARCH ?= amd64
 
 CLIENT_OSARCH := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64
-CLIENT_CMDS := loft loft-front loft-probe loft-bench
+CLIENT_CMDS := loft loft-front loft-probe loft-bench loft-reach
 
-.PHONY: test node client front probe bench macos macos-dmg macos-dmgs android ios dist dist-node dist-clients \
+.PHONY: test node client front probe bench reach macos macos-dmg macos-dmgs android ios dist dist-node dist-clients \
 	dist-clean-node dist-clean-legacy dist-debian dist-debian-amd64 dist-debian-arm64 \
 	dist-one dist-deb dist-deb-amd64 dist-deb-arm64 deb \
 	mobile-ios mobile-android mobile panel panel-ui panel-dev \
@@ -106,6 +106,10 @@ probe:
 bench:
 	mkdir -p $(CLIENTS)/go
 	go build -ldflags "$(LDFLAGS)" -o $(CLIENTS)/go/loft-bench ./clients/go/cmd/loft-bench
+
+reach:
+	mkdir -p $(CLIENTS)/go
+	go build -ldflags "$(LDFLAGS)" -o $(CLIENTS)/go/loft-reach ./clients/go/cmd/loft-reach
 
 # BUMP is forwarded so `make macos-dmg BUMP=0` works on GNU and BSD make (CI).
 # Root ARCH defaults to debian amd64; only pass it through when it is a macOS slice.
