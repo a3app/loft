@@ -390,8 +390,11 @@ final class SplitStore {
 
     /** The zone with this id, or null. */
     Zone zone(String id) {
+        if (id == null) {
+            return null;
+        }
         for (Zone z : zones) {
-            if (z.id.equals(id)) {
+            if (id.equals(z.id)) {
                 return z;
             }
         }

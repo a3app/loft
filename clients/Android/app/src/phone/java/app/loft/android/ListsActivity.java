@@ -15,12 +15,14 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.Layout;
 import android.text.TextUtils;
+import android.graphics.Typeface;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -231,7 +233,8 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * Switches to page {@code p}: sets the header (normal title bar or multi-select bar), the title,
-     * and rebuilds the page body from scratch. Unknown names show the list page.
+     * and rebuilds the page body from scratch. Unknown names show the list page. The previous
+     * body stays on screen until the new one is ready, so a throw cannot leave a blank ink page.
      */
     private void show(String p) {
         page = p;
@@ -247,57 +250,70 @@ public final class ListsActivity extends LoftActivity {
             findViewById(R.id.btn_sel_del).setEnabled(n > 0);
         }
         TextView title = findViewById(R.id.title);
+        View content;
+        try {
+            switch (p) {
+                case "zones":
+                    title.setText(R.string.zones);
+                    content = zonesPage();
+                    break;
+                case "zone":
+                    if (store.zone(editing) == null) {
+                        page = "zones";
+                        title.setText(R.string.zones);
+                        content = zonesPage();
+                    } else {
+                        title.setText(R.string.zone);
+                        content = zonePage();
+                    }
+                    break;
+                case "svc":
+                    title.setText(R.string.network);
+                    content = svcPage();
+                    break;
+                case "repo":
+                    title.setText(R.string.repository);
+                    content = repoPage();
+                    break;
+                case "catalog":
+                    title.setText(R.string.catalog);
+                    content = catalogPage();
+                    break;
+                case "excl":
+                    SplitStore.Zone ez = store.zone(zoneId);
+                    title.setText(getString(R.string.split_excl_title, ez == null ? zoneId : ez.name));
+                    content = exclPage();
+                    break;
+                case "imp":
+                    title.setText(R.string.split_import_title);
+                    content = impPage();
+                    break;
+                case "exp":
+                    title.setText(R.string.split_export_title);
+                    content = expPage();
+                    break;
+                case "profiles":
+                    title.setText(R.string.prof_title);
+                    content = profilesPage();
+                    break;
+                case "profimp":
+                    title.setText(R.string.prof_imp);
+                    content = profimpPage();
+                    break;
+                default:
+                    title.setText(R.string.split);
+                    content = listPage();
+                    break;
+            }
+        } catch (RuntimeException e) {
+            Journal.add("lists " + p + " " + e.getMessage());
+            LinearLayout err = col();
+            err.addView(subline(getString(R.string.lists_page_fail)));
+            content = scroll(err);
+        }
         ViewGroup body = findViewById(R.id.body);
         body.removeAllViews();
-        View content;
-        switch (p) {
-            case "zones":
-                title.setText(R.string.zones);
-                content = zonesPage();
-                break;
-            case "zone":
-                title.setText(R.string.zone);
-                content = zonePage();
-                break;
-            case "svc":
-                title.setText(R.string.network);
-                content = svcPage();
-                break;
-            case "repo":
-                title.setText(R.string.repository);
-                content = repoPage();
-                break;
-            case "catalog":
-                title.setText(R.string.catalog);
-                content = catalogPage();
-                break;
-            case "excl":
-                SplitStore.Zone ez = store.zone(zoneId);
-                title.setText(getString(R.string.split_excl_title, ez == null ? zoneId : ez.name));
-                content = exclPage();
-                break;
-            case "imp":
-                title.setText(R.string.split_import_title);
-                content = impPage();
-                break;
-            case "exp":
-                title.setText(R.string.split_export_title);
-                content = expPage();
-                break;
-            case "profiles":
-                title.setText(R.string.prof_title);
-                content = profilesPage();
-                break;
-            case "profimp":
-                title.setText(R.string.prof_imp);
-                content = profimpPage();
-                break;
-            default:
-                title.setText(R.string.split);
-                content = listPage();
-                break;
-        }
-        body.addView(content, new ViewGroup.LayoutParams(
+        body.addView(content, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
@@ -812,11 +828,10 @@ public final class ListsActivity extends LoftActivity {
      */
     private View zonePage() {
         SplitStore.Zone z = store.zone(editing);
-        if (z == null) {
-            show("zones");
-            return col();
-        }
         LinearLayout root = col();
+        if (z == null) {
+            return root;
+        }
         EditText name = field(z.name);
         name.setEnabled(!z.builtin);
         root.addView(label(getString(R.string.zone_name)));
@@ -1118,52 +1133,72 @@ public final class ListsActivity extends LoftActivity {
     /**
      * Catalog of ready-made lists in the public loft-routes repository, named in the app's
      * language. The zone's current list is highlighted; tapping one sets the zone's list URL.
+     * Rows are built without {@code FakeBoldText} or a 0-width weighted child: both have
+     * left a blank body on HyperOS when the system font is extra-large.
      */
     private View catalogPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.catalog_d)));
         String lang = Prefs.applyLang(this);
         SplitStore.Zone cur = store.zone(catalogZone);
-        String current = cur != null ? cur.repo : "";
+        String current = cur != null && cur.repo != null ? cur.repo : "";
+        int n = 0;
         for (String[] row : SplitStore.CATALOG) {
-            String id = row[0];
-            String url = SplitStore.catalogUrl(id);
-            LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.HORIZONTAL);
-            card.setGravity(Gravity.CENTER_VERTICAL);
-            card.setBackgroundResource(url.equals(current) ? R.drawable.bg_card_live : R.drawable.bg_card);
-            card.setPadding(dp(12), dp(9), dp(12), dp(9));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.bottomMargin = dp(6);
-            card.setLayoutParams(lp);
-            LinearLayout grow = col(false);
-            TextView n = new TextView(this);
-            n.setText(SplitStore.catalogLabel(id, lang));
-            n.setTextColor(getColor(R.color.snow));
-            n.setTextSize(13.5f);
-            n.getPaint().setFakeBoldText(true);
-            TextView m = new TextView(this);
-            m.setText(id + ".bat");
-            m.setTextColor(getColor(R.color.mute));
-            m.setTextSize(10.5f);
-            m.setTypeface(android.graphics.Typeface.MONOSPACE);
-            m.setPadding(0, dp(2), 0, 0);
-            grow.addView(n);
-            grow.addView(m);
-            card.addView(grow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-            card.addView(meta(getString(R.string.from_repo)));
-            card.setOnClickListener(v -> {
-                SplitStore.Zone z = store.zone(catalogZone);
-                if (z != null) {
-                    z.repo = url;
-                    persist();
-                }
-                show(catalogBack);
-            });
-            root.addView(card);
+            if (row == null || row.length < 1 || row[0] == null || row[0].isEmpty()) {
+                continue;
+            }
+            try {
+                root.addView(catalogCard(row[0], lang, current));
+                n++;
+            } catch (RuntimeException e) {
+                Journal.add("catalog " + row[0] + " " + e.getMessage());
+            }
+        }
+        if (n == 0) {
+            root.addView(hint(getString(R.string.catalog_empty)));
         }
         return scroll(root);
+    }
+
+    /** One loft-routes list: localized name, file, source. Tap writes the URL and goes back. */
+    private View catalogCard(String id, String lang, String current) {
+        String url = SplitStore.catalogUrl(id);
+        LinearLayout card = row();
+        card.setBackgroundResource(url.equals(current) ? R.drawable.bg_card_live : R.drawable.bg_card);
+        card.setPadding(dp(12), dp(9), dp(12), dp(9));
+        card.setMinimumHeight(dp(48));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(6);
+        card.setLayoutParams(lp);
+        LinearLayout grow = new LinearLayout(this);
+        grow.setOrientation(LinearLayout.VERTICAL);
+        TextView name = snow(SplitStore.catalogLabel(id, lang));
+        name.setTextSize(13.5f);
+        name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        oneLine(name);
+        TextView file = new TextView(this);
+        file.setText(id + ".bat");
+        file.setTextColor(getColor(R.color.mute));
+        file.setTextSize(10.5f);
+        file.setTypeface(Typeface.MONOSPACE);
+        file.setPadding(0, dp(2), 0, 0);
+        oneLine(file);
+        grow.addView(name);
+        grow.addView(file);
+        card.addView(grow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView src = meta(getString(R.string.from_repo));
+        oneLine(src);
+        card.addView(src);
+        card.setOnClickListener(v -> {
+            SplitStore.Zone z = store.zone(catalogZone);
+            if (z != null) {
+                z.repo = url;
+                persist();
+            }
+            show(catalogBack);
+        });
+        return card;
     }
 
     /**
@@ -1379,10 +1414,12 @@ public final class ListsActivity extends LoftActivity {
         return l;
     }
 
-    /** Wraps a page in a ScrollView. */
+    /** Wraps a page in a ScrollView. Child width is the viewport; height wraps. */
     private ScrollView scroll(View v) {
         ScrollView s = new ScrollView(this);
-        s.addView(v);
+        s.setFillViewport(true);
+        s.addView(v, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return s;
     }
 

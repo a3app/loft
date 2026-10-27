@@ -222,6 +222,8 @@
     <string name="repository">仓库</string>
     <string name="catalog">列表</string>
     <string name="catalog_d">来自 loft 仓库。自定义地址仍可粘贴。</string>
+    <string name="catalog_empty">目录是空的。</string>
+    <string name="lists_page_fail">打不开这一页。</string>
     <string name="repo_d">来自 GitHub 或自有主机的 .bat。填入此区域。你自己的行保留。</string>
     <string name="auto_update_d">每天一次。不覆盖你自己的条目。</string>
     <string name="no_list">还没有列表</string>
