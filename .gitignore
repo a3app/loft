@@ -6,6 +6,7 @@
 dist/
 *.o
 clients/macOS/build/
+clients/go/cmd/loft-front/rsrc_windows_*.syso
 clients/macOS/design/shots/
 clients/mobile/build/
 clients/Android/.gradle/

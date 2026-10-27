@@ -53,11 +53,19 @@ $(DIST)/x64/loft.exe: $(GUI_SRC) $(HDR) $(DIST)/x64/app.res VERSION
 $(DIST)/x86/loft.exe: $(GUI_SRC) $(HDR) $(DIST)/x86/app.res VERSION
 	$(CC86) $(CFLAGS) -o $@ $(GUI_SRC) $(DIST)/x86/app.res $(GUI_LIBS)
 
-$(DIST)/x64/loft-svc.exe: svc/loft-svc.c $(DIST)/x64/app.res
-	$(CC64) $(CFLAGS) -o $@ svc/loft-svc.c $(DIST)/x64/app.res $(SVC_LIBS)
+$(DIST)/x64/svc.res: res/svc.rc res/app.manifest $(ROOT)/docs/brand/windows/loft-svc.ico
+	mkdir -p $(@D)
+	$(WR64) -O coff -I $(ROOT)/docs/brand/windows -o $@ res/svc.rc
 
-$(DIST)/x86/loft-svc.exe: svc/loft-svc.c $(DIST)/x86/app.res
-	$(CC86) $(CFLAGS) -o $@ svc/loft-svc.c $(DIST)/x86/app.res $(SVC_LIBS)
+$(DIST)/x86/svc.res: res/svc.rc res/app.manifest $(ROOT)/docs/brand/windows/loft-svc.ico
+	mkdir -p $(@D)
+	$(WR86) -O coff -I $(ROOT)/docs/brand/windows -o $@ res/svc.rc
+
+$(DIST)/x64/loft-svc.exe: svc/loft-svc.c $(DIST)/x64/svc.res
+	$(CC64) $(CFLAGS) -o $@ svc/loft-svc.c $(DIST)/x64/svc.res $(SVC_LIBS)
+
+$(DIST)/x86/loft-svc.exe: svc/loft-svc.c $(DIST)/x86/svc.res
+	$(CC86) $(CFLAGS) -o $@ svc/loft-svc.c $(DIST)/x86/svc.res $(SVC_LIBS)
 
 assets:
 	@set -e; \
@@ -76,11 +84,16 @@ front:
 ifeq ($(strip $(GO_WIN7)),)
 	@echo "skip loft-front.exe (set GO_WIN7 to a patched go-win7)"
 else
-	mkdir -p $(DIST)/x64 $(DIST)/x86
+	@set -e; \
+	front=$(ROOT)/clients/go/cmd/loft-front; \
+	trap 'rm -f "$$front"/rsrc_windows_amd64.syso "$$front"/rsrc_windows_386.syso' EXIT; \
+	mkdir -p $(DIST)/x64 $(DIST)/x86; \
+	$(WR64) -O coff -I $(ROOT)/docs/brand/windows -o "$$front"/rsrc_windows_amd64.syso res/front.rc; \
+	$(WR86) -O coff -I $(ROOT)/docs/brand/windows -o "$$front"/rsrc_windows_386.syso res/front.rc; \
 	cd $(ROOT) && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 GOTOOLCHAIN=local \
 		$(if $(GOROOT),GOROOT=$(GOROOT),) \
 		$(GO_WIN7) build -trimpath -ldflags="-s -w" \
-		-o $(DIST)/x64/loft-front.exe ./clients/go/cmd/loft-front
+		-o $(DIST)/x64/loft-front.exe ./clients/go/cmd/loft-front; \
 	cd $(ROOT) && GOOS=windows GOARCH=386 CGO_ENABLED=0 GOTOOLCHAIN=local \
 		$(if $(GOROOT),GOROOT=$(GOROOT),) \
 		$(GO_WIN7) build -trimpath -ldflags="-s -w" \
