@@ -398,4 +398,28 @@ func TestRedact(t *testing.T) {
 	if strings.Contains(s, "lt_abcdefgh") || strings.Contains(s, "550e8400") {
 		t.Fatal(s)
 	}
+	s = Redact("trojan://s3cret@edge.example.com sstp://u:p@h")
+	if strings.Contains(s, "s3cret") || strings.Contains(s, "u:p") {
+		t.Fatal(s)
+	}
+}
+
+func TestSnapPath(t *testing.T) {
+	dir := t.TempDir()
+	if snapPath(dir, "../etc/passwd") != "" || snapPath(dir, "ab/cd") != "" {
+		t.Fatal("traversal")
+	}
+	p := snapPath(dir, "ab")
+	if p == "" || filepath.Dir(p) != dir {
+		t.Fatal(p)
+	}
+	if err := writeSnap("", Snap{State: "error"}); err == nil {
+		t.Fatal("empty path")
+	}
+	if err := writeSnap(p, Snap{State: "up"}); err != nil {
+		t.Fatal(err)
+	}
+	if readSnap(p).State != "up" || readSnap("").State != "" {
+		t.Fatal(readSnap(p))
+	}
 }

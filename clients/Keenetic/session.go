@@ -174,7 +174,7 @@ func (lv *live) runProxy(ctx context.Context, rt Runtime) error {
 		d, err := probeProxy(ctx, rt)
 		if err != nil {
 			lv.fail(err)
-			log.Printf("%v", err)
+			log.Printf("%s", Redact(err.Error()))
 			if !sleepCtx(ctx, delay) {
 				return ctx.Err()
 			}
@@ -329,7 +329,7 @@ func (lv *live) fail(err error) {
 	defer lv.mu.Unlock()
 	lv.state = "error"
 	if err != nil {
-		lv.err = err.Error()
+		lv.err = Redact(err.Error())
 	}
 	lv.write()
 }
@@ -359,6 +359,9 @@ func (lv *live) write() {
 }
 
 func writeSnap(path string, s Snap) error {
+	if path == "" {
+		return fmt.Errorf("id")
+	}
 	b, err := json.Marshal(s)
 	if err != nil {
 		return err
@@ -371,6 +374,9 @@ func writeSnap(path string, s Snap) error {
 }
 
 func readSnap(path string) Snap {
+	if path == "" {
+		return Snap{}
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return Snap{}
@@ -382,7 +388,16 @@ func readSnap(path string) Snap {
 	return s
 }
 
-func snapPath(dir, id string) string { return filepath.Join(dir, id+".json") }
+func snapPath(dir, id string) string {
+	if !idRe.MatchString(id) {
+		return ""
+	}
+	p := filepath.Join(dir, id+".json")
+	if filepath.Dir(p) != filepath.Clean(dir) {
+		return ""
+	}
+	return p
+}
 
 func indexOf(tun string) int {
 	n, err := strconv.Atoi(strings.TrimPrefix(tun, "opkgtun"))
