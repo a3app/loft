@@ -800,6 +800,7 @@
       <button type="button" data-lang="fr">FR</button>
       <button type="button" data-lang="de">DE</button>
       <button type="button" data-lang="it">IT</button>
+      <button type="button" data-lang="ka">KA</button>
       <button type="button" data-lang="ja">JA</button>
       <button type="button" data-lang="ko">KO</button>
       <button type="button" data-lang="pt">PT</button>
@@ -877,11 +878,12 @@
   <script src="../lang/pt.lang"></script>
   <script src="../lang/zh.lang"></script>
   <script src="../lang/it.lang"></script>
+  <script src="../lang/ka.lang"></script>
   <script src="../lang/ja.lang"></script>
   <script src="../lang/ko.lang"></script>
   <script src="../lang/vi.lang"></script>
   <script>
-    const LANGS = ["en", "fr", "de", "it", "pt", "ru", "vi", "zh", "ja", "ko"];
+    const LANGS = ["en", "fr", "ka", "de", "it", "pt", "ru", "vi", "zh", "ja", "ko"];
     const I18N = L10N_PACKS;
     const params = new URLSearchParams(location.search);
     let lang = LANGS.includes(params.get("lang")) ? params.get("lang") : "en";

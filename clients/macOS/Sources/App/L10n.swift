@@ -9,8 +9,8 @@ import Foundation
 enum L10n {
     /// UI languages that ship a `.lang` pack.
     enum Lang: String, CaseIterable {
-        /// Picker order: English first, then Latin/Cyrillic by English name, then ideographic.
-        case en, fr, de, it, pt, ru, vi, zh, ja, ko
+        /// Picker order: English first, then Latin / Mkhedruli / Cyrillic by English name, then ideographic.
+        case en, fr, ka, de, it, pt, ru, vi, zh, ja, ko
 
         /// Name of this language in that language, so the picker stays findable.
         var nativeName: String {
@@ -23,6 +23,7 @@ enum L10n {
             case .zh: return "中文"
             case .it: return "Italiano"
             case .ja: return "日本語"
+            case .ka: return "ქართული"
             case .ko: return "한국어"
             case .vi: return "Tiếng Việt"
             }
@@ -39,6 +40,7 @@ enum L10n {
             case .zh: return "zh_CN"
             case .it: return "it_IT"
             case .ja: return "ja_JP"
+            case .ka: return "ka_GE"
             case .ko: return "ko_KR"
             case .vi: return "vi_VN"
             }

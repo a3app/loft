@@ -411,7 +411,7 @@ One main session, the same accordion as the popover when Several is on:
 
 ## 10. Copy
 
-Canonical locale is English. Copy lives in [`lang/`](../lang/) — one `{code}.lang` pack per language, same files for the app and this mock (`?lang=zh`, `en`, `fr`, `de`, `it`, `ja`, `ko`, `pt`, `ru`, `vi`). Screenshots under `shots/` include Russian and English. The picker lists English first, then Latin and Cyrillic by English name, then ideographic languages (Chinese, Japanese, Korean). The app ships English, French, German, Italian, Portuguese, Russian, Vietnamese, Chinese, Japanese, and Korean. The Loft menu Language item is **Language** in English and `{native} (Language)` in every other pack.
+Canonical locale is English. Copy lives in [`lang/`](../lang/) — one `{code}.lang` pack per language, same files for the app and this mock (`?lang=zh`, `en`, `fr`, `ka`, `de`, `it`, `ja`, `ko`, `pt`, `ru`, `vi`). Screenshots under `shots/` include Russian and English. The picker lists English first, then Latin, Mkhedruli and Cyrillic by English name, then ideographic languages (Chinese, Japanese, Korean). The app ships English, French, Georgian, German, Italian, Portuguese, Russian, Vietnamese, Chinese, Japanese, and Korean. The Loft menu Language item is **Language** in English and `{native} (Language)` in every other pack.
 
 | id | English |
 |----|---------|

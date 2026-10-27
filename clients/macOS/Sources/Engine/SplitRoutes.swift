@@ -107,26 +107,32 @@ enum SplitListCatalog {
         SplitListEntry(id: "global", file: "global.bat", names: [
             "en": "World", "ru": "Мир", "de": "Welt", "fr": "Monde", "pt": "Mundo",
             "zh": "全球", "it": "Mondo", "ja": "世界", "ko": "세계", "vi": "Thế giới",
+            "ka": "მსოფლიო",
         ]),
         SplitListEntry(id: "ru", file: "ru.bat", names: [
             "en": "Russia", "ru": "Россия", "de": "Russland", "fr": "Russie", "pt": "Rússia",
             "zh": "俄罗斯", "it": "Russia", "ja": "ロシア", "ko": "러시아", "vi": "Nga",
+            "ka": "რუსეთი",
         ]),
         SplitListEntry(id: "cn", file: "cn.bat", names: [
             "en": "China", "ru": "Китай", "de": "China", "fr": "Chine", "pt": "China",
             "zh": "中国", "it": "Cina", "ja": "中国", "ko": "중국", "vi": "Trung Quốc",
+            "ka": "ჩინეთი",
         ]),
         SplitListEntry(id: "ir", file: "ir.bat", names: [
             "en": "Iran", "ru": "Иран", "de": "Iran", "fr": "Iran", "pt": "Irã",
             "zh": "伊朗", "it": "Iran", "ja": "イラン", "ko": "이란", "vi": "Iran",
+            "ka": "ირანი",
         ]),
         SplitListEntry(id: "kz", file: "kz.bat", names: [
             "en": "Kazakhstan", "ru": "Казахстан", "de": "Kasachstan", "fr": "Kazakhstan", "pt": "Cazaquistão",
             "zh": "哈萨克斯坦", "it": "Kazakistan", "ja": "カザフスタン", "ko": "카자흐스탄", "vi": "Kazakhstan",
+            "ka": "ყაზახეთი",
         ]),
         SplitListEntry(id: "by", file: "by.bat", names: [
             "en": "Belarus", "ru": "Беларусь", "de": "Belarus", "fr": "Biélorussie", "pt": "Bielorrússia",
             "zh": "白俄罗斯", "it": "Bielorussia", "ja": "ベラルーシ", "ko": "벨라루스", "vi": "Belarus",
+            "ka": "ბელარუსი",
         ]),
     ]
 
