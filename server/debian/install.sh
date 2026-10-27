@@ -34,7 +34,6 @@ LOFT_ENV="/etc/loft/loft.env"
 LOFT_YAML="/etc/loft/node.conf"
 LOFT_UNIT="/etc/systemd/system/loft-node.service"
 SYSCTL_D="/etc/sysctl.d/99-loft.conf"
-MODLOAD_D="/etc/modules-load.d/loft.conf"
 LOG="/var/log/loft-install.log"
 
 DRY=0; UNATTENDED=0; UNINSTALL=0; PURGE=0
@@ -307,7 +306,7 @@ if [ "$UNINSTALL" = 1 ]; then
 	fi
 	try rm -f "$LOFT_UNIT"
 	try rm -f "$LOFT_BIN"
-	try rm -f "$SYSCTL_D" "$MODLOAD_D"
+	try rm -f "$SYSCTL_D"
 	if have systemctl; then
 		try systemctl daemon-reload
 	fi
@@ -584,20 +583,12 @@ fi
 # ── 11. sysctl ───────────────────────────────────────────────────────────
 if [ "$NO_SYSCTL" = 0 ]; then
 	step "Sysctl"
-	# loft-node runs as user loft: it can pick BBR ("cc bbr" in node.conf)
-	# only when the module is loaded and listed as allowed.
-	write_file "$MODLOAD_D" 0644 <<EOF
-tcp_bbr
-EOF
 	write_file "$SYSCTL_D" 0644 <<EOF
 # UDP buffers for QUIC / HTTP/3 on :443.
 net.core.rmem_max = 7500000
 net.core.wmem_max = 7500000
-# BBR for user loft ("cc bbr" in node.conf).
-net.ipv4.tcp_allowed_congestion_control = reno cubic bbr
 EOF
 	if [ "$DRY" = 0 ]; then
-		try modprobe tcp_bbr
 		try sysctl -p "$SYSCTL_D" || try sysctl --system
 	fi
 	ok "$SYSCTL_D"

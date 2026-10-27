@@ -78,6 +78,25 @@ func tuneTCP(c net.Conn) {
 	standApplyLowat(t)
 }
 
+// tcpOf finds the *net.TCPConn under TLS and the node's own wrappers, or nil.
+func tcpOf(c net.Conn) *net.TCPConn {
+	for i := 0; i < 8 && c != nil; i++ {
+		switch u := c.(type) {
+		case *net.TCPConn:
+			return u
+		case *prefixConn:
+			c = u.Conn
+		case *maskConn:
+			c = u.Conn
+		case interface{ NetConn() net.Conn }:
+			c = u.NetConn()
+		default:
+			return nil
+		}
+	}
+	return nil
+}
+
 // tcpTuneListener calls tuneTCP on every Accept.
 type tcpTuneListener struct{ net.Listener }
 

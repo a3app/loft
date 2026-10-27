@@ -212,9 +212,6 @@ func main() {
 			names[i] = wire.CCName(id)
 		}
 		log.Printf("cc allow: %s", strings.Join(names, " "))
-		if err := transport.TCPBBRReady(); err != nil {
-			log.Printf("cc: TCP fronts stay on the kernel default, bbr unavailable (%v): load tcp_bbr and add bbr to net.ipv4.tcp_allowed_congestion_control", err)
-		}
 	}
 	if len(innerIDs) > 0 {
 		names := make([]string, len(innerIDs))

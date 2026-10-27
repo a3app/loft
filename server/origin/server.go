@@ -164,7 +164,6 @@ func Listen(cfg *config.ServerConfig, h http.Handler) error {
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
-		ConnContext:       transport.SockContext,
 	}
 	if cfg.CertFile == "" || cfg.KeyFile == "" {
 		return srv.ListenAndServe()

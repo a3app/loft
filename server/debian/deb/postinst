@@ -55,7 +55,6 @@ configure)
 	fi
 
 	if command -v sysctl >/dev/null 2>&1; then
-		modprobe tcp_bbr >/dev/null 2>&1 || true
 		sysctl -p /etc/sysctl.d/99-loft.conf >/dev/null 2>&1 || true
 	fi
 	if command -v systemctl >/dev/null 2>&1; then
