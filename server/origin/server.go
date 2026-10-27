@@ -54,8 +54,9 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 			if blob, ser, hash := signLists(cfg, priv); len(blob) > 0 {
 				lists.Store(&signedLists{blob, ser, hash})
 				info.ListsFn = currentLists
-				info.Caps |= wire.CapLists
+				info.Caps |= wire.CapLists | wire.CapListsInline
 			}
+			transport.ListsBlob = currentListsBlob
 		}
 	}
 	edge, err := cfg.EdgeByte()
@@ -208,7 +209,7 @@ func ListenAll(cfg *config.ServerConfig, h http.Handler) error {
 	}
 	if l := lists.Load(); l != nil && len(l.blob) > 0 {
 		info.ListsFn = currentLists
-		info.Caps |= wire.CapLists
+		info.Caps |= wire.CapLists | wire.CapListsInline
 	}
 	// UDP only when it will actually serve: quic/h3, or a decoy splice.
 	// ListenUDP returns nil at once when those fronts are off; treating that
@@ -247,6 +248,13 @@ func currentLists() (uint64, []byte) {
 	return 0, nil
 }
 
+func currentListsBlob() (uint64, []byte) {
+	if l := lists.Load(); l != nil {
+		return l.serial, l.blob
+	}
+	return 0, nil
+}
+
 // ReloadLists re-signs cfg.Lists (on SIGHUP). Lists that appear on a node
 // that started without any are served, but clients learn of them only
 // after a restart (the capability is set at start).
@@ -273,12 +281,19 @@ func signLists(cfg *config.ServerConfig, priv ed25519.PrivateKey) ([]byte, uint6
 		l.Serial = 1
 	}
 	for _, n := range names {
-		al := wire.AddrList{Name: n}
+		wireName := n
+		if n == "@" {
+			wireName = ""
+		}
+		al := wire.AddrList{Name: wireName}
 		for _, s := range cfg.Lists[n] {
-			a := wire.ParseAddr(s)
-			if a.Val != "" {
+			a := wire.ParseListEntry(s)
+			if a.Kind != 0 && a.Val != "" {
 				al.Entries = append(al.Entries, a)
 			}
+		}
+		if len(al.Entries) == 0 && wireName == "" {
+			continue
 		}
 		l.Sets = append(l.Sets, al)
 	}
