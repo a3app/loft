@@ -65,18 +65,17 @@ func h2ExtendedConnect(ctx context.Context, c net.Conn, sni, path string) (net.C
 	if err := bw.Flush(); err != nil {
 		return nil, err
 	}
-	streamWin, connWin := int32(65535), int32(65535)
-	if standH2Win() {
-		var err error
-		streamWin, connWin, err = h2WaitSettingsWin(ctx, c, fr, bw)
-		if err != nil {
-			return nil, err
-		}
-	} else if err := h2WaitSettings(ctx, c, fr, bw); err != nil {
+	// Take the node's initial stream window from its SETTINGS, as HTTP/2
+	// requires. Assuming the default 64 KiB instead (as this client did)
+	// kept at most 64 KiB in flight on the CONNECT stream while the node
+	// granted 4 MiB: every upload over h2 and l3 ran at 64 KiB per round
+	// trip, about 2 Mbit/s at 200 ms.
+	streamWin, connWin, err := h2WaitSettingsWin(ctx, c, fr, bw)
+	if err != nil {
 		return nil, err
 	}
 
-	st := &h2stream{c: c, fr: fr, bw: bw, br: br, sid: 1, win: streamWin, cwin: connWin}
+	st := &h2stream{c: c, fr: fr, bw: bw, br: br, sid: 1, win: streamWin, cwin: connWin, initWin: streamWin}
 	pr, pw := io.Pipe()
 	st.inR, st.inW = pr, pw
 	got := make(chan h2hs, 1)
@@ -97,7 +96,7 @@ func h2ExtendedConnect(ctx context.Context, c net.Conn, sni, path string) (net.C
 		}
 	}
 	st.mu.Lock()
-	err := fr.WriteHeaders(http2.HeadersFrameParam{
+	err = fr.WriteHeaders(http2.HeadersFrameParam{
 		StreamID:      1,
 		BlockFragment: hdr.Bytes(),
 		EndHeaders:    true,
@@ -134,8 +133,9 @@ func h2ExtendedConnect(ctx context.Context, c net.Conn, sni, path string) (net.C
 	return st, nil
 }
 
-// h2WaitSettingsWin is h2WaitSettings that also applies the peer's initial
-// stream window and any connection WINDOW_UPDATE already in the preface.
+// h2WaitSettingsWin reads frames until the server's SETTINGS, acknowledges
+// them, and returns the peer's initial stream window and the connection
+// window (with any WINDOW_UPDATE that came before the SETTINGS).
 func h2WaitSettingsWin(ctx context.Context, c net.Conn, fr *http2.Framer, bw *bufio.Writer) (int32, int32, error) {
 	streamWin, connWin := int32(65535), int32(65535)
 	if dl, ok := ctx.Deadline(); ok {
@@ -176,34 +176,6 @@ func h2WaitSettingsWin(ctx context.Context, c net.Conn, fr *http2.Framer, bw *bu
 	}
 }
 
-// h2WaitSettings reads frames until the server's SETTINGS and acknowledges them.
-func h2WaitSettings(ctx context.Context, c net.Conn, fr *http2.Framer, bw *bufio.Writer) error {
-	if dl, ok := ctx.Deadline(); ok {
-		_ = c.SetReadDeadline(dl)
-		defer c.SetReadDeadline(time.Time{})
-	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		f, err := fr.ReadFrame()
-		if err != nil {
-			return err
-		}
-		sf, ok := f.(*http2.SettingsFrame)
-		if !ok {
-			continue
-		}
-		if sf.IsAck() {
-			continue
-		}
-		if err := fr.WriteSettingsAck(); err != nil {
-			return err
-		}
-		return bw.Flush()
-	}
-}
-
 // h2stream is stream 1 DATA as a net.Conn.
 // readLoop feeds incoming DATA into a pipe that Read drains; Write sends
 // DATA only while both the stream and connection windows allow it.
@@ -216,11 +188,14 @@ type h2stream struct {
 	inR  *io.PipeReader
 	inW  *io.PipeWriter
 	mu   sync.Mutex
-	win  int32
-	cwin int32
-	dead atomic.Bool
-	once sync.Once
-	hs   chan h2hs
+	win  int32 // bytes we may still send on the stream
+	cwin int32 // bytes we may still send on the connection
+	// initWin is the peer's current SETTINGS_INITIAL_WINDOW_SIZE, to shift
+	// win when a later SETTINGS changes it.
+	initWin int32
+	dead    atomic.Bool
+	once    sync.Once
+	hs      chan h2hs
 }
 
 // readLoop handles every frame from the server: it answers SETTINGS and
@@ -242,6 +217,12 @@ func (s *h2stream) readLoop(got chan h2hs) {
 		case *http2.SettingsFrame:
 			s.mu.Lock()
 			if !f.IsAck() {
+				// A new initial window shifts the open stream's window by
+				// the difference (RFC 9113, section 6.9.2).
+				if v, ok := f.Value(http2.SettingInitialWindowSize); ok && v < 1<<31 {
+					s.win += int32(v) - s.initWin
+					s.initWin = int32(v)
+				}
 				_ = s.fr.WriteSettingsAck()
 				_ = s.bw.Flush()
 			}

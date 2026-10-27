@@ -144,9 +144,6 @@ func standCopy() int {
 	return n
 }
 
-// standH2Win makes the H2 client honor the peer SETTINGS_INITIAL_WINDOW_SIZE.
-func standH2Win() bool { return os.Getenv("LOFT_STAND_H2WIN") == "1" }
-
 // standTrace turns on the stand write log (LOFT_STAND_TRACE=1).
 func standTrace() bool { return os.Getenv("LOFT_STAND_TRACE") == "1" }
 
