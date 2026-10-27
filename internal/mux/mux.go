@@ -1116,13 +1116,17 @@ func (st *Stream) SetDeadline(t time.Time) error {
 	return st.SetWriteDeadline(t)
 }
 
-// SetReadDeadline uses unix nano; zero clears it.
+// SetReadDeadline uses unix nano; zero clears it. A Read already waiting
+// is woken so it sees the new deadline at once, as net.Conn requires: a
+// caller that sets a deadline of now to cancel a stuck Read must not wait
+// for the next byte.
 func (st *Stream) SetReadDeadline(t time.Time) error {
 	if t.IsZero() {
 		st.rdead.Store(0)
-		return nil
+	} else {
+		st.rdead.Store(t.UnixNano())
 	}
-	st.rdead.Store(t.UnixNano())
+	st.kick()
 	return nil
 }
 

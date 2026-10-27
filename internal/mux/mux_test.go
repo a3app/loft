@@ -818,3 +818,30 @@ func TestListsEnqueuePri(t *testing.T) {
 		t.Fatalf("pri %d", s.PriQueued())
 	}
 }
+
+// TestSetReadDeadlineWakesBlockedRead: a Read that started with no deadline
+// returns a timeout soon after another goroutine sets one, as net.Conn
+// requires. Before, it went on waiting for data, so a caller cancelling a
+// stuck download by setting a deadline of now hung for hours.
+func TestSetReadDeadlineWakesBlockedRead(t *testing.T) {
+	c := NewClient()
+	st, err := c.Open("1.2.3.4:80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := st.Read(make([]byte, 16))
+		done <- err
+	}()
+	time.Sleep(50 * time.Millisecond) // let Read block with no deadline
+	_ = st.SetReadDeadline(time.Now())
+	select {
+	case err := <-done:
+		if ne, ok := err.(interface{ Timeout() bool }); !ok || !ne.Timeout() {
+			t.Fatalf("err %v, want a timeout", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Read still blocked after SetReadDeadline")
+	}
+}
