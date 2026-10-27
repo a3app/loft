@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -80,6 +81,15 @@ func (f fakeAdm) Call(_ context.Context, op string, body, out any) error {
 		return errors.New("no stored key for this member")
 	case admproto.OpMail:
 		if f.mail != nil {
+			set(*f.mail)
+		}
+	case admproto.OpMailDomain:
+		in := body.(admproto.MailDomainSave)
+		if f.mail != nil {
+			f.mail.Domains = slices.DeleteFunc(f.mail.Domains, func(d admproto.MailDomain) bool { return d.Name == in.Name })
+			if !in.Delete {
+				f.mail.Domains = append(f.mail.Domains, in.MailDomain)
+			}
 			set(*f.mail)
 		}
 	}
