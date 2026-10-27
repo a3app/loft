@@ -1,6 +1,13 @@
 /* loft-setup: copy the client into Program Files, register the loft service, write the uninstaller.
    Windows 7 and later. No MSI. The exe carries a stored zip after the image (footer LOFTPK01).
-   asInvoker: UAC runs only when the user presses Install. */
+   asInvoker: UAC runs only when the user presses Install.
+
+   How it is built: the Makefile compiles this file into loft-setup-stub.exe, then
+   setup/pack_setup.py appends a zip of the payload (loft.exe, loft-svc.exe,
+   wintun.dll, lang, tray, ...) and a 16-byte footer. At run time the exe reads that
+   zip from its own file. The service itself is registered by running
+   "loft-svc.exe --install" (svc/loft-svc.c). After install, a copy of this exe stays
+   in the install folder as loft-setup.exe and serves as the uninstaller. */
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0601
 #endif
@@ -22,8 +29,20 @@
 #define LOFT_VERSION "1.0.0"
 #endif
 
+/* Control id of the install-folder edit box. */
 #define ID_DIR 10
 
+/* Window and run state.
+   g_lang      - UI language: 0 English, 1 Russian, 2 Chinese (from the Windows UI).
+   g_uninstall - this run removes Loft instead of installing it.
+   g_auto      - start the work at once without a click; set in the elevated copy
+                 that on_go starts (--do / --do-uninstall).
+   g_open      - start Loft when the install finishes (checkbox).
+   g_assoc     - open .loft files and loft:// links in Loft (checkbox).
+   g_busy      - work is running; ignore more clicks.
+   g_fail      - the last attempt failed; the exit code and status color show it.
+   g_dir       - install folder; g_status - the status line under the button.
+   g_edit, g_field, g_font - folder edit box, dark field brush, UI font. */
 static int g_dpi = 96;
 static int g_lang;
 static int g_uninstall;
@@ -38,26 +57,33 @@ static HWND g_edit;
 static HBRUSH g_field;
 static HFONT g_font;
 
+/* sc scales a size given at 96 DPI to the screen DPI. */
 static int sc(int px) { return MulDiv(px, g_dpi, 96); }
 
+/* tr picks the text for the current UI language. The installer has no lang
+   files of its own, so every string carries all three translations. */
 static const wchar_t *tr(const wchar_t *en, const wchar_t *ru, const wchar_t *zh) {
     if (g_lang == 1) return ru;
     if (g_lang == 2) return zh;
     return en;
 }
 
+/* set_status replaces the status line and asks the window to repaint. */
 static void set_status(HWND hwnd, const wchar_t *s) {
     wcsncpy(g_status, s ? s : L"", 399);
     g_status[399] = 0;
     if (hwnd) InvalidateRect(hwnd, NULL, FALSE);
 }
 
+/* u32 and u16 read little-endian integers, the byte order of zip headers. */
 static unsigned u32(const unsigned char *p) {
     return (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
 }
 
 static unsigned u16(const unsigned char *p) { return (unsigned)p[0] | ((unsigned)p[1] << 8); }
 
+/* crc32_update continues a zip-style CRC-32 over n more bytes (start with 0).
+   Used to check that each extracted file matches the zip. */
 static unsigned crc32_update(unsigned crc, const unsigned char *p, unsigned n) {
     unsigned i, k;
     crc = ~crc;
@@ -68,6 +94,7 @@ static unsigned crc32_update(unsigned crc, const unsigned char *p, unsigned n) {
     return ~crc;
 }
 
+/* is_admin tells whether this process already runs as an administrator. */
 static int is_admin(void) {
     BOOL yes = FALSE;
     SID_IDENTIFIER_AUTHORITY nt = SECURITY_NT_AUTHORITY;
@@ -79,6 +106,7 @@ static int is_admin(void) {
     return yes ? 1 : 0;
 }
 
+/* read_at reads exactly n bytes at byte offset off. Returns 0 on a short read. */
 static int read_at(HANDLE h, unsigned long long off, void *buf, DWORD n) {
     LARGE_INTEGER li;
     DWORD got = 0;
@@ -92,17 +120,23 @@ static int read_at(HANDLE h, unsigned long long off, void *buf, DWORD n) {
     return 1;
 }
 
+/* self_path gets the full path of this exe. */
 static void self_path(wchar_t *d, int n) {
     d[0] = 0;
     GetModuleFileNameW(NULL, d, n);
     if (n > 0) d[n - 1] = 0;
 }
 
+/* parent_dir cuts a path back to its folder, in place. */
 static void parent_dir(wchar_t *path) {
     wchar_t *s = wcsrchr(path, L'\\');
     if (s) *s = 0;
 }
 
+/* payload finds the zip appended to this exe. The last 16 bytes of the file are
+   an 8-byte little-endian zip size and the tag "LOFTPK01" (written by
+   pack_setup.py); the zip sits right before them. On success *out is an open
+   handle to this exe and base/size locate the zip inside it. */
 static int payload(HANDLE *out, unsigned long long *base, unsigned long long *size) {
     wchar_t path[MAX_PATH];
     unsigned char foot[16];
@@ -131,6 +165,8 @@ static int payload(HANDLE *out, unsigned long long *base, unsigned long long *si
     return 1;
 }
 
+/* mkdir_parents creates every folder on the way to path (not the last part).
+   It skips the drive prefix "C:\". The string is changed and restored. */
 static void mkdir_parents(wchar_t *path) {
     wchar_t *p;
     for (p = path + 3; *p; p++) {
@@ -141,6 +177,9 @@ static void mkdir_parents(wchar_t *path) {
     }
 }
 
+/* safe_path turns a zip entry name into a path under dest. Absolute names, drive
+   letters and ".." parts are rejected, so a damaged or hostile zip cannot write
+   outside the install folder. "/" becomes "\" and "." parts are dropped. */
 static int safe_path(const wchar_t *dest, const char *name, wchar_t *out, int outn) {
     wchar_t rel[260], clean[260];
     wchar_t *p;
@@ -170,6 +209,8 @@ static int safe_path(const wchar_t *dest, const char *name, wchar_t *out, int ou
     return 1;
 }
 
+/* write_stored copies n bytes of an uncompressed zip entry to path in 64 KiB
+   chunks and returns 1 only when the CRC-32 matches the zip header. */
 static int write_stored(HANDLE h, unsigned long long off, unsigned n, unsigned expect, const wchar_t *path) {
     wchar_t copy[MAX_PATH];
     HANDLE out;
@@ -195,6 +236,11 @@ static int write_stored(HANDLE h, unsigned long long off, unsigned n, unsigned e
     return crc == expect;
 }
 
+/* extract unpacks the payload zip into dest. It is a small zip reader that
+   accepts only what pack_setup.py writes: stored (uncompressed) entries with the
+   sizes in the local header, each up to 64 MiB. It walks the local file headers
+   and stops with success at the central directory. Anything else (compression,
+   bad sizes, a bad name, a CRC mismatch) stops with "The payload is damaged". */
 static int extract(HWND hwnd, const wchar_t *dest) {
     HANDLE h = NULL;
     unsigned long long base = 0, size = 0, pos = 0;
@@ -222,6 +268,7 @@ static int extract(HWND hwnd, const wchar_t *dest) {
         uncomp = u32(hdr + 22);
         namelen = u16(hdr + 26);
         extra = u16(hdr + 28);
+        /* Flag bit 3 means the sizes come after the data; this reader cannot handle that. */
         if ((flags & 8) || namelen == 0 || namelen >= sizeof name) break;
         if (comp > 64u * 1024u * 1024u || uncomp > 64u * 1024u * 1024u) break;
         pos += 30;
@@ -229,6 +276,7 @@ static int extract(HWND hwnd, const wchar_t *dest) {
         if (!read_at(h, base + pos, name, namelen)) break;
         name[namelen] = 0;
         pos += namelen + extra;
+        /* Folder entries carry no data and are skipped. */
         if (name[namelen - 1] == '/' || name[namelen - 1] == '\\') {
             pos += comp;
             continue;
@@ -255,6 +303,8 @@ static int extract(HWND hwnd, const wchar_t *dest) {
     return 0;
 }
 
+/* run_wait starts exe with args, hidden, and waits up to 2 minutes.
+   Returns 1 only when it exits with code 0. */
 static int run_wait(const wchar_t *exe, const wchar_t *args, const wchar_t *dir) {
     wchar_t cmd[MAX_PATH * 2];
     STARTUPINFOW si;
@@ -275,6 +325,9 @@ static int run_wait(const wchar_t *exe, const wchar_t *args, const wchar_t *dir)
     return code == 0;
 }
 
+/* shortcut creates "Loft" in the Start menu for all users, pointing at loft.exe
+   in dir. It uses the shell's COM link object; the CLSID and IIDs are spelled
+   out here. */
 static int shortcut(const wchar_t *dir) {
     static const CLSID clsid = {0x00021401, 0x0000, 0x0000, {0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
     static const IID iid_link = {0x000214F9, 0x0000, 0x0000, {0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
@@ -301,6 +354,7 @@ static int shortcut(const wchar_t *dir) {
     return ok;
 }
 
+/* remove_shortcut deletes the all-users Start menu shortcut. */
 static void remove_shortcut(void) {
     wchar_t menu[MAX_PATH], lnk[MAX_PATH];
     if (SHGetFolderPathW(NULL, CSIDL_COMMON_PROGRAMS, NULL, 0, menu) != S_OK) return;
@@ -309,6 +363,8 @@ static void remove_shortcut(void) {
     DeleteFileW(lnk);
 }
 
+/* write_uninstall_key adds Loft to "Programs and Features": name, version,
+   publisher, folder, icon and the command that runs loft-setup.exe --uninstall. */
 static void write_uninstall_key(const wchar_t *dir) {
     HKEY k = NULL;
     wchar_t setup[MAX_PATH], exe[MAX_PATH], cmd[MAX_PATH + 32], ver[32];
@@ -333,6 +389,8 @@ static void write_uninstall_key(const wchar_t *dir) {
     RegCloseKey(k);
 }
 
+/* read_install_dir reads the install folder back from the uninstall key.
+   Returns 0 when Loft is not registered. */
 static int read_install_dir(wchar_t *dir, int n) {
     HKEY k = NULL;
     DWORD nb = (DWORD)n * sizeof(wchar_t), typ = 0;
@@ -347,6 +405,10 @@ static int read_install_dir(wchar_t *dir, int n) {
     return dir[0] != 0;
 }
 
+/* launch_user starts exe as the signed-in user, not as administrator.
+   The installer runs elevated, but Loft must run as the normal user: its
+   profiles and keys live in that user's AppData. The token is borrowed from the
+   desktop shell (Explorer), which runs unelevated. Returns 0 if that fails. */
 static int launch_user(const wchar_t *exe, const wchar_t *dir) {
     HWND shell = GetShellWindow();
     DWORD pid = 0;
@@ -383,6 +445,8 @@ done:
     return ok;
 }
 
+/* has_loft_exe tells whether dir contains loft.exe. Used as a safety check
+   before deleting a folder, so a wrong path never wipes an unrelated folder. */
 static int has_loft_exe(const wchar_t *dir) {
     wchar_t p[MAX_PATH];
     _snwprintf(p, MAX_PATH, L"%s\\loft.exe", dir);
@@ -390,6 +454,9 @@ static int has_loft_exe(const wchar_t *dir) {
     return GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES;
 }
 
+/* delete_dir deletes a folder and everything inside it. It does not follow
+   junctions or symbolic links (reparse points) into other places, and refuses
+   very short paths such as a drive root. */
 static int delete_dir(const wchar_t *dir) {
     wchar_t spec[MAX_PATH], path[MAX_PATH];
     WIN32_FIND_DATAW fd;
@@ -415,11 +482,16 @@ static int delete_dir(const wchar_t *dir) {
     return RemoveDirectoryW(dir);
 }
 
+/* purge_tree deletes dir only if it looks like a Loft folder. */
 static int purge_tree(const wchar_t *dir) {
     if (!has_loft_exe(dir)) return 0;
     return delete_dir(dir);
 }
 
+/* do_purge is the last uninstall step, run from a copy of this exe in %TEMP%
+   (--purge). It waits up to 20 s for the uninstaller process pid to exit,
+   because Windows cannot delete a running exe. Then it removes the uninstall
+   key, the shortcut and the install folder. Exit code 0 means the folder is gone. */
 static int do_purge(const wchar_t *dir, unsigned pid) {
     if (pid) {
         HANDLE ph = OpenProcess(SYNCHRONIZE, FALSE, pid);
@@ -434,6 +506,8 @@ static int do_purge(const wchar_t *dir, unsigned pid) {
     return purge_tree(dir) ? 0 : 1;
 }
 
+/* copy_self copies this exe into the install folder as loft-setup.exe, which
+   the uninstall key points to. */
 static int copy_self(const wchar_t *dir) {
     wchar_t src[MAX_PATH], dst[MAX_PATH];
     self_path(src, MAX_PATH);
@@ -443,6 +517,9 @@ static int copy_self(const wchar_t *dir) {
     return CopyFileW(src, dst, FALSE);
 }
 
+/* schedule_purge copies this exe to %TEMP% and starts it with --purge.
+   An exe cannot delete the folder it runs from, so the copy finishes the job
+   after this process exits. */
 static void schedule_purge(const wchar_t *dir) {
     wchar_t src[MAX_PATH], tmp[MAX_PATH], cmd[MAX_PATH * 2];
     wchar_t temp[MAX_PATH];
@@ -464,16 +541,21 @@ static void schedule_purge(const wchar_t *dir) {
     }
 }
 
+/* install_work does the install itself. It must run as administrator.
+   Returns 1 on full success. */
 static int install_work(HWND hwnd) {
     wchar_t svc[MAX_PATH], exe[MAX_PATH], mark[MAX_PATH];
     GetWindowTextW(g_edit, g_dir, MAX_PATH);
     if (!g_dir[0] || wcslen(g_dir) < 4) return 0;
+    /* 1. Unpack the payload and keep this exe as the uninstaller. */
     set_status(hwnd, tr(L"Copying files.", L"Копирование файлов.", L"正在复制文件。"));
     if (!extract(hwnd, g_dir) || !has_loft_exe(g_dir)) return 0;
     if (!copy_self(g_dir)) {
         set_status(hwnd, tr(L"Could not write loft-setup.exe.", L"Не удалось записать loft-setup.exe.", L"无法写入 loft-setup.exe。"));
         return 0;
     }
+    /* 2. If file links were turned off, leave an "assoc.off" marker; loft.exe reads
+          it on its first start (src/win/assoc.c) and turns the associations off. */
     if (!g_assoc) {
         _snwprintf(mark, MAX_PATH, L"%s\\assoc.off", g_dir);
         mark[MAX_PATH - 1] = 0;
@@ -482,6 +564,8 @@ static int install_work(HWND hwnd) {
             if (mk != INVALID_HANDLE_VALUE) CloseHandle(mk);
         }
     }
+    /* 3. Register and start the loft service. On failure the files stay, with a
+          shortcut and an uninstall entry, so the user can still remove them. */
     _snwprintf(svc, MAX_PATH, L"%s\\loft-svc.exe", g_dir);
     svc[MAX_PATH - 1] = 0;
     set_status(hwnd, tr(L"Registering the loft service.", L"Регистрация службы loft.", L"正在注册 loft 服务。"));
@@ -492,6 +576,7 @@ static int install_work(HWND hwnd) {
         shortcut(g_dir);
         return 0;
     }
+    /* 4. Shortcut, uninstall entry, and start Loft if asked. */
     shortcut(g_dir);
     write_uninstall_key(g_dir);
     if (g_open) {
@@ -504,6 +589,8 @@ static int install_work(HWND hwnd) {
     return 1;
 }
 
+/* uninstall_work removes the service and the shortcut, then hands deletion
+   of the folder to the --purge copy. Must run as administrator. */
 static int uninstall_work(HWND hwnd) {
     wchar_t svc[MAX_PATH];
     if (!g_dir[0] && !read_install_dir(g_dir, MAX_PATH)) {
@@ -525,6 +612,8 @@ static int uninstall_work(HWND hwnd) {
     return 1;
 }
 
+/* elevate re-runs this exe with parameters through UAC and waits for it.
+   Returns 0 when UAC was refused or the start failed; *code gets the child's exit code. */
 static int elevate(const wchar_t *parameters, DWORD *code) {
     wchar_t path[MAX_PATH];
     SHELLEXECUTEINFOW sei;
@@ -545,6 +634,8 @@ static int elevate(const wchar_t *parameters, DWORD *code) {
     return 1;
 }
 
+/* quote_dir takes the folder from the edit box and wraps it in quotes for a
+   command line. */
 static void quote_dir(wchar_t *d, int n) {
     wchar_t tmp[MAX_PATH];
     GetWindowTextW(g_edit, g_dir, MAX_PATH);
@@ -554,6 +645,10 @@ static void quote_dir(wchar_t *d, int n) {
     if (n > 0) d[n - 1] = 0;
 }
 
+/* on_go handles the Install / Uninstall button. As administrator it does the
+   work here. Otherwise it hides the window, starts an elevated copy with the
+   same choices (--do or --do-uninstall plus --dir and options), and exits with
+   that copy's exit code. */
 static void on_go(HWND hwnd) {
     wchar_t params[MAX_PATH + 80], qdir[MAX_PATH + 2];
     DWORD code = 1;
@@ -581,6 +676,10 @@ static void on_go(HWND hwnd) {
     ExitProcess(code);
 }
 
+/* wnd_proc runs the installer window. The window has no standard frame or
+   buttons: everything except the folder edit box is drawn in WM_PAINT, and
+   clicks are matched against the same rectangles in WM_LBUTTONUP
+   (close "x", the two checkboxes, the main button). */
 static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE:
@@ -682,6 +781,8 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 }
 
+/* default_dir picks the starting folder: for install, "Program Files\Loft";
+   for uninstall, the registered folder, or the folder of this exe. */
 static void default_dir(void) {
     wchar_t pf[MAX_PATH];
     g_dir[0] = 0;
@@ -696,6 +797,10 @@ static void default_dir(void) {
     g_dir[MAX_PATH - 1] = 0;
 }
 
+/* wWinMain reads the command line and either runs --purge without a window or
+   shows the installer window.
+   Flags: --uninstall, --do / --do-uninstall (start at once), --dir PATH,
+   --no-open, --no-assoc, --purge DIR PID. */
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show) {
     WNDCLASSW wc;
     HWND hwnd;
@@ -742,6 +847,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show) {
     if (argv) LocalFree(argv);
     if (purge) return do_purge(purge_dir, purge_pid);
     if (!g_dir[0]) default_dir();
+    /* Window setup: DPI, font, dark field brush, centred borderless window. */
     SetProcessDPIAware();
     dc = GetDC(NULL);
     if (dc) {

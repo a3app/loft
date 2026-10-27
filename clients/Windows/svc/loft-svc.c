@@ -1,6 +1,16 @@
 /* loft-svc: Wintun adapter, IP Helper address and routes, packet pipe for loft-front.
    Windows 7 and later. The GUI is asInvoker; this process is LocalSystem.
-   WintunDeleteDriver runs only on --uninstall-driver. */
+   WintunDeleteDriver runs only on --uninstall-driver.
+
+   Why it exists: loft.exe (the tray app in src/win/) runs as the normal user and is
+   not allowed to change network settings. It asks this Windows service to do that
+   over the control pipe \\.\pipe\loft-ctl: one short text command per connection,
+   one text reply (see on_cmd; the client side is src/win/svcclient.c).
+   loft-front.exe, the separate Go process that carries the tunnel session, moves raw
+   IP packets through a second pipe, \\.\pipe\loft-tun (see rx_thread / tx_thread).
+   Wintun is a small virtual network adapter driver; wintun.dll sits next to this exe.
+   The same exe also installs and removes the service (--install, --uninstall);
+   setup/loft-setup.c runs it that way. */
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0601
 #endif
@@ -19,10 +29,15 @@
 #include <string.h>
 #include <stdint.h>
 
+/* LOFT_RTS caps how many routes the service remembers (and removes later).
+   The two pipe names are shared with src/win/ and with loft-front. */
 #define LOFT_RTS 280
 #define LOFT_PIPE_CTL L"\\\\.\\pipe\\loft-ctl"
 #define LOFT_PIPE_TUN L"\\\\.\\pipe\\loft-tun"
 
+/* Function types for the wintun.dll exports. The DLL is loaded at run time
+   (load_wintun), so these mirror the signatures from wintun.h instead of linking
+   an import library. */
 typedef void *WAdapter;
 typedef void *WSession;
 typedef WAdapter(WINAPI *FnCreate)(const WCHAR *, const WCHAR *, const GUID *);
@@ -37,6 +52,8 @@ typedef void(WINAPI *FnRel)(WSession, const BYTE *);
 typedef BYTE *(WINAPI *FnAlloc)(WSession, DWORD);
 typedef void(WINAPI *FnSend)(WSession, const BYTE *);
 
+/* W holds wintun.dll and the functions taken from it. All are NULL until
+   load_wintun succeeds. */
 static struct {
     HMODULE dll;
     FnCreate create;
@@ -52,6 +69,15 @@ static struct {
     FnSend send;
 } W;
 
+/* T is the tunnel state. One adapter at a time, shared by the control thread
+   and the two packet threads; cs guards the pipe client handle.
+   up       - the adapter and its session exist.
+   hold     - "no internet without the VPN": tun-close is ignored while set, so the
+              adapter and routes stay and traffic does not leak to the open network.
+   gw       - the machine's own default route, remembered before Loft adds routes;
+              "exclude" and "direct" routes go through it.
+   rts      - every route this service added, so it can remove exactly those.
+   dns_key / dns_old - registry key and old NameServer value, restored on close. */
 static struct {
     CRITICAL_SECTION cs;
     int ready;
@@ -73,12 +99,17 @@ static struct {
     WCHAR dns_old[512];
 } T;
 
+/* Service bookkeeping: SCM status handle and record, the stop event,
+   the control-pipe thread and the flag that keeps it looping. */
 static SERVICE_STATUS_HANDLE SvcStatus;
 static SERVICE_STATUS Svc;
 static HANDLE SvcStop;
 static HANDLE CtrlThread;
 static volatile LONG SvcRun;
 
+/* slog appends one timestamped line to %ProgramData%\loft\svc.log.
+   The service has no window, so this file is the only trace of what it did.
+   Writes stop once the file reaches 1 MiB, so the log cannot fill the disk. */
 static void slog(const char *s) {
     WCHAR dir[MAX_PATH], path[MAX_PATH];
     char line[640];
@@ -101,11 +132,14 @@ static void slog(const char *s) {
     CloseHandle(h);
 }
 
+/* reply copies a text answer into the response buffer for the control pipe. */
 static void reply(char *resp, int n, const char *s) {
     if (!resp || n <= 0) return;
     snprintf(resp, (size_t)n, "%s", s ? s : "err");
 }
 
+/* reply_err answers "err <what> (<GetLastError>)" and also logs it, so a failed
+   command can be diagnosed from svc.log. */
 static void reply_err(char *resp, int n, const char *what) {
     char b[192];
     snprintf(b, sizeof b, "err %s (%lu)", what ? what : "fail", GetLastError());
@@ -113,6 +147,8 @@ static void reply_err(char *resp, int n, const char *what) {
     reply(resp, n, b);
 }
 
+/* is_admin tells whether this process runs as a member of Administrators.
+   --install and --uninstall need that; otherwise they re-run themselves with UAC. */
 static int is_admin(void) {
     BOOL yes = FALSE;
     SID_IDENTIFIER_AUTHORITY nt = SECURITY_NT_AUTHORITY;
@@ -124,6 +160,10 @@ static int is_admin(void) {
     return yes ? 1 : 0;
 }
 
+/* pipe_sd builds the security descriptor for both pipes: full access for
+   SYSTEM, Administrators and interactive users (the signed-in desktop user who
+   runs loft.exe), nobody else. Network logons do not get in, and the pipes also
+   reject remote clients. The caller frees *sd with LocalFree. */
 static int pipe_sd(SECURITY_ATTRIBUTES *sa, PSECURITY_DESCRIPTOR *sd) {
     memset(sa, 0, sizeof *sa);
     *sd = NULL;
@@ -136,12 +176,18 @@ static int pipe_sd(SECURITY_ATTRIBUTES *sa, PSECURITY_DESCRIPTOR *sd) {
     return 1;
 }
 
+/* loft_guid fills the fixed GUID of the Loft adapter (its bytes spell
+   "loft-wintun-chk"). A fixed GUID makes Windows see the same adapter on every
+   start instead of a new network each time. */
 static void loft_guid(GUID *g) {
     static const unsigned char b[16] = {0x6c, 0x6f, 0x66, 0x74, 0x2d, 0x77, 0x69, 0x6e,
                                          0x74, 0x75, 0x6e, 0x2d, 0x63, 0x68, 0x6b, 0x01};
     memcpy(g, b, 16);
 }
 
+/* load_wintun loads wintun.dll from the directory of this exe (never from the
+   search path, so another copy cannot be picked up) and binds every function
+   into W. Returns 1 on success; a missing export counts as failure. */
 static int load_wintun(void) {
     WCHAR path[MAX_PATH], *slash;
     FARPROC p;
@@ -172,6 +218,8 @@ static int load_wintun(void) {
     return 1;
 }
 
+/* write_full writes all n bytes to a pipe, looping over partial writes.
+   Returns 0 on any error. */
 static int write_full(HANDLE h, const void *b, int n) {
     const char *p = b;
     int got = 0;
@@ -183,6 +231,8 @@ static int write_full(HANDLE h, const void *b, int n) {
     return 1;
 }
 
+/* read_full reads exactly n bytes from a pipe, looping over partial reads.
+   Returns 0 on error or when the other side closes. */
 static int read_full(HANDLE h, void *b, int n) {
     char *p = b;
     int got = 0;
@@ -194,6 +244,9 @@ static int read_full(HANDLE h, void *b, int n) {
     return 1;
 }
 
+/* write_client sends bytes to the connected loft-front, if any.
+   The handle is duplicated under the lock, so stop_threads may close T.client at
+   the same moment without this write landing on a closed handle. */
 static int write_client(const BYTE *b, int n) {
     HANDLE h = NULL, dup = NULL;
     int ok;
@@ -207,6 +260,11 @@ static int write_client(const BYTE *b, int n) {
     return ok;
 }
 
+/* rx_thread: packets Windows routes into the Loft adapter -> loft-front.
+   Each packet is framed as a 4-byte little-endian length plus the raw IP packet
+   and written to the loft-tun pipe. Anything shorter than an IPv4 header
+   (20 bytes) is dropped. The thread waits on Wintun's read event when the ring
+   is empty and ends when T.run drops or the session is closed. */
 static DWORD WINAPI rx_thread(LPVOID unused) {
     BYTE *buf;
     HANDLE ev;
@@ -246,6 +304,10 @@ static DWORD WINAPI rx_thread(LPVOID unused) {
     return 0;
 }
 
+/* tx_packets: loft-front -> Windows. Reads length-framed packets (same framing as
+   rx_thread) from one connected pipe client and hands each to Wintun, which
+   delivers it to the Windows network stack as if it arrived on the adapter.
+   A bad length or a closed pipe ends the loop; the client must reconnect. */
 static void tx_packets(HANDLE pipe) {
     BYTE *buf = (BYTE *)malloc(65535u);
     if (!buf) return;
@@ -266,6 +328,9 @@ static void tx_packets(HANDLE pipe) {
     free(buf);
 }
 
+/* tx_thread serves the loft-tun pipe: one client at a time, recreated after each
+   disconnect while the tunnel runs. pipe_ready is set once a pipe instance exists
+   (or creating it failed), so tun_open answers only when loft-front can connect. */
 static DWORD WINAPI tx_thread(LPVOID unused) {
     SECURITY_ATTRIBUTES sa;
     PSECURITY_DESCRIPTOR sd = NULL;
@@ -306,6 +371,9 @@ static DWORD WINAPI tx_thread(LPVOID unused) {
     return 0;
 }
 
+/* remember_gw saves the machine's own IPv4 default route (lowest metric, not on
+   the Loft adapter) in T.gw. It runs once per tunnel, before Loft's own default
+   route can hide it. Routes that must bypass the tunnel use this gateway. */
 static void remember_gw(void) {
     PMIB_IPFORWARD_TABLE2 tab = NULL;
     ULONG i;
@@ -324,6 +392,7 @@ static void remember_gw(void) {
     FreeMibTable(tab);
 }
 
+/* wipe_addrs removes every IPv4 address from the Loft adapter. */
 static void wipe_addrs(void) {
     PMIB_UNICASTIPADDRESS_TABLE tab = NULL;
     ULONG i;
@@ -334,17 +403,25 @@ static void wipe_addrs(void) {
     FreeMibTable(tab);
 }
 
+/* set_addr gives the Loft adapter a single IPv4 address (the overlay address
+   from the session; "overlay" is the private network inside the tunnel).
+   Old addresses are removed first. MTU is set to 1280, a conservative size,
+   so packets fit inside the tunnel's outer transport.
+   Returns 0 with the Windows error in GetLastError when the address cannot be set. */
 static int set_addr(const char *ip, int prefix) {
     MIB_UNICASTIPADDRESS_ROW row;
     IN_ADDR a;
     int i;
     if (prefix < 1 || prefix > 32) prefix = 32;
     if (inet_pton(AF_INET, ip, &a) != 1) return 0;
+    /* 1. A just-created adapter may not have an interface index yet; wait up to 3 s. */
     for (i = 0; i < 15; i++) {
         if (ConvertInterfaceLuidToIndex(&T.luid, &T.idx) == NO_ERROR) break;
         Sleep(200);
     }
     wipe_addrs();
+    /* 2. Add the address. Windows can refuse it for a moment right after the
+          adapter appears, so retry for about 3 s. */
     InitializeUnicastIpAddressEntry(&row);
     row.Address.Ipv4.sin_family = AF_INET;
     row.Address.si_family = AF_INET;
@@ -368,6 +445,7 @@ static int set_addr(const char *ip, int prefix) {
         }
     }
     {
+        /* 3. Interface settings: MTU 1280. */
         MIB_IPINTERFACE_ROW ir;
         InitializeIpInterfaceEntry(&ir);
         ir.InterfaceLuid = T.luid;
@@ -381,12 +459,17 @@ static int set_addr(const char *ip, int prefix) {
     return 1;
 }
 
+/* track remembers a route this service added, so it can be removed later.
+   Past LOFT_RTS entries the route stays in Windows but is not tracked. */
 static int track(const MIB_IPFORWARD_ROW2 *row) {
     if (T.nrts >= LOFT_RTS) return 0;
     T.rts[T.nrts++] = *row;
     return 1;
 }
 
+/* drop_tracked removes tracked routes of one kind: only_default=1 removes the
+   default routes (0.0.0.0/0), only_default=0 removes every other route.
+   The remaining routes stay tracked. */
 static void drop_tracked(int only_default) {
     int i, w = 0;
     for (i = 0; i < T.nrts; i++) {
@@ -400,12 +483,16 @@ static void drop_tracked(int only_default) {
     T.nrts = w;
 }
 
+/* drop_all_routes removes every route this service added. */
 static void drop_all_routes(void) {
     int i;
     for (i = 0; i < T.nrts; i++) DeleteIpForwardEntry2(&T.rts[i]);
     T.nrts = 0;
 }
 
+/* add_route adds dest/prefix either through the Loft adapter (via_tun=1, metric 5)
+   or around it, through the saved physical gateway (via_tun=0). The second form
+   needs a known gateway. The route is tracked even if it already existed. */
 static int add_route(int via_tun, const IN_ADDR *dest, int prefix) {
     MIB_IPFORWARD_ROW2 row;
     DWORD e;
@@ -437,6 +524,7 @@ static int add_route(int via_tun, const IN_ADDR *dest, int prefix) {
     return 1;
 }
 
+/* parse_cidr reads "a.b.c.d" or "a.b.c.d/n" (IPv4 only). No prefix means /32. */
 static int parse_cidr(const char *s, IN_ADDR *a, int *pre) {
     char tmp[80];
     char *sl;
@@ -456,6 +544,9 @@ static int parse_cidr(const char *s, IN_ADDR *a, int *pre) {
     return inet_pton(AF_INET, tmp, a) == 1;
 }
 
+/* dns_flush clears the Windows DNS cache and tells the TCP/IP stack that the
+   adapter settings changed, so a new NameServer takes effect without a reboot.
+   Both functions are looked up at run time; a missing one is skipped. */
 static void dns_flush(void) {
     HMODULE dns = LoadLibraryW(L"dnsapi.dll");
     HMODULE dhcp = LoadLibraryW(L"dhcpcsvc.dll");
@@ -472,6 +563,8 @@ static void dns_flush(void) {
     }
 }
 
+/* guid_key builds the registry path that holds the TCP/IP settings of the adapter
+   with GUID g (under HKLM). */
 static void guid_key(const GUID *g, WCHAR *dst, int n) {
     _snwprintf(dst, (size_t)n,
                L"SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{%08lX-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}",
@@ -481,6 +574,9 @@ static void guid_key(const GUID *g, WCHAR *dst, int n) {
     dst[n - 1] = 0;
 }
 
+/* dns_set writes the DNS servers for the Loft adapter (the NameServer value in
+   its registry key). The first call saves the old value so dns_restore can put
+   it back when the tunnel closes. */
 static void dns_set(const char *ips) {
     GUID g;
     WCHAR sub[300], wips[512];
@@ -506,6 +602,7 @@ static void dns_set(const char *ips) {
     dns_flush();
 }
 
+/* dns_restore puts back the NameServer value saved by dns_set. */
 static void dns_restore(void) {
     HKEY k = NULL;
     if (!T.dns_saved) return;
@@ -517,6 +614,9 @@ static void dns_restore(void) {
     dns_flush();
 }
 
+/* stop_threads ends the Wintun session and both packet threads. Ending the
+   session wakes rx_thread; cancelling pending I/O and closing the client pipe
+   wakes tx_thread. Each thread gets up to 5 s to exit. */
 static void stop_threads(void) {
     HANDLE c = NULL;
     WSession ses = T.ses;
@@ -545,6 +645,8 @@ static void stop_threads(void) {
     T.ses = NULL;
 }
 
+/* close_adapter closes the Wintun adapter handle and forgets its identity.
+   Closing the handle removes the Loft adapter from Windows. */
 static void close_adapter(void) {
     if (T.ad && W.close_ad) W.close_ad(T.ad);
     T.ad = NULL;
@@ -553,6 +655,9 @@ static void close_adapter(void) {
     memset(&T.luid, 0, sizeof T.luid);
 }
 
+/* tun_shutdown takes the whole tunnel down: threads, routes, address, DNS
+   (when restore_dns is set) and the adapter. It also clears hold and the saved
+   gateway, so the next tunnel starts clean. */
 static void tun_shutdown(int restore_dns) {
     stop_threads();
     drop_all_routes();
@@ -563,6 +668,9 @@ static void tun_shutdown(int restore_dns) {
     T.hold = 0;
 }
 
+/* tun_open creates the Loft adapter, starts a Wintun session (4 MiB packet
+   ring) and the two packet threads. Answers "ok idx=<interface index>".
+   Calling it while the tunnel is already up just repeats that answer. */
 static int tun_open(char *resp, int n) {
     GUID g;
     WAdapter ad;
@@ -576,6 +684,8 @@ static int tun_open(char *resp, int n) {
         reply_err(resp, n, "wintun.dll");
         return 0;
     }
+    /* 1. Create the adapter and start a session. If the session does not start,
+          close the adapter and try once more with a fresh one. */
     loft_guid(&g);
     SetLastError(0);
     ad = W.create(L"Loft", L"Loft", &g);
@@ -600,6 +710,7 @@ static int tun_open(char *resp, int n) {
             return 0;
         }
     }
+    /* 2. Start the packet threads and wait (up to 3 s) until loft-tun exists. */
     T.ad = ad;
     T.ses = ses;
     T.up = 1;
@@ -613,6 +724,7 @@ static int tun_open(char *resp, int n) {
         reply(resp, n, "err thread");
         return 0;
     }
+    /* 3. Wait briefly for the interface index; the answer reports it. */
     WaitForSingleObject(T.pipe_ready, 3000);
     for (i = 0; i < 10; i++) {
         if (ConvertInterfaceLuidToIndex(&T.luid, &T.idx) == NO_ERROR) break;
@@ -623,8 +735,26 @@ static int tun_open(char *resp, int n) {
     return 1;
 }
 
+/* on_cmd runs one control-pipe command and writes the text answer to resp.
+   Commands (sent by src/win/session.c):
+     ping, status          - liveness check and current state
+     tun-open, tun-close   - create / remove the adapter (tun-close is ignored
+                             while hold is on)
+     reset                 - remove the adapter even when hold is on
+     hold 0|1              - "no internet without the VPN" switch
+     addr IP [prefix]      - set the adapter address
+     dns LIST              - set the adapter DNS servers (stored as given)
+     route CIDR            - send this range into the tunnel
+     direct CIDR           - send this range around the tunnel
+     exclude IP            - send this host around the tunnel (always /32; used
+                             for the server address, so the tunnel's own traffic
+                             does not loop back into the tunnel)
+     route-default on|off  - add / remove the 0.0.0.0/0 route into the tunnel
+     routes-clear          - remove all non-default routes
+   Commands from addr on need the tunnel to be up. */
 static void on_cmd(char *line, char *resp, int n) {
     char *arg;
+    /* Split "name arg" and trim spaces and line ends. */
     while (*line == ' ' || *line == '\t' || *line == '\r' || *line == '\n') line++;
     arg = line + strlen(line);
     while (arg > line && (arg[-1] == '\r' || arg[-1] == '\n' || arg[-1] == ' ')) {
@@ -730,10 +860,15 @@ static void on_cmd(char *line, char *resp, int n) {
     reply(resp, n, "err unknown");
 }
 
+/* ctl_pipe creates one instance of the loft-ctl control pipe (message mode,
+   local clients only). */
 static HANDLE ctl_pipe(SECURITY_ATTRIBUTES *sa) {
     return CreateNamedPipeW(LOFT_PIPE_CTL, PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, sa);
 }
 
+/* ctrl_thread is the control-pipe server. For each client it reads one command,
+   answers it and disconnects. Commands run one after another on this thread,
+   so the tunnel state never sees two commands at once. */
 static DWORD WINAPI ctrl_thread(LPVOID unused) {
     SECURITY_ATTRIBUTES sa;
     PSECURITY_DESCRIPTOR sd = NULL;
@@ -777,6 +912,8 @@ static DWORD WINAPI ctrl_thread(LPVOID unused) {
     return 0;
 }
 
+/* report tells the Service Control Manager (SCM, the part of Windows that starts
+   and stops services) the current state. Stop is accepted only while running. */
 static void report(DWORD state) {
     Svc.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
     Svc.dwCurrentState = state;
@@ -787,6 +924,8 @@ static void report(DWORD state) {
     SetServiceStatus(SvcStatus, &Svc);
 }
 
+/* handler receives stop and shutdown requests from the SCM. It only signals;
+   the cleanup itself runs in ServiceMain. */
 static DWORD WINAPI handler(DWORD ctrl, DWORD type, LPVOID data, LPVOID ctx) {
     (void)type;
     (void)data;
@@ -802,6 +941,9 @@ static DWORD WINAPI handler(DWORD ctrl, DWORD type, LPVOID data, LPVOID ctx) {
     return ERROR_CALL_NOT_IMPLEMENTED;
 }
 
+/* ServiceMain is the service body, called by the SCM on start. It starts the
+   control-pipe thread, waits for a stop request, then stops that thread and
+   removes the tunnel (adapter, routes, DNS) so nothing is left behind. */
 static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
     (void)argc;
     (void)argv;
@@ -821,6 +963,7 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
     CtrlThread = CreateThread(NULL, 0, ctrl_thread, NULL, 0, NULL);
     report(SERVICE_RUNNING);
     slog("service up");
+    /* Stop requested: end the control thread first, so no command races the cleanup. */
     WaitForSingleObject(SvcStop, INFINITE);
     SvcRun = 0;
     if (CtrlThread) {
@@ -835,6 +978,8 @@ static void WINAPI ServiceMain(DWORD argc, LPWSTR *argv) {
     report(SERVICE_STOPPED);
 }
 
+/* elevate re-runs this exe with params through UAC ("runas") and waits up to
+   2 minutes. Returns the child's exit code, or 1 when UAC was refused. */
 static int elevate(const WCHAR *params) {
     WCHAR path[MAX_PATH];
     SHELLEXECUTEINFOW sei;
@@ -857,6 +1002,9 @@ static int elevate(const WCHAR *params) {
     return 0;
 }
 
+/* do_install registers loft-svc as the auto-start service "loft" (it depends on
+   Tcpip) and starts it. An existing registration is updated to point at this
+   exe. Returns 0 on success; the process exit code is what loft-setup checks. */
 static int do_install(void) {
     SC_HANDLE scm, svc;
     WCHAR path[MAX_PATH], bin[MAX_PATH + 8];
@@ -893,6 +1041,9 @@ static int do_install(void) {
     return 0;
 }
 
+/* do_uninstall stops and deletes the "loft" service. With del_driver it also
+   removes the Wintun driver from Windows (other Wintun users would lose it too,
+   so plain --uninstall keeps it). */
 static int do_uninstall(int del_driver) {
     SC_HANDLE scm, svc;
     SERVICE_STATUS st;
@@ -911,6 +1062,9 @@ static int do_uninstall(int del_driver) {
     return 0;
 }
 
+/* wWinMain: --install, --uninstall and --uninstall-driver do that job and exit.
+   With no flag, the exe hands itself to the SCM as the "loft" service. If it was
+   not started by the SCM (for example, double-clicked), it installs itself. */
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show) {
     int argc = 0, i, uninstall = 0, driver = 0, install = 0;
     LPWSTR *argv;
