@@ -28,7 +28,7 @@ func tunnelIface(name string) bool {
 	for _, p := range []string{
 		"utun", "tun", "tap", "ppp", "ipsec", "wg", "zt", "tailscale",
 		"feth", "awdl", "llw", "gif", "stf", "p2p", "anpi", "vmnet", "vnic",
-		"lo",
+		"lo", "loft",
 	} {
 		if n == p || strings.HasPrefix(n, p) {
 			return true

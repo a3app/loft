@@ -730,15 +730,22 @@ static void on_cmd(char *line, char *resp, int n) {
     reply(resp, n, "err unknown");
 }
 
+static HANDLE ctl_pipe(SECURITY_ATTRIBUTES *sa) {
+    return CreateNamedPipeW(LOFT_PIPE_CTL, PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, sa);
+}
+
 static DWORD WINAPI ctrl_thread(LPVOID unused) {
     SECURITY_ATTRIBUTES sa;
     PSECURITY_DESCRIPTOR sd = NULL;
+    HANDLE next = INVALID_HANDLE_VALUE;
     (void)unused;
     if (!pipe_sd(&sa, &sd)) return 0;
     while (SvcRun) {
-        HANDLE p = CreateNamedPipeW(LOFT_PIPE_CTL, PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, &sa);
+        HANDLE p = next;
         char req[512], resp[256];
         DWORD got = 0;
+        next = INVALID_HANDLE_VALUE;
+        if (p == INVALID_HANDLE_VALUE) p = ctl_pipe(&sa);
         if (p == INVALID_HANDLE_VALUE) {
             Sleep(200);
             continue;
@@ -751,6 +758,9 @@ static DWORD WINAPI ctrl_thread(LPVOID unused) {
             CloseHandle(p);
             break;
         }
+        /* The next instance exists before this command runs, so the client
+           does not see a missing pipe between hold and addr. */
+        next = ctl_pipe(&sa);
         memset(req, 0, sizeof req);
         if (ReadFile(p, req, sizeof req - 1, &got, NULL) && got > 0) {
             req[got] = 0;
@@ -762,6 +772,7 @@ static DWORD WINAPI ctrl_thread(LPVOID unused) {
         DisconnectNamedPipe(p);
         CloseHandle(p);
     }
+    if (next != INVALID_HANDLE_VALUE) CloseHandle(next);
     LocalFree(sd);
     return 0;
 }

@@ -3,7 +3,7 @@ package protect
 import "testing"
 
 func TestTunnelIface(t *testing.T) {
-	for _, n := range []string{"utun6", "tun0", "ppp0", "lo0", "awdl0", "ipsec0", "wg0"} {
+	for _, n := range []string{"utun6", "tun0", "ppp0", "lo0", "awdl0", "ipsec0", "wg0", "Loft"} {
 		if !tunnelIface(n) {
 			t.Fatalf("%s", n)
 		}

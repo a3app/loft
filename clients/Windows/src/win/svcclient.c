@@ -6,10 +6,36 @@ int svc_call_to(const char *cmd, char *resp, int n, DWORD ms) {
     BOOL ok;
     if (resp && n > 0) resp[0] = 0;
     if (!cmd) cmd = "";
-    ok = CallNamedPipeA("\\\\.\\pipe\\loft-ctl", (LPVOID)cmd, (DWORD)strlen(cmd), buf, sizeof buf - 1, &got, ms ? ms : 8000);
-    if (!ok) {
-        if (resp && n > 0) snprintf(resp, (size_t)n, "err pipe");
-        return 0;
+    {
+        /* The service recreates the pipe between commands. CallNamedPipe
+           returns at once with ERROR_FILE_NOT_FOUND in that gap, so a burst
+           (hold, addr, routes) drops the first command and the tunnel never
+           gets its address. Wait out the gap inside the same budget. */
+        DWORD budget = ms ? ms : 8000;
+        DWORD t0 = GetTickCount();
+        DWORD err = 0;
+        ok = FALSE;
+        for (;;) {
+            DWORD elapsed = GetTickCount() - t0;
+            DWORD left = budget - elapsed;
+            if (elapsed >= budget) break;
+            if (!WaitNamedPipeA("\\\\.\\pipe\\loft-ctl", left > 200 ? 200 : left) && GetLastError() == ERROR_FILE_NOT_FOUND) {
+                if (GetTickCount() - t0 >= budget) break;
+                Sleep(20);
+                continue;
+            }
+            elapsed = GetTickCount() - t0;
+            if (elapsed >= budget) break;
+            ok = CallNamedPipeA("\\\\.\\pipe\\loft-ctl", (LPVOID)cmd, (DWORD)strlen(cmd), buf, sizeof buf - 1, &got, budget - elapsed);
+            if (ok) break;
+            err = GetLastError();
+            if (err != ERROR_PIPE_BUSY && err != ERROR_FILE_NOT_FOUND) break;
+            if (GetTickCount() - t0 >= budget) break;
+        }
+        if (!ok) {
+            if (resp && n > 0) snprintf(resp, (size_t)n, "err pipe %lu", err ? (unsigned long)err : (unsigned long)GetLastError());
+            return 0;
+        }
     }
     if (got >= sizeof buf) got = sizeof buf - 1;
     buf[got] = 0;
