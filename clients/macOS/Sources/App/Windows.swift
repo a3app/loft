@@ -1,5 +1,8 @@
 // Loft windows: status, connections list, settings, profile editor, and onboard.
 // Split-routing sheets live in SplitWindows.swift.
+// Each window is an NSWindowController that builds its views in code from the
+// widgets in Chrome.swift and reads state from SessionController. A profile
+// is one saved connection (server, key, transport options).
 
 import AppKit
 
@@ -52,6 +55,7 @@ final class StatusWindowController: NSWindowController {
         titleLab.textColor = Palette.snow
         titleLab.alignment = .center
         Palette.fitLine(titleLab)
+        // Status pill under the title; a click opens the connections list.
         pillBox.wantsLayer = true
         pillBox.layer?.backgroundColor = Palette.field.cgColor
         pillBox.layer?.cornerRadius = 12
@@ -70,6 +74,7 @@ final class StatusWindowController: NSWindowController {
         pillBox.addSubview(pillHit)
         action.target = self
         action.action = #selector(tap)
+        // Three info cards: overlay address, active front, SOCKS port.
         for (card, labs) in zip(cards, [[sOverK, sOverV], [sFrontK, sFrontV], [sSocksK, sSocksV]]) {
             card.fill = Palette.field
             card.radius = 10
@@ -92,6 +97,7 @@ final class StatusWindowController: NSWindowController {
         sparkR.textColor = Palette.mute
         sparkR.alignment = .right
         Palette.fitLine(sparkR)
+        // Footer buttons: Journal, Reset, Routes, Settings.
         footLine.wantsLayer = true
         footLine.layer?.backgroundColor = Palette.line.cgColor
         journalBtn.compact = true
@@ -117,6 +123,7 @@ final class StatusWindowController: NSWindowController {
         c.addSubview(resetBtn)
         c.addSubview(splitBtn)
         c.addSubview(setBtn)
+        // Rows for the other running sessions in "several on" mode.
         others = SessionRows(host: c)
         others.plateFill = Palette.field
         others.onPrefer = { [weak self] id in self?.engine.prefer(id) }
@@ -135,6 +142,7 @@ final class StatusWindowController: NSWindowController {
         let disconnecting = e.state == .disconnecting
         let busy = connecting || disconnecting
         mark.state = (held || fail) ? .err : (on ? .on : .off)
+        // Pill: "connected: <name> <uptime>" or "off".
         let pillText: String
         if on {
             let name: String
@@ -151,6 +159,7 @@ final class StatusWindowController: NSWindowController {
         action.lampOn = on && !held && !busy
         action.isEnabled = !disconnecting
         action.title = e.actionTitle()
+        // Cards and footer texts; the "simple" preference hides cards and ticker.
         setKicker(sOverK, "OVERLAY")
         setKicker(sFrontK, L10n.t("front").uppercased())
         setKicker(sSocksK, "SOCKS5")
@@ -194,6 +203,7 @@ final class StatusWindowController: NSWindowController {
         let w = c.bounds.width > 1 ? c.bounds.width : 400
         let simple = engine.store.simple
         let wideSpark = engine.state == .error || engine.state == .connecting || engine.state == .disconnecting
+        // Header: mark, title, pill and the main button at fixed positions.
         mark.frame = NSRect(x: round((w - 72) / 2), y: 16, width: 72, height: 72)
         titleLab.frame = NSRect(x: 22, y: 92, width: w - 44, height: 28)
         let pillNeed = Palette.textWidth(pillLab.stringValue, font: Palette.body(11.5)) + 36
@@ -219,10 +229,13 @@ final class StatusWindowController: NSWindowController {
             sparkR.frame = NSRect(x: w - 22 - 160, y: 300, width: 160, height: 18)
             sparkR.isHidden = wideSpark
         }
+        // Other sessions, then the footer under them.
         let rest = simple ? [] : engine.otherLive()
         let restEnd = others.place(rest, engine: engine, x: 22, y: 330, width: w - 44, inset: 10, gap: 6)
         let bodyH: CGFloat = simple ? 310 : (rest.isEmpty ? 490 : max(490, restEnd + 88))
         footLine.frame = NSRect(x: 0, y: bodyH - 72, width: w, height: 1)
+        // Footer buttons share the width: spare room goes to the outer two; when
+        // short, the outer ones shrink first, down to a minimum width.
         let gap: CGFloat = 8
         let inner = w - 40
         let font = Palette.font(11.5)
@@ -295,6 +308,7 @@ private final class ConnRow: FlippedView {
     let side = PassLab(labelWithString: "")
     let edit = GhostButton(frame: .zero)
 
+    /// Styles the row parts once; the window fills and places them on each rebuild.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         plate.radius = 10
@@ -322,8 +336,10 @@ private final class ConnRow: FlippedView {
         for v in [plate, hit, act, name, host, tagLab, side, edit] as [NSView] { addSubview(v) }
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Keeps the plate and the hit button covering the whole row.
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         plate.frame = bounds
@@ -410,6 +426,7 @@ final class ConnectionsWindowController: NSWindowController {
     @objc func rebuild() {
         let c = loftBody(window!)
         let w = c.bounds.width > 1 ? c.bounds.width : 400
+        // 1. Texts, then the header row: title with "+", and the "several" switch.
         titleLab.text = L10n.t("conns")
         multiCap.text = L10n.t("several")
         multiSw.on = engine.store.multi
@@ -440,6 +457,8 @@ final class ConnectionsWindowController: NSWindowController {
         sub.lineBreakMode = .byTruncatingTail
         sub.usesSingleLineMode = true
         sub.frame = NSRect(x: 20, y: 40, width: w - 40, height: 18)
+        // 2. One row per profile, freshest first. The button column is as wide as
+        //    the longest possible button text, so rows do not jump.
         var y: CGFloat = 0
         let simple = engine.store.simple
         let multi = engine.store.multi
@@ -479,6 +498,7 @@ final class ConnectionsWindowController: NSWindowController {
             let live = st == .on
             row.plate.fill = (active || live) ? Palette.field : nil
             row.plate.stroke = (active || live) ? Palette.slate : nil
+            // Row button: Retry/Cancel on error, Disconnect when on, Connect when off.
             if st == .error {
                 row.act.title = engine.actionTitle(of: p.id)
                 row.act.lampOn = false
@@ -503,6 +523,8 @@ final class ConnectionsWindowController: NSWindowController {
             let actX: CGFloat = 8
             row.act.frame = NSRect(x: actX, y: round((rowH - actH) / 2), width: actW, height: actH)
             let textX = actX + actW + 8
+            // Right column: external or overlay IP and state in "several" mode,
+            // "active" or the protocol in exclusive mode.
             let sideStr: String
             if simple {
                 sideStr = st == .error ? L10n.t("fail") : ""
@@ -562,6 +584,8 @@ final class ConnectionsWindowController: NSWindowController {
             row.edit.frame = NSRect(x: sideX, y: edY, width: sideW, height: 18)
             y += row.frame.height + 4
         }
+        // 3. Drop rows of deleted profiles, then size the list (keeping its scroll
+        //    position) and the footer; with no profiles show the drop zone instead.
         for (id, row) in rows where !seen.contains(id) {
             row.removeFromSuperview()
             rows.removeValue(forKey: id)
@@ -732,6 +756,7 @@ final class SettingsWindowController: NSWindowController {
 
     /// Rebuilds the current tab from prefs.
     func reload() {
+        // 1. Save what was typed in text fields, because the whole tab is rebuilt.
         commitSocksPort()
         commitExtIPURL()
         socksPortF = nil
@@ -739,6 +764,7 @@ final class SettingsWindowController: NSWindowController {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
         switches.removeAll()
+        // 2. Header (title, Reset) and the three tabs: General, Route, Client.
         let resetTitle = L10n.t("reset")
         let resetW = min(200, Palette.textWidth(resetTitle, font: Palette.font(11.5)) + 22)
         let headY: CGFloat = 16
@@ -763,6 +789,7 @@ final class SettingsWindowController: NSWindowController {
         }
         c.addSubview(tabs)
         y += 44
+        // 3. Row builders. Each adds one row at `y` and moves `y` down.
         let textW: CGFloat = 328
         let swX: CGFloat = 382
         /// One named pref row with a toggle.
@@ -1005,6 +1032,7 @@ final class SettingsWindowController: NSWindowController {
             }
             y += 22
         }
+        // 4. The rows of the selected tab, then the links under every tab.
         switch tab {
         case 1:
             pref("default_route", "default_route_d", engine.store.defaultRoute)
@@ -1209,6 +1237,7 @@ final class EditWindowController: NSWindowController {
     private func build() {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
+        // Header: title and the QR button.
         let qrTitle = L10n.t("qr")
         let qrW = min(88, Palette.textWidth(qrTitle, font: Palette.font(11.5)) + 22)
         // 14pt matches the Back/Delete footer so the title is not cramped under the lights.
@@ -1228,6 +1257,7 @@ final class EditWindowController: NSWindowController {
         qr.action = #selector(qrTap)
         c.addSubview(qr)
         var y: CGFloat = headY + headH + 8
+        // Name field, then the protocol switch (loft, SSTP, VLESS, Trojan).
         let nl = Palette.label(L10n.t("name"), font: Palette.body(11.5), color: Palette.mute, frame: NSRect(x: 28, y: y, width: 384, height: 16))
         c.addSubview(nl)
         y += 18
@@ -1247,6 +1277,7 @@ final class EditWindowController: NSWindowController {
         vpnSeg.onChange = { [weak self] v in self?.switchVPN(v) }
         c.addSubview(vpnSeg)
         y += rowH + 14
+        // Main / Advanced tabs; switching saves the fields first.
         tabSeg = SegControl(frame: NSRect(x: 28, y: y, width: 384, height: 32), titles: [L10n.t("edit_main"), L10n.t("edit_adv")])
         tabSeg.value = editTab
         tabSeg.onChange = { [weak self] v in
@@ -1256,6 +1287,7 @@ final class EditWindowController: NSWindowController {
         }
         c.addSubview(tabSeg)
         y += 44
+        // Scrollable area that paintForm fills, plus the fixed footer buttons.
         formTop = y
         formScroll = loftOverlayScroll(frame: NSRect(x: 0, y: y, width: 440, height: 200))
         form = FlippedView(frame: NSRect(x: 0, y: 0, width: 440, height: 200))
@@ -1308,6 +1340,7 @@ final class EditWindowController: NSWindowController {
 
     /// Reloads the type-specific block and resizes the window.
     private func paintForm() {
+        // 1. Forget the old controls; harvest and save only read the ones rebuilt below.
         form.subviews.forEach { $0.removeFromSuperview() }
         userF = nil; pathF = nil; kindSeg = nil; muxSw = nil; sniF = nil; tlsSw = nil; papSw = nil
         dnsF = nil; dnsReplaceSw = nil; dnsSystemSw = nil
@@ -1318,6 +1351,7 @@ final class EditWindowController: NSWindowController {
         vlessHostF = nil; vlessPortF = nil; vlessFpF = nil; vlessPbkF = nil; vlessSidF = nil
         vlessPathF = nil; vlessHdrF = nil; vlessSecSeg = nil; vlessNetSeg = nil; vlessVisionSw = nil
         var y: CGFloat = 0
+        // 2. Small builders. Each adds controls at `y` and moves `y` down.
         /// Mute caption inside `form`.
         func lab(_ k: String) {
             let l = Palette.label(L10n.t(k), font: Palette.body(11.5), color: Palette.mute, frame: NSRect(x: 28, y: y, width: 384, height: 16))
@@ -1353,6 +1387,7 @@ final class EditWindowController: NSWindowController {
             y += 48
             return (f, sw)
         }
+        /// Width for a capsule switch so its longest title fits in every segment (max 384 pt).
         func capsuleWidth(_ titles: [String], icon: CGFloat = 0) -> CGFloat {
             let face = Palette.font(11.5)
             let text = titles.map { Palette.textWidth($0, font: face) }.max() ?? 48
@@ -1384,6 +1419,9 @@ final class EditWindowController: NSWindowController {
         let trojan = profile.isTrojan
         let alt = sstp || vless || trojan
         let capW: CGFloat = 320
+        /// Adds one option row (title, wrapped description, switch on the right),
+        /// for example TLS check, mux or system DNS, and returns the switch so
+        /// the caller can read it on save.
         func inbound(_ key: String, _ dkey: String, _ on: Bool) -> ToggleSwitch {
             let n = Palette.label(L10n.t(key), font: Palette.body(13.5), color: Palette.snow, frame: NSRect(x: 28, y: y, width: capW, height: 18))
             let dStr = L10n.t(dkey)
@@ -1396,6 +1434,8 @@ final class EditWindowController: NSWindowController {
             y += 20 + dH + 14
             return sw
         }
+        // 3. Main tab: connection fields per protocol. SSTP, VLESS and loft can be
+        //    entered as one share link or field by field (Link / Manual switch).
         if editTab == 0 {
             if sstp {
                 linkManual(sstpManual) { [weak self] on in self?.sstpManual = on }
@@ -1533,12 +1573,14 @@ final class EditWindowController: NSWindowController {
                     keyF = field("loft://lt_@host/path", ShareURI.emit(profile), secure: true)
                 }
             }
+            // TLS options for the protocols that use TLS directly.
             if sstp {
                 tlsSw = inbound("sstp_tls", "sstp_tls_d", profile.tlsCheck)
                 papSw = inbound("sstp_pap", "sstp_pap_d", profile.papCHAP)
             } else if vless || trojan {
                 tlsSw = inbound("sstp_tls", "sstp_tls_d", profile.tlsCheck)
             }
+        // 4. Advanced tab: local SOCKS port, TUN, mux and DNS options.
         } else {
             let defPort = engine.store.socksPort
             let socksL = Palette.label(L10n.t("socks"), font: Palette.body(13.5), color: Palette.snow, frame: NSRect(x: 28, y: y, width: capW, height: 18))
@@ -1637,6 +1679,8 @@ final class EditWindowController: NSWindowController {
     /// Copies visible fields into `profile`.
     private func harvest() {
         profile.name = nameF.stringValue
+        // 1. Main-tab fields, per protocol. A pasted link is parsed only when it
+        //    differs from the one shown, so an unchanged link does not reset fields.
         if profile.isVLESS {
             harvestVLESS()
         } else if profile.isSSTP {
@@ -1689,6 +1733,8 @@ final class EditWindowController: NSWindowController {
                 profile.url = raw
             }
         }
+        // 2. Fields shared by several protocols and the Advanced tab; nil means
+        //    the control is not on screen and the profile keeps its value.
         if let u = userF { profile.user = u.stringValue }
         if let s = sniF { profile.sni = s.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
         if let t = tlsSw { profile.tlsCheck = t.on }
@@ -1709,6 +1755,7 @@ final class EditWindowController: NSWindowController {
         if let k = kindSeg, !loftManual, !profile.isSSTP, !profile.isVLESS, !profile.isTrojan {
             profile.kind = LoftProfile.frontKind(k.value)
         }
+        // 3. Fix-ups: L3 has no mux; a Trojan link supplies password and SNI if missing.
         if profile.kind.lowercased() == "l3" { profile.mux = false }
         if profile.isTrojan, profile.url.lowercased().hasPrefix("trojan://") {
             if let u = URL(string: profile.url), let pass = u.user, profile.token.isEmpty {
@@ -1785,6 +1832,7 @@ final class EditWindowController: NSWindowController {
     @objc private func saveTap() {
         harvest()
         var p = profile
+        // 1. A full share link in the URL field fills the profile from that link.
         let lowURL = p.url.lowercased()
         if lowURL.hasPrefix("loft://"), let q = ShareURI.loft(p.url, fileName: p.id) {
             if p.name.isEmpty { p.name = q.name }
@@ -1823,6 +1871,8 @@ final class EditWindowController: NSWindowController {
             if p.sni.isEmpty { p.sni = q.sni }
             p.mux = false
         }
+        // 2. Rules per protocol: SSTP always uses TUN and no mux; VLESS and Trojan
+        //    have no mux; a profile needs SOCKS or TUN, so TUN is turned on if both are off.
         if p.isSSTP {
             p.tun = true
             p.mux = false
@@ -1831,6 +1881,7 @@ final class EditWindowController: NSWindowController {
             p.mux = false
         }
         if !p.tun && !p.socksOn { p.tun = true }
+        // 3. New profile: make an id from the name. Then save and close.
         if p.id.isEmpty {
             p.id = engine.store.slug(p.name)
             if p.id.isEmpty { p.id = UUID().uuidString }
@@ -1935,6 +1986,7 @@ final class OnboardWindowController: NSWindowController {
     private func paint() {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
+        // Shared header: mark, step label, title and explanation.
         let mark = MarkView(frame: NSRect(x: 188, y: 16, width: 64, height: 64))
         mark.state = .on
         c.addSubview(mark)
@@ -1950,6 +2002,7 @@ final class OnboardWindowController: NSWindowController {
         c.addSubview(stepL); c.addSubview(title); c.addSubview(body)
 
         var y: CGFloat = 190
+        // Step 1: the access key, Continue, and "import from a file" instead.
         if step == 1 {
             field = LoftField(frame: NSRect(x: 36, y: y, width: 368, height: 40), placeholder: "lt_")
             field.stringValue = token
@@ -1976,6 +2029,7 @@ final class OnboardWindowController: NSWindowController {
             alt.target = self
             alt.action = #selector(imp)
             c.addSubview(alt)
+        // Step 2: server URL, transport type and path, then Connect and Back.
         } else {
             let ul = Palette.label(L10n.t("url"), font: Palette.body(11.5), color: Palette.mute, frame: NSRect(x: 36, y: y, width: 368, height: 16))
             c.addSubview(ul)

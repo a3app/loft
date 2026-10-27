@@ -1,4 +1,6 @@
 // Share-string detector: loft://, sstp://, vless://, trojan://, YAML, SSTP .vpn JSON (docs/share.md).
+// It turns whatever the user pasted, dropped or scanned into LoftProfile
+// values that ProfileStore can save.
 
 import Foundation
 
@@ -9,12 +11,14 @@ enum ShareURI {
         parse(raw, fileName: fileName, allowB64: true)
     }
 
-    /// One pass of the detector in docs/share.md §1.
+    /// One pass of the share-string detector described in docs/share.md: split
+    /// multi-line text, match a known scheme, else try one level of base64.
     private static func parse(_ raw: String, fileName: String, allowB64: Bool) -> [LoftProfile] {
         var s = raw
         if s.hasPrefix("\u{FEFF}") { s.removeFirst() }
         s = s.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.isEmpty { return [] }
+        // Several lines: parse each on its own and drop duplicates.
         let lines = s.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -29,6 +33,7 @@ enum ShareURI {
             }
             if !out.isEmpty { return out }
         }
+        // One share string: pick the parser by scheme.
         let low = s.lowercased()
         if low.hasPrefix("loft://") {
             if let p = loft(s, fileName: fileName) { return [p] }
@@ -46,6 +51,7 @@ enum ShareURI {
             if let p = sstp(s, fileName: fileName) { return [p] }
             return []
         }
+        // Last try: the whole text may be base64 of the above (one level only).
         if allowB64, let decoded = unwrapBase64(s) {
             return parse(decoded, fileName: fileName, allowB64: false)
         }
@@ -63,6 +69,9 @@ enum ShareURI {
         var path = c.path
         if path == "/" { path = "" }
         let q = query(c)
+        // "Fronts" are the transports a loft node offers (GET, WebSocket, HTTP/2,
+        // HTTP/3, QUIC). Query keys named after them list the enabled ones, each
+        // with an optional path; the main type is GET when present.
         let frontKeys = ["get", "ws", "h2", "h3", "quic"]
         let hasFronts = frontKeys.contains { q.keys.contains($0) }
         var type = (q["type"] ?? "get").lowercased()
@@ -100,6 +109,8 @@ enum ShareURI {
                 listedFronts.append(f)
             }
         }
+        // Build the profile URL: GET and multi-front links keep only scheme://host
+        // (paths live in their own fields); a single other front keeps its path in the URL.
         if !LoftProfile.frontKinds.contains(type) { return nil }
         let scheme: String
         if let s = q["scheme"]?.lowercased(), ["https", "http", "wss", "ws"].contains(s) {
@@ -158,6 +169,7 @@ enum ShareURI {
         if !token.isEmpty { c.user = token }
         if host.isEmpty { return c.string ?? "loft://" }
         c.host = host
+        // Write the fronts back as query keys, or a single "type=" for a lone non-GET front.
         let type = p.kind.lowercased()
         let kind = LoftProfile.frontKinds.contains(type) ? type : "get"
         let scheme = (u?.scheme ?? (kind == "ws" ? "wss" : "https")).lowercased()
@@ -202,6 +214,7 @@ enum ShareURI {
             }
             if kind != "get" { items.append(URLQueryItem(name: "type", value: kind)) }
         }
+        // Optional extras: non-default scheme, edge host, CDN and the mask public key.
         let defScheme = kind == "ws" ? "wss" : "https"
         if scheme != defScheme && kind != "get" && !extra { items.append(URLQueryItem(name: "scheme", value: scheme)) }
         let edge = normalizeEdge(p.edge)
@@ -243,6 +256,7 @@ enum ShareURI {
         let def = sch == "http" ? 80 : 443
         let portUse = (port > 0 && port < 65536) ? port : def
         let hostPart = bracketHost(host, port: portUse, omitDefault: portUse == def)
+        /// Trims a path and makes sure a non-empty one starts with "/".
         func slash(_ s: String) -> String {
             var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
             if !t.isEmpty, !t.hasPrefix("/") { t = "/" + t }
@@ -453,7 +467,7 @@ enum ShareURI {
         return (s, 443)
     }
 
-    /// `sstp://<user>:<password>@<host>[:port][/path]?sni=…&pap=1#Name` (docs/share.md §7).
+    /// `sstp://<user>:<password>@<host>[:port][/path]?sni=…&pap=1#Name` (format described in docs/share.md).
     /// `url` on the profile is the HTTPS dial address. Password is required.
     static func sstp(_ raw: String, fileName: String) -> LoftProfile? {
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)

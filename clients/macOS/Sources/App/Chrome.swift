@@ -1,4 +1,9 @@
 // Shared loft UI chrome: flipped views, mark, plates, buttons, fields, and borderless windows.
+// The macOS client draws its own look instead of using stock AppKit controls:
+// dark "ink" windows without a system title bar, gold "lamp" accents, pill
+// buttons, switches, segmented controls and text fields. Every window and
+// the menu-bar popover build their screens from the classes and helper
+// functions in this file. Colors and fonts come from App/Palette.swift.
 
 import AppKit
 import CoreText
@@ -6,6 +11,7 @@ import QuartzCore
 
 /// Label that lets clicks pass through to the row or plate behind it.
 final class PassLab: NSTextField {
+    /// Returns nil so the click goes to whatever is underneath.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
@@ -18,8 +24,11 @@ final class DrawLab: FlippedView {
     /// Extra lift after geometric center. −2 matches pill titles; 0 is true center.
     var pillNudge = true { didSet { needsDisplay = true } }
 
+    /// Purely visual: clicks pass through to the view behind.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+    /// Draws `text` either cap-height centered (`pillNudge` off) or on the same
+    /// mid-line as pill button titles (`pillNudge` on).
     override func draw(_ dirtyRect: NSRect) {
         let p = NSMutableParagraphStyle()
         p.alignment = alignment
@@ -53,15 +62,18 @@ class FlippedView: NSView {
     /// Lets a first click on the view fire without an extra focus click.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// Accepts a drag only when someone listens (`onFiles`) and it carries files.
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard onFiles != nil else { return [] }
         return fileURLs(from: sender).isEmpty ? [] : .copy
     }
 
+    /// Confirms the drop will be handled, using the same test as `draggingEntered`.
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
         onFiles != nil && !fileURLs(from: sender).isEmpty
     }
 
+    /// Hands the dropped file URLs to `onFiles`.
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = fileURLs(from: sender)
         guard let onFiles = onFiles, !urls.isEmpty else { return false }
@@ -79,21 +91,27 @@ class FlippedView: NSView {
 /// Lamp-fill tag (popover TUN). Caps sit on capHeight in the plate;
 /// em-box / ink-box sat TUN on the top rim.
 final class LampTag: FlippedView {
+    /// Short badge text, "TUN" by default.
     var text = "TUN" { didSet { needsDisplay = true } }
 
+    /// Plain view; the text is drawn in `draw`.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Size that fits `text` with side padding: at least 28 pt wide, 16 pt tall.
     static func size(for text: String) -> NSSize {
         let w = (text as NSString).size(withAttributes: attrs).width
         return NSSize(width: max(28, ceil(w) + 12), height: 16)
     }
 
+    /// Bold 10 pt badge font.
     private static var tagFont: NSFont { Palette.font(10, weight: .bold) }
 
+    /// Text attributes: badge font, ink color, slight letter spacing.
     private static var attrs: [NSAttributedString.Key: Any] {
         [
             .font: tagFont,
@@ -102,6 +120,8 @@ final class LampTag: FlippedView {
         ]
     }
 
+    /// Fills the gold plate and draws the text centered by its real ink width and
+    /// cap height (Core Text), so capitals look centered in the small badge.
     override func draw(_ dirtyRect: NSRect) {
         Palette.lamp.setFill()
         loftRound(bounds, radius: 3.5).fill()
@@ -128,12 +148,16 @@ final class LampTag: FlippedView {
 final class MarqueeLab: FlippedView {
     private let a = NSTextField(labelWithString: "")
     private let b = NSTextField(labelWithString: "")
+    /// Drives the scroll; runs only while the ticker is visible and moving.
     private var timer: Timer?
     private var text = ""
     private var scrolling = false
     private var keepMoving = false
+    /// Current scroll offset of the first copy (0 or negative).
     private var x: CGFloat = 0
+    /// Distance between the starts of the two copies; one full loop.
     private var piece: CGFloat = 0
+    /// Space between the end of one copy and the start of the next.
     private let gap: CGFloat = 36
 
     var font: NSFont = Palette.body(11.5) {
@@ -163,6 +187,7 @@ final class MarqueeLab: FlippedView {
     /// Storyboard path is unused.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Stops the scroll timer so it does not outlive the view.
     deinit { timer?.invalidate() }
 
     /// Sets the ticker string. `scroll` loops it; `keepMoving` crawls even if it fits.
@@ -284,6 +309,7 @@ enum MarkState { case off, on, err }
 /// Vector loft mark: body plus a lamp that follows `MarkState`.
 final class MarkView: FlippedView {
     var state: MarkState = .off { didSet { needsDisplay = true } }
+    /// Draws the body in dark ink instead of stone, for use on a light (lamp) plate.
     var inkBody = false { didSet { needsDisplay = true } }
 
     /// Paints the mark into `bounds` using `state` and `inkBody`.
@@ -402,6 +428,8 @@ final class MarkView: FlippedView {
 
 /// Pixel-grid heart (A³ colophon): 7×6 cells, loft lamp.
 final class HeartView: FlippedView {
+    /// Paints the heart from rectangles on a pixel grid, without anti-aliasing,
+    /// so the cells stay crisp at any size.
     override func draw(_ dirtyRect: NSRect) {
         NSGraphicsContext.current?.shouldAntialias = false
         NSGraphicsContext.current?.imageInterpolation = .none
@@ -426,11 +454,15 @@ final class HeartView: FlippedView {
 
 /// Filled rounded button. `lampOn` uses the lamp fill; `compact` shrinks padding.
 final class PillButton: NSButton {
+    /// Gold "primary" fill; off means the neutral slate fill.
     var lampOn = false { didSet { needsDisplay = true } }
+    /// Smaller corner radius, font and padding for tight rows. With the title "+"
+    /// it draws a geometric plus instead of text.
     var compact = false
     private var hover = false
     private var track: NSTrackingArea?
 
+    /// Refreshes the look and the pointer cursor when enabled state changes.
     override var isEnabled: Bool {
         get { super.isEnabled }
         set { super.isEnabled = newValue; needsDisplay = true; window?.invalidateCursorRects(for: self) }
@@ -473,11 +505,13 @@ final class PillButton: NSButton {
         track = t
     }
 
+    /// Turns the hover tint on.
     override func mouseEntered(with event: NSEvent) {
         hover = true
         needsDisplay = true
     }
 
+    /// Turns the hover tint off.
     override func mouseExited(with event: NSEvent) {
         hover = false
         needsDisplay = true
@@ -578,6 +612,7 @@ final class PillButton: NSButton {
 
 /// Text-only button; hover and press lighten `tone`.
 final class GhostButton: NSButton {
+    /// Text color when idle; hover and press mix it toward white.
     var tone: NSColor = Palette.mute { didSet { needsDisplay = true } }
     private var hover = false
     private var track: NSTrackingArea?
@@ -678,13 +713,16 @@ final class ToggleSwitch: FlippedView {
             if oldValue != on { apply(animated: live) }
         }
     }
+    /// Called after a user click changes `on` (not when code sets `on`).
     var onChange: ((Bool) -> Void)?
     private var pressed = false {
         didSet {
             if oldValue != pressed { apply(animated: live) }
         }
     }
+    /// The white round knob that slides left (off) or right (on).
     private let knob = FlippedView(frame: .zero)
+    /// True once in a window; only then do changes animate.
     private var live = false
 
     /// Forces the switch to 36×22 regardless of the incoming frame size.
@@ -776,26 +814,33 @@ final class ToggleSwitch: FlippedView {
         }
     }
 
+    /// Fixed 36×22 size for Auto Layout users.
     override var intrinsicContentSize: NSSize { NSSize(width: 36, height: 22) }
 }
 
 /// 18×18 lamp plate with a check. Click flips `on`.
 final class LoftCheck: FlippedView {
     var on = false { didSet { needsDisplay = true } }
+    /// Called after a user click changes `on`.
     var onChange: ((Bool) -> Void)?
 
+    /// Forces the box to 18×18 whatever frame is passed.
     override init(frame frameRect: NSRect) {
         super.init(frame: NSRect(x: frameRect.origin.x, y: frameRect.origin.y, width: 18, height: 18))
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Lets a first click fire without an extra focus click.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// Pointing-hand cursor over the box.
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .pointingHand)
     }
 
+    /// Waits for mouse-up and toggles `on` only if the pointer is still inside.
     override func mouseDown(with event: NSEvent) {
         var keep = true
         while keep {
@@ -810,6 +855,7 @@ final class LoftCheck: FlippedView {
         }
     }
 
+    /// Draws the rounded plate (gold when on) and, when on, the check mark.
     override func draw(_ dirtyRect: NSRect) {
         let box = bounds.insetBy(dx: 0.5, dy: 0.5)
         let path = loftRound(box, radius: 4)
@@ -830,16 +876,21 @@ final class LoftCheck: FlippedView {
 
 /// Rounded single-line field. `secure` bullets the value and adds a reveal control.
 final class LoftField: FlippedView, NSTextFieldDelegate {
+    /// The inner AppKit field. It is replaced by a new one when the secret is
+    /// revealed or hidden, so do not keep a reference to it.
     private(set) var field: NSTextField
     private let secret: Bool
     private let placeholder: String
     private var revealed = false
     private var eye: LoftEyeButton?
+    /// Text of the inner field.
     var stringValue: String {
         get { field.stringValue }
         set { field.stringValue = newValue }
     }
+    /// Called on every edit with the new text.
     var onEdit: ((String) -> Void)?
+    /// Off makes the field read-only and dims it.
     var isEnabled: Bool = true {
         didSet {
             field.isEditable = isEnabled
@@ -959,6 +1010,7 @@ final class LoftField: FlippedView, NSTextFieldDelegate {
         eye?.setAccessibilityLabel(tip)
     }
 
+    /// Reports each edit through `onEdit`.
     func controlTextDidChange(_ obj: Notification) {
         onEdit?(stringValue)
     }
@@ -990,25 +1042,31 @@ final class LoftField: FlippedView, NSTextFieldDelegate {
 final class LoftEyeButton: NSButton {
     var open = false { didSet { needsDisplay = true } }
 
+    /// Borderless empty-title button; the icon is drawn in `draw`.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         loftWireButton(self)
         title = ""
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Lets a first click fire without an extra focus click.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// Redraws so the pressed wash tracks highlight.
     override func highlight(_ flag: Bool) {
         super.highlight(flag)
         needsDisplay = true
     }
 
+    /// Pointing-hand cursor over the button.
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .pointingHand)
     }
 
+    /// Redraws around the AppKit mouse-down so the press wash is visible.
     override func mouseDown(with event: NSEvent) {
         needsDisplay = true
         super.mouseDown(with: event)
@@ -1074,18 +1132,22 @@ func loftWireLine(_ field: NSTextField) {
 
 /// Closed field that pops an `NSMenu` of `titles`. `value` is the selected index.
 final class LoftSelect: FlippedView {
+    /// Menu entries, in order.
     var titles: [String] = [] { didSet { syncTitle() } }
     var value = 0 { didSet { syncTitle() } }
+    /// Called with the new index after the user picks an entry.
     var onChange: ((Int) -> Void)?
     private var pressed = false
     private let lab = PassLab(labelWithString: "")
     private let chev = PassLab(labelWithString: "▾")
 
+    /// Builds the label and chevron.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setup()
     }
 
+    /// Nib path, kept working because it costs nothing here.
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setup()
@@ -1110,6 +1172,7 @@ final class LoftSelect: FlippedView {
         lab.stringValue = (value >= 0 && value < titles.count) ? titles[value] : ""
     }
 
+    /// Title on the left, chevron on the right, both vertically inset by 6 pt.
     override func layout() {
         super.layout()
         let inset: CGFloat = 6
@@ -1119,8 +1182,10 @@ final class LoftSelect: FlippedView {
         chev.frame = NSRect(x: bounds.width - 12 - chevW, y: inset, width: chevW, height: h)
     }
 
+    /// Lets a first click fire without an extra focus click.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// Pointing-hand cursor over the field.
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .pointingHand)
     }
@@ -1144,6 +1209,7 @@ final class LoftSelect: FlippedView {
         needsDisplay = true
     }
 
+    /// Menu item handler: stores the picked index and notifies `onChange`.
     @objc private func pick(_ sender: NSMenuItem) {
         value = sender.tag
         onChange?(value)
@@ -1190,6 +1256,7 @@ enum SegIcon {
             let d = s * 0.17
             let dx = d * 0.707
             let dy = d * 0.707 * (yDown ? 1 : -1)
+            /// Strokes one rounded loop of the chain, tilted 45 degrees, centered at (cx, cy).
             func loop(cx: CGFloat, cy: CGFloat) {
                 let p = NSBezierPath(roundedRect: NSRect(x: -loopW / 2, y: -loopH / 2, width: loopW, height: loopH), xRadius: loopH / 2, yRadius: loopH / 2)
                 var xf = AffineTransform.identity
@@ -1233,9 +1300,13 @@ enum SegIcon {
 /// One segment of `SegControl`; `on` uses the lamp fill unless `capsule`.
 final class SegBit: NSButton {
     var on = false { didSet { needsDisplay = true } }
+    /// Smaller font and radius.
     var compact = false
+    /// Part of a capsule track: no own plate, the parent's sliding thumb shows selection.
     var capsule = false
+    /// Selected capsule text in ink, for the gold thumb.
     var lampThumb = false
+    /// Optional glyph before the title.
     var icon = SegIcon.none
 
     /// Borderless segment bit in DemiBold 12.5.
@@ -1275,6 +1346,7 @@ final class SegBit: NSButton {
     /// Draws the selected or idle pill and the title.
     override func draw(_ dirtyRect: NSRect) {
         let pressed = isEnabled && isHighlighted
+        // Standalone segment: own rounded plate, gold when selected.
         if !capsule {
             var fill = on ? Palette.lamp : Palette.field
             let border = on ? Palette.lamp : Palette.slate
@@ -1286,6 +1358,7 @@ final class SegBit: NSButton {
         }
         let p = NSMutableParagraphStyle()
         p.alignment = .center
+        // Text color: inside a capsule the thumb shows selection; otherwise ink on gold.
         let face: NSColor
         if capsule {
             face = on ? (lampThumb ? Palette.ink : Palette.snow) : Palette.mute
@@ -1301,6 +1374,7 @@ final class SegBit: NSButton {
         let sz = t.size(withAttributes: attrs)
         let yDown = NSGraphicsContext.current?.isFlipped ?? isFlipped
         let press: CGFloat = pressed ? (yDown ? 1 : -1) : 0
+        // Center the icon and title together as one group.
         let iconSide: CGFloat = lampThumb ? 14 : (compact || capsule ? 12 : 13)
         let iconGap: CGFloat = lampThumb ? 7 : 5
         let hasIcon = icon != .none
@@ -1329,6 +1403,7 @@ final class SegControl: FlippedView {
     private let thumb = FlippedView(frame: .zero)
     private var thumbReady = false
     var value = 0 { didSet { paint() } }
+    /// Called with the new index after the user taps a segment.
     var onChange: ((Int) -> Void)?
 
     /// Builds one `SegBit` per title. `vertical` stacks them; `compact` shrinks the pills.
@@ -1451,6 +1526,7 @@ final class SegControl: FlippedView {
 
 /// Decorative traffic lights; only the red disc closes the window.
 final class TrafficLights: FlippedView {
+    /// Called when the red disc is clicked.
     var onClose: (() -> Void)?
     private var pressRed = false
 
@@ -1511,7 +1587,9 @@ final class TrafficLights: FlippedView {
 
 /// Window chrome: ink plate, traffic lights, and a body below the title bar.
 final class LoftRoot: FlippedView {
+    /// The three discs in the top-left corner.
     let lights = TrafficLights(frame: .zero)
+    /// Area below the 28 pt title strip where windows put their content.
     let body = FlippedView(frame: .zero)
 
     /// Ink rounded plate with traffic lights wired to `window?.close()`.
@@ -1621,6 +1699,7 @@ func loftOverlayScroll(frame: NSRect) -> NSScrollView {
 
 /// Invisible hit target; optional white wash while highlighted.
 final class ActionButton: NSButton {
+    /// Draw the white wash while pressed; off for rows that paint their own highlight.
     var drawsWash = true
     var washRadius: CGFloat = 8
 
@@ -1693,7 +1772,10 @@ func loftStrokeInside(_ rect: NSRect, radius: CGFloat, color: NSColor, width: CG
 
 /// Cached CTLine + ink bounds for static chrome titles.
 private enum InkCache {
+    /// Cache key to (line, ink bounds). Cleared when it grows past 96 entries.
     static var map: [String: (CTLine, CGRect)] = [:]
+    /// Returns the Core Text line and its ink bounds for `text` in `attrs`,
+    /// building and caching them on first use. The key covers text, font and color.
     static func line(_ text: String, attrs: [NSAttributedString.Key: Any]) -> (CTLine, CGRect) {
         let font = attrs[.font] as? NSFont
         let c = (attrs[.foregroundColor] as? NSColor)?.usingColorSpace(.genericRGB)

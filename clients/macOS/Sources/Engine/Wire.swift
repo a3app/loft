@@ -1,14 +1,27 @@
 // Loft wire: mux frames, hello, status, and host:port targets.
+// Swift copy of the loft wire format, the binary protocol between a client
+// and a loft node. After the handshake, one connection carries many logical
+// streams; "mux frames" are the small packets that say which stream each
+// chunk of data belongs to. Also here: the client hello, the node's status
+// reply and the host:port target that opens a stream. The app itself talks
+// to the node through loft-front (a bundled Go helper), so in the app only
+// the protocol version (`proto`) is read, for an info caption.
 
 import Foundation
 
 /// Loft wire: mux frames, hello, status, and host:port targets.
 enum LoftWire {
+    /// Protocol version this client speaks (high byte major, low byte minor).
     static let proto: UInt16 = 0x0100
+    /// Oldest protocol version this client accepts.
     static let protoMin: UInt16 = 0x0100
+    /// Frame header bytes: 2 length + 1 command + 4 stream id.
     static let headerSize = 7
+    /// Largest payload one frame may carry.
     static let maxPayload = 16 * 1024
 
+    // Frame commands: open/data/close a stream, ping/pong keepalive, padding,
+    // reset of the whole mux, and a datagram (UDP) frame.
     static let cmdOpen: UInt8 = 1
     static let cmdData: UInt8 = 2
     static let cmdClose: UInt8 = 3
@@ -18,6 +31,8 @@ enum LoftWire {
     static let cmdReset: UInt8 = 7
     static let cmdDgram: UInt8 = 8
 
+    // Capability bits a client announces in its hello (one bit per feature,
+    // such as each transport and optional protocol extension).
     static let capGET: UInt64 = 1 << 5
     static let capWS: UInt64 = 1 << 6
     static let capStatus: UInt64 = 1 << 7
@@ -36,13 +51,16 @@ enum LoftWire {
     static let capLists: UInt64 = 1 << 21
     static let capResume: UInt64 = 1 << 1
 
+    /// Every capability this client announces.
     static let clientCaps: UInt64 =
         capGET | capWS | capStatus | capTimers | capHelloCaps | capReset | capQUIC | capDgram |
         capClockless | capTicket | capDecoy | capH2 | capH3 | capMask | capRoster | capLists | capResume
 
     /// One mux frame: 2-byte length, cmd, stream id, payload.
     struct Frame {
+        /// One of the `cmd...` commands.
         var cmd: UInt8
+        /// Logical stream the frame belongs to.
         var streamID: UInt32
         var payload: Data
         /// Encodes this frame; nil if the payload exceeds `maxPayload`.
@@ -123,15 +141,23 @@ enum LoftWire {
     /// Node status after handshake: overlay IP, MTU, timers.
     /// The Status ticket field is empty in this revision.
     struct Status {
+        /// Result code; see `codeName` for the known values.
         var code: UInt16 = 0
         var ip = ""
+        /// Overlay gateway address.
         var gateway = ""
+        /// Node instance that answered.
         var instanceID = ""
         var mtu: UInt16 = 0
+        /// How long the overlay address lease lasts, in seconds.
         var leaseSec: UInt32 = 0
+        /// Keepalive interval asked by the node, in milliseconds.
         var keepaliveMS: UInt32 = 0
+        /// Idle timeout asked by the node, in milliseconds.
         var idleMS: UInt32 = 0
+        /// Session resume ticket (may be empty).
         var ticket = Data()
+        /// True for "ok" and "ok, resumed".
         var ok: Bool { code == 0x0000 || code == 0x0001 }
     }
 

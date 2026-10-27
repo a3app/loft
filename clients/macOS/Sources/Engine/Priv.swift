@@ -1,4 +1,9 @@
 // Swift wrapper around setuid loft-priv: install helper, hold utun, split default, restore.
+// loft-priv is a small helper bundled with the app that runs as root
+// (setuid). Creating a utun (the macOS TUN network interface) and changing
+// system routes need root, so the app asks loft-priv to do them. A running
+// loft-priv process "holds" a utun open for a session; split routing and
+// the default route are applied and restored through it as well.
 
 import Foundation
 import AppKit
@@ -7,18 +12,27 @@ import SystemConfiguration
 
 /// Swift wrapper around setuid loft-priv: install helper, hold utun, split default, restore.
 enum Priv {
+    /// Running loft-priv holder processes by session key; each keeps one utun open.
     private static var heldBy: [String: Process] = [:]
+    /// utun interface name by session key.
     private static var tunNameBy: [String: String] = [:]
+    /// Guards `heldBy`, `tunNameBy` and `tunName`, which change from several threads.
     private static let heldLock = NSLock()
+    /// Name of the most recently held utun.
     private(set) static var tunName = ""
+    /// Gateway that was the default route before loft changed it; used to restore it.
     private static var origGW = ""
+    // Cached default gateway and its interface, refreshed at most every `gwTTL` seconds.
     private static let gwLock = NSLock()
     private static var gwCached = ""
     private static var gwIface = ""
     private static var gwCachedAt = Date.distantPast
     private static let gwTTL: TimeInterval = 5
+    /// Background queue for slow network checks (probes, DNS lookups).
     static let netQueue = DispatchQueue(label: "app.loft.net", qos: .utility)
+    /// Called when the system network path changes (gateway or interface).
     static var onPathChange: (() -> Void)?
+    /// Keeps the network-change watcher alive.
     private static var pathBox: PathWatchBox?
     /// Last `--apply-split` bag so a path-watch echo does not re-run loft-priv.
     private static var splitSig = ""
@@ -271,6 +285,8 @@ enum Priv {
         var blob = ""
         var ok = false
         let sem = DispatchSemaphore(value: 0)
+        // loft-priv reports on stderr. Every line goes to the journal; the line
+        // "hold <...> <utunN>" means the utun is ready and gives its name.
         errp.fileHandleForReading.readabilityHandler = { h in
             let data = h.availableData
             if data.isEmpty { return }
@@ -298,6 +314,7 @@ enum Priv {
             errp.fileHandleForReading.readabilityHandler = nil
             sem.signal()
         }
+        // Keep the process (it holds the utun) and wait up to 8 s for the "hold" line.
         try p.start(at: path)
         heldLock.lock(); heldBy[key] = p; heldLock.unlock()
         _ = sem.wait(timeout: .now() + 8)
@@ -866,6 +883,8 @@ enum Priv {
             if isPrivateV4(t) { return }
             if seen.insert(t).inserted { out.append(t) }
         }
+        /// Adds the front host of a URL: its resolved addresses, or the host itself
+        /// when it does not resolve.
         func addURL(_ rawURL: String) {
             let host = frontHost(rawURL)
             let resolved = resolve(host)
@@ -965,6 +984,7 @@ enum Priv {
             var slen = socklen_t(MemoryLayout<Int32>.size)
             if getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &slen) != 0 || soerr != 0 { return false }
         }
+        /// Sends all bytes, waiting for the socket to become writable; false on error or deadline.
         func sendAll(_ b: [UInt8]) -> Bool {
             var off = 0
             while off < b.count {
@@ -981,6 +1001,7 @@ enum Priv {
             }
             return true
         }
+        /// Reads exactly `n` bytes, waiting for data; nil on error, EOF or deadline.
         func recvN(_ n: Int) -> [UInt8]? {
             var buf = [UInt8](repeating: 0, count: n)
             var off = 0
@@ -1153,6 +1174,7 @@ private final class PathWatchBox {
     var store: SCDynamicStore?
     var source: CFRunLoopSource?
     let onFire: () -> Void
+    /// Stores the callback to run when the watched network keys change.
     init(_ onFire: @escaping () -> Void) { self.onFire = onFire }
 }
 

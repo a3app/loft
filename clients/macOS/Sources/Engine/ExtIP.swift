@@ -1,4 +1,7 @@
 // Fetches the public address of one outbound through that session’s SOCKS (or the default route).
+// The echo API is a web service that answers with the caller's address.
+// Asking it through a session's local SOCKS port shows which address the
+// internet sees for that tunnel; the popover and status window display it.
 
 import Foundation
 import Darwin

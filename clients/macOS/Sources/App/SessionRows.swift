@@ -1,4 +1,7 @@
 // Several on: the other live sessions as collapsed rows under the main one.
+// In "several on" (multi) mode more than one connection can run at once.
+// The popover and the status window show the main one in full and the rest
+// as these compact rows; clicking a row makes that session the main one.
 
 import AppKit
 
@@ -17,6 +20,8 @@ final class SessionRow: FlippedView {
     var onPrefer: ((String) -> Void)?
     var onToggle: ((String) -> Void)?
 
+    /// Builds the row's plate, status dot, labels and the connect/disconnect
+    /// button; `fill` puts data in later.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         plate.radius = 10
@@ -43,6 +48,7 @@ final class SessionRow: FlippedView {
         for v in [plate, hit, dot, name, time, act] as [NSView] { addSubview(v) }
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
     /// Fills the row from one profile's live state and lays it out in `width`.
@@ -86,11 +92,13 @@ final class SessionRow: FlippedView {
         name.frame = NSRect(x: nameX, y: round((h - 18) / 2), width: max(20, timeX - 8 - nameX), height: 18)
     }
 
+    /// Row click: makes this session the preferred one.
     @objc private func tapRow() {
         LoftLog.shared.tap("session-row", "prefer")
         onPrefer?(pid)
     }
 
+    /// Row button: connects or disconnects this session.
     @objc private func tapAct() {
         LoftLog.shared.tap("session-row", act.title)
         onToggle?(pid)
@@ -106,6 +114,7 @@ final class SessionRows {
     /// Plate fill behind each row; nil leaves rows flat (popover).
     var plateFill: NSColor?
 
+    /// `host` is the view the rows are added to (held weakly).
     init(host: NSView) { self.host = host }
 
     /// Places rows for `profiles` from `y` downward with `gap` between them; returns the new `y`.

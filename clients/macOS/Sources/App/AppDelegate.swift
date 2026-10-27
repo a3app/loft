@@ -1,4 +1,9 @@
 // Menubar app: status item, popover, windows, and SessionController that talks to loft-front.
+// AppDelegate is the hub of the app: it owns the menu-bar icon and its
+// popover (PopoverView.swift), the SessionController engine that runs the
+// connections, and every window (Windows.swift, SplitWindows.swift, About,
+// Journal, update offer). loft-front is the bundled Go helper process that
+// runs one tunnel session to a loft node.
 
 import AppKit
 
@@ -46,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         L10n.apply(engine.store.lang)
         installKeyMenu()
 
+        // 1. Menu-bar icon; a click toggles the popover.
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let btn = item.button {
             btn.image = Palette.menuIcon(on: false)
@@ -54,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             btn.action = #selector(togglePopover(_:))
         }
 
+        // 2. Popover content and what each of its buttons does.
         popView = PopoverView(frame: .zero)
         popView.onToggle = { [weak self] in self?.tapConnect() }
         popView.onOpen = { [weak self] in self?.hidePopover(); self?.showList() }
@@ -69,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         _ = popView.render(engine: engine)
 
+        // 3. The popover lives in a borderless panel that floats over every Space
+        //    and does not take focus away from the current app.
         popPanel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 280),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -85,6 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popView.autoresizingMask = [.width, .height]
         popPanel.contentView = popView
 
+        // 4. Observers: Dock icon after a window closes, redraw on engine state,
+        //    and network checks after sleep and screen wake.
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { [weak self] note in
             guard note.object is LoftWindow else { return }
             DispatchQueue.main.async { self?.syncDock() }
@@ -105,6 +116,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.engine.networkChanged()
         }
 
+        // 5. One-second tick: watch the network path, update rates and uptime, and
+        //    redraw reconnect countdowns.
         sparkTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             self.engine.notePath()
@@ -121,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let t = sparkTimer { RunLoop.main.add(t, forMode: .common) }
 
+        // 6. Optional auto-connect, first draw, Dock policy and the update check.
         if engine.store.autoConnect, engine.store.active() != nil {
             engine.connect()
         }
@@ -186,12 +200,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Menu bar while Loft is key: Loft | Connections | Tools | Edit.
     private func installKeyMenu() {
+        // Rebuilt only when the UI language changed; otherwise just refresh the
+        // dynamic parts.
         if menuLang == L10n.lang, NSApp.mainMenu != nil {
             refreshConnectionsMenu()
             paintSplitMenuItem()
             return
         }
         menuLang = L10n.lang
+        // App menu: About, Open, Language, Hide/Show, Quit.
         let main = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
@@ -226,12 +243,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(withTitle: L10n.t("menu_quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(appItem)
+        // Connections menu: filled by refreshConnectionsMenu.
         let connItem = NSMenuItem()
         let connMenu = NSMenu(title: L10n.t("conns"))
         connMenu.autoenablesItems = false
         connItem.submenu = connMenu
         connectionsMenu = connMenu
         main.addItem(connItem)
+        // Tools: Settings, split routing switch, Routes window, Journal.
         let toolsItem = NSMenuItem()
         let tools = NSMenu(title: L10n.t("menu_tools"))
         tools.autoenablesItems = false
@@ -254,6 +273,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         journal.image = Palette.journalMenuIcon()
         tools.addItem(journal)
         main.addItem(toolsItem)
+        // Edit: standard cut/copy/paste/select all so text fields get the shortcuts.
         let editItem = NSMenuItem()
         let edit = NSMenu(title: L10n.t("menu_edit"))
         editItem.submenu = edit
@@ -321,23 +341,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return sub
     }
 
+    /// Profile submenu: connect or disconnect that profile.
     @objc private func menuConnToggle(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         LoftLog.shared.tap("menu", sender.title)
         engine.toggle(id)
     }
 
+    /// Profile submenu: turn TUN mode (system-wide tunnel) on or off for that profile.
     @objc private func menuConnTun(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         guard let p = engine.store.profiles.first(where: { $0.id == id }) else { return }
         engine.setProfileTun(id, on: !p.tun)
     }
 
+    /// Profile submenu: route all system traffic through that session, or stop.
     @objc private func menuConnDefault(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         engine.setSessionDefault(id, on: !engine.defaultArmed(of: id))
     }
 
+    /// Profile submenu: open the profile editor.
     @objc private func menuConnEdit(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         guard let p = engine.store.profiles.first(where: { $0.id == id }) else { return }

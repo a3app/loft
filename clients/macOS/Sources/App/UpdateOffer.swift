@@ -1,16 +1,24 @@
 // Launch-time offer: a newer GitHub release, Update / Later, and “don’t ask again”.
+// AppDelegate opens this window when the launch-time update check
+// (Engine/Updater.swift) finds a newer release. The window only drives the
+// flow: Updater does the download, verification and app swap. Widgets such as
+// PillButton and LoftCheck come from App/Chrome.swift.
 
 import AppKit
 
 /// Small loft window when launch check finds a newer DMG.
 final class UpdateOfferWindowController: NSWindowController {
+    /// The release being offered (version and DMG asset).
     private let offer: Updater.Offer
+    /// Own updater instance; it lives as long as this window does.
     private let updater = Updater()
     private let go = PillButton(frame: .zero)
     private let later = GhostButton(frame: .zero)
     private let check = LoftCheck(frame: .zero)
+    /// True while a download or install runs; blocks Later and the quiet checkbox.
     private var busy = false
 
+    /// Builds the floating, centered window for `offer`.
     init(offer: Updater.Offer) {
         self.offer = offer
         let w = makeLoftWindow(size: NSSize(width: 360, height: 280))
@@ -20,6 +28,7 @@ final class UpdateOfferWindowController: NSWindowController {
         w.center()
     }
 
+    /// Not used: the window is built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
     /// Gold Update, Later, and the quiet checkbox.
@@ -74,17 +83,20 @@ final class UpdateOfferWindowController: NSWindowController {
         loftResize(window!, bodyHeight: y)
     }
 
+    /// Click on the "don't ask again" row (box or its label) toggles the box.
     @objc private func quietTap() {
         guard !busy else { return }
         check.on.toggle()
         check.onChange?(check.on)
     }
 
+    /// Later: just close; the offer comes back on the next launch unless the box is ticked.
     @objc private func laterTap() {
         guard !busy else { return }
         window?.close()
     }
 
+    /// Update: start the download unless one already runs.
     @objc private func goTap() {
         if busy { return }
         startInstall()
@@ -98,6 +110,8 @@ final class UpdateOfferWindowController: NSWindowController {
         AppDelegate.shared?.settingsWCReload()
     }
 
+    /// Updates the main button's text, gold lamp and enabled state. Later stays
+    /// hidden while `busy`.
     private func setBtn(_ title: String, lamp: Bool, enabled: Bool) {
         go.title = title
         go.lampOn = lamp
@@ -106,6 +120,9 @@ final class UpdateOfferWindowController: NSWindowController {
         later.isHidden = busy
     }
 
+    /// Runs `Updater.install`: shows download percent, then "installing", and on
+    /// success quits the app so the relaunch script can replace the bundle. On
+    /// failure the button becomes enabled again with the error text, so a click retries.
     private func startInstall() {
         busy = true
         later.isHidden = true
@@ -131,6 +148,7 @@ final class UpdateOfferWindowController: NSWindowController {
         })
     }
 
+    /// Maps an updater error to a short localized message for the button.
     private func failText(_ e: Error) -> String {
         guard let f = e as? Updater.Fail else { return L10n.t("upd_err") }
         switch f {

@@ -1,28 +1,47 @@
 // Status-item popover: connect/disconnect, profile rows, spark line, and footer links.
+// This is the small panel that drops down from the loft icon in the macOS
+// menu bar. It shows the state of the shown connection (a "profile" is one
+// saved server setup), a big connect/disconnect button, a few info rows
+// (overlay address, external IP, route, SOCKS port) and footer links. It only
+// draws: SessionController (Engine/SessionController.swift) holds the state,
+// and AppDelegate wires the `on...` callbacks to real actions.
 
 import AppKit
 
 /// Status-item popover: connect/disconnect, profile rows, spark line, and footer links.
 final class PopoverView: FlippedView {
+    /// Main button: connect, disconnect, or retry the shown profile.
     var onToggle: (() -> Void)?
+    /// "Open" footer link: shows the main status window.
     var onOpen: (() -> Void)?
+    /// "Quit" footer link.
     var onQuit: (() -> Void)?
+    /// Connection row clicked while there are no profiles (AppDelegate opens the profile list).
     var onSwitch: (() -> Void)?
+    /// Reset button: restores the routes that were there before loft after a
+    /// hold (the "keep traffic blocked when the tunnel drops" mode).
     var onReset: (() -> Void)?
+    /// Journal (event log) window; not reachable from the current footer.
     var onJournal: (() -> Void)?
+    /// Middle footer link: opens Settings.
     var onSettings: (() -> Void)?
     /// Opens the profile editor for a connection id from the exclusive menu.
     var onEdit: ((String) -> Void)?
     /// True while the connection `NSMenu` is tracking, so a click on it does not dismiss the popover.
     private(set) var trackingMenu = false
+    /// Source of the state shown; set by `render`. Weak because the engine owns
+    /// the app's lifetime, not the popover.
     private weak var engine: SessionController?
 
+    // Header: mark, title ("connected 01:23" / "off"), profile name with a dot,
+    // and the up/down rates on the right.
     private let mark = MarkView(frame: .zero)
     private let titleLab = NSTextField(labelWithString: "")
     private let subDot = FlippedView(frame: .zero)
     private let subLab = NSTextField(labelWithString: "")
     private let actionBtn = PillButton(frame: .zero)
     private let resetBtn = PillButton(frame: .zero)
+    // Info rows: kX is the key label on the left, vX the value on the right.
     private let kConn = NSTextField(labelWithString: "")
     private let vConn = GhostButton(frame: .zero)
     private let kOver = NSTextField(labelWithString: "Overlay")
@@ -34,6 +53,8 @@ final class PopoverView: FlippedView {
     private let vRoute = NSTextField(labelWithString: "")
     private let kSocks = NSTextField(labelWithString: "SOCKS5")
     private let vSocks = NSTextField(labelWithString: "")
+    // Bottom ticker ("spark line"): progress text while connecting, the error on
+    // failure, front and protocol details when on.
     private let sparkL = MarqueeLab(frame: .zero)
     private let sparkR = NSTextField(labelWithString: "")
     private let rateUp = NSTextField(labelWithString: "")
@@ -42,10 +63,12 @@ final class PopoverView: FlippedView {
     private let journalBtn = GhostButton(frame: .zero)
     private let quitBtn = GhostButton(frame: .zero)
     private let line = FlippedView(frame: .zero)
+    /// Invisible button over the whole connection row; opens the profile menu.
     private let connHit = ActionButton(frame: .zero)
     /// Several on: line above the collapsed sessions.
     private let othersLine = FlippedView(frame: .zero)
     private lazy var others = SessionRows(host: self)
+    // Which parts of the layout `render` shows this time.
     private var showRows = true
     private var showNet = false
     private var showReset = false
@@ -65,6 +88,7 @@ final class PopoverView: FlippedView {
         layer?.cornerRadius = 12
         layer?.masksToBounds = true
 
+        // Header labels and the two big buttons.
         titleLab.font = Palette.body(13)
         titleLab.textColor = Palette.snow
         subDot.wantsLayer = true
@@ -77,6 +101,7 @@ final class PopoverView: FlippedView {
         resetBtn.target = self
         resetBtn.action = #selector(tapReset)
 
+        // Info rows: single-line labels, keys in grey on the left, values on the right.
         for lab in [kConn, kOver, kExt, kRoute, kSocks, vOver, vExt, vRoute, vSocks, titleLab, subLab, sparkR, rateUp, rateDown] {
             lab.usesSingleLineMode = true
             lab.lineBreakMode = .byTruncatingTail
@@ -109,6 +134,7 @@ final class PopoverView: FlippedView {
             lab.alignment = .right
         }
 
+        // Divider lines and the rows of other sessions.
         line.wantsLayer = true
         line.layer?.backgroundColor = Palette.line.cgColor
         othersLine.wantsLayer = true
@@ -116,6 +142,7 @@ final class PopoverView: FlippedView {
         others.onPrefer = { [weak self] id in self?.engine?.prefer(id) }
         others.onToggle = { [weak self] id in self?.engine?.toggle(id) }
 
+        // Footer links: Open, Settings (center), Quit.
         openBtn.font = Palette.body(12.5)
         openBtn.tone = Palette.stone
         openBtn.alignment = .left
@@ -156,6 +183,7 @@ final class PopoverView: FlippedView {
     /// Relays session state into labels and returns the fitted popover size.
     func render(engine: SessionController) -> NSSize {
         self.engine = engine
+        // 1. Read the engine state.
         let p = engine.displayProfile()
         let name: String
         if let p = p, !p.name.isEmpty { name = p.name }
@@ -172,6 +200,7 @@ final class PopoverView: FlippedView {
         showNet = on && !held && !fail
         showReset = held
 
+        // 2. Header texts and colors.
         var markState: MarkState = .off
         if held || fail { markState = .err }
         else if on { markState = .on }
@@ -194,6 +223,7 @@ final class PopoverView: FlippedView {
         resetBtn.lampOn = false
         resetBtn.isHidden = !showReset
 
+        // 3. Info row texts. Rows show only while connected (and not held or failed).
         kConn.stringValue = L10n.t("conn")
         vConn.title = name + "\u{2004}›"
         kOver.stringValue = L10n.t("overlay")
@@ -218,6 +248,7 @@ final class PopoverView: FlippedView {
         }
         vExt.textColor = Palette.snow
 
+        // 4. Rates appear only when the spark line says there is a pair to show.
         let spark = engine.sparkLine()
         showRates = spark.pair
         let upStr = "↑ \(Palette.rate(engine.upRate, bits: engine.store.rateBits))"
@@ -231,6 +262,7 @@ final class PopoverView: FlippedView {
         journalBtn.title = L10n.t("settings")
         quitBtn.title = L10n.t("quit")
 
+        // 5. Layout, top to bottom; `y` is the running offset in this flipped view.
         let pad: CGFloat = 14
         let w: CGFloat = 300
         var y: CGFloat = pad
@@ -260,6 +292,7 @@ final class PopoverView: FlippedView {
             resetBtn.frame = NSRect(x: pad, y: y, width: w - pad * 2, height: 40)
             y += 40
         }
+        // Detail rows are hidden in the "simple" mode preference.
         if showRows {
             y += 12
             let inset: CGFloat = pad + 2
@@ -354,6 +387,7 @@ final class PopoverView: FlippedView {
             sparkL.show("", scroll: false)
             y += 8
         }
+        // 6. Footer: Open on the left, Quit on the right, Settings centered between them.
         line.frame = NSRect(x: pad, y: y, width: w - pad * 2, height: 1)
         y += 8
         /// Width of a ghost title, at least 32pt.
@@ -496,29 +530,36 @@ final class PopoverView: FlippedView {
         }
     }
 
+    /// "Several on" (multi) mode: makes this profile the preferred one, which
+    /// owns the popover, the shared SOCKS port and the default route.
     @objc private func menuPrefer(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         LoftLog.shared.tap("pop-menu", "prefer")
         engine?.prefer(id)
     }
 
+    /// Submenu: connect or disconnect one profile.
     @objc private func menuToggle(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         LoftLog.shared.tap("pop-menu", sender.title)
         engine?.toggle(id)
     }
 
+    /// Submenu: turn TUN mode (system-wide tunnel through a virtual network
+    /// interface, instead of SOCKS only) on or off for one profile.
     @objc private func menuTun(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String, let engine = engine else { return }
         guard let p = engine.store.profiles.first(where: { $0.id == id }) else { return }
         engine.setProfileTun(id, on: !p.tun)
     }
 
+    /// Submenu: send all system traffic through this session (default route) or not.
     @objc private func menuDefault(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String, let engine = engine else { return }
         engine.setSessionDefault(id, on: !engine.defaultArmed(of: id))
     }
 
+    /// Submenu: open the profile editor for this profile.
     @objc private func menuSetup(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         LoftLog.shared.tap("pop-menu", "setup")
@@ -533,16 +574,23 @@ final class PopoverView: FlippedView {
 /// One connection row in the popover menu. Click sets priority; the system still
 /// draws the submenu chevron so Connect / tunnel / default / setup stay on the arrow.
 private final class ConnPickRow: NSView {
+    /// Row height that matches standard menu items.
     static let rowH: CGFloat = 22
+    /// Left column for the check mark.
     static let checkW: CGFloat = 20
+    /// Right column kept free for the system submenu arrow.
     static let chevronW: CGFloat = 18
+    /// Standard menu font, so the custom row matches normal items.
     private static var menuFont: NSFont { NSFont.menuFont(ofSize: 0) }
 
+    /// Profile id this row stands for.
     let pid: String
     private let title: String
     private let checked: Bool
+    /// Called with `pid` when the row (not its arrow) is clicked.
     var onPick: ((String) -> Void)?
 
+    /// Fixed-size row; `width` should come from `width(for:)` of the longest title.
     init(title: String, checked: Bool, pid: String, width: CGFloat) {
         self.title = title
         self.checked = checked
@@ -550,20 +598,25 @@ private final class ConnPickRow: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: Self.rowH))
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { nil }
 
+    /// Width a row needs for `title` plus the check and arrow columns.
     static func width(for title: String) -> CGFloat {
         let w = (title as NSString).size(withAttributes: [.font: menuFont]).width
         return ceil(checkW + 8 + w + chevronW + 10)
     }
 
+    /// Keeps the menu from resizing the row.
     override var intrinsicContentSize: NSSize { frame.size }
 
+    /// Installs hover tracking once the row is inside the menu window.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         updateTracking()
     }
 
+    /// Rebuilds hover tracking when the size or window changes.
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         updateTracking()
@@ -580,7 +633,9 @@ private final class ConnPickRow: NSView {
         ))
     }
 
+    /// Redraws so the highlight follows the pointer.
     override func mouseEntered(with event: NSEvent) { needsDisplay = true }
+    /// Redraws so the highlight clears when the pointer leaves.
     override func mouseExited(with event: NSEvent) { needsDisplay = true }
 
     /// Clicks on the chevron (right ~28pt) fall through so the submenu still opens.
@@ -589,6 +644,7 @@ private final class ConnPickRow: NSView {
         return super.hitTest(point)
     }
 
+    /// Draws like a normal menu item: highlight, check mark, title, arrow.
     override func draw(_ dirtyRect: NSRect) {
         let on = enclosingMenuItem?.isHighlighted ?? false
         if on {
@@ -612,6 +668,7 @@ private final class ConnPickRow: NSView {
         (chev as NSString).draw(at: NSPoint(x: cx.rounded(), y: y), withAttributes: attrs)
     }
 
+    /// Click on the row: prefer this profile and close the menu.
     override func mouseUp(with event: NSEvent) {
         onPick?(pid)
         enclosingMenuItem?.menu?.cancelTracking()

@@ -1,4 +1,7 @@
 // In-memory journal with optional rotating diag file under ~/Library/Logs/loft.
+// LoftLog.shared collects short lines from the app and from loft-front;
+// the Journal window shows them. When "diag" is on the lines are also
+// appended to a file that rotates, so it never grows without limit.
 
 import Foundation
 

@@ -1,4 +1,7 @@
 // Colors, fonts, and small formatters used by the loft menubar UI.
+// Every window takes its colors (dark "ink" background, gold "lamp" accent,
+// "snow" text, "mute" grey) and fonts from here, so the look stays the same
+// everywhere. The widgets that use them are in Chrome.swift.
 
 import AppKit
 

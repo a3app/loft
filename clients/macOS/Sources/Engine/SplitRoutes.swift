@@ -1,33 +1,54 @@
 // Split-routing lists: Keenetic / loft-routes files, local store, and a git raw repo.
+// Split routing decides, per IPv4 network (CIDR), whether traffic goes
+// through the loft tunnel or around it straight to the local network.
+// Networks are grouped into named sets, and sets live in zones; a zone's
+// `def` flag gives the direction. SplitStore keeps everything in
+// Application Support/loft/routes.txt; SplitBat reads and writes the
+// Windows-style `route ADD` .bat files used by Keenetic routers and by the
+// a3app/loft-routes list repository. SessionController turns the result into
+// kernel routes; App/SplitWindows.swift is the editor UI.
 
 import Foundation
 
 /// One named CIDR set. Direction comes from the zone, not from the row.
 struct SplitSet {
+    /// Stable key used by the store and the editor (unique within the store).
     var id: String
+    /// Display name, usually a service such as "YouTube".
     var name: String
+    /// Id of the zone this set belongs to; the zone decides the direction.
     var zone: String
+    /// Networks in "a.b.c.d/n" form.
     var cidrs: [String]
     var source: SplitSource
 }
 
 /// Policy bag: through loft or around loft, plus its own list URL.
 struct SplitZone {
+    /// Short key: "local", "global", or a slug for a user zone.
     var id: String
     var name: String
+    /// Local and Global always exist and cannot be deleted.
     var builtin: Bool
     /// True = through loft, false = around loft.
     var def: Bool
+    /// URL of a remote list (.bat) that fills this zone; empty when none.
     var repo: String
+    /// Pull `repo` again automatically about once a day.
     var auto: Bool
+    /// Text shown as "last update" (date and CIDR count) after a pull.
     var repoLast: String
+    /// Time of the last successful pull; drives the daily auto-pull.
     var repoAt: Date?
+    /// Number of CIDRs the last pull brought in.
     var repoCount: Int
 
+    /// The built-in "around loft" zone (for LAN and home-country networks), empty by default.
     static func local() -> SplitZone {
         SplitZone(id: "local", name: "Local", builtin: true, def: false, repo: "", auto: true, repoLast: "", repoAt: nil, repoCount: 0)
     }
 
+    /// The built-in "through loft" zone, fed from the loft-routes "global" list.
     static func global() -> SplitZone {
         SplitZone(id: "global", name: "Global", builtin: true, def: true, repo: SplitListCatalog.rawBase + "global.bat", auto: true, repoLast: "", repoAt: nil, repoCount: 0)
     }
@@ -35,7 +56,9 @@ struct SplitZone {
 
 /// Where a set came from. Repo updates leave `me` and `ignore` rows in place.
 enum SplitSource: String {
+    /// Typed by the user; repo pulls never remove it.
     case me
+    /// Came from a zone's list URL; replaced on the next pull of that zone.
     case repo
     /// CIDRs that stay out of the kernel table and out of imported rows.
     case ignore
@@ -43,8 +66,10 @@ enum SplitSource: String {
 
 /// Parsed Keenetic / loft-routes file.
 struct SplitFile {
+    /// The file started with a "loft-routes" marker comment.
     var loftHeader: Bool
     var sets: [SplitSet]
+    /// Number of route lines read (route rows plus ignore rows).
     var lineCount: Int
     /// True when no `REM zone:` and no `| via` / `| bypass` — import asks which zone.
     var needsWhere: Bool
@@ -52,10 +77,14 @@ struct SplitFile {
 
 /// One published list from loft-routes `catalog.json`.
 struct SplitListEntry {
+    /// Catalog key, for example "ru".
     var id: String
+    /// File name inside the loft-routes repo, for example "ru.bat".
     var file: String
+    /// Titles by language code ("en", "ru", ...).
     var names: [String: String]
 
+    /// Raw GitHub URL of the list file.
     var url: String { SplitListCatalog.rawBase + file }
 
     /// Localized title; English, then Russian, then the file name.
@@ -67,8 +96,10 @@ struct SplitListEntry {
 
 /// Catalog of named `.bat` files in a3app/loft-routes.
 enum SplitListCatalog {
+    /// Raw-file prefix of the a3app/loft-routes main branch.
     static let rawBase = "https://raw.githubusercontent.com/a3app/loft-routes/main/"
     static let catalogURL = rawBase + "catalog.json"
+    /// Where lists lived before they moved to loft-routes; rewritten on load.
     static let legacyPrefix = "https://raw.githubusercontent.com/a3app/loft/main/lists/"
 
     /// Built-in index when the bundle and the network both miss.
@@ -159,14 +190,19 @@ enum SplitListCatalog {
 
 /// Local split lists plus per-zone repositories.
 final class SplitStore {
+    /// All zones, built-ins first.
     var zones: [SplitZone] = []
+    /// All sets of every zone, including ignore rows.
     var sets: [SplitSet] = []
 
+    /// Folder that holds routes.txt; replaced by `load(dir:)` or `seedShot()`.
     private var dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("loft", isDirectory: true)
 
+    /// Zone with this id, or nil.
     func zoneById(_ id: String) -> SplitZone? { zones.first { $0.id == id } }
 
+    /// Position of the zone in `zones`, or nil.
     func zoneIndex(_ id: String) -> Int? { zones.firstIndex { $0.id == id } }
 
     /// Built-ins Local, Global, then any added zones.
@@ -182,6 +218,8 @@ final class SplitStore {
         return ids
     }
 
+    /// Display name of a zone: the localized name for built-ins, else the user's
+    /// name, else the id in capitals.
     func zoneLabel(_ id: String) -> String {
         let k = "split.zone." + id
         let s = L10n.t(k)
@@ -196,6 +234,7 @@ final class SplitStore {
         return id != "local"
     }
 
+    /// Every set (route and ignore rows) of one zone.
     func sets(in zone: String) -> [SplitSet] { sets.filter { $0.zone == zone } }
 
     /// Kernel bag: through loft. Derived from zone.def.
@@ -235,13 +274,16 @@ final class SplitStore {
         return out
     }
 
+    /// Notifies the owner (SessionController) that the route table must be rebuilt.
     private func listsChanged() { onChange?() }
 
+    /// Total number of CIDRs in a zone, ignore rows included.
     func cidrCount(in zone: String) -> Int {
         sets(in: zone).reduce(0) { $0 + $1.cidrs.count }
     }
 
     /// Loads `routes.txt` from Application Support/loft.
+    /// On first start (no file yet) it creates the built-in zones and the LAN set.
     func load(dir: URL) {
         self.dir = dir
         let u = dir.appendingPathComponent("routes.txt")
@@ -334,6 +376,7 @@ final class SplitStore {
         listsChanged()
     }
 
+    /// Deletes one set by id, saves, and asks for a route update.
     func remove(id: String) {
         sets.removeAll { $0.id == id }
         save()
@@ -379,6 +422,7 @@ final class SplitStore {
         sets.removeAll { $0.source != .ignore && $0.cidrs.isEmpty }
     }
 
+    /// Replaces the zone with the same id, or appends a new one, then saves.
     func upsertZone(_ z: SplitZone) {
         if let i = zoneIndex(z.id) {
             zones[i] = z
@@ -400,6 +444,9 @@ final class SplitStore {
         listsChanged()
     }
 
+    /// Makes a short id for a new zone from its name: lowercase ASCII letters and
+    /// digits, up to 16 characters, with a number added when taken. Names
+    /// without Latin letters get "z1", "z2", ...
     func zoneSlug(_ name: String) -> String {
         let ascii = name.lowercased().folding(options: .diacriticInsensitive, locale: .current)
             .replacingOccurrences(of: "[^a-z0-9]+", with: "", options: .regularExpression)
@@ -485,6 +532,8 @@ final class SplitStore {
         ]
     }
 
+    /// Makes a set id from a name ("My List" -> "my-list"), adding "-2", "-3"...
+    /// when the id is already used.
     private func uniqueID(_ name: String) -> String {
         var base = name.lowercased().replacingOccurrences(of: " ", with: "-")
         let extra = CharacterSet(charactersIn: "-_")
@@ -499,6 +548,7 @@ final class SplitStore {
         return id
     }
 
+    /// Text for a zone's "last update" line: today's date in the UI language and the CIDR count.
     static func stamp(_ n: Int) -> String {
         let day = DateFormatter()
         day.locale = Locale(identifier: L10n.lang.localeID)
@@ -507,6 +557,8 @@ final class SplitStore {
         return "\(day.string(from: Date())) · \(n)"
     }
 
+    /// Makes sure the Local and Global zones exist, in that order at the front,
+    /// and are marked built-in (a hand-edited file may lack them).
     private func ensureBuiltins() {
         if zoneById("local") == nil { zones.insert(SplitZone.local(), at: 0) }
         if zoneById("global") == nil {
@@ -521,6 +573,8 @@ final class SplitStore {
         if let i = zoneIndex("global") { zones[i].builtin = true }
     }
 
+    /// Rewrites old list URLs of every zone. Returns true when something changed,
+    /// so the caller saves the file.
     private func migrateLegacyRepos() -> Bool {
         var changed = false
         for i in zones.indices {
@@ -533,6 +587,8 @@ final class SplitStore {
         return changed
     }
 
+    /// Adds the default "LAN" set (private address ranges) to the Local zone on
+    /// first start, so home network traffic does not go into the tunnel.
     private func seedDefaults() {
         if sets.isEmpty {
             sets.append(SplitSet(
@@ -545,6 +601,10 @@ final class SplitStore {
         }
     }
 
+    /// Reads routes.txt. The file is a list of blocks: "zone: id" blocks with
+    /// zone settings and "set: id" blocks with "name:", "zone:", "src:" and one
+    /// "cidr:" line per network. Older files had a single repo described by
+    /// "repo_*" lines at the top and a "via:" flag per set; both are converted.
     private func parseStore(_ s: String) {
         sets = []
         zones = []
@@ -557,6 +617,8 @@ final class SplitStore {
         var legacyLast = ""
         var legacyCount = 0
         var legacyAt: Date?
+        /// Stores the set being read. A set without a zone goes to Local or Global
+        /// based on its old "via:" flag.
         func flushSet() {
             if var c = cur, !c.cidrs.isEmpty {
                 if c.zone.isEmpty { c.zone = pendingVia == false ? "local" : "global" }
@@ -565,6 +627,7 @@ final class SplitStore {
             cur = nil
             pendingVia = nil
         }
+        /// Stores the zone being read.
         func flushZone() {
             if let z = curZ { zones.append(z) }
             curZ = nil
@@ -573,6 +636,7 @@ final class SplitStore {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix("#") { continue }
             let low = line.lowercased()
+            // Old single-repo header lines, only valid before the first block.
             if cur == nil && curZ == nil {
                 if low.hasPrefix("repo_url:") {
                     legacyURL = String(line.dropFirst(9)).trimmingCharacters(in: .whitespaces)
@@ -616,6 +680,7 @@ final class SplitStore {
                 curZ = z
                 continue
             }
+            // Inside a "set:" block.
             if var c = cur {
                 if low.hasPrefix("name:") {
                     c.name = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
@@ -634,6 +699,7 @@ final class SplitStore {
                 cur = c
                 continue
             }
+            // Inside a "zone:" block.
             if var z = curZ {
                 if low.hasPrefix("name:") {
                     z.name = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
@@ -658,6 +724,7 @@ final class SplitStore {
         }
         flushSet()
         flushZone()
+        // Move the old single repo onto the zone that matches its direction.
         if !legacyURL.isEmpty {
             let tid = legacyVia ? "global" : "local"
             if let i = zoneIndex(tid), zones[i].repo.isEmpty {
@@ -670,6 +737,7 @@ final class SplitStore {
         }
     }
 
+    /// Writes the routes.txt text read by `parseStore`: all zones, then all sets.
     private func emitStore() -> String {
         var out = ""
         for z in zones {
@@ -696,9 +764,15 @@ final class SplitStore {
 }
 
 /// Keenetic `route ADD` and loft-routes 1.0.
+/// Reader and writer for route lists in .bat form. A line looks like
+/// "route ADD 1.2.3.0 MASK 255.255.255.0 0.0.0.0 :: rem Name | via".
+/// "REM zone: id" marks the zone of the lines below it (loft-routes format),
+/// "| via" / "| bypass" after the name gives a direction per line, and
+/// "REM ignore a.b.c.d/n" adds an ignore row.
 enum SplitBat {
     /// Parses a `.bat` / `.txt` / `.loft-routes` body.
     static func parse(_ text: String) -> SplitFile {
+        // 1. Read lines into flat rows (name, zone, cidr, ignore?).
         var loftHeader = false
         var currentZone: String?
         var sawZone = false
@@ -744,6 +818,7 @@ enum SplitBat {
             let ignore = row.name.lowercased() == "ignore"
             rows.append((row.name, zone, row.cidr, ignore))
         }
+        // 2. Group rows into sets by zone and name, keeping first-seen order.
         var buckets: [String: SplitSet] = [:]
         var order: [String] = []
         for r in rows {
@@ -770,12 +845,15 @@ enum SplitBat {
     /// loft-routes (all zones, `REM zone:`) or Keenetic (one zone, no zone marker).
     static func emit(_ sets: [SplitSet], loft: Bool, zoneOrder: [String] = []) -> String {
         var out = "@echo off\r\n"
+        /// Zone of a set; an empty zone means Global.
         func zoneOf(_ s: SplitSet) -> String { s.zone.isEmpty ? "global" : s.zone }
+        /// Writes the ignore rows of a set as "REM ignore" lines.
         func writeIgnore(_ s: SplitSet) {
             for c in s.cidrs {
                 out += "REM ignore \(c)\r\n"
             }
         }
+        /// Writes a set as "route ADD ... MASK ..." lines with the name as a comment.
         func write(_ s: SplitSet) {
             if s.source == .ignore {
                 writeIgnore(s)
@@ -788,6 +866,7 @@ enum SplitBat {
                 out += "\r\n"
             }
         }
+        // loft format: one "REM zone:" section per zone, ignore rows first.
         if loft {
             out += "REM loft-routes 1.0\r\n"
             let present = Set(sets.map { zoneOf($0) })
@@ -843,6 +922,7 @@ enum SplitBat {
         return normalizeCIDR(token)
     }
 
+    /// Splits "a.b.c.d/n" into a 32-bit address and the prefix length (32 when missing).
     private static func cidrParts(_ c: String) -> (ip: UInt32, bits: Int)? {
         let p = c.split(separator: "/", maxSplits: 1).map(String.init)
         guard let ipStr = ipv4(p[0]) else { return nil }
@@ -869,6 +949,9 @@ enum SplitBat {
         return "\(ip)/\(n)"
     }
 
+    /// Reads one "route [ADD] dest [MASK m] gw :: rem comment" line. The
+    /// destination may be a CIDR or an address plus MASK. Returns the name and
+    /// optional direction from the comment, or nil when the line is not a route.
     private static func parseRoute(_ line: String) -> (name: String, via: Bool?, cidr: String)? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         let up = trimmed.uppercased()
@@ -901,6 +984,7 @@ enum SplitBat {
         return (name, via, c)
     }
 
+    /// Finds where the trailing comment starts (":: rem" or "& rem", with or without a space).
     private static func remRange(_ s: String) -> Range<String.Index>? {
         let u = s.lowercased()
         if let r = u.range(of: ":: rem") { return r }
@@ -910,6 +994,8 @@ enum SplitBat {
         return nil
     }
 
+    /// Splits a comment "Name | via" into the name and the direction (true =
+    /// through loft). No "|" means no direction.
     private static func nameAndDir(_ comment: String) -> (String, Bool?) {
         let t = comment.trimmingCharacters(in: .whitespaces)
         if t.isEmpty { return ("", nil) }
@@ -921,11 +1007,14 @@ enum SplitBat {
         return (t, nil)
     }
 
+    /// Direction word that follows `key` in a comment, if any.
     private static func direction(in body: String, key: String) -> Bool? {
         guard let r = body.range(of: key) else { return nil }
         return directionWord(String(body[r.upperBound...]))
     }
 
+    /// Maps "via"/"loft" to true (through loft) and "bypass"/"direct"/"past" to
+    /// false (around loft); anything else is nil.
     private static func directionWord(_ s: String) -> Bool? {
         let w = s.trimmingCharacters(in: .whitespaces).lowercased()
         if w.hasPrefix("via") || w.hasPrefix("loft") { return true }
@@ -933,6 +1022,8 @@ enum SplitBat {
         return nil
     }
 
+    /// Checks a dotted IPv4 address and returns it in canonical form (no leading
+    /// zeros); nil if it is not four numbers 0-255.
     private static func ipv4(_ s: String) -> String? {
         let oct = s.split(separator: ".", omittingEmptySubsequences: false)
         guard oct.count == 4 else { return nil }
@@ -944,6 +1035,7 @@ enum SplitBat {
         return out.joined(separator: ".")
     }
 
+    /// Converts a dotted netmask to a prefix length; nil when the mask has holes.
     private static func prefix(fromMask mask: String) -> Int? {
         let oct = mask.split(separator: ".").compactMap { UInt32($0) }
         guard oct.count == 4 else { return nil }
@@ -956,6 +1048,7 @@ enum SplitBat {
         return n == 0 ? bits : nil
     }
 
+    /// Turns "a.b.c.d/n" into the address and dotted mask for a "route ADD" line.
     private static func splitCIDR(_ c: String) -> (ip: String, mask: String)? {
         let p = c.split(separator: "/", maxSplits: 1).map(String.init)
         guard let ip = ipv4(p[0]) else { return nil }

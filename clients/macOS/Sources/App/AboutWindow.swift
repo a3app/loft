@@ -1,4 +1,7 @@
 // About window: mark, version, protocol blurb, credit, GitHub update.
+// Opened from the app menu. Its button checks GitHub for a newer release
+// and installs it through Engine/Updater.swift, like the launch-time offer
+// in UpdateOffer.swift.
 
 import AppKit
 
@@ -35,6 +38,7 @@ final class AboutWindowController: NSWindowController {
         idlePill()
     }
 
+    /// Resets the update button to its idle state each time the window is shown.
     override func showWindow(_ sender: Any?) {
         idlePill()
         super.showWindow(sender)
@@ -70,6 +74,9 @@ final class AboutWindowController: NSWindowController {
         }
     }
 
+    /// Builds the window once: mark, name and version, a small table of the
+    /// supported protocols, the blurb, the update button and the
+    /// "Made with love by A³" line.
     private func build() {
         let c = loftBody(window!)
         let mark = MarkView(frame: NSRect(x: 144, y: 8, width: 72, height: 72))
@@ -79,6 +86,7 @@ final class AboutWindowController: NSWindowController {
         let ver = Palette.label(software, font: Palette.body(12.5), color: Palette.mute, frame: NSRect(x: 20, y: 112, width: 320, height: 18))
         ver.alignment = .center
 
+        // Kicker line under the version.
         kick.font = Palette.body(11)
         kick.textColor = Palette.mute
         kick.backgroundColor = .clear
@@ -90,6 +98,7 @@ final class AboutWindowController: NSWindowController {
         kick.frame = NSRect(x: 20, y: 132, width: 320, height: 16)
         c.addSubview(kick)
 
+        // Protocol table: protocol name on the left, its options on the right.
         let keyFont = Palette.body(12.5)
         let valFont = Palette.mono(12)
         let keys = ["loft/1.0", "SSTP", "VLESS"]
@@ -112,6 +121,7 @@ final class AboutWindowController: NSWindowController {
             c.addSubview(v)
         }
 
+        // Fixed vertical layout of the lower half (body is 420 pt tall).
         let bodyH: CGFloat = 420
         let madeH: CGFloat = 20
         let madeY = bodyH - 14 - madeH
@@ -143,6 +153,7 @@ final class AboutWindowController: NSWindowController {
         actionBtn.target = self
         actionBtn.action = #selector(tapUpdate)
 
+        // Colophon: "Made with love", the pixel heart, "by A³", centered as one row.
         let madeFont = Palette.body(12)
         let leftStr = "Made with love"
         let rightStr = "by A³"
@@ -171,6 +182,7 @@ final class AboutWindowController: NSWindowController {
         actionBtn.needsDisplay = true
     }
 
+    /// Update button: installs the found update if there is one, else checks now.
     @objc private func tapUpdate() {
         if let offer = offer {
             startInstall(offer)
@@ -179,6 +191,8 @@ final class AboutWindowController: NSWindowController {
         checkNow()
     }
 
+    /// Downloads and installs `offer` through Updater, showing progress on the
+    /// button; on success the app quits so the relaunch script can swap it.
     private func startInstall(_ offer: Updater.Offer) {
         guard !busy else { return }
         busy = true
@@ -203,6 +217,7 @@ final class AboutWindowController: NSWindowController {
         })
     }
 
+    /// Maps an updater error to a short localized message for the button.
     private func failText(_ e: Error) -> String {
         guard let f = e as? Updater.Fail else { return L10n.t("upd_err") }
         switch f {

@@ -1,4 +1,6 @@
 // Journal window: front and session log lines, copy/clear, rotating diag file path.
+// The journal is the in-app event log kept by Engine/LoftLog.swift. With the
+// diagnostics option on, the same lines also go to a log file on disk.
 
 import AppKit
 
@@ -66,6 +68,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         sub.textColor = Palette.mute
         sub.alignment = .center
 
+        // Rounded log area.
         scroll.drawsBackground = true
         scroll.backgroundColor = Palette.field
         scroll.hasVerticalScroller = true
@@ -79,6 +82,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         scroll.contentView.drawsBackground = true
         scroll.contentView.backgroundColor = Palette.field
 
+        // Read-only, selectable monospace text with no automatic "smart" replacements.
         text.isEditable = false
         text.isSelectable = true
         text.drawsBackground = false
@@ -99,6 +103,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         applyLogStyle()
         scroll.documentView = text
 
+        // Footer: Copy on the left, Clear in the middle, Back on the right.
         copyBtn.font = Palette.body(12.5)
         copyBtn.tone = Palette.mute
         copyBtn.alignment = .left
@@ -189,6 +194,8 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         copyBtn.title = L10n.t("copy")
         clearBtn.title = L10n.t("clear_log")
         back.title = L10n.t("back")
+        // Skip the redraw when hidden, unchanged, or while the user has a selection
+        // (replacing the text would lose it).
         guard window?.isVisible == true else { return }
         let body = LoftLog.shared.dump()
         let shown = body.isEmpty ? L10n.t("journal_empty") : body
@@ -200,6 +207,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         let inner = scroll.bounds.width > 1 ? scroll.bounds.width : 480
         text.textContainer?.containerSize = NSSize(width: max(40, inner - 20), height: CGFloat.greatestFiniteMagnitude)
         let empty = L10n.t("journal_empty")
+        // New lines only appended: add just the tail. Anything else: replace all.
         if shown.hasPrefix(old), !old.isEmpty, old != empty, let storage = text.textStorage, !body.isEmpty {
             let extra = String(shown.dropFirst(old.count))
             storage.beginEditing()
@@ -222,6 +230,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
                 text.textStorage?.addAttribute(.font, value: Palette.mono(11), range: r)
             }
         }
+        // Size the text view to its content and scroll to the newest line.
         text.layoutManager?.ensureLayout(for: text.textContainer!)
         let used = text.layoutManager?.usedRect(for: text.textContainer!) ?? .zero
         let h = max(scroll.bounds.height, used.height + 24)

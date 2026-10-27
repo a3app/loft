@@ -1,4 +1,8 @@
 // Spawns bundled loft-front, parses STATUS lines, and owns the TUN unix-socket path.
+// loft-front is a Go helper inside loft.app. It opens one session to a loft
+// node and serves it as a local SOCKS port (and a TUN network interface when
+// enabled). It reports progress as STATUS lines on its output; this class
+// starts it, reads those lines into properties and stops it.
 
 import Foundation
 import Darwin
@@ -649,6 +653,8 @@ enum FrontExplain {
     /// Human line for the journal and spark: STATUS, auth, GET, and net errors.
     static func display(_ line: String) -> String {
         var s = line
+        // STATUS lines: progress and "on" become short captions; an error keeps its
+        // message for the matching below.
         if s.hasPrefix("STATUS ") {
             let st = parseStatus(s)
             if st.state == "connecting" {
@@ -679,6 +685,7 @@ enum FrontExplain {
         if low.contains("ip_pool") { return L10n.t("err_ip_pool") }
         if low.contains("policy_drop") { return L10n.t("err_policy") }
         if low.contains("echo timeout") { return L10n.t("err_stale") }
+        // The node could not be reached: say why (no network, no reply, refused, DNS...).
         if isTransportFail(low) || (low.contains("get handshake") && !low.contains("empty session") && !low.contains("status")) {
             if !LocalNet.hasUplink() { return L10n.t("err_no_net") }
             if isNoReply(low) || low.contains("get handshake") { return L10n.t("err_no_reply") }
@@ -692,11 +699,13 @@ enum FrontExplain {
             }
             return L10n.t("err_no_reply")
         }
+        // GET transport handshake problems.
         if low.contains("get handshake") {
             if low.contains("empty session") { return L10n.t("err_get_empty") }
             if low.contains("status") { return L10n.t("err_get_status") }
             return L10n.t("err_get_hs")
         }
+        // VLESS, Trojan and SSTP errors.
         if low.contains("reality: dest") || low.contains("reality dest") || low.contains("vless reality") {
             return L10n.t("err_reality")
         }
@@ -725,6 +734,7 @@ enum FrontExplain {
             if rest.isEmpty { return L10n.t("err_sstp") }
             return rest
         }
+        // loft-front's own failures and exit codes; anything unknown is shown as is.
         if low.contains("wss dial") { return L10n.t("err_ws") }
         if low.contains("front closed") { return L10n.t("err_front_closed") }
         if low.contains("no loft-front") { return L10n.t("err_no_front") }
@@ -814,6 +824,8 @@ enum LocalNet {
         var ptr = ifaddr
         while let p = ptr {
             ptr = p.pointee.ifa_next
+            // Skip interfaces that are down, loopback, tunnels (utun, gif, stf) and
+            // Apple peer-to-peer links (awdl, llw); they do not reach the internet.
             let flags = Int32(p.pointee.ifa_flags)
             if flags & IFF_UP == 0 { continue }
             if flags & IFF_LOOPBACK != 0 { continue }
@@ -822,12 +834,14 @@ enum LocalNet {
                 || name.hasPrefix("gif") || name.hasPrefix("stf") { continue }
             guard let sa = p.pointee.ifa_addr else { continue }
             switch Int32(sa.pointee.sa_family) {
+            // IPv4 counts unless it is loopback or self-assigned (169.254.x.x).
             case AF_INET:
                 let ip = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee.sin_addr.s_addr }
                 let a = Int(ip & 0xff)
                 let b = Int((ip >> 8) & 0xff)
                 if a == 127 || (a == 169 && b == 254) { continue }
                 return true
+            // IPv6 counts unless it is link-local, multicast, unspecified or loopback.
             case AF_INET6:
                 let addr = sa.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { $0.pointee.sin6_addr }
                 let t = addr.__u6_addr.__u6_addr8

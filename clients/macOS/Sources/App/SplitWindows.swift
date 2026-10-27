@@ -1,31 +1,52 @@
 // Split-routing windows: zones, Keenetic import/export, repository, list catalog, add a network.
+// Split routing sends some networks through the loft tunnel and others
+// around it (see Engine/SplitRoutes.swift for the data model: zones hold sets
+// of CIDR networks, and a zone's direction is "through loft" or "around
+// loft"). This file holds every window of that feature: the main lists
+// window, the zones manager, the add/edit-zone sheet, import and export of
+// .bat route files, the per-zone repository (list URL), the catalog of
+// published lists, and the add/edit-network sheet. AppDelegate opens them
+// through its showSplit... methods.
 
 import AppKit
 
 /// Where the list catalog returns after a pick.
 enum SplitListBack {
+    /// Back to the repository window of this zone.
     case repo(String)
+    /// Back to the edit sheet of this zone.
     case zoneEdit(String)
+    /// Back to the add-zone sheet (its draft is kept in `SplitZoneDraft`).
     case zoneAdd
 }
 
 /// Draft for the add-zone sheet (survives a trip to the list catalog).
 struct SplitZoneDraft {
     var name = ""
+    /// True = traffic goes through loft; false = around it.
     var def = true
+    /// List URL picked so far (may come from the catalog).
     var repo = ""
+    /// Pull the list again automatically about once a day.
     var auto = true
 }
 
 /// One split-list row. Reused across reloads.
 private final class SplitRow: FlippedView {
+    /// Rounded background of the row.
     let plate = LoftPlate(frame: .zero)
+    /// Invisible button over the whole row; opens the network editor.
     let hit = ActionButton(frame: .zero)
+    /// Set name, or the localized "ignore" title for ignore rows.
     let name = PassLab(labelWithString: "")
+    /// First two CIDRs as a preview.
     let cidrs = PassLab(labelWithString: "")
+    /// Network count, right-aligned.
     let meta = PassLab(labelWithString: "")
+    /// Where the set came from (me / repository / ignore), right-aligned.
     let src = PassLab(labelWithString: "")
 
+    /// Styles the labels once; `SplitWindowController.addRow` fills and places them.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         plate.radius = 8
@@ -51,8 +72,10 @@ private final class SplitRow: FlippedView {
         for v in [plate, hit, name, cidrs, meta, src] as [NSView] { addSubview(v) }
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Keeps the plate and the hit button covering the whole row.
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         plate.frame = bounds
@@ -62,17 +85,26 @@ private final class SplitRow: FlippedView {
 
 /// Lists window: zone tabs, import, export, repository.
 final class SplitWindowController: NSWindowController {
+    /// Owner of the route store; the toggle and lists write through it.
     private let engine: SessionController
+    /// Zone whose tab is selected.
     private var zoneId = "global"
+    /// Search text; filters sets by name.
     private var query = ""
     private let titleLab = DrawLab(frame: .zero)
+    /// Master switch for split routing (the `split` preference).
     private let splitSw = ToggleSwitch(frame: .zero)
     private let sub = NSTextField(wrappingLabelWithString: "")
+    /// Caption with the current home gateway and interface, the path used for
+    /// "around loft" traffic.
     private let native = NSTextField(labelWithString: "")
     private let zoneLab = NSTextField(labelWithString: "")
     private let zonesBtn = GhostButton(frame: .zero)
+    /// One tab per zone; rebuilt when the zone list changes.
     private var tabSeg: SegControl?
+    /// Zone ids in tab order, matching `tabSeg` indexes.
     private var tabZoneIds: [String] = []
+    /// "<zone> · through loft" or "<zone> · around loft" under the tabs.
     private let policy = NSTextField(labelWithString: "")
     private var searchF: LoftField!
     private var listScroll: NSScrollView!
@@ -82,6 +114,7 @@ final class SplitWindowController: NSWindowController {
     private let exp = PillButton(frame: .zero)
     private let repo = PillButton(frame: .zero)
     private let footLine = FlippedView(frame: .zero)
+    /// Rows by set id, reused across reloads so the list does not flicker.
     private var rows: [String: SplitRow] = [:]
 
     /// Builds the split lists window around `engine`.
@@ -95,8 +128,12 @@ final class SplitWindowController: NSWindowController {
         reload()
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Creates and styles all controls once and wires their actions. Flipping
+    /// the master switch saves the preference and re-applies the kernel routes
+    /// right away.
     private func build() {
         let c = loftBody(window!)
         titleLab.font = Palette.font(20)
@@ -147,6 +184,7 @@ final class SplitWindowController: NSWindowController {
     }
 
     /// Reloads lists, toggle, zone tabs, and native hop caption.
+        // 1. Texts that depend on state and language.
     @objc func reload() {
         let c = loftBody(window!)
         let w = c.bounds.width > 1 ? c.bounds.width : 440
@@ -169,6 +207,7 @@ final class SplitWindowController: NSWindowController {
         addBtn.title = "+  " + L10n.t("split_add")
         searchF.field.placeholderString = L10n.t("split_search")
 
+        // 2. Zone tabs: rebuild only when the set of zones changed, else just retitle.
         let labels = ids.map { id in
             "\(routes.zoneLabel(id))  \(routes.sets(in: id).count)"
         }
@@ -190,6 +229,7 @@ final class SplitWindowController: NSWindowController {
             if let i = ids.firstIndex(of: zoneId) { seg.value = i }
         }
 
+        // 3. Header layout, top to bottom.
         let headY: CGFloat = 14
         let headH: CGFloat = 28
         titleLab.frame = NSRect(x: 20, y: headY, width: w - 20 - 36 - 16, height: headH)
@@ -210,6 +250,7 @@ final class SplitWindowController: NSWindowController {
         y += 24
         searchF.frame = NSRect(x: 20, y: y, width: w - 40, height: 36)
         y += 44
+        // 4. List rows for the selected zone and search text; stale rows are removed.
         let listTop = y
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let listed = routes.sets(in: zoneId).filter { q.isEmpty || $0.name.lowercased().contains(q) }
@@ -234,6 +275,7 @@ final class SplitWindowController: NSWindowController {
                 rows.removeValue(forKey: id)
             }
         }
+        // 5. Size the scroll area to the content, but keep the window on screen.
         list.alphaValue = on ? 1 : 0.4
         list.frame = NSRect(x: 0, y: 0, width: w - 40, height: max(1, ly))
         let footer: CGFloat = 12 + 1 + 12 + 36 + 16
@@ -287,6 +329,7 @@ final class SplitWindowController: NSWindowController {
         return h
     }
 
+    /// Short localized tag for where a set came from.
     private func srcLabel(_ src: SplitSource) -> String {
         switch src {
         case .repo: return L10n.t("split_src_repo")
@@ -295,6 +338,8 @@ final class SplitWindowController: NSWindowController {
         }
     }
 
+    /// "Native" path text: the gateway and interface found before loft took over
+    /// the default route. Tunnel (utun) and loopback interfaces are not shown.
     private func nativeLine() -> String {
         let g = Priv.cachedGateway()
         if g.isEmpty { return "" }
@@ -306,16 +351,22 @@ final class SplitWindowController: NSWindowController {
         return String(format: L10n.t("split_native"), g, iff)
     }
 
+    /// "+ Add" link: opens the network editor for a new set in this zone.
     @objc private func addTap() {
         AppDelegate.shared?.showSplitAdd(nil, zone: zoneId)
     }
 
+    /// Row click: opens the network editor for that set (id is stored in the button's identifier).
     @objc private func editTap(_ sender: NSButton) {
         let id = sender.identifier?.rawValue ?? ""
         guard let s = engine.store.routes.sets.first(where: { $0.id == id }) else { return }
         AppDelegate.shared?.showSplitAdd(s, zone: s.zone)
     }
 
+    /// Opens the zones manager.
+    /// Opens the repository (list URL) window for the selected zone.
+    /// Opens the import window for the selected zone.
+    /// Opens the export window for the selected zone.
     @objc private func zonesTap() { AppDelegate.shared?.showSplitZones() }
     @objc private func impTap() { AppDelegate.shared?.showSplitImport(zone: zoneId) }
     @objc private func expTap() { AppDelegate.shared?.showSplitExport(zone: zoneId) }
@@ -328,16 +379,26 @@ final class SplitWindowController: NSWindowController {
     }
 }
 
+/// Import window: the user drops or picks a .bat route file (Keenetic router
+/// format or loft-routes format), sees what was detected, picks a zone when
+/// the file does not name one, and merges the networks into the store.
 /// Keenetic / loft-routes drop-in.
 final class SplitImportWindowController: NSWindowController {
     private let engine: SessionController
+    /// File read but not imported yet.
     private var pending: SplitFile?
+    /// Zone ids behind the zone picker, in menu order.
     private var zoneIds: [String] = []
+    /// Zone that receives rows when the file does not say where they go.
     private var whereZone: String
+    /// One-line summary of the loaded file (format, line count, missing zone).
     private var detect = ""
+    /// Drop-zone caption inside the dashed plate.
     private var drop: NSTextField!
+    /// Shows `detect` under the drop zone.
     private var hint: NSTextField!
 
+    /// Opens the import window; `zone` preselects the target zone.
     init(engine: SessionController, zone: String) {
         self.engine = engine
         self.whereZone = zone
@@ -348,8 +409,10 @@ final class SplitImportWindowController: NSWindowController {
         w.center()
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Makes the whole window body a drop target for files, then draws it.
     private func build() {
         let c = loftBody(window!)
         c.onFiles = { [weak self] urls in
@@ -359,6 +422,8 @@ final class SplitImportWindowController: NSWindowController {
         paint()
     }
 
+    /// Rebuilds all controls from the current state. The zone picker shows only
+    /// before a file is loaded or when the file has no zone markers.
     private func paint() {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
@@ -424,6 +489,7 @@ final class SplitImportWindowController: NSWindowController {
         loftResize(window!, bodyHeight: y)
     }
 
+    /// Shows a file picker for .bat / .txt / .loft-routes files.
     @objc private func pickTap() {
         let p = NSOpenPanel()
         p.allowedFileTypes = ["bat", "txt", "loft-routes"]
@@ -433,6 +499,8 @@ final class SplitImportWindowController: NSWindowController {
         }
     }
 
+    /// Reads a route file (UTF-8, or Windows-1251 as older Russian Keenetic
+    /// exports use), parses it and redraws with a summary of what was found.
     private func loadFile(_ url: URL) {
         let text = (try? String(contentsOf: url, encoding: .utf8))
             ?? (try? String(contentsOf: url, encoding: .windowsCP1251))
@@ -449,6 +517,9 @@ final class SplitImportWindowController: NSWindowController {
         paint()
     }
 
+    /// Main button: with nothing loaded it opens the file picker; otherwise it
+    /// merges the sets as the user's own rows (not repository rows) and returns
+    /// to the lists window.
     @objc private func goTap() {
         guard var f = pending, !f.sets.isEmpty else {
             pickTap()
@@ -463,19 +534,27 @@ final class SplitImportWindowController: NSWindowController {
         AppDelegate.shared?.showSplit()
     }
 
+    /// Closes and returns to the lists window.
     @objc private func backTap() {
         window?.close()
         AppDelegate.shared?.showSplit()
     }
 }
 
+/// Export window: saves the lists as a .bat file, either the loft-routes
+/// format (all zones, with "REM zone:" markers) or the plain Keenetic format
+/// (one zone, which a router can run as is).
 /// Keenetic .bat or loft-routes export.
 final class SplitExportWindowController: NSWindowController {
     private let engine: SessionController
+    /// True = loft-routes format, false = Keenetic format.
     private var loftFmt = true
+    /// Zone ids behind the zone picker (Keenetic format only).
     private var zoneIds: [String] = []
+    /// Zone exported in Keenetic format.
     private var whereZone: String
 
+    /// Opens the export window; `zone` preselects the zone for Keenetic export.
     init(engine: SessionController, zone: String) {
         self.engine = engine
         self.whereZone = zone
@@ -486,8 +565,11 @@ final class SplitExportWindowController: NSWindowController {
         w.center()
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Rebuilds the window: format switch, zone picker (Keenetic only), a short
+    /// sample of the output, and the save button.
     private func paint() {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
@@ -568,6 +650,8 @@ final class SplitExportWindowController: NSWindowController {
         return sets.first.map { $0.name.isEmpty ? "routes" : $0.name } ?? "routes"
     }
 
+    /// Asks where to save and writes the chosen format. Refuses with a notice
+    /// when there is nothing to export.
     @objc private func saveTap() {
         let routes = engine.store.routes
         let sets: [SplitSet]
@@ -595,19 +679,27 @@ final class SplitExportWindowController: NSWindowController {
         }
     }
 
+    /// Closes and returns to the lists window.
     @objc private func backTap() {
         window?.close()
         AppDelegate.shared?.showSplit()
     }
 }
 
+/// Repository window of one zone: the list URL, the daily auto-update switch,
+/// the last update line, and "pull now". The URL may also be picked from the
+/// catalog of published lists.
 /// Raw .bat URL of one zone, auto-update, pull now.
 final class SplitRepoWindowController: NSWindowController {
     private let engine: SessionController
+    /// Zone being edited.
     private let zoneId: String
+    /// URL field; its text is saved on every repaint and before leaving.
     private var urlF: LoftField!
+    /// True while a pull runs; disables the button.
     private var pulling = false
 
+    /// Opens the repository window for `zone`.
     init(engine: SessionController, zone: String) {
         self.engine = engine
         self.zoneId = zone
@@ -618,8 +710,11 @@ final class SplitRepoWindowController: NSWindowController {
         w.center()
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Rebuilds the window from the zone. It first saves what was typed in the
+    /// URL field (`harvest`) so a repaint never loses the edit.
     private func paint() {
         harvest()
         let c = loftBody(window!)
@@ -683,6 +778,8 @@ final class SplitRepoWindowController: NSWindowController {
         loftResize(window!, bodyHeight: y)
     }
 
+    /// Adds the "list URL" caption, the URL field and the catalog button.
+    /// Returns the y below them.
     private func addRepoURL(into c: NSView, y: CGFloat, url: String) -> CGFloat {
         let ul = Palette.label(L10n.t("split_repo_url"), font: Palette.body(11.5), color: Palette.mute, frame: NSRect(x: 28, y: y, width: 384, height: 16))
         c.addSubview(ul)
@@ -702,12 +799,16 @@ final class SplitRepoWindowController: NSWindowController {
         return y + 48
     }
 
+    /// Saves the URL field into the zone (old list URLs are rewritten to the
+    /// current repository) and writes the store.
     private func harvest() {
         guard let f = urlF, let i = engine.store.routes.zoneIndex(zoneId) else { return }
         engine.store.routes.zones[i].repo = SplitListCatalog.rewriteLegacy(f.stringValue.trimmingCharacters(in: .whitespacesAndNewlines))
         engine.store.routes.save()
     }
 
+    /// Saves the URL, then downloads the list and replaces this zone's repository
+    /// rows. Shows an error notice when the pull fails.
     @objc private func pullTap() {
         harvest()
         pulling = true
@@ -720,12 +821,14 @@ final class SplitRepoWindowController: NSWindowController {
         }
     }
 
+    /// Saves the URL and opens the catalog, which comes back to this window.
     @objc private func pickTap() {
         harvest()
         window?.close()
         AppDelegate.shared?.showSplitLists(back: .repo(zoneId))
     }
 
+    /// Saves the URL and returns to the lists window.
     @objc private func backTap() {
         harvest()
         window?.close()
@@ -734,11 +837,17 @@ final class SplitRepoWindowController: NSWindowController {
 }
 
 /// Catalog of lists in the loft repository. A row fills the zone URL.
+/// Catalog window: lists the published route lists (bundled index first, then
+/// the fresh one from GitHub). Clicking a row stores its URL in the zone, or
+/// in the add-zone draft, and goes back to where the user came from.
 final class SplitListWindowController: NSWindowController {
     private let engine: SessionController
+    /// Window to return to, and whose URL a pick fills.
     private let back: SplitListBack
+    /// Catalog rows currently shown.
     private var entries: [SplitListEntry]
 
+    /// Shows the bundled catalog at once and repaints when the online one arrives.
     init(engine: SessionController, back: SplitListBack) {
         self.engine = engine
         self.back = back
@@ -755,8 +864,10 @@ final class SplitListWindowController: NSWindowController {
         }
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// URL currently set in the target zone or draft; that row is highlighted.
     private func currentURL() -> String {
         switch back {
         case .repo(let id), .zoneEdit(let id):
@@ -766,6 +877,7 @@ final class SplitListWindowController: NSWindowController {
         }
     }
 
+    /// Rebuilds the window: title, help text, one row per list, Back.
     private func paint() {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
@@ -824,6 +936,8 @@ final class SplitListWindowController: NSWindowController {
         return h
     }
 
+    /// Row click: writes the list URL into the zone (saved right away) or into
+    /// the add-zone draft, then goes back.
     @objc private func rowTap(_ sender: NSButton) {
         let id = sender.identifier?.rawValue ?? ""
         guard let e = entries.first(where: { $0.id == id }) else { return }
@@ -840,11 +954,13 @@ final class SplitListWindowController: NSWindowController {
         goBack()
     }
 
+    /// Goes back without changing anything.
     @objc private func backTap() {
         window?.close()
         goBack()
     }
 
+    /// Reopens the window named by `back`.
     private func goBack() {
         switch back {
         case .repo(let id):
@@ -859,16 +975,26 @@ final class SplitListWindowController: NSWindowController {
 
 /// One CIDR (or a comma list) and a service name. Zone is membership, not direction.
 final class SplitAddWindowController: NSWindowController {
+    /// Add/edit network window. A row is either a route (traffic follows the
+    /// zone's direction) or an ignore row (these networks are left out of the
+    /// zone, even if a repository list includes them).
     private let engine: SessionController
+    /// Set being edited; nil when adding a new one.
     private var editing: SplitSet?
+    /// Zone ids behind the zone picker.
     private var zoneIds: [String] = []
+    /// Zone the set will belong to.
     private var whereZone: String
+    /// True = ignore row, false = route row.
     private var asIgnore = false
+    /// Network text typed so far; kept across repaints.
     private var netText = ""
+    /// Name typed so far; kept across repaints.
     private var nameText = ""
     private var netF: LoftField!
     private var nameF: LoftField!
 
+    /// Opens the editor for `set`, or for a new set in `zone` when `set` is nil.
     init(engine: SessionController, set: SplitSet?, zone: String) {
         self.engine = engine
         self.editing = set
@@ -883,8 +1009,11 @@ final class SplitAddWindowController: NSWindowController {
         w.center()
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Rebuilds the window: kind switch (route / ignore), network, name, zone,
+    /// save, Back and (when editing) Delete.
     private func paint() {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
@@ -971,11 +1100,17 @@ final class SplitAddWindowController: NSWindowController {
         loftResize(window!, bodyHeight: y)
     }
 
+    /// Copies the field texts into `netText` / `nameText` before a repaint.
     private func harvest() {
         if let f = netF { netText = f.stringValue }
         if let f = nameF { nameText = f.stringValue }
     }
 
+    /// Validates and saves. Networks may be separated by commas, spaces,
+    /// semicolons or new lines; invalid ones are skipped and none valid is an
+    /// error. When a repository row is edited, the networks removed from it are
+    /// remembered as ignores, so the next pull does not bring them back. The
+    /// edited row becomes the user's own.
     @objc private func goTap() {
         harvest()
         var cidrs: [String] = []
@@ -1004,6 +1139,8 @@ final class SplitAddWindowController: NSWindowController {
         AppDelegate.shared?.showSplit()
     }
 
+    /// Deletes the set. For a repository row its networks are remembered as
+    /// ignores, so the next pull does not re-add them.
     @objc private func delTap() {
         if let old = editing {
             if old.source == .repo {
@@ -1016,6 +1153,7 @@ final class SplitAddWindowController: NSWindowController {
         AppDelegate.shared?.showSplit()
     }
 
+    /// Returns to the lists window without saving.
     @objc private func backTap() {
         window?.close()
         AppDelegate.shared?.showSplit()
@@ -1023,9 +1161,12 @@ final class SplitAddWindowController: NSWindowController {
 }
 
 /// Zone list: name, direction, built-in mark.
+/// Zones manager: one row per zone with its direction, network count and list
+/// file; a row opens the zone editor. "+ Add" starts a new zone.
 final class SplitZonesWindowController: NSWindowController {
     private let engine: SessionController
 
+    /// Opens the zones manager.
     init(engine: SessionController) {
         self.engine = engine
         let w = makeLoftWindow(size: NSSize(width: 440, height: 420))
@@ -1035,10 +1176,13 @@ final class SplitZonesWindowController: NSWindowController {
         w.center()
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Repaints after zones changed elsewhere.
     func reload() { paint() }
 
+    /// Rebuilds the window: title, help, zone rows, Add, Back.
     private func paint() {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
@@ -1081,6 +1225,7 @@ final class SplitZonesWindowController: NSWindowController {
         loftResize(window!, bodyHeight: y)
     }
 
+    /// One zone row. Returns the used height.
     private func addRow(_ id: String, y: CGFloat, into c: NSView) -> CGFloat {
         let routes = engine.store.routes
         let z = routes.zoneById(id)
@@ -1112,11 +1257,14 @@ final class SplitZonesWindowController: NSWindowController {
         return h
     }
 
+    /// Row click: opens the editor of that zone (id is in the button's identifier).
     @objc private func rowTap(_ sender: NSButton) {
         let id = sender.identifier?.rawValue ?? ""
         AppDelegate.shared?.showSplitZoneEdit(id)
     }
 
+    /// "+ Add": opens an empty add-zone sheet.
+    /// Returns to the lists window.
     @objc private func addTap() { AppDelegate.shared?.showSplitZoneAdd(fresh: true) }
     @objc private func backTap() {
         window?.close()
@@ -1126,13 +1274,18 @@ final class SplitZonesWindowController: NSWindowController {
 
 /// Edit one zone: name (locked if built-in), direction, repository.
 final class SplitZoneEditWindowController: NSWindowController {
+    /// Owner of the route store.
     private let engine: SessionController
+    /// Zone being edited.
     private let zoneId: String
     private var nameF: LoftField!
     private var urlF: LoftField!
+    /// Direction chosen in the switch (true = through loft).
     private var defVia: Bool
+    /// False only before the first paint, when there are no fields to read yet.
     private var painted = false
 
+    /// Opens the editor for zone `zone`.
     init(engine: SessionController, zone: String) {
         self.engine = engine
         self.zoneId = zone
@@ -1144,8 +1297,11 @@ final class SplitZoneEditWindowController: NSWindowController {
         w.center()
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Rebuilds the window. Edits are saved (`harvest`) before every repaint
+    /// except the first, so changing the direction keeps the typed name and URL.
     private func paint() {
         if painted { harvest() }
         painted = true
@@ -1251,6 +1407,8 @@ final class SplitZoneEditWindowController: NSWindowController {
         loftResize(window!, bodyHeight: y)
     }
 
+    /// Writes direction, list URL and (for user zones) the name into the store and
+    /// saves. Built-in zones keep their name.
     private func harvest() {
         guard let i = engine.store.routes.zoneIndex(zoneId) else { return }
         engine.store.routes.zones[i].def = defVia
@@ -1264,24 +1422,28 @@ final class SplitZoneEditWindowController: NSWindowController {
         engine.store.routes.save()
     }
 
+    /// Saves and returns to the zones manager.
     @objc private func saveTap() {
         harvest()
         window?.close()
         AppDelegate.shared?.showSplitZones()
     }
 
+    /// Saves and opens the catalog, which returns to this editor.
     @objc private func pickTap() {
         harvest()
         window?.close()
         AppDelegate.shared?.showSplitLists(back: .zoneEdit(zoneId))
     }
 
+    /// Deletes the zone; its sets move to Global (see `SplitStore.deleteZone`).
     @objc private func delTap() {
         engine.store.routes.deleteZone(zoneId)
         window?.close()
         AppDelegate.shared?.showSplitZones()
     }
 
+    /// Back also saves the edits, then returns to the zones manager.
     @objc private func backTap() {
         harvest()
         window?.close()
@@ -1290,13 +1452,19 @@ final class SplitZoneEditWindowController: NSWindowController {
 }
 
 /// New user zone.
+/// Add-zone sheet. Its fields live in `AppDelegate.zoneAddDraft`, so they
+/// survive a trip to the catalog window and back.
 final class SplitZoneAddWindowController: NSWindowController {
+    /// Owner of the route store.
     private let engine: SessionController
     private var nameF: LoftField!
     private var urlF: LoftField!
+    /// Direction chosen in the switch (true = through loft).
     private var defVia: Bool
+    /// State of the auto-update switch.
     private var autoOn: Bool
 
+    /// Opens the sheet filled from `draft`.
     init(engine: SessionController, draft: SplitZoneDraft) {
         self.engine = engine
         self.defVia = draft.def
@@ -1308,8 +1476,11 @@ final class SplitZoneAddWindowController: NSWindowController {
         w.center()
     }
 
+    /// Not used: built in code, never from a nib.
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Rebuilds the window from `draft`: name, direction, list URL with the catalog
+    /// button, auto-update switch, Add and Back.
     private func paint(draft: SplitZoneDraft) {
         let c = loftBody(window!)
         c.subviews.forEach { $0.removeFromSuperview() }
@@ -1394,6 +1565,7 @@ final class SplitZoneAddWindowController: NSWindowController {
         loftResize(window!, bodyHeight: y)
     }
 
+    /// Copies the current field values into the shared draft.
     private func harvestDraft() {
         var d = AppDelegate.shared?.zoneAddDraft ?? SplitZoneDraft()
         d.name = nameF?.stringValue ?? d.name
@@ -1403,6 +1575,8 @@ final class SplitZoneAddWindowController: NSWindowController {
         AppDelegate.shared?.zoneAddDraft = d
     }
 
+    /// Creates the zone with an id made from its name (name is required), clears
+    /// the draft and returns to the zones manager.
     @objc private func addTap() {
         harvestDraft()
         let d = AppDelegate.shared?.zoneAddDraft ?? SplitZoneDraft()
@@ -1422,12 +1596,14 @@ final class SplitZoneAddWindowController: NSWindowController {
         AppDelegate.shared?.showSplitZones()
     }
 
+    /// Saves the draft and opens the catalog, which returns here.
     @objc private func pickTap() {
         harvestDraft()
         window?.close()
         AppDelegate.shared?.showSplitLists(back: .zoneAdd)
     }
 
+    /// Keeps the draft and returns to the zones manager.
     @objc private func backTap() {
         harvestDraft()
         window?.close()
@@ -1435,6 +1611,7 @@ final class SplitZoneAddWindowController: NSWindowController {
     }
 }
 
+/// File name at the end of a list URL ("…/ru.bat?x" -> "ru.bat"), or nil if empty.
 private func zoneRepoFile(_ repo: String) -> String? {
     let u = repo.trimmingCharacters(in: .whitespacesAndNewlines)
     if u.isEmpty { return nil }

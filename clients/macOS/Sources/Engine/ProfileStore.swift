@@ -1,22 +1,41 @@
 // Profiles and prefs on disk under Application Support/loft.
+// A profile is one saved connection (server URL, key, transport and SOCKS/TUN
+// options). Each profile is a YAML file; app settings live in prefs.yaml. The
+// store also owns the split-routing lists (SplitStore in SplitRoutes.swift).
 
 import Foundation
 
 /// One loft connection: key, front URL, SOCKS/TUN/mux flags.
 struct LoftProfile {
+    /// Stable key; the profile is saved as profiles/<id>.yaml.
     var id: String
+    /// Name shown in lists.
     var name: String
+    /// Secret of the connection: loft access key, SSTP/Trojan password or VLESS UUID.
     var token: String
+    /// SSTP user name.
     var user: String = ""
+    /// Server address. For loft it is the node (scheme://host[:port]); for VLESS
+    /// and Trojan it is the whole share link.
     var url: String
+    /// Protocol or loft transport: "get", "ws", "h2", "h3", "quic", "l3",
+    /// "sstp", "vless" or "trojan".
     var kind: String
+    /// HTTP path of the GET transport.
     var path: String
     var cdn: String = ""
+    /// Local SOCKS5 listen address: "auto", "host:port", or empty for no SOCKS.
     var socks: String
+    /// Run in TUN mode (system routes through a utun interface).
     var tun: Bool
+    /// Use the mux (many streams over one connection).
     var mux: Bool
+    /// Client instance id, sent to the node in the hello; loft-front gets it
+    /// through an instance file.
     var instanceID: String
+    /// File name the profile came from or is saved as.
     var file: String
+    /// Original YAML when the profile was imported from YAML; exported unchanged.
     var yaml: String = ""
     /// SSTP TLS ServerName; empty uses the URL host.
     var sni: String = ""
@@ -285,27 +304,48 @@ final class ProfileStore {
     }
 
     private(set) var profiles: [LoftProfile] = []
+    /// Selected profile id (the one Connect uses), saved in the "active" file.
     var activeID: String = ""
+    /// "Several on": allow more than one connection at a time.
     var multi = false
+    /// Apps use one shared SOCKS port (`socksPort`) instead of each session's own.
     var sharedSocks = true
     var socksPort = 1080
+    /// If the tunnel goes down, direct internet stays blocked until loft is back.
     var hold = false
+    /// If the session holding the default route drops, move it to another live tunnel.
     var failover = true
+    /// Split routing on (see SplitRoutes.swift).
     var split = false
+    /// Send all internet traffic through loft in TUN mode, not only loft networks.
     var defaultRoute = true
+    /// Also write the journal to a log file.
     var diag = false
+    /// Simpler UI: fewer rows and details.
     var simple = false
+    /// Show speeds in bits per second (true) or bytes per second (false).
     var rateBits = true
+    /// Start loft at login.
     var login = false
+    /// When the Dock icon is shown.
     var dock: DockMode = .window
+    /// Connect the selected profile when the app starts.
     var autoConnect = false
+    /// Reconnect automatically after a session drops.
     var reconnect = true
+    /// Look up and show each session's external IP.
     var showExtIP = true
+    /// Echo API URL used for the external IP.
     var extIPURL = ProfileStore.defaultExtIPURL
+    /// UI language code.
     var lang = "ru"
+    /// Check GitHub for a newer release at launch.
     var checkUpdates = true
+    /// Split-routing lists, stored next to the profiles.
     let routes = SplitStore()
+    /// Serial queue for disk writes.
     private let io = DispatchQueue(label: "app.loft.prefs")
+    /// Pending debounced prefs save.
     private var prefsWork: DispatchWorkItem?
 
     /// Plain-text echo used when the pref is empty or garbage.
@@ -339,6 +379,7 @@ final class ProfileStore {
         try? fm.createDirectory(at: profilesDir, withIntermediateDirectories: true)
         let prefs = dir.appendingPathComponent("prefs.yaml")
         var hadSocksPort = false
+        // 1. App settings from prefs.yaml (simple "key: value" lines).
         if let s = try? String(contentsOf: prefs, encoding: .utf8) {
             /// True/false for `k:` in the prefs blob, or nil if absent.
             func flag(_ k: String) -> Bool? {
@@ -397,6 +438,7 @@ final class ProfileStore {
             }
             if let v = flag("check_updates") { checkUpdates = v }
         }
+        // 2. The last selected profile, then every profile file in profiles/.
         let activeFile = dir.appendingPathComponent("active")
         activeID = (try? String(contentsOf: activeFile, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         var list: [LoftProfile] = []
@@ -408,6 +450,8 @@ final class ProfileStore {
         profiles = list.sorted { $0.name < $1.name }
         routes.load(dir: dir)
         ensureActive()
+        // 3. Older prefs had no socks_port: move profiles pinned to port 1080 to
+        //    "auto" so they do not clash with the shared SOCKS port.
         if !hadSocksPort {
             for i in profiles.indices {
                 var p = profiles[i]
@@ -616,6 +660,8 @@ final class ProfileStore {
 
     /// Canonical client.yaml for `p`, or the original blob if still set.
     func exportYAML(_ p: LoftProfile) -> String {
+        // Profiles imported from YAML are exported as they came. Otherwise build
+        // YAML per protocol: VLESS, Trojan and SSTP have one outbound each.
         if !p.yaml.isEmpty { return p.yaml }
         if p.isVLESS {
             let sniLine = p.sni.isEmpty ? "" : "\nsni: \(yamlQ(p.sni))"
@@ -666,6 +712,8 @@ final class ProfileStore {
                 url: \(yamlQ(p.url))
             """
         }
+        // loft: one GET outbound plus a "fronts:" list; ws/h2/h3 get their own
+        // outbound only when their path is not the default.
         var extra = ""
         let u = URL(string: p.url)
         let hostURL: String = {
@@ -823,6 +871,7 @@ final class ProfileStore {
     private func parseVPNJSON(_ s: String, fileName: String) -> [LoftProfile] {
         guard let data = s.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+        // Password-protected exports cannot be read.
         if (root["encrypted"] as? Bool) == true { return [] }
         var rows: [[String: Any]] = []
         if let arr = root["profiles"] as? [[String: Any]] {
@@ -830,6 +879,7 @@ final class ProfileStore {
         } else if root["server"] != nil || root["username"] != nil {
             rows = [root]
         }
+        // Only SSTP entries (proto 0) with a server, user and password are imported.
         return rows.compactMap { d in
             let proto = jsonInt(d["proto"])
             if proto != 0 { return nil }
@@ -934,6 +984,7 @@ final class ProfileStore {
 
     /// URI / YAML / SSTP JSON detector for a UTF-8 blob.
     private func parseBlob(_ s: String, fileName: String) -> [LoftProfile] {
+        // 1. Share strings (loft://, vless://, ...) and SSTP .vpn JSON have their own parsers.
         let share = ShareURI.profiles(from: s, fileName: fileName)
         if !share.isEmpty { return share }
         let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -941,6 +992,8 @@ final class ProfileStore {
             let vpn = parseVPNJSON(trimmed, fileName: fileName)
             if !vpn.isEmpty { return vpn }
         }
+        // 2. Otherwise read the simple YAML profile line by line. Top-level keys
+        //    fill the head* values; entries under "outbounds:" become `items`.
         var token = ""
         var instanceID = ""
         var socks = "auto"
@@ -1063,6 +1116,7 @@ final class ProfileStore {
             }
         }
         flush()
+        // 3. A key is required; vless/trojan links may carry it as the URL user.
         if token.isEmpty {
             for ob in items {
                 let u = ob.url.lowercased()
@@ -1081,6 +1135,7 @@ final class ProfileStore {
             items.append((headName, headKind, headURL, headPath, "", headUser, ""))
         }
         if items.isEmpty { return [] }
+        // 4. One LoftProfile per outbound, falling back to the top-level values.
         let file = fileName
         let mapped = items.map { ob -> LoftProfile in
             let rawKind = ob.type.lowercased()
@@ -1125,12 +1180,17 @@ final class ProfileStore {
                 maskPub: ob.maskPub
             )
         }
+        // 5. Fold loft transports of one server into one profile, then apply the
+        //    shared "inner", "edge" and "fronts" settings.
         var merged = mergeLoftFronts(mapped)
         if !headInner.isEmpty {
             for i in merged.indices {
                 merged[i].inner = headInner
             }
         }
+        // "edge" names a front host (for example a CDN) placed before the node.
+        // Loft profiles keep it in `edge`; one whose URL points at the edge host
+        // takes the node's own address and GET path from another outbound.
         if !headEdge.isEmpty {
             let norm = ShareURI.normalizeEdge(headEdge)
             let eh = URL(string: norm)?.host?.lowercased() ?? ""
@@ -1174,10 +1234,14 @@ final class ProfileStore {
         let mux = Set(["get", "ws", "h2", "h3", "quic"])
         var out: [LoftProfile] = []
         var acc: LoftProfile?
+        /// Ends the loft profile being merged, if any, and adds it to the output.
         func flush() {
             if let a = acc { out.append(a) }
             acc = nil
         }
+        // Non-loft profiles pass through. Consecutive loft outbounds with the same
+        // key are merged into one profile: GET is the base, ws/h2/h3 add their
+        // paths and quic turns QUIC on.
         for p in list {
             let k = p.kind.lowercased()
             if !mux.contains(k) {

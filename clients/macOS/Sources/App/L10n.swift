@@ -1,9 +1,13 @@
 // UI strings: one pack per language in lang/<code>.lang (same files the design mock loads).
+// L10n.t(key) returns the caption for the chosen UI language and falls back
+// to English, then Russian, then the key itself, so a missing string never
+// breaks a window.
 
 import Foundation
 
 /// Lookup for every UI caption. Default locale is Russian, matching prefs.
 enum L10n {
+    /// UI languages that ship a `.lang` pack.
     enum Lang: String, CaseIterable {
         /// Picker order: English first, then Latin/Cyrillic by English name, then ideographic.
         case en, fr, de, it, pt, ru, vi, zh, ja, ko
@@ -72,6 +76,8 @@ enum L10n {
         return "\(n) \(n == 1 ? one : many)"
     }
 
+    /// Finds key `k` in the current language, then English, then Russian.
+    /// Nil when no pack has it.
     private static func lookup(_ k: String) -> String? {
         if let s = packs[lang.rawValue]?[k] { return s }
         if lang != .en, let s = packs["en"]?[k] { return s }

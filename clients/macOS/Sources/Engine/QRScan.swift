@@ -1,4 +1,6 @@
 // Decode QR payloads from a still image (screenshot or photo of a share URI).
+// Used when the user drops or picks an image to import a connection; the
+// decoded text is then parsed by ShareURI.swift.
 
 import AppKit
 import CoreImage

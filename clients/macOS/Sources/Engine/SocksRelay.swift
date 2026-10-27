@@ -1,4 +1,7 @@
 // TCP splice: shared SOCKS port → the current loft-front unique SOCKS.
+// With "shared SOCKS" on, other apps use one fixed local port while each
+// loft-front listens on its own port. The relay forwards between them, so
+// switching the main session does not change the port apps are set up with.
 
 import Foundation
 import Darwin

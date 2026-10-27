@@ -1,5 +1,8 @@
 // Session owner: loft-front via FrontHelper, TUN via loft-priv, reconnect, and UI state.
 // Several outbounds (`prefs.multi`): one LiveSession per profile, each with its own loft-front and utun.
+// This is the engine behind the UI. LiveSession is the runtime state of one
+// connection. Windows read everything through this class and redraw when
+// it posts the .loftState notification.
 
 import AppKit
 import Foundation
@@ -11,24 +14,41 @@ extension Notification.Name {
 
 /// Per-profile outbound: loft-front process, overlay, optional utun.
 final class LiveSession {
+    /// Profile id this session runs.
     let id: String
     var state: SessionController.State = .off
+    /// Last error shown to the user, empty when fine.
     var errorText = ""
+    /// Address the node gave this client inside the overlay (the private loft network).
     var overlayIP = ""
+    /// Transport in use as reported by loft-front (for example "get" or "ws").
     var frontName = ""
+    /// True once loft-front has taken over the utun interface.
     var tunLive = false
+    /// True while the system default route points into this session's tunnel.
     var defaultArmed = false
+    /// SOCKS address shown to the user; empty when the profile hides its SOCKS port.
     var socksDisplay = ""
+    /// Current upload / download speed shown in the UI.
     var upRate = 0
     var downRate = 0
+    /// When the session came up; drives the uptime clock.
     var connectedAt: Date?
+    /// Connect progress line ("connecting · ..."), built from `progressParts`.
     var progressText = ""
     var progressParts: [String] = []
+    /// The loft-front process of this session.
     let helper = FrontHelper()
+    /// True while the utun is set up for this session (cleared on teardown).
     var tunArmed = false
+    /// Server URL the routes were pinned for; needed to undo them on teardown.
     var tunURL = ""
+    /// Name of this session's utun interface (for example "utun5").
     var tunName = ""
+    /// Bumped on every connect and disconnect. Background work captures it and
+    /// stops when it changed, so stale callbacks cannot touch a newer session.
     var generation = 0
+    /// Pending automatic reconnect, its attempt number and planned time.
     var reconnectWork: DispatchWorkItem?
     var reconnectAttempt = 0
     var reconnectAt: Date?
@@ -36,13 +56,16 @@ final class LiveSession {
     var freshSeq: UInt64 = 0
     /// Public address of this outbound, from the echo API.
     var extIP = ""
+    /// True while an external-IP lookup runs.
     var extIPBusy = false
+    /// Lookup generation; an answer for an older one is dropped.
     var extIPGen = 0
     /// loft-front SOCKS bind used for echo-API and TCP probes, even when the profile hides SOCKS.
     var probeSocks = ""
     /// Mux died while loft-front still runs; 0/1 was dropped until resume.
     var muxDown = false
 
+    /// Starts a session record for profile `id` in its idle state.
     init(id: String) { self.id = id }
 }
 
@@ -54,21 +77,30 @@ final class SessionController {
     }
 
     let store = ProfileStore()
+    /// Runtime state per profile id.
     private var lives: [String: LiveSession] = [:]
+    /// Forwards the shared SOCKS port to the main session's own port.
     private let relay = SocksRelay()
+    /// Serial queue for connect, teardown and route work, kept off the main thread.
     private let queue = DispatchQueue(label: "app.loft.session")
+    /// True after the first `halt`, so quitting does not tear down twice.
     private var haltDone = false
+    /// Last error text, shown until the next success.
     private var lastFail = ""
     /// Popover, advertised SOCKS, and default route follow this id (last successful connect).
     private var currentID = ""
+    /// Counter behind `LiveSession.freshSeq`.
     private var nextFresh: UInt64 = 0
     /// Last on-link physical gw seen by notePath (sleep/wake / Wi-Fi hop).
     private var lastPathGW = ""
+    /// Consecutive path checks with no gateway; a few are tolerated before acting.
     private var emptyGWTicks = 0
+    /// Pending debounced network-change handling and wake probe.
     private var pathWork: DispatchWorkItem?
     private var wakeProbe: DispatchWorkItem?
 
-    /// `"ws"` for ws(s) URLs, otherwise `"get"`.
+    /// Profile kind guessed from a URL scheme: "ws" for ws(s)://, "vless" and
+    /// "trojan" for their schemes, otherwise "get".
     static func kindForURL(_ url: String) -> String {
         let s = url.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if s.hasPrefix("ws://") || s.hasPrefix("wss://") { return "ws" }
@@ -77,6 +109,7 @@ final class SessionController {
         return "get"
     }
 
+    /// App version from Info.plist, for captions and the update check.
     var software: String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0.22"
     }
@@ -165,6 +198,8 @@ final class SessionController {
             // Overlay /24 is already on utun at tun up. Putting it in the
             // via bag lets --clear-split delete the member subnet.
             let overlayIP = owner?.helper.overlayIP ?? ""
+            /// True for a /24 (or bare address) inside the overlay subnet, which is
+            /// already routed on the tunnel interface.
             func skipOverlay(_ c: String) -> Bool {
                 if overlayIP.isEmpty { return false }
                 let host = c.split(separator: "/").first.map(String.init) ?? c
@@ -368,6 +403,8 @@ final class SessionController {
             return
         }
         var p = p0
+        // 1. Exclusive mode (multi off): stop every other session first, then come
+        //    back here once they are down.
         if !store.multi {
             store.select(p.id)
             let leftover = othersBusy(besides: p.id)
@@ -381,6 +418,7 @@ final class SessionController {
                 return
             }
         }
+        // 2. Check the profile has what its protocol needs (key, user, a local inbound).
         let s = ensure(p.id)
         cancelReconnect(s)
         if s.state == .connecting { return }
@@ -411,6 +449,8 @@ final class SessionController {
             fail(L10n.t("need_inbound"), id: p.id)
             return
         }
+        // 3. New generation: any older background work for this session sees the
+        //    changed number and gives up.
         s.generation += 1
         let ticket = s.generation
         if lives[currentID]?.state != .on {
@@ -418,6 +458,7 @@ final class SessionController {
             store.select(p.id)
         }
         set(p.id, .connecting, err: "", ip: "")
+        // 4. Off the main thread: start loft-front and wait for it to come up.
         queue.async {
             if ticket != s.generation { return }
             s.helper.stop()
@@ -434,6 +475,8 @@ final class SessionController {
                     let frontsLog = hello.isEmpty ? "" : " fronts=\(hello)"
                     LoftLog.shared.add("loft", "open \(p.name) \(p.spawnType())\(frontsLog) \(p.url) path=\(p.path)")
                 }
+                // loft-front output: track the live front name, show connect stages, and
+                // note when the mux (the shared stream channel) drops or recovers.
                 s.helper.onLine = { [weak self] line in
                     guard let self = self else { return }
                     if line.hasPrefix("STATUS ") {
@@ -464,6 +507,7 @@ final class SessionController {
                         }
                     }
                 }
+                // loft-front quit on its own: show the error and plan a reconnect.
                 s.helper.onExit = { [weak self] code in
                     guard let self = self else { return }
                     let raw = s.helper.lastError
@@ -481,10 +525,12 @@ final class SessionController {
                         }
                     }
                 }
+                // Pick the local SOCKS address and pin the front's route, then launch.
                 let advertised = self.store.socksBind(for: p, taken: self.takenSocks(except: p.id))
                 let socksAddr = advertised.isEmpty ? self.internalSocks(taken: self.takenSocks(except: p.id)) : advertised
                 Priv.pinFront(url: p.url, extra: self.edgeExtra(p.id))
                 try s.helper.start(profile: p, socksBind: socksAddr, instanceFile: self.store.instanceFile(for: p.id))
+                // 5. Up: store what loft-front reported and remember learned fronts and keys.
                 if ticket != s.generation { return }
                 s.frontName = s.helper.overlayFront.isEmpty ? p.kind : s.helper.overlayFront
                 let ip = s.helper.overlayIP
@@ -506,6 +552,9 @@ final class SessionController {
                 if !learnedPBK.isEmpty {
                     self.store.applyLearnedMask(id: p.id, hex: learnedPBK)
                 }
+                // 6. TUN mode: have loft-priv create the utun and hand it to loft-front,
+                //    then apply DNS and split routes. The default route is moved to the
+                //    tunnel only after a test TCP connection through SOCKS works.
                 if p.tun, !ip.isEmpty, !s.helper.tunSock.isEmpty {
                     do {
                         let takeDefault = self.store.defaultRoute
@@ -561,6 +610,7 @@ final class SessionController {
                     self.set(p.id, .on, err: "", ip: ip)
                 }
                 self.probeExtIP(s)
+            // Start failed: show the error and plan a reconnect (unless cancelled).
             } catch {
                 if ticket != s.generation { return }
                 let raw = error.localizedDescription
@@ -1088,6 +1138,8 @@ final class SessionController {
     /// wedged SYN cannot stall disconnect/restore. Three passes (3s / 5s / 8s)
     /// after lid-open so DHCP/WPA is not a false death.
     private func probeLiveSessions(pass: Int) {
+        /// A session to probe, captured with its generation so a late answer for a
+        /// session that has since reconnected is ignored.
         struct Target { let id: String; let gen: Int; let socks: String }
         var targets: [Target] = []
         for s in lives.values where s.state == .on {
@@ -1412,12 +1464,14 @@ final class SessionController {
     private func set(_ id: String, _ st: State, err: String, ip: String) {
         let apply = {
             let s = self.ensure(id)
+            // Uptime clock: starts on the first "on", cleared when the session stops.
             if st == .on {
                 if s.state != .on { s.connectedAt = Date() }
                 s.reconnectAttempt = 0
             } else if st != .disconnecting {
                 s.connectedAt = nil
             }
+            // Connect progress text starts with the protocol name; later stages append to it.
             if st == .connecting {
                 let seed: String
                 if let p = self.store.profiles.first(where: { $0.id == id }) {
@@ -1434,11 +1488,14 @@ final class SessionController {
                 s.progressParts = []
                 s.progressText = ""
             }
+            // External IP belongs to a live session only; bumping the generation drops
+            // any lookup still in flight.
             if st != .on {
                 s.extIP = ""
                 s.extIPBusy = false
                 s.extIPGen += 1
             }
+            // Keep a specific earlier error instead of replacing it with a generic exit message.
             var shown = err
             if st == .error, s.state == .error,
                FrontExplain.isGenericExit(shown), !FrontExplain.isGenericExit(s.errorText) {

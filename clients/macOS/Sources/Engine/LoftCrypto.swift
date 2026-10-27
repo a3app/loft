@@ -1,4 +1,6 @@
 // ChaCha20-Poly1305 seal/open via the C AEAD.
+// A thin Swift layer over the C implementation that ships with the app, so
+// Swift code can encrypt and decrypt with the same AEAD as the rest of loft.
 
 import Foundation
 import Security
