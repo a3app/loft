@@ -7,19 +7,23 @@
 
 # loft
 
-**跑在 TLS 里面的覆盖网。VLESS、Trojan、SSTP 和 loft 走普通 HTTPS — 支持 macOS、Android 和 Linux。**
+**跑在 TLS 里面的覆盖网。VLESS、Trojan、SSTP 和 loft 走普通 HTTPS — 支持 macOS、Windows、Android 和 Linux。**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/a3app/loft/test.yml?label=ci)](https://github.com/a3app/loft/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/a3app/loft)](https://github.com/a3app/loft/releases)
 [![Downloads](https://img.shields.io/github/downloads/a3app/loft/total)](https://github.com/a3app/loft/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Android%20%7C%20Linux-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Android%20%7C%20Linux-blue)
 
 [English](README.md) · [Русский](README_ru.md) · **中文**
 
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS-2ea44f?style=for-the-badge" alt="下载 loft（macOS）"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20arm64-2ea44f?style=for-the-badge" alt="下载 loft（macOS arm64）"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20x86__64-2ea44f?style=for-the-badge" alt="下载 loft（macOS x86_64）"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x64-2ea44f?style=for-the-badge" alt="下载 loft（Windows x64）"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x86-2ea44f?style=for-the-badge" alt="下载 loft（Windows x86）"></a>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Android-2ea44f?style=for-the-badge" alt="下载 loft（Android）"></a>
-<a href="#下载"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux-2ea44f?style=for-the-badge" alt="下载 loft（Linux）"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20arm64-2ea44f?style=for-the-badge" alt="下载 loft（Linux arm64）"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20amd64-2ea44f?style=for-the-badge" alt="下载 loft（Linux amd64）"></a>
 
 </div>
 
@@ -33,7 +37,7 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 
 协议 **loft/1.0**。分享链接 **`loft://`**。YAML 里 `kind: loft`。
 
-本仓库是开放规范，加上参考节点、网页面板和客户端（macOS 应用、Android 手机和电视、Linux / macOS CLI）。软件版本 `1.0.32`。第三方按 [docs/protocol_zh.md](docs/protocol_zh.md) 就能自己实现 loft。
+本仓库是开放规范，加上参考节点、网页面板和客户端（macOS 应用、Windows 托盘、Android 手机和电视、Linux / macOS CLI）。软件版本 `1.0.32`。第三方按 [docs/protocol_zh.md](docs/protocol_zh.md) 就能自己实现 loft。
 
 ## 目录
 
@@ -63,9 +67,10 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 | 节点 | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node_1.0.32_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node_1.0.32_amd64.deb) |
 | 面板 | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel_1.0.32_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel_1.0.32_amd64.deb) |
 | Android | [手机 APK](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk) · [电视 APK](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk) | 同一套 fat APK |
+| Windows | [x64 zip](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip) | [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip) |
 | iOS | 只有源码（[clients/iOS/](clients/iOS/)）；开发中，正在上架 App Store | Dist 没有包 |
 
-校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.32/loft-clients-1.0.32-SHA256SUMS.txt) · [节点](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-SHA256SUMS.txt) · [面板](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.32/loft-android-1.0.32-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。
+校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.32/loft-clients-1.0.32-SHA256SUMS.txt) · [节点](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-SHA256SUMS.txt) · [面板](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.32/loft-android-1.0.32-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.32/loft-windows-1.0.32-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。Windows 是 portable zip（7 SP1+）：解压即用。
 
 ## 应用
 
@@ -82,6 +87,8 @@ Android 手机是系统 VPN（`VpnService`）。命名连接、`loft://` 链接�
 | <img src="docs/img/android/zh-home.png" alt="loft Android 主页" width="240"> | <img src="docs/img/android/zh-conns.png" alt="loft Android 连接" width="240"> |
 
 <img src="docs/img/android/zh-tv.png" alt="Android TV 上的 loft" width="640">
+
+Windows 客户端在托盘。Windows 7 SP1 及更高。解压即用；第一次打开隧道时安装服务。GitHub 的 zip 用 Dist 替换自己的目录。
 
 ## 面板
 
@@ -160,7 +167,7 @@ make windows    # dist/clients/Windows/x64 和 x86
 make dist       # 节点 tar/.deb + CLI 归档
 ```
 
-打标签 `vX.Y.Z`（必须和 `VERSION` 一致）会跑 GitHub Actions：测试、`make dist`、macOS DMG arm64 和 x86_64（ad-hoc）、发 Release、ping 一下 pkg.go.dev。手动：Actions → Dist。
+打标签 `vX.Y.Z`（必须和 `VERSION` 一致）会跑 GitHub Actions：测试、`make dist`、macOS DMG arm64 和 x86_64（ad-hoc）、Windows portable zip（x64 和 x86，Win7 SP1）、发 Release、ping 一下 pkg.go.dev。手动：Actions → Dist。
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'
