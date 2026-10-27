@@ -2401,5 +2401,17 @@ window.LOFT_EN = {
   "релей / залип": "relay / stuck",
   "старый ключ": "old key",
   "нет трафика": "no traffic",
-  "через релей": "via relay"
+  "через релей": "via relay",
+  "Профиль маршрутов": "Route profile",
+  "Имя и DNS входят в подпись вместе со списками. Клиент ставит этот профиль как операторский и только читает его.": "The name and DNS go into the signature with the lists. The client installs this profile as the operator’s and only reads it.",
+  "Имя профиля": "Profile name",
+  "DNS для прямых": "DNS for direct",
+  "Сохранить профиль": "Save profile",
+  "RU напрямую": "RU direct",
+  "Через сервер": "Via the server",
+  "Подпись": "Label",
+  "Направление": "Direction",
+  "Направление списка входит в подпись.": "The list’s direction goes into the signature.",
+  "Профиль сохранён — нода перечитала списки": "Profile saved — the node re-read its lists",
+  "Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24). Направление списка входит в подпись.": "An entry is a domain (example.com), a domain with all subdomains (.example.com), or a subnet (198.51.100.0/24). The list’s direction goes into the signature."
 };

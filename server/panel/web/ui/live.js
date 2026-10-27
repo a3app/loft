@@ -2159,39 +2159,72 @@
   }
   // ndLists: the node's signed lists. Unlike other node settings they are not
   // part of the draft: each save writes all lists at once (/api/nodecfg/lists).
+  // Reserved list "@" is the profile header (kinds 5–6); named sets carry
+  // @dir/@label (kinds 4–5) plus domains/CIDRs.
+  const listMeta = arr => {
+    const m = { dir: 'via', label: '', dns: '', rest: [] };
+    for (const e of arr || []) {
+      if (e.startsWith('@dir ')) m.dir = e.slice(5).trim().toLowerCase();
+      else if (e.startsWith('@label ') || e.startsWith('@name ')) m.label = e.replace(/^@(?:label|name) /, '');
+      else if (e.startsWith('@dns ')) m.dns = e.slice(5).trim();
+      else if (!e.startsWith('@')) m.rest.push(e);
+    }
+    return m;
+  };
+  const listAddrs = arr => (arr || []).filter(e => e && e[0] !== '@');
   function ndLists() {
     const lists = L.nd.lists || {}, own = L.can('node');
-    const names = Object.keys(lists).sort();
-    return blk('Списки', 'Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода во «Внешних каналах» тоже на них ссылаются.',
+    const header = listMeta(lists['@']);
+    const names = Object.keys(lists).filter(n => n !== '@').sort();
+    const dirLabel = d => d === 'direct' ? 'Напрямую' : d === 'drop' ? 'Блокировать' : 'Через сервер';
+    return blk('Профиль маршрутов', 'Имя и DNS входят в подпись вместе со списками. Клиент ставит этот профиль как операторский и только читает его.',
+      `<div class="fld"><label for="lsname">Имя профиля</label><input id="lsname" value="${esc(header.label)}" ${own ? '' : 'readonly'} placeholder="RU напрямую"></div>` +
+      `<div class="fld"><label for="lsdns">DNS для прямых</label><input id="lsdns" class="mono" value="${esc(header.dns)}" ${own ? '' : 'readonly'} placeholder="77.88.8.8"></div>` +
+      (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.saveProfile()">Сохранить профиль</button></div>` : '')) +
+      blk('Списки', 'Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода во «Внешних каналах» тоже на них ссылаются.',
       (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openList('')">${ic('i-plus')}Создать список</button><label class="btn" style="cursor:pointer">${ic('i-up')}Загрузить из файла<input type="file" accept=".txt,.list,text/plain" hidden onchange="LIVE.listFile(this)"></label></div>` : '') +
-      table(['Список', 'Записей', 'Что внутри'], names.map(n => `<tr class="click" onclick="LIVE.openList('${esc(n)}')"><td class="mono"><b>${esc(n)}</b></td><td class="num">${lists[n].length.toLocaleString(LOC())}</td><td class="mono mute">${esc(lists[n].slice(0, 3).join(', '))}${lists[n].length > 3 ? ', …' : ''}</td></tr>`).join('') || `<tr><td colspan="3" class="mute">Списков нет.</td></tr>`) +
-      '<p class="hint">Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24).</p>');
+      table(['Список', 'Записей', 'Что внутри'], names.map(n => { const m = listMeta(lists[n]), a = listAddrs(lists[n]); return `<tr class="click" onclick="LIVE.openList('${esc(n)}')"><td class="mono"><b>${esc(n)}</b>${m.label && m.label !== n ? ` <span class="mute">${esc(m.label)}</span>` : ''}</td><td class="num">${a.length.toLocaleString(LOC())}</td><td class="mono mute">${esc(dirLabel(m.dir))}${a.length ? ': ' + esc(a.slice(0, 3).join(', ')) + (a.length > 3 ? ', …' : '') : ''}</td></tr>`; }).join('') || `<tr><td colspan="3" class="mute">Списков нет.</td></tr>`) +
+      '<p class="hint">Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24). Направление списка входит в подпись.</p>');
   }
   const saveLists = async (lists, msg) => {
     toast('Сохраняю списки…');
     try { const v = await job('/api/nodecfg/lists', { lists }); L.nd = v; L.ndDraft.lists = v.lists; closeDlg(); toast(msg); } catch (e) { toast(e.message); }
     render();
   };
+  L.saveProfile = () => {
+    const name = ($('#lsname') || {}).value.trim(), dns = ($('#lsdns') || {}).value.trim();
+    const all = { ...(L.nd.lists || {}) };
+    const h = [];
+    if (name) h.push('@label ' + name);
+    if (dns) h.push('@dns ' + dns);
+    if (h.length) all['@'] = h; else delete all['@'];
+    saveLists(all, 'Профиль сохранён — нода перечитала списки');
+  };
   L.openList = name => {
-    const nw = !name, l = nw ? [] : L.nd.lists[name], own = L.can('node');
+    const nw = !name, raw = nw ? [] : (L.nd.lists[name] || []), own = L.can('node'), m = listMeta(raw);
     dialog(nw ? 'Новый список' : 'Список ' + esc(name), 'По записи на строку: домен, .домен со всеми поддоменами или подсеть.', `
       <div class="fld"><label for="ls1">Имя</label><input id="ls1" class="mono" value="${esc(name)}" ${nw ? '' : 'readonly'} placeholder="blocked"></div>
-      <div class="fld"><label for="ls2">Записи</label><textarea id="ls2" class="mono ta" rows="10" ${own ? '' : 'readonly'}>${esc(l.join('\n'))}</textarea></div>`,
+      <div class="fld"><label for="lslabel">Подпись</label><input id="lslabel" value="${esc(m.label)}" ${own ? '' : 'readonly'} placeholder="Russia"></div>
+      <div class="fld"><label for="lsdir">Направление</label><select id="lsdir" ${own ? '' : 'disabled'}><option value="via"${m.dir === 'via' ? ' selected' : ''}>Через сервер</option><option value="direct"${m.dir === 'direct' ? ' selected' : ''}>Напрямую</option><option value="drop"${m.dir === 'drop' ? ' selected' : ''}>Блокировать</option></select></div>
+      <div class="fld"><label for="ls2">Записи</label><textarea id="ls2" class="mono ta" rows="10" ${own ? '' : 'readonly'}>${esc(m.rest.join('\n'))}</textarea></div>`,
       own ? `<button class="btn pri" type="button" onclick="LIVE.listSave(${nw})">${nw ? 'Создать' : 'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить список" style="margin-left:auto" onclick="LIVE.listDel('${esc(name)}')">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
   const entries = t => [...new Set(t.split(/\r?\n/).map(x => x.replace(/#.*/, '').trim()).filter(Boolean))];
   L.listSave = nw => {
-    const n = $('#ls1').value.trim().toLowerCase(), e = entries($('#ls2').value);
-    if (!/^[a-z0-9][a-z0-9._-]{0,31}$/.test(n)) { toast('Имя списка: строчная латиница, цифры, точка, дефис'); return; }
+    const n = $('#ls1').value.trim().toLowerCase(), rest = entries($('#ls2').value).filter(x => x[0] !== '@');
+    const dir = ($('#lsdir') || {}).value || 'via', label = (($('#lslabel') || {}).value || '').trim();
+    if (n === '@' || !/^[a-z0-9][a-z0-9._-]{0,31}$/.test(n)) { toast('Имя списка: строчная латиница, цифры, точка, дефис'); return; }
     if (nw && L.nd.lists[n]) { toast('Список с таким именем уже есть'); return; }
-    if (!e.length) { toast('В списке нет записей'); return; }
-    saveLists({ ...L.nd.lists, [n]: e }, 'Список сохранён — нода перечитала списки');
+    if (!rest.length) { toast('В списке нет записей'); return; }
+    const e = ['@dir ' + dir];
+    if (label) e.push('@label ' + label);
+    saveLists({ ...L.nd.lists, [n]: e.concat(rest) }, 'Список сохранён — нода перечитала списки');
   };
   L.listDel = n => { const all = { ...L.nd.lists }; delete all[n]; saveLists(all, 'Список удалён'); };
   L.listFile = inp => {
     const f = inp.files[0]; inp.value = '';
     if (!f) return;
-    f.text().then(t => { L.openList(''); $('#ls1').value = f.name.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 32); $('#ls2').value = entries(t).join('\n'); });
+    f.text().then(t => { L.openList(''); $('#ls1').value = f.name.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 32); $('#ls2').value = entries(t).filter(x => x[0] !== '@').join('\n'); });
   };
   // ndAccess: the controller's public key (clients check signatures of the
   // roster and lists with it), the shared token, the node token change and

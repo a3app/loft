@@ -1963,14 +1963,18 @@ function nodeRelay(){
 function openListMock(n){
  dialog(n?'Список '+n:'Новый список','По записи на строку: домен, .домен со всеми поддоменами или подсеть.',`
   <div class="fld"><label for="ls1">Имя</label><input id="ls1" class="mono" value="${n}" ${n?'readonly':''} placeholder="blocked"></div>
+  <div class="fld"><label for="lslabel">Подпись</label><input id="lslabel" value="${n==='blocked-ru'?'Russia':''}" placeholder="Russia"></div>
+  <div class="fld"><label for="lsdir">Направление</label><select id="lsdir"><option value="via">Через сервер</option><option value="direct"${n==='local'?' selected':''}>Напрямую</option><option value="drop"${n==='ads'||n==='blocked-ru'?' selected':''}>Блокировать</option></select></div>
   <div class="fld"><label for="ls2">Записи</label><textarea id="ls2" class="mono ta" rows="10">${n?'.example.ru\n198.51.100.0/24':''}</textarea></div>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">${n?'Сохранить':'Создать'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${n?`<button class="icb del" type="button" aria-label="Удалить список" style="margin-left:auto">${ic('i-trash')}</button>`:''}`);
 }
 function nodeLists(){
- return blk('Списки','Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода во «Внешних каналах» тоже на них ссылаются.',
+ return blk('Профиль маршрутов','Имя и DNS входят в подпись вместе со списками. Клиент ставит этот профиль как операторский и только читает его.',
+  `<div class="fld"><label for="lsname">Имя профиля</label><input id="lsname" value="RU напрямую" placeholder="RU напрямую"></div><div class="fld"><label for="lsdns">DNS для прямых</label><input id="lsdns" class="mono" value="77.88.8.8" placeholder="77.88.8.8"></div><div class="acts"><button class="btn" type="button">Сохранить профиль</button></div>`)+
+  blk('Списки','Подписанные нодой списки доменов и подсетей. Клиент сам решает, что из списка вести через сервер, напрямую или блокировать; правила выхода во «Внешних каналах» тоже на них ссылаются.',
   `<div class="acts"><button class="btn" type="button" onclick="openListMock('')">${ic('i-plus')}Создать список</button><button class="btn" type="button">${ic('i-up')}Загрузить из файла</button></div>`+
   table(['Список','Записей','Что внутри'],LISTS.map(r=>`<tr class="click" onclick="openListMock('${r[0]}')"><td class="mono"><b>${r[0]}</b></td><td class="num">${r[1]}</td><td class="mono mute">${r[2]}</td></tr>`).join(''))+
-  '<p class="hint">Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24).</p>');
+  '<p class="hint">Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24). Направление списка входит в подпись.</p>');
 }
 function nodeAccess(){
  return blk('Ключ контроллера','Клиенты сверяют по нему подпись списка ретрансляторов и списков. Входит в файл .loft.',

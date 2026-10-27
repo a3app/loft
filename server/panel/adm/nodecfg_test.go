@@ -95,4 +95,14 @@ func TestNodeSave(t *testing.T) {
 	if _, err := o.NodeLists(ctx, admproto.NodeLists{Lists: map[string][]string{"Bad Name": {"x"}}}); err == nil {
 		t.Fatal("bad list name")
 	}
+	l, err = o.NodeLists(ctx, admproto.NodeLists{Lists: map[string][]string{
+		"@":  {"@label RU direct", "@dns 77.88.8.8"},
+		"ru": {"@dir direct", "@label Russia", ".yandex.ru"},
+	}})
+	if err != nil || l.Lists["@"][0] != "@label RU direct" || l.Lists["ru"][1] != "@label Russia" {
+		t.Fatalf("meta %v %v", l.Lists, err)
+	}
+	if _, err := o.NodeLists(ctx, admproto.NodeLists{Lists: map[string][]string{"ru": {"@dir sideways"}}}); err == nil {
+		t.Fatal("bad @dir accepted")
+	}
 }

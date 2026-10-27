@@ -371,20 +371,33 @@ func (o *Ops) RelayGet(req admproto.RelayKeyReq) (admproto.IssuedKey, error) {
 
 var listName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
 
+// listEntryOK is a domain, .suffix, CIDR, or @dir/@label/@dns/@name (spaces
+// allowed only on those @ lines). # and empty are refused.
+func listEntryOK(e string) bool {
+	if e == "" || strings.Contains(e, "#") || len(e) > 253 {
+		return false
+	}
+	if strings.HasPrefix(e, "@") {
+		a := lwire.ParseListEntry(e)
+		return a.Kind != 0 && a.Val != ""
+	}
+	return !strings.ContainsAny(e, " \t")
+}
+
 // NodeLists replaces lists.conf and reloads the node (restarts it when the
 // node had no lists at all: clients learn of lists from the start-up offer).
 func (o *Ops) NodeLists(ctx context.Context, in admproto.NodeLists) (admproto.NodeConfig, error) {
 	o.mu.Lock()
 	n := 0
 	for name, l := range in.Lists {
-		if !listName.MatchString(name) {
+		if name != "@" && !listName.MatchString(name) {
 			o.mu.Unlock()
 			return admproto.NodeConfig{}, fmt.Errorf("list name %q: lower-case latin, digits, . _ -", name)
 		}
 		for _, e := range l {
-			if e == "" || strings.ContainsAny(e, " \t#") || len(e) > 253 {
+			if !listEntryOK(e) {
 				o.mu.Unlock()
-				return admproto.NodeConfig{}, fmt.Errorf("list %s: %q is not a domain, .suffix or subnet", name, e)
+				return admproto.NodeConfig{}, fmt.Errorf("list %s: %q is not a domain, .suffix, subnet or @dir/@label/@dns/@name", name, e)
 			}
 		}
 		n += len(l)
