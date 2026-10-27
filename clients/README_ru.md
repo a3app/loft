@@ -13,7 +13,7 @@
 | [`MikroTik/`](MikroTik/) | Контейнер RouterOS 7. Макет: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Тонкое приложение-хост + appex. Макет: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md), фаза 6 |
 | [`Android/`](Android/) | VpnService. Тонкий хост на Java. Flavor для телефона и для TV. Макет: [`Android/design/index.html`](Android/design/index.html) |
-| [`Windows/`](Windows/) | Клиент в трее. Windows 7 SP1 и новее. Оболочка Win32 + loft-svc. UX: [`Windows/design/DESIGN_ru.md`](Windows/design/DESIGN_ru.md) |
+| [`Windows/`](Windows/) | Клиент в трее. x86/x64 Win7 SP1+; arm64 Win10/11 ARM. Оболочка Win32 + loft-svc. UX: [`Windows/design/DESIGN_ru.md`](Windows/design/DESIGN_ru.md) |
 | [`Sailfish/`](Sailfish/) | Оверлей ConnMan. Тонкий хост на QML + loft-front. Для ОС Аврора — RPM-пакет OMP. Макет: [`Sailfish/design/index.html`](Sailfish/design/index.html) |
 | [`mobile/`](mobile/) | Общий движок Go (`gomobile bind`). Без GUI. |
 

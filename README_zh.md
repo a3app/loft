@@ -17,13 +17,45 @@
 
 [English](README.md) · [Русский](README_ru.md) · **中文**
 
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20arm64-2ea44f?style=for-the-badge" alt="下载 loft（macOS arm64）"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20x86__64-2ea44f?style=for-the-badge" alt="下载 loft（macOS x86_64）"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x64-2ea44f?style=for-the-badge" alt="下载 loft（Windows x64）"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x86-2ea44f?style=for-the-badge" alt="下载 loft（Windows x86）"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Android-2ea44f?style=for-the-badge" alt="下载 loft（Android）"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20arm64-2ea44f?style=for-the-badge" alt="下载 loft（Linux arm64）"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20amd64-2ea44f?style=for-the-badge" alt="下载 loft（Linux amd64）"></a>
+<table>
+<tr>
+<td align="center" valign="top" width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg">
+  <img src="docs/brand/platforms/macos.svg" width="32" alt="macOS">
+</picture><br>
+<strong>macOS</strong><br>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg">arm</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg">Intel</a>
+</td>
+<td align="center" valign="top" width="50%">
+<img src="docs/brand/platforms/windows.svg" width="32" alt="Windows"><br>
+<strong>Windows</strong><br>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip">x86-64</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip">x86</a>
+·
+<a href="#下载">arm64</a>
+</td>
+</tr>
+<tr>
+<td align="center" valign="top">
+<img src="docs/brand/platforms/android.svg" width="32" alt="Android"><br>
+<strong>Android</strong><br>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk">Android</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk">Google TV</a>
+</td>
+<td align="center" valign="top">
+<img src="docs/brand/platforms/linux.svg" width="32" alt="Linux"><br>
+<strong>Linux</strong><br>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz">arm64</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz">amd64</a>
+</td>
+</tr>
+</table>
 
 </div>
 
@@ -88,7 +120,7 @@ Android 手机是系统 VPN（`VpnService`）。命名连接、`loft://` 链接�
 
 <img src="docs/img/android/zh-tv.png" alt="Android TV 上的 loft" width="640">
 
-Windows 客户端在托盘。Windows 7 SP1 及更高。解压即用；第一次打开隧道时安装服务。GitHub 的 zip 用 Dist 替换自己的目录。
+Windows 客户端在托盘。x86 和 x86-64：Windows 7 SP1 及更高。arm64：Windows 10 on ARM / Windows 11 ARM。解压即用；第一次打开隧道时安装服务。GitHub 的 zip 用 Dist 替换自己的目录。
 
 ## 面板
 
@@ -160,14 +192,14 @@ make node       # ./loft-node
 make client     # dist/clients/go/loft
 make macos      # dist/clients/macOS/loft.app
 make macos-dmg  # dist/clients/macOS/loft-*-macos-<arch>.dmg
-make macos-dmgs # arm64 和 x86_64 两份 DMG（CI）
+make macos-dmgs # arm 和 intel 两份 DMG（CI）
 make android    # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios        # dist/clients/iOS/loft.app（macOS）+ iphonesimulator/loft.app
 make windows    # dist/clients/Windows/x64 和 x86
 make dist       # 节点 tar/.deb + CLI 归档
 ```
 
-打标签 `vX.Y.Z`（必须和 `VERSION` 一致）会跑 GitHub Actions：测试、`make dist`、macOS DMG arm64 和 x86_64（ad-hoc）、Windows portable zip（x64 和 x86，Win7 SP1）、发 Release、ping 一下 pkg.go.dev。手动：Actions → Dist。
+打标签 `vX.Y.Z`（必须和 `VERSION` 一致）会跑 GitHub Actions：测试、`make dist`、macOS DMG（arm 和 intel，ad-hoc）、Windows portable zip（x86-64 和 x86 适用于 Win7 SP1+，arm64 适用于 Windows 10/11 ARM）、发 Release、ping 一下 pkg.go.dev。手动：Actions → Dist。
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'
