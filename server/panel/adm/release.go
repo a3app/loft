@@ -1,5 +1,11 @@
 package adm
 
+// This file installs and removes "release" packages: catalog entries (see
+// server/panel/catalog) that come as a zip from a project's GitHub releases
+// rather than from apt. It runs inside a package job (runjob.go), so its
+// progress goes to job.log. bin.go handles the similar "bin" method, which
+// uses tarballs with hashes pinned in the catalog instead.
+
 import (
 	"context"
 	"encoding/json"
@@ -18,6 +24,8 @@ import (
 // Release packages: the project's newest GitHub release for this
 // architecture, checked against the SHA2-256 line of ASSET.dgst.
 
+// latestTag asks the GitHub API for the newest release tag of repo (for
+// example "owner/name"). Tags that do not look like a version are refused.
 func (r *runner) latestTag(ctx context.Context, repo string) (string, error) {
 	base := firstNonEmpty(r.o.ReleaseAPI, "https://api.github.com/repos")
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, base+"/"+repo+"/releases/latest", nil)
@@ -43,6 +51,16 @@ func (r *runner) latestTag(ctx context.Context, repo string) (string, error) {
 	return rel.Tag, nil
 }
 
+// installRelease installs or upgrades a release package. Steps:
+//  1. find the newest tag and the asset for this CPU;
+//  2. download ASSET.dgst and the asset into a private work directory and
+//     check the asset's SHA-256 against the SHA2-256 line of the .dgst;
+//  3. unpack it beside the package directory (DIR.new), check the main
+//     binary is there, then swap it in with a rename, so a failed unpack
+//     never leaves a half-written install behind;
+//  4. write the package's extra files from the catalog and enable the
+//     service, restarting it only if it already runs (it starts on its
+//     own once it has a config).
 func (r *runner) installRelease(ctx context.Context, p catalog.Package) error {
 	rel := p.Release
 	asset := rel.Assets[runtime.GOARCH]
@@ -117,6 +135,8 @@ func (r *runner) installRelease(ctx context.Context, p catalog.Package) error {
 	return nil
 }
 
+// removeRelease stops and disables the package's service, deletes its extra
+// files and the unpacked release directory.
 func (r *runner) removeRelease(ctx context.Context, p catalog.Package) error {
 	if p.Unit != "" {
 		r.cmd(ctx, "systemctl", "disable", "--now", p.Unit)

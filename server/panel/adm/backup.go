@@ -1,5 +1,11 @@
 package adm
 
+// This file handles encrypted backups ("copies", .lpbak files) of the node,
+// the panel and optionally the mail server. The first half is the request
+// side (set the recovery key, list copies, start a backup or restore job);
+// the second half, after "the job", runs inside the job unit (runjob.go).
+// Encryption and the archive format live in server/panel/backup.
+
 import (
 	"archive/tar"
 	"context"
@@ -38,10 +44,14 @@ var (
 	backupDirRe  = regexp.MustCompile(`^/[A-Za-z0-9._/-]{1,200}$`)
 )
 
+// backupKeyFile holds the public half of the recovery key (never the
+// phrase itself), so the server can encrypt copies it cannot decrypt.
 func (o *Ops) backupKeyFile() string {
 	return filepath.Join(firstNonEmpty(o.PanelEtc, "/etc/loft-panel"), "backup-key.json")
 }
 
+// readBackupKey loads the stored recovery key; nil with no error means no
+// recovery phrase has been set yet.
 func (o *Ops) readBackupKey() (*admproto.BackupKey, error) {
 	b, err := os.ReadFile(o.backupKeyFile())
 	if errors.Is(err, os.ErrNotExist) {
@@ -81,6 +91,8 @@ func (o *Ops) BackupState(ctx context.Context) (admproto.BackupState, error) {
 	return st, err
 }
 
+// listCopies lists the copies in dir, newest first. Only files named like a
+// copy count; anything else in the directory is ignored.
 func listCopies(dir string) []admproto.BackupFile {
 	out := []admproto.BackupFile{}
 	ents, _ := os.ReadDir(dir)
@@ -96,6 +108,9 @@ func listCopies(dir string) []admproto.BackupFile {
 	return out
 }
 
+// checkParts checks the part names (node, panel, mail, ...) a job asks for.
+// For a backup (backupSide) the node and panel parts are required, because
+// every copy must be able to bring the server back on its own.
 func checkParts(parts []string, backupSide bool) error {
 	if len(parts) == 0 {
 		return errors.New("choose what to restore")
@@ -209,6 +224,8 @@ func (r *runner) move(ctx context.Context, src, dst string) error {
 	return err
 }
 
+// streamFile copies src to dst through dst.part and a rename, so a store
+// never shows a half-copied file under a real copy name.
 func streamFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -232,6 +249,8 @@ func streamFile(src, dst string) error {
 	return os.Rename(tmp, dst)
 }
 
+// backupHost is the name used in copy file names: the node's public host
+// name if set, else the machine's host name.
 func (r *runner) backupHost() string {
 	if in, err := r.o.NodeInfo(); err == nil && in.Host != "" {
 		return strings.ToLower(in.Host)
@@ -240,12 +259,17 @@ func (r *runner) backupHost() string {
 	return strings.ToLower(firstNonEmpty(h, "server"))
 }
 
+// copyName builds a copy's file name: loft-HOST-YYYYMMDD-HHMMSS[suffix].lpbak.
 func copyName(host string, at time.Time, suffix string) string {
 	host = regexp.MustCompile(`[^a-z0-9.-]`).ReplaceAllString(host, "-")
 	return "loft-" + host + "-" + at.Format("20060102-150405") + suffix + ".lpbak"
 }
 
-// makeCopy writes a copy of parts into the local directory.
+// makeCopy writes a copy of parts into the local directory, encrypted to k,
+// and returns its name and size. Steps: open a hidden .part file (removed
+// on any failure), encrypt and archive the parts into it and flush it to
+// disk, then rename it to its real name. Both the directory and the result
+// are handed to the panel user so the panel can upload the copy.
 func (r *runner) makeCopy(parts []string, k backup.Key, suffix string) (string, int64, error) {
 	dir := r.path(backupLocal)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -287,6 +311,7 @@ func (r *runner) makeCopy(parts []string, k backup.Key, suffix string) (string, 
 	return name, fi.Size(), nil
 }
 
+// chownPanel gives p to the loft-panel user, if that user exists.
 func (r *runner) chownPanel(p string) {
 	if u, err := user.Lookup(panelUser); err == nil {
 		uid, _ := strconv.Atoi(u.Uid)
@@ -310,6 +335,9 @@ func prune(dir string, keep int, before bool) {
 	}
 }
 
+// backup is the job body of a backup: make a copy in the local directory,
+// optionally copy it to a directory store and trim that store to Keep
+// copies, then trim the local directory to the two newest.
 func (r *runner) backup(ctx context.Context, b *admproto.BackupJob) error {
 	kp, err := r.o.readBackupKey()
 	if err != nil || kp == nil {
@@ -364,6 +392,19 @@ func restoreOwner(path string, h *tar.Header) error {
 // units stopped while a part is swapped in.
 var partUnits = map[string][]string{"node": {"loft-node"}, "panel": {"loft-panel"}, "mail": {"postfix", "dovecot", "opendkim"}}
 
+// restore is the job body of a restore. The steps are numbered below:
+//  1. decrypt the copy with the recovery phrase and check it holds every
+//     part asked for;
+//  2. unpack those parts into a staging directory (nothing live changes);
+//  3. save a "-before-restore" copy of the current state;
+//  4. stop the affected services and swap each part's directories for the
+//     restored ones;
+//  5. drop the old directories and start the services again;
+//  6. let nginx, the panel, the helper and the mail server pick up the
+//     restored settings.
+//
+// If a swap fails half-way, the directories already swapped are put back,
+// so the server is never left with a mix of old and restored files.
 func (r *runner) restore(ctx context.Context, b *admproto.BackupJob, phrase string) error {
 	src, err := r.o.copyPath(b.File)
 	if err != nil {
@@ -397,7 +438,7 @@ func (r *runner) restore(ctx context.Context, b *admproto.BackupJob, phrase stri
 	}
 	r.say("unpacked and checked")
 
-	// A copy of what is here now, before anything changes.
+	// 3. A copy of what is here now, before anything changes.
 	r.step("before")
 	k := backup.Key{Public: h.Public, Salt: h.Salt}
 	if kp, _ := r.o.readBackupKey(); kp != nil {
@@ -412,6 +453,9 @@ func (r *runner) restore(ctx context.Context, b *admproto.BackupJob, phrase stri
 	prune(r.path(backupLocal), 1, true)
 	r.say("current state saved as %s", pre)
 
+	// 4. Stop the services that use these parts and swap directories:
+	// live -> live.before-restore, staged -> live. done remembers each swap
+	// so undo can reverse them in order.
 	r.step("swap")
 	var units []string
 	for _, p := range b.Parts {

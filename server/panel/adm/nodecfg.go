@@ -1,5 +1,14 @@
 package adm
 
+// This file backs the panel's Node screen: reading and saving node.conf
+// (role, listen address, fronts, decoy, request paths, relays), lists.conf
+// (named domain/subnet lists clients can route by), relay keys, the
+// controller key roll-over and the node token. A "front" is one of the ways
+// a client can reach the node (plain GET, WebSocket, HTTP/2, QUIC, HTTP/3,
+// layer 3); a "relay" is another server that forwards clients to this one.
+// Every change that needs a restart is rolled back if loft-node fails to
+// come up again.
+
 import (
 	"context"
 	"crypto/ed25519"
@@ -30,9 +39,12 @@ import (
 // node.conf from the Node screen: the panel edits a fixed set of commands;
 // the rest of the file (cert paths, canary, controller) stays as it is.
 
+// listsFile is lists.conf in the node data directory; loftEnv is
+// /etc/loft/loft.env, which holds the node secret LOFT_TOKEN.
 func (o *Ops) listsFile() string { return filepath.Join(o.Dir, "lists.conf") }
 func (o *Ops) loftEnv() string   { return filepath.Join(o.etc(), "loft.env") }
 
+// nodeToken reads LOFT_TOKEN from loft.env, without quotes; "" when absent.
 func (o *Ops) nodeToken() string {
 	b, _ := os.ReadFile(o.loftEnv())
 	for _, ln := range strings.Split(string(b), "\n") {
@@ -57,7 +69,12 @@ func (o *Ops) maskPubB64() string {
 	return base64.RawURLEncoding.EncodeToString(pub)
 }
 
-// NodeConfig is node.conf, lists.conf and the node's state.
+// NodeConfig is node.conf, lists.conf and the node's state. Besides the
+// settings it gathers what the screen shows next to them: the mask and
+// controller public keys, when a pending key roll-over ends, the number of
+// member keys, the certificate's expiry and names, the node's own
+// node-status.json and whether the service is running. Missing extras are
+// left empty instead of failing the whole read.
 func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 	c, err := config.LoadServer(o.nodeConf())
 	if err != nil {
@@ -108,8 +125,10 @@ func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 	return v, nil
 }
 
+// pathRe is an allowed request path: a leading slash and URL-safe characters.
 var pathRe = regexp.MustCompile(`^/[A-Za-z0-9._~/-]{1,80}$`)
 
+// knownFronts are the front names node.conf accepts.
 var knownFronts = []string{"get", "ws", "h2", "quic", "h3", "l3"}
 
 // NodeSave writes the panel's commands into node.conf. A change of relays
@@ -129,6 +148,7 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		return admproto.NodeConfig{}, fmt.Errorf("node.conf: %w", err)
 	}
 	prev := *c
+	// 1. Check each field from the panel and copy it into the parsed config.
 	if _, _, err := net.SplitHostPort(in.Listen); err != nil {
 		return admproto.NodeConfig{}, fmt.Errorf("listen %q: like :443 or 0.0.0.0:443", in.Listen)
 	}
@@ -181,6 +201,7 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 	if in.Trace {
 		c.Trace = filepath.Join(o.Dir, "trace.log")
 	}
+	// 2. Relays: keep each surviving relay's key hash from the old file.
 	keyOf := map[string]string{}
 	for _, e := range prev.Relays {
 		keyOf[e.ID] = e.KeySHA256
@@ -213,6 +234,7 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		}
 		c.CDNPeers = append(c.CDNPeers, pp.Masked().String())
 	}
+	// 3. Render the new file and make sure the node's parser accepts it.
 	text := "# loft-node config; loft-panel edits the commands it shows.\n" + config.RenderCommands(*c)
 	if _, err := config.ParseCommands(text); err != nil {
 		return admproto.NodeConfig{}, fmt.Errorf("node.conf: %w", err)
@@ -220,6 +242,8 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 	if string(oldText) == text {
 		return o.NodeConfig(ctx)
 	}
+	// 4. Write it. A change limited to relays only needs a reload; anything
+	// else restarts the node. Failure restores the old file.
 	onlyFleet := func() bool {
 		a, b := prev, *c
 		a.Relays, b.Relays = nil, nil
@@ -240,12 +264,16 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		}
 		return admproto.NodeConfig{}, fmt.Errorf("loft-node did not start with the new node.conf, the old one is back: %v", err)
 	}
+	// 5. Forget keys of relays that were removed.
 	if err := o.pruneRelayKeys(c.Relays); err != nil {
 		return admproto.NodeConfig{}, err
 	}
 	return o.NodeConfig(ctx)
 }
 
+// Files in the node data directory: relays.keys (one secret per relay),
+// controller.seed (the controller signing key) and controller.roll (the
+// signed hand-over from an old controller key to a new one).
 func (o *Ops) relayKeys() string { return filepath.Join(o.Dir, "relays.keys") }
 func (o *Ops) ctlSeed() string   { return filepath.Join(o.Dir, "controller.seed") }
 func (o *Ops) ctlRoll() string   { return filepath.Join(o.Dir, "controller.roll") }
@@ -322,10 +350,12 @@ func (o *Ops) RelayKey(ctx context.Context, req admproto.RelayKeyReq) (admproto.
 	if err != nil {
 		return admproto.IssuedKey{}, fmt.Errorf("node.conf: %w", err)
 	}
+	// 1. The relay must already be listed in node.conf.
 	i := slices.IndexFunc(c.Relays, func(e config.RelayEntry) bool { return e.ID == req.ID })
 	if i < 0 {
 		return admproto.IssuedKey{}, fmt.Errorf("relay %q is not in node.conf: save it first", req.ID)
 	}
+	// 2. Replace its key in relays.keys and its hash on the relay line.
 	plain, sha, err := identity.NewKey()
 	if err != nil {
 		return admproto.IssuedKey{}, err
@@ -345,6 +375,7 @@ func (o *Ops) RelayKey(ctx context.Context, req admproto.RelayKeyReq) (admproto.
 	if err := o.writeKeepMode(o.nodeConf(), []byte(text)); err != nil {
 		return admproto.IssuedKey{}, err
 	}
+	// 3. Reload the node; if it fails, both files go back.
 	if err := o.applySettled(ctx); err != nil {
 		o.writeKeepMode(o.nodeConf(), oldConf)
 		o.write(o.relayKeys(), oldKeys, 0o600)
@@ -369,6 +400,7 @@ func (o *Ops) RelayGet(req admproto.RelayKeyReq) (admproto.IssuedKey, error) {
 	return admproto.IssuedKey{ID: req.ID, Key: string(tok), KeySHA256: identity.Sum(string(tok))}, nil
 }
 
+// listName is an allowed list name in lists.conf ("@" is also accepted).
 var listName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
 
 // listEntryOK is a domain, .suffix, CIDR, or @dir/@label/@dns/@name (spaces

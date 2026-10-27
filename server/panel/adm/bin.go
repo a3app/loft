@@ -1,5 +1,11 @@
 package adm
 
+// This file installs catalog packages that ship as a single prebuilt binary
+// (for example mtproto) instead of a Debian package. The catalog
+// (server/panel/catalog) pins the GitHub release tag, the asset name and its
+// SHA-256 per CPU architecture; installBin is called from runner.install in
+// runjob.go while a package job runs.
+
 import (
 	"context"
 	"fmt"
@@ -11,6 +17,8 @@ import (
 	"github.com/a3app/loft/server/panel/catalog"
 )
 
+// binURL is the download address of a release asset. BinBase overrides the
+// GitHub releases address (tests and mirrors use it).
 func (r *runner) binURL(p catalog.Package, asset string) string {
 	base := firstNonEmpty(r.o.BinBase, "https://github.com/"+p.Bin.Repo+"/releases/download")
 	return strings.TrimRight(base, "/") + "/" + p.Bin.Tag + "/" + asset
@@ -18,10 +26,14 @@ func (r *runner) binURL(p catalog.Package, asset string) string {
 
 // installBin downloads the pinned GitHub tarball, checks SHA-256 against the
 // catalog (not a checksum file), and copies the named binary into place.
+// The work happens in a scratch directory under the job state dir that is
+// removed afterwards. It also writes a "version" file into the package's
+// first data directory so the panel can show what is installed.
 func (r *runner) installBin(ctx context.Context, p catalog.Package) error {
 	if p.Bin == nil {
 		return fmt.Errorf("package %q has no binary", p.Key)
 	}
+	// 1. Pick the asset for this CPU and the checksum it must match.
 	arch := r.o.arch()
 	asset := fmt.Sprintf(p.Bin.Asset, arch)
 	sum, ok := p.Bin.SHA256[arch]
@@ -38,6 +50,7 @@ func (r *runner) installBin(ctx context.Context, p catalog.Package) error {
 	}
 	defer os.RemoveAll(work)
 
+	// 2. Download and verify the tarball before anything is unpacked.
 	dst := filepath.Join(work, asset)
 	r.step("download:" + p.Key)
 	if err := r.download(ctx, r.binURL(p, asset), dst); err != nil {
@@ -52,6 +65,7 @@ func (r *runner) installBin(ctx context.Context, p catalog.Package) error {
 	}
 	r.say("%s: SHA-256 matches the catalog", asset)
 
+	// 3. Unpack and copy the one binary the catalog names into place.
 	xdir := filepath.Join(work, "x")
 	if err := untar(dst, xdir); err != nil {
 		return fmt.Errorf("%s: %w", asset, err)
@@ -68,6 +82,7 @@ func (r *runner) installBin(ctx context.Context, p catalog.Package) error {
 	}
 	r.say("installed %s", p.Bin.Path)
 
+	// 4. Package-specific setup and the version marker.
 	if p.Key == "mtproto" {
 		if err := r.ensureMTProto(); err != nil {
 			return err
@@ -85,6 +100,8 @@ func (r *runner) installBin(ctx context.Context, p catalog.Package) error {
 	return nil
 }
 
+// findNamed returns the first regular file called name anywhere under dir.
+// Release tarballs put the binary at different depths, so it is searched for.
 func findNamed(dir, name string) (string, error) {
 	var found string
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {

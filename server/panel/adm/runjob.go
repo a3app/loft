@@ -1,5 +1,12 @@
 package adm
 
+// This file is the worker side of background jobs. Long work (installing
+// packages, updating loft, making or restoring a backup) does not run inside
+// the helper's request, which has a short deadline. Instead jobs.go records
+// the job in job.json and starts a transient systemd unit that runs this
+// binary as "run-job"; RunJob below then does the work and writes its
+// progress to job.log, which the panel shows live.
+
 import (
 	"bufio"
 	"context"
@@ -21,6 +28,8 @@ import (
 // recorded in job.json, appends to job.log, and records how it ended. It runs
 // as root outside the helper's sandbox (apt writes /usr, downloads use the
 // network), and only ever does what the catalog or a release tag says.
+// The job runs by kind; a panic becomes an error, so the job always ends
+// with a recorded state ("done" or "error") instead of staying "running".
 func (o *Ops) RunJob(ctx context.Context) error {
 	j, err := o.readJob()
 	if err != nil {
@@ -77,14 +86,19 @@ func (o *Ops) RunJob(ctx context.Context) error {
 	return o.saveJob(j)
 }
 
+// runner carries one job while it runs: the Ops it works on, the job record
+// (saved as it advances) and the job log that every step writes to.
 type runner struct {
 	o *Ops
 	j *admproto.Job
 	w io.Writer
 }
 
+// say writes one progress line to the job log.
 func (r *runner) say(f string, a ...any) { fmt.Fprintf(r.w, "▸ "+f+"\n", a...) }
 
+// step records what the job is doing now (for example "install:mail") in
+// job.json, so the panel can show the current step.
 func (r *runner) step(now string) {
 	r.j.Now = now
 	r.o.saveJob(*r.j)
@@ -97,6 +111,9 @@ func (r *runner) path(p string) string { return r.o.sys(p) }
 // needrestart does not restart services behind the panel's back.
 var aptEnv = []string{"DEBIAN_FRONTEND=noninteractive", "UCF_FORCE_CONFFOLD=1", "NEEDRESTART_SUSPEND=1", "LC_ALL=C.UTF-8"}
 
+// cmd runs a command with its output going to the job log, after echoing
+// the command line itself. The apt environment is set for every command, so
+// nothing it starts can stop to ask a question. Tests replace it via Stream.
 func (r *runner) cmd(ctx context.Context, name string, args ...string) error {
 	fmt.Fprintf(r.w, "$ %s %s\n", name, strings.Join(args, " "))
 	if r.o.Stream != nil {
@@ -108,6 +125,8 @@ func (r *runner) cmd(ctx context.Context, name string, args ...string) error {
 	return c.Run()
 }
 
+// apt runs apt-get non-interactively: it waits up to 5 minutes for the dpkg
+// lock (another apt may be running) and keeps existing config files.
 func (r *runner) apt(ctx context.Context, args ...string) error {
 	base := []string{"-y", "-q", "-o", "DPkg::Lock::Timeout=300",
 		"-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold"}
@@ -117,6 +136,13 @@ func (r *runner) apt(ctx context.Context, args ...string) error {
 	return nil
 }
 
+// packages carries out a package plan from the panel: removals first, then
+// installs, then upgrades. Each package is handled by its catalog method:
+// apt packages through apt-get, "release" and "bin" packages through their
+// own downloaders. Apt repositories and package lists are refreshed only
+// when some package in the plan comes from apt. On upgrade, release and bin
+// packages are simply installed again, apt packages are upgraded in place
+// without pulling anything new. The first failure stops the job.
 func (r *runner) packages(ctx context.Context, plan catalog.Plan) error {
 	if err := plan.Check(); err != nil {
 		return err
@@ -188,6 +214,12 @@ func (r *runner) packages(ctx context.Context, plan catalog.Plan) error {
 	return nil
 }
 
+// install installs one apt or bin package: get the software (apt-get with
+// any debconf answers the catalog gives, or the bin downloader), write the
+// package's files from the catalog, then enable and start its service and
+// check it stays up for Settle (a bad config usually crashes it at once). A
+// service that fails to start fails the job with the tail of its journal in
+// the log.
 func (r *runner) install(ctx context.Context, p catalog.Package) error {
 	if p.Method == catalog.MethodBin {
 		if err := r.installBin(ctx, p); err != nil {
@@ -253,11 +285,18 @@ func (r *runner) install(ctx context.Context, p catalog.Package) error {
 	return nil
 }
 
+// unitFailed copies the last journal lines of unit into the job log and
+// returns an error pointing at them.
 func (r *runner) unitFailed(ctx context.Context, unit string) error {
 	r.cmd(ctx, "journalctl", "-u", unit, "-n", "30", "--no-pager", "-o", "cat")
 	return fmt.Errorf("%s did not start (its log is above)", unit)
 }
 
+// remove uninstalls one apt or bin package. It stops the service first, then
+// deletes the binary (bin) or removes the apt packages together with the
+// dependencies only they needed, and the apt repository the package added.
+// With purge it also wipes the package's data directories (mailboxes,
+// databases), so there is no way back.
 func (r *runner) remove(ctx context.Context, p catalog.Package, purge bool) error {
 	if p.Unit != "" {
 		r.cmd(ctx, "systemctl", "disable", "--now", p.Unit)
@@ -313,6 +352,8 @@ func (r *runner) remove(ctx context.Context, p catalog.Package, purge bool) erro
 	return nil
 }
 
+// repoList and repoKey are where a package's own apt repository list and
+// signing key are written; the "loft-" prefix marks them as the panel's.
 func repoList(rp *catalog.Repo) string {
 	return "/etc/apt/sources.list.d/loft-" + rp.Name + ".list"
 }
@@ -358,6 +399,8 @@ func (r *runner) codename() string {
 	return ""
 }
 
+// sortedKeys returns the keys of m in order, so files are written and logged
+// in the same order every time.
 func sortedKeys(m map[string]string) []string {
 	k := make([]string, 0, len(m))
 	for s := range m {

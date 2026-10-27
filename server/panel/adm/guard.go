@@ -1,5 +1,10 @@
 package adm
 
+// This file is the "Guard" tab of loft-panel-adm (the root helper behind the
+// web panel): it writes fail2ban's configuration for the panel, ssh, mail
+// and web scanners, lists the bans in force and bans or unbans by hand.
+// File staging (stage, hostFile) is shared with mail.go.
+
 import (
 	"context"
 	"encoding/json"
@@ -43,8 +48,11 @@ var scanPaths = []string{`wp-login\.php`, `wp-admin`, `wp-content`, `xmlrpc\.php
 // and the plain site probes of the node's name land on.
 var scanLogs = []string{"/var/log/nginx/loft-panel.access.log", "/var/log/nginx/loft-panel-mail.access.log", "/var/log/nginx/access.log"}
 
+// guardInstalled reports whether the fail2ban package is on the host.
 func (o *Ops) guardInstalled() bool { return exists(o.sys("/usr/bin/fail2ban-client")) }
 
+// cleanAllow normalises the never-ban list: single addresses and subnets in
+// canonical form, blanks and duplicates dropped, at most 200 entries.
 func cleanAllow(in []string) ([]string, error) {
 	out := []string{}
 	for _, a := range in {
@@ -69,6 +77,8 @@ func cleanAllow(in []string) ([]string, error) {
 	return out, nil
 }
 
+// checkGuard checks the guard settings from the page against sane bounds
+// (BanSec -1 means a ban for good) and cleans the allow list in place.
 func checkGuard(c *admproto.GuardConf) error {
 	if c.Fails < 1 || c.Fails > 100 {
 		return errors.New("failed logins: 1 to 100")
@@ -84,6 +94,10 @@ func checkGuard(c *admproto.GuardConf) error {
 	return err
 }
 
+// renderGuardJail renders the panel's jail file. mail turns on the dovecot
+// and postfix jails (only when the mail server is installed); logs are the
+// nginx logs that exist, watched for scanners. The manual jails never match
+// anything: they only hold bans made by hand.
 func renderGuardJail(c admproto.GuardConf, mail bool, logs []string) string {
 	on := func(b bool) string {
 		if b {
@@ -143,12 +157,17 @@ _nft_add_set = <nftables> add set <table_family> <table> <addr_set> \{ type <add
 // for good survives restarts.
 const guardLocalConf = guardMark + "\n[DEFAULT]\ndbpurgeage = 400d\n"
 
+// renderScanFilter is the fail2ban filter that matches a request for one of
+// scanPaths in an nginx access log line.
 func renderScanFilter() string {
 	return guardMark + "\n# nginx combined log: a request for a path that exists on no loft server.\n[Definition]\n" +
 		`failregex = ^<HOST> \S+ \S+ .*?"(?:GET|POST|HEAD|PUT|PROPFIND) /+(?:[^" ]*/)?(?:` + strings.Join(scanPaths, "|") + `)` + "\n"
 }
 
-// Guard is the guard's state with the addresses banned now.
+// Guard is the guard's state with the addresses banned now. Bans are read
+// from fail2ban's database through guardListPy; a later row for the same
+// jail and address replaces the earlier one, so each ban shows once. A
+// failure to read them just shows no bans, so the tab still opens.
 func (o *Ops) Guard(ctx context.Context) (admproto.GuardView, error) {
 	v := admproto.GuardView{Installed: o.guardInstalled(), Banned: []admproto.GuardBan{}}
 	if !v.Installed {
@@ -243,6 +262,8 @@ func (o *Ops) GuardSet(ctx context.Context, c admproto.GuardConf) (admproto.Guar
 			logs = append(logs, l)
 		}
 	}
+	// 1. Render every file and remember the current ones (or that a file did
+	// not exist), so a refused configuration can be put back exactly.
 	files := []hostFile{
 		{Path: guardJail, Data: renderGuardJail(c, o.mailInstalled(), logs), Mode: "0644"},
 		{Path: guardLocal, Data: guardLocalConf, Mode: "0644"},
@@ -262,6 +283,8 @@ func (o *Ops) GuardSet(ctx context.Context, c admproto.GuardConf) (admproto.Guar
 		f.Data = string(b)
 		undo = append(undo, f)
 	}
+	// 2. Install the files and let fail2ban test them; on an error restore the
+	// old files and delete new ones.
 	put, err := o.stage(files)
 	if err != nil {
 		return admproto.GuardView{}, err
@@ -282,6 +305,7 @@ func (o *Ops) GuardSet(ctx context.Context, c admproto.GuardConf) (admproto.Guar
 	return o.Guard(ctx)
 }
 
+// errText is err's message, or "" for nil.
 func errText(err error) string {
 	if err == nil {
 		return ""
@@ -289,6 +313,8 @@ func errText(err error) string {
 	return err.Error()
 }
 
+// banTarget accepts an address or a subnet to ban and returns it in
+// canonical form.
 func banTarget(s string) (string, error) {
 	if ip := net.ParseIP(s); ip != nil {
 		return ip.String(), nil

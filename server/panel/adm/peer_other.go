@@ -2,6 +2,9 @@
 
 package adm
 
+// This file is the non-Linux stand-in for peer_linux.go, so the package
+// still builds (and its tests run) on macOS and other systems.
+
 import (
 	"errors"
 	"net"

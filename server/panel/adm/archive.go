@@ -1,5 +1,11 @@
 package adm
 
+// This file unpacks downloaded archives safely. The package installer
+// (bin.go) unpacks GitHub release tarballs with untar, and the release
+// installer (release.go) unpacks zip assets with unzipFlat. Because adm runs
+// as root, every entry name is checked so a hostile archive cannot write
+// outside the target directory, follow a symlink, or fill the disk.
+
 import (
 	"archive/tar"
 	"archive/zip"
@@ -49,11 +55,17 @@ func destIn(dir, name string) (string, error) {
 	return dst, nil
 }
 
+// createFile creates a new file for an archive entry. O_EXCL refuses to
+// reuse an existing path and O_NOFOLLOW refuses to write through a symlink,
+// so a crafted archive cannot redirect the write elsewhere.
 func createFile(dst string, mode os.FileMode) (*os.File, error) {
 	return os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, mode)
 }
 
 // untar extracts regular files and directories of a .tar.gz into dir.
+// Symlinks, devices and other entry types are refused. File modes keep at
+// most the 0o755 bits (and always owner read/write), and each file is cut
+// at maxAsset bytes.
 func untar(tgz, dir string) error {
 	f, err := os.Open(tgz)
 	if err != nil {
@@ -88,6 +100,8 @@ func untar(tgz, dir string) error {
 		if err != nil {
 			return err
 		}
+		// Only plain directories and regular files are allowed; the
+		// target directory itself cannot be replaced by a file.
 		switch h.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(dst, 0o755); err != nil {
@@ -118,7 +132,8 @@ func untar(tgz, dir string) error {
 }
 
 // unzipFlat extracts regular files of a zip into dir, using only the
-// final path element of each name.
+// final path element of each name. Directory entries are skipped, so the
+// result is one flat directory. Each file is cut at maxAsset bytes.
 func unzipFlat(zp, dir string) error {
 	z, err := zip.OpenReader(zp)
 	if err != nil {

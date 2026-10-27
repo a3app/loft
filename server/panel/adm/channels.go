@@ -1,5 +1,12 @@
 package adm
 
+// This file holds the "External channels" side of loft-panel-adm (the root
+// helper the web panel asks over the admproto socket). A channel is an
+// upstream link the node (loft-node, the loft server process) can send
+// member traffic out through: WireGuard, OpenVPN, ZeroTier, SSTP, an
+// HTTP/SOCKS proxy or Xray. Priority lists live in prios.go, the Xray config
+// in xray.go; the node reads the result from egress.conf.
+
 import (
 	"context"
 	"encoding/base64"
@@ -41,6 +48,9 @@ const (
 	xrayPortBase = 10800
 )
 
+// chanStore is the content of channels.json: every channel with its secrets,
+// the priority lists, the exit rules and the probe for the server's own
+// (direct) internet link. Only the helper reads and writes this file.
 type chanStore struct {
 	Channels    []admproto.Channel  `json:"channels"`
 	Prios       []admproto.Prio     `json:"prios,omitempty"`
@@ -49,11 +59,17 @@ type chanStore struct {
 	seeded      bool                `json:"-"` // ensureDefaultPrio just created the leftover list
 }
 
+// chanFile is the path of channels.json under the panel's /etc directory.
 func (o *Ops) chanFile() string {
 	return filepath.Join(firstNonEmpty(o.PanelEtc, "/etc/loft-panel"), "channels.json")
 }
+
+// egressFile is the node's egress.conf: the file that tells loft-node which
+// channel each member's traffic leaves through.
 func (o *Ops) egressFile() string { return filepath.Join(o.Dir, "egress.conf") }
 
+// readChans loads channels.json (a missing file is an empty store) and
+// upgrades old layouts with migrate, so callers always see priority lists.
 func (o *Ops) readChans() (chanStore, error) {
 	var s chanStore
 	b, err := os.ReadFile(o.chanFile())
@@ -69,6 +85,8 @@ func (o *Ops) readChans() (chanStore, error) {
 	return s, nil
 }
 
+// writeChans saves the store as indented JSON, readable by root only
+// because it holds keys and passwords.
 func (o *Ops) writeChans(s chanStore) error {
 	b, _ := json.MarshalIndent(s, "", "  ")
 	if err := os.MkdirAll(filepath.Dir(o.chanFile()), 0o755); err != nil {
@@ -77,12 +95,16 @@ func (o *Ops) writeChans(s chanStore) error {
 	return storeWrite(o.chanFile(), append(b, '\n'), 0o600)
 }
 
+// find returns the index of the channel called name, or -1.
 func find(s chanStore, name string) int {
 	return slices.IndexFunc(s.Channels, func(c admproto.Channel) bool { return c.Name == name })
 }
 
+// chanName is the allowed form of a channel's system name. It doubles as a
+// Linux interface name, which is limited to 15 bytes.
 var chanName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,11}$`)
 
+// wgKey reports whether k is a WireGuard key: 32 bytes in standard base64.
 func wgKey(k string) bool {
 	b, err := base64.StdEncoding.DecodeString(k)
 	return err == nil && len(b) == 32
@@ -101,6 +123,9 @@ func WGPublic(priv string) string {
 	return base64.StdEncoding.EncodeToString(pub)
 }
 
+// hostPort checks a "host:port" string. When the port is missing and
+// defPort is set, defPort is added. Hosts with spaces, slashes or quotes are
+// refused, since the value ends up in config files.
 func hostPort(s string, defPort string) (string, error) {
 	if _, _, err := net.SplitHostPort(s); err != nil {
 		if defPort == "" || strings.Contains(s, ":") && !strings.HasPrefix(s, "[") {
@@ -115,6 +140,8 @@ func hostPort(s string, defPort string) (string, error) {
 	return s, nil
 }
 
+// cidrs parses a list of subnets, skips blanks and returns them in their
+// canonical masked form (10.0.0.5/24 becomes 10.0.0.0/24).
 func cidrs(list []string) ([]string, error) {
 	var out []string
 	for _, x := range list {
@@ -171,6 +198,8 @@ var ovpnRefused = map[string]bool{"up": true, "down": true, "route-up": true, "r
 	"dev": true, "dev-type": true, "dev-node": true, "daemon": true, "user": true, "group": true, "auth-user-pass": true,
 	"route-noexec": true, "route-nopull": true, "redirect-gateway": true, "tmp-dir": true, "setenv": true, "machine-readable-output": true}
 
+// ovpnDirective is the lower-cased keyword of one .ovpn line ("remote",
+// "dev", ...), or "" for blanks, comments and inline <tag> blocks.
 func ovpnDirective(line string) string {
 	l := strings.TrimSpace(line)
 	if l == "" || l[0] == '#' || l[0] == ';' || l[0] == '<' {
@@ -180,8 +209,10 @@ func ovpnDirective(line string) string {
 }
 
 // checkChannel validates c and fills what the helper owns, keeping
-// secrets of old when the page sent none.
+// secrets of old when the page sent none. old is the stored version of the
+// channel (nil for a new one) and s the whole store, for name clashes.
 func checkChannel(c *admproto.Channel, old *admproto.Channel, s chanStore) error {
+	// 1. Name and title: a new channel without a name gets the next free one.
 	if old == nil && c.Name == "" {
 		c.Name = sysName(c.Type, s)
 	}
@@ -200,6 +231,8 @@ func checkChannel(c *admproto.Channel, old *admproto.Channel, s chanStore) error
 			return fmt.Errorf("a connection named %q exists", c.Title)
 		}
 	}
+	// 2. Rules shared by every type: fixed type, a valid link probe, and a
+	// "connect through" channel that exists.
 	if old != nil && old.Type != c.Type {
 		return errors.New("a channel keeps its type: delete it and add a new one")
 	}
@@ -210,6 +243,9 @@ func checkChannel(c *admproto.Channel, old *admproto.Channel, s chanStore) error
 	if c.Via != "" && (c.Via == c.Name || find(s, c.Via) < 0) {
 		return fmt.Errorf("connect through: %q is no channel", c.Via)
 	}
+	// 3. Per-type checks. Secrets the page left empty are copied from old,
+	// because the page is never sent them back (see redact). Kernel types
+	// (WireGuard, OpenVPN) use the channel name as their interface name.
 	switch c.Type {
 	case admproto.ChanWG:
 		w := c.WG
@@ -343,6 +379,8 @@ func checkChannel(c *admproto.Channel, old *admproto.Channel, s chanStore) error
 	default:
 		return fmt.Errorf("unknown channel type %q", c.Type)
 	}
+	// 4. Incoming connections need a real interface; a kept channel keeps its
+	// routing table number.
 	if c.Accept && c.Type != admproto.ChanWG && c.Type != admproto.ChanOVPN && c.Type != admproto.ChanZT {
 		return errors.New("only WireGuard, OpenVPN and ZeroTier channels take incoming connections")
 	}
@@ -355,6 +393,9 @@ func checkChannel(c *admproto.Channel, old *admproto.Channel, s chanStore) error
 	return nil
 }
 
+// redact returns a copy of c safe to show in the browser: private keys,
+// preshared keys and passwords are blanked and replaced by Has* flags, so
+// the page can say "a key is set" without ever seeing it.
 func redact(c admproto.Channel) admproto.Channel {
 	if c.WG != nil {
 		w := *c.WG
@@ -417,7 +458,12 @@ func (o *Ops) Channels(ctx context.Context) (admproto.ChannelsView, error) {
 	return v, nil
 }
 
-// ChannelSave adds or changes a channel and applies it.
+// ChannelSave adds or changes a channel and applies it. It validates the
+// channel against its stored version (which supplies secrets the page did
+// not resend), refuses WireGuard subnets inside the loft network, gives a
+// new channel a routing table (and an Xray channel a local port), then
+// applies the next store. A new exit channel joins every list marked Auto;
+// a channel no longer used for exit leaves all lists.
 func (o *Ops) ChannelSave(ctx context.Context, c admproto.Channel) (admproto.ChannelsView, error) {
 	o.chanMu.Lock()
 	s, err := o.readChans()
@@ -425,6 +471,8 @@ func (o *Ops) ChannelSave(ctx context.Context, c admproto.Channel) (admproto.Cha
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, err
 	}
+	// 1. Validate against the stored version (if any), which also supplies
+	// secrets the page did not resend.
 	i := find(s, c.Name)
 	var old *admproto.Channel
 	if i >= 0 {
@@ -439,6 +487,9 @@ func (o *Ops) ChannelSave(ctx context.Context, c admproto.Channel) (admproto.Cha
 		o.chanMu.Unlock()
 		return admproto.ChannelsView{}, err
 	}
+	// 2. Give a new channel its routing table (and an Xray channel its local
+	// port), then build the next store. A new exit channel joins every list
+	// marked Auto; a channel no longer used for exit leaves all lists.
 	if c.Table == 0 {
 		c.Table = freeTable(s)
 	}
@@ -465,6 +516,8 @@ func (o *Ops) ChannelSave(ctx context.Context, c admproto.Channel) (admproto.Cha
 	return o.Channels(ctx)
 }
 
+// usedByRules reports whether the exit rules (or the default for the rest)
+// send traffic to name.
 func usedByRules(s chanStore, name string) bool {
 	if s.Rules.Default == name {
 		return true
@@ -472,6 +525,8 @@ func usedByRules(s chanStore, name string) bool {
 	return slices.ContainsFunc(s.Rules.Rules, func(r admproto.ExitRule) bool { return r.Via == name })
 }
 
+// freeTable is the lowest routing table number from tableBase no channel
+// uses yet.
 func freeTable(s chanStore) int {
 	for t := tableBase; ; t++ {
 		if !slices.ContainsFunc(s.Channels, func(c admproto.Channel) bool { return c.Table == t }) {
@@ -480,6 +535,8 @@ func freeTable(s chanStore) int {
 	}
 }
 
+// freeXrayPort is the lowest local SOCKS port from xrayPortBase no Xray
+// channel uses yet.
 func freeXrayPort(s chanStore) int {
 	for p := xrayPortBase; ; p++ {
 		if !slices.ContainsFunc(s.Channels, func(c admproto.Channel) bool { return c.XR != nil && c.XR.Port == p }) {
@@ -596,7 +653,12 @@ func (o *Ops) ChannelRules(ctx context.Context, r admproto.ExitRules) (admproto.
 	return o.Channels(ctx)
 }
 
-// EgressConf is what the node gets from the channels and rules.
+// EgressConf is what the node gets from the channels and rules. Each panel
+// channel type maps to a node egress kind: WireGuard, OpenVPN and ZeroTier
+// are a device the node binds sockets to; SSTP and proxies are dialed by
+// the node itself; an Xray channel is a SOCKS5 proxy on 127.0.0.1. The text
+// is parsed back before it is returned, so the node never gets a file it
+// would refuse.
 func EgressConf(s chanStore) (string, error) {
 	c := &egress.Config{Default: s.Rules.Default}
 	if k := s.DirectCheck; k != nil {
@@ -651,6 +713,8 @@ func EgressConf(s chanStore) (string, error) {
 // node reload, routing tables. On a failure before the node reload the
 // old files are put back.
 func (o *Ops) applyChans(ctx context.Context, have, want chanStore) error {
+	// 1. Render egress.conf first, so a bad store fails before anything moves.
+	// Then stop channels that are gone or changed type.
 	conf, err := EgressConf(want)
 	if err != nil {
 		return err
@@ -660,6 +724,7 @@ func (o *Ops) applyChans(ctx context.Context, have, want chanStore) error {
 			o.chanDown(ctx, c, true)
 		}
 	}
+	// 2. Write and start (or stop) the kernel side of every wanted channel.
 	for _, c := range want.Channels {
 		var prev *admproto.Channel
 		if i := find(have, c.Name); i >= 0 {
@@ -669,6 +734,8 @@ func (o *Ops) applyChans(ctx context.Context, have, want chanStore) error {
 			return fmt.Errorf("%s: %v", c.Name, err)
 		}
 	}
+	// 3. Save the new store and Xray config, then hand the node a new
+	// egress.conf only when its text changed.
 	if err := o.writeChans(want); err != nil {
 		return err
 	}
@@ -730,6 +797,8 @@ func (o *Ops) putFile(ctx context.Context, dst string, data []byte, mode os.File
 	return err
 }
 
+// rmFile deletes a file on the host, outside the helper's sandbox (the
+// counterpart of putFile). Errors are ignored: a missing file is fine.
 func (o *Ops) rmFile(ctx context.Context, path string) {
 	if o.Exec != nil {
 		os.Remove(filepath.Join(o.Root, path))
@@ -738,6 +807,8 @@ func (o *Ops) rmFile(ctx context.Context, path string) {
 	o.host(ctx, "rm", "-f", path)
 }
 
+// wgConf renders /etc/wireguard/NAME.conf for wg-quick. Routing is left to
+// the helper (Table = off), see Reconcile.
 func wgConf(c admproto.Channel) string {
 	w := c.WG
 	var b strings.Builder
@@ -771,6 +842,10 @@ func wgConf(c admproto.Channel) string {
 	return b.String()
 }
 
+// ovpnConf renders /etc/openvpn/client/NAME.conf: the user's .ovpn text,
+// then the lines the panel insists on (device name, no scripts, no
+// server-pushed default route). Without Routes, server-pushed routes are
+// ignored too.
 func ovpnConf(c admproto.Channel) string {
 	x := c.OVPN
 	var b strings.Builder
@@ -786,6 +861,8 @@ func ovpnConf(c admproto.Channel) string {
 	return b.String()
 }
 
+// unitOf is the systemd unit that runs a kernel channel (wg-quick or
+// openvpn-client template), or "" for types without one.
 func unitOf(c admproto.Channel) string {
 	switch c.Type {
 	case admproto.ChanWG:
@@ -796,8 +873,15 @@ func unitOf(c admproto.Channel) string {
 	return ""
 }
 
-// chanUp writes and starts (or stops) the kernel side of c.
+// chanUp writes and starts (or stops) the kernel side of c. prev is the
+// stored version, nil for a new channel. WireGuard and OpenVPN get their
+// config files and a systemd unit; since the files are always rewritten,
+// a saved channel that is on is always restarted. ZeroTier has no files:
+// it joins or leaves the network through zerotier-cli and refuses default
+// routes and DNS from the network. Other types are run by the node.
 func (o *Ops) chanUp(ctx context.Context, c admproto.Channel, prev *admproto.Channel) error {
+	// 1. Decide which config files the channel needs. ZeroTier has none: it is
+	// joined or left through zerotier-cli and returns early.
 	var files map[string]string
 	switch c.Type {
 	case admproto.ChanWG:
@@ -829,6 +913,8 @@ func (o *Ops) chanUp(ctx context.Context, c admproto.Channel, prev *admproto.Cha
 	default:
 		return nil // the node holds SSTP and proxies; Xray is written with writeXray
 	}
+	// 2. Write the files and (re)start or stop the unit. putFile always runs,
+	// so a saved channel is always restarted to pick up its config.
 	changed := prev == nil || prev.On != c.On
 	for path, body := range files {
 		mode := os.FileMode(0o600)
@@ -873,6 +959,7 @@ func (o *Ops) chanDown(ctx context.Context, c admproto.Channel, gone bool) {
 	}
 }
 
+// ipRule is one entry of `ip -j rule show`: a policy routing rule.
 type ipRule struct {
 	Priority int    `json:"priority"`
 	Src      string `json:"src"`
@@ -892,6 +979,7 @@ func (o *Ops) Reconcile(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	// 1. Look at the host once (interfaces, rules, routes, ZeroTier).
 	snap := o.hostSnapshot(ctx, s)
 	changed := false
 	// ZeroTier picks its own interface name: learn it.
@@ -911,6 +999,10 @@ func (o *Ops) Reconcile(ctx context.Context) {
 			}
 		}
 	}
+	// 2. Work out the wanted state: for each running kernel channel a default
+	// route in its own table, a rule "oif DEV lookup TABLE" (and, for channels
+	// that accept incoming connections, "from ADDR lookup TABLE" so replies go
+	// back the same way), plus WireGuard peer subnets in the main table.
 	type want struct {
 		pref  int
 		oif   string
@@ -946,6 +1038,8 @@ func (o *Ops) Reconcile(ctx context.Context) {
 			}
 		}
 	}
+	// 3. Delete rules in the helper's priority range that are not wanted, then
+	// add the missing ones. Rules outside the range belong to someone else.
 	for _, r := range snap.rules {
 		if r.Priority < prefBase || r.Priority >= prefBase+2000 {
 			continue
@@ -980,6 +1074,7 @@ func (o *Ops) Reconcile(ctx context.Context) {
 		}
 		o.host(ctx, "ip", append(args, "lookup", strconv.Itoa(w.table))...)
 	}
+	// 4. Same for main-table routes tagged with ChannelProto.
 	for _, r := range snap.chanRoutes {
 		if !routes[r] {
 			dst, dev, _ := strings.Cut(r, " ")
@@ -1008,6 +1103,7 @@ type snapshot struct {
 	units      map[string][2]string // unit → state, since
 }
 
+// ztNet is one network from `zerotier-cli -j listnetworks`.
 type ztNet struct {
 	ID       string   `json:"nwid"`
 	Name     string   `json:"name"`
@@ -1016,13 +1112,20 @@ type ztNet struct {
 	Assigned []string `json:"assignedAddresses"`
 }
 
+// wgDev is what the status page needs from `wg show all dump` for one
+// interface: the newest peer handshake (unix seconds) and a peer endpoint.
 type wgDev struct {
 	handshake int64
 	endpoint  string
 }
 
+// snapFresh is how long a host snapshot is reused. The panel page and the
+// 20-second Reconcile loop both ask for one, and ZeroTier can take seconds
+// to answer.
 const snapFresh = 3 * time.Second
 
+// snapKey sums up which units and types a snapshot was taken for; a cached
+// snapshot is reused only for the same set of channels.
 func snapKey(s chanStore) string {
 	var b strings.Builder
 	for _, c := range s.Channels {
@@ -1036,12 +1139,16 @@ func snapKey(s chanStore) string {
 	return b.String()
 }
 
+// dropSnap forgets the cached snapshot, so the next caller sees the host
+// as it is after a change.
 func (o *Ops) dropSnap() {
 	o.snapMu.Lock()
 	o.snapAt = time.Time{}
 	o.snapMu.Unlock()
 }
 
+// hostSnapshot returns the host state for the channels in s, from cache
+// when it is fresh (see snapFresh) and taken for the same channels.
 func (o *Ops) hostSnapshot(ctx context.Context, s chanStore) snapshot {
 	key := snapKey(s)
 	o.snapMu.Lock()
@@ -1054,9 +1161,17 @@ func (o *Ops) hostSnapshot(ctx context.Context, s chanStore) snapshot {
 	return sn
 }
 
+// hostSnapshotRun takes a fresh snapshot. Every command runs in one shell
+// script on the host (each host call starts a transient systemd unit, which
+// is slow), and the outputs are split on "@@" lines in a fixed order:
+// links, IPv4 addresses, rules, channel routes, WireGuard dump, ZeroTier
+// networks, ZeroTier node info, unit states. Parse errors leave a part
+// empty rather than failing the whole snapshot.
 func (o *Ops) hostSnapshotRun(ctx context.Context, s chanStore) snapshot {
 	sn := snapshot{devs: map[string]bool{}, addrs: map[string][]string{}, stats: map[string][2]uint64{}, ztDev: map[string]string{},
 		zt: map[string]ztNet{}, wg: map[string]wgDev{}, units: map[string][2]string{}}
+	// 1. Build the script. zerotier-cli is only asked when a ZeroTier channel
+	// exists, under a short timeout because a stuck daemon hangs it.
 	var units []string
 	hasZT := false
 	for _, c := range s.Channels {
@@ -1079,10 +1194,12 @@ func (o *Ops) hostSnapshotRun(ctx context.Context, s chanStore) snapshot {
 	if err != nil && out == "" {
 		return sn
 	}
+	// 2. Split the output and pad it, so a short output still has 8 parts.
 	part := strings.Split(out, "@@")
 	for len(part) < 8 {
 		part = append(part, "")
 	}
+	// 3. Parse each part in order.
 	var links []struct {
 		IfName string `json:"ifname"`
 		Stats  struct {
@@ -1164,11 +1281,19 @@ func (o *Ops) hostSnapshotRun(ctx context.Context, s chanStore) snapshot {
 	return sn
 }
 
+// nodeEgress is the part of egress-status.json (written by the node) the
+// helper reads: the node's view of each channel.
 type nodeEgress struct {
 	Channels []egress.Status `json:"channels"`
 }
 
-// channelStatus is every channel's state from the host and the node.
+// channelStatus is every channel's state from the host and the node. Two
+// sources are used: the host snapshot for kernel channels (unit state,
+// interface, addresses, traffic; a WireGuard link counts as up only with a
+// handshake in the last 3 minutes), and egress-status.json, written by the
+// node, for the channels it runs itself (SSTP, proxies, Xray) and for its
+// link check, which can mark an up channel "nolink". A direct-link probe,
+// when set, adds a row for the server's own route.
 func (o *Ops) channelStatus(ctx context.Context, s chanStore) []admproto.ChannelStatus {
 	sn := o.hostSnapshot(ctx, s)
 	var ne nodeEgress
@@ -1185,6 +1310,8 @@ func (o *Ops) channelStatus(ctx context.Context, s chanStore) []admproto.Channel
 		if n, ok := node[c.Name]; ok {
 			st.Conns = n.Conns
 		}
+		// WireGuard/OpenVPN: from the systemd unit and the interface. A WireGuard
+		// link counts as up only with a handshake in the last 3 minutes.
 		switch c.Type {
 		case admproto.ChanWG, admproto.ChanOVPN:
 			u := sn.units[unitOf(c)]
@@ -1285,6 +1412,7 @@ func (o *Ops) ChannelDirectCheck(ctx context.Context, k admproto.ChanCheck) (adm
 	return o.Channels(ctx)
 }
 
+// nowUnix is the current time in unix seconds.
 func nowUnix() int64 { return time.Now().Unix() }
 
 // externalIP asks the internet which address the channel's traffic comes
@@ -1310,6 +1438,7 @@ func (o *Ops) externalIP(ctx context.Context, dev string) string {
 	return ip
 }
 
+// extIP is one cached answer of externalIP and when it was fetched.
 type extIP struct {
 	ip string
 	at time.Time

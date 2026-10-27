@@ -1,5 +1,9 @@
 package adm
 
+// This file checks who is on the other end of the adm socket. Only the
+// panel's own user (or root) may send requests to loft-panel-adm, and Linux
+// reports the peer's uid through SO_PEERCRED.
+
 import (
 	"errors"
 	"fmt"
@@ -9,6 +13,8 @@ import (
 )
 
 // PeerUID returns a check that the unix socket peer runs as uid (or root).
+// It is used as Server.Allow, which runs it on every connection before the
+// request is acted on.
 func PeerUID(uid int) func(net.Conn) error {
 	return func(c net.Conn) error {
 		uc, ok := c.(*net.UnixConn)

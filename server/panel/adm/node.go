@@ -1,5 +1,11 @@
 package adm
 
+// This file manages the node's public identity: its DNS name ("advertise",
+// the URL clients and the roster use for this node), the panel's own name,
+// and the TLS certificates both use. It edits /etc/loft/node.conf and
+// panel.env, rewrites the nginx site (nginx.go) and restarts loft-node, putting
+// the old files back whenever the node does not come up again.
+
 import (
 	"context"
 	"crypto/ed25519"
@@ -23,7 +29,9 @@ import (
 	"github.com/a3app/loft/server/panel/admproto"
 )
 
-// Paths outside the node data directory, with Debian defaults.
+// Paths outside the node data directory, with Debian defaults: /etc/loft,
+// node.conf (the node's settings), the node's TLS directory, the nginx site
+// file and panel.env (the panel's environment, which holds PANEL_HOSTS).
 func (o *Ops) etc() string      { return firstNonEmpty(o.Etc, "/etc/loft") }
 func (o *Ops) nodeConf() string { return filepath.Join(o.etc(), "node.conf") }
 func (o *Ops) tlsDir() string   { return filepath.Join(o.etc(), "tls") }
@@ -32,6 +40,8 @@ func (o *Ops) nginxSite() string {
 }
 func (o *Ops) panelEnv() string { return firstNonEmpty(o.PanelEnv, "/etc/loft-panel/panel.env") }
 
+// nginxTest runs "nginx -t" to check the whole nginx config before a reload.
+// Tests replace it through Ops.NginxTest.
 func (o *Ops) nginxTest() error {
 	if o.NginxTest != nil {
 		return o.NginxTest()
@@ -43,7 +53,10 @@ func (o *Ops) nginxTest() error {
 	return nil
 }
 
-// NodeInfo reads node.conf and the controller public key.
+// NodeInfo reads node.conf and the controller public key. The controller
+// key signs the node's roster (the list of fronts and relays clients may
+// use); only its public half is returned. The panel's names come from
+// PANEL_HOSTS in panel.env.
 func (o *Ops) NodeInfo() (admproto.NodeInfo, error) {
 	c, err := config.LoadServer(o.nodeConf())
 	if err != nil {
@@ -74,6 +87,7 @@ func (o *Ops) NodeInfo() (admproto.NodeInfo, error) {
 	return in, nil
 }
 
+// dnsName matches a dotted DNS name whose last label is letters only.
 var dnsName = regexp.MustCompile(`^(?i)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
 
 // ValidDomain is a public DNS name with at least one dot (no IPs, no ports).
@@ -98,6 +112,8 @@ func (o *Ops) DomainSet(ctx context.Context, req admproto.DomainSet) (admproto.N
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
+	// 1. Build the new node.conf and check it parses; keep every old file
+	// so undo can put them back.
 	nodeOld, err := os.ReadFile(o.nodeConf())
 	if err != nil {
 		return admproto.NodeInfo{}, err
@@ -120,6 +136,7 @@ func (o *Ops) DomainSet(ctx context.Context, req admproto.DomainSet) (admproto.N
 			o.writeOwned(o.nginxSite(), siteOld, 0o644, 0, 0)
 		}
 	}
+	// 2. Write node.conf, panel.env and the nginx site.
 	if err := o.writeKeepMode(o.nodeConf(), []byte(nodeNew)); err != nil {
 		return admproto.NodeInfo{}, err
 	}
@@ -135,6 +152,7 @@ func (o *Ops) DomainSet(ctx context.Context, req admproto.DomainSet) (admproto.N
 			return admproto.NodeInfo{}, err
 		}
 	}
+	// 3. Restart the node; if it does not stay up, restore and restart again.
 	if err := o.restartSettled(ctx); err != nil {
 		undo()
 		o.restartSettled(ctx)
@@ -190,6 +208,8 @@ func (o *Ops) CertInstall(ctx context.Context, req admproto.CertInstall) (admpro
 	default:
 		return admproto.NodeStatus{}, fmt.Errorf("target %q: want node or panel", req.Target)
 	}
+	// Node target: keep the old pair as .prev and for undo, write the new
+	// pair, then restart the node and roll back if it fails to come up.
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	fc, kp := filepath.Join(o.tlsDir(), "fullchain.pem"), filepath.Join(o.tlsDir(), "privkey.pem")
@@ -217,6 +237,7 @@ func (o *Ops) CertInstall(ctx context.Context, req admproto.CertInstall) (admpro
 		o.restartSettled(ctx)
 		return admproto.NodeStatus{}, fmt.Errorf("loft-node did not start with the new certificate, the old one is back: %v", err)
 	}
+	// nginx serves the same file when the panel shares the node's name.
 	if exists(o.nginxSite()) {
 		if err := o.nginxTest(); err == nil {
 			o.reloadNginx(ctx)
@@ -288,6 +309,8 @@ func (o *Ops) writeKeepMode(path string, b []byte) error {
 	return o.writeOwned(path, b, mode, uid, gid)
 }
 
+// writeOwned replaces path atomically with mode and then sets its owner.
+// When Ops has no UID/GID (tests), ownership is left as is.
 func (o *Ops) writeOwned(path string, b []byte, mode os.FileMode, uid, gid int) error {
 	if err := storeWrite(path, b, mode); err != nil {
 		return err

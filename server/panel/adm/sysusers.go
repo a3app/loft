@@ -1,5 +1,10 @@
 package adm
 
+// This file backs the panel's Users screen for Linux login accounts (not
+// panel users): listing them with their SSH keys and sudo level, creating,
+// changing and deleting them, and refusing any change that would lock the
+// operator out of root over SSH.
+
 import (
 	"bytes"
 	"context"
@@ -38,8 +43,11 @@ var reserved = []string{"root", "daemon", "bin", "sys", "sync", "games", "man", 
 	"www-data", "backup", "list", "irc", "nobody", "systemd-network", "systemd-resolve", "messagebus", "sshd",
 	"loft", "loft-panel", "vmail", "postfix", "dovecot", "dovenull", "opendkim", "_rspamd", "debian-tor", "admin"}
 
+// sudoersFile is the panel's no-password sudo rule for login.
 func sudoersFile(login string) string { return sudoersDir + "/loft-panel-" + login }
 
+// sysAcct is an account as the panel shows it, plus its home directory and
+// primary group, which are needed to write authorized_keys.
 type sysAcct struct {
 	admproto.SysUser
 	home, group string
@@ -60,11 +68,19 @@ func (o *Ops) hostIn(ctx context.Context, stdin string, name string, args ...str
 	return out.String(), nil
 }
 
+// sysReadScript gathers everything readAccts needs in one host call, as six
+// parts separated by "@@": passwd, group, shadow (login, hash, expiry),
+// sshd's password/root-login settings, the sudoers.d file names, and each
+// shown account's authorized_keys under a "##login" line.
 const sysReadScript = `getent passwd; echo @@; getent group; echo @@; getent shadow | cut -d: -f1,2,8; echo @@
 sshd -T 2>/dev/null | grep -Ei '^(passwordauthentication|permitrootlogin) '; echo @@; ls ` + sudoersDir + ` 2>/dev/null; echo @@
 getent passwd | awk -F: '($3==0||$3>=1000)&&$3!=65534{print $1":"$6}' | while IFS=: read u h; do echo "##$u"; cat "$h/.ssh/authorized_keys" 2>/dev/null; done`
 
-// readAccts lists root and the people's accounts.
+// readAccts lists root and the people's accounts. It returns both the
+// internal records and the view for the panel. An account counts as
+// having a password when its shadow hash is set and not disabled ("!" or
+// "*"), and as locked when its expiry date has passed (the panel locks by
+// expiring an account).
 func (o *Ops) readAccts(ctx context.Context) ([]sysAcct, admproto.SysUsers, error) {
 	out, err := o.host(ctx, "sh", "-c", sysReadScript)
 	if err != nil && !strings.Contains(out, "@@") {
@@ -74,6 +90,7 @@ func (o *Ops) readAccts(ctx context.Context) ([]sysAcct, admproto.SysUsers, erro
 	for len(part) < 6 {
 		part = append(part, "")
 	}
+	// 1. sshd settings, sudoers files, sudo group members, shadow, keys.
 	view := admproto.SysUsers{RootLogin: "prohibit-password"}
 	for _, ln := range strings.Split(part[3], "\n") {
 		f := strings.Fields(strings.ToLower(ln))
@@ -121,6 +138,7 @@ func (o *Ops) readAccts(ctx context.Context) ([]sysAcct, admproto.SysUsers, erro
 			keys[cur] = append(keys[cur], ln)
 		}
 	}
+	// 2. Build each shown account from passwd and the maps above.
 	today := int(time.Now().Unix() / 86400)
 	var accts []sysAcct
 	for _, ln := range strings.Split(part[0], "\n") {
@@ -222,10 +240,15 @@ func cleanKeys(in []string) ([]string, error) {
 	return out, nil
 }
 
-// SysUserSave creates or changes an account.
+// SysUserSave creates or changes an account. It writes one shell script
+// that runs on the host: useradd for a new account, sudo group and sudoers
+// file for the sudo level, an expiry date for lock/unlock, and the new
+// authorized_keys. The password goes to chpasswd on stdin. root may only
+// have its keys changed.
 func (o *Ops) SysUserSave(ctx context.Context, req admproto.SysUserSave) (admproto.SysUsers, error) {
 	o.sysMu.Lock()
 	defer o.sysMu.Unlock()
+	// 1. Check the request against the current accounts.
 	accts, view, err := o.readAccts(ctx)
 	if err != nil {
 		return view, err
@@ -280,6 +303,7 @@ func (o *Ops) SysUserSave(ctx context.Context, req admproto.SysUserSave) (admpro
 		return view, err
 	}
 
+	// 2. Build the script: create, sudo level, lock.
 	var sc strings.Builder
 	sc.WriteString("set -e\n")
 	if req.New {
@@ -330,6 +354,7 @@ func (o *Ops) SysUserSave(ctx context.Context, req admproto.SysUserSave) (admpro
 	if tmp != "" {
 		sc.WriteString(fmt.Sprintf("install -m 0600 -o %s -g \"$G\" %s \"$H/.ssh/authorized_keys\" && rm -f %s\n", req.Login, shq(tmp), shq(tmp)))
 	}
+	// 3. Run it, then set the password.
 	if _, err := o.host(ctx, "sh", "-c", sc.String()); err != nil {
 		return view, fmt.Errorf("%s: %v", req.Login, err)
 	}

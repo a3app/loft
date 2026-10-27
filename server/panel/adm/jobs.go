@@ -1,5 +1,11 @@
 package adm
 
+// This file is the helper's side of background jobs: starting one, keeping
+// its record in job.json, and reporting its state and log to the panel.
+// Only one job exists at a time. The work itself happens in a separate
+// systemd unit that runs RunJob (runjob.go), so the job survives the end of
+// the admproto request that started it.
+
 import (
 	"context"
 	"crypto/rand"
@@ -26,10 +32,13 @@ const JobUnit = "loft-panel-job"
 // logTail is how much of the job log a reply carries.
 const logTail = 48 << 10
 
+// stateDir is the helper's own state directory; jobFile and jobLog are the
+// job record and the job's output inside it.
 func (o *Ops) stateDir() string { return firstNonEmpty(o.State, "/var/lib/loft-panel-adm") }
 func (o *Ops) jobFile() string  { return filepath.Join(o.stateDir(), "job.json") }
 func (o *Ops) jobLog() string   { return filepath.Join(o.stateDir(), "job.log") }
 
+// readJob loads job.json.
 func (o *Ops) readJob() (admproto.Job, error) {
 	var j admproto.Job
 	b, err := os.ReadFile(o.jobFile())
@@ -39,6 +48,8 @@ func (o *Ops) readJob() (admproto.Job, error) {
 	return j, json.Unmarshal(b, &j)
 }
 
+// saveJob writes job.json atomically. The log is never stored there; it
+// lives in job.log and is attached only when the panel asks.
 func (o *Ops) saveJob(j admproto.Job) error {
 	j.Log = ""
 	b, err := json.MarshalIndent(j, "", "  ")
@@ -48,6 +59,7 @@ func (o *Ops) saveJob(j admproto.Job) error {
 	return storeWrite(o.jobFile(), append(b, '\n'), 0o600)
 }
 
+// jobAlive reports whether the job unit is still running in systemd.
 func (o *Ops) jobAlive(ctx context.Context) bool {
 	st, _ := o.Systemctl(ctx, "is-active", JobUnit+".service")
 	st = strings.TrimSpace(st)
@@ -86,6 +98,8 @@ func (o *Ops) JobGet(ctx context.Context, withLog bool) (admproto.Job, error) {
 	return j, nil
 }
 
+// tail returns about the last n bytes of the file at path, starting at a
+// whole line. A missing file gives "".
 func tail(path string, n int64) string {
 	f, err := os.Open(path)
 	if err != nil {
@@ -121,6 +135,7 @@ func (o *Ops) StartPackages(ctx context.Context, by string, plan catalog.Plan) (
 	return o.startJob(ctx, admproto.Job{Kind: "packages", By: by, Plan: &plan})
 }
 
+// tagRe matches a release tag such as v1.2.3 or v1.2.3-rc.1.
 var tagRe = regexp.MustCompile(`^v\d{1,4}\.\d{1,4}\.\d{1,6}(-[0-9A-Za-z.]{1,32})?$`)
 
 // StartUpdate starts installing release tag.
@@ -131,6 +146,13 @@ func (o *Ops) StartUpdate(ctx context.Context, by string, req admproto.UpdateApp
 	return o.startJob(ctx, admproto.Job{Kind: "update", By: by, Tag: req.Tag})
 }
 
+// startJob records j as the new running job and launches it with
+// systemd-run as the transient unit JobUnit, running this binary with
+// "run-job". It refuses while another job is alive; a job that is marked
+// running but whose unit is gone is marked interrupted first. A job that
+// cannot be launched is saved as failed so the panel sees why. The id, the
+// empty log and the record are on disk before the unit starts, because the
+// runner reads them as soon as it runs.
 func (o *Ops) startJob(ctx context.Context, j admproto.Job) (admproto.Job, error) {
 	o.jobMu.Lock()
 	defer o.jobMu.Unlock()

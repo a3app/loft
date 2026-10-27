@@ -2,6 +2,9 @@
 
 package adm
 
+// This file reads a file's owner on Unix systems. It is split out because
+// syscall.Stat_t only exists there.
+
 import (
 	"os"
 	"syscall"

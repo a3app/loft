@@ -1,5 +1,11 @@
 package adm
 
+// This file turns the panel's mail settings (mail.json) into the text of the
+// config files for Postfix (accepts and sends mail), Dovecot (stores mail and
+// serves IMAP), OpenDKIM (signs outgoing mail), Roundcube (webmail) and the
+// nginx site for mail.<domain>. It only renders strings; mail.go writes them
+// to disk and reloads the daemons.
+
 import (
 	"fmt"
 	"slices"
@@ -75,18 +81,26 @@ type hostFile struct {
 	Owner, Group string
 }
 
+// mailHost is the server name used for a mail domain, e.g. mail.example.com.
 func mailHost(domain string) string { return "mail." + domain }
 
+// mailTLS gives the certificate and key paths the panel keeps for a mail host.
 func mailTLS(host string) (crt, key string) {
 	return "/etc/loft-panel/mail-tls/" + host + ".crt", "/etc/loft-panel/mail-tls/" + host + ".key"
 }
 
+// dkimKeyPath is where the private DKIM key of a domain lives, named by
+// domain and selector so a new selector gets its own file.
 func dkimKeyPath(d admproto.MailDomain) string {
 	return dkimKeyDir + "/" + d.Name + "." + dkimSel(d) + ".key"
 }
 
+// dkimSel is the DKIM selector of a domain (the label before ._domainkey in
+// DNS), "mail" when none is set.
 func dkimSel(d admproto.MailDomain) string { return firstNonEmpty(d.Selector, "mail") }
 
+// splitAddr cuts an address at its last "@" into local part and domain.
+// Without an "@" the whole string is the local part.
 func splitAddr(a string) (local, domain string) {
 	i := strings.LastIndexByte(a, '@')
 	if i < 0 {
@@ -106,6 +120,7 @@ func (s *mailStore) on() []admproto.MailDomain {
 	return out
 }
 
+// domainOn reports whether name is a known, enabled domain.
 func (s *mailStore) domainOn(name string) bool {
 	return slices.ContainsFunc(s.Domains, func(d admproto.MailDomain) bool { return d.Name == name && d.Enabled })
 }
@@ -131,10 +146,13 @@ func (s *mailStore) helo() string {
 	return ""
 }
 
+// mailHead is the warning comment written at the top of every generated
+// file, so whoever opens it knows hand edits will not last.
 func mailHead(what string) string {
 	return "# Written by loft-panel-adm: " + what + ".\n# Edits are replaced the next time mail is saved in the panel.\n"
 }
 
+// renderVDomains is the Postfix map of domains this server accepts mail for.
 func renderVDomains(s *mailStore) string {
 	var b strings.Builder
 	b.WriteString(mailHead("domains this server takes mail for"))
@@ -302,6 +320,7 @@ func renderDovecot(s *mailStore, e mailEnv) string {
 	if e.Dovecot24 {
 		return renderDovecot24(s, e)
 	}
+	// 1. Fixed part for 2.3: storage, logins, quota, delivery and auth sockets.
 	var b strings.Builder
 	b.WriteString(mailHead("mailboxes are virtual, one Maildir per address"))
 	b.WriteString(`
@@ -358,6 +377,7 @@ service auth {
 `)
 	if h := defaultCert(s, e); h != "" {
 		crt, key := mailTLS(h)
+		// 2. Default certificate, for clients that send no server name.
 		fmt.Fprintf(&b, "\nssl_cert = <%s\nssl_key = <%s\n", crt, key)
 	}
 	for _, d := range s.on() {
@@ -366,13 +386,21 @@ service auth {
 			continue
 		}
 		crt, key := mailTLS(h)
+		// 3. Per-name certificate, picked by the name the client asks for.
 		fmt.Fprintf(&b, "local_name %s {\n  ssl_cert = <%s\n  ssl_key = <%s\n}\n", h, crt, key)
 	}
 	return b.String()
 }
 
+// renderDovecot24 is renderDovecot for Dovecot 2.4 (Debian 13). The meaning
+// is the same as the 2.3 file: virtual boxes in one Maildir per address under
+// /var/vmail, logins and passwords from the panel's passwd-file, quotas,
+// Sieve on delivery, the sockets Postfix uses, and one certificate per mail
+// host. Only the syntax differs: 2.4 renamed most settings and replaced %d/%n
+// variables with %{user | domain} style filters.
 func renderDovecot24(s *mailStore, e mailEnv) string {
 	var b strings.Builder
+	// 1. Fixed part: storage, logins, quota, delivery and auth sockets.
 	b.WriteString(mailHead("mailboxes are virtual, one Maildir per address"))
 	box := mailRoot + "/%{user | domain}/%{user | username}"
 	b.WriteString(`
@@ -434,6 +462,7 @@ service auth {
 `)
 	if h := defaultCert(s, e); h != "" {
 		crt, key := mailTLS(h)
+		// 2. Default certificate, for clients that send no server name.
 		fmt.Fprintf(&b, "\nssl_server_cert_file = %s\nssl_server_key_file = %s\n", crt, key)
 	}
 	for _, d := range s.on() {
@@ -442,12 +471,14 @@ service auth {
 			continue
 		}
 		crt, key := mailTLS(h)
+		// 3. Per-name certificate, picked by the name the client asks for.
 		fmt.Fprintf(&b, "local_name %s {\n  ssl_server_cert_file = %s\n  ssl_server_key_file = %s\n}\n", h, crt, key)
 	}
 	return b.String()
 }
 
-// mailParams are the main.cf keys the panel owns.
+// mailParams are the main.cf keys the panel owns, as key/value pairs. A key
+// set to "" is cleared. Other keys in main.cf are left as the admin had them.
 func mailParams(s *mailStore, e mailEnv) [][2]string {
 	p := [][2]string{
 		// Local delivery off: boxes are virtual, and root@ must not pile up
@@ -474,14 +505,19 @@ func mailParams(s *mailStore, e mailEnv) [][2]string {
 		{"milter_default_action", "accept"},
 		{"milter_mail_macros", "i {mail_addr} {client_addr} {client_name} {auth_authen}"},
 	}
+	// The greeting name: the first domain's mail host, else the machine name.
 	if h := firstNonEmpty(s.helo(), e.Hostname); h != "" {
 		p = append(p, [2]string{"myhostname", h})
 	}
+	// Milters (mail filters Postfix calls): OpenDKIM always, rspamd for
+	// incoming SMTP only when it runs. Locally submitted mail is only signed.
 	milters := "inet:127.0.0.1:" + dkimPort
 	if e.Spam {
 		milters += ", inet:127.0.0.1:" + spamPort
 	}
 	p = append(p, [2]string{"smtpd_milters", milters}, [2]string{"non_smtpd_milters", "inet:127.0.0.1:" + dkimPort})
+	// TLS: the default certificate plus the per-name map, or neither while
+	// no mail host has a certificate yet.
 	if h := defaultCert(s, e); h != "" {
 		crt, key := mailTLS(h)
 		p = append(p, [2]string{"smtpd_tls_chain_files", key + ", " + crt}, [2]string{"tls_server_sni_maps", "hash:" + mailPostfixDir + "/sni"})
@@ -559,6 +595,8 @@ func renderDKIMConf() string {
 		"InternalHosts           " + dkimTrusted + "\n"
 }
 
+// renderKeyTable is OpenDKIM's KeyTable: for each signing domain, the DNS
+// name of its key record and the path to its private key.
 func renderKeyTable(s *mailStore) string {
 	var b strings.Builder
 	b.WriteString(mailHead("DKIM keys"))
@@ -570,6 +608,8 @@ func renderKeyTable(s *mailStore) string {
 	return b.String()
 }
 
+// renderSignTable is OpenDKIM's SigningTable: any sender of a domain is
+// signed with that domain's key.
 func renderSignTable(s *mailStore) string {
 	var b strings.Builder
 	b.WriteString(mailHead("which key signs which sender"))
@@ -581,6 +621,8 @@ func renderSignTable(s *mailStore) string {
 	return b.String()
 }
 
+// renderTrusted lists the loopback as OpenDKIM's internal hosts, whose mail
+// gets signed.
 func renderTrusted() string {
 	return mailHead("hosts whose mail is signed") + "127.0.0.1\n::1\nlocalhost\n"
 }
@@ -624,6 +666,8 @@ func renderMailSite(s *mailStore, e mailEnv) string {
 	if len(hosts) == 0 {
 		return ""
 	}
+	// 1. Port 80 for all mail hosts: ACME challenges go to the panel, which
+	// gets the certificates; everything else is sent to HTTPS.
 	var b strings.Builder
 	b.WriteString(mailHead("mail server names: certificates and webmail"))
 	fmt.Fprintf(&b, `
@@ -645,6 +689,10 @@ server {
 	if !e.Webmail || e.PHPSock == "" {
 		return b.String()
 	}
+	// 2. Webmail, one server block per host that already has a certificate.
+	// It listens only on the loopback: loft-node hands every TLS connection
+	// that is not a loft client to 127.0.0.1:8443, with a PROXY line that
+	// carries the real client address.
 	for _, h := range hosts {
 		if !e.Certs[h] {
 			continue

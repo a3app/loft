@@ -1,5 +1,9 @@
 package adm
 
+// This file writes the nginx site that puts the web panel on the node's
+// port 443. node.go calls WriteSite and reloadNginx when the domain or the
+// certificate changes; the installer uses RenderSite for the first copy.
+
 import (
 	"bytes"
 	"context"
@@ -107,7 +111,11 @@ type Site struct {
 	PanelCert, PanelKey string
 }
 
+// Separate reports whether the panel has its own name, different from the
+// node's, and so gets its own server block and certificate.
 func (s Site) Separate() bool { return s.Panel != "" && s.Panel != s.Node }
+
+// Names80 is the server_name list for the plain-HTTP block on port 80.
 func (s Site) Names80() string {
 	if s.Separate() {
 		return s.Node + " " + s.Panel
@@ -125,6 +133,7 @@ func RenderSite(s Site) string {
 	return b.String()
 }
 
+// panelTLS is the directory of the panel's own certificate.
 func (o *Ops) panelTLS() string { return firstNonEmpty(o.PanelTLS, "/etc/loft-panel/tls") }
 
 // currentSite reads the names from node.conf (advertise) and panel.env
@@ -157,6 +166,7 @@ func (o *Ops) currentSite() (Site, error) {
 	return s, nil
 }
 
+// exists reports whether p can be stat'ed.
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 // WriteSite renders the site from the current names, checks it with
@@ -177,12 +187,15 @@ func (o *Ops) WriteSite() (changed bool, err error) {
 	if err := o.writeOwned(o.nginxSite(), []byte(body), 0o644, 0, 0); err != nil {
 		return false, err
 	}
+	// Debian-style sites-enabled link, recreated so it always points here.
 	if o.NginxEnabled != "" {
 		os.Remove(o.NginxEnabled)
 		if err := os.Symlink(o.nginxSite(), o.NginxEnabled); err != nil {
 			return false, err
 		}
 	}
+	// A failed check puts the old file back (or removes the new one), so
+	// a later nginx reload never picks up a broken config.
 	if err := o.nginxTest(); err != nil {
 		if oldErr == nil {
 			o.writeOwned(o.nginxSite(), old, 0o644, 0, 0)

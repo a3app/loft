@@ -1,5 +1,10 @@
 package adm
 
+// This file updates loft itself (loft-node, loft-panel and this helper) to
+// another GitHub release. It runs inside a background job (jobs.go,
+// runjob.go), because the update restarts the panel and this helper, so
+// the request that started it cannot wait for the result.
+
 import (
 	"bufio"
 	"context"
@@ -52,7 +57,13 @@ func (r *runner) update(ctx context.Context, tag string) error {
 	return r.updateTar(ctx, tag, ver, work)
 }
 
+// updateTar updates a tarball install: it downloads and verifies the
+// release tarball, copies the current binaries aside, and runs the
+// release's install.sh. If install.sh fails or the services do not settle
+// on the new version, the saved binaries are copied back and the services
+// restarted.
 func (r *runner) updateTar(ctx context.Context, tag, ver, work string) error {
+	// 1. Download, verify and unpack the release tarball.
 	r.step("download")
 	name := fmt.Sprintf("loft-panel-%s-linux-%s.tar.gz", ver, runtime.GOARCH)
 	tgz, err := r.fetchChecked(ctx, tag, fmt.Sprintf("loft-panel-%s-SHA256SUMS.txt", ver), name, work)
@@ -68,6 +79,7 @@ func (r *runner) updateTar(ctx context.Context, tag, ver, work string) error {
 		return fmt.Errorf("%s has no install.sh", name)
 	}
 
+	// 2. Copy the running binaries aside for a rollback.
 	r.step("backup")
 	bins := r.binaries()
 	back := filepath.Join(r.o.stateDir(), "rollback")
@@ -82,6 +94,7 @@ func (r *runner) updateTar(ctx context.Context, tag, ver, work string) error {
 	}
 	r.say("backed up %s", strings.Join(bins, ", "))
 
+	// 3. Install and wait until every service runs the new version.
 	r.step("install")
 	r.say("install %s", tag)
 	ierr := r.cmd(ctx, "sh", inst, "--unattended")
@@ -91,6 +104,7 @@ func (r *runner) updateTar(ctx context.Context, tag, ver, work string) error {
 	if ierr == nil {
 		return nil
 	}
+	// 4. It failed: put the old binaries back and restart.
 	r.step("rollback")
 	r.say("roll back to %s: %v", version.Version, ierr)
 	for i, b := range bins {
@@ -107,6 +121,10 @@ func (r *runner) updateTar(ctx context.Context, tag, ver, work string) error {
 	return fmt.Errorf("release %s did not come up (%v): %s is back", ver, ierr, version.Version)
 }
 
+// updateDeb updates a Debian-package install with the release's
+// loft-node and loft-panel .deb files through apt. On failure it downloads
+// the running version's .deb files from that version's release and
+// installs them again.
 func (r *runner) updateDeb(ctx context.Context, tag, ver, work string) error {
 	r.step("download")
 	debs, err := r.fetchDebs(ctx, tag, ver, work)
@@ -141,6 +159,8 @@ func (r *runner) updateDeb(ctx context.Context, tag, ver, work string) error {
 	return fmt.Errorf("release %s did not come up (%v): %s is back", ver, ierr, cur)
 }
 
+// fetchDebs downloads and verifies the loft-node and loft-panel .deb files
+// of a release for this CPU, returning their paths in that order.
 func (r *runner) fetchDebs(ctx context.Context, tag, ver, dir string) ([]string, error) {
 	arch := runtime.GOARCH
 	node, err := r.fetchChecked(ctx, tag, fmt.Sprintf("loft-node-%s-SHA256SUMS.txt", ver), fmt.Sprintf("loft-node_%s_%s.deb", ver, arch), dir)
@@ -238,6 +258,8 @@ func (r *runner) fetchChecked(ctx context.Context, tag, sums, asset, dir string)
 	return ap, nil
 }
 
+// download fetches url into dst, refusing anything that is not HTTP 200 or
+// is larger than maxAsset. Ops.HTTP replaces the client in tests.
 func (r *runner) download(ctx context.Context, url, dst string) error {
 	r.say("download %s", url)
 	c := r.o.HTTP
@@ -292,6 +314,7 @@ func sumFor(sums, asset string) (string, error) {
 	return "", fmt.Errorf("%s is not listed in %s", asset, filepath.Base(sums))
 }
 
+// fileSum is the lowercase hex SHA-256 of a file.
 func fileSum(p string) (string, error) {
 	f, err := os.Open(p)
 	if err != nil {
@@ -305,6 +328,7 @@ func fileSum(p string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// copyFile copies src to dst with mode, replacing dst atomically.
 func copyFile(src, dst string, mode os.FileMode) error {
 	b, err := os.ReadFile(src)
 	if err != nil {

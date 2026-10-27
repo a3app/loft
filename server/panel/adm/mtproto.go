@@ -1,5 +1,11 @@
 package adm
 
+// This file manages the optional MTProto proxy package: mtg, a Telegram proxy
+// that hides its traffic as TLS to some domain ("FakeTLS"). The panel can
+// install it from the package catalog (bin.go downloads the binary); here
+// live its settings file, the config mtg reads, the share links shown in the
+// panel, and the restart after a change.
+
 import (
 	"context"
 	"crypto/rand"
@@ -38,12 +44,15 @@ var mtprotoTaken = map[int]string{
 	8443: "nginx (panel)",
 }
 
+// mtprotoFile is settings.json, the panel's copy of the proxy settings. mtg
+// itself reads mtg.toml, which is written from it.
 type mtprotoFile struct {
 	Port   int    `json:"port"`
 	Domain string `json:"domain"`
 	Secret string `json:"secret"`
 }
 
+// mtprotoInstalled reports whether the mtg binary from the catalog is on disk.
 func (o *Ops) mtprotoInstalled() bool {
 	p, ok := catalog.Find("mtproto")
 	if !ok || p.Bin == nil {
@@ -53,6 +62,10 @@ func (o *Ops) mtprotoInstalled() bool {
 	return err == nil
 }
 
+// ensureMTProto runs during package install. It keeps existing settings
+// (so a reinstall does not change the secret users already have) and
+// otherwise creates new ones on the default port, faking the node's own DNS
+// name when it has one.
 func (r *runner) ensureMTProto() error {
 	if err := os.MkdirAll(r.path(mtprotoDir), 0o755); err != nil {
 		return err
@@ -71,6 +84,7 @@ func (r *runner) ensureMTProto() error {
 	return r.o.writeMTProto(s)
 }
 
+// newMTProto builds fresh settings with a new random secret.
 func newMTProto(port int, domain string) (mtprotoFile, error) {
 	sec, err := mtprotoSecret(domain)
 	if err != nil {
@@ -88,6 +102,8 @@ func mtprotoSecret(domain string) (string, error) {
 	return "ee" + hex.EncodeToString(b) + hex.EncodeToString([]byte(strings.ToLower(domain))), nil
 }
 
+// readMTProto loads settings.json and refuses one missing port, domain or
+// secret, since mtg cannot run without them.
 func (o *Ops) readMTProto() (mtprotoFile, error) {
 	b, err := os.ReadFile(o.sys(mtprotoSetFile))
 	if err != nil {
@@ -103,6 +119,8 @@ func (o *Ops) readMTProto() (mtprotoFile, error) {
 	return s, nil
 }
 
+// writeMTProto saves settings.json and rewrites mtg.toml (secret and listen
+// address) from it. It does not restart the proxy.
 func (o *Ops) writeMTProto(s mtprotoFile) error {
 	if err := os.MkdirAll(o.sys(mtprotoDir), 0o755); err != nil {
 		return err
@@ -119,6 +137,9 @@ func (o *Ops) writeMTProto(s mtprotoFile) error {
 	return storeWrite(o.sys(mtprotoTOML), []byte(toml), 0o644)
 }
 
+// mtprotoView is what the panel shows: the settings, the installed version,
+// whether the fake domain points at this server, and tg:// and t.me links
+// that open the proxy in Telegram. Links need the node's DNS name.
 func (o *Ops) mtprotoView(s mtprotoFile) admproto.MTProto {
 	out := admproto.MTProto{Installed: true, Port: s.Port, Domain: s.Domain, Secret: s.Secret}
 	if b, err := os.ReadFile(o.sys(mtprotoVerFile)); err == nil {
@@ -186,6 +207,7 @@ func (o *Ops) MTProtoSet(ctx context.Context, req admproto.MTProtoSet) (admproto
 	if err != nil {
 		return admproto.MTProto{}, err
 	}
+	// Apply each requested change; a new domain always needs a new secret.
 	changed := req.RotateSecret
 	if req.Port != 0 && req.Port != s.Port {
 		if err := checkMTProtoPort(req.Port); err != nil {
@@ -211,6 +233,7 @@ func (o *Ops) MTProtoSet(ctx context.Context, req admproto.MTProtoSet) (admproto
 		s.Secret = sec
 		changed = true
 	}
+	// Nothing changed: skip the restart, so connected users stay connected.
 	if !changed {
 		return o.mtprotoView(s), nil
 	}
@@ -223,6 +246,8 @@ func (o *Ops) MTProtoSet(ctx context.Context, req admproto.MTProtoSet) (admproto
 	return o.mtprotoView(s), nil
 }
 
+// checkMTProtoPort accepts a valid TCP port not already used by the node,
+// nginx or the panel.
 func checkMTProtoPort(port int) error {
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("port %d is not a TCP port", port)
@@ -233,6 +258,9 @@ func checkMTProtoPort(port int) error {
 	return nil
 }
 
+// restartMTProto restarts the proxy's systemd unit so it reads the new
+// mtg.toml. Like other host commands in this package, systemctl runs on the
+// host through systemd-run, outside the helper's own sandbox.
 func (o *Ops) restartMTProto(ctx context.Context) error {
 	p, _ := catalog.Find("mtproto")
 	if o.Root != "" {

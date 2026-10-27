@@ -1,5 +1,10 @@
 package adm
 
+// This file connects an existing loft node to the panel's nginx. The node's
+// "decoy" is where it forwards TLS traffic that is not loft (a normal
+// website), so pointing it at nginx makes the panel reachable on the node's
+// own port 443.
+
 import (
 	"errors"
 	"fmt"
@@ -31,6 +36,7 @@ func WireNode(path, decoy string) (changed bool, note string, err error) {
 	if err != nil {
 		return false, "", fmt.Errorf("%s: %w", path, err)
 	}
+	// Work out which lines are missing; a foreign decoy stops the edit.
 	var add []string
 	switch {
 	case len(c.Decoy) == 0:
@@ -48,6 +54,7 @@ func WireNode(path, decoy string) (changed bool, note string, err error) {
 		body += "\n"
 	}
 	body += "# loft-panel: non-loft TLS goes to the panel's nginx with the client address\n" + strings.Join(add, "\n") + "\n"
+	// Re-parse the edited text so a bad edit never reaches disk.
 	n, err := config.ParseCommands(body)
 	if err != nil {
 		return false, "", fmt.Errorf("edited %s does not parse: %w", path, err)
@@ -55,6 +62,7 @@ func WireNode(path, decoy string) (changed bool, note string, err error) {
 	if len(n.Decoy) == 0 || n.Decoy[0] != decoy || !n.DecoyProxy {
 		return false, "", errors.New("edited node.conf does not have the decoy it should")
 	}
+	// Keep the old file as .prev, write the new one, keep the owner.
 	st, err := os.Stat(path)
 	if err != nil {
 		return false, "", err

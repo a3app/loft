@@ -1,6 +1,28 @@
 // Package adm is what loft-panel-adm does as root: read and replace the
 // node's network.conf with rollback, issue member keys, restart loft-node.
 // Paths and system calls are fields so tests run without root.
+//
+// loft-panel-adm (the "panel-adm" or "helper") is the small privileged
+// daemon beside the web panel. The panel itself runs without privileges;
+// whenever it needs to touch the system it connects to the helper's unix
+// socket and sends one admproto request (one JSON request per connection,
+// one JSON reply; see server/panel/admproto). server.go accepts those
+// requests and hands each to a method of Ops. The main areas are:
+//
+//   - network.conf (the node's member list and policy) and members.keys
+//     (each member's secret key): ops.go
+//   - the loft-node service itself, its domain, certificate and settings:
+//     node.go, nodecfg.go, wire.go
+//   - software packages, self-update and the background jobs that install
+//     them: packages.go, runjob.go, jobs.go, release.go, bin.go, update.go
+//   - upstream channels and routing priorities: channels.go, prios.go, xray.go
+//   - host networking, nginx, time zone, Linux accounts, fail2ban:
+//     net.go, nginx.go, timezone.go, sysusers.go, guard.go
+//   - the mail server and the MTProto proxy: mail.go, mailcfg.go, mtproto.go
+//   - encrypted backups and restore: backup.go, archive.go
+//
+// This file holds Ops (the shared state and system hooks) and the
+// network.conf / member key operations.
 package adm
 
 import (
@@ -100,14 +122,19 @@ func Defaults() *Ops {
 		Systemctl: runSystemctl, Settle: 3 * time.Second, NginxEnabled: "/etc/nginx/sites-enabled/loft-panel.conf"}
 }
 
+// runSystemctl is the real Systemctl hook: run systemctl and return its
+// trimmed stdout.
 func runSystemctl(ctx context.Context, args ...string) (string, error) {
 	out, err := exec.CommandContext(ctx, "systemctl", args...).Output()
 	return strings.TrimSpace(string(out)), err
 }
 
+// conf and keys are the paths of network.conf and members.keys in Dir.
 func (o *Ops) conf() string { return filepath.Join(o.Dir, "network.conf") }
 func (o *Ops) keys() string { return filepath.Join(o.Dir, "members.keys") }
 
+// sum is the hex SHA-256 of b. The panel sends back the hash it saw so an
+// apply can detect that the file changed in the meantime.
 func sum(b []byte) string {
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
@@ -144,6 +171,10 @@ func (o *Ops) current() (string, error) {
 // NetworkApply validates text with the node's own parser, replaces
 // network.conf (keeping network.conf.prev), drops keys of removed members,
 // restarts the node, and puts the old file back if the node does not stay up.
+// In order: parse the text, refuse if network.conf changed since the panel
+// loaded it (req.Expect is the hash it saw), keep the old file as .prev and
+// in memory, write the new one, prune keys, make the node load it, and on
+// failure restore both files and load them again.
 func (o *Ops) NetworkApply(ctx context.Context, req admproto.NetworkApply) (admproto.Network, error) {
 	if len(req.Text) > MaxNetworkConf {
 		return admproto.Network{}, fmt.Errorf("network.conf: larger than %d KiB", MaxNetworkConf>>10)
@@ -371,6 +402,7 @@ func (o *Ops) restartSettled(ctx context.Context) error {
 	return nil
 }
 
+// firstNonEmpty returns a, or b when a is empty.
 func firstNonEmpty(a, b string) string {
 	if a != "" {
 		return a
@@ -386,6 +418,7 @@ func (o *Ops) sys(p string) string {
 	return filepath.Join(o.Root, p)
 }
 
+// arch is the CPU architecture used to pick downloads (GOARCH in tests).
 func (o *Ops) arch() string {
 	if o.GOARCH != "" {
 		return o.GOARCH
@@ -393,8 +426,13 @@ func (o *Ops) arch() string {
 	return runtime.GOARCH
 }
 
+// storeWrite is store.WriteAtomic: it writes a temp file, then renames it over
+// the target, so a crash never leaves a half-written file behind. Every state
+// and config file of the helper goes through it.
 var storeWrite = store.WriteAtomic
 
+// write replaces path atomically and gives it the node's owner, so loft-node
+// (which runs as user loft) can still read files the root helper wrote.
 func (o *Ops) write(path string, b []byte, mode os.FileMode) error {
 	if err := store.WriteAtomic(path, b, mode); err != nil {
 		return err
@@ -402,6 +440,7 @@ func (o *Ops) write(path string, b []byte, mode os.FileMode) error {
 	return o.chown(path)
 }
 
+// chown sets path to UID/GID; with both negative it leaves the owner alone.
 func (o *Ops) chown(path string) error {
 	if o.UID < 0 && o.GID < 0 {
 		return nil

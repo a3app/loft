@@ -1,5 +1,11 @@
 package adm
 
+// This file holds the priority lists of the "External channels" tab
+// (channels.go). A priority list is an ordered set of channels: an exit
+// rule sends traffic to a list, and the node (loft-node) uses the first
+// channel in it that works, falling back to the next. It also validates
+// link checks, the probes that decide whether a channel works.
+
 import (
 	"context"
 	"errors"
@@ -27,10 +33,12 @@ const (
 	defaultPrioTitle = "Политика по умолчанию"
 )
 
+// findPrio returns the index of the list with this ID, or -1.
 func findPrio(s chanStore, id string) int {
 	return slices.IndexFunc(s.Prios, func(p admproto.Prio) bool { return p.ID == id })
 }
 
+// freePrioID is the first unused list ID of the form prio1, prio2, ...
 func freePrioID(s chanStore) string {
 	for n := 1; ; n++ {
 		id := "prio" + strconv.Itoa(n)
@@ -64,6 +72,12 @@ func dropFromPrios(s *chanStore, name string) {
 // migrate turns rules that still name a channel into priority lists built
 // from that channel's fail chain, then drops the chains. It runs on every
 // read; a store that has no such rules comes back unchanged.
+//
+// Inside, conv maps one rule target: a channel name becomes a list built by
+// following that channel's Fail chain (stopping at a loop, direct or
+// block); anything else is returned as it is. A channel converted once
+// reuses its list. Last, ensureDefaultPrio makes sure the default list
+// exists.
 func migrate(s *chanStore) {
 	made := map[string]string{} // channel → list ID
 	conv := func(v string) string {
@@ -197,6 +211,7 @@ func normalizeCheck(k *admproto.ChanCheck, pingOK bool) (*admproto.ChanCheck, er
 	return k, nil
 }
 
+// withCheckPort adds def as the port when s is a bare host.
 func withCheckPort(s, def string) string {
 	if s == "" {
 		return s
@@ -207,7 +222,12 @@ func withCheckPort(s, def string) string {
 	return net.JoinHostPort(s, def)
 }
 
+// checkPrio validates a priority list from the page and tidies it in
+// place: a unique title of up to 40 characters, a fallback (Last) of
+// direct or block, each entry either "direct" or an exit channel listed
+// once, and speed limits only for channels still in the list.
 func checkPrio(p *admproto.Prio, s chanStore) error {
+	// 1. Title and fallback.
 	p.Title = strings.Join(strings.Fields(p.Title), " ")
 	if p.Title == "" {
 		return errors.New("name the list")
@@ -229,6 +249,8 @@ func checkPrio(p *admproto.Prio, s chanStore) error {
 	if p.Use == nil {
 		p.Use = []string{}
 	}
+	// 2. On return, drop limits of channels not in the list and zero limits.
+	// The deferred cleanup runs after the loop below has filled seen.
 	seen := map[string]bool{}
 	defer func() {
 		for ch, l := range p.Limits {
@@ -240,6 +262,7 @@ func checkPrio(p *admproto.Prio, s chanStore) error {
 			p.Limits = nil
 		}
 	}()
+	// 3. Limits are in Mbit/s; the server's own direct route takes none.
 	for ch, l := range p.Limits {
 		if ch == egress.Direct {
 			delete(p.Limits, ch)
@@ -249,6 +272,7 @@ func checkPrio(p *admproto.Prio, s chanStore) error {
 			return fmt.Errorf("speed limit of %s: 0 to 100000 Mbit/s", ch)
 		}
 	}
+	// 4. Entries: direct, or an existing exit channel, each once.
 	for _, u := range p.Use {
 		if u == egress.Direct {
 			if seen[u] {

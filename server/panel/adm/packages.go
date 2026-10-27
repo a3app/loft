@@ -1,5 +1,11 @@
 package adm
 
+// This file reports the state of the optional software the panel can
+// install (the package catalog in server/panel/catalog: mail, proxies,
+// WireGuard, fail2ban and so on) and switches their services on or off.
+// Installing and removing happen in a background job (runjob.go); this file
+// only reads dpkg, apt and systemd.
+
 import (
 	"bufio"
 	"context"
@@ -15,11 +21,14 @@ import (
 	"github.com/a3app/loft/server/panel/catalog"
 )
 
+// runExec runs a command directly (inside the helper's sandbox) and
+// returns its stdout.
 func runExec(ctx context.Context, name string, args ...string) (string, error) {
 	out, err := exec.CommandContext(ctx, name, args...).Output()
 	return string(out), err
 }
 
+// exec runs a command through Ops.Exec when set (tests), else runExec.
 func (o *Ops) exec(ctx context.Context, name string, args ...string) (string, error) {
 	if o.Exec != nil {
 		return o.Exec(ctx, name, args...)
@@ -27,6 +36,7 @@ func (o *Ops) exec(ctx context.Context, name string, args ...string) (string, er
 	return runExec(ctx, name, args...)
 }
 
+// dpkgRow is what dpkg knows about one Debian package.
 type dpkgRow struct {
 	ok      bool // ii: installed and configured
 	version string
@@ -103,7 +113,11 @@ func (o *Ops) unitStates(ctx context.Context, units []string) (active map[string
 }
 
 // Packages is every catalog entry as it stands, marking those a running job
-// is changing.
+// is changing. How "installed" and the version are found depends on how the
+// package is delivered: part of loft-node, a loft release binary, a
+// single prebuilt binary, or apt packages (all of which must be installed).
+// For apt packages an upgrade candidate is offered only when apt has a newer
+// version; DiskMB is the installed size, or the expected size when absent.
 func (o *Ops) Packages(ctx context.Context) ([]admproto.Package, error) {
 	all := catalog.All()
 	var names, units []string
@@ -113,6 +127,7 @@ func (o *Ops) Packages(ctx context.Context) ([]admproto.Package, error) {
 			units = append(units, p.Unit)
 		}
 	}
+	// 1. Ask dpkg, apt, systemd and the job state in a few batched calls.
 	dp := o.dpkgState(ctx, names)
 	var have []string
 	for n, r := range dp {
@@ -136,6 +151,7 @@ func (o *Ops) Packages(ctx context.Context) ([]admproto.Package, error) {
 		}
 	}
 
+	// 2. Build each entry according to its delivery method.
 	out := make([]admproto.Package, 0, len(all))
 	for _, p := range all {
 		s := admproto.Package{Key: p.Key, Group: p.Group, Base: p.Base(), Service: p.Unit != "", Ports: p.Ports, Busy: busy[p.Key]}
@@ -231,6 +247,8 @@ func (o *Ops) PackageUnit(ctx context.Context, req admproto.PackageUnit) (admpro
 	return admproto.Package{}, errors.New("package vanished")
 }
 
+// packageInstalled reports whether p is on the system, by the same rules
+// as Packages (for apt, only the first package is checked).
 func (o *Ops) packageInstalled(ctx context.Context, p catalog.Package) bool {
 	if p.Method == catalog.MethodBin && p.Bin != nil {
 		_, err := os.Stat(o.sys(p.Bin.Path))
@@ -246,6 +264,8 @@ func (o *Ops) packageInstalled(ctx context.Context, p catalog.Package) bool {
 	return o.dpkgState(ctx, p.Apt)[p.Apt[0]].ok
 }
 
+// binVersion is the version a single-binary package was installed at, read
+// from the "version" file installBin writes into its first data directory.
 func (o *Ops) binVersion(p catalog.Package) string {
 	if len(p.DataDirs) == 0 {
 		return ""

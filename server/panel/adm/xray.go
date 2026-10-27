@@ -1,5 +1,9 @@
 package adm
 
+// This file turns Xray share links (vless://, trojan://, ss://) into the
+// config of the loft-panel-xray unit. Xray-core is a proxy client; each
+// Xray channel of channels.go becomes a local SOCKS port the node dials.
+
 import (
 	"context"
 	"encoding/base64"
@@ -54,6 +58,7 @@ func ParseXrayLink(link string) (XrayLink, error) {
 	return XrayLink{}, errors.New("link: vless://, trojan:// or ss://")
 }
 
+// linkPort checks the server host and port taken from a link.
 func linkPort(h, p string) (string, int, error) {
 	n, err := strconv.Atoi(p)
 	if err != nil || n < 1 || n > 65535 || h == "" || strings.ContainsAny(h, " /\"") {
@@ -62,6 +67,11 @@ func linkPort(h, p string) (string, int, error) {
 	return h, n, nil
 }
 
+// parseVlessTrojan reads a vless:// or trojan:// link of the form
+// SCHEME://ID@host:port?params#name into an Xray outbound. The user part is
+// the VLESS user ID or the Trojan password. Query parameters choose the
+// security layer (none, tls, reality) and the transport (tcp, ws, grpc,
+// httpupgrade, xhttp); unknown values are refused rather than guessed.
 func parseVlessTrojan(link, proto string) (XrayLink, error) {
 	u, err := url.Parse(link)
 	if err != nil || u.User == nil {
@@ -78,6 +88,7 @@ func parseVlessTrojan(link, proto string) (XrayLink, error) {
 	if id == "" {
 		return XrayLink{}, errors.New("link: no user id or password")
 	}
+	// 1. Protocol settings: who to connect to and as whom.
 	var settings map[string]any
 	if proto == "vless" {
 		user := map[string]any{"id": id, "encryption": firstNonEmpty(q.Get("encryption"), "none")}
@@ -91,6 +102,8 @@ func parseVlessTrojan(link, proto string) (XrayLink, error) {
 			l.Security = "tls" // trojan is TLS unless told otherwise
 		}
 	}
+	// 2. Security layer. sni (or the older "peer") names the TLS server;
+	// REALITY needs the server's public key (pbk).
 	stream := map[string]any{"network": l.Transport, "security": l.Security}
 	sni := firstNonEmpty(q.Get("sni"), q.Get("peer"))
 	fp := q.Get("fp")
@@ -117,6 +130,7 @@ func parseVlessTrojan(link, proto string) (XrayLink, error) {
 	default:
 		return XrayLink{}, fmt.Errorf("link: security %q (none, tls, reality)", l.Security)
 	}
+	// 3. Transport and its options. splithttp is the old name of xhttp.
 	switch l.Transport {
 	case "tcp", "raw":
 		if q.Get("headerType") == "http" {
@@ -142,6 +156,8 @@ func parseVlessTrojan(link, proto string) (XrayLink, error) {
 	return l, nil
 }
 
+// b64 decodes base64 in either the URL-safe or the standard alphabet,
+// with or without padding, as share links use both.
 func b64(s string) ([]byte, error) {
 	s = strings.TrimRight(s, "=")
 	for _, enc := range []*base64.Encoding{base64.RawURLEncoding, base64.RawStdEncoding} {
@@ -152,6 +168,10 @@ func b64(s string) ([]byte, error) {
 	return nil, errors.New("bad base64")
 }
 
+// parseSS reads a Shadowsocks ss:// link in either common form:
+// ss://BASE64(method:password)@host:port#name (or with the user part in
+// plain text) or ss://BASE64(method:password@host:port)#name. Plugin
+// options after "?" are dropped.
 func parseSS(link string) (XrayLink, error) {
 	rest := strings.TrimPrefix(link[2:], "://")
 	name := ""
@@ -197,6 +217,10 @@ func parseSS(link string) (XrayLink, error) {
 }
 
 // XrayConfig is the whole config for the xr channels in s; nil when there are none.
+// Each Xray channel that is on gets an outbound from its link, a local
+// SOCKS inbound on its port, and a routing rule tying the two. With Via the
+// outbound leaves through another channel: bound to a kernel channel's
+// interface, or dialed through an extra proxy outbound (one per proxy).
 func XrayConfig(s chanStore) ([]byte, error) {
 	var in, out, rules []any
 	extra := map[string]bool{}
@@ -247,6 +271,8 @@ func XrayConfig(s chanStore) ([]byte, error) {
 	}, "", "  ")
 }
 
+// proxyOutbound is an Xray outbound for a proxy channel (SOCKS5, HTTP or
+// HTTPS), used as the dialer of an Xray channel that connects through it.
 func proxyOutbound(v admproto.Channel) map[string]any {
 	host, p, _ := net.SplitHostPort(v.PX.Addr)
 	port, _ := strconv.Atoi(p)

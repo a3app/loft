@@ -1,5 +1,10 @@
 package adm
 
+// This file backs the panel's Network screen: it lists the server's
+// addresses, routes and listening ports, and adds or removes extra IP
+// addresses and routes with a safety timer. Channel interfaces from
+// channels.go are labelled in the listing.
+
 import (
 	"bytes"
 	"context"
@@ -49,11 +54,15 @@ func (o *Ops) host(ctx context.Context, name string, args ...string) (string, er
 	return out.String(), nil
 }
 
+// netFile is net.json, the addresses and routes the panel has added.
 func (o *Ops) netFile() string {
 	return filepath.Join(firstNonEmpty(o.PanelEtc, "/etc/loft-panel"), "net.json")
 }
+
+// pendingFile holds the one change that waits for confirmation.
 func (o *Ops) pendingFile() string { return filepath.Join(o.stateDir(), "net-pending.json") }
 
+// readNet loads net.json; a missing file means nothing was added yet.
 func (o *Ops) readNet() (admproto.Net, error) {
 	var n admproto.Net
 	b, err := os.ReadFile(o.netFile())
@@ -66,6 +75,7 @@ func (o *Ops) readNet() (admproto.Net, error) {
 	return n, json.Unmarshal(b, &n)
 }
 
+// writeNet saves net.json atomically (root only, 0600).
 func (o *Ops) writeNet(n admproto.Net) error {
 	b, _ := json.MarshalIndent(n, "", "  ")
 	if err := os.MkdirAll(filepath.Dir(o.netFile()), 0o755); err != nil {
@@ -74,6 +84,7 @@ func (o *Ops) writeNet(n admproto.Net) error {
 	return storeWrite(o.netFile(), append(b, '\n'), 0o600)
 }
 
+// ipAddr is one interface from "ip -j addr show" (JSON output).
 type ipAddr struct {
 	IfName   string `json:"ifname"`
 	AddrInfo []struct {
@@ -87,6 +98,7 @@ type ipAddr struct {
 	LinkType  string `json:"link_type"`
 }
 
+// ipRoute is one route from "ip -j route show".
 type ipRoute struct {
 	Dst      string `json:"dst"`
 	Gateway  string `json:"gateway"`
@@ -123,7 +135,12 @@ func (o *Ops) netProbe(ctx context.Context) (addr, r4, r6, ss string, err error)
 	return strings.TrimSpace(p[0]), strings.TrimSpace(p[1]), strings.TrimSpace(p[2]), strings.TrimSpace(p[3]), nil
 }
 
-// NetState is the server's addresses, routes and listeners.
+// NetState is the server's addresses, routes and listeners. Each global
+// address is tagged with its interface's default gateway, whether the panel
+// added it, whether it is the primary one (first address of the default
+// route's interface, per family), which services listen on it, and which
+// channel owns the interface. Routes are tagged system, panel or channel.
+// A pending change, if any, is included.
 func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 	var st admproto.NetState
 	out, r4, r6, ssOut, err := o.netProbe(ctx)
@@ -145,6 +162,7 @@ func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 		}
 		routes = append(routes, l...)
 	}
+	// 1. Default gateways per interface and family, and the default device.
 	mine, _ := o.readNet()
 	gw := map[string]string{} // dev|family → default gateway
 	defDev := ""
@@ -162,6 +180,7 @@ func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 			}
 		}
 	}
+	// 2. Listeners and channel interfaces, to annotate each address.
 	listen := parseListeners(ssOut)
 	chDev := map[string]string{} // interface → channel
 	if cs, err := o.readChans(); err == nil {
@@ -171,6 +190,7 @@ func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 			}
 		}
 	}
+	// 3. Addresses: global scope only, loopback skipped.
 	primary := map[string]bool{}
 	for _, l := range links {
 		if l.IfName == "lo" {
@@ -192,6 +212,7 @@ func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 			st.Addrs = append(st.Addrs, ad)
 		}
 	}
+	// 4. Routes with where they came from.
 	for _, r := range routes {
 		if r.Scope == "link" && r.Protocol == "kernel" {
 			continue // the subnet of an address: shown with the address
@@ -211,10 +232,16 @@ func (o *Ops) NetState(ctx context.Context) (admproto.NetState, error) {
 	return st, nil
 }
 
+// listenSet is the parsed output of ss: each entry is a listening address,
+// its family ("inet", "inet6" or "*" for any), and a label like
+// "nginx :443/tcp".
 type listenSet []struct{ addr, fam, what string }
 
+// ssUsers pulls the first process name out of ss's users:(("name",...)) field.
 var ssUsers = regexp.MustCompile(`\(\("([^"]+)"`)
 
+// parseListeners reads "ss -Htlnup" output (TCP and UDP listeners with
+// process names) into a listenSet, dropping duplicates.
 func parseListeners(out string) listenSet {
 	var ls listenSet
 	seen := map[string]bool{}
@@ -255,6 +282,9 @@ func parseListeners(out string) listenSet {
 	return ls
 }
 
+// forAddr lists the services reachable on ip: those bound to it exactly and
+// those bound to the wildcard address of its family. Loopback-only
+// listeners are left out. The result is sorted and without repeats.
 func (ls listenSet) forAddr(ip, fam string) []string {
 	var out []string
 	for _, l := range ls {
@@ -269,6 +299,9 @@ func (ls listenSet) forAddr(ip, fam string) []string {
 	return slices.Compact(out)
 }
 
+// validDev reports whether name looks like a Linux interface name (at most
+// 15 characters, no spaces or shell-special characters), since it is passed
+// to ip as an argument.
 func validDev(name string) bool {
 	if name == "" || len(name) > 15 {
 		return false
@@ -281,7 +314,11 @@ func validDev(name string) bool {
 	return true
 }
 
-// NetChange applies one change live and holds it for NetHold.
+// NetChange applies one change live and holds it for NetHold. Only one
+// change may wait at a time. The panel may only remove addresses and routes
+// it added itself, and never the default route. A systemd timer runs
+// "loft-panel-adm net-revert" when the hold ends, so the change is undone
+// even if the panel or this helper has stopped; NetConfirm cancels it.
 func (o *Ops) NetChange(ctx context.Context, req admproto.NetChange) (admproto.NetPending, error) {
 	o.netMu.Lock()
 	defer o.netMu.Unlock()
@@ -296,6 +333,8 @@ func (o *Ops) NetChange(ctx context.Context, req admproto.NetChange) (admproto.N
 	if err != nil {
 		return admproto.NetPending{}, err
 	}
+	// 1. Validate the request and work out the new net.json and the ip
+	// commands that get there.
 	next := cur
 	next.Addrs = slices.Clone(cur.Addrs)
 	next.Routes = slices.Clone(cur.Routes)
@@ -358,6 +397,7 @@ func (o *Ops) NetChange(ctx context.Context, req admproto.NetChange) (admproto.N
 	default:
 		return admproto.NetPending{}, fmt.Errorf("unknown change %q", req.Op)
 	}
+	// 2. Run the commands on the host, then record the change as pending.
 	for _, c := range cmds {
 		if _, err := o.host(ctx, c[0], c[1:]...); err != nil {
 			return admproto.NetPending{}, err
@@ -373,7 +413,8 @@ func (o *Ops) NetChange(ctx context.Context, req admproto.NetChange) (admproto.N
 	if err := o.savePending(p); err != nil {
 		return admproto.NetPending{}, err
 	}
-	// The undo runs even if the panel and the helper are gone by then.
+	// 3. Schedule the undo. It runs even if the panel and the helper are
+	// gone by then.
 	if o.Exec == nil {
 		exe := firstNonEmpty(o.Exe, mustExe())
 		o.host(ctx, "systemctl", "stop", "loft-panel-net-revert.timer")
@@ -386,8 +427,10 @@ func (o *Ops) NetChange(ctx context.Context, req admproto.NetChange) (admproto.N
 	return p, nil
 }
 
+// mustExe is the path of the running binary, used for the revert timer.
 func mustExe() string { e, _ := os.Executable(); return e }
 
+// readPending loads the waiting change; an error means none waits.
 func (o *Ops) readPending() (admproto.NetPending, error) {
 	var p admproto.NetPending
 	b, err := os.ReadFile(o.pendingFile())
@@ -397,6 +440,7 @@ func (o *Ops) readPending() (admproto.NetPending, error) {
 	return p, json.Unmarshal(b, &p)
 }
 
+// savePending records the waiting change in the state directory.
 func (o *Ops) savePending(p admproto.NetPending) error {
 	if err := os.MkdirAll(o.stateDir(), 0o700); err != nil {
 		return err
@@ -430,6 +474,8 @@ func (o *Ops) NetRevert(ctx context.Context, id string) error {
 	return o.revertLocked(ctx, p)
 }
 
+// revertLocked puts the host and net.json back to the state before p and
+// cancels the timer. The caller holds netMu.
 func (o *Ops) revertLocked(ctx context.Context, p admproto.NetPending) error {
 	o.netApply(ctx, p.Next, p.Prev)
 	if err := o.writeNet(p.Prev); err != nil {
@@ -465,6 +511,8 @@ func (o *Ops) netApply(ctx context.Context, have, want admproto.Net) {
 	}
 }
 
+// routeArgs builds the ip arguments to add or delete a panel route; the
+// panel's proto tag lets it tell its own routes from the system's.
 func routeArgs(verb string, r admproto.NetRouteSpec) []string {
 	a := []string{"route", verb, r.Dst}
 	if r.Via != "" {

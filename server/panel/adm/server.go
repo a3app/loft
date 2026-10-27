@@ -1,5 +1,12 @@
 package adm
 
+// This file is the front door of loft-panel-adm (the root helper): it accepts
+// connections on the admproto unix socket, checks who is calling, decodes the
+// one JSON request each connection carries, runs the matching Ops method and
+// writes back one JSON reply. admproto (server/panel/admproto) defines the op
+// names and message shapes; the real work lives in the other files of this
+// package (ops.go, node.go, channels.go, mail.go, backup.go and so on).
+
 import (
 	"bufio"
 	"bytes"
@@ -62,6 +69,10 @@ func opDeadline(op string) time.Duration {
 	return 15 * time.Second
 }
 
+// serveConn handles one connection: read one request, check the peer, run
+// the op under its deadline and write one reply. Errors are sent to the
+// panel as text and also logged; successful changes are logged too, so the
+// system log keeps an audit trail of who changed what.
 func (s *Server) serveConn(c net.Conn) {
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(10 * time.Second))
@@ -99,6 +110,8 @@ func (s *Server) serveConn(c net.Conn) {
 	json.NewEncoder(c).Encode(rep)
 }
 
+// mutating reports whether op changes the system. Only those ops are logged
+// on success; read-only ops would flood the log because the panel polls them.
 func mutating(op string) bool {
 	switch op {
 	case admproto.OpNetworkApply, admproto.OpMemberKey, admproto.OpNodeRestart, admproto.OpDomainSet, admproto.OpCertInstall,
@@ -115,9 +128,17 @@ func mutating(op string) bool {
 	return false
 }
 
+// do dispatches one request to the Ops method for its op and returns that
+// method's result, which serveConn marshals into the reply. Ops that take a
+// body decode it with strict, so an unknown field is an error rather than
+// being silently ignored. Unknown ops are refused. The cases are grouped by
+// area in the same order as the op list in admproto; a trailing comment on
+// the first case of each group names the area. Channels are upstream links
+// (WireGuard, OpenVPN, ZeroTier, SSTP, proxies, Xray) and the rules that
+// pick one.
 func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 	switch req.Op {
-	case admproto.OpPing:
+	case admproto.OpPing: // health, network.conf (the member list), member keys
 		return admproto.Ping{Version: version.Version}, nil
 	case admproto.OpNetworkGet:
 		return s.Ops.NetworkGet()
@@ -157,7 +178,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.CertInstall(ctx, b)
-	case admproto.OpPackages:
+	case admproto.OpPackages: // packages, MTProto proxy, self-update, jobs
 		return s.Ops.Packages(ctx)
 	case admproto.OpPackagesApply:
 		var b catalog.Plan
@@ -187,7 +208,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 		return s.Ops.StartUpdate(ctx, req.By, b)
 	case admproto.OpJobGet:
 		return s.Ops.JobGet(ctx, true)
-	case admproto.OpNetState:
+	case admproto.OpNetState: // host network; changes undo themselves unless confirmed
 		return s.Ops.NetState(ctx)
 	case admproto.OpNetChange:
 		var b admproto.NetChange
@@ -204,7 +225,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, s.Ops.NetConfirm(ctx, b.ID)
 		}
 		return nil, s.Ops.NetRevert(ctx, b.ID)
-	case admproto.OpPresence:
+	case admproto.OpPresence: // live node-status.json from loft-node; missing = nobody yet
 		b, err := os.ReadFile(filepath.Join(s.Ops.Dir, "node-status.json"))
 		if err != nil {
 			return json.RawMessage(`{"members":[],"relays":[]}`), nil
@@ -246,7 +267,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.RelayGet(b)
-	case admproto.OpChannels:
+	case admproto.OpChannels: // upstream links the node sends traffic out through
 		return s.Ops.Channels(ctx)
 	case admproto.OpChannelSave:
 		var b admproto.Channel
@@ -290,7 +311,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.ChannelDirectCheck(ctx, b)
-	case admproto.OpMail:
+	case admproto.OpMail: // mail server: domains, mailboxes, aliases, certificates
 		return s.Ops.Mail(ctx)
 	case admproto.OpMailDomain:
 		var b admproto.MailDomainSave
@@ -320,7 +341,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 		return s.Ops.MailApply(ctx)
 	case admproto.OpMailStats:
 		return s.Ops.MailStats(ctx)
-	case admproto.OpSysUsers:
+	case admproto.OpSysUsers: // Linux accounts on the host
 		return s.Ops.SysUsers(ctx)
 	case admproto.OpSysUserSave:
 		var b admproto.SysUserSave
@@ -334,7 +355,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.SysUserDelete(ctx, b)
-	case admproto.OpGuard:
+	case admproto.OpGuard: // fail2ban settings and bans against password guessing
 		return s.Ops.Guard(ctx)
 	case admproto.OpGuardSet:
 		var b admproto.GuardConf
@@ -351,7 +372,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return s.Ops.GuardBan(ctx, b)
 		}
 		return s.Ops.GuardUnban(ctx, b)
-	case admproto.OpBackupKey:
+	case admproto.OpBackupKey: // encrypted backups
 		var b admproto.BackupKey
 		if err := strict(req.Body, &b); err != nil {
 			return nil, err
@@ -374,7 +395,7 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.BackupDir(ctx, b)
-	case admproto.OpTimezone:
+	case admproto.OpTimezone: // system time zone
 		return s.Ops.Timezone(ctx)
 	case admproto.OpTimezoneSet:
 		var b admproto.Timezone
@@ -400,6 +421,7 @@ func strict(raw json.RawMessage, v any) error {
 	return nil
 }
 
+// logf writes to the server log when one is set (tests leave it nil).
 func (s *Server) logf(f string, a ...any) {
 	if s.Log != nil {
 		s.Log.Printf(f, a...)

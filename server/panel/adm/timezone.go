@@ -1,5 +1,9 @@
 package adm
 
+// This file reads and sets the server's time zone through timedatectl, for
+// the panel's system settings page (admproto ops system.tz and
+// system.tz.set).
+
 import (
 	"context"
 	"fmt"
