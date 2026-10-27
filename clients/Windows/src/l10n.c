@@ -1,3 +1,7 @@
+/* Windows client, portable core (also built into the host tests): UI strings
+   in ten languages. Keeps the Windows-specific pack and the shared macOS pack
+   per language and looks a key up through both, falling back to English.
+   win/app.c loads the pack files; json.c parses them. */
 #include "l10n.h"
 
 #include "json.h"

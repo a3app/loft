@@ -1,3 +1,7 @@
+/* Windows client GUI: the layout and command handling of every window kind
+   (main, flyout, menu, settings, edit, routes, journal, about, update, first
+   run). Layouts are drawn with draw.c inside chrome.c windows; commands call
+   into session.c and store.c. */
 #include "common.h"
 
 static const char *kinds[9] = {"get", "ws", "h2", "quic", "h3", "l3", "sstp", "vless", "trojan"};

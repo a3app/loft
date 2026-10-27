@@ -1,3 +1,9 @@
+/*
+ * Android client, phone build: the per-app routing screen (Settings, Route,
+ * Apps). Lets the user pick which installed apps skip the tunnel or are the
+ * only ones using it. The choice is stored in Prefs and applied by
+ * LoftVpnService when it builds the TUN.
+ */
 package app.loft.android;
 
 import android.content.pm.ApplicationInfo;

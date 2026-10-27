@@ -1,3 +1,7 @@
+/* Windows client GUI: the global App state g, DPI scaling, paths next to the
+   exe, loading the language packs, the journal (in-app log, also written to
+   journal.log), shared fonts and brushes, and app start-up and shutdown.
+   main.c calls app_boot; the rest of src/win reads g. */
 #include "common.h"
 
 App g;

@@ -1,3 +1,11 @@
+/*
+ * Android client, shared by the phone and TV builds: the data model and storage
+ * for split routing (zones, services and exclusions that decide which address
+ * ranges use the tunnel). Saved as JSON in Prefs, edited on ListsActivity,
+ * turned into TUN routes by RoutePlan, and refreshed from the public
+ * loft-routes lists (Keenetic .bat files, parsed by Bat). Same model as the
+ * macOS app's lists.
+ */
 package app.loft.android;
 
 import android.content.Context;

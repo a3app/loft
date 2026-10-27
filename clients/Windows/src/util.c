@@ -1,3 +1,6 @@
+/* Windows client, portable core (also built into the host tests): small string
+   helpers (bounded copy, trim, compare, quoting, version compare, slugs,
+   secure wipe) used by the other src/*.c files and the Win32 code in src/win. */
 #include "util.h"
 
 #include <ctype.h>

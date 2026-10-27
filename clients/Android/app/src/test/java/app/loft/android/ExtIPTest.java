@@ -1,3 +1,7 @@
+/*
+ * Android client unit tests (JVM, no device) for ExtIP.parse: reading the
+ * public IP from plain-text and JSON echo-service replies, and rejecting junk.
+ */
 package app.loft.android;
 
 import org.junit.Test;

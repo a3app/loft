@@ -1,3 +1,9 @@
+/*
+ * Android client unit tests (JVM, no device) for YamlBuilder, which writes the
+ * client YAML passed to the Go engine. Covers front choices (GET, WebSocket,
+ * L3, ...), edge round-trips, merging extra fronts, reading profiles back from
+ * YAML, and VLESS links.
+ */
 package app.loft.android;
 
 import org.junit.Test;

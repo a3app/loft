@@ -1,3 +1,9 @@
+/*
+ * Android client unit tests (JVM, no device) for RoutePlan, which turns split
+ * lists and LAN bypass into TUN routes. Covers the API 33+ excludeRoute path
+ * and the older subtract-from-default path, plus block, ignore and the plan
+ * key that tells LoftVpnService when to rebuild the TUN.
+ */
 package app.loft.android;
 
 import org.junit.Test;

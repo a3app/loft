@@ -1,3 +1,7 @@
+/* Windows client, portable core (also built into the host tests): a minimal
+   JSON reader for the language packs. It only reads objects of string values,
+   and can find one pack inside a packs["code"] = { ... } script file. Used
+   by l10n.c. */
 #include "json.h"
 
 #include "util.h"

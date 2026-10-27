@@ -1,3 +1,8 @@
+/* Windows client GUI entry point (wWinMain). Applies a pending self-update,
+   keeps a single running instance (a second launch forwards its command line),
+   creates the hidden message window, boots the app and runs the message loop.
+   The message window routes tray, status, update and timer messages to the
+   other src/win files. */
 #include "common.h"
 
 #include <wchar.h>

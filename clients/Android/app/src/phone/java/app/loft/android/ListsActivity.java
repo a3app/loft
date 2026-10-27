@@ -1,3 +1,10 @@
+/*
+ * Android client, phone build: the editor for split-routing lists and route
+ * profiles. A single activity that swaps pages (lists, exclusions, zones,
+ * services, repository catalog, import, export, profiles). Edits SplitStore
+ * and ProfileStore and saves them through Prefs; LoftVpnService picks up
+ * the change through RoutePlan.
+ */
 package app.loft.android;
 
 import android.app.AlertDialog;

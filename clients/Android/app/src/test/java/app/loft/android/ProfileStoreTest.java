@@ -1,3 +1,8 @@
+/*
+ * Android client unit tests (JVM, no device) for ProfileStore, the catalog of
+ * route profiles: copying a profile marks its services as the user's own,
+ * and the operator profile (sent by the node) can be the active one.
+ */
 package app.loft.android;
 
 import org.junit.Test;

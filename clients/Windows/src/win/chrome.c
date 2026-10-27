@@ -1,3 +1,7 @@
+/* Windows client GUI: the borderless custom windows (main window, flyout,
+   popups, settings and so on). Registers the window class, places windows,
+   handles painting, hit tests and the custom close button, and hands layout
+   and clicks to ui.c. Drawing primitives live in draw.c. */
 #include "common.h"
 
 static HWND hot_hw;

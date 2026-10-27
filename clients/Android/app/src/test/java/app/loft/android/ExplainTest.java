@@ -1,3 +1,8 @@
+/*
+ * Android client unit tests (JVM, no device) for Explain, which turns raw
+ * engine and node errors into the short lines shown on Home and in the
+ * notification. Checks known cases and that unknown raw dumps never leak.
+ */
 package app.loft.android;
 
 import org.junit.Test;

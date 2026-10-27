@@ -1,3 +1,9 @@
+/*
+ * Android client, TV build: a tiny one-purpose HTTP server on the TV's LAN
+ * address for phone-to-TV pairing. TvActivity shows its URL as a QR with a
+ * short code; the phone (ScanActivity) POSTs its profiles there. URL shape
+ * and the code check live in PairUrl, shared with the phone build.
+ */
 package app.loft.android;
 
 import android.os.Handler;

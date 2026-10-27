@@ -1,3 +1,7 @@
+/* Windows client GUI: stores each profile's secret key separately from the
+   profile file, encrypted with Windows DPAPI (CryptProtectData) under
+   %APPDATA%\loft\keys, so only the same Windows user can read it.
+   Used by store.c. */
 #include "common.h"
 
 static void key_path(const char *id, wchar_t *d, int n) {

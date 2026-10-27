@@ -1,3 +1,11 @@
+/*
+ * Android client, shared by the phone and TV builds: the Android VpnService
+ * that runs the whole VPN session in-process. It drives the Go engine, owns
+ * the TUN interface, keeps engine sockets off the VPN, follows network
+ * switches, and publishes state into Live for the screens and notification.
+ * Routes come from RoutePlan (which reads SplitStore and Prefs); the profile
+ * YAML comes from YamlBuilder.
+ */
 package app.loft.android;
 
 import android.app.Notification;

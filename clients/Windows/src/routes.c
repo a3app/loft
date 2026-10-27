@@ -1,3 +1,7 @@
+/* Windows client, portable core (also built into the host tests): split-routing
+   lists stored in routes.txt (zones, then services), the same file format the
+   macOS client writes. Loads, saves, adds rows and imports Keenetic .bat lists.
+   win/store.c reads and writes the file; win/session.c applies the routes. */
 #include "routes.h"
 
 #include "util.h"

@@ -1,3 +1,9 @@
+/*
+ * Android client, "github" build flavor only: small HTTP helpers for GitHub
+ * Releases. Picks the newest stable release with the right APK (phone or TV)
+ * and its SHA256SUMS file, downloads small text bodies, and streams the APK
+ * while hashing it. Used by Channel.java, which drives the update flow.
+ */
 package app.loft.android;
 
 import org.json.JSONArray;

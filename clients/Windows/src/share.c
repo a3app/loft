@@ -1,3 +1,7 @@
+/* Windows client, portable core (also built into the host tests): turns share
+   links (loft://, sstp://, vless://, trojan://, or one link per line) into
+   profiles. Text that is not a link falls through to the YAML parser in
+   profile.c. */
 #include "share.h"
 
 #include "util.h"

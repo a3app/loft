@@ -1,3 +1,10 @@
+/*
+ * Android client, shared by the phone and TV builds: finds the public IP
+ * address the internet sees through the VPN by asking an echo ("what is my
+ * IP") service over the tunnel network. Called from the Home screens
+ * (MainActivity, TvActivity); the reply parser mirrors the macOS client's
+ * ExtIP and is covered by ExtIPTest.
+ */
 package app.loft.android;
 
 import android.content.Context;

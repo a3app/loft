@@ -1,3 +1,7 @@
+/* Windows client GUI: drawing primitives (text, fills, lines, buttons, toggles,
+   rows). The same layout code in ui.c runs in paint mode to draw and in hit
+   mode to find which control is under the mouse, so the two can never
+   disagree. chrome.c switches the mode. */
 #include "common.h"
 
 static HDC pdc;

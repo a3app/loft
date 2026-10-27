@@ -1,3 +1,8 @@
+/*
+ * Android client unit tests (JVM, no device) for Ver (release version ordering,
+ * including pre-releases) and Sums (reading one file's hash from a SHA256SUMS
+ * list). Both are used by the GitHub self-updater in Channel.java.
+ */
 package app.loft.android;
 
 import org.junit.Test;

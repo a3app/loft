@@ -1,3 +1,11 @@
+/*
+ * Android client, "github" build flavor only: the self-updater for APKs published
+ * on GitHub Releases. It checks for a newer release, downloads and verifies the
+ * APK, and installs it through PackageInstaller. The "store" flavor has its own
+ * Channel.java with the same API that does nothing, so shared code compiles in
+ * both. Gh.java does the HTTP and release picking; GhInstall receives the
+ * installer result.
+ */
 package app.loft.android;
 
 import android.app.Activity;

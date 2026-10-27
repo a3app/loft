@@ -1,3 +1,7 @@
+/* Windows client GUI: the notification-area (tray) icon and its popups.
+   Loads the icon PNGs through GDI+ or draws a fallback, follows the light
+   or dark taskbar, sets the tooltip, and opens the flyout, menu, connection
+   list and language list. */
 #include "common.h"
 
 typedef int(WINAPI *GpStartup)(ULONG_PTR *, const void *, void *);

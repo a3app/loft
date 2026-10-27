@@ -1,3 +1,8 @@
+/* Windows client, portable core (also built into the host tests): connection
+   profiles and app settings. Parses profile YAML, writes canonical YAML, builds
+   the loft-front command line for a profile, loads and saves prefs, and parses
+   the STATUS lines loft-front prints. share.c handles share links; win/store.c
+   and win/session.c use the results. */
 #include "profile.h"
 
 #include "util.h"

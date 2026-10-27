@@ -1,3 +1,8 @@
+/* Windows client GUI: connection sessions. Each session runs loft-front.exe
+   (the protocol engine) as a child process, reads its STATUS lines, and asks
+   loft-svc (the LocalSystem service with the Wintun adapter, see svc/) through
+   svcclient.c to open the TUN and set addresses and routes. Also handles
+   automatic retry and disconnect. */
 #include "common.h"
 
 static void host_of(const char *url, char *host, int n) {

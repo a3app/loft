@@ -1,3 +1,8 @@
+/*
+ * Android client unit tests (JVM, no device) for Cidr: IPv4/IPv6 prefix
+ * parsing and canonical form, rejecting hostnames, and the prefix
+ * subtraction that RoutePlan uses for LAN bypass on older Android versions.
+ */
 package app.loft.android;
 
 import org.junit.Test;

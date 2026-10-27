@@ -1,3 +1,8 @@
+/*
+ * Android client unit tests (JVM, no device) for PairUrl, the phone-to-TV
+ * LAN pairing URL: building and detecting it, not confusing it with a
+ * loft:// link, and accepting only a POST that carries the right code.
+ */
 package app.loft.android;
 
 import org.junit.Test;

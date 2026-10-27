@@ -1,3 +1,8 @@
+/*
+ * Android client unit tests (JVM, no device) for SplitStore: deleting
+ * repository versus user services, clearing a zone, skipping duplicate
+ * prefixes on import, and exporting every zone.
+ */
 package app.loft.android;
 
 import org.junit.Test;

@@ -1,3 +1,9 @@
+/*
+ * Android client, phone build: the import screen. Reads a connection from a
+ * camera QR code (CameraX + ZXing), the clipboard, a file or a gallery image.
+ * A TV pairing QR (see PairUrl and the TV build's TvPair) sends the phone's
+ * profiles to the TV instead. Opened from MainActivity and EditActivity.
+ */
 package app.loft.android;
 
 import android.Manifest;

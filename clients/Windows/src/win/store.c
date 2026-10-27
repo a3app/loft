@@ -1,3 +1,7 @@
+/* Windows client GUI: on-disk storage under %APPDATA%\loft (prefs.yaml,
+   profiles/, active, routes.txt), plus import and export of profile files.
+   Keys go to key.c; parsing and writing use the portable core in src/
+   (profile.c, share.c, routes.c). */
 #include "common.h"
 
 int store_root(wchar_t *d, int n) {

@@ -1,3 +1,9 @@
+/*
+ * Android client, phone build: the older per-route screen, a plain list of
+ * CIDRs each sent through the tunnel, around it, or dropped. Kept for existing
+ * settings in Prefs.routes; SplitStore migrates those routes into its lists
+ * the first time it loads, and ListsActivity is the current editor.
+ */
 package app.loft.android;
 
 import android.os.Bundle;

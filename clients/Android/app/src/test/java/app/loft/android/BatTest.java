@@ -1,3 +1,8 @@
+/*
+ * Android client unit tests (JVM, no device) for Bat: parsing Keenetic /
+ * loft-routes .bat lists, mask-to-prefix conversion, and the SplitStore
+ * helpers that use them (seed zones, row previews, auto-update timing).
+ */
 package app.loft.android;
 
 import org.junit.Test;

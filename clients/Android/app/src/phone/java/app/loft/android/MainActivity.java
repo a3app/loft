@@ -1,3 +1,11 @@
+/*
+ * Android client, phone build: the main screen with the Home, Connections and
+ * Settings tabs, and the entry point for imports (loft:// links, shared text,
+ * opened files). It starts and stops LoftVpnService and redraws from Live
+ * on Bus events; it never talks to the engine directly. Other phone screens
+ * (EditActivity, ScanActivity, ListsActivity, AppsActivity) open from here.
+ * The TV build uses TvActivity instead.
+ */
 package app.loft.android;
 
 import android.Manifest;

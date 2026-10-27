@@ -1,3 +1,6 @@
+/* Windows client GUI: UTF-8 / UTF-16 conversion (Win32 APIs take wide strings,
+   the core works in UTF-8), path joining and whole-file read/write helpers
+   used across src/win. */
 #include "common.h"
 
 char *dupstr(const char *s) {

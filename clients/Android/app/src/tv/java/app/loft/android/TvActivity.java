@@ -1,3 +1,10 @@
+/*
+ * Android client, TV build: the whole Android TV interface in one activity
+ * (Home, Connections and Settings panes behind a left rail, driven by a D-pad
+ * remote). It plays the role MainActivity plays on the phone and uses the same
+ * LoftVpnService, Live and Bus. Imports come from a phone through TvPair, a
+ * USB or Downloads file, or a typed loft:// link.
+ */
 package app.loft.android;
 
 import android.app.Activity;
