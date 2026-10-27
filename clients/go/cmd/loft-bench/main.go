@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strconv"
@@ -43,6 +44,11 @@ func main() {
 	timeout := flag.Duration("timeout", 45*time.Second, "per-case deadline")
 	ifName := flag.String("if", "", "outbound interface or local IP")
 	h2MaxAge := flag.Duration("h2-max-age", 0, "GET HTTP/2 recycle; 0 keep until error")
+	disorder := flag.Bool("disorder", false, "experimental: ClientHello start with TTL 1 (with -ab/-soak: the option to compare)")
+	l3Shape := flag.Bool("l3-shape", false, "experimental: l3 shaping (with -ab/-soak: the option to compare)")
+	abN := flag.Int("ab", 0, "A/B: rounds per front, options off vs on (needs -disorder and/or -l3-shape)")
+	soak := flag.Duration("soak", 0, "stability: this long off and this long on, back-to-back downloads")
+	csvPath := flag.String("csv", "", "A/B: also write every sample to this CSV file")
 	flag.Parse()
 	if *h2MaxAge > 0 {
 		outboundH2MaxAgeMS = int(h2MaxAge.Milliseconds())
@@ -55,6 +61,8 @@ func main() {
 		os.Exit(2)
 	}
 	transport.SetClientCC(cc, uint32(*ccUp)*1000, uint32(*ccDown)*1000)
+	transport.SetDisorder(*disorder)
+	transport.SetL3Shape(*l3Shape)
 
 	if *serve != "" {
 		if err := serveOrigin(*serve); err != nil {
@@ -94,6 +102,34 @@ func main() {
 		}
 		kinds = onlyGET
 	}
+	if *abN > 0 || *soak > 0 {
+		if !*disorder && !*l3Shape {
+			fmt.Fprintln(os.Stderr, "loft-bench: -ab and -soak compare an option: add -disorder and/or -l3-shape")
+			os.Exit(2)
+		}
+		p := benchParams{token: *token, raw: *rawURL, path: *path, origin: *origin, cdn: *cdnName, mux: *muxOn, nbyte: *bytesN, timeout: *timeout}
+		vs := abVariants(*disorder, *l3Shape)
+		if *abN > 0 {
+			var out io.Writer
+			if *csvPath != "" {
+				f, err := os.Create(*csvPath)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "loft-bench: -csv: %v\n", err)
+					os.Exit(2)
+				}
+				defer f.Close()
+				out = f
+			}
+			runAB(ctx, p, kinds, *abN, vs, out)
+		}
+		if *soak > 0 {
+			for _, k := range kinds {
+				runSoak(ctx, p, k, vs, *soak)
+			}
+		}
+		return
+	}
+
 	var rows []row
 	if os.Getenv("LOFT_STAND") != "1" {
 		rows = append(rows, measureDirect(ctx, *httpN, *timeout)...)

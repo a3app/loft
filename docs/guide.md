@@ -270,6 +270,8 @@ make probe
 | `inner` | Data-cipher ask: `clear` or `aes`. Empty or `chacha` omits the Hello byte (ChaCha20-Poly1305). The node confirms that id or the session stays on ChaCha20-Poly1305. `get` stays ChaCha20-Poly1305. `loft-front -inner` is this field. |
 | `cc` | Congestion control ask: `off` (default), `bbr`, `fixed`. Applies only on `quic` and `h3`; TCP fronts keep the default. Leave it off on a network that singles out unusual traffic. The node answers with what both sides use; a node that does not allow it keeps the default. |
 | `cc_up_mbps`, `cc_down_mbps` | For `fixed`: how fast this client sends and how fast it can receive, Mbit/s. Set them to the real line speed: fixed rate does not slow down on loss. `0` leaves that direction on the default. |
+| `disorder` | Experimental (branch `experimentos`), off by default. The start of the outer ClientHello to the node is sent with IP TTL 1 and resent by the kernel with the normal TTL, so a DPI box that does not keep reordered segments misses the server name. TCP fronts only; adds about 200 ms to each new connection; may hurt where only listed names pass. Replaces `split_hello` on that connection. loft-front: `-disorder`. |
+| `l3_shape` | Experimental (branch `experimentos`), off by default. Asks the node to shape the `l3` front against "TLS inside TLS" detection: the start of each TCP flow is corked up to 12 ms and padded to a size step, and the first data of a flow from the other side is answered at once with padding. Needs a node from the same branch (Status capability bit 48). loft-front: `-l3-shape`. |
 | `bootstrap` | HTTPS URL of the roster manifest, before auth |
 | `controller_pub` | 32-byte Ed25519 (64 hex). Required to accept a roster and address lists |
 | `tofu` | `true` pins the first valid signer when `controller_pub` is empty (default off) |
@@ -286,6 +288,16 @@ make probe
 | `listen.http_pass` | Optional password for that page |
 | `listen.bind` | Same as `-if`; CLI `-if` wins |
 | `listen.uplink` | RouterOS WAN name for container egress (`ether1`, `lte1`) |
+
+To compare these experimental options with them off, use `loft-bench` (run `loft-bench -serve 0.0.0.0:9474` on the node first; for `l3` pass `-origin <node address>:9474`, since the node does not forward `l3` to its own loopback):
+
+```
+loft-bench -url https://node.example:443 -token lt_… -type h2,l3 -origin 203.0.113.5:9474 \
+  -disorder -l3-shape -ab 10 -csv run.csv     # 10 rounds, off and on alternating
+loft-bench … -disorder -l3-shape -soak 10m    # 10 min off, 10 min on, in alternating slices
+```
+
+`-ab` prints, per front and setting: failures, handshake time and first-byte time on a new connection (median and 95th percentile), download and upload speed, and for `l3_shape` the padding sent in percent of the client's packet bytes. `-soak` prints average speed, transfer errors, session deaths, reconnect time and stalls (a second or more without bytes). The CSV has one line per sample.
 
 Outbound fields: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| empty), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `h2_max_age_ms`, `insecure_skip_verify`.
 

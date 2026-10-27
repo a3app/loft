@@ -68,6 +68,8 @@ func main() {
 	ccName := flag.String("cc", "", "congestion control ask: off | bbr | fixed; empty = off")
 	ccUp := flag.Uint("cc-up", 0, "fixed: upload rate, Mbit/s")
 	ccDown := flag.Uint("cc-down", 0, "fixed: download rate, Mbit/s")
+	disorder := flag.Bool("disorder", false, "experimental: send the start of ClientHello with TTL 1 so DPI misses the SNI")
+	l3Shape := flag.Bool("l3-shape", false, "experimental: shape the l3 front against TLS-in-TLS detection")
 	edgeURL := flag.String("edge", "", "CDN URL for the first GET; other fronts use -url")
 	decoy := flag.String("decoy", "", "direct-path decoy SNI (dest hostname)")
 	pbk := flag.String("pbk", "", "node X25519 public, hex or base64url")
@@ -179,6 +181,7 @@ func main() {
 		os.Exit(2)
 	}
 	cfg.CC, cfg.CCUpMbps, cfg.CCDownMbps = strings.TrimSpace(*ccName), uint32(*ccUp), uint32(*ccDown)
+	cfg.Disorder, cfg.L3Shape = *disorder, *l3Shape
 	if _, _, _, err := cfg.CCAsk(); err != nil {
 		fmt.Fprintf(os.Stderr, "loft-front: %v\n", err)
 		os.Exit(2)

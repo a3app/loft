@@ -245,6 +245,8 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 	EnsureInstance()
 	if cfg != nil {
 		SetPauseSchedule(cfg.Pause)
+		SetDisorder(cfg.Disorder)
+		SetL3Shape(cfg.L3Shape)
 	}
 	if path == nil {
 		path = make(chan struct{})

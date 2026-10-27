@@ -412,7 +412,8 @@ func DialMask(addr, sni, fingerprint string, token, maskPub []byte) (net.Conn, e
 // handshake messages until the server Finished. It checks the server
 // Finished, CertificateVerify and the serial bind, sends its own Finished,
 // and returns a conn that speaks TLS 1.3 application records. The canary
-// policy for addr may ask to split the ClientHello across TCP segments.
+// policy for addr may ask to split the ClientHello across TCP segments, and
+// the client's disorder switch may send its start with TTL 1 (disorder.go).
 func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []string) (net.Conn, error) {
 	skipCV := len(maskPub) != 32
 	raw, err := protect.Timeout("tcp4", addr, 10*time.Second)
@@ -420,10 +421,7 @@ func dialMaskALPN(addr, sni, fingerprint string, token, maskPub []byte, alpn []s
 		return nil, err
 	}
 	tuneTCP(raw)
-	pol := CachedCanary(addr)
-	if pol.Split {
-		raw = &splitHelloConn{Conn: raw, at: 1}
-	}
+	raw = helloConn(raw, CachedCanary(addr))
 	kx, err := buildMaskHello(sni, fingerprint, token, maskPub, alpn)
 	if err != nil {
 		raw.Close()

@@ -138,7 +138,7 @@ func (l *L3) Rebind() error {
 	if err != nil {
 		return err
 	}
-	key, err := l3Handshake(stream, l.token, l.offer, addr, sni)
+	key, _, err := l3Handshake(stream, l.token, l.offer, addr, sni)
 	if err != nil {
 		_ = c.Close()
 		return err
@@ -168,6 +168,49 @@ type l3Sess struct {
 	corkN int
 	timer *time.Timer
 	werr  error
+
+	// shape is set when both sides agreed CapL3Shape (experimental, see
+	// l3shape.go); flows tracks TCP flows for it, and corkStart says the
+	// cork holds the start of a flow, so the next message is padded.
+	shape     bool
+	flows     *l3ShapeFlows
+	corkStart bool
+}
+
+// enableShape switches l3 shaping on for this session.
+func (s *l3Sess) enableShape() {
+	s.shape = true
+	s.flows = newL3ShapeFlows()
+}
+
+// noteRecv is called for each packet that came from the peer. With shaping
+// on, the first data of a flow from the peer is answered at once with a
+// padding-only message (l3shape.go, step 2).
+func (s *l3Sess) noteRecv(pkt []byte) {
+	if s.shape && s.flows.noteRecv(pkt) {
+		go s.chaff()
+	}
+}
+
+// chaff sends one padding-only message of a random size.
+func (s *l3Sess) chaff() {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	select {
+	case <-s.done:
+		return
+	default:
+	}
+	if s.werr != nil {
+		return
+	}
+	size := l3ChaffSize()
+	if err := s.sealWriteLocked(wire.EncodeL3Padded(nil, size)); err != nil {
+		s.werr = err
+		return
+	}
+	l3StatChaffN.Add(1)
+	l3StatChaff.Add(uint64(size))
 }
 
 // die flushes pending packets and closes done once.
@@ -216,6 +259,12 @@ func (s *l3Sess) WriteIP(p []byte) error {
 		return s.werr
 	}
 	urgent := l3Urgent(pkt)
+	if s.shape && s.flows.noteSend(pkt) {
+		// The start of a flow (its SYN or first data) waits in the cork
+		// and makes the message padded, even a SYN that would flush at once.
+		urgent = false
+		s.corkStart = true
+	}
 	if s.corkN+len(pkt)+3 > l3Cork && len(s.cork) > 0 {
 		if err := s.flushLocked(); err != nil {
 			return err
@@ -227,7 +276,11 @@ func (s *l3Sess) WriteIP(p []byte) error {
 		return s.flushLocked()
 	}
 	if s.timer == nil {
-		s.timer = time.AfterFunc(l3CorkWait, s.flushAsync)
+		wait := l3CorkWait
+		if s.corkStart {
+			wait = l3ShapeWait
+		}
+		s.timer = time.AfterFunc(wait, s.flushAsync)
 	}
 	return nil
 }
@@ -251,9 +304,11 @@ func (s *l3Sess) flushLocked() error {
 		return s.werr
 	}
 	pkts := s.cork
+	padded := s.corkStart
 	s.cork = nil
 	s.corkN = 0
-	err := s.sendLocked(pkts)
+	s.corkStart = false
+	err := s.sendLocked(pkts, padded)
 	if err != nil {
 		s.werr = err
 	}
@@ -261,14 +316,33 @@ func (s *l3Sess) flushLocked() error {
 }
 
 // sendLocked seals pkts as one message (one packet, or a batch) and writes
-// it on the current conn.
-func (s *l3Sess) sendLocked(pkts [][]byte) error {
+// it on the current conn. padded makes it a type 0x02 message padded to a
+// size bucket (shaping only).
+func (s *l3Sess) sendLocked(pkts [][]byte, padded bool) error {
 	var plain []byte
-	if len(pkts) == 1 {
+	var payload int
+	for _, p := range pkts {
+		payload += len(p)
+	}
+	l3StatPayload.Add(uint64(payload))
+	switch {
+	case padded:
+		n := 3 + 2*len(pkts) + payload
+		size := l3ShapeBucket(n)
+		plain = wire.EncodeL3Padded(pkts, size)
+		l3StatPaddedN.Add(1)
+		l3StatPad.Add(uint64(size - n))
+	case len(pkts) == 1:
 		plain = wire.EncodeL3(wire.L3IP, pkts[0])
-	} else {
+	default:
 		plain = wire.EncodeL3Batch(pkts)
 	}
+	return s.sealWriteLocked(plain)
+}
+
+// sealWriteLocked seals one plaintext with the session key and writes it on
+// the current conn. Caller holds wmu.
+func (s *l3Sess) sealWriteLocked(plain []byte) error {
 	s.mu.Lock()
 	conn, key := s.conn, s.key
 	s.mu.Unlock()
@@ -327,42 +401,46 @@ func l3Deliver(plain []byte, emit func([]byte)) {
 }
 
 // l3Handshake writes 0x02 and reads AEAD(Status). On error it closes conn.
-func l3Handshake(conn net.Conn, token []byte, offer wire.Cap, addr, sni string) ([]byte, error) {
+// The bool is true when the node agreed to l3 shaping (CapL3Shape).
+func l3Handshake(conn net.Conn, token []byte, offer wire.Cap, addr, sni string) ([]byte, bool, error) {
+	if l3ShapeAsk.Load() {
+		offer |= wire.CapL3Shape
+	}
 	hello := newClientHello(offer | wire.CapL3)
 	proof, nonce, sk, err := ecrypto.MakeAuth(token)
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return nil, false, err
 	}
 	auth := append(proof, hello.Encode()...)
 	if err := writeMsg(conn, auth); err != nil {
 		conn.Close()
-		return nil, err
+		return nil, false, err
 	}
 	raw, err := readMsg(conn)
 	if err != nil {
 		conn.Close()
-		return nil, afterProof(err)
+		return nil, false, afterProof(err)
 	}
 	key, plain, err := ecrypto.OpenHello(sk, nonce, raw, nil)
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return nil, false, err
 	}
 	st, err := wire.DecodeStatus(plain)
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return nil, false, err
 	}
 	if !st.Code.OK() {
 		conn.Close()
-		return nil, wire.Fail(st.Code, st.Program)
+		return nil, false, wire.Fail(st.Code, st.Program)
 	}
 	// A node that did not enable l3 still answers 0x02 on the h2 path and
 	// then speaks mux. CapL3 is the only signal that the body is IP frames.
 	if !st.Caps.Has(wire.CapL3) {
 		conn.Close()
-		return nil, fmt.Errorf("l3: node has no l3")
+		return nil, false, fmt.Errorf("l3: node has no l3")
 	}
 	RememberVis(st)
 	if addr == "" {
@@ -370,21 +448,24 @@ func l3Handshake(conn net.Conn, token []byte, offer wire.Cap, addr, sni string) 
 	}
 	if err := adoptDecoy(addr, sni, st, true); err != nil {
 		conn.Close()
-		return nil, err
+		return nil, false, err
 	}
 	takeInner(wire.FrontL3, key, st)
 	takeCC(st, nil)
-	return key, nil
+	return key, st.Caps.Has(wire.CapL3Shape), nil
 }
 
 // startL3 writes 0x02, reads AEAD(Status), and pumps IP frames.
 func startL3(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, addr, sni string) (*l3Sess, error) {
 	_ = ctx
-	key, err := l3Handshake(conn, token, offer, addr, sni)
+	key, shape, err := l3Handshake(conn, token, offer, addr, sni)
 	if err != nil {
 		return nil, err
 	}
 	s := &l3Sess{conn: conn, key: key, in: make(chan []byte, l3InCap), done: make(chan struct{})}
+	if shape {
+		s.enableShape()
+	}
 	go s.readLoop(conn, key)
 	return s, nil
 }
@@ -411,6 +492,7 @@ func (s *l3Sess) readLoop(conn net.Conn, key []byte) {
 			continue
 		}
 		l3Deliver(plain, func(pkt []byte) {
+			s.noteRecv(pkt)
 			select {
 			case s.in <- pkt:
 			case <-s.done:
@@ -436,6 +518,11 @@ func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth, sock any) {
 	finishStatusL3(&st, a.Token, a.Rest, link, conn.RemoteAddr())
 	applyInner(&st, wire.FrontL3, a.Rest)
 	applyCC(&st, wire.FrontL3, a.Rest, sock)
+	if h, err := wire.DecodeHello(a.Rest); err == nil && h.Caps.Has(wire.CapL3Shape) {
+		// Echo the experimental bit only to a client that asked (wire.CapL3Shape).
+		st.Caps |= wire.CapL3Shape
+		link.enableShape()
+	}
 	sealed, err := ecrypto.Seal(a.Key, st.Encode(), nil)
 	if err != nil {
 		return
@@ -461,9 +548,14 @@ func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth, sock any) {
 		}
 		o := NetSwitch()
 		l3Deliver(plain, func(pkt []byte) {
+			link.noteRecv(pkt)
 			if o != nil {
 				o.DeliverL3(link, pkt)
 			}
 		})
 	}
 }
+
+// Shaped reports whether the node agreed to l3 shaping on this session
+// (experimental, see l3shape.go).
+func (l *L3) Shaped() bool { return l != nil && l.inner != nil && l.inner.shape }
