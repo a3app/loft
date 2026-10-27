@@ -54,17 +54,29 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * and redraws from Live on every Bus event.
  */
 public final class MainActivity extends LoftActivity implements Bus.Listener {
+    /** Request codes for the VPN consent dialog and the notification permission prompt. */
     private static final int REQ_VPN = 1;
     private static final int REQ_NOTE = 2;
 
+    /** Container that holds the three tab views; only one is visible at a time. */
     private ViewGroup pane;
     private View home;
     private View conns;
     private View settings;
     private ConnAdapter adapter;
+    /**
+     * True once the notification permission was requested in this screen's life, so it is
+     * asked at most once.
+     */
     private boolean askedVpn;
+    /** True while a public-IP lookup is running, so taps and redraws do not start a second one. */
     private final AtomicBoolean extFetch = new AtomicBoolean();
 
+    /**
+     * Shows Home first, wires the bottom tabs and the Home buttons, handles a link or file the app
+     * was opened with, opens onboarding when there are no profiles yet, and auto-connects when
+     * that setting is on.
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         setTheme(R.style.Theme_Loft);
@@ -75,6 +87,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         pane.addView(home);
         show(home);
 
+        // 1. Bottom tabs: the Connections and Settings views are created on first use.
         BottomNavigationView nav = findViewById(R.id.nav);
         nav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
@@ -90,10 +103,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             return true;
         });
 
+        // 2. Home: big button connects or disconnects, the pill opens Connections, cards open details.
         home.findViewById(R.id.go).setOnClickListener(v -> toggle());
         home.findViewById(R.id.pill).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_conns));
         home.findViewById(R.id.cards).setOnClickListener(v -> details());
 
+        // 3. Import whatever started the app, then onboarding or auto-connect.
         handleIntent(getIntent());
         if (LoftApp.of(this).profiles().all().isEmpty()
                 && !Prefs.p(this).getBoolean("onboard_done", false)) {
@@ -111,6 +126,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         });
     }
 
+    /** Creates the Connections tab on first use: the profile list and the add button. */
     private void ensureConns() {
         if (conns != null) {
             return;
@@ -126,6 +142,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         adapter.reload();
     }
 
+    /** Creates the Settings tab on first use and binds it to Prefs. */
     private void ensureSettings() {
         if (settings != null) {
             return;
@@ -136,12 +153,17 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         wireSettings();
     }
 
+    /** The app was already open and got a new link or file: import it. */
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleIntent(intent);
     }
 
+    /**
+     * Back in front: listen to state changes again and refresh everything, since profiles or app
+     * routing may have changed in another screen.
+     */
     @Override
     protected void onResume() {
         super.onResume();
@@ -153,12 +175,14 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         paintAppsRow();
     }
 
+    /** Stops listening while the screen is hidden. */
     @Override
     protected void onPause() {
         Bus.drop(this);
         super.onPause();
     }
 
+    /** Bus callback: VPN state changed, redraw Home and the connection list. */
     @Override
     public void onLoft() {
         paintHome();
@@ -167,6 +191,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /** Makes one tab view visible and hides the others, refreshing the one being shown. */
     private void show(View v) {
         home.setVisibility(v == home ? View.VISIBLE : View.GONE);
         if (conns != null) {
@@ -190,6 +215,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      * public IP seen through the tunnel. "Simple" mode hides the details.
      */
     private void paintHome() {
+        // 1. Lamp, status pill and big button for the four states.
         ImageView lamp = home.findViewById(R.id.lamp);
         TextView pillT = home.findViewById(R.id.pill_t);
         View pillDot = home.findViewById(R.id.pill_dot);
@@ -233,10 +259,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             go.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.lamp)));
             go.setTextColor(getColor(R.color.ink));
         }
+        // 2. Which detail blocks are visible, then the info cards.
         cards.setVisibility(simple ? View.GONE : View.VISIBLE);
         sparkRow.setVisibility(simple || (!on && !conn) ? View.GONE : View.VISIBLE);
         iprows.setVisibility(simple || !on ? View.GONE : View.VISIBLE);
         paintCards(p, on);
+        // 3. Current speed and the traffic chart (a handshake animation while connecting).
         boolean bits = Prefs.rateBits(this);
         TextView rateDn = home.findViewById(R.id.rate_dn);
         TextView rateUp = home.findViewById(R.id.rate_up);
@@ -257,6 +285,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         } else {
             spark.clear();
         }
+        // 4. Public IP (fetched on demand), overlay address(es) and gateway.
         View extRow = home.findViewById(R.id.row_ext);
         boolean showExt = Prefs.showExtIP(this);
         ((View) extRow.getParent()).setVisibility(showExt ? View.VISIBLE : View.GONE);
@@ -331,6 +360,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /** Bottom sheet with session details: overlay address, front, MTU and server host. */
     private void details() {
         Profile p = LoftApp.of(this).profiles().active();
         BottomSheetDialog d = Sheets.of(this, R.layout.sheet_details);
@@ -349,6 +379,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         d.show();
     }
 
+    /** Big-button action: stop when connected or connecting, otherwise connect. */
     private void toggle() {
         if (Live.on() || Live.connecting() || LoftVpnService.running) {
             LoftVpnService.requestStop(this);
@@ -380,6 +411,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         LoftVpnService.requestStart(this);
     }
 
+    /** Result of the VPN consent dialog: start the service if the user allowed it. */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -388,6 +420,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /** Long-press menu for a profile: edit, export or delete. */
     private void showConnMenu(Profile pr) {
         if (pr == null) {
             return;
@@ -409,6 +442,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 .show();
     }
 
+    /** Asks before deleting a profile, then refreshes the list. */
     private void confirmDelete(Profile pr) {
         new AlertDialog.Builder(this)
                 .setMessage(R.string.confirm_delete)
@@ -440,6 +474,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         d.show();
     }
 
+    /** Opens the system share sheet with text and a file-like subject name. */
     private void shareText(String body, String name) {
         Intent i = new Intent(Intent.ACTION_SEND);
         i.setType("text/plain");
@@ -448,6 +483,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         startActivity(Intent.createChooser(i, getString(R.string.export)));
     }
 
+    /** "Add connection" sheet: scan a QR, paste, open a file, or enter by hand. */
     private void addSheet() {
         BottomSheetDialog d = Sheets.of(this, R.layout.sheet_add);
         d.findViewById(R.id.add_scan).setOnClickListener(v -> {
@@ -469,6 +505,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         d.show();
     }
 
+    /** Imports from the clipboard; with an empty clipboard opens the scanner instead. */
     private void paste() {
         ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         CharSequence t = null;
@@ -530,6 +567,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      * A language change recreates the screen.
      */
     private void wireSettings() {
+        // 1. On/off switches, each saved to Prefs the moment it changes.
         CompoundButton simple = settings.findViewById(R.id.sw_simple);
         CompoundButton def = settings.findViewById(R.id.sw_default);
         CompoundButton split = settings.findViewById(R.id.sw_split);
@@ -561,6 +599,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             paintHome();
         });
         log.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("verbose", on).apply());
+        // 2. Display choices: speed units, chart style and language.
         Spinner rate = settings.findViewById(R.id.sp_rate);
         rate.setAdapter(spin(getString(R.string.rate_kbit), getString(R.string.rate_kb)));
         rate.setSelection(Prefs.rateBits(this) ? 0 : 1);
@@ -587,6 +626,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             Lang.apply(this);
             recreate();
         }));
+        // 3. Buttons that open other screens (system VPN settings, log, about, lists, apps).
         settings.findViewById(R.id.btn_vpn).setOnClickListener(v ->
                 startActivity(new Intent(Settings.ACTION_VPN_SETTINGS)));
         settings.findViewById(R.id.btn_log).setOnClickListener(v ->
@@ -600,6 +640,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         settings.findViewById(R.id.row_apps).setOnClickListener(v ->
                 startActivity(new Intent(this, AppsActivity.class)));
         paintAppsRow();
+        // 4. Local DNS: system, a plain DNS address, or DNS-over-HTTPS (DoH) URL.
         Spinner dns = settings.findViewById(R.id.sp_dns);
         EditText dnsAddr = settings.findViewById(R.id.dns_addr);
         dns.setAdapter(spin(getString(R.string.ldns_sys),
@@ -629,6 +670,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                         .putString("local_dns_addr", s.toString().trim()).apply();
             }
         });
+        // 5. Reset to defaults, then the update-channel section (Channel).
         settings.findViewById(R.id.btn_defaults).setOnClickListener(v ->
                 new AlertDialog.Builder(this)
                         .setMessage(R.string.defaults_q)
@@ -679,6 +721,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }, "loft-extip").start();
     }
 
+    /** Reads a whole stream as UTF-8 text. Also used by ScanActivity for opened files. */
     static String readAll(InputStream in) throws Exception {
         ByteArrayOutputStream o = new ByteArrayOutputStream();
         byte[] b = new byte[4096];
@@ -689,6 +732,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         return o.toString(StandardCharsets.UTF_8.name());
     }
 
+    /** Shows the per-app routing mode on its Settings row, with the app count for except/only. */
     private void paintAppsRow() {
         if (settings == null) {
             return;
@@ -705,6 +749,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         t.setText(n > 0 && !"all".equals(mode) ? label + " · " + n : label);
     }
 
+    /** Hides the DNS address field for system DNS and sets a matching example otherwise. */
     private static void paintDnsRow(int i, EditText addr) {
         if (i == 0) {
             addr.setVisibility(View.GONE);
@@ -714,6 +759,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         addr.setHint(i == 2 ? "https://dns.example/dns-query" : "77.88.8.8");
     }
 
+    /** Spinner adapter with the app's own item layouts. */
     private ArrayAdapter<String> spin(String... items) {
         ArrayAdapter<String> a = new ArrayAdapter<>(this, R.layout.spinner_item, items);
         a.setDropDownViewResource(R.layout.spinner_dropdown);
@@ -758,6 +804,9 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         private String openId;
         private float openTx;
 
+        /**
+         * Reloads profiles from storage, closes any swiped card and toggles the empty-list hint.
+         */
         void reload() {
             data = LoftApp.of(MainActivity.this).profiles().all();
             openId = null;
@@ -768,10 +817,14 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             conns.findViewById(R.id.empty).setVisibility(empty ? View.VISIBLE : View.GONE);
         }
 
+        /** Profile at a position, or null when the position is out of range. */
         Profile getItem(int i) {
             return i >= 0 && i < data.size() ? data.get(i) : null;
         }
 
+        /**
+         * Snaps every swiped card except {@code keep} back to closed, so only one is open at a time.
+         */
         void closeOthers(Hold keep) {
             RecyclerView rv = conns.findViewById(R.id.list);
             for (int i = 0; i < getItemCount(); i++) {
@@ -782,6 +835,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             }
         }
 
+        /** Inflates one connection card. */
         @NonNull
         @Override
         public Hold onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -789,6 +843,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             return new Hold(v);
         }
 
+        /**
+         * Fills a card for one profile and wires its connect button, tap, swipe actions and
+         * long-press. The open swipe position is remembered by profile id so it survives redraws.
+         */
         @Override
         public void onBindViewHolder(@NonNull Hold h, int i) {
             Profile p = data.get(i);
@@ -803,6 +861,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             h.mini.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
                     getColor(thisUp ? R.color.lamp : R.color.slate)));
             h.mini.setTextColor(getColor(thisUp ? R.color.ink : R.color.snow));
+            // Restore this card's swipe state and remember where the user leaves it.
             h.swipe.settleNow(p.id.equals(openId) ? openTx : 0);
             h.swipe.setListener(new RevealFrame.Listener() {
                 @Override
@@ -828,6 +887,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                     }
                 }
             });
+            // Card button: make this profile active, then stop it or (re)connect with it.
             h.mini.setOnClickListener(x -> {
                 LoftApp.of(MainActivity.this).profiles().setActive(p.id);
                 if (thisUp) {
@@ -839,6 +899,8 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                     connect();
                 }
             });
+            // Tap closes an open swipe first; otherwise opens the editor.
+            // Edit and Delete are the buttons revealed under the swiped card.
             h.body.setOnClickListener(x -> {
                 if (Math.abs(h.swipe.translation()) > 4) {
                     h.swipe.close();
@@ -866,11 +928,13 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             });
         }
 
+        /** Number of profiles in the list. */
         @Override
         public int getItemCount() {
             return data.size();
         }
 
+        /** Holds the views of one connection card so they are looked up only once. */
         final class Hold extends RecyclerView.ViewHolder {
             final RevealFrame swipe;
             final View card;

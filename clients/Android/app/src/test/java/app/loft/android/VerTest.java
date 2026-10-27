@@ -10,7 +10,12 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+/** Tests for version comparison and SHA256SUMS lookup used by the updater. */
 public final class VerTest {
+    /**
+     * Versions compare numerically per part; a pre-release sorts before its release, and
+     * pre-release labels compare as text.
+     */
     @Test
     public void order() {
         assertEquals(-1, Ver.cmp("1.0.27", "1.0.28"));
@@ -22,12 +27,17 @@ public final class VerTest {
         assertEquals(-1, Ver.cmp("1.0.27-a", "1.0.27-b"));
     }
 
+    /** Release-candidate suffixes like -rc.1 sort before the plain release. */
     @Test
     public void tagShape() {
         assertEquals(0, Ver.cmp("1.0.27", "1.0.27"));
         assertEquals(1, Ver.cmp("1.0.27", "1.0.27-rc.1"));
     }
 
+    /**
+     * hexFor finds a file's hash in text or binary (*name) form, skips comments, and returns null
+     * for a missing file.
+     */
     @Test
     public void sums() {
         String body = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  loft-android.apk\n"

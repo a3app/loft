@@ -11,7 +11,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/** Tests for the phone-to-TV pairing URL and its request check. */
 public final class PairUrlTest {
+    /** A built URL is recognised as a pairing URL and its code can be read back. */
     @Test
     public void buildAndDetect() {
         String u = PairUrl.build("192.168.1.8", 43111, "K7M2P4");
@@ -20,6 +22,7 @@ public final class PairUrlTest {
         assertEquals("K7M2P4", PairUrl.code(u));
     }
 
+    /** loft:// links, other HTTP URLs, empty and null strings are not pairing URLs. */
     @Test
     public void loftUriIsNotPair() {
         assertFalse(PairUrl.isPair("loft://lt_ab@api.example/static/js?type=get"));
@@ -28,6 +31,7 @@ public final class PairUrlTest {
         assertFalse(PairUrl.isPair(null));
     }
 
+    /** The TV accepts only a POST to /pair with exactly the expected, non-empty code. */
     @Test
     public void onlyPostWithTheCodeIsAuthorized() {
         assertTrue(PairUrl.authorized("POST /pair?c=K7M2P4 HTTP/1.1", "K7M2P4"));

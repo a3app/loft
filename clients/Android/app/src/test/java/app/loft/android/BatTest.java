@@ -13,7 +13,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/** Tests for the .bat list parser and the SplitStore helpers built on it. */
 public final class BatTest {
+    /**
+     * A {@code route ADD} line becomes a named prefix, a {@code REM ignore} line becomes an
+     * ignore row, and the {@code REM zone:} header is read as the zone hint.
+     */
     @Test
     public void parseRouteAddAndIgnore() {
         String bat = "@echo off\nREM zone: global\n"
@@ -29,6 +34,7 @@ public final class BatTest {
         assertEquals("global", Bat.zoneHint(bat));
     }
 
+    /** Dotted masks convert to prefix lengths and back (255.0.0.0 is /8, /16 is 255.255.0.0). */
     @Test
     public void ipMaskBits() {
         Cidr c = Cidr.fromIpMask("10.0.0.0", "255.0.0.0");
@@ -36,6 +42,10 @@ public final class BatTest {
         assertEquals("255.255.0.0", Cidr.dottedMask(16));
     }
 
+    /**
+     * A fresh store has a built-in Local zone that bypasses the tunnel, a Global zone that goes
+     * through it, and one LAN service with the three private IPv4 ranges.
+     */
     @Test
     public void seedHasLocalLanAndGlobal() {
         SplitStore st = new SplitStore();
@@ -47,6 +57,10 @@ public final class BatTest {
         assertEquals(3, st.svc("lan").cidrs.size());
     }
 
+    /**
+     * Row previews show the first prefix plus a count instead of the whole list, and search inside
+     * a zone matches by address or by service name.
+     */
     @Test
     public void previewDoesNotJoinEveryCidr() {
         SplitStore.Svc s = new SplitStore.Svc();
@@ -64,6 +78,10 @@ public final class BatTest {
         assertEquals(1, st.in(SplitStore.GLOBAL, "cloud").size());
     }
 
+    /**
+     * An auto-updating zone is due when it was never downloaded, not due right after a download,
+     * and never due when auto-update is off or the zone has no source.
+     */
     @Test
     public void autoDueWhenNeverPulled() {
         SplitStore st = new SplitStore();

@@ -1,3 +1,8 @@
+/*
+ * Android client, phone build: the "share profile" screen. Turns a saved
+ * profile back into a loft:// link (YamlBuilder.emit) and shows it as text
+ * and as a QR code (Qr), so another device can import it with ScanActivity.
+ */
 package app.loft.android;
 
 import android.content.ClipData;
@@ -13,6 +18,10 @@ import android.widget.TextView;
  * Started with the profile id in the "id" extra.
  */
 public final class ShareQrActivity extends LoftActivity {
+    /**
+     * Builds the link for the profile named by the "id" extra and wires close, copy and share.
+     * An unknown id shows an empty screen instead of crashing.
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

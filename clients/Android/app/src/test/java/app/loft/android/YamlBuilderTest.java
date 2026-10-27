@@ -11,7 +11,9 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/** Tests for turning a Profile into engine YAML and loft:// links, and reading it back. */
 public final class YamlBuilderTest {
+    /** A GET-front profile writes kind loft, type get and a path, keeps mux on, and parses back. */
     @Test
     public void loftGet() {
         Profile p = new Profile();
@@ -30,6 +32,10 @@ public final class YamlBuilderTest {
         assertTrue("get".equals(back.kind));
     }
 
+    /**
+     * The L3 (IP packet) front turns mux off (mux = many streams over one connection) and is
+     * kept in the shared loft:// link.
+     */
     @Test
     public void loftL3DropsMux() {
         Profile p = new Profile();
@@ -45,6 +51,7 @@ public final class YamlBuilderTest {
         assertTrue(uri.startsWith("loft://"));
     }
 
+    /** Peek.outbound reads a field of the first outbound without a full YAML parser. */
     @Test
     public void peekOutbound() {
         String y = "kind: loft\ntoken: lt_x\noutbounds:\n  - name: n\n    type: h3\n    url: https://e\n";
@@ -52,6 +59,10 @@ public final class YamlBuilderTest {
         assertTrue("https://e".equals(Peek.outbound(y, "url")));
     }
 
+    /**
+     * A CDN edge in front of the node is written to YAML and to the link, and read back without
+     * replacing the node URL.
+     */
     @Test
     public void loftEdgeRoundtrip() {
         Profile p = new Profile();
@@ -74,6 +85,10 @@ public final class YamlBuilderTest {
         assertTrue("/static/js".equals(back.path));
     }
 
+    /**
+     * Extra fronts listed by the node (ws, h2, quic) merge into one profile and survive the round
+     * trip; learned fronts fill missing paths, and the listed-fronts string follows the paths.
+     */
     @Test
     public void mergeExtraFronts() {
         String y = "kind: loft\ntoken: lt_x\nfronts: [get, ws, h2, quic]\n"
@@ -108,6 +123,7 @@ public final class YamlBuilderTest {
         assertTrue(p.listedFronts.isEmpty());
     }
 
+    /** A profile with only a WebSocket outbound stays WebSocket and gains no GET outbound. */
     @Test
     public void wsOnlyStaysWs() {
         String y = "kind: loft\ntoken: lt_x\nselect: auto\noutbounds:\n"
@@ -120,6 +136,7 @@ public final class YamlBuilderTest {
         assertFalse(back.contains("type: get"));
     }
 
+    /** A GET profile given a wss:// URL dials GET over https and adds a separate ws outbound. */
     @Test
     public void getDoesNotDialWss() {
         Profile p = new Profile();
@@ -136,6 +153,9 @@ public final class YamlBuilderTest {
         assertTrue(y.contains("wss://api.iqos.help/api/v1/sync"));
     }
 
+    /**
+     * VLESS YAML keeps the uuid as the token and the link's transport and security are reported.
+     */
     @Test
     public void fromYamlReadsUuid() {
         String y = "kind: vless\nuuid: 550e8400-e29b-41d4-a716-446655440000\noutbounds:\n"
@@ -150,6 +170,7 @@ public final class YamlBuilderTest {
         assertTrue("TLS".equals(p.linkSecurity()));
     }
 
+    /** Transport and security labels are read from VLESS and Trojan link parameters. */
     @Test
     public void vlessCardsFromUrl() {
         Profile p = new Profile();
@@ -170,6 +191,9 @@ public final class YamlBuilderTest {
         assertTrue("none".equals(p.linkSecurity()));
     }
 
+    /**
+     * When an edge is set, the CDN outbound is skipped and the node outbound fills url and path.
+     */
     @Test
     public void fromYamlSkipsPinnedCdn() {
         String y = "kind: loft\ntoken: lt_x\nedge: https://cdn.example.com\n"

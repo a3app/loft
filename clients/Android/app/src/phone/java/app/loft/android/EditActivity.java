@@ -1,3 +1,10 @@
+/*
+ * Android client, phone build: the profile editor. A profile is one saved
+ * connection (to a loft node, or to a VLESS, Trojan or SSTP server). The form
+ * is saved through Profiles and turned into engine YAML by YamlBuilder.
+ * Opened from MainActivity; uses ScanActivity to fill the form from a QR code
+ * and ShareQrActivity to share the saved profile.
+ */
 package app.loft.android;
 
 import android.app.AlertDialog;
@@ -17,16 +24,30 @@ import android.widget.TextView;
  * to edit, without one to create.
  */
 public final class EditActivity extends LoftActivity {
+    /** Protocol families, in the order of the family control (shown only for a new profile). */
     private static final String[] KINDS = {"loft", "sstp", "vless", "trojan"};
+    /**
+     * Loft fronts (ways to carry the tunnel over the web), in the order of the front control.
+     * "auto" is saved as GET; index 6 is L3.
+     */
     private static final String[] METHODS = {"auto", "get", "ws", "h2", "quic", "h3", "l3"};
     private static final int REQ_SCAN = 2;
 
     private Profile p;
+    /** True when creating a new profile rather than editing a saved one. */
     private boolean fresh;
+    /** True when the form is in field-by-field mode instead of link mode. */
     private boolean manual;
+    /** True while the secret part of the link is visible (eye button). */
     private boolean shown;
+    /** The full, unmasked link; the link field shows a masked copy unless {@link #shown}. */
     private String linkFull = "";
 
+    /**
+     * Loads the profile from the "id" extra or starts a new one, wires close, save, delete (with
+     * confirmation), scan, the share/export menu and the eye button, then fills and shows the form.
+     * Delete and the menu are hidden for a new profile; scan only appears for a new one.
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -108,6 +129,7 @@ public final class EditActivity extends LoftActivity {
         show();
     }
 
+    /** Copies the profile's values into the form, including the masked link. */
     private void fill() {
         set(R.id.name, p.name);
         set(R.id.token, p.token);
@@ -176,6 +198,7 @@ public final class EditActivity extends LoftActivity {
         findViewById(R.id.sni).setVisibility(sstp || "trojan".equals(fam) ? View.VISIBLE : View.GONE);
     }
 
+    /** Saves the form and closes the screen. */
     private void save() {
         saveQuiet();
         finish();
@@ -194,6 +217,7 @@ public final class EditActivity extends LoftActivity {
         p.dnsSystem = ((Switch) findViewById(R.id.sw_dns_sys)).isChecked();
         p.sni = text(R.id.sni);
         if ("loft".equals(fam)) {
+            // Loft: a parsable link replaces the profile; otherwise build it from the fields.
             if (!manual) {
                 String raw = shown ? text(R.id.link) : linkFull;
                 if (raw.isEmpty()) {
@@ -244,6 +268,7 @@ public final class EditActivity extends LoftActivity {
                 p.path = "";
             }
         } else if ("vless".equals(fam)) {
+            // VLESS: build the link from UUID, host and port, or take the pasted link.
             p.kind = "vless";
             p.tlsCheck = ((Switch) findViewById(R.id.sw_tls)).isChecked();
             if (manual) {
@@ -268,6 +293,7 @@ public final class EditActivity extends LoftActivity {
                 p.url = raw;
             }
         } else if ("sstp".equals(fam)) {
+            // SSTP: user and password; the server may be a URL or a bare host plus port.
             p.kind = "sstp";
             p.user = text(R.id.user);
             p.pass = text(R.id.pass);
@@ -286,6 +312,7 @@ public final class EditActivity extends LoftActivity {
                 p.url = "https://" + host + (port == 443 ? "" : ":" + port);
             }
         } else {
+            // Trojan and anything else: keep the link as typed.
             p.kind = fam;
             String raw = shown ? text(R.id.link) : (linkFull.isEmpty() ? text(R.id.link) : linkFull);
             p.url = raw;
@@ -329,10 +356,12 @@ public final class EditActivity extends LoftActivity {
         show();
     }
 
+    /** Puts text into an EditText; null becomes empty. */
     private void set(int id, String s) {
         ((EditText) findViewById(id)).setText(s == null ? "" : s);
     }
 
+    /** Trimmed text of an EditText by view id. */
     private String text(int id) {
         return ((EditText) findViewById(id)).getText().toString().trim();
     }
@@ -351,6 +380,7 @@ public final class EditActivity extends LoftActivity {
         return s.substring(0, a + 3) + "••••••" + s.substring(at);
     }
 
+    /** Adds a leading "/" to a non-empty path. */
     private static String slash(String s) {
         if (s == null) {
             return "";
@@ -362,12 +392,14 @@ public final class EditActivity extends LoftActivity {
         return s.startsWith("/") ? s : "/" + s;
     }
 
+    /** Host part of a URL, using Profile's own parsing. */
     private static String hostOf(String u) {
         Profile x = new Profile();
         x.url = u;
         return x.host();
     }
 
+    /** Parses a port number; returns {@code def} when it is not a number in 1..65535. */
     private static int num(String s, int def) {
         try {
             int n = Integer.parseInt(s);
@@ -377,6 +409,7 @@ public final class EditActivity extends LoftActivity {
         }
     }
 
+    /** Position of {@code v} in {@code a} ignoring case, or 0 when absent. */
     private static int index(String[] a, String v) {
         for (int i = 0; i < a.length; i++) {
             if (a[i].equalsIgnoreCase(v)) {

@@ -14,7 +14,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/** Tests for deleting, clearing, importing and exporting split-list entries. */
 public final class SplitStoreTest {
+    /**
+     * Deleting a service that came from a repository (downloaded list) turns its prefixes into
+     * exclusions so the next auto-update does not bring it back; restoring the snapshot undoes it.
+     */
     @Test
     public void repoDeleteMovesCidrsToExclusions() {
         SplitStore st = new SplitStore();
@@ -37,6 +42,7 @@ public final class SplitStoreTest {
         assertEquals(0, st.exclCount(SplitStore.GLOBAL));
     }
 
+    /** Deleting a user's own service simply removes it, with no exclusion left behind. */
     @Test
     public void ownDeleteDoesNotCreateExclusion() {
         SplitStore st = new SplitStore();
@@ -47,6 +53,7 @@ public final class SplitStoreTest {
         assertEquals(0, st.exclCount(SplitStore.LOCAL));
     }
 
+    /** Clearing a whole zone also forgets its repository and turns off auto-update. */
     @Test
     public void clearAllUnlinksRepo() {
         SplitStore st = new SplitStore();
@@ -69,6 +76,7 @@ public final class SplitStoreTest {
         assertFalse(st.zone(SplitStore.GLOBAL).auto);
     }
 
+    /** Importing rows skips prefixes the zone already has. */
     @Test
     public void addRowsSkipsExistingCidr() {
         SplitStore st = new SplitStore();
@@ -84,6 +92,9 @@ public final class SplitStoreTest {
         assertEquals(2, st.count(SplitStore.LOCAL));
     }
 
+    /**
+     * Exporting writes a zone header for every zone and the result parses back to the same rows.
+     */
     @Test
     public void emitAllWritesEveryZone() {
         SplitStore st = new SplitStore();

@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * saved; with the "file" extra the file picker opens at once.
  */
 public final class ScanActivity extends LoftActivity {
+    /** Request codes that tell apart the camera permission, file picker and gallery results. */
     private static final int REQ_CAM = 3;
     private static final int REQ_FILE = 4;
     private static final int REQ_GAL = 5;
@@ -56,6 +57,10 @@ public final class ScanActivity extends LoftActivity {
     private final AtomicBoolean got = new AtomicBoolean(false);
     private final MultiFormatReader reader = new MultiFormatReader();
 
+    /**
+     * Wires close, paste, add, file and gallery buttons. Then either opens the file picker at once
+     * ("file" extra) or starts the camera, asking for camera permission first if needed.
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -90,6 +95,10 @@ public final class ScanActivity extends LoftActivity {
         }
     }
 
+    /**
+     * Starts the camera once permission is granted; otherwise says the camera is unavailable,
+     * leaving paste, file and gallery usable.
+     */
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -100,6 +109,10 @@ public final class ScanActivity extends LoftActivity {
         }
     }
 
+    /**
+     * Reads the chosen file as text, or decodes a QR code from the chosen gallery image, and
+     * passes the result to accept(). Read errors are shown as a toast.
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -130,6 +143,10 @@ public final class ScanActivity extends LoftActivity {
         }
     }
 
+    /**
+     * Binds the back camera to this screen with a live preview and a frame analyser. Only the
+     * newest frame is kept, so slow decoding never builds a queue.
+     */
     private void startCam() {
         ListenableFuture<ProcessCameraProvider> f = ProcessCameraProvider.getInstance(this);
         f.addListener(() -> {
@@ -150,7 +167,11 @@ public final class ScanActivity extends LoftActivity {
         }, ContextCompat.getMainExecutor(this));
     }
 
-    // Camera frame callback, on a background thread.
+    /**
+     * Camera frame callback, run on a background thread. Skips work once a code was accepted,
+     * always closes the frame so the camera can deliver the next one, and hands found text to
+     * accept() on the UI thread.
+     */
     private void analyze(ImageProxy image) {
         if (got.get()) {
             image.close();
@@ -189,6 +210,7 @@ public final class ScanActivity extends LoftActivity {
         return decodePixels(pixels, w, h);
     }
 
+    /** Decodes a QR code from a still image (gallery), or returns null. */
     private String decodeBitmap(Bitmap bm) {
         if (bm == null) {
             return null;
@@ -200,6 +222,10 @@ public final class ScanActivity extends LoftActivity {
         return decodePixels(px, w, h);
     }
 
+    /**
+     * Runs ZXing on ARGB pixels and returns the code text, or null when nothing was found.
+     * The reader is reset after every attempt because it is reused for every frame.
+     */
     private String decodePixels(int[] px, int w, int h) {
         try {
             BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(w, h, px)));
@@ -223,6 +249,7 @@ public final class ScanActivity extends LoftActivity {
         if (raw == null || raw.trim().isEmpty() || !got.compareAndSet(false, true)) {
             return;
         }
+        // 1. A TV pairing QR: send every profile to the TV and close on success.
         if (PairUrl.isPair(raw)) {
             String body = LoftApp.of(this).profiles().shareAll();
             if (body.isEmpty()) {
@@ -242,17 +269,20 @@ public final class ScanActivity extends LoftActivity {
             });
             return;
         }
+        // 2. Otherwise parse links or YAML into profiles; nothing usable means try again.
         List<Profile> list = Importer.parse(raw);
         if (list.isEmpty()) {
             got.set(false);
             Toast.makeText(this, R.string.paste_hint, Toast.LENGTH_SHORT).show();
             return;
         }
+        // 3. EditActivity only wants the raw text back, without saving anything here.
         if (getIntent().getBooleanExtra("return", false)) {
             setResult(RESULT_OK, new Intent().putExtra("raw", raw));
             finish();
             return;
         }
+        // 4. Show what will be added (one line per profile) and add only after the user confirms.
         Profile first = list.get(0);
         String title = first.name.isEmpty() ? first.host() : first.name;
         StringBuilder msg = new StringBuilder();

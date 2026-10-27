@@ -27,10 +27,15 @@ import java.util.List;
  * Long-press removes a route.
  */
 public final class RoutesActivity extends LoftActivity {
+    /** Stored values for the three route choices, in the same order as the spinner entries. */
     private static final String[] VIA = {"through", "bypass", "drop"};
     private List<Prefs.Route> list;
     private ArrayAdapter<String> adapter;
 
+    /**
+     * Builds the whole screen in code: title, CIDR input, through/bypass/drop picker, Add button
+     * and the route list. Input that is not a valid prefix is ignored.
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -82,6 +87,7 @@ public final class RoutesActivity extends LoftActivity {
         setContentView(root);
     }
 
+    /** One display line per route: "prefix · choice". */
     private List<String> labels() {
         List<String> out = new ArrayList<>();
         for (Prefs.Route r : list) {
@@ -90,6 +96,7 @@ public final class RoutesActivity extends LoftActivity {
         return out;
     }
 
+    /** Saves the list to Prefs and refreshes the visible rows. */
     private void persist() {
         Prefs.setRoutes(this, list);
         adapter.clear();

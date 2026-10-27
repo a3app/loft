@@ -15,7 +15,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+/** Tests for parsing, normalising and subtracting IP prefixes. */
 public final class CidrTest {
+    /** An IPv4 prefix keeps its host address and length as typed. */
     @Test
     public void parseV4() {
         Cidr c = Cidr.parse("10.8.0.2/24");
@@ -25,6 +27,7 @@ public final class CidrTest {
         assertFalse(c.v6);
     }
 
+    /** canonical() clears the host bits, so 10.8.0.2/24 becomes 10.8.0.0/24. */
     @Test
     public void canonicalZerosHostBits() {
         Cidr c = Cidr.parse("10.8.0.2/24").canonical();
@@ -33,6 +36,7 @@ public final class CidrTest {
         assertEquals("10.8.0.0/24", c.display());
     }
 
+    /** IPv6 prefixes parse and are flagged as v6. */
     @Test
     public void parseV6() {
         Cidr c = Cidr.parse("2001:db8::1/64");
@@ -41,6 +45,7 @@ public final class CidrTest {
         assertEquals(64, c.bits);
     }
 
+    /** Hostnames and URLs are not prefixes and parse to null. */
     @Test
     public void parseDropsHostnames() {
         assertNull(Cidr.parse("youtube.com"));
@@ -48,6 +53,7 @@ public final class CidrTest {
         assertNull(Cidr.parse("http://example.com"));
     }
 
+    /** Removing one /32 from 0.0.0.0/0 leaves 32 pieces, none of which contain that address. */
     @Test
     public void subtractHostFromDefault() {
         Cidr all = Cidr.parse("0.0.0.0/0");
@@ -62,6 +68,10 @@ public final class CidrTest {
         assertTrue(covered);
     }
 
+    /**
+     * After cutting the private ranges out of the default route, the overlay subnet (the tunnel's
+     * own 10.8.0.0/24) can be added back, while home LAN addresses stay outside.
+     */
     @Test
     public void lanBypassKeepsOverlay() {
         List<Cidr> v4 = Cidr.of("0.0.0.0/0");

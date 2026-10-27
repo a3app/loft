@@ -1,3 +1,8 @@
+/*
+ * Android client, phone build: the Quick Settings tile (the button in the
+ * pull-down shade). It starts and stops LoftVpnService and repaints itself
+ * from Live state whenever the Bus (in-process event bus) fires.
+ */
 package app.loft.android;
 
 import android.content.Intent;
@@ -12,24 +17,30 @@ import android.service.quicksettings.TileService;
  * dialog when permission has not been granted.
  */
 public final class LoftTileService extends TileService implements Bus.Listener {
+    /** Called when the shade opens: subscribe to state changes and paint the current state. */
     @Override
     public void onStartListening() {
         Bus.watch(this);
         paint();
     }
 
+    /** Called when the shade closes: stop listening, nothing to repaint. */
     @Override
     public void onStopListening() {
         Bus.drop(this);
     }
 
+    /** Bus callback: VPN state changed, repaint the tile. */
     @Override
     public void onLoft() {
         paint();
     }
 
-    // startActivityAndCollapse needs a PendingIntent on API 34+; a plain
-    // Intent is refused there.
+    /**
+     * Tap handler. Stops the tunnel if it is running or connecting; otherwise opens the app
+     * when there is no profile, asks for VPN consent when needed, or starts the tunnel.
+     * startActivityAndCollapse needs a PendingIntent on API 34+; a plain Intent is refused there.
+     */
     @Override
     public void onClick() {
         if (LoftVpnService.running || Live.on() || Live.connecting()) {
@@ -55,6 +66,7 @@ public final class LoftTileService extends TileService implements Bus.Listener {
         LoftVpnService.requestStart(this);
     }
 
+    /** Shows the tile as active while connected or connecting, inactive otherwise. */
     private void paint() {
         Tile t = getQsTile();
         if (t == null) {

@@ -1,3 +1,9 @@
+/*
+ * Android client, phone build: the first-run wizard. MainActivity opens it
+ * while no profile exists. A profile can come from a scanned QR code
+ * (ScanActivity), a pasted link (Importer) or typed fields (built into YAML
+ * with YamlBuilder); then the VPN is started.
+ */
 package app.loft.android;
 
 import android.app.Activity;
@@ -24,6 +30,7 @@ public final class OnboardActivity extends LoftActivity {
     private static final int REQ_VPN = 1;
     private int step;
 
+    /** Wires the buttons of all three steps and starts on step 0. */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -59,6 +66,7 @@ public final class OnboardActivity extends LoftActivity {
         }
     }
 
+    /** Shows step {@code s} (0, 1 or 2) and sets its step label, title and help text. */
     private void go(int s) {
         step = s;
         findViewById(R.id.step0).setVisibility(s == 0 ? View.VISIBLE : View.GONE);
@@ -103,6 +111,10 @@ public final class OnboardActivity extends LoftActivity {
         askVpn();
     }
 
+    /**
+     * Builds a profile from the typed key, host, front, path and edge, saves it as the active
+     * profile and moves on to VPN consent. Does nothing while the host is empty.
+     */
     private void connectHand() {
         Profile p = new Profile();
         p.token = text(R.id.token);
@@ -140,6 +152,9 @@ public final class OnboardActivity extends LoftActivity {
         finish();
     }
 
+    /**
+     * Result of the VPN consent dialog: start the tunnel if allowed, then leave onboarding either way.
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -149,6 +164,7 @@ public final class OnboardActivity extends LoftActivity {
         finish();
     }
 
+    /** Trimmed text of an EditText by view id. */
     private String text(int id) {
         return ((EditText) findViewById(id)).getText().toString().trim();
     }

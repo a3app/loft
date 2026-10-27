@@ -11,7 +11,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/** Tests for copying route profiles and detecting the operator profile. */
 public final class ProfileStoreTest {
+    /**
+     * Copying the operator profile gives a new id and marks the copy and its services as the
+     * user's own ("me" instead of "op").
+     */
     @Test
     public void copyMarksServicesMine() {
         ProfileStore ps = new ProfileStore();
@@ -32,6 +37,7 @@ public final class ProfileStoreTest {
         assertFalse(copy.id.equals(op.id));
     }
 
+    /** operatorActive() is true only while the profile sent by the node is selected. */
     @Test
     public void operatorActive() {
         ProfileStore ps = new ProfileStore();

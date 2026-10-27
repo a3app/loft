@@ -46,23 +46,43 @@ import app.loft.engine.mobile.Mobile;
  * import and export. Back returns to the list page first.
  */
 public final class ListsActivity extends LoftActivity {
+    /** Request code for the file picker (a .bat list on the import page, a profile on profimp). */
     private static final int REQ_IN = 8;
+    /** The lists being edited: a working copy of the active route profile. */
     private SplitStore store;
+    /**
+     * Zone selected on the list page; also the target of the exclusions, repository and clear actions.
+     */
     private String zoneId = SplitStore.GLOBAL;
+    /** Name of the page currently shown (see show()). */
     private String page = "list";
+    /** Id of the service or zone open on the "svc" or "zone" page. */
     private String editing;
+    /** Zone whose list URL the catalog page will set, and the page to return to afterwards. */
     private String catalogZone = SplitStore.GLOBAL;
     private String catalogBack = "repo";
     private final Handler main = new Handler(Looper.getMainLooper());
+    /** Ids picked in multi-select mode on the list page; null when not selecting. */
     private Set<String> sel;
+    /** State before the last delete or clear, kept while the undo snackbar is visible. */
     private SplitStore.Snap undo;
+    /** The row currently swiped open, so opening another one closes it. */
     private RevealFrame openSwipe;
+    /**
+     * Rows read from an imported .bat file, waiting for the user to pick a zone; null when none.
+     * {@link #pendingHint} is the zone named inside the file, if any.
+     */
     private List<Bat.Row> pendingRows;
     private String pendingHint = "";
     private final Runnable hideSnack = this::hideSnack;
+    /** Serial of the operator profile last shown. The node bumps it when it pushes new lists. */
     private long opSerial;
     private final Bus.Listener bus = this::onBus;
 
+    /**
+     * Loads the lists and wires the header: split on/off switch, back, the "more" menu, the
+     * multi-select bar (cancel, select all, delete) and the undo button of the snackbar.
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -110,18 +130,24 @@ public final class ListsActivity extends LoftActivity {
         show("list");
     }
 
+    /** Listens to the Bus (in-process event bus) while visible, to notice operator pushes. */
     @Override
     protected void onStart() {
         super.onStart();
         Bus.watch(bus);
     }
 
+    /** Stops listening when the screen is no longer visible. */
     @Override
     protected void onStop() {
         Bus.drop(bus);
         super.onStop();
     }
 
+    /**
+     * Bus event: if the node pushed a new operator profile (serial changed) while the list or
+     * profiles page is open, reload the lists when that profile is active and redraw.
+     */
     private void onBus() {
         if (!"list".equals(page) && !"profiles".equals(page)) {
             return;
@@ -139,6 +165,10 @@ public final class ListsActivity extends LoftActivity {
         show(page);
     }
 
+    /**
+     * Back leaves multi-select first, then a sub-page (catalog and profile import go back to
+     * where they were opened from), and only closes the screen from the list page.
+     */
     @Override
     public void onBackPressed() {
         if (sel != null) {
@@ -161,15 +191,23 @@ public final class ListsActivity extends LoftActivity {
         super.onBackPressed();
     }
 
+    /**
+     * Saves the lists as the active document and copies them into the active route profile.
+     * The VPN service reads the saved lists when it next builds routes.
+     */
     private void persist() {
         store.save(this);
         ProfileStore.syncActive(this, store);
     }
 
+    /**
+     * True when the operator's profile is active: its lists come from the node and are read-only here.
+     */
     private boolean ro() {
         return ProfileStore.load(this).operatorActive();
     }
 
+    /** "More" menu on the list page: start multi-select or clear the current zone. */
     private void openMore(View v) {
         if (ro()) {
             return;
@@ -189,6 +227,10 @@ public final class ListsActivity extends LoftActivity {
         m.show();
     }
 
+    /**
+     * Switches to page {@code p}: sets the header (normal title bar or multi-select bar), the title,
+     * and rebuilds the page body from scratch. Unknown names show the list page.
+     */
     private void show(String p) {
         page = p;
         boolean list = "list".equals(p);
@@ -257,6 +299,11 @@ public final class ListsActivity extends LoftActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
+    /**
+     * Main page: profile row, zone chips with counts, the zone's policy line, a search field and
+     * the zone's services. Below them: exclusions, add, import, export and repository (only
+     * export when read-only).
+     */
     private View listPage() {
         LinearLayout root = col();
         root.addView(subline(Prefs.split(this)
@@ -278,6 +325,7 @@ public final class ListsActivity extends LoftActivity {
             root.addView(hint(getString(R.string.prof_ro)));
             root.addView(ghostSm(getString(R.string.prof_copy), v -> copyActive()));
         }
+        // Zone chips: picking one shows that zone's services.
         LinearLayout zhead = row();
         zhead.addView(label(getString(R.string.zone)),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -307,6 +355,7 @@ public final class ListsActivity extends LoftActivity {
         hsLp.bottomMargin = dp(8);
         root.addView(hs, hsLp);
         root.addView(policyOf(store.zone(zoneId)));
+        // Service list, filtered by the search text (search is hidden while selecting).
         EditText search = field("");
         search.setHint(getString(R.string.search));
         search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
@@ -345,6 +394,7 @@ public final class ListsActivity extends LoftActivity {
         lv.setDividerHeight(dp(6));
         lv.setSelector(new android.graphics.drawable.ColorDrawable(0));
         lv.setNestedScrollingEnabled(true);
+        // Footer under the list: exclusions row and the action buttons.
         if (sel == null) {
             LinearLayout tail = col(false);
             int nx = store.exclCount(zoneId);
@@ -398,6 +448,10 @@ public final class ListsActivity extends LoftActivity {
         return root;
     }
 
+    /**
+     * Exclusions page for the current zone: "ignore" entries whose prefixes never use the tunnel.
+     * Allows adding one and clearing all when editable.
+     */
     private View exclPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.split_excl_sub)));
@@ -459,6 +513,12 @@ public final class ListsActivity extends LoftActivity {
         return root;
     }
 
+    /**
+     * Fills one swipeable row. A service shows name, prefix preview, counts and source (list,
+     * operator or mine); an exclusion shows its prefixes. Tap opens the editor or toggles the
+     * pick in multi-select; long-press starts multi-select; the swipe action deletes or, for an
+     * exclusion, lets the prefix use its zone again.
+     */
     private void bindSvcRow(RevealFrame row, SplitStore.Svc s, boolean excl) {
         row.settleNow(0);
         TextView name = row.findViewById(R.id.name);
@@ -537,6 +597,7 @@ public final class ListsActivity extends LoftActivity {
         act.setOnClickListener(v -> gone(java.util.Collections.singletonList(s.id)));
     }
 
+    /** Short count line for a service, e.g. "3 networks · 2 domains". */
     private String svcMeta(SplitStore.Svc s) {
         List<String> bits = new ArrayList<>();
         if (!s.cidrs.isEmpty()) {
@@ -548,6 +609,9 @@ public final class ListsActivity extends LoftActivity {
         return TextUtils.join(" · ", bits);
     }
 
+    /**
+     * Line that says what the zone does (through, around or block), with an explanation for block.
+     */
     private View policyOf(SplitStore.Zone z) {
         LinearLayout box = col(false);
         String name = z == null ? zoneId : z.name;
@@ -565,6 +629,11 @@ public final class ListsActivity extends LoftActivity {
         return box;
     }
 
+    /**
+     * Editor for one service or exclusion: kind (route or ignore), networks, domains, name and
+     * zone. Save keeps only valid prefixes and unique lower-case domains. Read-only for the
+     * operator profile. Creates an empty service if the id is unknown.
+     */
     private View svcPage() {
         SplitStore.Svc s = store.svc(editing);
         if (s == null) {
@@ -619,6 +688,7 @@ public final class ListsActivity extends LoftActivity {
         HorizontalScrollView hs = new HorizontalScrollView(this);
         hs.addView(zseg);
         root.addView(hs);
+        // Domains apply only to route entries, so hide them for ignore.
         Runnable kindUi = () -> {
             int vis = svc.ignore ? View.GONE : View.VISIBLE;
             domLab.setVisibility(vis);
@@ -643,6 +713,7 @@ public final class ListsActivity extends LoftActivity {
             }
             return scroll(root);
         }
+        // Save: parse the text fields back into the service.
         Button save = go(getString(R.string.save), 14);
         save.setOnClickListener(v -> {
             svc.name = name.getText().toString().trim();
@@ -676,6 +747,9 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /**
+     * List of all zones with direction and service count, plus "new zone" (goes through by default).
+     */
     private View zonesPage() {
         LinearLayout root = col();
         for (SplitStore.Zone z : store.zones) {
@@ -718,6 +792,7 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /** Human label for a zone's direction: through, around or blocked. */
     private String dirLabel(SplitStore.Zone z) {
         if (z.block) {
             return getString(R.string.split_blocked);
@@ -725,6 +800,10 @@ public final class ListsActivity extends LoftActivity {
         return getString(z.through ? R.string.through_loft : R.string.around_loft);
     }
 
+    /**
+     * Editor for one zone: name (fixed for built-in zones), direction, list URL with catalog
+     * picker, auto-update switch and last-download state. Custom zones can be deleted.
+     */
     private View zonePage() {
         SplitStore.Zone z = store.zone(editing);
         if (z == null) {
@@ -794,6 +873,10 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /**
+     * Repository page for the current zone: list URL (saved as typed), catalog picker,
+     * auto-update and a button that downloads the list now.
+     */
     private View repoPage() {
         SplitStore.Zone z = store.zone(zoneId);
         LinearLayout root = col();
@@ -824,6 +907,11 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /**
+     * Import page. Without rows yet it offers a file picker; after a .bat file is read it shows
+     * how many rows were found, lets the user pick the zone (the file's own zone hint first)
+     * and adds the rows, skipping prefixes the zone already has.
+     */
     private View impPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.split_import_body)));
@@ -869,6 +957,7 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /** Export page: all zones as one .bat text, shown as a preview and sent via the share sheet. */
     private View expPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.split_export_body)));
@@ -893,6 +982,7 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /** Display name of a route profile; unnamed own profiles get the "own" label. */
     private String profName(ProfileStore.Prof p) {
         if (p == null) {
             return getString(R.string.prof_own);
@@ -906,6 +996,9 @@ public final class ListsActivity extends LoftActivity {
         return p.id;
     }
 
+    /**
+     * Where a route profile came from: the operator (with its connection name), a link, or the user.
+     */
     private String profSrc(ProfileStore.Prof p) {
         if ("op".equals(p.src)) {
             String conn = p.conn == null || p.conn.isEmpty() ? "—" : p.conn;
@@ -917,6 +1010,7 @@ public final class ListsActivity extends LoftActivity {
         return getString(R.string.prof_src_own);
     }
 
+    /** Makes an editable copy of the active (operator) profile and switches to it. */
     private void copyActive() {
         ProfileStore ps = ProfileStore.load(this);
         ProfileStore.Prof src = ps.current();
@@ -928,6 +1022,7 @@ public final class ListsActivity extends LoftActivity {
         show("list");
     }
 
+    /** Route profiles page: tap one to make it active; operator profiles also offer "copy". */
     private View profilesPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.prof_sub)));
@@ -958,6 +1053,7 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /** Route-profile import page: paste a loft://routes/ link or pick a file. */
     private View profimpPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.prof_imp_sub)));
@@ -979,6 +1075,10 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /**
+     * Parses a route-profile link with the Go engine (Mobile.parseRoutes) and adds it to the
+     * catalog. Any failure shows one "bad link" message.
+     */
     private void importProfile(String raw) {
         if (raw == null || raw.trim().isEmpty()) {
             Toast.makeText(this, R.string.prof_bad, Toast.LENGTH_SHORT).show();
@@ -1002,12 +1102,17 @@ public final class ListsActivity extends LoftActivity {
         }
     }
 
+    /** Opens the catalog to choose a list for {@code zone}, returning to page {@code back}. */
     private void openCatalog(String zone, String back) {
         catalogZone = zone;
         catalogBack = back;
         show("catalog");
     }
 
+    /**
+     * Catalog of ready-made lists in the public loft-routes repository, named in the app's
+     * language. The zone's current list is highlighted; tapping one sets the zone's list URL.
+     */
     private View catalogPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.catalog_d)));
@@ -1055,6 +1160,9 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    /**
+     * Downloads the zone's list on a background thread, then saves and redraws on the main thread.
+     */
     private void pull(SplitStore.Zone z) {
         if (z.repo == null || z.repo.isEmpty()) {
             Toast.makeText(this, R.string.no_url, Toast.LENGTH_SHORT).show();
@@ -1074,6 +1182,11 @@ public final class ListsActivity extends LoftActivity {
         }).start();
     }
 
+    /**
+     * Deletes services with undo: removes them, saves, keeps a snapshot for the snackbar and
+     * describes what went (one name, an exclusion's prefix, or a count). Deleting entries that
+     * came from a repository list turns their prefixes into exclusions; the snackbar says so.
+     */
     private void gone(List<String> ids) {
         if (ro()) {
             return;
@@ -1109,6 +1222,11 @@ public final class ListsActivity extends LoftActivity {
         show("list".equals(page) || "excl".equals(page) ? page : "list");
     }
 
+    /**
+     * Confirm dialog for clearing the current zone. For exclusions it clears them all. For
+     * services it counts the user's own entries versus list entries and offers "mine only",
+     * "all" (which also unlinks the list) or just the one choice that applies.
+     */
     private void openClear(boolean excl) {
         SplitStore.Zone z = store.zone(zoneId);
         String name = z == null ? zoneId : z.name;
@@ -1149,6 +1267,7 @@ public final class ListsActivity extends LoftActivity {
         b.show();
     }
 
+    /** Clears the current zone ("me" or "all"), saves, and offers undo. */
     private void doClear(String how, String name) {
         SplitStore.Snap snap = store.snap();
         store.clearZone(zoneId, how);
@@ -1158,6 +1277,7 @@ public final class ListsActivity extends LoftActivity {
         show("list");
     }
 
+    /** Shows the undo snackbar for 5 seconds. */
     private void snack(String text) {
         TextView t = findViewById(R.id.snack_t);
         t.setText(text);
@@ -1166,12 +1286,17 @@ public final class ListsActivity extends LoftActivity {
         main.postDelayed(hideSnack, 5000);
     }
 
+    /** Hides the snackbar and forgets the undo snapshot. */
     private void hideSnack() {
         findViewById(R.id.snack).setVisibility(View.GONE);
         main.removeCallbacks(hideSnack);
         undo = null;
     }
 
+    /**
+     * File picker result: on the profile import page imports a route profile, otherwise reads a
+     * .bat list and opens the import page with its rows.
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -1195,6 +1320,7 @@ public final class ListsActivity extends LoftActivity {
         }
     }
 
+    /** Reads a whole stream as UTF-8 text. */
     private static String read(InputStream in) throws Exception {
         ByteArrayOutputStream o = new ByteArrayOutputStream();
         byte[] b = new byte[4096];
@@ -1205,6 +1331,7 @@ public final class ListsActivity extends LoftActivity {
         return o.toString(StandardCharsets.UTF_8.name());
     }
 
+    /** Card row with a title on the left and grey meta text on the right. */
     private LinearLayout clickRow(String n, String m, View.OnClickListener l) {
         LinearLayout row = row();
         row.setBackgroundResource(R.drawable.bg_card);
@@ -1222,10 +1349,12 @@ public final class ListsActivity extends LoftActivity {
         return row;
     }
 
+    /** Vertical container with the standard page padding. */
     private LinearLayout col() {
         return col(true);
     }
 
+    /** Vertical container, padded or not. */
     private LinearLayout col(boolean pad) {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
@@ -1236,6 +1365,7 @@ public final class ListsActivity extends LoftActivity {
         return l;
     }
 
+    /** Horizontal container with vertically centred children. */
     private LinearLayout row() {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.HORIZONTAL);
@@ -1243,16 +1373,19 @@ public final class ListsActivity extends LoftActivity {
         return l;
     }
 
+    /** Wraps a page in a ScrollView. */
     private ScrollView scroll(View v) {
         ScrollView s = new ScrollView(this);
         s.addView(v);
         return s;
     }
 
+    /** Inflates a styled button layout (the styles live in XML). */
     private Button inflateBtn(int layout) {
         return (Button) getLayoutInflater().inflate(layout, findViewById(R.id.body), false);
     }
 
+    /** Full-width layout params with a top margin in dp. */
     private LinearLayout.LayoutParams stack(int top) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -1260,6 +1393,7 @@ public final class ListsActivity extends LoftActivity {
         return lp;
     }
 
+    /** Equal-width button for a segmented control. */
     private Button segBtn(String t) {
         Button b = inflateBtn(R.layout.btn_seg);
         b.setText(t);
@@ -1267,6 +1401,7 @@ public final class ListsActivity extends LoftActivity {
         return b;
     }
 
+    /** Small selectable chip, used for zone choices. */
     private Button chip(String t) {
         Button b = inflateBtn(R.layout.btn_chip);
         b.setText(t);
@@ -1277,6 +1412,7 @@ public final class ListsActivity extends LoftActivity {
         return b;
     }
 
+    /** Rounder chip, used for the zone chips on the list page. */
     private Button pill(String t) {
         Button b = chip(t);
         if (b instanceof MaterialButton) {
@@ -1285,6 +1421,7 @@ public final class ListsActivity extends LoftActivity {
         return b;
     }
 
+    /** Main (accent) full-width button. */
     private Button go(String t, int top) {
         Button b = inflateBtn(R.layout.btn_go);
         b.setText(t);
@@ -1292,6 +1429,7 @@ public final class ListsActivity extends LoftActivity {
         return b;
     }
 
+    /** Full-width button for destructive actions. */
     private Button danger(String t, int top) {
         Button b = inflateBtn(R.layout.btn_danger);
         b.setText(t);
@@ -1299,6 +1437,7 @@ public final class ListsActivity extends LoftActivity {
         return b;
     }
 
+    /** Small outlined button with a click action. */
     private Button ghostSm(String t, View.OnClickListener l) {
         Button b = inflateBtn(R.layout.btn_ghost_sm);
         b.setText(t);
@@ -1310,18 +1449,21 @@ public final class ListsActivity extends LoftActivity {
         return b;
     }
 
+    /** Small compact button. */
     private Button mini(String t) {
         Button b = inflateBtn(R.layout.btn_mini);
         b.setText(t);
         return b;
     }
 
+    /** Small compact button with a click action. */
     private Button mini(String t, View.OnClickListener l) {
         Button b = mini(t);
         b.setOnClickListener(l);
         return b;
     }
 
+    /** Full-width styled text field with the given text. */
     private EditText field(String v) {
         EditText e = new EditText(this);
         e.setText(v);
@@ -1338,6 +1480,7 @@ public final class ListsActivity extends LoftActivity {
         return e;
     }
 
+    /** Single-line monospace field for a list URL, sized to sit in a urlRow. */
     private EditText urlField(String v) {
         EditText e = field(v);
         e.setSingleLine(true);
@@ -1348,6 +1491,7 @@ public final class ListsActivity extends LoftActivity {
         return e;
     }
 
+    /** URL field plus a "pick list" button that opens the catalog. */
     private LinearLayout urlRow(EditText url, View.OnClickListener lists) {
         LinearLayout row = row();
         LinearLayout.LayoutParams wrap = new LinearLayout.LayoutParams(
@@ -1366,6 +1510,7 @@ public final class ListsActivity extends LoftActivity {
         return row;
     }
 
+    /** Settings row with the zone's auto-update switch, saved as soon as it changes. */
     private LinearLayout autoRow(SplitStore.Zone z) {
         LinearLayout auto = row();
         auto.setPadding(0, dp(12), 0, dp(12));
@@ -1393,6 +1538,7 @@ public final class ListsActivity extends LoftActivity {
         return auto;
     }
 
+    /** Small grey field label. */
     private TextView label(String t) {
         TextView v = new TextView(this);
         v.setText(t);
@@ -1401,6 +1547,7 @@ public final class ListsActivity extends LoftActivity {
         return v;
     }
 
+    /** Grey multi-line help text. */
     private TextView hint(String t) {
         TextView v = new TextView(this);
         v.setText(t);
@@ -1414,6 +1561,7 @@ public final class ListsActivity extends LoftActivity {
         return v;
     }
 
+    /** Grey description line at the top of a page. */
     private TextView subline(String t) {
         TextView v = new TextView(this);
         v.setText(t);
@@ -1426,6 +1574,7 @@ public final class ListsActivity extends LoftActivity {
         return v;
     }
 
+    /** Grey line that states a zone's policy. */
     private TextView policyLine(String t) {
         TextView v = new TextView(this);
         v.setText(t);
@@ -1438,6 +1587,7 @@ public final class ListsActivity extends LoftActivity {
         return v;
     }
 
+    /** Small secondary text, e.g. counts or source. */
     private TextView meta(String t) {
         TextView v = new TextView(this);
         v.setText(t);
@@ -1446,6 +1596,7 @@ public final class ListsActivity extends LoftActivity {
         return v;
     }
 
+    /** Text in the main (light) text colour. */
     private TextView snow(String t) {
         TextView v = new TextView(this);
         v.setText(t);
@@ -1453,6 +1604,7 @@ public final class ListsActivity extends LoftActivity {
         return v;
     }
 
+    /** Equal-share width params with a left margin in dp, for button rows. */
     private LinearLayout.LayoutParams weight(int left) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
@@ -1460,10 +1612,12 @@ public final class ListsActivity extends LoftActivity {
         return lp;
     }
 
+    /** Converts density-independent pixels to real pixels for this screen. */
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
+    /** TextWatcher that runs one action after every text change. */
     private static final class SimpleWatch implements android.text.TextWatcher {
         private final Runnable r;
 

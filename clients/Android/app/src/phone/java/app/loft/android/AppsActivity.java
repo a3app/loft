@@ -34,7 +34,9 @@ import java.util.Set;
  * packages use it. Except and only keep separate package sets.
  */
 public final class AppsActivity extends LoftActivity {
+    /** Current mode: "all", "except" or "only". */
     private String mode;
+    /** Whether system apps are listed. Not saved; system apps already picked are always shown. */
     private boolean sys;
     private final Set<String> except = new HashSet<>();
     private final Set<String> only = new HashSet<>();
@@ -43,8 +45,10 @@ public final class AppsActivity extends LoftActivity {
     private TextView hint;
     private TextView cnt;
     private EditText search;
+    /** Container for search, system-apps switch, counter and app list; hidden in "all" mode. */
     private LinearLayout extra;
 
+    /** Loads the saved mode and both package sets, then draws the screen. */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -56,16 +60,25 @@ public final class AppsActivity extends LoftActivity {
         paint();
     }
 
+    /**
+     * Saves the mode and both package sets to Prefs right away, so the next tunnel start uses them.
+     */
     private void persist() {
         Prefs.p(this).edit().putString("app_mode", mode).apply();
         Prefs.setAppSet(this, "except", except);
         Prefs.setAppSet(this, "only", only);
     }
 
+    /** The package set the current mode edits ("only" set, else the "except" set). */
     private Set<String> sel() {
         return "only".equals(mode) ? only : except;
     }
 
+    /**
+     * Rebuilds the whole screen in code for the current mode: description, mode switch and hint,
+     * and, for except/only, the search field, system-apps switch, counter and app list.
+     * Called again whenever the mode changes.
+     */
     private void paint() {
         ViewGroup body = findViewById(R.id.body);
         body.removeAllViews();
@@ -74,6 +87,7 @@ public final class AppsActivity extends LoftActivity {
         int p = dp(16);
         root.setPadding(p, p / 2, p, p);
 
+        // 1. Mode description and the All / Except / Only switch.
         TextView sub = new TextView(this);
         int d = "only".equals(mode) ? R.string.apps_d_only
                 : "except".equals(mode) ? R.string.apps_d_except : R.string.apps_d_all;
@@ -110,6 +124,7 @@ public final class AppsActivity extends LoftActivity {
         segLp.bottomMargin = dp(10);
         root.addView(seg, segLp);
 
+        // 2. Hint line, then the area that holds the app picker.
         hint = new TextView(this);
         hint.setTextColor(getColor(R.color.mute));
         hint.setTextSize(12);
@@ -128,6 +143,7 @@ public final class AppsActivity extends LoftActivity {
         } else {
             hint.setText(R.string.apps_lock);
             extra.setVisibility(View.VISIBLE);
+            // 3. Except/only: search field, system-apps switch, counter and the app list.
             search = new EditText(this);
             search.setHint(R.string.apps_search);
             search.setTextColor(getColor(R.color.snow));
@@ -217,6 +233,11 @@ public final class AppsActivity extends LoftActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
+    /**
+     * Refills the app list: every launchable app except loft itself, filtered by the search text,
+     * with system apps hidden unless the switch is on or they are already picked. Picked apps
+     * come first, then by name.
+     */
     private void fill() {
         rows.clear();
         String q = search == null ? "" : search.getText().toString().trim().toLowerCase();
@@ -274,6 +295,7 @@ public final class AppsActivity extends LoftActivity {
         }
     }
 
+    /** Creates one empty list row (icon, name, package, switch); views are found later by tag. */
     private View makeRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -308,6 +330,10 @@ public final class AppsActivity extends LoftActivity {
         return row;
     }
 
+    /**
+     * Fills a row for one app and makes its switch (or a tap on the row) add or remove the
+     * package from the current set, saving immediately.
+     */
     private void bindRow(View row, Row r) {
         ImageView ic = row.findViewWithTag("ic");
         if (r.icon != null) {
@@ -334,10 +360,12 @@ public final class AppsActivity extends LoftActivity {
         row.setOnClickListener(v -> sw.toggle());
     }
 
+    /** Converts density-independent pixels to real pixels for this screen. */
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
+    /** One installed app as shown in the list. */
     private static final class Row {
         String pkg = "";
         String name = "";
