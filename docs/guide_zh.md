@@ -416,8 +416,8 @@ go test ./internal/wire ./internal/crypto ./internal/mux ./internal/netconf ./in
 
 - 节点 tarball 和 `.deb`（linux amd64、arm64）
 - CLI 归档（`loft`、`loft-front`、`loft-probe`、`loft-bench`，linux/darwin，amd64/arm64）
-- macOS DMG，ad-hoc 签名：`loft-*-macos-arm64.dmg` 和 `loft-*-macos-x86_64.dmg`（`BUMP=0`，CI 不改写 `clients/macOS/VERSION`）。跑的是 Apple Silicon；Intel 是 Swift/Go 交叉编译（`ARCH=x86_64`）。
+- macOS DMG，ad-hoc 签名：`loft-*-macos-arm.dmg` 和 `loft-*-macos-intel.dmg`（`BUMP=0`，CI 不改写 `clients/macOS/VERSION`）。跑的是 Apple Silicon；Intel 是 Swift/Go 交叉编译（`ARCH=x86_64`）。
 
-然后发 GitHub Release。Dist 还会把标签拉进 [proxy.golang.org](https://proxy.golang.org)，并请求 [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft)，让模块页跟上这次发布。文件名带版本（`loft-1.0.32-macos-arm64.dmg`、`loft-node_1.0.32_amd64.deb`）。同一标签再跑一遍工作流会替换文件。没有标签时，Actions → Dist → Run workflow 只上传产物。
+然后发 GitHub Release。Dist 还会把标签拉进 [proxy.golang.org](https://proxy.golang.org)，并请求 [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft)，让模块页跟上这次发布。文件名带版本（`loft-1.0.32-macos-arm.dmg`、`loft-node_1.0.32_amd64.deb`）。同一标签再跑一遍工作流会替换文件。没有标签时，Actions → Dist → Run workflow 只上传产物。
 
 本地打包：`make dist`。本地打 DMG 且不抬 macOS 市场版本：`make macos-dmg BUMP=0`。Developer ID 和公证留在有钥匙串的 Mac 上；不在 Actions 里。
