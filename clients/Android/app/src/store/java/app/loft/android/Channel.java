@@ -8,6 +8,7 @@ package app.loft.android;
 
 import android.app.Activity;
 import android.app.Application;
+import android.content.Context;
 import android.view.View;
 
 /** Store channel: no GitHub updater. The github flavor ships a different class. */
@@ -24,4 +25,9 @@ public final class Channel {
 
     /** Same as {@link #attach(Activity)} for a given view tree; does nothing. */
     public static void attach(Activity a, View root) {}
+
+    /** Store builds do not send crash reports (Play Vitals). Shared Crash.java still compiles. */
+    static boolean sendCrash(Context ctx, String title, String body) {
+        return true;
+    }
 }

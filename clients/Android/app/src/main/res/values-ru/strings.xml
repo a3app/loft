@@ -140,6 +140,8 @@
     <string name="sent_tv">Отправлено на телевизор</string>
     <string name="pair_no_lan">Нет адреса LAN</string>
     <string name="extended_log">Подробный журнал</string>
+    <string name="crash_report">Отчёт о сбое</string>
+    <string name="crash_report_d">После падения отправляется в GitHub. Ключи вырезаются.</string>
     <string name="handshake">рукопожатие</string>
     <string name="details">Подробности</string>
     <string name="mtu">MTU</string>

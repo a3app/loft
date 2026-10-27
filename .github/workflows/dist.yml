@@ -191,6 +191,9 @@ jobs:
           chmod 600 secrets/android-github.p12 secrets/android-github.pass
       - name: GitHub-channel APKs
         if: env.skip != '1'
+        env:
+          # issues:write on a3app/loft only; baked into the APK. Empty: reports queue.
+          LOFT_ANDROID_CRASH_TOKEN: ${{ secrets.LOFT_ANDROID_CRASH_TOKEN }}
         run: make -C clients/Android release
       - name: Smoke APKs
         if: env.skip != '1'

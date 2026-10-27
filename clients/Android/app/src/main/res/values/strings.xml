@@ -151,6 +151,8 @@
     <string name="sent_tv">Sent to TV</string>
     <string name="pair_no_lan">No LAN address</string>
     <string name="extended_log">Extended log</string>
+    <string name="crash_report">Crash reports</string>
+    <string name="crash_report_d">After a crash, a redacted report is sent to GitHub.</string>
     <string name="handshake">handshake</string>
     <string name="details">Details</string>
     <string name="mtu">MTU</string>

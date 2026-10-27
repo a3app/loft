@@ -36,7 +36,7 @@ No bottom navigation, no FAB, no swipe. A left rail (Home / Connections / Settin
 | File | Leanback picker over USB OTG and `Downloads`. `.loft`, `loft://`, YAML. Confirm: name, kind · transport, host; the secret stays hidden. |
 | Paste | Leanback IME. Field `loft://` or YAML. **Add**. |
 | Edit | Sparse on purpose. Name, method chips **Auto · GET · WS · H2 · QUIC · H3 · L3**, Save. Full loft / SSTP / VLESS / Trojan forms stay on the phone. A TV remote is not a YAML editor. |
-| Settings | Groups **General / Route / Connection**. General: language, extended log. Route: default route, LAN bypass, **No Internet without VPN** as a link **Open VPN settings** (Always-on and Block connections without VPN are system switches). Connection: Connect at launch, Reconnect on disconnect. Footer: Log · About. No CIDR Lists editor. |
+| Settings | Groups **General / Route / Connection**. General: language, extended log, crash reports (GitHub channel). Route: default route, LAN bypass, **No Internet without VPN** as a link **Open VPN settings** (Always-on and Block connections without VPN are system switches). Connection: Connect at launch, Reconnect on disconnect. Footer: Log · About. No CIDR Lists editor. |
 | Log | Last lines, key shortened. Clear with a confirm. |
 | About | Mark, version, loft/1.0 · SSTP · VLESS · Trojan, blurb, Made with love by A³. |
 | Consent | Stock Android TV **Connection request**. Once. Then Connect does not ask. |

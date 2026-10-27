@@ -140,6 +140,8 @@
     <string name="sent_tv">已发到电视</string>
     <string name="pair_no_lan">没有局域网地址</string>
     <string name="extended_log">详细日志</string>
+    <string name="crash_report">崩溃报告</string>
+    <string name="crash_report_d">崩溃后发到 GitHub。密钥会去掉。</string>
     <string name="handshake">握手</string>
     <string name="details">详情</string>
     <string name="mtu">MTU</string>

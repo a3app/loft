@@ -145,6 +145,58 @@ final class Gh {
         return hex(md.digest());
     }
 
+    /**
+     * Opens a GitHub issue on a3app/loft. The token is baked into the APK, so
+     * it must be issues:write only. Empty token or a non-201 response is false.
+     */
+    static boolean postIssue(String token, String ua, String title, String body) throws IOException {
+        if (token == null || token.isEmpty()) {
+            return false;
+        }
+        JSONObject o = new JSONObject();
+        try {
+            o.put("title", title);
+            o.put("body", body);
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
+        byte[] payload = o.toString().getBytes(StandardCharsets.UTF_8);
+        HttpURLConnection c = (HttpURLConnection) new URL(
+                "https://api.github.com/repos/a3app/loft/issues").openConnection();
+        c.setRequestMethod("POST");
+        c.setDoOutput(true);
+        c.setConnectTimeout(8000);
+        c.setReadTimeout(15000);
+        c.setRequestProperty("User-Agent", ua);
+        c.setRequestProperty("Accept", "application/vnd.github+json");
+        c.setRequestProperty("Authorization", "Bearer " + token);
+        c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        c.setRequestProperty("X-GitHub-Api-Version", "2022-11-28");
+        c.setFixedLengthStreamingMode(payload.length);
+        try {
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(payload);
+            }
+            int code = c.getResponseCode();
+            InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+            if (in != null) {
+                try (InputStream s = in) {
+                    byte[] buf = new byte[1024];
+                    int n, total = 0;
+                    while ((n = s.read(buf)) > 0) {
+                        total += n;
+                        if (total > 64 * 1024) {
+                            break;
+                        }
+                    }
+                }
+            }
+            return code == 201;
+        } finally {
+            c.disconnect();
+        }
+    }
+
     /** Lowercase hex form of a digest, the same format as SHA256SUMS lines. */
     static String hex(byte[] d) {
         char[] out = new char[d.length * 2];

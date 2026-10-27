@@ -62,6 +62,7 @@ Java-пакет `app.loft.engine`: `Engine`, `Snapshot`, `PacketSink`, `SocketPr
 | | `github` (по умолчанию, Dist) | `store` |
 |--|--|--|
 | Обновление | Настройки / О программе → Проверить. GitHub Releases, SHA-256, `PackageInstaller`. Разрешение на установку из неизвестных источников даётся один раз, дальше обновления ставятся тихо (`USER_ACTION_NOT_REQUIRED`, update-ownership). Автопроверка раз в 6 ч в безлимитной сети. | кода нет |
+| Отчёт о сбое | Непойманный Java плюс native/ANR пишутся на диск, при следующем старте уходят GitHub Issue. Ключи вырезаются. Тумблер в Настройках, по умолчанию включён. Токен `LOFT_ANDROID_CRASH_TOKEN` (`issues:write` только на a3app/loft — он в APK). Пустой токен: отчёты остаются в очереди. | Play Vitals; кода нет |
 | Право | `REQUEST_INSTALL_PACKAGES` | нет |
 | Ключ | `secrets/android-github.p12` (`make -C clients/Android github-key`) | Play App Signing |
 

@@ -12,6 +12,24 @@ fun loftVersionCode(v: String): Int {
     return n(0) * 1_000_000 + n(1) * 1_000 + n(2)
 }
 
+/** Java string literal for a BuildConfig field; safe against Gradle `$` interpolation. */
+fun javaStringLiteral(s: String): String {
+    val b = StringBuilder("\"")
+    for (ch in s) {
+        when (ch) {
+            '\\' -> b.append("\\\\")
+            '"' -> b.append("\\\"")
+            '\n' -> b.append("\\n")
+            '\r' -> b.append("\\r")
+            '\t' -> b.append("\\t")
+            '$' -> b.append("\\u0024")
+            else -> if (ch.code < 0x20) b.append("\\u%04x".format(ch.code)) else b.append(ch)
+        }
+    }
+    b.append('"')
+    return b.toString()
+}
+
 layout.buildDirectory.set(androidDist.resolve("gradle/app"))
 
 android {
@@ -41,6 +59,12 @@ android {
             dimension = "channel"
             isDefault = true
             buildConfigField("boolean", "GITHUB", "true")
+            // issues:write only — this string is in the APK. Empty: reports stay queued.
+            buildConfigField(
+                "String",
+                "CRASH_TOKEN",
+                javaStringLiteral(System.getenv("LOFT_ANDROID_CRASH_TOKEN") ?: ""),
+            )
         }
         create("store") {
             dimension = "channel"

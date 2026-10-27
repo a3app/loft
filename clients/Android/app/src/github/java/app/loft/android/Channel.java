@@ -496,4 +496,21 @@ public final class Channel {
         busy.set(false);
         paint(msg, true);
     }
+
+    /**
+     * Posts a crash report as a GitHub issue. The token is a Dist secret baked
+     * into this flavor ({@code BuildConfig.CRASH_TOKEN}); it must be
+     * issues:write only. Empty token returns false so the file stays queued.
+     */
+    static boolean sendCrash(Context ctx, String title, String body) {
+        String tok = BuildConfig.CRASH_TOKEN;
+        if (tok == null || tok.isEmpty()) {
+            return false;
+        }
+        try {
+            return Gh.postIssue(tok, "loft-android/" + current(ctx), title, body);
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }

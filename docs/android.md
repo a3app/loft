@@ -62,6 +62,7 @@ Two product flavors on the `channel` dimension, same `applicationId`, different 
 | | `github` (default, Dist) | `store` |
 |--|--|--|
 | In-app update | Settings / About → Check. GitHub Releases, SHA-256, `PackageInstaller`. Install-unknown-apps once; later sessions silent (`USER_ACTION_NOT_REQUIRED`, update-ownership). Auto-check every 6 h on unmetered. | compiled out |
+| Crash reports | Uncaught Java plus native/ANR queued on disk, POSTed as a GitHub issue on the next start. Keys stripped. Settings toggle, on by default. Token `LOFT_ANDROID_CRASH_TOKEN` (`issues:write` on a3app/loft only — it is in the APK). Empty token: reports stay queued. | Play Vitals; compiled out |
 | Permission | `REQUEST_INSTALL_PACKAGES` | none |
 | Key | `secrets/android-github.p12` (`make -C clients/Android github-key`) | Play App Signing |
 

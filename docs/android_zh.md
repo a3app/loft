@@ -62,6 +62,7 @@ Java 包 `app.loft.engine`：`Engine`、`Snapshot`、`PacketSink`、`SocketProte
 | | `github`（默认，Dist） | `store` |
 |--|--|--|
 | 应用内更新 | 设置 / 关于 → 检查。GitHub Releases，SHA-256，`PackageInstaller`。未知来源安装只开一次；之后静默（`USER_ACTION_NOT_REQUIRED`，update-ownership）。非计费网络每 6 小时自检。 | 不编进包 |
+| 崩溃报告 | 未捕获的 Java 以及 native/ANR 先写入磁盘，下次启动 POST 成 GitHub Issue。密钥会去掉。设置里有开关，默认开。令牌 `LOFT_ANDROID_CRASH_TOKEN`（仅 `issues:write`，写进 APK）。空令牌：报告留在队列。 | Play Vitals；不编进包 |
 | 权限 | `REQUEST_INSTALL_PACKAGES` | 无 |
 | 钥匙 | `secrets/android-github.p12`（`make -C clients/Android github-key`） | Play App Signing |
 
