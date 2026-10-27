@@ -43,6 +43,17 @@ static HICON png_icon(const wchar_t *path) {
     return ic;
 }
 
+/* Light taskbar (Windows 10+): ink body. Dark taskbar and Windows 7: snow body. */
+static int light;
+
+static int taskbar_light(void) {
+    DWORD v = 0, n = sizeof v;
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                     L"SystemUsesLightTheme", RRF_RT_REG_DWORD, NULL, &v, &n) != ERROR_SUCCESS)
+        return 0;
+    return v != 0;
+}
+
 static HICON icon_dib(int px, int state) {
     BITMAPINFO bi;
     HDC dc, mem;
@@ -53,7 +64,8 @@ static HICON icon_dib(int px, int state) {
     ICONINFO ii;
     HICON ic = NULL;
     int x, y, s = px;
-    int lr = 0xC6, lg = 0x7B, lb = 0x3A;
+    int br = light ? 0x1A : 0xF3, bg = light ? 0x17 : 0xED, bb = light ? 0x14 : 0xE4;
+    int lr = br, lg = bg, lb = bb;
     if (s < 16) s = 16;
     if (state == 1) {
         lr = 0xE8;
@@ -100,9 +112,9 @@ static HICON icon_dib(int px, int state) {
                 b = lb;
                 a = 255;
             } else if (body) {
-                r = 0xC6;
-                g = 0x7B;
-                b = 0x3A;
+                r = br;
+                g = bg;
+                b = bb;
                 a = 255;
             }
             pix[y * s + x] = ((DWORD)a << 24) | ((DWORD)r << 16) | ((DWORD)g << 8) | (DWORD)b;
@@ -130,10 +142,12 @@ static int icon_px(void) {
     return 16;
 }
 
-static HICON load_png(int px, int off) {
+/* state: 0 off, 1 on, 2 error. Files: tray/loft-tray[-light][-off|-err]-<px>.png */
+static HICON load_png(int px, int state) {
+    static const char *const tail[3] = {"-off", "", "-err"};
     wchar_t dir[MAX_PATH], sub[MAX_PATH], path[MAX_PATH], file[64];
     char name[64];
-    snprintf(name, sizeof name, "loft-tray%s-%d.png", off ? "-off" : "", px);
+    snprintf(name, sizeof name, "loft-tray%s%s-%d.png", light ? "-light" : "", tail[state], px);
     widen(name, file, 64);
     exe_dir(dir, MAX_PATH);
     path_join(sub, MAX_PATH, dir, L"tray");
@@ -173,13 +187,18 @@ static int icon_which(void) {
     return 0;
 }
 
+static void icons_load(void) {
+    int i, px = icon_px();
+    light = taskbar_light();
+    for (i = 0; i < 3; i++) {
+        if (g.icon[i]) DestroyIcon(g.icon[i]);
+        g.icon[i] = load_png(px, i);
+        if (!g.icon[i]) g.icon[i] = icon_dib(px, i);
+    }
+}
+
 void tray_init(void) {
-    int px = icon_px();
-    g.icon[0] = load_png(px, 1);
-    g.icon[1] = load_png(px, 0);
-    g.icon[2] = icon_dib(px, 2);
-    if (!g.icon[0]) g.icon[0] = icon_dib(px, 0);
-    if (!g.icon[1]) g.icon[1] = icon_dib(px, 1);
+    icons_load();
     memset(&g.nid, 0, sizeof g.nid);
     g.nid.cbSize = NOTIFYICONDATAW_V3_SIZE;
     g.nid.hWnd = g.msg;
@@ -205,6 +224,13 @@ void tray_update(void) {
     Shell_NotifyIconW(NIM_MODIFY, &g.nid);
     if (session_phase() == PH_CONNECTING) SetTimer(g.msg, T_BLINK, 450, NULL);
     else KillTimer(g.msg, T_BLINK);
+}
+
+/* The taskbar switched between light and dark: swap the icon set. */
+void tray_theme(void) {
+    if (taskbar_light() == light) return;
+    icons_load();
+    tray_update();
 }
 
 void tray_remove(void) {

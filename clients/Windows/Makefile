@@ -39,13 +39,23 @@ SVC_LIBS := -liphlpapi -ladvapi32 -lws2_32 -luser32 -lshell32
 
 all: $(DIST)/x64/loft.exe $(DIST)/x86/loft.exe $(DIST)/x64/loft-svc.exe $(DIST)/x86/loft-svc.exe assets front
 
-$(DIST)/x64/app.res: res/app.rc res/app.manifest
-	mkdir -p $(@D)
-	$(WR64) -O coff -o $@ res/app.rc
+ICONS := $(ROOT)/docs/brand/windows
 
-$(DIST)/x86/app.res: res/app.rc res/app.manifest
+$(DIST)/x64/app.res: res/app.rc res/app.manifest $(ICONS)/loft.ico $(ICONS)/loft-file.ico
 	mkdir -p $(@D)
-	$(WR86) -O coff -o $@ res/app.rc
+	$(WR64) -O coff -I $(ICONS) -o $@ res/app.rc
+
+$(DIST)/x86/app.res: res/app.rc res/app.manifest $(ICONS)/loft.ico $(ICONS)/loft-file.ico
+	mkdir -p $(@D)
+	$(WR86) -O coff -I $(ICONS) -o $@ res/app.rc
+
+$(DIST)/x64/setup.res: res/setup.rc res/app.manifest $(ICONS)/loft-setup.ico
+	mkdir -p $(@D)
+	$(WR64) -O coff -I $(ICONS) -o $@ res/setup.rc
+
+$(DIST)/x86/setup.res: res/setup.rc res/app.manifest $(ICONS)/loft-setup.ico
+	mkdir -p $(@D)
+	$(WR86) -O coff -I $(ICONS) -o $@ res/setup.rc
 
 $(DIST)/x64/loft.exe: $(GUI_SRC) $(HDR) $(DIST)/x64/app.res VERSION
 	$(CC64) $(CFLAGS) -o $@ $(GUI_SRC) $(DIST)/x64/app.res $(GUI_LIBS)
@@ -74,8 +84,9 @@ assets:
 	  cp ../macOS/lang/*.lang $(DIST)/$$a/lang/; \
 	  cp design/lang/win.lang $(DIST)/$$a/lang/win.lang; \
 	  for p in 16 20 24 32; do \
-	    cp ../../docs/brand/tray/loft-tray-$$p.png $(DIST)/$$a/tray/; \
-	    cp ../../docs/brand/tray/loft-tray-off-$$p.png $(DIST)/$$a/tray/; \
+	    for t in tray tray-off tray-err tray-light tray-light-off tray-light-err; do \
+	      cp ../../docs/brand/tray/loft-$$t-$$p.png $(DIST)/$$a/tray/; \
+	    done; \
 	  done; \
 	  cp wintun-check/dist/$$a/wintun.dll $(DIST)/$$a/wintun.dll; \
 	done
@@ -110,6 +121,8 @@ clean:
 
 # release: GitHub portable zips, GitHub installers, and the Store layout.
 # The Store layout is not an installable MSIX. makeappx and signing run on Windows.
+# Logos carry scale-/targetsize- qualifiers (docs/brand/windows/store), so build
+# resources.pri with makepri before makeappx.
 
 release: github store
 
@@ -140,11 +153,11 @@ $(DIST)/github/loft-$(VER)-windows-x64.zip $(DIST)/github/loft-$(VER)-windows-x8
 	  || shasum -a 256 loft-$(VER)-windows-x64.zip loft-$(VER)-windows-x86.zip ) \
 	  > loft-windows-$(VER)-SHA256SUMS.txt
 
-$(DIST)/x64/loft-setup-stub.exe: setup/loft-setup.c res/app.rc res/app.manifest VERSION $(DIST)/x64/app.res
-	$(CC64) $(CFLAGS) -o $@ setup/loft-setup.c $(DIST)/x64/app.res -luser32 -lgdi32 -lshell32 -lole32 -luuid -ladvapi32 -luserenv
+$(DIST)/x64/loft-setup-stub.exe: setup/loft-setup.c VERSION $(DIST)/x64/setup.res
+	$(CC64) $(CFLAGS) -o $@ setup/loft-setup.c $(DIST)/x64/setup.res -luser32 -lgdi32 -lshell32 -lole32 -luuid -ladvapi32 -luserenv
 
-$(DIST)/x86/loft-setup-stub.exe: setup/loft-setup.c res/app.rc res/app.manifest VERSION $(DIST)/x86/app.res
-	$(CC86) $(CFLAGS) -o $@ setup/loft-setup.c $(DIST)/x86/app.res -luser32 -lgdi32 -lshell32 -lole32 -luuid -ladvapi32 -luserenv
+$(DIST)/x86/loft-setup-stub.exe: setup/loft-setup.c VERSION $(DIST)/x86/setup.res
+	$(CC86) $(CFLAGS) -o $@ setup/loft-setup.c $(DIST)/x86/setup.res -luser32 -lgdi32 -lshell32 -lole32 -luuid -ladvapi32 -luserenv
 
 $(DIST)/github/loft-windows-x64-setup.exe $(DIST)/github/loft-windows-x86-setup.exe: $(DIST)/x64/loft-setup-stub.exe $(DIST)/x86/loft-setup-stub.exe payload setup/pack_setup.py
 	@set -e; \
@@ -162,7 +175,8 @@ store: $(DIST)/store/x64/loft.exe assets
 	cp $(DIST)/x64/lang/* $(DIST)/store/x64/lang/; \
 	cp $(DIST)/x64/tray/* $(DIST)/store/x64/tray/; \
 	if [ -f $(DIST)/x64/loft-front.exe ]; then cp $(DIST)/x64/loft-front.exe $(DIST)/store/x64/; fi; \
-	python3 setup/store_logos.py $(DIST)/store/x64/assets; \
+	rm -rf $(DIST)/store/x64/assets; mkdir -p $(DIST)/store/x64/assets; \
+	cp $(ICONS)/store/*.png $(DIST)/store/x64/assets/; \
 	ver=$$(python3 -c 'v=open("VERSION").read().strip().split("."); v += ["0"]*(4-len(v)); print(".".join(v[:4]))'); \
 	printf '%s\n' \
 	'<?xml version="1.0" encoding="utf-8"?>' \
@@ -173,7 +187,10 @@ store: $(DIST)/store/x64/loft.exe assets
 	'  <Resources><Resource Language="en-us"/><Resource Language="ru-ru"/><Resource Language="zh-cn"/></Resources>' \
 	'  <Capabilities><rescap:Capability Name="runFullTrust"/><Capability Name="internetClient"/></Capabilities>' \
 	'  <Applications><Application Id="Loft" Executable="loft.exe" EntryPoint="Windows.FullTrustApplication">' \
-	'    <uap:VisualElements DisplayName="Loft" Description="Loft" BackgroundColor="#1A1714" Square150x150Logo="assets\Square150x150Logo.png" Square44x44Logo="assets\Square44x44Logo.png"/>' \
+	'    <uap:VisualElements DisplayName="Loft" Description="Loft" BackgroundColor="#1A1714" Square150x150Logo="assets\Square150x150Logo.png" Square44x44Logo="assets\Square44x44Logo.png">' \
+	'      <uap:DefaultTile Wide310x150Logo="assets\Wide310x150Logo.png" Square71x71Logo="assets\Square71x71Logo.png" Square310x310Logo="assets\Square310x310Logo.png"/>' \
+	'      <uap:SplashScreen Image="assets\SplashScreen.png" BackgroundColor="#1A1714"/>' \
+	'    </uap:VisualElements>' \
 	'    <Extensions>' \
 	'      <uap:Extension Category="windows.protocol"><uap:Protocol Name="loft"/></uap:Extension>' \
 	'      <uap:Extension Category="windows.fileTypeAssociation"><uap:FileTypeAssociation Name="loft"><uap:SupportedFileTypes><uap:FileType>.loft</uap:FileType></uap:SupportedFileTypes></uap:FileTypeAssociation></uap:Extension>' \

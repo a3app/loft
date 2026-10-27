@@ -11,6 +11,14 @@ static int reg_sz(HKEY root, const wchar_t *sub, const wchar_t *value) {
     return e == ERROR_SUCCESS;
 }
 
+/* "loft.exe",-2 is the .loft document icon; -1 is the app icon. */
+static void exe_icon(wchar_t *d, int n, int id) {
+    wchar_t p[MAX_PATH];
+    GetModuleFileNameW(NULL, p, MAX_PATH);
+    _snwprintf(d, (size_t)n, L"\"%s\",-%d", p, id);
+    if (n > 0) d[n - 1] = 0;
+}
+
 static void exe_cmd(wchar_t *d, int n) {
     wchar_t p[MAX_PATH];
     GetModuleFileNameW(NULL, p, MAX_PATH);
@@ -19,7 +27,7 @@ static void exe_cmd(wchar_t *d, int n) {
 }
 
 void assoc_apply(void) {
-    wchar_t cmd[MAX_PATH + 32], mark[MAX_PATH];
+    wchar_t cmd[MAX_PATH + 32], mark[MAX_PATH], icon[MAX_PATH + 16];
     exe_file(mark, MAX_PATH, L"assoc.off");
     if (GetFileAttributesW(mark) != INVALID_FILE_ATTRIBUTES) {
         g.prefs.assoc_file = 0;
@@ -32,6 +40,8 @@ void assoc_apply(void) {
         reg_sz(HKEY_CURRENT_USER, L"Software\\Classes\\.loft", L"Loft.Profile");
         reg_sz(HKEY_CURRENT_USER, L"Software\\Classes\\Loft.Profile", L"Loft profile");
         reg_sz(HKEY_CURRENT_USER, L"Software\\Classes\\Loft.Profile\\shell\\open\\command", cmd);
+        exe_icon(icon, MAX_PATH + 16, 2);
+        reg_sz(HKEY_CURRENT_USER, L"Software\\Classes\\Loft.Profile\\DefaultIcon", icon);
     } else {
         RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Classes\\.loft");
         RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Classes\\Loft.Profile");
@@ -40,6 +50,8 @@ void assoc_apply(void) {
         reg_sz(HKEY_CURRENT_USER, L"Software\\Classes\\loft", L"URL:loft");
         reg_sz(HKEY_CURRENT_USER, L"Software\\Classes\\loft\\URL Protocol", L"");
         reg_sz(HKEY_CURRENT_USER, L"Software\\Classes\\loft\\shell\\open\\command", cmd);
+        exe_icon(icon, MAX_PATH + 16, 1);
+        reg_sz(HKEY_CURRENT_USER, L"Software\\Classes\\loft\\DefaultIcon", icon);
     } else {
         RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Classes\\loft");
     }

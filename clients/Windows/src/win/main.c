@@ -95,6 +95,9 @@ static LRESULT CALLBACK msg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_LOFT_EXIT:
         session_on_exit((int)wp);
         return 0;
+    case WM_SETTINGCHANGE:
+        if (lp && lstrcmpiW((const wchar_t *)lp, L"ImmersiveColorSet") == 0) tray_theme();
+        return 0;
     case WM_LOFT_EXTIP: {
         char *ip = (char *)lp;
         session_extip((int)wp, ip ? ip : "");

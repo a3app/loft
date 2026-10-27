@@ -259,7 +259,7 @@ static void register_cls(void) {
     wc.lpszClassName = L"LoftWnd";
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.style = CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW | CS_DROPSHADOW;
-    wc.hIcon = g.icon[1] ? g.icon[1] : LoadIcon(NULL, IDI_APPLICATION);
+    wc.hIcon = LoadIconW(g.inst, MAKEINTRESOURCEW(1));
     cls_ok = RegisterClassW(&wc) != 0;
 }
 

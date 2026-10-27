@@ -282,6 +282,7 @@ void place_center(HWND hwnd, int w, int h);
 
 void tray_init(void);
 void tray_update(void);
+void tray_theme(void);
 void tray_remove(void);
 void fly_toggle(void);
 void fly_close(void);
