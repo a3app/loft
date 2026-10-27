@@ -9,9 +9,11 @@ package app.loft.android;
 
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Layout;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -528,6 +530,10 @@ public final class ListsActivity extends LoftActivity {
         TextView ck = row.findViewById(R.id.ck);
         TextView act = row.findViewById(R.id.act_del);
         name.setText(excl ? SplitStore.join(s.cidrs) : s.name);
+        oneLine(name);
+        oneLine(sub);
+        oneLine(meta);
+        oneLine(src);
         if (excl) {
             name.setTypeface(android.graphics.Typeface.MONOSPACE);
             sub.setVisibility(View.GONE);
@@ -1453,7 +1459,24 @@ public final class ListsActivity extends LoftActivity {
     private Button mini(String t) {
         Button b = inflateBtn(R.layout.btn_mini);
         b.setText(t);
+        b.setMaxLines(1);
+        b.setEllipsize(TextUtils.TruncateAt.END);
+        b.setMinWidth(0);
         return b;
+    }
+
+    /**
+     * One line with an ellipsis. XML {@code maxLines} is ignored on some
+     * shells (MIUI) when the system font is extra-large.
+     */
+    private static void oneLine(TextView t) {
+        t.setMaxLines(1);
+        t.setEllipsize(TextUtils.TruncateAt.END);
+        t.setHorizontallyScrolling(true);
+        if (Build.VERSION.SDK_INT >= 23) {
+            t.setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE);
+            t.setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE);
+        }
     }
 
     /** Small compact button with a click action. */

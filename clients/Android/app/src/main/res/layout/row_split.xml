@@ -64,9 +64,12 @@
                 android:id="@+id/name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:breakStrategy="simple"
                 android:ellipsize="end"
                 android:fontFamily="sans-serif-medium"
+                android:hyphenationFrequency="none"
                 android:maxLines="1"
+                android:scrollHorizontally="true"
                 android:textColor="@color/snow"
                 android:textSize="13.5sp" />
 
@@ -75,9 +78,12 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
+                android:breakStrategy="simple"
                 android:ellipsize="end"
                 android:fontFamily="monospace"
+                android:hyphenationFrequency="none"
                 android:maxLines="1"
+                android:scrollHorizontally="true"
                 android:textColor="@color/mute"
                 android:textSize="10.5sp" />
         </LinearLayout>
