@@ -43,24 +43,25 @@ const (
 // the mask public key); the app saves them back into the connection.
 // State is one of idle, connecting, on, error, stopped.
 type Snapshot struct {
-	Kind       string
-	IP         string
-	Gateway    string
-	IP6        string
-	Gateway6   string
-	Prefix     int
-	Prefix6    int
-	MTU        int
-	DNS        string
-	FrontIPs   string
-	Fronts     string
-	MaskPub    string
-	Routes     string
-	BytesUp    int64
-	BytesDown  int64
-	State      string
-	Err        string
-	InstanceID string
+	Kind        string
+	IP          string
+	Gateway     string
+	IP6         string
+	Gateway6    string
+	Prefix      int
+	Prefix6     int
+	MTU         int
+	DNS         string
+	FrontIPs    string
+	Fronts      string
+	MaskPub     string
+	Routes      string
+	BytesUp     int64
+	BytesDown   int64
+	State       string
+	Err         string
+	InstanceID  string
+	ProfileJSON string
 }
 
 // Engine is one overlay/VPN session for a Packet Tunnel / VpnService.
@@ -296,15 +297,16 @@ func (e *Engine) NotifyPathChange() {
 func (e *Engine) Snapshot() *Snapshot {
 	e.mu.Lock()
 	s := &Snapshot{
-		Kind:       e.kind,
-		MTU:        e.mtu,
-		DNS:        e.dns,
-		FrontIPs:   e.fronts,
-		State:      e.state,
-		Err:        e.err,
-		InstanceID: transport.ClientInstance(),
-		BytesUp:    e.bytesUp.Load(),
-		BytesDown:  e.bytesDown.Load(),
+		Kind:        e.kind,
+		MTU:         e.mtu,
+		DNS:         e.dns,
+		FrontIPs:    e.fronts,
+		State:       e.state,
+		Err:         e.err,
+		InstanceID:  transport.ClientInstance(),
+		BytesUp:     e.bytesUp.Load(),
+		BytesDown:   e.bytesDown.Load(),
+		ProfileJSON: transport.ListsProfileJSON(),
 	}
 	h := e.holder
 	vc := e.vless

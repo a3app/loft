@@ -121,6 +121,8 @@ func yamlConnections(s string) []string {
 func parseOne(s string) (string, error) {
 	low := strings.ToLower(s)
 	switch {
+	case strings.HasPrefix(low, "loft://routes"):
+		return "", fmt.Errorf("loft://routes")
 	case strings.HasPrefix(low, "loft://"):
 		return loftYAML(s)
 	case strings.HasPrefix(low, "vless://"):
@@ -414,6 +416,9 @@ func yamlFile(s string) (string, error) {
 	var probe map[string]any
 	if err := yaml.Unmarshal([]byte(s), &probe); err != nil {
 		return "", err
+	}
+	if k, _ := probe["kind"].(string); strings.EqualFold(k, "routes") {
+		return "", fmt.Errorf("yaml")
 	}
 	_, tok := probe["token"]
 	_, id := probe["uuid"]
