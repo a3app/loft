@@ -171,10 +171,10 @@ func laneCtx(ctx context.Context, done <-chan struct{}) context.Context {
 	if ctx != nil {
 		base = context.WithoutCancel(ctx)
 	}
-	out, cancel := context.WithCancel(base)
 	if done == nil {
-		return out
+		return base // no session end to wait for: nothing to cancel
 	}
+	out, cancel := context.WithCancel(base)
 	go func() {
 		select {
 		case <-done:
