@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import app.loft.engine.mobile.Mobile;
+
 /**
  * Editor for the split-routing lists (SplitStore). Pages: zone list,
  * exclusions, zones, one zone, one service, repository, catalog,
@@ -51,6 +53,8 @@ public final class ListsActivity extends LoftActivity {
     private List<Bat.Row> pendingRows;
     private String pendingHint = "";
     private final Runnable hideSnack = this::hideSnack;
+    private long opSerial;
+    private final Bus.Listener bus = this::onBus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,6 +104,35 @@ public final class ListsActivity extends LoftActivity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        Bus.watch(bus);
+    }
+
+    @Override
+    protected void onStop() {
+        Bus.drop(bus);
+        super.onStop();
+    }
+
+    private void onBus() {
+        if (!"list".equals(page) && !"profiles".equals(page)) {
+            return;
+        }
+        ProfileStore ps = ProfileStore.load(this);
+        ProfileStore.Prof op = ps.get(ProfileStore.OP);
+        long ser = op == null ? 0 : op.serial;
+        if (ser == opSerial) {
+            return;
+        }
+        opSerial = ser;
+        if (ps.operatorActive()) {
+            store = SplitStore.load(this);
+        }
+        show(page);
+    }
+
+    @Override
     public void onBackPressed() {
         if (sel != null) {
             sel = null;
@@ -108,6 +141,10 @@ public final class ListsActivity extends LoftActivity {
         }
         if ("catalog".equals(page)) {
             show(catalogBack);
+            return;
+        }
+        if ("profimp".equals(page)) {
+            show("profiles");
             return;
         }
         if (!"list".equals(page)) {
@@ -119,9 +156,17 @@ public final class ListsActivity extends LoftActivity {
 
     private void persist() {
         store.save(this);
+        ProfileStore.syncActive(this, store);
+    }
+
+    private boolean ro() {
+        return ProfileStore.load(this).operatorActive();
     }
 
     private void openMore(View v) {
+        if (ro()) {
+            return;
+        }
         PopupMenu m = new PopupMenu(this, v);
         m.getMenu().add(0, 1, 0, R.string.split_sel);
         m.getMenu().add(0, 2, 0, R.string.split_clear);
@@ -144,7 +189,7 @@ public final class ListsActivity extends LoftActivity {
         findViewById(R.id.head).setVisibility(selecting ? View.GONE : View.VISIBLE);
         findViewById(R.id.selbar).setVisibility(selecting ? View.VISIBLE : View.GONE);
         findViewById(R.id.sw_split).setVisibility(list && !selecting ? View.VISIBLE : View.GONE);
-        findViewById(R.id.btn_more).setVisibility(list && !selecting ? View.VISIBLE : View.GONE);
+        findViewById(R.id.btn_more).setVisibility(list && !selecting && !ro() ? View.VISIBLE : View.GONE);
         if (selecting) {
             int n = sel.size();
             ((TextView) findViewById(R.id.sel_title)).setText(getString(R.string.split_sel_n, n));
@@ -188,6 +233,14 @@ public final class ListsActivity extends LoftActivity {
                 title.setText(R.string.split_export_title);
                 content = expPage();
                 break;
+            case "profiles":
+                title.setText(R.string.prof_title);
+                content = profilesPage();
+                break;
+            case "profimp":
+                title.setText(R.string.prof_imp);
+                content = profimpPage();
+                break;
             default:
                 title.setText(R.string.split);
                 content = listPage();
@@ -201,10 +254,29 @@ public final class ListsActivity extends LoftActivity {
         LinearLayout root = col();
         root.addView(subline(Prefs.split(this)
                 ? getString(R.string.split_sub) : getString(R.string.split_sub_off)));
+        boolean locked = ro();
+        findViewById(R.id.btn_more).setVisibility(locked ? View.GONE : View.VISIBLE);
+        ProfileStore ps = ProfileStore.load(this);
+        ProfileStore.Prof cur = ps.current();
+        String meta = "";
+        if (cur != null && "op".equals(cur.src)) {
+            meta = getString(R.string.prof_src_operator) + " ›";
+        } else {
+            meta = "›";
+        }
+        root.addView(clickRow(getString(R.string.prof),
+                (cur == null ? getString(R.string.prof_own) : profName(cur)) + "  " + meta,
+                v -> show("profiles")));
+        if (locked) {
+            root.addView(hint(getString(R.string.prof_ro)));
+            root.addView(ghostSm(getString(R.string.prof_copy), v -> copyActive()));
+        }
         LinearLayout zhead = row();
         zhead.addView(label(getString(R.string.zone)),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        zhead.addView(ghostSm(getString(R.string.zones), v -> show("zones")));
+        if (!locked) {
+            zhead.addView(ghostSm(getString(R.string.zones), v -> show("zones")));
+        }
         root.addView(zhead);
         LinearLayout chips = new LinearLayout(this);
         chips.setOrientation(LinearLayout.HORIZONTAL);
@@ -271,27 +343,37 @@ public final class ListsActivity extends LoftActivity {
             int nx = store.exclCount(zoneId);
             tail.addView(clickRow(getString(R.string.split_excl), nx + " ›",
                     v -> show("excl")));
-            tail.addView(ghostSm("+ " + getString(R.string.add), v -> {
-                SplitStore.Svc s = new SplitStore.Svc();
-                s.zone = zoneId;
-                s.name = getString(R.string.service);
-                store.services.add(s);
-                persist();
-                editing = s.id;
-                show("svc");
-            }));
-            LinearLayout foot = row();
-            LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            footLp.topMargin = dp(10);
-            foot.setLayoutParams(footLp);
-            foot.addView(mini(getString(R.string.import_routes), v -> {
-                pendingRows = null;
-                show("imp");
-            }), weight(0));
-            foot.addView(mini(getString(R.string.export_routes), v -> show("exp")), weight(6));
-            foot.addView(mini(getString(R.string.repository), v -> show("repo")), weight(6));
-            tail.addView(foot);
+            if (!locked) {
+                tail.addView(ghostSm("+ " + getString(R.string.add), v -> {
+                    SplitStore.Svc s = new SplitStore.Svc();
+                    s.zone = zoneId;
+                    s.name = getString(R.string.service);
+                    store.services.add(s);
+                    persist();
+                    editing = s.id;
+                    show("svc");
+                }));
+                LinearLayout foot = row();
+                LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                footLp.topMargin = dp(10);
+                foot.setLayoutParams(footLp);
+                foot.addView(mini(getString(R.string.import_routes), v -> {
+                    pendingRows = null;
+                    show("imp");
+                }), weight(0));
+                foot.addView(mini(getString(R.string.export_routes), v -> show("exp")), weight(6));
+                foot.addView(mini(getString(R.string.repository), v -> show("repo")), weight(6));
+                tail.addView(foot);
+            } else {
+                LinearLayout foot = row();
+                LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                footLp.topMargin = dp(10);
+                foot.setLayoutParams(footLp);
+                foot.addView(mini(getString(R.string.export_routes), v -> show("exp")), weight(0));
+                tail.addView(foot);
+            }
             lv.addFooterView(tail, null, false);
         }
         lv.setAdapter(adapter);
@@ -349,21 +431,23 @@ public final class ListsActivity extends LoftActivity {
             root.addView(lv, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         }
-        root.addView(ghostSm("+ " + getString(R.string.add), v -> {
-            SplitStore.Svc s = new SplitStore.Svc();
-            s.zone = zoneId;
-            s.name = "ignore";
-            s.src = "ignore";
-            s.ignore = true;
-            store.services.add(s);
-            persist();
-            editing = s.id;
-            show("svc");
-        }));
-        if (!rows.isEmpty()) {
-            Button clr = danger(getString(R.string.split_excl_clear), 14);
-            clr.setOnClickListener(v -> openClear(true));
-            root.addView(clr);
+        if (!ro()) {
+            root.addView(ghostSm("+ " + getString(R.string.add), v -> {
+                SplitStore.Svc s = new SplitStore.Svc();
+                s.zone = zoneId;
+                s.name = "ignore";
+                s.src = "ignore";
+                s.ignore = true;
+                store.services.add(s);
+                persist();
+                editing = s.id;
+                show("svc");
+            }));
+            if (!rows.isEmpty()) {
+                Button clr = danger(getString(R.string.split_excl_clear), 14);
+                clr.setOnClickListener(v -> openClear(true));
+                root.addView(clr);
+            }
         }
         return root;
     }
@@ -389,15 +473,20 @@ public final class ListsActivity extends LoftActivity {
             sub.setText(SplitStore.preview(s));
             meta.setText(svcMeta(s));
             src.setVisibility(View.VISIBLE);
-            src.setText("repo".equals(s.src) ? getString(R.string.from_repo) : getString(R.string.mine));
+            src.setText("repo".equals(s.src) ? getString(R.string.from_repo)
+                    : "op".equals(s.src) ? getString(R.string.prof_src_operator)
+                    : getString(R.string.mine));
             act.setText(R.string.delete);
         }
         boolean picking = sel != null && !excl;
+        boolean locked = ro();
         ck.setVisibility(picking ? View.VISIBLE : View.GONE);
         if (picking) {
             boolean on = sel.contains(s.id);
             ck.setBackgroundResource(on ? R.drawable.bg_ck_on : R.drawable.bg_ck);
             ck.setText(on ? "✓" : "");
+            row.lock();
+        } else if (locked) {
             row.lock();
         } else {
             row.leftOnly();
@@ -430,7 +519,7 @@ public final class ListsActivity extends LoftActivity {
             show("svc");
         });
         card.setOnLongClickListener(v -> {
-            if (excl || sel != null) {
+            if (excl || sel != null || locked) {
                 return false;
             }
             sel = new HashSet<>();
@@ -535,6 +624,18 @@ public final class ListsActivity extends LoftActivity {
             kindUi.run();
         });
         kindUi.run();
+        if (ro()) {
+            nets.setEnabled(false);
+            doms.setEnabled(false);
+            name.setEnabled(false);
+            for (int i = 0; i < kind.getChildCount(); i++) {
+                kind.getChildAt(i).setEnabled(false);
+            }
+            for (int i = 0; i < zseg.getChildCount(); i++) {
+                zseg.getChildAt(i).setEnabled(false);
+            }
+            return scroll(root);
+        }
         Button save = go(getString(R.string.save), 14);
         save.setOnClickListener(v -> {
             svc.name = name.getText().toString().trim();
@@ -595,16 +696,18 @@ public final class ListsActivity extends LoftActivity {
             });
             root.addView(row);
         }
-        root.addView(ghostSm("+ " + getString(R.string.new_zone), v -> {
-            SplitStore.Zone z = new SplitStore.Zone();
-            z.id = UUID.randomUUID().toString();
-            z.name = getString(R.string.new_zone);
-            z.through = true;
-            store.zones.add(z);
-            persist();
-            editing = z.id;
-            show("zone");
-        }));
+        if (!ro()) {
+            root.addView(ghostSm("+ " + getString(R.string.new_zone), v -> {
+                SplitStore.Zone z = new SplitStore.Zone();
+                z.id = UUID.randomUUID().toString();
+                z.name = getString(R.string.new_zone);
+                z.through = true;
+                store.zones.add(z);
+                persist();
+                editing = z.id;
+                show("zone");
+            }));
+        }
         return scroll(root);
     }
 
@@ -653,6 +756,14 @@ public final class ListsActivity extends LoftActivity {
         }));
         root.addView(autoRow(z));
         root.addView(hint(z.pulled == 0 ? getString(R.string.no_list) : getString(R.string.pulled)));
+        if (ro()) {
+            name.setEnabled(false);
+            url.setEnabled(false);
+            for (int i = 0; i < dir.getChildCount(); i++) {
+                dir.getChildAt(i).setEnabled(false);
+            }
+            return scroll(root);
+        }
         Button save = go(getString(R.string.save), 14);
         save.setOnClickListener(v -> {
             if (!z.builtin) {
@@ -775,6 +886,115 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    private String profName(ProfileStore.Prof p) {
+        if (p == null) {
+            return getString(R.string.prof_own);
+        }
+        if (p.name != null && !p.name.isEmpty()) {
+            return p.name;
+        }
+        if (ProfileStore.MINE.equals(p.id) || "me".equals(p.src)) {
+            return getString(R.string.prof_own);
+        }
+        return p.id;
+    }
+
+    private String profSrc(ProfileStore.Prof p) {
+        if ("op".equals(p.src)) {
+            String conn = p.conn == null || p.conn.isEmpty() ? "—" : p.conn;
+            return getString(R.string.prof_src_op, conn);
+        }
+        if ("link".equals(p.src)) {
+            return getString(R.string.prof_src_link);
+        }
+        return getString(R.string.prof_src_own);
+    }
+
+    private void copyActive() {
+        ProfileStore ps = ProfileStore.load(this);
+        ProfileStore.Prof src = ps.current();
+        if (src == null) {
+            return;
+        }
+        ps.copyAndActivate(src, getString(R.string.prof_copy_name, profName(src)), this);
+        store = SplitStore.load(this);
+        show("list");
+    }
+
+    private View profilesPage() {
+        LinearLayout root = col();
+        root.addView(subline(getString(R.string.prof_sub)));
+        ProfileStore ps = ProfileStore.load(this);
+        for (ProfileStore.Prof pr : ps.profiles) {
+            String meta = pr.id.equals(ps.active) ? "✓ " + getString(R.string.prof_active) : "";
+            LinearLayout row = clickRow(profName(pr), profSrc(pr) + (meta.isEmpty() ? "" : "  " + meta), v -> {
+                ProfileStore storePs = ProfileStore.load(this);
+                storePs.activate(pr.id, this);
+                store = SplitStore.load(this);
+                show("list");
+            });
+            root.addView(row);
+            if ("op".equals(pr.src)) {
+                root.addView(ghostSm(getString(R.string.prof_copy), v -> {
+                    ProfileStore s = ProfileStore.load(this);
+                    ProfileStore.Prof src = s.get(pr.id);
+                    if (src == null) {
+                        return;
+                    }
+                    s.copyAndActivate(src, getString(R.string.prof_copy_name, profName(src)), this);
+                    store = SplitStore.load(this);
+                    show("list");
+                }));
+            }
+        }
+        root.addView(ghostSm("+ " + getString(R.string.prof_imp), v -> show("profimp")));
+        return scroll(root);
+    }
+
+    private View profimpPage() {
+        LinearLayout root = col();
+        root.addView(subline(getString(R.string.prof_imp_sub)));
+        EditText field = field("");
+        field.setHint("loft://routes/…");
+        field.setTypeface(android.graphics.Typeface.MONOSPACE);
+        field.setMinLines(3);
+        field.setGravity(Gravity.TOP);
+        root.addView(field);
+        root.addView(ghostSm(getString(R.string.from_file), v -> {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("*/*");
+            startActivityForResult(i, REQ_IN);
+        }));
+        Button go = go(getString(R.string.prof_imp_go), 14);
+        go.setOnClickListener(v -> importProfile(field.getText().toString()));
+        root.addView(go);
+        return scroll(root);
+    }
+
+    private void importProfile(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            Toast.makeText(this, R.string.prof_bad, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            String json = Mobile.parseRoutes(raw.trim());
+            if (json == null || json.isEmpty()) {
+                Toast.makeText(this, R.string.prof_bad, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            ProfileStore.Prof p = ProfileStore.importLink(this, json);
+            if (p == null) {
+                Toast.makeText(this, R.string.prof_bad, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Toast.makeText(this, R.string.prof_added, Toast.LENGTH_SHORT).show();
+            show("profiles");
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.prof_bad, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void openCatalog(String zone, String back) {
         catalogZone = zone;
         catalogBack = back;
@@ -848,6 +1068,9 @@ public final class ListsActivity extends LoftActivity {
     }
 
     private void gone(List<String> ids) {
+        if (ro()) {
+            return;
+        }
         SplitStore.Snap snap = store.snap();
         SplitStore.Gone g = store.removeSvcs(ids);
         if (g.n == 0) {
@@ -953,6 +1176,10 @@ public final class ListsActivity extends LoftActivity {
                 return;
             }
             String body = read(in);
+            if ("profimp".equals(page)) {
+                importProfile(body);
+                return;
+            }
             pendingHint = Bat.zoneHint(body);
             pendingRows = Bat.parse(body);
             show("imp");

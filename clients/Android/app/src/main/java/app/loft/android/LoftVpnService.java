@@ -357,6 +357,10 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             if (!fronts.isEmpty()) {
                 store.applyLearnedFronts(id, fronts);
             }
+            String pj = nz(snap.getProfileJSON());
+            if (!pj.isEmpty()) {
+                ProfileStore.applyOperator(this, pj, Live.name);
+            }
         }
         updateNote();
         Bus.post();

@@ -121,56 +121,7 @@ final class SplitStore {
             return st;
         }
         try {
-            JSONObject o = new JSONObject(raw);
-            JSONArray zs = o.optJSONArray("zones");
-            if (zs != null) {
-                for (int i = 0; i < zs.length(); i++) {
-                    JSONObject z = zs.getJSONObject(i);
-                    Zone zone = new Zone();
-                    zone.id = z.optString("id");
-                    zone.name = z.optString("name");
-                    zone.builtin = z.optBoolean("builtin");
-                    zone.through = z.optBoolean("through");
-                    zone.block = z.optBoolean("block");
-                    zone.repo = z.optString("repo");
-                    zone.auto = z.optBoolean("auto", true);
-                    zone.pulled = z.optLong("pulled", 0);
-                    if (!zone.id.isEmpty()) {
-                        st.zones.add(zone);
-                    }
-                }
-            }
-            JSONArray ss = o.optJSONArray("services");
-            if (ss != null) {
-                for (int i = 0; i < ss.length(); i++) {
-                    JSONObject s = ss.getJSONObject(i);
-                    Svc svc = new Svc();
-                    svc.id = s.optString("id", svc.id);
-                    svc.name = s.optString("name");
-                    svc.zone = s.optString("zone", GLOBAL);
-                    svc.src = s.optString("src", "me");
-                    svc.ignore = s.optBoolean("ignore") || "ignore".equals(svc.src);
-                    JSONArray cidrs = s.optJSONArray("cidrs");
-                    if (cidrs != null) {
-                        for (int j = 0; j < cidrs.length(); j++) {
-                            String x = cidrs.optString(j).trim();
-                            if (Cidr.parse(x) != null) {
-                                svc.cidrs.add(x);
-                            }
-                        }
-                    }
-                    JSONArray domains = s.optJSONArray("domains");
-                    if (domains != null) {
-                        for (int j = 0; j < domains.length(); j++) {
-                            String d = domains.optString(j).trim().toLowerCase(Locale.US);
-                            if (!d.isEmpty() && !svc.domains.contains(d)) {
-                                svc.domains.add(d);
-                            }
-                        }
-                    }
-                    st.services.add(svc);
-                }
-            }
+            st.readJSON(new JSONObject(raw));
         } catch (Exception ignored) {
             st.zones.clear();
             st.services.clear();
@@ -184,6 +135,85 @@ final class SplitStore {
     }
 
     void save(Context c) {
+        Prefs.p(c).edit().putString("split_store", writeJSON().toString()).apply();
+    }
+
+    /** Operator/link SplitJSON → zones+services. Missing builtins are filled; LAN is not injected. */
+    static SplitStore fromJSON(String raw) {
+        SplitStore st = new SplitStore();
+        if (raw == null || raw.isEmpty()) {
+            st.ensureBuiltins();
+            return st;
+        }
+        try {
+            st.readJSON(new JSONObject(raw));
+        } catch (Exception ignored) {
+            st.zones.clear();
+            st.services.clear();
+        }
+        st.ensureBuiltins();
+        return st;
+    }
+
+    SplitStore copy() {
+        SplitStore n = new SplitStore();
+        n.restore(snap());
+        return n;
+    }
+
+    void readJSON(JSONObject o) throws Exception {
+        JSONArray zs = o.optJSONArray("zones");
+        if (zs != null) {
+            for (int i = 0; i < zs.length(); i++) {
+                JSONObject z = zs.getJSONObject(i);
+                Zone zone = new Zone();
+                zone.id = z.optString("id");
+                zone.name = z.optString("name");
+                zone.builtin = z.optBoolean("builtin");
+                zone.through = z.optBoolean("through");
+                zone.block = z.optBoolean("block");
+                zone.repo = z.optString("repo");
+                zone.auto = z.optBoolean("auto", true);
+                zone.pulled = z.optLong("pulled", 0);
+                if (!zone.id.isEmpty()) {
+                    zones.add(zone);
+                }
+            }
+        }
+        JSONArray ss = o.optJSONArray("services");
+        if (ss != null) {
+            for (int i = 0; i < ss.length(); i++) {
+                JSONObject s = ss.getJSONObject(i);
+                Svc svc = new Svc();
+                svc.id = s.optString("id", svc.id);
+                svc.name = s.optString("name");
+                svc.zone = s.optString("zone", GLOBAL);
+                svc.src = s.optString("src", "me");
+                svc.ignore = s.optBoolean("ignore") || "ignore".equals(svc.src);
+                JSONArray cidrs = s.optJSONArray("cidrs");
+                if (cidrs != null) {
+                    for (int j = 0; j < cidrs.length(); j++) {
+                        String x = cidrs.optString(j).trim();
+                        if (Cidr.parse(x) != null) {
+                            svc.cidrs.add(x);
+                        }
+                    }
+                }
+                JSONArray domains = s.optJSONArray("domains");
+                if (domains != null) {
+                    for (int j = 0; j < domains.length(); j++) {
+                        String d = domains.optString(j).trim().toLowerCase(Locale.US);
+                        if (!d.isEmpty() && !svc.domains.contains(d)) {
+                            svc.domains.add(d);
+                        }
+                    }
+                }
+                services.add(svc);
+            }
+        }
+    }
+
+    JSONObject writeJSON() {
         JSONObject o = new JSONObject();
         try {
             JSONArray zs = new JSONArray();
@@ -223,7 +253,32 @@ final class SplitStore {
             o.put("services", ss);
         } catch (Exception ignored) {
         }
-        Prefs.p(c).edit().putString("split_store", o.toString()).apply();
+        return o;
+    }
+
+    void ensureBuiltins() {
+        if (zone(LOCAL) == null) {
+            Zone local = new Zone();
+            local.id = LOCAL;
+            local.name = "Local";
+            local.builtin = true;
+            local.through = false;
+            local.auto = true;
+            zones.add(0, local);
+        }
+        if (zone(GLOBAL) == null) {
+            Zone global = new Zone();
+            global.id = GLOBAL;
+            global.name = "Global";
+            global.builtin = true;
+            global.through = true;
+            global.repo = REPO_BASE + "global.bat";
+            global.auto = true;
+            zones.add(global);
+        }
+        if (zone(BLOCK) == null) {
+            zones.add(blockZone());
+        }
     }
 
     /** Resets to the two built-in zones and a LAN service with the private IPv4 ranges. */
