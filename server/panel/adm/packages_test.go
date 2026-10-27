@@ -131,7 +131,7 @@ func pkgOps(t *testing.T) (*Ops, *fakeHost) {
 	os.WriteFile(filepath.Join(root, "etc/os-release"), []byte("ID=ubuntu\nVERSION_CODENAME=noble\n"), 0o644)
 	h := &fakeHost{installed: map[string]string{"nginx": "1.24.0-2ubuntu7"}, cand: map[string]string{}, active: map[string]string{"nginx.service": "active", "loft-node.service": "active"}}
 	o := &Ops{Dir: t.TempDir(), Unit: "loft-node.service", UID: -1, GID: -1, Settle: time.Millisecond,
-		State: t.TempDir(), Root: root, Exe: "/usr/local/bin/loft-panel-adm", NodeBin: "/usr/local/bin/loft-node",
+		State: t.TempDir(), Root: root, PanelEtc: filepath.Join(root, "etc/loft-panel"), Exe: "/usr/local/bin/loft-panel-adm", NodeBin: "/usr/local/bin/loft-node",
 		Systemctl: h.systemctl, Exec: h.exec, Stream: h.stream}
 	o.SystemdRun = func(context.Context, ...string) error { h.jobUnit = true; return nil }
 	return o, h

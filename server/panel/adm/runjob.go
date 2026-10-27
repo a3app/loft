@@ -211,7 +211,26 @@ func (r *runner) packages(ctx context.Context, plan catalog.Plan) error {
 			return fmt.Errorf("upgrade %s: %w", k, err)
 		}
 	}
+	// Roundcube's nginx site is written only when php-fpm's socket and the
+	// mail.<domain> certificate are already there. Installing webmail after
+	// the domain leaves the HTTPS vhost missing until the next mail save.
+	if mailTouched(plan) {
+		r.step("mail")
+		r.say("write mail files")
+		if _, err := r.o.MailApply(ctx); err != nil {
+			return fmt.Errorf("mail apply: %w", err)
+		}
+	}
 	return nil
+}
+
+func mailTouched(plan catalog.Plan) bool {
+	for _, k := range append(append(append([]string{}, plan.Install...), plan.Remove...), plan.Upgrade...) {
+		if k == "mail" || k == "webmail" || k == "antispam" {
+			return true
+		}
+	}
+	return false
 }
 
 // install installs one apt or bin package: get the software (apt-get with
