@@ -1,3 +1,9 @@
+/*
+ * Android client, shared code: the small protocol for sending a connection
+ * from a phone to a TV on the same network. The TV (TvPair) listens and
+ * shows a pairing URL as a QR code; the phone (ScanActivity) scans it and
+ * POSTs the profile YAML to it.
+ */
 package app.loft.android;
 
 import android.content.Context;
@@ -15,6 +21,7 @@ import java.security.MessageDigest;
  * LAN pairing: TV listens on http://ip:port/pair?c=CODE, phone POSTs YAML.
  */
 final class PairUrl {
+    /** HTTP path of the TV's pairing endpoint. */
     static final String PATH = "/pair";
 
     /** True when a scanned string is a TV pairing URL (path /pair with a c= code). */
@@ -27,11 +34,13 @@ final class PairUrl {
         return PATH.equals(p) && query(u, "c") != null;
     }
 
+    /** The pairing code (c= parameter) from a pairing URL; "" when missing. */
     static String code(String raw) {
         URI u = parse(raw);
         return u == null ? "" : nz(query(u, "c"));
     }
 
+    /** Builds the URL the TV shows: http://host:port/pair?c=code. */
     static String build(String host, int port, String code) {
         return "http://" + host + ":" + port + PATH + "?c=" + code;
     }
@@ -93,6 +102,7 @@ final class PairUrl {
         }, "loft-pair").start();
     }
 
+    /** Parses an http(s) URL; null for anything else or on a syntax error. */
     private static URI parse(String raw) {
         if (raw == null) {
             return null;
@@ -108,6 +118,7 @@ final class PairUrl {
         }
     }
 
+    /** Raw value of a query parameter; "" when present without a value, null when absent. */
     private static String query(URI u, String key) {
         String q = u.getQuery();
         if (q == null || q.isEmpty()) {
@@ -123,10 +134,12 @@ final class PairUrl {
         return null;
     }
 
+    /** Null to "". */
     private static String nz(String s) {
         return s == null ? "" : s;
     }
 
+    /** Result of send(): ok, or false with a short error text. */
     interface Callback {
         void done(boolean ok, String err);
     }

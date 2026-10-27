@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 
 /** Echo-API lookup through the VPN, same parse as macOS ExtIP. */
 final class ExtIP {
+    /** JSON field names different echo services use for the caller's address, tried in order. */
     private static final String[] JSON_KEYS = {
             "ip", "query", "origin", "address", "ip_addr", "externalIp", "external_ip"
     };
@@ -114,6 +115,7 @@ final class ExtIP {
         return "";
     }
 
+    /** Same as parse(byte[]) for a reply already held as text (used by tests). */
     static String parse(String body) {
         return parse(body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8));
     }
@@ -141,6 +143,7 @@ final class ExtIP {
         }
     }
 
+    /** Strict dotted-quad check: four groups of 1-3 digits, each 0-255. */
     private static boolean v4(String t) {
         String[] p = t.split("\\.", -1);
         if (p.length != 4) {
@@ -187,6 +190,7 @@ final class ExtIP {
         return null;
     }
 
+    /** Reads at most {@code cap} bytes, so a misbehaving service cannot send a huge body. */
     private static byte[] read(InputStream in, int cap) throws Exception {
         ByteArrayOutputStream o = new ByteArrayOutputStream();
         byte[] b = new byte[512];

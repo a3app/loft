@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 final class Gh {
     // Size caps protect against a hostile or broken server streaming forever.
     // TAG accepts only plain release tags like v1.2.3 or v1.2.3-rc1.
+    /** GitHub API URL listing the latest 20 releases of the loft repo. */
     static final String API = "https://api.github.com/repos/a3app/loft/releases?per_page=20";
     static final int MAX_JSON = 2 * 1024 * 1024;
     static final int MAX_APK = 128 * 1024 * 1024;
@@ -40,6 +41,7 @@ final class Gh {
         final String sumsName;
         final String sumsUrl;
 
+        /** Holds the fields as given; asset names and URLs may be null. */
         Rel(String tag, String ver, String apkName, String apkUrl, String sumsName, String sumsUrl) {
             this.tag = tag;
             this.ver = ver;
@@ -49,6 +51,7 @@ final class Gh {
             this.sumsUrl = sumsUrl;
         }
 
+        /** True when the release has both an APK for this device and a checksum file to verify it. */
         boolean hasApk() {
             return apkUrl != null && sumsUrl != null;
         }
@@ -142,6 +145,7 @@ final class Gh {
         return hex(md.digest());
     }
 
+    /** Lowercase hex form of a digest, the same format as SHA256SUMS lines. */
     static String hex(byte[] d) {
         char[] out = new char[d.length * 2];
         for (int i = 0; i < d.length; i++) {

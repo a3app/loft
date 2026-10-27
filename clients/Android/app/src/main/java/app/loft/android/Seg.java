@@ -1,3 +1,8 @@
+/*
+ * Android client, shared code: a small helper that turns a row of plain
+ * views into a segmented control (pick one of several options). Used by the
+ * connection editor and onboarding screens in the phone build.
+ */
 package app.loft.android;
 
 import android.view.View;
@@ -9,10 +14,13 @@ import android.view.ViewGroup;
  * drawables use for highlighting.
  */
 final class Seg {
+    /** Receives the index of the child the user tapped. */
     interface Pick {
+        /** Called after the tapped child has been marked selected. */
         void on(int index);
     }
 
+    /** Index of the selected child, or 0 when none is selected. */
     static int selected(ViewGroup row) {
         for (int i = 0; i < row.getChildCount(); i++) {
             if (row.getChildAt(i).isSelected()) {

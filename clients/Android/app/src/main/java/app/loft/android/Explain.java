@@ -1,3 +1,9 @@
+/*
+ * Explain: turns raw error text from the Go engine or the node (the loft
+ * server the app connects to) into one short translated line for the Home
+ * screen and the notification. The full error stays in the journal
+ * (Journal / LogActivity). Covered by ExplainTest.
+ */
 package app.loft.android;
 
 import android.content.Context;
@@ -26,11 +32,18 @@ final class Explain {
         return res(raw, true);
     }
 
+    /**
+     * Picks the string resource for a raw error by looking for known markers,
+     * most specific first. {@code uplink} says whether the phone has any
+     * internet; without it, network-level failures are reported as "no
+     * network" instead of blaming the node.
+     */
     static int res(String raw, boolean uplink) {
         if (raw == null || raw.isEmpty()) {
             return R.string.err_fail;
         }
         String low = raw.toLowerCase();
+        // 1. Codes the node sends when it refuses this member (auth_*), and HTTP-level rejections.
         if (low.contains("auth_limit")) {
             return R.string.err_auth_limit;
         }
@@ -56,6 +69,7 @@ final class Explain {
         if (low.contains("requires mux")) {
             return R.string.err_need_mux;
         }
+        // 2. Session and config problems (network switched off, address pool full, empty config...).
         if (low.contains("net_disabled")) {
             return R.string.err_net_off;
         }
@@ -77,6 +91,7 @@ final class Explain {
         if (low.contains("no connection")) {
             return R.string.err_no_conn;
         }
+        // 3. Transport and protocol specific errors (WebSocket, front, VLESS, Trojan, SSTP).
         // GET Auto against a ws:// / wss:// URL.
         if (low.contains("unsupported protocol scheme")) {
             if (low.contains("wss") || low.contains("\"ws\"")) {
@@ -122,6 +137,7 @@ final class Explain {
         if (low.startsWith("sstp ") && !low.startsWith("sstp up") && !low.startsWith("sstp: ")) {
             return R.string.err_sstp;
         }
+        // 4. Plain network failures: refine by cause, or say "no network" when offline.
         boolean getHs = low.contains("get handshake");
         if (transport(low) || (getHs && !low.contains("empty session") && !low.contains("status"))) {
             if (!uplink) {
@@ -144,6 +160,7 @@ final class Explain {
             }
             return R.string.err_no_reply;
         }
+        // 5. HTTP GET handshake failures that are not network errors, then short bare words.
         if (getHs) {
             if (low.contains("empty session")) {
                 return R.string.err_get_empty;
@@ -165,6 +182,7 @@ final class Explain {
         return R.string.err_fail;
     }
 
+    /** True for timeout-style errors: the other side never answered. */
     private static boolean noReply(String low) {
         return low.contains("i/o timeout")
                 || low.contains("timed out")
@@ -173,6 +191,7 @@ final class Explain {
                 || low.contains("no response");
     }
 
+    /** True for errors from the network layer (timeouts, refused, reset, DNS, no route). */
     private static boolean transport(String low) {
         return noReply(low)
                 || low.contains("connection refused")
@@ -187,6 +206,11 @@ final class Explain {
                 || low.contains("connection failed");
     }
 
+    /**
+     * True when the active network claims internet access. Errors and a missing
+     * ConnectivityManager count as "up", so the message never wrongly blames
+     * the phone's connection.
+     */
     private static boolean uplink(Context ctx) {
         try {
             ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);

@@ -1,3 +1,8 @@
+/*
+ * Android client, shared code: reads single values out of the YAML documents
+ * the Go engine produces (for example from a shared link). Profile uses it
+ * to fill its fields from imported YAML without pulling in a YAML library.
+ */
 package app.loft.android;
 
 /** One-level YAML field reader for client documents Mobile.parseShare emits. */
@@ -24,6 +29,7 @@ final class Peek {
         return "";
     }
 
+    /** Value of {@code key} in the first item of the "outbounds:" list; "" when absent. */
     static String outbound(String yaml, String key) {
         return outboundSkipHost(yaml, key, "");
     }
@@ -92,10 +98,14 @@ final class Peek {
     static final class Ob {
         String type = "";
         String url = "";
+        /** Path for the HTTP-based fronts. */
         String path = "";
         String name = "";
+        /** Cover host the connection is sent through (CDN). */
         String cdn = "";
+        /** The node's mask public key, learned after the first handshake. */
         String maskPub = "";
+        /** TLS fingerprint to imitate. */
         String fp = "";
     }
 
@@ -176,6 +186,7 @@ final class Peek {
         return v.equals("true") || v.equals("yes") || v.equals("1");
     }
 
+    /** Removes one pair of matching single or double quotes around a value. */
     static String unquote(String s) {
         if (s.length() >= 2) {
             char a = s.charAt(0);

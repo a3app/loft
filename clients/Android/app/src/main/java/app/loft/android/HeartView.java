@@ -1,3 +1,7 @@
+/*
+ * Android client, shared code: a tiny custom view that paints the pixel
+ * heart on the About screen (AboutActivity sizes it).
+ */
 package app.loft.android;
 
 import android.content.Context;
@@ -21,23 +25,28 @@ public final class HeartView extends View {
         {3, 5, 1, 1},
     };
 
+    /** Solid fill with smoothing turned off, so cells keep hard edges. */
     private final Paint fill = new Paint(0);
 
+    /** Code constructor. */
     public HeartView(Context c) {
         super(c);
         init();
     }
 
+    /** Constructor used when the view is inflated from XML. */
     public HeartView(Context c, AttributeSet a) {
         super(c, a);
         init();
     }
 
+    /** XML constructor with a default style attribute. */
     public HeartView(Context c, AttributeSet a, int s) {
         super(c, a, s);
         init();
     }
 
+    /** Shared setup: software layer and a non-smoothed paint in the lamp colour. */
     private void init() {
         setWillNotDraw(false);
         setLayerType(LAYER_TYPE_SOFTWARE, null);
@@ -49,6 +58,7 @@ public final class HeartView extends View {
     }
 
     @Override
+    /** Picks the largest whole-pixel cell that fits 7x6 cells, centres the heart and paints each cell rectangle. */
     protected void onDraw(Canvas c) {
         int w = getWidth();
         int h = getHeight();

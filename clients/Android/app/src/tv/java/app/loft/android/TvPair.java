@@ -29,8 +29,11 @@ final class TvPair {
 
     private ServerSocket ss;
     private Thread th;
+    /** Cleared by stop() so the accept loop exits. */
     private volatile boolean run;
+    /** Code shown on screen; a request must carry it to be accepted. */
     final String code = newCode();
+    /** LAN address, port and full pairing URL; empty / 0 while stopped. */
     String host = "";
     int port;
     String url = "";
@@ -63,6 +66,7 @@ final class TvPair {
         }
     }
 
+    /** Closes the listener (which ends the accept loop) and clears the URL. Safe to call twice. */
     void stop() {
         run = false;
         try {
@@ -77,7 +81,7 @@ final class TvPair {
         port = 0;
     }
 
-    // Serves one connection at a time until stop() closes the socket.
+    /** Serves one connection at a time until stop() closes the socket. */
     private void loop(Consumer<String> onBody, Handler h) {
         while (run && ss != null && !ss.isClosed()) {
             try (Socket s = ss.accept()) {
@@ -99,6 +103,7 @@ final class TvPair {
      * on the LAN, gets 404 and changes nothing; the code is never sent back.
      */
     private void handle(Socket s, Consumer<String> onBody, Handler h) throws Exception {
+        // 1. Read the request line and headers byte by byte until "\r\n\r\n".
         InputStream in = s.getInputStream();
         ByteArrayOutputStream head = new ByteArrayOutputStream();
         int prev = 0, n;
@@ -118,6 +123,7 @@ final class TvPair {
                 return;
             }
         }
+        // 2. Find Content-Length and check the request line (method, path, code).
         String hdr = head.toString("ISO-8859-1");
         int len = 0;
         for (String line : hdr.split("\r\n")) {
@@ -130,6 +136,7 @@ final class TvPair {
         }
         int eol = hdr.indexOf("\r\n");
         boolean ok = PairUrl.authorized(eol < 0 ? hdr : hdr.substring(0, eol), code);
+        // 3. Read the body, capped at 256 KiB.
         byte[] body = new byte[Math.max(0, Math.min(len, 256 * 1024))];
         int got = 0;
         while (got < body.length) {
@@ -140,6 +147,7 @@ final class TvPair {
             got += r;
         }
         String text = new String(body, 0, got, StandardCharsets.UTF_8);
+        // 4. Pass an accepted body to the UI thread and answer.
         OutputStream out = s.getOutputStream();
         if (ok) {
             if (!text.isEmpty()) {
@@ -151,6 +159,7 @@ final class TvPair {
         }
     }
 
+    /** Writes a tiny plain-text HTTP response (200 or 404) with "Connection: close". */
     private static void reply(OutputStream out, int code, String body) throws Exception {
         byte[] b = body.getBytes(StandardCharsets.UTF_8);
         String h = "HTTP/1.1 " + code + (code == 200 ? " OK" : " Not Found") + "\r\n"

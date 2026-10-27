@@ -1,3 +1,9 @@
+/*
+ * Android client, shared code: small encryption helper. Profiles uses it to
+ * encrypt the saved connections file (which holds member keys and passwords)
+ * with a key kept in the Android keystore, so the file is useless if copied
+ * off the device.
+ */
 package app.loft.android;
 
 import android.security.keystore.KeyGenParameterSpec;
@@ -13,10 +19,13 @@ import javax.crypto.spec.GCMParameterSpec;
 
 /** AES-GCM in AndroidKeyStore. Falls back to plaintext if the store is missing. */
 final class Box {
+    /** Keystore name of the app's AES key. */
     private static final String ALIAS = "app.loft.profiles";
     private static final String KS = "AndroidKeyStore";
     private static final String TF = "AES/GCM/NoPadding";
+    /** GCM nonce length in bytes. */
     private static final int IV = 12;
+    /** GCM authentication tag length in bits. */
     private static final int TAG = 128;
 
     /**

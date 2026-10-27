@@ -45,10 +45,13 @@ import java.util.List;
  * MainActivity, and redraw from Live on every Bus event.
  */
 public final class TvActivity extends LoftActivity implements Bus.Listener {
+    /** Request codes for the system VPN consent dialog and the file picker. */
     private static final int REQ_VPN = 1;
     private static final int REQ_FILE = 2;
 
+    /** Container that holds the three panes; only one is visible at a time. */
     private ViewGroup pane;
+    /** The panes. Connections and Settings are inflated lazily (null until first use). */
     private View home;
     private View conns;
     private View settings;
@@ -57,9 +60,17 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     // delete. overlay: the full-screen panel (pairing QR, share, paste, edit)
     // shown over the current pane; Back closes it.
     private String selected = "";
+    /** Running pairing listener while the pairing QR is shown, else null. */
     private TvPair pair;
+    /** True while a public-IP lookup is in flight, so only one runs at a time. */
     private final java.util.concurrent.atomic.AtomicBoolean extFetch = new java.util.concurrent.atomic.AtomicBoolean();
 
+    /**
+     * Builds the rail and Home pane, opens Settings instead when asked by the
+     * "pane" extra (used after a language change), imports a loft:// link the
+     * app was opened with, and auto-connects when that setting is on. The
+     * other panes are built right after the first frame.
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         setTheme(R.style.Theme_Loft_Tv);
@@ -97,6 +108,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         });
     }
 
+    /** Inflates the Connections pane and wires its edit / share / delete actions, once. */
     private void ensureConns() {
         if (conns != null) {
             return;
@@ -110,6 +122,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         paintConns();
     }
 
+    /** Inflates the Settings pane and wires its controls, once. */
     private void ensureSettings() {
         if (settings != null) {
             return;
@@ -120,6 +133,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         wireSettings();
     }
 
+    /** The activity is reused: handle a new "pane" extra or loft:// link. */
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
@@ -131,6 +145,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         handleIntent(intent);
     }
 
+    /** Starts listening to Bus (state change events) and redraws. */
     @Override
     protected void onResume() {
         super.onResume();
@@ -139,24 +154,28 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         paintConns();
     }
 
+    /** Stops listening to Bus while the screen is hidden. */
     @Override
     protected void onPause() {
         Bus.drop(this);
         super.onPause();
     }
 
+    /** Makes sure the pairing listener does not outlive the screen. */
     @Override
     protected void onDestroy() {
         stopPair();
         super.onDestroy();
     }
 
+    /** Bus callback: connection state or stats in Live changed, so redraw. */
     @Override
     public void onLoft() {
         paintHome();
         paintConns();
     }
 
+    /** Back closes an open overlay first; otherwise it leaves as usual. */
     @Override
     public void onBackPressed() {
         if (overlay != null) {
@@ -166,7 +185,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         super.onBackPressed();
     }
 
-    // The remote's Menu key on the Connections pane opens the add dialog.
+    /** The remote's Menu key on the Connections pane opens the add dialog. */
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MENU && conns != null && conns.getVisibility() == View.VISIBLE) {
@@ -207,6 +226,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /** Colors the active rail icon amber and the others grey. */
     private void tintRail(ImageButton on) {
         int lamp = 0xFFE8B84A;
         int mute = 0xFF8A7E72;
@@ -227,6 +247,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
      * replaced by three add tiles.
      */
     private void paintHome() {
+        // 1. Status line and connect button text from the connection state.
         Profile p = LoftApp.of(this).profiles().active();
         String name = p == null ? "" : p.name;
         boolean on = Live.on();
@@ -249,6 +270,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
             status.setText(getString(R.string.pill_off) + (name.isEmpty() ? "" : " · " + name));
             go.setText(R.string.connect);
         }
+        // 2. Side panel: the active profile, then live addresses and rates.
         TextView sn = home.findViewById(R.id.side_name);
         TextView sk = home.findViewById(R.id.side_kind);
         TextView sh = home.findViewById(R.id.side_host);
@@ -275,6 +297,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         snet.setText(net);
         boolean bits = Prefs.rateBits(this);
         sr.setText("↓ " + Cidr.fmt(Live.rateDown, bits) + "   ↑ " + Cidr.fmt(Live.rateUp, bits));
+        // 3. Live rows only while connected; fetch the public IP if missing.
         sip.setVisibility(on ? View.VISIBLE : View.GONE);
         boolean showExt = Prefs.showExtIP(this);
         se.setVisibility(on && showExt ? View.VISIBLE : View.GONE);
@@ -283,6 +306,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         if (on && showExt && Live.extIP.isEmpty()) {
             fetchExt();
         }
+        // 4. Nothing to show at all: hide the panel and offer add tiles.
         View side = home.findViewById(R.id.side);
         if (p == null && !on) {
             side.setVisibility(View.GONE);
@@ -298,6 +322,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /** "  12m" minutes since connect, or "" when not connected. */
     private String uptime() {
         if (Live.since <= 0) {
             return "";
@@ -306,9 +331,10 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         return "  " + (s / 60) + "m";
     }
 
+    /** Row of add tiles shown on Home when there are no profiles; built on first need. */
     private View emptyAdd;
 
-    // Builds the add tiles (phone QR, USB file, type a link) once, above the button.
+    /** Builds the add tiles (phone QR, USB file, type a link) once, above the button. */
     private void showEmptyAdd() {
         if (emptyAdd != null) {
             emptyAdd.setVisibility(View.VISIBLE);
@@ -325,12 +351,14 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         emptyAdd = box;
     }
 
+    /** Hides the add tiles once a profile exists or a session is up. */
     private void hideEmptyAdd() {
         if (emptyAdd != null) {
             emptyAdd.setVisibility(View.GONE);
         }
     }
 
+    /** One large focusable tile button that runs {@code run} when pressed. */
     private Button addTile(String title, Runnable run) {
         Button b = new Button(this);
         b.setText(title);
@@ -378,6 +406,11 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /**
+     * One connection card: name (amber when it is the active profile), kind and
+     * host. Click makes it active and goes Home; focus selects it for the
+     * action buttons; long press opens the editor. {@code sel} enlarges it.
+     */
     private View connCard(Profile p, boolean live, boolean sel) {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
@@ -420,6 +453,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         return c;
     }
 
+    /** Plain TextView with a text size in sp and a color. */
     private TextView tv(int sp, int color) {
         TextView t = new TextView(this);
         t.setTextSize(sp);
@@ -427,6 +461,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         return t;
     }
 
+    /** Dialog with the three ways to add a connection: phone QR, file, or typed link. */
     private void addSheet() {
         new AlertDialog.Builder(this)
                 .setItems(new CharSequence[]{
@@ -512,6 +547,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         showOverlay(box);
     }
 
+    /** Overlay with a text field for typing or pasting a link, and an Add button. */
     private void showPaste() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -534,6 +570,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         f.requestFocus();
     }
 
+    /** Opens the system file picker (USB stick, Downloads); the result lands in onActivityResult. */
     private void pickFile() {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -553,6 +590,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         if (p == null) {
             return;
         }
+        // 1. Name field.
         Profile ed = p;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -564,6 +602,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         name.setTextColor(0xFFF3EDE4);
         name.setHintTextColor(0xFF8A7E72);
         box.addView(name);
+        // 2. Front chips; a press only remembers the choice until Save.
         LinearLayout chips = new LinearLayout(this);
         chips.setOrientation(LinearLayout.HORIZONTAL);
         String[] ids = {"get", "get", "ws", "h2", "quic", "h3", "l3"};
@@ -583,6 +622,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
             chips.addView(ch);
         }
         box.addView(chips);
+        // 3. Save writes the profile (front only for loft) and redraws.
         Button save = new Button(this);
         save.setText(R.string.save);
         save.setAllCaps(false);
@@ -603,6 +643,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         name.requestFocus();
     }
 
+    /** Asks for confirmation, then deletes the focused connection. */
     private void deleteSelected() {
         Profile p = LoftApp.of(this).profiles().get(selected);
         if (p == null) {
@@ -635,6 +676,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         paintHome();
     }
 
+    /** Shows {@code v} full-screen over the current pane, replacing any earlier overlay. */
     private void showOverlay(View v) {
         hideOverlay();
         FrameLayout pane = findViewById(R.id.pane);
@@ -645,6 +687,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         v.requestFocus();
     }
 
+    /** Removes the overlay, if any, and stops pairing that it may have started. */
     private void hideOverlay() {
         if (overlay != null) {
             ((ViewGroup) overlay.getParent()).removeView(overlay);
@@ -653,6 +696,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         stopPair();
     }
 
+    /** Stops the pairing listener, if one is running. */
     private void stopPair() {
         if (pair != null) {
             pair.stop();
@@ -660,6 +704,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /** Connect button: stops a running or starting session, otherwise connects. */
     private void toggle() {
         if (Live.on() || Live.connecting() || LoftVpnService.running) {
             LoftVpnService.requestStop(this);
@@ -683,6 +728,10 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         LoftVpnService.requestStart(this);
     }
 
+    /**
+     * VPN consent granted: start the session. File picked: read up to
+     * 256 KiB of it and import the profiles inside.
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -706,6 +755,10 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /**
+     * Imports a loft:// link the activity was opened with, then clears it so
+     * a recreate does not import it again.
+     */
     private void handleIntent(Intent in) {
         if (in == null) {
             return;
@@ -717,8 +770,10 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
-    // Language buttons. Changing the language recreates the activity and
-    // reopens the Settings pane through the "pane" extra.
+    /**
+     * Language buttons. Changing the language recreates the activity and
+     * reopens the Settings pane through the "pane" extra.
+     */
     private void wireLang() {
         int cur = Lang.index(this);
         int[] ids = {R.id.lang_en, R.id.lang_ru, R.id.lang_zh};
@@ -742,6 +797,11 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
+    /**
+     * Wires the Settings pane: language, the switches (each saved to Prefs as
+     * soon as it is flipped), links to system VPN settings, Log and About,
+     * and the update button from Channel.
+     */
     private void wireSettings() {
         wireLang();
         Switch d = settings.findViewById(R.id.sw_default);
@@ -811,6 +871,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }, "loft-extip").start();
     }
 
+    /** Converts dp to pixels for this screen. */
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }

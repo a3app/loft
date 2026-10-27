@@ -1,3 +1,10 @@
+/*
+ * Profiles: the store of saved connections ("profiles", one per loft node or
+ * other server the user added) and the active choice. Profile is the single
+ * entry, YamlBuilder turns it into the session YAML the Go engine reads, and
+ * Box encrypts the file at rest. Not to be confused with ProfileStore, which
+ * holds split-tunnel route profiles.
+ */
 package app.loft.android;
 
 import android.content.Context;
@@ -18,20 +25,26 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * Every change rebuilds the profile's YAML and saves the whole list.
  */
 final class Profiles {
+    /** File name under the app's private files dir. */
     private static final String FILE = "profiles.json";
     private final Context app;
+    /** Saved connections in list order (the order shown on screen). */
     private final List<Profile> items = new CopyOnWriteArrayList<>();
+    /** Id of the selected profile; empty when none has been chosen yet. */
     private String active = "";
 
+    /** Loads the saved list right away; uses the application context so no Activity leaks. */
     Profiles(Context c) {
         app = c.getApplicationContext();
         load();
     }
 
+    /** A copy of the list, safe to iterate while the store changes. */
     synchronized List<Profile> all() {
         return new ArrayList<>(items);
     }
 
+    /** Profile with this id, or null. */
     synchronized Profile get(String id) {
         for (Profile p : items) {
             if (p.id.equals(id)) {
@@ -50,11 +63,13 @@ final class Profiles {
         return items.isEmpty() ? null : items.get(0);
     }
 
+    /** Id of active(), or "" when there are no profiles. */
     synchronized String activeId() {
         Profile p = active();
         return p == null ? "" : p.id;
     }
 
+    /** Makes {@code id} the active profile and saves; unknown ids are ignored. */
     synchronized void setActive(String id) {
         if (get(id) != null) {
             active = id;
@@ -82,6 +97,11 @@ final class Profiles {
         save();
     }
 
+    /**
+     * Appends imported profiles (from a file, QR or TV pairing) and saves once.
+     * Unlike put(), it does not replace existing ids. If nothing was active,
+     * the first added profile becomes active.
+     */
     synchronized void addAll(List<Profile> list) {
         for (Profile p : list) {
             if (p == null) {
@@ -134,6 +154,7 @@ final class Profiles {
         save();
     }
 
+    /** Removes a profile; if it was active, the first remaining one takes over. */
     synchronized void delete(String id) {
         for (int i = 0; i < items.size(); i++) {
             if (items.get(i).id.equals(id)) {
@@ -166,6 +187,7 @@ final class Profiles {
         return b.toString();
     }
 
+    /** One profile as its session YAML, for sharing a single connection. */
     synchronized String exportOne(Profile p) {
         if (p == null) {
             return "";
@@ -242,6 +264,7 @@ final class Profiles {
         }
     }
 
+    /** Encrypts the whole list with Box and rewrites profiles.json. Errors are ignored. */
     private void save() {
         try {
             JSONObject o = new JSONObject();
@@ -256,6 +279,7 @@ final class Profiles {
         }
     }
 
+    /** Reads a whole file into memory. */
     private static byte[] read(File f) throws Exception {
         java.io.FileInputStream in = new java.io.FileInputStream(f);
         try {
@@ -274,6 +298,7 @@ final class Profiles {
         }
     }
 
+    /** Replaces the file's content with {@code b}. */
     private static void write(File f, byte[] b) throws Exception {
         java.io.FileOutputStream out = new java.io.FileOutputStream(f);
         try {

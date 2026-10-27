@@ -1,3 +1,9 @@
+/*
+ * Android client, "github" build flavor only: receives the result of an APK
+ * install started by Channel.java (the GitHub self-updater). PackageInstaller
+ * reports back here through a broadcast once the install session finishes or
+ * needs the user's confirmation.
+ */
 package app.loft.android;
 
 import android.content.BroadcastReceiver;
@@ -12,8 +18,11 @@ import android.widget.Toast;
  * (update-ownership). After that USER_ACTION_NOT_REQUIRED is silent.
  */
 public final class GhInstall extends BroadcastReceiver {
-    // When the system needs the user to confirm, it hands back an activity
-    // intent; start it. Any other non-success status shows a short error.
+    /**
+     * Handles one install status. When the system needs the user to confirm,
+     * it hands back an activity intent; start it. Any other non-success status
+     * shows a short error.
+     */
     @Override
     public void onReceive(Context c, Intent in) {
         int st = in.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);

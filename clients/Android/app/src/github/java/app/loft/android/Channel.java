@@ -86,6 +86,7 @@ public final class Channel {
         }
     }
 
+    /** Binds the update controls found anywhere in the activity's window. */
     public static void attach(Activity a) {
         attach(a, a.getWindow().getDecorView());
     }
@@ -118,8 +119,11 @@ public final class Channel {
         }
     }
 
-    // After the user grants "install unknown apps", continue what they asked
-    // for: install the pending release, or check again.
+    /**
+     * Runs whenever any activity resumes. After the user grants "install
+     * unknown apps", continue what they asked for: install the pending
+     * release, or check again. Otherwise just refresh the idle status text.
+     */
     static void onResume(Activity a) {
         Activity cur = uiAct != null ? uiAct.get() : null;
         if (awaitingPerm && canInstall(a)) {
@@ -158,6 +162,11 @@ public final class Channel {
         startCheck(a.getApplicationContext(), false);
     }
 
+    /**
+     * Sends the user to the system "install unknown apps" screen for this app
+     * and remembers whether to install or just check when they come back.
+     * Falls back to the general app list on devices without that screen.
+     */
     private static void askInstall(Activity a) {
         awaitingPerm = true;
         wantInstall = pending != null && pending.hasApk() && Ver.cmp(pending.ver, current(a)) > 0;
@@ -194,6 +203,11 @@ public final class Channel {
         startCheck(ctx.getApplicationContext(), true);
     }
 
+    /**
+     * Fetches the release list on a background thread and passes the best
+     * match to {@link #onCheck}. A silent (background) check shows no error
+     * on failure. The caller must already hold {@code busy}.
+     */
     private static void startCheck(Context ctx, boolean silent) {
         paint(ctx.getString(R.string.channel_checking), false);
         final boolean tv = "tv".equals(BuildConfig.FLAVOR_device);
@@ -280,11 +294,13 @@ public final class Channel {
         final File apk = new File(ctx.getCacheDir(), "loft-update.apk");
         new Thread(() -> {
             try {
+                // 1. Get the expected hash for this APK from the checksum file.
                 String sums = Gh.get(rel.sumsUrl, ua, 64 * 1024);
                 String want = Sums.hexFor(sums, rel.apkName);
                 if (want == null) {
                     throw new IllegalStateException("sum");
                 }
+                // 2. Download the APK into the cache dir, hashing as it streams.
                 try (FileOutputStream out = new FileOutputStream(apk)) {
                     String got = Gh.sha(rel.apkUrl, ua, out, Gh.MAX_APK);
                     if (!want.equals(got)) {
@@ -292,10 +308,12 @@ public final class Channel {
                         return;
                     }
                 }
+                // 3. Refuse an APK that is not this app signed with our key.
                 if (!samePackage(ctx, apk)) {
                     main.post(() -> done(ctx.getString(R.string.channel_bad_sign)));
                     return;
                 }
+                // 4. Hand it to the system installer on the main thread.
                 main.post(() -> {
                     paint(ctx.getString(R.string.channel_installing), false);
                     try {
@@ -358,6 +376,10 @@ public final class Channel {
         s.close();
     }
 
+    /**
+     * True when this app may install packages. Before Android 8 (API 26) there
+     * is no per-app permission, so the answer is always yes.
+     */
     static boolean canInstall(Context ctx) {
         if (Build.VERSION.SDK_INT < 26) {
             return true;
@@ -365,6 +387,7 @@ public final class Channel {
         return ctx.getPackageManager().canRequestPackageInstalls();
     }
 
+    /** True when the current network is metered (for example mobile data). */
     private static boolean isMetered(Context ctx) {
         ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
         return cm != null && cm.isActiveNetworkMetered();
@@ -399,6 +422,7 @@ public final class Channel {
         return a != null && b != null && MessageDigest.isEqual(a, b);
     }
 
+    /** PackageManager flag that asks for signing certificates, old or new API. */
     @SuppressWarnings("deprecation")
     private static int sigFlags() {
         if (Build.VERSION.SDK_INT >= 28) {
@@ -407,6 +431,11 @@ public final class Channel {
         return PackageManager.GET_SIGNATURES;
     }
 
+    /**
+     * First signing certificate of a package, or null when none is known.
+     * On API 28+ it reads the signing history (or the current signers when
+     * there are several), so a rotated key still matches its original.
+     */
     @SuppressWarnings("deprecation")
     private static byte[] firstCert(PackageInfo pi) {
         if (Build.VERSION.SDK_INT >= 28) {
@@ -421,6 +450,7 @@ public final class Channel {
         return s != null && s.length > 0 ? s[0].toByteArray() : null;
     }
 
+    /** Installed version name (e.g. "1.2.3"), falling back to the build's own. */
     private static String current(Context c) {
         try {
             return c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
@@ -429,6 +459,7 @@ public final class Channel {
         }
     }
 
+    /** Status text when nothing is running: permission needed, update available, or "check for updates". */
     private static String idleMsg(Context c) {
         if (!canInstall(c)) {
             return c.getString(R.string.channel_perm_d);
@@ -460,6 +491,7 @@ public final class Channel {
         }
     }
 
+    /** Ends the current check or install: frees {@code busy} and shows {@code msg}. */
     private static void done(String msg) {
         busy.set(false);
         paint(msg, true);

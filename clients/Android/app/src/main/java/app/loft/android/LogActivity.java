@@ -1,3 +1,8 @@
+/*
+ * Android client, shared code: the log screen used by both phone and TV
+ * builds. It shows the text kept by Journal and lets the user copy, share
+ * or clear it.
+ */
 package app.loft.android;
 
 import android.app.AlertDialog;
@@ -15,6 +20,7 @@ public final class LogActivity extends LoftActivity implements Bus.Listener {
     private TextView body;
 
     @Override
+    /** Inflates the screen and wires back, copy, share and clear (clear asks first). */
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_log);
@@ -42,6 +48,7 @@ public final class LogActivity extends LoftActivity implements Bus.Listener {
     }
 
     @Override
+    /** Starts listening for new log lines and shows the current text. */
     protected void onResume() {
         super.onResume();
         Bus.watch(this);
@@ -49,16 +56,19 @@ public final class LogActivity extends LoftActivity implements Bus.Listener {
     }
 
     @Override
+    /** Stops listening while the screen is hidden. */
     protected void onPause() {
         Bus.drop(this);
         super.onPause();
     }
 
     @Override
+    /** Bus event: the journal (or other state) changed, so redraw. */
     public void onLoft() {
         paint();
     }
 
+    /** Replaces the text with the whole journal. */
     private void paint() {
         body.setText(Journal.text());
     }

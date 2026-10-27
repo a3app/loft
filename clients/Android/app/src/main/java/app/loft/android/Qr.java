@@ -1,3 +1,8 @@
+/*
+ * Android client, shared code: draws QR codes with the ZXing library. The
+ * phone uses it to share a connection as a QR code; the TV build uses it to
+ * show a pairing address that the phone scans (see PairUrl, TvPair).
+ */
 package app.loft.android;
 
 import android.graphics.Bitmap;
@@ -11,6 +16,12 @@ import java.util.Map;
 
 /** QR bitmap for share and TV pairing. Dark mark on snow. */
 final class Qr {
+    /**
+     * Encodes {@code s} into a square QR bitmap about {@code size} pixels wide,
+     * in the app's dark-ink-on-light colours with a 1-module quiet border.
+     * Returns null for empty text, a size under 32 px, or an encoding error
+     * (for example text too long for a QR code).
+     */
     static Bitmap encode(String s, int size) {
         if (s == null || s.isEmpty() || size < 32) {
             return null;

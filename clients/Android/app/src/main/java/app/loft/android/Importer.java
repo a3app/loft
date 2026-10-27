@@ -1,3 +1,9 @@
+/*
+ * Android client, shared code: turns anything the user brings in (pasted
+ * text, a scanned QR code, an opened file) into connection profiles. The
+ * format detection itself is done by the Go engine (Mobile, built from
+ * clients/mobile with gomobile); this class only splits and filters.
+ */
 package app.loft.android;
 
 import java.util.ArrayList;
@@ -37,6 +43,7 @@ final class Importer {
         if (all == null || all.trim().isEmpty()) {
             return out;
         }
+        // One profile per YAML document; drop documents that carry no secret.
         for (String doc : all.split("\n---\n")) {
             String y = doc.trim();
             if (y.isEmpty()) {

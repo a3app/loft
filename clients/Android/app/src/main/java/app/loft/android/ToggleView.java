@@ -1,3 +1,8 @@
+/*
+ * Android client, shared code: the app's own on/off switch widget, drawn by
+ * hand to match the design mock (a pill track with a round thumb) instead
+ * of the Material switch. Used in the settings screens.
+ */
 package app.loft.android;
 
 import android.animation.ValueAnimator;
@@ -13,13 +18,17 @@ import android.widget.CompoundButton;
 public final class ToggleView extends CompoundButton {
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF track = new RectF();
+    /** Colours: track off/on (slate/lamp) and thumb off/on (paper/ink). */
     private final int lamp;
     private final int slate;
     private final int ink;
     private final int paper;
+    /** Thumb position from 0 (off) to 1 (on); animated between the two. */
     private float pos;
+    /** Running slide animation, if any. */
     private ValueAnimator anim;
 
+    /** Code constructor. */
     public ToggleView(Context c) {
         super(c);
         lamp = c.getColor(R.color.lamp);
@@ -29,6 +38,7 @@ public final class ToggleView extends CompoundButton {
         init();
     }
 
+    /** Constructor used when the view is inflated from XML. */
     public ToggleView(Context c, AttributeSet a) {
         super(c, a);
         lamp = c.getColor(R.color.lamp);
@@ -38,6 +48,7 @@ public final class ToggleView extends CompoundButton {
         init();
     }
 
+    /** XML constructor with a default style attribute. */
     public ToggleView(Context c, AttributeSet a, int s) {
         super(c, a, s);
         lamp = c.getColor(R.color.lamp);
@@ -47,6 +58,7 @@ public final class ToggleView extends CompoundButton {
         init();
     }
 
+    /** Strips the default button look so only onDraw paints, and places the thumb for the current state. */
     private void init() {
         setClickable(true);
         setFocusable(true);
@@ -98,12 +110,14 @@ public final class ToggleView extends CompoundButton {
     }
 
     @Override
+    /** Always 42x26 dp, whatever the parent offers. */
     protected void onMeasure(int wSpec, int hSpec) {
         float d = getResources().getDisplayMetrics().density;
         setMeasuredDimension(Math.round(42 * d), Math.round(26 * d));
     }
 
     @Override
+    /** Draws the track (colour blends with pos) and the thumb at its current position. */
     protected void onDraw(Canvas c) {
         float w = getWidth();
         float h = getHeight();

@@ -57,26 +57,42 @@ import app.loft.engine.mobile.SocketProtector;
  * and IPv6 overlay addresses, both taken from the engine's Snapshot.
  */
 public final class LoftVpnService extends VpnService implements PacketSink, SocketProtector {
+    /** Intent actions understood by onStartCommand (see requestStart / requestStop). */
     static final String ACTION_STOP = "app.loft.android.STOP";
     static final String ACTION_START = "app.loft.android.START";
+    /** Notification channel id and the id of the one ongoing notification. */
     private static final String CH = "loft.vpn";
     private static final int NOTE = 1;
 
+    /** Worker threads for blocking work: dialing, stopping the engine, rebuilding the TUN. */
     private final ExecutorService go = Executors.newCachedThreadPool();
+    /** Main-thread handler for the once-a-second poll and reconnect delays. */
     private final Handler main = new Handler(Looper.getMainLooper());
+    /** Guards the TUN descriptor and its output stream (tun, out, plan, lastAddr). */
     private final Object io = new Object();
+    /** Serialises TUN rebuilds so two applyTun calls never establish() at once. */
     private final Object tunLock = new Object();
+    /** Set once the user or system asked to stop; blocks retries and new sessions. */
     private final AtomicBoolean stopping = new AtomicBoolean(false);
 
     private Engine engine;
     private ParcelFileDescriptor tun;
     private FileOutputStream out;
+    /** Route plan the current TUN was built from; the reader uses it to drop blocked packets. */
     private RoutePlan plan;
     private ConnectivityManager.NetworkCallback pathCb;
+    /** The physical network (Wi-Fi, LTE, Ethernet) the VPN currently rides on. */
     private Network underlying;
+    /** False until the first onAvailable, which is the start network and not a switch. */
     private boolean seenPath;
+    /**
+     * Key of everything the current TUN was built from (addresses, DNS, MTU,
+     * routes, app filter). applyTun skips the rebuild when it is unchanged.
+     */
     private String lastAddr = "";
+    /** Thread that reads packets from the TUN (see pumpReads). */
     private Thread reader;
+    /** Reconnect attempts since the last successful start. */
     private int retries;
     private final Runnable ticker = this::tickOnce;
 
@@ -153,6 +169,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             return;
         }
         Profile p = LoftApp.of(this).profiles().active();
+        // 1. Pick the active profile and its engine YAML; nothing to do without them.
         if (p == null) {
             Journal.add("no connection");
             stopSelf();
@@ -164,6 +181,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             stopSelf();
             return;
         }
+        // 2. Show "connecting" and log which front and host are dialed.
         Live.name = p.name;
         Live.kind = p.kind;
         Live.state = "connecting";
@@ -175,8 +193,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             path = "(default)";
         }
         Journal.add("front " + p.side() + " " + p.host() + (path.isEmpty() ? "" : " " + path));
+        // 3. Follow network switches and route settings for the whole session.
         watchPath();
         watchRoutePrefs();
+        // 4. Start the engine (blocks until the handshake ends), then build
+        //    the TUN, start polling and fetch due route lists.
         try {
             Engine eng = new Engine();
             eng.setProtector(this);
@@ -241,16 +262,19 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         if (ip.isEmpty() && ip6.isEmpty()) {
             return false;
         }
+        // 1. Build the route plan and a key of everything the TUN depends on.
         RoutePlan rp = RoutePlan.of(this, snap);
         String key = ip + "|" + ip6 + "|" + snap.getDNS() + "|" + snap.getFrontIPs()
                 + "|" + snap.getMTU() + "|" + rp.key()
                 + "|" + Prefs.appMode(this) + Prefs.appSet(this, Prefs.appMode(this)).hashCode()
                 + "|" + Prefs.dnsMode(this) + "|" + Prefs.dnsAddr(this);
         synchronized (tunLock) {
+            // 2. Nothing changed: keep the current TUN, just refresh the UI.
             if (key.equals(lastAddr) && tun != null) {
                 paint(snap);
                 return true;
             }
+            // 3. Describe the new interface: session name, MTU, overlay addresses, DNS.
             Builder b = new Builder()
                     .setSession(Live.name.isEmpty() ? "loft" : Live.name)
                     .setMtu(snap.getMTU() > 0 ? (int) snap.getMTU() : 1280)
@@ -271,6 +295,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 }
             }
             addDns(b, snap);
+            // 4. Add tunnel routes, then (API 33+) carve out excluded prefixes.
+            //    Bad prefixes are logged (first 8) and skipped, not fatal.
             int fail = 0;
             for (Cidr c : rp.include) {
                 try {
@@ -299,6 +325,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             if (fail > 8) {
                 Journal.add("routes " + fail + " failed");
             }
+            // 5. Per-app filter and the physical network, then create the TUN.
             addApps(b);
             if (underlying != null && Build.VERSION.SDK_INT >= 22) {
                 b.setUnderlyingNetworks(new Network[]{underlying});
@@ -307,6 +334,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             if (pfd == null) {
                 return false;
             }
+            // 6. Stop the old reader and swap in the new descriptor.
             Thread old = reader;
             reader = null;
             if (old != null) {
@@ -320,6 +348,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 lastAddr = key;
             }
         }
+        // 7. Start reading from the new TUN and show the new state.
         pumpReads();
         paint(snap);
         return true;
@@ -334,6 +363,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
      * start can use them.
      */
     private void paint(Snapshot snap) {
+        // 1. Copy state, addresses and counters. Empty addresses keep the old value.
         Live.state = nz(snap.getState()).isEmpty() ? "on" : snap.getState();
         Live.err = nz(snap.getErr());
         String ip = nz(snap.getIP());
@@ -353,6 +383,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         Live.instance = nz(snap.getInstanceID());
         Live.mtu = snap.getMTU() > 0 ? (int) snap.getMTU() : 1280;
         Live.rates(snap.getBytesUp(), snap.getBytesDown());
+        // 2. When up: save what the node taught (mask key, fronts, and the
+        //    operator's profile JSON, which ProfileStore.applyOperator takes in).
         if ("on".equals(Live.state)) {
             Live.holding = false;
             Profiles store = LoftApp.of(this).profiles();
@@ -413,7 +445,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         reader.start();
     }
 
-    // Schedules the next once-a-second poll of the engine state.
+    /** Schedules the next once-a-second poll of the engine state. */
     private void tick() {
         main.removeCallbacks(ticker);
         main.postDelayed(ticker, 1000);
@@ -474,6 +506,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         unwatchPath();
         seenPath = false;
         pathCb = new ConnectivityManager.NetworkCallback() {
+            /** A physical network came up: ride on it, and report a switch after the first one. */
             @Override
             public void onAvailable(Network network) {
                 if (isVPN(cm, network)) {
@@ -497,6 +530,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 seenPath = true;
             }
 
+            /** The network under the VPN went away: show "hold" and let the engine park the session. */
             @Override
             public void onLost(Network network) {
                 if (network.equals(underlying)) {
@@ -510,6 +544,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 }
             }
 
+            /** Keeps the network label (Wi-Fi, LTE, Ethernet) in Live current. */
             @Override
             public void onCapabilitiesChanged(Network network, NetworkCapabilities cap) {
                 if (!network.equals(underlying) || cap == null) {
@@ -531,6 +566,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
+    /** True when the network is a VPN (this one or another), which must not be used as the path. */
     private static boolean isVPN(ConnectivityManager cm, Network n) {
         try {
             NetworkCapabilities c = cm.getNetworkCapabilities(n);
@@ -540,6 +576,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
+    /** Removes the network callback registered by watchPath, if any. */
     private void unwatchPath() {
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm != null && pathCb != null) {
@@ -551,6 +588,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         pathCb = null;
     }
 
+    /** Short name of the network type for the UI: "Wi-Fi", "LTE" (any cellular), "Ethernet" or "". */
     private static String label(ConnectivityManager cm, Network n) {
         try {
             NetworkCapabilities c = cm.getNetworkCapabilities(n);
@@ -628,15 +666,20 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         });
     };
 
+    /** Starts listening for route-related settings changes (see routeWatch). */
     private void watchRoutePrefs() {
         Prefs.p(this).registerOnSharedPreferenceChangeListener(routeWatch);
     }
 
+    /** Stops listening for route-related settings changes. */
     private void unwatchRoutePrefs() {
         Prefs.p(this).unregisterOnSharedPreferenceChangeListener(routeWatch);
     }
 
-    /** Daily auto-pull of zone lists, same 20 h window as macOS. */
+    /**
+     * Daily auto-pull of zone lists, same 20 h window as macOS. Only when
+     * split routing is on; rebuilds the TUN when a list was downloaded.
+     */
     private void pullRoutes() {
         if (!Prefs.split(this) || stopping.get()) {
             return;
@@ -650,6 +693,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         rebuildRoutes();
     }
 
+    /**
+     * Sets the TUN's DNS servers: the user's own address when "Local DNS" is
+     * set to an IP, otherwise the comma list the node gave in the Snapshot.
+     * Only numeric addresses are used; names are skipped.
+     */
     private void addDns(Builder b, Snapshot snap) {
         if ("ip".equals(Prefs.dnsMode(this))) {
             InetAddress a = Cidr.numeric(Prefs.dnsAddr(this));
@@ -673,6 +721,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
+    /**
+     * Applies the per-app filter: in "only" mode just the chosen apps use the
+     * VPN, in the other mode the chosen apps are left out. "all" or an empty
+     * list changes nothing. Apps that are no longer installed are logged.
+     */
     private void addApps(Builder b) {
         String mode = Prefs.appMode(this);
         if ("all".equals(mode)) {
@@ -695,6 +748,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
+    /** Re-runs applyTun on a fresh Snapshot so changed settings reach the TUN. */
     private void rebuildRoutes() {
         if (stopping.get() || engine == null) {
             return;
@@ -721,6 +775,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         Bus.post();
     }
 
+    /** Stops the Go engine and the TUN reader thread; the TUN itself stays open. */
     private void stopEngine() {
         Engine eng = engine;
         engine = null;
@@ -737,6 +792,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
+    /** Closes the TUN output stream and descriptor. Caller must hold {@code io}. */
     private void closeTunLocked() {
         try {
             if (out != null) {
@@ -754,6 +810,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         tun = null;
     }
 
+    /** Redraws the ongoing notification from the current Live state. */
     private void updateNote() {
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm != null) {
@@ -761,6 +818,10 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
+    /**
+     * Notification text: "hold" while switching networks, profile name, kind,
+     * overlay IP and, on error, the human explanation from Explain.
+     */
     private String noteText() {
         StringBuilder b = new StringBuilder();
         if (Live.holding) {
@@ -787,6 +848,10 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         return b.length() == 0 ? getString(R.string.connected) : b.toString();
     }
 
+    /**
+     * Builds the ongoing notification: tapping opens the home screen, the
+     * button disconnects. Creates the low-importance channel first on API 26+.
+     */
     private Notification notice(String text) {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch = new NotificationChannel(CH, "loft", NotificationManager.IMPORTANCE_LOW);
@@ -830,6 +895,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 || (s.contains("get handshake") && s.contains("404"));
     }
 
+    /** Null-safe trim: null becomes "". */
     private static String nz(String s) {
         return s == null ? "" : s.trim();
     }
@@ -844,6 +910,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
+    /** Asks the running service to end the session and stop itself. */
     static void requestStop(Context c) {
         c.startService(new Intent(c, LoftVpnService.class).setAction(ACTION_STOP));
     }

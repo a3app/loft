@@ -1,3 +1,9 @@
+/*
+ * RevealFrame: the swipeable row container used by the connection list
+ * (row_conn.xml, MainActivity) and the split-tunnel service lists
+ * (row_split.xml, ListsActivity). It holds a front "card" view and a
+ * "behind" layer with Edit/Delete actions that the card slides away to show.
+ */
 package app.loft.android;
 
 import android.content.Context;
@@ -17,42 +23,58 @@ import android.widget.FrameLayout;
  * never flies off the list.
  */
 public final class RevealFrame extends FrameLayout {
+    /** How far the card slides when parked open, in dp. */
     static final int REVEAL_DP = 84;
+    /** Minimum drag distance, in dp, for a release to park the card open instead of closing it. */
     static final int THRESH_DP = 48;
+    /** Duration of the snap animation, in milliseconds. */
     static final int ANIM_MS = 180;
 
+    /** Callbacks the owning list uses to keep only one row open at a time. */
     interface Listener {
+        /** Called when a horizontal drag starts on this row (so other open rows can close). */
         void onRevealStart(RevealFrame row);
 
+        /** Called when the snap animation ends; {@code tx} is the final card offset in pixels. */
         void onSettled(RevealFrame row, float tx);
     }
 
     private Listener listener;
+    /** Touch position at ACTION_DOWN, used to measure the drag. */
     private float x0;
     private float y0;
+    /** Card translation when the touch started. */
     private float start;
+    /** True once the gesture has been recognised as a horizontal swipe. */
     private boolean dragging;
+    /** System touch slop: movement below this is still treated as a tap. */
     private int slop;
+    /** REVEAL_DP and THRESH_DP converted to pixels. */
     private float reveal;
     private float thresh;
+    /** Allowed card translation range; narrowed by leftOnly() and lock(). */
     private float minTx;
     private float maxTx;
 
+    /** Creates a row from code. */
     public RevealFrame(Context c) {
         super(c);
         init(c);
     }
 
+    /** Creates a row inflated from XML. */
     public RevealFrame(Context c, AttributeSet a) {
         super(c, a);
         init(c);
     }
 
+    /** Creates a row inflated from XML with a style; the style is ignored. */
     public RevealFrame(Context c, AttributeSet a, int defStyle) {
         super(c, a);
         init(c);
     }
 
+    /** Converts the dp constants to pixels and sets the default two-way slide range. */
     private void init(Context c) {
         float d = c.getResources().getDisplayMetrics().density;
         reveal = REVEAL_DP * d;
@@ -67,6 +89,7 @@ public final class RevealFrame extends FrameLayout {
         setClipChildren(false);
     }
 
+    /** Gives the "behind" action layer rounded 12dp corners so it matches the card shape. */
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
@@ -84,6 +107,7 @@ public final class RevealFrame extends FrameLayout {
         behind.setClipToOutline(true);
     }
 
+    /** Sets the callback for drag start and settle events (null to clear). */
     void setListener(Listener l) {
         listener = l;
     }
@@ -101,15 +125,21 @@ public final class RevealFrame extends FrameLayout {
         settleNow(0);
     }
 
+    /** The front view that slides; null if the layout has no R.id.card. */
     View card() {
         return findViewById(R.id.card);
     }
 
+    /** Current horizontal offset of the card in pixels (0 when closed). */
     float translation() {
         View c = card();
         return c == null ? 0 : c.getTranslationX();
     }
 
+    /**
+     * Moves the card to {@code tx} instantly, without animation or callback.
+     * Used when a recycled row is rebound and must show its saved state.
+     */
     void settleNow(float tx) {
         View c = card();
         if (c == null) {
@@ -120,6 +150,7 @@ public final class RevealFrame extends FrameLayout {
         syncActions();
     }
 
+    /** Animates the card to {@code tx} and reports the final offset to the listener. */
     void snap(float tx) {
         View c = card();
         if (c == null) {
@@ -140,6 +171,10 @@ public final class RevealFrame extends FrameLayout {
                 .start();
     }
 
+    /**
+     * Shows the Edit/Delete buttons only while the card is dragged or moved
+     * off centre, so they never peek out around a closed card.
+     */
     private void syncActions() {
         View c = card();
         boolean show = dragging || (c != null && Math.abs(c.getTranslationX()) > 0.5f);
@@ -154,10 +189,12 @@ public final class RevealFrame extends FrameLayout {
         }
     }
 
+    /** Animates the card back to the closed position. */
     void close() {
         snap(0);
     }
 
+    /** True when the touch is inside the card at its current (slid) position. */
     private boolean onCard(MotionEvent e) {
         View c = card();
         if (c == null) {
@@ -170,6 +207,10 @@ public final class RevealFrame extends FrameLayout {
                 && y >= c.getTop() && y < c.getBottom();
     }
 
+    /**
+     * True when the touch is on the small Connect button (R.id.mini) inside the
+     * card. Touches there are left to the button so a tap is not taken as a swipe.
+     */
     private boolean onMini(MotionEvent e) {
         View mini = findViewById(R.id.mini);
         if (mini == null || mini.getVisibility() != VISIBLE) {
@@ -185,6 +226,10 @@ public final class RevealFrame extends FrameLayout {
                 && sy >= m[1] && sy < m[1] + mini.getHeight();
     }
 
+    /**
+     * Lets child views (card body, buttons) receive taps, and takes over the
+     * gesture only once it becomes a mostly horizontal move past the touch slop.
+     */
     @Override
     public boolean onInterceptTouchEvent(MotionEvent e) {
         int act = e.getActionMasked();
@@ -214,6 +259,10 @@ public final class RevealFrame extends FrameLayout {
         return false;
     }
 
+    /**
+     * Drives the swipe: the card follows the finger within the allowed range,
+     * and on release it parks open if dragged past the threshold, else closes.
+     */
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         View c = card();
@@ -221,12 +270,14 @@ public final class RevealFrame extends FrameLayout {
             return super.onTouchEvent(e);
         }
         int act = e.getActionMasked();
+        // 1. Finger down: remember where the gesture and the card started.
         if (act == MotionEvent.ACTION_DOWN) {
             x0 = e.getX();
             y0 = e.getY();
             start = c.getTranslationX();
             return true;
         }
+        // 2. Move: start the drag once it is clearly horizontal, then follow the finger.
         if (act == MotionEvent.ACTION_MOVE) {
             float dx = e.getX() - x0;
             float dy = e.getY() - y0;
@@ -239,6 +290,7 @@ public final class RevealFrame extends FrameLayout {
             }
             return true;
         }
+        // 3. Release: snap open on the dragged side if past the threshold, otherwise close.
         if (act == MotionEvent.ACTION_UP || act == MotionEvent.ACTION_CANCEL) {
             if (dragging) {
                 dragging = false;
@@ -256,6 +308,11 @@ public final class RevealFrame extends FrameLayout {
         return super.onTouchEvent(e);
     }
 
+    /**
+     * Marks the gesture as a swipe: stops the parent list from scrolling,
+     * cancels pending long-presses (which would open selection mode) and
+     * tells the listener so other open rows can close.
+     */
     private void beginDrag() {
         dragging = true;
         ViewParent p = getParent();
@@ -277,6 +334,10 @@ public final class RevealFrame extends FrameLayout {
         }
     }
 
+    /**
+     * Sizes the row by the card alone, then stretches the other children (the
+     * action layer) to exactly the card's height so they never make the row taller.
+     */
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         View card = card();
@@ -301,6 +362,7 @@ public final class RevealFrame extends FrameLayout {
                 h + getPaddingTop() + getPaddingBottom());
     }
 
+    /** Limits {@code v} to the range [lo, hi]. */
     static float clamp(float v, float lo, float hi) {
         return Math.max(lo, Math.min(hi, v));
     }

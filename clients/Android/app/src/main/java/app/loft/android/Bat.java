@@ -1,3 +1,9 @@
+/*
+ * Android client, shared code: reads and writes route lists in the ".bat"
+ * format (Keenetic router / loft-routes). SplitStore uses it to import
+ * route lists and to export the user's zones so the same file works on
+ * Windows, routers and this app.
+ */
 package app.loft.android;
 
 import java.util.ArrayList;
@@ -10,8 +16,11 @@ import java.util.regex.Pattern;
 final class Bat {
     /** One parsed line: a prefix, its label, and whether it is an "ignore" exclusion. */
     static final class Row {
+        /** Label shown in the list (from the rem comment, else the prefix itself). */
         String name = "";
+        /** The prefix in CIDR form, e.g. 10.0.0.0/8. */
         String cidr = "";
+        /** True for "REM ignore" rows: keep this prefix off the tunnel. */
         boolean ignore;
     }
 
@@ -41,6 +50,7 @@ final class Bat {
             if (line.isEmpty()) {
                 continue;
             }
+            // 1. "REM ignore cidr" exclusions.
             Matcher ign = IGNORE.matcher(line);
             if (ign.find()) {
                 Cidr c = Cidr.parse(ign.group(1));
@@ -53,10 +63,12 @@ final class Bat {
                 }
                 continue;
             }
+            // 2. Other REM lines, the zone header and @echo are not routes.
             if (ZONE.matcher(line).find() || line.regionMatches(true, 0, "REM", 0, 3)
                     || line.regionMatches(true, 0, "@echo", 0, 5)) {
                 continue;
             }
+            // 3. Split off a trailing "rem label" comment.
             String rem = "";
             Matcher remM = REM.matcher(line);
             String head = line;
@@ -64,6 +76,7 @@ final class Bat {
                 rem = remM.group(1).trim();
                 head = line.substring(0, remM.start()).trim();
             }
+            // 4. A "route ADD ip [MASK mask]" line, or else a bare CIDR.
             Matcher m = ADD.matcher(head);
             if (!m.find()) {
                 Cidr c = Cidr.parse(line);
@@ -119,6 +132,10 @@ final class Bat {
         return b.toString();
     }
 
+    /**
+     * Appends one zone block: header, optional repo line, then each service of
+     * the zone as "REM ignore" lines or IPv4 "route ADD" lines.
+     */
     private static void appendZone(StringBuilder b, SplitStore st, String zoneId) {
         b.append("\nREM zone: ").append(zoneId).append("\n");
         SplitStore.Zone z = st.zone(zoneId);

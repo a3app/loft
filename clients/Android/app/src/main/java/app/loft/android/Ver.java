@@ -1,7 +1,13 @@
+/*
+ * Android client, shared code: compares version strings. The GitHub update
+ * channel uses it to decide whether a published release is newer than the
+ * installed app.
+ */
 package app.loft.android;
 
 /** Semver 1.2.3[-pre], same order as the panel updater. */
 final class Ver {
+    /** Static helpers only; not instantiated. */
     private Ver() {}
 
     /**
@@ -43,6 +49,7 @@ final class Ver {
         return ap.compareTo(bp);
     }
 
+    /** Parses one numeric part; anything that is not a number counts as 0. */
     private static int parse(String s) {
         try {
             return Integer.parseInt(s);

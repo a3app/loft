@@ -1,3 +1,9 @@
+/*
+ * Android client, shared code (phone and TV builds): the in-process event
+ * bus. The VPN service (LoftVpnService), the log (Journal) and the profile
+ * list (Profiles) post here after changing state; screens subscribe while
+ * they are visible and redraw from Live.
+ */
 package app.loft.android;
 
 import android.os.Handler;
@@ -13,23 +19,30 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * the main thread. The event carries no data: listeners read Live directly.
  */
 final class Bus {
+    /** Implemented by screens that want to redraw when shared state changes. */
     interface Listener {
+        /** Called on the main thread after any post(). */
         void onLoft();
     }
 
+    /** Main-thread handler, so listeners can touch views directly. */
     private static final Handler H = new Handler(Looper.getMainLooper());
+    /** Current subscribers; copy-on-write so post() can iterate while screens subscribe or leave. */
     private static final List<Listener> L = new CopyOnWriteArrayList<>();
 
+    /** Subscribes a listener (usually in onResume). Null is ignored. */
     static void watch(Listener l) {
         if (l != null) {
             L.add(l);
         }
     }
 
+    /** Unsubscribes a listener (usually in onPause) so a hidden screen is not redrawn or leaked. */
     static void drop(Listener l) {
         L.remove(l);
     }
 
+    /** Tells every subscriber, on the main thread, that shared state changed. Safe to call from any thread. */
     static void post() {
         H.post(() -> {
             for (Listener l : L) {

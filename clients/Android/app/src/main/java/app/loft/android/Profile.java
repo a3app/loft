@@ -1,3 +1,9 @@
+/*
+ * Android client, shared by the phone and TV builds: one saved connection
+ * (Profile) and the rules for which fronts it uses. Profiles holds the list,
+ * Importer and fromYaml fill a Profile from a link or engine YAML, YamlBuilder
+ * turns it back into the YAML that LoftVpnService hands to the Go engine.
+ */
 package app.loft.android;
 
 import org.json.JSONException;
@@ -29,6 +35,10 @@ final class Profile {
     // listedFronts is the front list sent in Hello (the client's first
     // message, saying what it can do). fp is the TLS fingerprint to imitate.
     // yaml is the cached engine config built from these fields.
+    // user / pass / pap are the SSTP login (pap allows PAP/CHAP). sni is the
+    // TLS server name to send. dns / dnsSystem are the Edit screen's DNS
+    // fields. mux turns stream multiplexing on; tlsCheck verifies the
+    // server certificate.
     String id = UUID.randomUUID().toString();
     String name = "";
     String kind = "get";
@@ -55,27 +65,36 @@ final class Profile {
     boolean pap;
     boolean dnsSystem = true;
 
+    /** True for a loft front (get, ws, h2, quic, h3, l3) rather than SSTP / VLESS / Trojan. */
     boolean isLoft() {
         return indexOf(kind) >= 0;
     }
 
+    /** True for the L3 front, which carries raw IP packets and has no mux. */
     boolean isL3() {
         return "l3".equalsIgnoreCase(kind);
     }
 
+    /** True for an SSTP (Microsoft VPN over HTTPS) profile. */
     boolean isSSTP() {
         return "sstp".equalsIgnoreCase(kind);
     }
 
+    /** True for a VLESS (Xray-style) profile. */
     boolean isVLESS() {
         return "vless".equalsIgnoreCase(kind);
     }
 
+    /** True for a Trojan profile. */
     boolean isTrojan() {
         return "trojan".equalsIgnoreCase(kind);
     }
 
-    /** Cover host without a separate edge: extra mux fronts stay off. */
+    /**
+     * Cover host without a separate edge: extra mux fronts stay off. True
+     * when a cdn host is set or the URL host contains "cdn.", and no edge
+     * (direct node address) is given.
+     */
     boolean isCDN() {
         if (edge != null && !edge.trim().isEmpty()) {
             return false;
@@ -92,10 +111,9 @@ final class Profile {
         return !nz(wsPath).isEmpty() || !nz(h2Path).isEmpty() || !nz(h3Path).isEmpty() || quic;
     }
 
-    /** Hello list from Edit extras. GET-only stays empty so Status can still teach fronts. */
     /**
-     * Rebuilds listedFronts from the Edit screen's extra-front fields.
-     * With GET only it stays empty: the client then lists no fronts, and the
+     * Hello list from Edit extras: rebuilds listedFronts from the Edit
+     * screen's extra-front fields. With GET only it stays empty: the client then lists no fronts, and the
      * node answers in Status (its reply to Hello) with the fronts it offers,
      * which applyLearnedFronts saves.
      */
@@ -201,6 +219,8 @@ final class Profile {
         if (raw == null) {
             return;
         }
+        // 1. Strip brackets and quotes, keep known mux fronts once each, and
+        //    switch each one on (GET also becomes the profile's kind).
         java.util.ArrayList<String> listed = new java.util.ArrayList<>();
         java.util.HashSet<String> seen = new java.util.HashSet<>();
         String s = raw.trim();
@@ -241,6 +261,7 @@ final class Profile {
                     break;
             }
         }
+        // 2. Store the cleaned list as a comma string.
         if (listed.isEmpty()) {
             listedFronts = "";
         } else {
@@ -270,6 +291,7 @@ final class Profile {
             if (s.isEmpty()) {
                 continue;
             }
+            // Each item is "name=/path" or a bare name (QUIC has no path).
             String name;
             String path;
             int eq = s.indexOf('=');
@@ -318,6 +340,7 @@ final class Profile {
         return changed;
     }
 
+    /** True when t is one of the mux fronts in MUX_ORDER (L3 is not). */
     private static boolean muxName(String t) {
         for (String x : MUX_ORDER) {
             if (x.equals(t)) {
@@ -327,6 +350,7 @@ final class Profile {
         return false;
     }
 
+    /** Null-safe trim: null becomes "". */
     static String nz(String s) {
         return s == null ? "" : s.trim();
     }
@@ -406,12 +430,13 @@ final class Profile {
         return "loft";
     }
 
+    /** Display title of the kind ("GET", "WS", ...), or the kind upper-cased if it is not a front. */
     String frontTitle() {
         int i = indexOf(kind);
         return i >= 0 ? FRONT_TITLES[i] : kind.toUpperCase();
     }
 
-    // Short label for logs and the UI, e.g. "loft · get".
+    /** Short label for logs and the UI, e.g. "loft · get", or the family name. */
     String side() {
         if (isLoft()) {
             return "loft · " + kind.toLowerCase();
@@ -458,6 +483,7 @@ final class Profile {
         return YamlBuilder.from(this);
     }
 
+    /** Every field as JSON, the form Profiles saves to storage. */
     JSONObject toJson() throws JSONException {
         JSONObject o = new JSONObject();
         o.put("id", id);
@@ -488,6 +514,7 @@ final class Profile {
         return o;
     }
 
+    /** Reads a profile saved by toJson; missing keys get the field defaults. */
     static Profile fromJson(JSONObject o) {
         Profile p = new Profile();
         p.id = o.optString("id", p.id);
@@ -527,6 +554,7 @@ final class Profile {
     static Profile fromYaml(String yaml) {
         Profile p = new Profile();
         p.yaml = yaml == null ? "" : yaml;
+        // 1. Kind: the first outbound's type, else the top-level family.
         String fam = Peek.get(yaml, "kind");
         if (fam.isEmpty()) {
             fam = "loft";
@@ -535,6 +563,7 @@ final class Profile {
         if (p.kind.isEmpty()) {
             p.kind = fam.equals("loft") ? "get" : fam;
         }
+        // 2. Identity: name, member key (token, uuid or password), login.
         p.name = Peek.get(yaml, "name");
         if (p.name.isEmpty()) {
             p.name = Peek.outbound(yaml, "name");
@@ -548,6 +577,8 @@ final class Profile {
         }
         p.user = Peek.get(yaml, "username");
         p.pass = Peek.get(yaml, "password");
+        // 3. Address and transport: URL and path, extra fronts from the other
+        //    outbounds, cover host, SNI, mask key, inner cipher, fingerprint.
         p.edge = Peek.get(yaml, "edge");
         p.url = Peek.outbound(yaml, "url");
         p.path = Peek.outbound(yaml, "path");
@@ -563,6 +594,7 @@ final class Profile {
         if (p.fp.isEmpty()) {
             p.fp = "chrome";
         }
+        // 4. Switches: mux (never for L3), TLS check, PAP/CHAP.
         p.mux = Peek.outboundBool(yaml, "mux", !p.isL3());
         if (p.isL3()) {
             p.mux = false;
@@ -573,6 +605,7 @@ final class Profile {
         }
         String pap = Peek.get(yaml, "pap_chap");
         p.pap = pap.equals("true") || pap.equals("yes") || pap.equals("1");
+        // 5. Fallback name from the host, then the explicit "fronts" list.
         if (p.name.isEmpty()) {
             p.name = p.host();
         }
@@ -583,7 +616,14 @@ final class Profile {
         return p;
     }
 
-    /** One loft connection may list get/ws/h2/h3/quic outbounds. Merge them. */
+    /**
+     * One loft connection may list get/ws/h2/h3/quic outbounds. Merge them
+     * into one profile: GET sets the main URL and path, the others switch on
+     * their extra front and supply the base URL if none is set yet. Outbounds
+     * that point at the edge host are skipped (the edge is stored separately).
+     * Mask key, cover host and fingerprint are taken from the first outbound
+     * that has them.
+     */
     private static void mergeOutbounds(Profile p, String yaml) {
         String eh = hostOf(p.edge).toLowerCase();
         for (Peek.Ob o : Peek.outbounds(yaml)) {
@@ -591,6 +631,7 @@ final class Profile {
             if (!eh.isEmpty() && hostOf(o.url).toLowerCase().equals(eh)) {
                 continue;
             }
+            // Shared settings: first non-empty value wins.
             if (p.maskPub.isEmpty() && o.maskPub != null && !o.maskPub.isEmpty()) {
                 p.maskPub = o.maskPub;
             }
@@ -600,6 +641,7 @@ final class Profile {
             if ((p.fp == null || p.fp.isEmpty() || "chrome".equals(p.fp)) && o.fp != null && !o.fp.isEmpty()) {
                 p.fp = o.fp;
             }
+            // Per-front settings.
             switch (t) {
                 case "get":
                     p.kind = "get";
@@ -653,8 +695,10 @@ final class Profile {
         }
     }
 
-    // The URL without its path, so several fronts can share one base URL.
-    // ws/wss become http/https: GET cannot dial a WebSocket URL.
+    /**
+     * The URL without its path, so several fronts can share one base URL.
+     * ws/wss become http/https: GET cannot dial a WebSocket URL.
+     */
     private static String stripPath(String url) {
         if (url == null || url.isEmpty()) {
             return "";
@@ -676,12 +720,14 @@ final class Profile {
         return base;
     }
 
+    /** Host name of any URL, using the same rules as host(). */
     static String hostOf(String url) {
         Profile x = new Profile();
         x.url = url == null ? "" : url;
         return x.host();
     }
 
+    /** Position of a kind in FRONTS (case-insensitive), or -1 when it is not a loft front. */
     static int indexOf(String kind) {
         if (kind == null) {
             return -1;

@@ -1,3 +1,8 @@
+/*
+ * Android client, shared code: the About screen (version, protocol table,
+ * "made with" line with HeartView). On the github build Channel.attach also
+ * adds the update button and status here; on the store build it does nothing.
+ */
 package app.loft.android;
 
 import android.content.res.Configuration;
@@ -12,6 +17,7 @@ import android.widget.TextView;
 /** About screen: app version and a short table of the supported protocols. */
 public final class AboutActivity extends LoftActivity {
     @Override
+    /** Fills the version and the protocol rows, scales the layout, then lets the update channel attach. */
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_about);
@@ -30,6 +36,7 @@ public final class AboutActivity extends LoftActivity {
         Channel.attach(this);
     }
 
+    /** Sets the name ({@code k}) and description ({@code v}) strings of one protocol row. */
     private void bindProto(int row, int k, int v) {
         View r = findViewById(row);
         ((TextView) r.findViewById(R.id.k)).setText(k);
@@ -41,6 +48,7 @@ public final class AboutActivity extends LoftActivity {
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             return;
         }
+        // Scale factor relative to a 360x700 dp phone, kept between 1 and 1.45.
         DisplayMetrics dm = getResources().getDisplayMetrics();
         float d = dm.density;
         float sw = dm.widthPixels / d;
@@ -55,6 +63,7 @@ public final class AboutActivity extends LoftActivity {
         int side = Math.round(Math.max(24f, sw * 0.09f) * d);
         findViewById(R.id.about_body).setPadding(side, 0, side, Math.round(8 * d));
 
+        // Logo mark, then text sizes, then the protocol table, then the heart.
         int mark = Math.round(96f * s * d);
         View m = findViewById(R.id.mark);
         ViewGroup.LayoutParams mp = m.getLayoutParams();
@@ -89,6 +98,7 @@ public final class AboutActivity extends LoftActivity {
         heart.setLayoutParams(hp);
     }
 
+    /** Sets the text size of a TextView in sp. */
     private void setSp(int id, float sp) {
         ((TextView) findViewById(id)).setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
     }

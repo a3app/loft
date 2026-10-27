@@ -1,3 +1,9 @@
+/*
+ * SparkView: the small live traffic chart on the main screen. It draws the
+ * download (gold) and upload (grey) rates that LoftVpnService samples into
+ * Live, either as smooth lines or as bars, and a pulsing text label while the
+ * tunnel is still connecting.
+ */
 package app.loft.android;
 
 import android.content.Context;
@@ -24,30 +30,40 @@ public final class SparkView extends View {
     private final Path fillPath = new Path();
     private final Path upPath = new Path();
 
+    /** Download and upload samples in bytes/s, oldest first. */
     private final float[] dn = new float[N];
     private final float[] up = new float[N];
+    /** How many of the N slots hold real samples. */
     private int n;
+    /** True to draw bars instead of lines. */
     private boolean bars;
+    /** True while connecting: the label is drawn instead of the chart. */
     private boolean handshake;
     private String handshakeText = "";
+    /** Phase of the label's fade animation, in radians. */
     private float pulse;
+    /** True while the tick runnable is scheduled. */
     private boolean pulsing;
 
+    /** Creates the view from code. */
     public SparkView(Context c) {
         super(c);
         init();
     }
 
+    /** Creates the view from XML. */
     public SparkView(Context c, AttributeSet a) {
         super(c, a);
         init();
     }
 
+    /** Creates the view from XML with a default style. */
     public SparkView(Context c, AttributeSet a, int s) {
         super(c, a, s);
         init();
     }
 
+    /** Sets up the paints: colours, stroke widths and label size. */
     private void init() {
         downStroke.setStyle(Paint.Style.STROKE);
         downStroke.setStrokeWidth(dp(1.6f));
@@ -67,6 +83,7 @@ public final class SparkView extends View {
         text.setAntiAlias(true);
     }
 
+    /** Switches between line chart (false) and bar chart (true). */
     void setBars(boolean on) {
         bars = on;
         invalidate();
@@ -96,6 +113,7 @@ public final class SparkView extends View {
         invalidate();
     }
 
+    /** Drops all samples and stops the handshake label, leaving an empty view. */
     void clear() {
         n = 0;
         handshake = false;
@@ -103,6 +121,7 @@ public final class SparkView extends View {
         invalidate();
     }
 
+    /** Starts the label fade loop unless it is already running. */
     private void startPulse() {
         if (pulsing) {
             return;
@@ -111,6 +130,7 @@ public final class SparkView extends View {
         post(tick);
     }
 
+    /** Advances the fade about 25 times a second; stops itself when the handshake ends. */
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
@@ -127,6 +147,7 @@ public final class SparkView extends View {
         }
     };
 
+    /** Stops the animation loop so a removed view is not redrawn. */
     @Override
     protected void onDetachedFromWindow() {
         pulsing = false;
@@ -134,6 +155,7 @@ public final class SparkView extends View {
         super.onDetachedFromWindow();
     }
 
+    /** Draws the handshake label, the bars or the lines, depending on state. */
     @Override
     protected void onDraw(Canvas c) {
         int w = getWidth();
@@ -163,6 +185,7 @@ public final class SparkView extends View {
         drawLines(c, w, h, max);
     }
 
+    /** Largest sample in either direction; both series share this scale. */
     private float peak() {
         float max = 0;
         for (int i = 0; i < n; i++) {
@@ -240,6 +263,10 @@ public final class SparkView extends View {
         bar.setAlpha(255);
     }
 
+    /**
+     * Converts samples to screen points. Points are placed in a fixed N-slot
+     * grid aligned right, so the newest sample is always at the right edge.
+     */
     private void pts(float[] v, float max, int w, int h, float[] x, float[] y, float scale) {
         float padX = dp(2);
         float padY = dp(6);
@@ -272,6 +299,7 @@ public final class SparkView extends View {
         }
     }
 
+    /** Converts dp to pixels. */
     private float dp(float v) {
         return v * getResources().getDisplayMetrics().density;
     }

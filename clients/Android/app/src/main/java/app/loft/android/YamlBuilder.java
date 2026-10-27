@@ -1,3 +1,9 @@
+/*
+ * Android client, shared code: turns a saved Profile into text. from() builds
+ * the YAML config that LoftVpnService passes to the Go engine (Engine.Start in
+ * clients/mobile); emit() builds the shareable loft:// or sstp:// link used
+ * for QR codes and TV pairing. Importer does the reverse (link to Profile).
+ */
 package app.loft.android;
 
 /** Client YAML for Engine.Start. Shape matches clients/mobile marshalClient. */
@@ -14,6 +20,7 @@ final class YamlBuilder {
         if (p == null) {
             return "";
         }
+        // 1. Identity: protocol kind, name, and the credentials it needs.
         StringBuilder b = new StringBuilder();
         String fam = p.family();
         line(b, "kind", fam.equals("loft") ? "loft" : fam);
@@ -34,6 +41,8 @@ final class YamlBuilder {
                 line(b, "uuid", p.token);
             }
         }
+        // 2. loft-only extras: edge, inner cipher, and the list of fronts
+        //    (ways of carrying traffic, like GET, WS, H2) when several are used.
         b.append("select: auto\n");
         if (p.isLoft() && p.edge != null && !p.edge.isEmpty()) {
             line(b, "edge", p.edge);
@@ -52,6 +61,7 @@ final class YamlBuilder {
             }
             b.append("]\n");
         }
+        // 3. The main outbound: name, type and URL of the server to dial.
         b.append("outbounds:\n");
         String obType = p.kind.toLowerCase();
         if (p.isLoft() && contains(mux, "get")) {
@@ -68,6 +78,7 @@ final class YamlBuilder {
         if (p.isLoft() && "get".equals(obType) && p.path != null && !p.path.isEmpty()) {
             b.append("    path: ").append(quote(p.path)).append('\n');
         }
+        // 4. Per-protocol options, extra loft fronts, and TLS checking.
         if (p.isLoft()) {
             if (!p.cdn.isEmpty()) {
                 b.append("    cdn: ").append(quote(p.cdn)).append('\n');
@@ -125,6 +136,7 @@ final class YamlBuilder {
         }
         String scheme = schemeOf(p.url, type);
         int port = portOf(p.url, scheme);
+        // 1. key@host[:port][/path], leaving out the default port.
         StringBuilder b = new StringBuilder("loft://");
         b.append(enc(token)).append('@');
         if (host.indexOf(':') >= 0) {
@@ -143,6 +155,7 @@ final class YamlBuilder {
             }
             b.append(path);
         }
+        // 2. Query parameters, each only when it differs from the default.
         StringBuilder q = new StringBuilder();
         if (!"get".equals(type)) {
             q.append("type=").append(type);
@@ -173,6 +186,7 @@ final class YamlBuilder {
             }
             q.append("pbk=").append(enc(p.maskPub));
         }
+        // 3. Join the query and add the display name as the #fragment.
         if (q.length() > 0) {
             b.append('?').append(q);
         }
@@ -182,6 +196,11 @@ final class YamlBuilder {
         return b.toString();
     }
 
+    /**
+     * Builds an sstp://user:password@host[:port][/path]?sni=&amp;pap=1#name
+     * link. SSTP is Microsoft's VPN over HTTPS; pap=1 allows the plain PAP
+     * login instead of CHAP. Port 443 is left out.
+     */
     private static String emitSstp(Profile p) {
         String user = nz(p.user);
         String pass = p.pass.isEmpty() ? nz(p.token) : p.pass;
@@ -254,7 +273,10 @@ final class YamlBuilder {
         }
     }
 
-    // Adds ws= / h2= / h3= / quic to a loft:// link when the profile uses extra fronts.
+    /**
+     * Adds ws= / h2= / h3= / quic to a loft:// link when the profile uses
+     * extra fronts. A front without a custom path gets the default path.
+     */
     private static void appendFrontQuery(StringBuilder q, Profile p) {
         if (p == null || !p.isLoft() || p.isL3()) {
             return;
@@ -310,7 +332,7 @@ final class YamlBuilder {
         return wss + path;
     }
 
-    // scheme://host[:port] of the main URL, with ws/wss mapped to http/https.
+    /** scheme://host[:port] of the main URL, with ws/wss mapped to http/https. */
     private static String originURL(Profile p) {
         String sch = schemeOf(p.url, p.kind);
         if ("ws".equals(sch) || "wss".equals(sch)) {
@@ -328,6 +350,7 @@ final class YamlBuilder {
         return sch + "://" + host + (port > 0 && port != def ? ":" + port : "");
     }
 
+    /** True when the array (may be null) holds {@code v}. */
     private static boolean contains(String[] a, String v) {
         if (a == null) {
             return false;
@@ -340,12 +363,15 @@ final class YamlBuilder {
         return false;
     }
 
+    /** Appends one top-level "key: value" YAML line, quoting the value when needed. */
     private static void line(StringBuilder b, String k, String v) {
         b.append(k).append(": ").append(quote(v == null ? "" : v)).append('\n');
     }
 
-    // Quotes a YAML value when it could be misread: contains ':', '#', a space
-    // or a quote, or is a member key (lt_...), which must stay a string.
+    /**
+     * Quotes a YAML value when it could be misread: contains ':', '#', a space
+     * or a quote, or is a member key (lt_...), which must stay a string.
+     */
     private static String quote(String s) {
         if (s.isEmpty()) {
             return "\"\"";
@@ -357,10 +383,12 @@ final class YamlBuilder {
         return s;
     }
 
+    /** Null-safe trim: null becomes "". */
     private static String nz(String s) {
         return s == null ? "" : s.trim();
     }
 
+    /** URL-encodes a link part, with spaces as %20 rather than '+'. */
     private static String enc(String s) {
         try {
             return java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20");
@@ -369,6 +397,10 @@ final class YamlBuilder {
         }
     }
 
+    /**
+     * Lowercase scheme of a URL ("https", "wss", ...). Without one it guesses
+     * from the front type: "wss" for WS, "https" otherwise.
+     */
     static String schemeOf(String url, String type) {
         if (url == null) {
             return "ws".equals(type) ? "wss" : "https";
@@ -422,6 +454,7 @@ final class YamlBuilder {
         return "/".equals(p) ? "" : p;
     }
 
+    /** The host[:port] part of a URL, without scheme, user info, path or query. */
     private static String hostPort(String url) {
         if (url == null) {
             return "";

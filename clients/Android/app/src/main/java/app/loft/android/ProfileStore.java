@@ -1,3 +1,10 @@
+/*
+ * ProfileStore: saved split-tunnel route profiles. A route profile is a full
+ * SplitStore (which services and zones go through the tunnel and which stay
+ * local). The phone's Lists screen switches between them; LoftVpnService
+ * stores the profile a node operator pushes. Not related to Profiles, which
+ * holds connections.
+ */
 package app.loft.android;
 
 import android.content.Context;
@@ -16,23 +23,37 @@ import java.util.UUID;
  * One is active. Operator slot is read-only and overwritten on serial change.
  */
 final class ProfileStore {
+    /** Fixed id of the user's own profile (created from the original split_store). */
     static final String MINE = "mine";
+    /** Fixed id of the single operator slot, filled by the node the user connects to. */
     static final String OP = "op";
 
+    /** Id of the active profile. */
     String active = MINE;
     final List<Prof> profiles = new ArrayList<>();
 
+    /** One route profile with its origin and its full split-tunnel settings. */
     static final class Prof {
         String id = "";
+        /** Where it came from: "me" (user-made), "op" (pushed by the node operator) or "link" (imported). */
         String src = "me"; // me | op | link
         String name = "";
+        /** For the operator profile: name of the connection it arrived over. */
         String conn = "";
+        /** DNS setting carried by the profile. */
         String dns = "";
+        /** Version number set by the profile's author; an operator profile is replaced only when it changes. */
         long serial;
+        /** Last change time, epoch milliseconds. */
         long updated;
         SplitStore store = new SplitStore();
     }
 
+    /**
+     * Reads the catalog from prefs. On first run it creates it with a single
+     * "mine" profile copied from the current split_store, so existing settings
+     * are kept. Falls back to a valid active id if the saved one is gone.
+     */
     static ProfileStore load(Context c) {
         String raw = Prefs.p(c).getString("route_profiles", "");
         if (raw == null || raw.isEmpty()) {
@@ -54,10 +75,15 @@ final class ProfileStore {
         return ps;
     }
 
+    /** Writes the catalog (not the active split_store) to prefs. */
     void save(Context c) {
         Prefs.p(c).edit().putString("route_profiles", toJSON()).apply();
     }
 
+    /**
+     * Builds a catalog from its JSON form. Profiles without an id are dropped;
+     * a broken document yields an empty catalog rather than an error.
+     */
     static ProfileStore parse(String raw) {
         ProfileStore ps = new ProfileStore();
         try {
@@ -92,6 +118,7 @@ final class ProfileStore {
         return ps;
     }
 
+    /** JSON form of the catalog, the inverse of parse(). */
     String toJSON() {
         JSONObject o = new JSONObject();
         try {
@@ -115,6 +142,7 @@ final class ProfileStore {
         return o.toString();
     }
 
+    /** Profile with this id, or null. */
     Prof get(String id) {
         for (Prof p : profiles) {
             if (p.id.equals(id)) {
@@ -124,16 +152,22 @@ final class ProfileStore {
         return null;
     }
 
+    /** The active profile, falling back to "mine". */
     Prof current() {
         Prof p = get(active);
         return p != null ? p : get(MINE);
     }
 
+    /** True when the operator's profile is selected; the UI then treats the lists as read-only. */
     boolean operatorActive() {
         Prof p = current();
         return p != null && "op".equals(p.src);
     }
 
+    /**
+     * Copies edits made on the Lists screen back into the active catalog entry.
+     * Skipped for the operator profile, since the node owns it.
+     */
     static void syncActive(Context c, SplitStore store) {
         ProfileStore ps = load(c);
         Prof p = ps.current();
@@ -145,6 +179,11 @@ final class ProfileStore {
         ps.save(c);
     }
 
+    /**
+     * Switches to profile {@code id}: first saves the current split_store into
+     * the outgoing profile (unless it is the operator's), then writes the new
+     * profile's settings into split_store so RoutePlan picks them up.
+     */
     void activate(String id, Context c) {
         Prof p = get(id);
         if (p == null) {
@@ -159,6 +198,11 @@ final class ProfileStore {
         save(c);
     }
 
+    /**
+     * Adds an editable "me" copy of {@code src} under a new id. Services marked
+     * as coming from the operator are re-marked as the user's own, so they can
+     * be edited in the copy.
+     */
     Prof copyOf(Prof src, String name) {
         Prof n = new Prof();
         n.id = UUID.randomUUID().toString();
@@ -176,11 +220,17 @@ final class ProfileStore {
         return n;
     }
 
+    /** copyOf() followed by activate(); how a read-only profile becomes editable. */
     void copyAndActivate(Prof src, String name, Context c) {
         Prof n = copyOf(src, name);
         activate(n.id, c);
     }
 
+    /**
+     * Creates or refreshes the operator slot from the node's profile JSON.
+     * The connection name is always updated; the content is replaced only when
+     * the serial differs (or is 0), so an unchanged push is a no-op.
+     */
     void putOperator(String json, String conn) {
         JSONObject o;
         try {
@@ -208,6 +258,11 @@ final class ProfileStore {
         p.src = "op";
     }
 
+    /**
+     * Entry point for LoftVpnService after a connection comes up: stores the
+     * operator profile and, if it is the active one, also refreshes
+     * split_store so the new routes take effect.
+     */
     static void applyOperator(Context c, String json, String conn) {
         if (json == null || json.isEmpty()) {
             return;
@@ -223,6 +278,7 @@ final class ProfileStore {
         }
     }
 
+    /** Adds a profile parsed from a shared routes link; null if the JSON is invalid. */
     Prof addLink(String json) {
         JSONObject o;
         try {
@@ -242,6 +298,7 @@ final class ProfileStore {
         return p;
     }
 
+    /** Loads the catalog, adds a link profile and saves it. Does not activate it. */
     static Prof importLink(Context c, String json) {
         ProfileStore ps = load(c);
         Prof p = ps.addLink(json);

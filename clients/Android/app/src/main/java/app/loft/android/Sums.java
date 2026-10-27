@@ -1,7 +1,13 @@
+/*
+ * Android client, shared code: reads SHA256SUMS checksum files. The GitHub
+ * update channel (github flavor: Channel, Gh) downloads the published
+ * SHA256SUMS next to the APK and checks the download against it.
+ */
 package app.loft.android;
 
 /** SHA256SUMS lines: {@code <hex>  name} or {@code <hex> *name}. */
 final class Sums {
+    /** Static helpers only; not instantiated. */
     private Sums() {}
 
     /**
@@ -35,6 +41,7 @@ final class Sums {
         return null;
     }
 
+    /** Index of the first space or tab in {@code s}, or -1 when there is none. */
     private static int indexOfWs(String s) {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);

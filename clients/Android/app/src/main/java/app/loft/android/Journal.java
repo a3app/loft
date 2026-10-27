@@ -1,3 +1,9 @@
+/*
+ * Android client, shared code: the session log ("journal") shown on the log
+ * screen. LoftVpnService adds most lines (other parts add errors, e.g. TV
+ * pairing and route-list downloads); LogActivity shows, copies and shares
+ * them. Kept in memory only and capped in size.
+ */
 package app.loft.android;
 
 import java.text.SimpleDateFormat;
@@ -8,10 +14,13 @@ import java.util.Locale;
 
 /** Ring of session lines. Tokens are not stored. */
 final class Journal {
+    /** Maximum number of lines kept; older lines are dropped first. */
     private static final int MAX = 400;
     private static final List<String> LINES = new ArrayList<>();
+    /** Time prefix for each line. Only used under the class lock, so sharing one formatter is safe. */
     private static final SimpleDateFormat FMT = new SimpleDateFormat("HH:mm:ss", Locale.US);
 
+    /** Adds one time-stamped, redacted line, trims the oldest lines and notifies screens. Empty input is ignored. */
     static synchronized void add(String s) {
         if (s == null || s.isEmpty()) {
             return;
@@ -24,15 +33,18 @@ final class Journal {
         Bus.post();
     }
 
+    /** A copy of all lines, oldest first. */
     static synchronized List<String> all() {
         return new ArrayList<>(LINES);
     }
 
+    /** Removes every line and notifies screens. */
     static synchronized void clear() {
         LINES.clear();
         Bus.post();
     }
 
+    /** All lines joined with newlines, for display, copy and share. */
     static synchronized String text() {
         StringBuilder b = new StringBuilder();
         for (String l : LINES) {

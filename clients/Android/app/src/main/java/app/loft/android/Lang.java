@@ -1,3 +1,8 @@
+/*
+ * Android client, shared code: the in-app language switch. LoftApp applies
+ * it at start, LoftActivity applies it to every screen, and the settings
+ * screens (phone and TV) call apply() again after the user picks a language.
+ */
 package app.loft.android;
 
 import android.content.Context;
@@ -16,8 +21,14 @@ import java.util.Locale;
  * XML layouts and getString() agree.
  */
 final class Lang {
+    /** Languages offered in the picker, in picker order. */
     static final String[] TAGS = {"en", "ru", "zh"};
 
+    /**
+     * Makes the stored choice the app-wide locale (AppCompat application
+     * locales and the Java default locale). An empty choice hands the decision
+     * back to the system.
+     */
     static void apply(Context c) {
         String tag = tag(c);
         LocaleListCompat list = tag.isEmpty()

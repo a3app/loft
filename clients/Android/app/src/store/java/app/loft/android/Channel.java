@@ -1,3 +1,9 @@
+/*
+ * Android client, "store" build flavor only: the no-op update channel. Builds
+ * installed from an app store are updated by the store itself, so this class
+ * keeps the same API as the github flavor's Channel.java (the GitHub
+ * self-updater) and does nothing.
+ */
 package app.loft.android;
 
 import android.app.Activity;
@@ -10,9 +16,12 @@ public final class Channel {
 
     // Same API as the github flavor's Channel so shared code compiles in both.
     // Store builds are updated by the store, so every hook does nothing.
+    /** Called at app start; nothing to set up in store builds. */
     public static void boot(Application app) {}
 
+    /** Called when a screen opens; store builds show no update button. */
     public static void attach(Activity a) {}
 
+    /** Same as {@link #attach(Activity)} for a given view tree; does nothing. */
     public static void attach(Activity a, View root) {}
 }

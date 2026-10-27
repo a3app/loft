@@ -1,3 +1,10 @@
+/*
+ * Cidr: a small IPv4/IPv6 prefix type (address + prefix length) with the
+ * set arithmetic needed to build VpnService route lists. RoutePlan uses it to
+ * compute which ranges go into the tunnel; Bat uses it to read and write
+ * Windows-style "route add ... MASK ..." lines. It also hosts the shared
+ * byte-rate formatter used by the traffic UI.
+ */
 package app.loft.android;
 
 import java.net.InetAddress;
@@ -11,16 +18,25 @@ import java.util.Locale;
  * LAN bypass is 0.0.0.0/0 minus RFC1918 (overlay CIDR added back).
  */
 final class Cidr {
+    /** Raw address bytes: 4 for IPv4, 16 for IPv6. Host bits may be non-zero (see canonical()). */
     final byte[] addr;
+    /** Prefix length: how many leading bits form the network part. */
     final int bits;
+    /** True for an IPv6 prefix. */
     final boolean v6;
 
+    /** Creates a prefix; the address array is copied so callers can reuse theirs. */
     Cidr(byte[] addr, int bits, boolean v6) {
         this.addr = addr.clone();
         this.bits = bits;
         this.v6 = v6;
     }
 
+    /**
+     * Parses "addr" or "addr/bits". A bare address becomes a single-host prefix
+     * (/32 or /128). Returns null for empty input, host names, bad numbers or a
+     * prefix length too large for the family.
+     */
     static Cidr parse(String s) {
         if (s == null) {
             return null;
@@ -57,6 +73,7 @@ final class Cidr {
         return new Cidr(raw, bits, v6);
     }
 
+    /** Single-host prefix (/32 or /128) for {@code a}; null when {@code a} is null. */
     static Cidr host(InetAddress a) {
         if (a == null) {
             return null;
@@ -71,6 +88,7 @@ final class Cidr {
         return bits;
     }
 
+    /** Address part as text, without the prefix length. */
     String address() {
         try {
             return InetAddress.getByAddress(addr).getHostAddress();
@@ -79,6 +97,7 @@ final class Cidr {
         }
     }
 
+    /** "address/bits" form, as shown in the UI and logs. */
     String display() {
         return address() + "/" + bits;
     }
@@ -90,6 +109,7 @@ final class Cidr {
         return new Cidr(n, bits, v6);
     }
 
+    /** True when every address of {@code o} lies inside this prefix (same family only). */
     boolean contains(Cidr o) {
         if (o == null || o.v6 != v6 || o.bits < bits) {
             return false;
@@ -105,6 +125,7 @@ final class Cidr {
         return prefixEqual(addr, o.addr, Math.min(bits, o.bits));
     }
 
+    /** Parses each string and returns the valid ones; bad entries are silently skipped. */
     static List<Cidr> of(String... cidrs) {
         List<Cidr> out = new ArrayList<>();
         for (String s : cidrs) {
@@ -179,6 +200,7 @@ final class Cidr {
         return out;
     }
 
+    /** Sets bit number {@code bit} (0 = most significant bit of byte 0) to {@code v}. */
     private static void setBit(byte[] addr, int bit, int v) {
         int i = bit / 8;
         int m = 1 << (7 - (bit % 8));
@@ -189,18 +211,21 @@ final class Cidr {
         }
     }
 
+    /** Reads bit number {@code bit}, counted from the most significant bit. */
     private static int bitValue(byte[] addr, int bit) {
         int i = bit / 8;
         int m = 1 << (7 - (bit % 8));
         return (addr[i] & m) != 0 ? 1 : 0;
     }
 
+    /** Clears every bit from position {@code bit} to the end (zeroes the host part). */
     private static void zeroAfter(byte[] addr, int bit) {
         for (int b = bit; b < addr.length * 8; b++) {
             setBit(addr, b, 0);
         }
     }
 
+    /** True when {@code a} and {@code b} agree on their first {@code bits} bits. */
     private static boolean prefixEqual(byte[] a, byte[] b, int bits) {
         if (bits <= 0) {
             return true;
@@ -219,6 +244,7 @@ final class Cidr {
         return (a[full] & m) == (b[full] & m);
     }
 
+    /** Same as display(), so a Cidr prints readably in logs and string joins. */
     @Override
     public String toString() {
         return display();
@@ -281,6 +307,7 @@ final class Cidr {
         return parse(ip + "/" + bits);
     }
 
+    /** IPv4 prefix length as a dotted netmask (/24 → 255.255.255.0), for route-batch files. */
     static String dottedMask(int bits) {
         int n = bits <= 0 ? 0 : bits >= 32 ? 0xFFFFFFFF : (0xFFFFFFFF << (32 - bits));
         return ((n >>> 24) & 255) + "." + ((n >>> 16) & 255) + "." + ((n >>> 8) & 255) + "." + (n & 255);
