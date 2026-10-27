@@ -141,7 +141,8 @@ func dialTLSALPN(addr, sni, fingerprint string, insecure bool, token []byte, alp
 // node answers with mask records, so go straight to the mask dial.
 // Otherwise dial TCP, apply the canary policy cached for addr (Fat: use the
 // Chrome fingerprint instead of the small Go one; Split: send ClientHello in
-// two TLS records), stamp session_id, and handshake. If the handshake fails the
+// two TLS records; or disorder, when the client turned it on), stamp
+// session_id, and handshake. If the handshake fails the
 // way a mask certificate makes ordinary TLS fail, retry once as mask.
 func dialTLSALPNContext(ctx context.Context, addr, sni, fingerprint string, insecure bool, token []byte, alpn []string) (net.Conn, error) {
 	if ctx == nil {
@@ -162,9 +163,7 @@ func dialTLSALPNContext(ctx context.Context, addr, sni, fingerprint string, inse
 	if pol.Fat && fingerprint == "go" {
 		fingerprint = "chrome"
 	}
-	if pol.Split {
-		raw = &splitHelloConn{Conn: raw, at: 1}
-	}
+	raw = helloConn(raw, pol)
 	cfg := &utls.Config{
 		ServerName:         sni,
 		InsecureSkipVerify: insecure,

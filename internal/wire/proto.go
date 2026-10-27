@@ -60,6 +60,16 @@ const (
 	capSentinel
 )
 
+// CapL3Shape is an experimental bit (branch experimentos, bits 48–63 are
+// the experimental class). A client sets it in Hello to ask for l3 shaping;
+// a node that implements it echoes it in Status only when the Hello had it,
+// and then both sides shape what they send on that l3 session: the start of
+// each TCP flow is corked and padded, and the first data of a flow from the
+// peer is answered at once with a padding-only message (transport/l3shape.go).
+// It is not in NodeCaps: a node must not set an experimental bit toward a
+// client that did not ask for it.
+const CapL3Shape Cap = 1 << 48
+
 // NodeCaps is every capability this implementation advertises on Status.
 // CapRelay stays here so a controller still shows it accepts trunks.
 // Members MUST NOT copy this bit into Hello (see MemberCaps).

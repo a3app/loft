@@ -51,6 +51,12 @@ type ClientConfig struct {
 	CC            string            `yaml:"cc,omitempty"`           // congestion control ask: off | bbr | fixed. Empty = off
 	CCUpMbps      uint32            `yaml:"cc_up_mbps,omitempty"`   // fixed: how fast this client may send, Mbit/s
 	CCDownMbps    uint32            `yaml:"cc_down_mbps,omitempty"` // fixed: how fast this client can receive, Mbit/s
+	// Experimental (branch experimentos). Disorder sends the start of the
+	// outer ClientHello with TTL 1 so DPI misses the server name
+	// (transport/disorder.go). L3Shape asks the node to shape the l3 front
+	// against "TLS inside TLS" detection (transport/l3shape.go).
+	Disorder bool `yaml:"disorder,omitempty"`
+	L3Shape  bool `yaml:"l3_shape,omitempty"`
 }
 
 // Published SOCKS5 (GUI / client.yaml). Debug CLI binds DebugSOCKS5 so the
