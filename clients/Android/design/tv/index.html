@@ -674,6 +674,7 @@
         name: "Имя", method: "Способ",
         settings: "Настройки", general: "Общие", route: "Маршрут", conn: "Подключение",
         lang: "Язык", logExt: "Расширенный журнал",
+        crash: "Отчёт о сбое", crashS: "После падения — GitHub Issue без ключей.",
         defRoute: "Маршрут по умолчанию", defRouteS: "Весь интернет через loft. Выкл — только сеть loft.",
         lan: "Обход LAN", lanS: "RFC1918 остаётся на Ethernet / Wi-Fi.",
         hold: "Без VPN — без интернета", holdS: "Системные тумблеры. Приложение их не показывает.",
@@ -724,6 +725,7 @@
         name: "Name", method: "Method",
         settings: "Settings", general: "General", route: "Route", conn: "Connection",
         lang: "Language", logExt: "Extended log",
+        crash: "Crash reports", crashS: "After a crash, a redacted GitHub issue.",
         defRoute: "Default route", defRouteS: "Send all Internet through loft. Off — overlay net only.",
         lan: "LAN bypass", lanS: "RFC1918 stays on Ethernet / Wi-Fi.",
         hold: "No Internet without VPN", holdS: "System switches. The app does not show them.",
@@ -774,6 +776,7 @@
         name: "名称", method: "方式",
         settings: "设置", general: "常规", route: "路由", conn: "连接",
         lang: "语言", logExt: "详细日志",
+        crash: "崩溃报告", crashS: "崩溃后发到 GitHub。密钥会去掉。",
         defRoute: "默认路由", defRouteS: "全部互联网走 loft。关 — 只走 overlay 网。",
         lan: "绕过局域网", lanS: "RFC1918 留在以太网 / Wi-Fi。",
         hold: "无 VPN 则无网络", holdS: "系统开关。应用不画它们。",
@@ -851,6 +854,7 @@
         `<div class="grp">${T("general")}</div>` +
         `<div class="srow"><div>${T("lang")}</div><div class="seg">${chip("en", "English")}${chip("ru", "Русский")}${chip("zh", "中文")}</div></div>` +
         row("logExt", null, false) +
+        row("crash", "crashS", true) +
         `<div class="grp">${T("route")}</div>` +
         row("defRoute", "defRouteS", true) +
         row("lan", "lanS", true) +

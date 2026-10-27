@@ -33,6 +33,7 @@ release: $(AAR)
 	LOFT_STORE_PASSWORD="$$(cat $(PASSFILE))" \
 	LOFT_KEY_ALIAS=loft \
 	LOFT_KEY_PASSWORD="$$(cat $(PASSFILE))" \
+	LOFT_ANDROID_CRASH_TOKEN="$${LOFT_ANDROID_CRASH_TOKEN}" \
 	$(GRADLE) --project-cache-dir $(DIST)/.gradle :app:assemblePhoneGithubRelease :app:assembleTvGithubRelease
 	cp $(DIST)/gradle/app/outputs/apk/phoneGithub/release/app-phone-github-release.apk $(DIST)/loft-$(VER)-android.apk
 	cp $(DIST)/gradle/app/outputs/apk/tvGithub/release/app-tv-github-release.apk $(DIST)/loft-$(VER)-android-tv.apk

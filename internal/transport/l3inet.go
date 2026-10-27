@@ -24,7 +24,9 @@ import (
 // IP protocol numbers, TCP flag bits, and NAT limits: at most l3FlowCap
 // flows of each kind (TCP, UDP) node-wide, UDP flows close after l3UDPIdle
 // without a reply, and the SYN-ACK offers MSS l3MSS and window scale
-// l3WScale.
+// l3WScale. l3RcvWin is the receive window every segment to the member
+// advertises, and l3OOOMax caps the bytes kept per flow that arrived after
+// a missing segment (see l3InetTCP).
 const (
 	ipProtoTCP = 6
 	ipProtoUDP = 17
@@ -38,6 +40,12 @@ const (
 	l3MSS      = 1240
 	l3WScale   = 7
 	l3TCPChunk = 1240
+	// l3RcvWin is 1 MiB: about 40 Mbit/s per flow at 200 ms. A larger
+	// window let the member's TCP put megabytes in flight at once, more
+	// than the tunnel drains, so its local queue (the gVisor link queue in
+	// L3Net, the TUN queue in the OS) dropped packets.
+	l3RcvWin = 1 << 20
+	l3OOOMax = 1 << 20
 )
 
 // l3Tuple identifies one NAT flow: member overlay address and port, and the
@@ -51,7 +59,8 @@ type l3Tuple struct {
 // sequence number, snd the next sequence number to send, rcv the next one
 // expected from the client, una the last byte the client acknowledged, and
 // cwin the client's advertised window (scaled by wshift). pend holds data
-// the client sent before the outbound connection was up.
+// the client sent before the outbound connection was up. ooo holds segments
+// that arrived after a missing one, by sequence number, oooN their bytes.
 type l3TCPFlow struct {
 	who           egress.Who // the member, so its exit rules apply
 	src, dst      net.IP
@@ -66,6 +75,8 @@ type l3TCPFlow struct {
 	up            bool
 	pend          []byte
 	ack           chan struct{}
+	ooo           map[uint32][]byte
+	oooN          int
 }
 
 // l3UDPFlow is one proxied UDP flow. With exit rules configured it goes out
@@ -273,13 +284,18 @@ func encapsulateIPv4UDP(src, dst net.IP, sport, dport uint16, payload []byte) []
 // completes) and acknowledged at once; FIN, after the payload of the same
 // segment, half-closes the outbound connection.
 //
-// Only bytes at the expected sequence number are taken. The link to the
-// member is a reliable stream, so segments do not arrive out of order, but
-// the member's TCP may still resend a segment whose ACK was slow (common on
-// mobile links). Writing it again would duplicate bytes in the outbound
-// stream (inside TLS that is a fatal "bad record MAC") and acknowledge bytes
-// the member never sent. A resent segment is only acknowledged again; a
-// segment from beyond a gap is dropped and the member resends it.
+// Bytes are written to the outbound connection strictly in order. The link
+// to the member is a reliable stream, but packets can still go missing
+// before it (a full queue on the member's side), and the member's TCP may
+// resend a segment whose ACK was slow (common on mobile links). Writing a
+// resent byte again would duplicate it in the outbound stream (inside TLS
+// that is a fatal "bad record MAC"). So a resent segment is only
+// acknowledged again, and a segment from beyond a gap is kept (up to
+// l3OOOMax per flow) until the missing one arrives; then everything that
+// now lines up is written and acknowledged at once. Without that keeping,
+// one lost packet cost the member a resend of its whole window, which
+// stalled uploads. A new SYN for a flow that is still known starts a fresh
+// flow: the member reused the port for a new connection.
 func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []byte, ihl int) {
 	if len(pkt) < ihl+20 {
 		return
@@ -307,6 +323,13 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 		}
 		l3TCPMu.Unlock()
 		return
+	}
+	if f != nil && flags&tcpSYN != 0 && flags&tcpACK == 0 && seq+1 != f.rcv {
+		// Not a resend of this flow's SYN (that has the same seq): a new
+		// connection on the same addresses and ports.
+		f.close()
+		delete(l3TCP, key)
+		f = nil
 	}
 	if f == nil {
 		if flags&tcpSYN == 0 || flags&tcpACK != 0 || len(l3TCP) >= l3FlowCap {
@@ -350,8 +373,26 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 	if !f.up && flags&tcpACK != 0 {
 		f.up = true
 	}
+	if ahead := int32(seq - f.rcv); ahead > 0 && len(payload) > 0 {
+		// Beyond a gap: keep it for later and repeat the ACK of what we
+		// have, which tells the member which segment is missing.
+		if _, dup := f.ooo[seq]; !dup && f.oooN+len(payload) <= l3OOOMax {
+			if f.ooo == nil {
+				f.ooo = map[uint32][]byte{}
+			}
+			f.ooo[seq] = append([]byte(nil), payload...)
+			f.oooN += len(payload)
+		}
+		rep := f.reply
+		f.mu.Unlock()
+		_ = rep(f.segment(tcpACK, nil))
+		return
+	}
 	payload, inOrder := l3TCPTrim(seq, f.rcv, payload)
 	fin := flags&tcpFIN != 0 && inOrder
+	if len(payload) > 0 && len(f.ooo) > 0 && !fin {
+		payload = f.drainOOO(append([]byte(nil), payload...))
+	}
 	if len(payload) == 0 && !fin {
 		resend := len(th[dataOff:]) > 0 || flags&tcpFIN != 0
 		rep := f.reply
@@ -373,6 +414,7 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 	if fin {
 		f.rcv++
 		c = f.conn
+		f.ooo, f.oooN = nil, 0 // nothing may follow a FIN
 	}
 	rep := f.reply
 	f.mu.Unlock()
@@ -382,6 +424,31 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 		}
 	}
 	_ = rep(f.segment(tcpACK, nil))
+}
+
+// drainOOO appends to in (the bytes that arrive in order at f.rcv) the kept
+// segments that now line up behind them, and forgets those and any that
+// lie wholly before the new end. f.mu must be held.
+func (f *l3TCPFlow) drainOOO(in []byte) []byte {
+	end := f.rcv + uint32(len(in))
+	for {
+		moved := false
+		for seq, b := range f.ooo {
+			if int32(seq-end) > 0 {
+				continue // still beyond a gap
+			}
+			delete(f.ooo, seq)
+			f.oooN -= len(b)
+			if rest, _ := l3TCPTrim(seq, end, b); len(rest) > 0 {
+				in = append(in, rest...)
+				end += uint32(len(rest))
+			}
+			moved = true
+		}
+		if !moved {
+			return in
+		}
+	}
 }
 
 // l3TCPTrim returns the part of payload (sent at seq) that starts at the
@@ -514,7 +581,7 @@ func l3TCPPacket(f *l3TCPFlow, flags byte, payload []byte) []byte {
 	binary.BigEndian.PutUint32(th[8:12], f.rcv)
 	th[12] = byte(hdr/4) << 4
 	th[13] = flags
-	binary.BigEndian.PutUint16(th[14:16], 65535)
+	binary.BigEndian.PutUint16(th[14:16], l3RcvWin>>l3WScale)
 	copy(th[20:], opts)
 	copy(th[hdr:], payload)
 	pkt := encapsulateIPv4(f.dst, f.src, ipProtoTCP, th)

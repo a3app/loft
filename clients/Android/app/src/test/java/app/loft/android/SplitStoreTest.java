@@ -92,6 +92,24 @@ public final class SplitStoreTest {
         assertEquals(2, st.count(SplitStore.LOCAL));
     }
 
+    /** Catalog URLs sit under loft-routes; labels follow the UI language; a null id is not a zone. */
+    @Test
+    public void catalogUrlAndLabel() {
+        assertEquals("https://raw.githubusercontent.com/a3app/loft-routes/main/ru.bat",
+                SplitStore.catalogUrl("ru"));
+        assertEquals("Россия", SplitStore.catalogLabel("ru", "ru"));
+        assertEquals("Russia", SplitStore.catalogLabel("ru", "en"));
+        assertEquals("俄罗斯", SplitStore.catalogLabel("ru", "zh"));
+        assertEquals("Мир", SplitStore.catalogLabel("global", "ru"));
+        SplitStore st = new SplitStore();
+        st.seed();
+        assertTrue(st.zone(null) == null);
+        SplitStore.Zone nameless = new SplitStore.Zone();
+        nameless.id = null;
+        st.zones.add(nameless);
+        assertTrue(st.zone(SplitStore.GLOBAL) != null);
+    }
+
     /**
      * Exporting writes a zone header for every zone and the result parses back to the same rows.
      */

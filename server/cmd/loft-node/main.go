@@ -29,6 +29,12 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("loft-node: ")
+	// First, before any goroutine: the h2 and l3 fronts need HTTP/2
+	// extended CONNECT, which Go 1.27+ takes only from GODEBUG at start.
+	// This may restart the process once with that setting.
+	if err := transport.EnsureHTTP2ExtendedConnect(); err != nil {
+		log.Printf("HTTP/2 extended CONNECT is off (%v): the h2 and l3 fronts will fail", err)
+	}
 	version.ExitIfAsked("loft-node", os.Args[1:])
 	dir := flag.String("dir", "/var/lib/loft", "data directory")
 	cfgPath := flag.String("c", "", "server config (role, relays, decoy)")
@@ -275,7 +281,6 @@ func main() {
 	go writeEgressStatus(*dir)
 	go reloadOnHUP(*dir, *cfgPath, cfg)
 	go writeNodeStatus(*dir)
-	transport.EnableHTTP2ExtendedConnect()
 	if err := origin.ListenAll(cfg, h); err != nil {
 		log.Fatal(err)
 	}

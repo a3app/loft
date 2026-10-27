@@ -110,6 +110,31 @@
                 android:showText="false" />
         </LinearLayout>
 
+        <LinearLayout
+            android:id="@+id/row_crash"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:minHeight="48dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingEnd="16dp"
+                android:text="@string/crash_report"
+                android:textColor="@color/snow"
+                android:textSize="20sp" />
+
+            <Switch
+                android:id="@+id/sw_crash"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:showText="false" />
+        </LinearLayout>
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

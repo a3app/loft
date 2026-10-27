@@ -1,9 +1,33 @@
+<div align="center">
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/png/loft-lockup-readme-on-dark.png">
-  <img src="docs/brand/png/loft-lockup-readme.png" alt="loft — Loft Overlay For TLS" width="480">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/svg/loft-mark-on-dark.svg">
+  <img src="docs/brand/svg/loft-mark.svg" alt="loft" width="96">
 </picture>
 
+# loft
+
+**Оверлей внутри TLS. VLESS, Trojan, SSTP и loft поверх обычного HTTPS — для macOS, Windows, Android и Linux.**
+
+[![CI](https://img.shields.io/github/actions/workflow/status/a3app/loft/test.yml?label=ci)](https://github.com/a3app/loft/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/a3app/loft)](https://github.com/a3app/loft/releases)
+[![Downloads](https://img.shields.io/github/downloads/a3app/loft/total)](https://github.com/a3app/loft/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Android%20%7C%20Linux-blue)
+
 [English](README.md) · **Русский** · [中文](README_zh.md)
+
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20arm64-2ea44f?style=for-the-badge" alt="Скачать loft для macOS arm64"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20x86__64-2ea44f?style=for-the-badge" alt="Скачать loft для macOS x86_64"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x64-2ea44f?style=for-the-badge" alt="Скачать loft для Windows x64"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x86-2ea44f?style=for-the-badge" alt="Скачать loft для Windows x86"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Android-2ea44f?style=for-the-badge" alt="Скачать loft для Android"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20arm64-2ea44f?style=for-the-badge" alt="Скачать loft для Linux arm64"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20amd64-2ea44f?style=for-the-badge" alt="Скачать loft для Linux amd64"></a>
+
+</div>
+
+---
 
 **loft** — оверлей внутри TLS. Приложение подключается по популярным протоколам поверх обычного HTTPS — VLESS, Trojan и SSTP — и по собственному протоколу loft.
 
@@ -13,7 +37,7 @@ loft рассчитан на сети, где обычные VPN-протоко�
 
 Протокол **loft/1.0**. Ссылка **`loft://`**. В YAML `kind: loft`.
 
-В этом репозитории лежат открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.31`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
+В этом репозитории лежат открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, клиент в трее Windows, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.32`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
 
 ## Содержание
 
@@ -33,19 +57,20 @@ loft рассчитан на сети, где обычные VPN-протоко�
 
 ## Скачать
 
-Сборки опубликованы в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла указана версия (`loft-1.0.31-macos-arm64.dmg`).
+Сборки опубликованы в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла указана версия (`loft-1.0.32-macos-arm64.dmg`).
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS, приложение | [DMG](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-macos-x86_64.dmg) |
-| macOS, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-darwin-amd64.tar.gz) |
-| Linux, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-linux-amd64.tar.gz) |
-| Нода | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node_1.0.31_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node_1.0.31_amd64.deb) |
-| Панель | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel_1.0.31_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel_1.0.31_amd64.deb) |
-| Android | [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android-tv.apk) | те же fat APK |
+| macOS, приложение | [DMG](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg) |
+| macOS, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-darwin-amd64.tar.gz) |
+| Linux, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz) |
+| Нода | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node_1.0.32_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node_1.0.32_amd64.deb) |
+| Панель | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel_1.0.32_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel_1.0.32_amd64.deb) |
+| Android | [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk) | те же fat APK |
+| Windows | [x64 zip](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip) | [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip) |
 | iOS | только исходники ([clients/iOS/](clients/iOS/)); в разработке и на публикации в App Store | в Dist нет |
 
-Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.31/loft-clients-1.0.31-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.31/loft-node-1.0.31-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.31/loft-panel-1.0.31-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.31/loft-android-1.0.31-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления.
+Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.32/loft-clients-1.0.32-SHA256SUMS.txt) · [нода](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-SHA256SUMS.txt) · [панель](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.32/loft-android-1.0.32-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.32/loft-windows-1.0.32-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления. Windows — portable zip (7 SP1+): распаковать и запустить.
 
 ## Приложение
 
@@ -62,6 +87,8 @@ loft рассчитан на сети, где обычные VPN-протоко�
 | <img src="docs/img/android/ru-home.png" alt="Главная loft на Android" width="240"> | <img src="docs/img/android/ru-conns.png" alt="Подключения loft на Android" width="240"> |
 
 <img src="docs/img/android/ru-tv.png" alt="loft на Android TV" width="640">
+
+Клиент для Windows живёт в трее. Windows 7 SP1 и новее. Распаковать и запустить; службу ставит первое включение туннеля. Zip с GitHub заменяет свой каталог из Dist.
 
 ## Панель
 
@@ -140,7 +167,7 @@ make windows    # dist/clients/Windows/x64 и x86
 make dist       # tarball/.deb ноды + архивы CLI
 ```
 
-Тег `vX.Y.Z` (как в `VERSION`) запускает GitHub Actions: тесты, `make dist`, DMG для arm64 и x86_64 (подпись ad-hoc), Release и пинг pkg.go.dev. Вручную: Actions → Dist.
+Тег `vX.Y.Z` (как в `VERSION`) запускает GitHub Actions: тесты, `make dist`, DMG для arm64 и x86_64 (подпись ad-hoc), Windows portable zip (x64 и x86, Win7 SP1), Release и пинг pkg.go.dev. Вручную: Actions → Dist.
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'

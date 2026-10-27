@@ -809,6 +809,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         Switch auto = settings.findViewById(R.id.sw_auto);
         Switch re = settings.findViewById(R.id.sw_re);
         Switch log = settings.findViewById(R.id.sw_log);
+        Switch crash = settings.findViewById(R.id.sw_crash);
         d.setChecked(Prefs.defaultRoute(this));
         lan.setChecked(Prefs.lanBypass(this));
         auto.setChecked(Prefs.autoConnect(this));
@@ -819,6 +820,15 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         auto.setOnCheckedChangeListener((b, v) -> Prefs.p(this).edit().putBoolean("auto", v).apply());
         re.setOnCheckedChangeListener((b, v) -> Prefs.p(this).edit().putBoolean("reconnect", v).apply());
         log.setOnCheckedChangeListener((b, v) -> Prefs.p(this).edit().putBoolean("verbose", v).apply());
+        if (!BuildConfig.GITHUB) {
+            View row = settings.findViewById(R.id.row_crash);
+            if (row != null) {
+                row.setVisibility(View.GONE);
+            }
+        } else if (crash != null) {
+            crash.setChecked(Prefs.crashReports(this));
+            crash.setOnCheckedChangeListener((b, v) -> Prefs.p(this).edit().putBoolean("crash", v).apply());
+        }
         settings.findViewById(R.id.open_vpn).setOnClickListener(v -> {
             try {
                 startActivity(new Intent(Settings.ACTION_VPN_SETTINGS));

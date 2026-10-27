@@ -958,7 +958,7 @@ function openMDom(nw){
   <details class="adv"><summary>Дополнительно</summary><div class="fld" style="margin-top:12px"><label for="md3">Селектор DKIM</label><input id="md3" class="mono" value="mail"></div><div class="hint">Смена селектора создаёт новый ключ; старая запись в DNS станет не нужна.</div></details>`,
   `<button class="btn pri" type="button" onclick="closeDlg()">${nw?'Добавить':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить домен" style="margin-left:auto" onclick="mdDel()">${ic('i-trash')}</button>`}`);
 }
-function mdDel(){dialog(`Удалить почтовый домен «${S.md}»?`,'Уйдут его ящики и псевдонимы, сервер перестанет принимать для него почту.','<label class="chk"><input type="checkbox">Удалить и письма с диска</label>',`<button class="btn danger" type="button" onclick="closeDlg()">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
+function mdDel(){dialog(`Удалить почтовый домен «${S.md}»?`,'Уйдут его ящики и псевдонимы, сервер перестанет принимать для него почту.','<label class="chk"><input type="checkbox">Удалить и письма с диска</label><label class="chk"><input type="checkbox" checked>Удалить записи DNS, которые создала панель (MX, DKIM, SPF, DMARC, mail)</label>',`<button class="btn danger" type="button" onclick="closeDlg()">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
 function openBox(i){
  const b=BOXES[i]||['','admin',0,'0 / 3 ГБ','—','активен'],nw=i<0;
  dialog(nw?'Новый ящик':b[0],nw?'Пароль покажется один раз; потом его можно только сменить.':'',`

@@ -140,6 +140,8 @@
     <string name="sent_tv">已发到电视</string>
     <string name="pair_no_lan">没有局域网地址</string>
     <string name="extended_log">详细日志</string>
+    <string name="crash_report">崩溃报告</string>
+    <string name="crash_report_d">崩溃后发到 GitHub。密钥会去掉。</string>
     <string name="handshake">握手</string>
     <string name="details">详情</string>
     <string name="mtu">MTU</string>
@@ -220,6 +222,8 @@
     <string name="repository">仓库</string>
     <string name="catalog">列表</string>
     <string name="catalog_d">来自 loft 仓库。自定义地址仍可粘贴。</string>
+    <string name="catalog_empty">目录是空的。</string>
+    <string name="lists_page_fail">打不开这一页。</string>
     <string name="repo_d">来自 GitHub 或自有主机的 .bat。填入此区域。你自己的行保留。</string>
     <string name="auto_update_d">每天一次。不覆盖你自己的条目。</string>
     <string name="no_list">还没有列表</string>

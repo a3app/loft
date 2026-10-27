@@ -151,6 +151,8 @@
     <string name="sent_tv">Sent to TV</string>
     <string name="pair_no_lan">No LAN address</string>
     <string name="extended_log">Extended log</string>
+    <string name="crash_report">Crash reports</string>
+    <string name="crash_report_d">After a crash, a redacted report is sent to GitHub.</string>
     <string name="handshake">handshake</string>
     <string name="details">Details</string>
     <string name="mtu">MTU</string>
@@ -231,6 +233,8 @@
     <string name="repository">Repository</string>
     <string name="catalog">Lists</string>
     <string name="catalog_d">From the loft repository. You can still paste any URL.</string>
+    <string name="catalog_empty">No lists in the catalog.</string>
+    <string name="lists_page_fail">Couldn\'t open this page.</string>
     <string name="repo_d">A .bat file from GitHub or your host. Fills this zone. Your own rows stay.</string>
     <string name="auto_update_d">Once a day. Leaves your own rows alone.</string>
     <string name="no_list">No list yet</string>

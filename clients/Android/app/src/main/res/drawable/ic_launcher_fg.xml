@@ -4,10 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- loft-icon.svg mark inset into adaptive-icon 108, 96+6+6 -->
+    <!-- loft-icon.svg 96 mark scaled into the 72 safe zone (18+72+18). -->
     <group
-        android:translateX="6"
-        android:translateY="6">
+        android:translateX="18"
+        android:translateY="18"
+        android:scaleX="0.75"
+        android:scaleY="0.75">
         <path
             android:fillColor="@color/stone"
             android:pathData="M41.8311,11.5923 A0.768,0.768 0,0 1,42.7854 11.6109 L57.68,31.16 L57.68,60.76 A3.52,3.52 0,0 0,61.2 64.28 L79.44,64.28 A2.56,2.56 0,0 1,82 66.84 L82,79.928 A3.072,3.072 0,0 1,78.928 83 L28.752,83 A3.072,3.072 0,0 1,25.68 79.928 L25.68,31.16 Z" />

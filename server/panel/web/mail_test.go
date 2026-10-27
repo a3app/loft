@@ -145,3 +145,99 @@ func TestMailDNSCreateReplacesForeignMX(t *testing.T) {
 		t.Fatalf("MX after create state=%q auto=%v body=%v", mxState, mxAuto, g.body["records"])
 	}
 }
+
+// TestMailDomainDeleteDropsOwnDNS: removing a mail domain with drop_dns
+// deletes the mail records the panel made, and only those. A hand-made
+// record, the panel's CAA (not mail), and a panel record edited by hand
+// since all stay; the mail.<domain> certificate is forgotten.
+func TestMailDomainDeleteDropsOwnDNS(t *testing.T) {
+	e := newEnv(t)
+	e.srv.SetDomainsFile(t.TempDir())
+	fd := &fakeDNS{n: 100, recs: map[string][]Record{"example.net": {
+		{ID: "1", Type: "A", Name: "www", Value: "203.0.113.10"},
+		{ID: "2", Type: "TXT", Name: "@", Value: "google-site-verification=abc"},
+	}}}
+	e.srv.dom.provider = func(dnsProv) DNSProvider { return fd }
+	c, csrf := e.owner()
+	p := e.do("POST", "/api/domains/provider", map[string]string{"kind": "cloudflare", "token": "tok-1234567890"}, c, csrf)
+	if r := e.do("POST", "/api/domains/zone", map[string]any{"name": "example.net", "provider": p.body["id"]}, c, csrf); r.code != 200 {
+		t.Fatalf("zone %d %v", r.code, r.body)
+	}
+	e.mail.Domains = []admproto.MailDomain{{Name: "example.net", Enabled: true, DKIM: true, DKIMRecord: "v=DKIM1; k=rsa; p=AAAA"}}
+	if r := e.do("POST", "/api/mail/dns", map[string]string{"domain": "example.net"}, c, csrf); r.code != 200 {
+		t.Fatalf("create %d %v", r.code, r.body)
+	}
+	// The panel's own non-mail record and a mail record changed by hand.
+	e.srv.dom.mu.Lock()
+	e.srv.dom.load()
+	z := e.srv.dom.zoneFor("example.net")
+	fd.recs["example.net"] = append(fd.recs["example.net"], Record{ID: "50", Type: "CAA", Name: "@", Value: `0 issue "letsencrypt.org"`})
+	z.Ours = append(z.Ours, ourRec{Type: "CAA", Name: "@", ID: "50"})
+	for i, rec := range fd.recs["example.net"] {
+		if rec.Name == "_dmarc" {
+			fd.recs["example.net"][i].Value = "something else"
+		}
+	}
+	e.srv.dom.f.Certs = append(e.srv.dom.f.Certs, certRec{ID: "c1", Names: []string{"mail.example.net"}, Use: "mail"},
+		certRec{ID: "c2", Names: []string{"example.net"}, Use: "node"})
+	e.srv.dom.save()
+	e.srv.dom.mu.Unlock()
+
+	r := e.do("POST", "/api/mail/domain", map[string]any{"name": "example.net", "delete": true, "drop_dns": true}, c, csrf)
+	if r.code != 200 {
+		t.Fatalf("delete %d %v", r.code, r.body)
+	}
+	if n, _ := r.body["dns_removed"].(float64); n < 4 {
+		t.Fatalf("dns_removed %v note %v", r.body["dns_removed"], r.body["note"])
+	}
+	if note, _ := r.body["note"].(string); !strings.Contains(note, "changed by hand") {
+		t.Fatalf("note %q", note)
+	}
+	left := map[string]bool{}
+	for _, rec := range fd.recs["example.net"] {
+		left[rec.Type+" "+rec.Name] = true
+	}
+	for _, want := range []string{"A www", "TXT @", "CAA @", "TXT _dmarc"} {
+		if !left[want] {
+			t.Fatalf("%s deleted; left %v", want, fd.recs["example.net"])
+		}
+	}
+	for _, gone := range []string{"MX @", "A mail", "TXT mail", "TXT mail._domainkey"} {
+		if left[gone] {
+			t.Fatalf("%s still there: %v", gone, fd.recs["example.net"])
+		}
+	}
+	if len(e.mail.Domains) != 0 {
+		t.Fatalf("mail domain kept: %v", e.mail.Domains)
+	}
+	e.srv.dom.mu.Lock()
+	defer e.srv.dom.mu.Unlock()
+	e.srv.dom.load()
+	if len(e.srv.dom.f.Certs) != 1 || e.srv.dom.f.Certs[0].ID != "c2" {
+		t.Fatalf("certs %v", e.srv.dom.f.Certs)
+	}
+}
+
+// TestMailOwnRec pins which records count as the panel's mail records.
+func TestMailOwnRec(t *testing.T) {
+	d := "example.net"
+	for _, c := range []struct {
+		typ, name, value string
+		want             bool
+	}{
+		{"MX", "example.net", "mail.example.net", true},
+		{"A", "mail.example.net", "203.0.113.1", true},
+		{"TXT", "example.net", "v=spf1 mx -all", true},
+		{"TXT", "example.net", "google-site-verification=x", false},
+		{"TXT", "mail.example.net", `"v=spf1 a -all"`, true},
+		{"TXT", "old._domainkey.example.net", "v=DKIM1; p=x", true},
+		{"TXT", "_dmarc.example.net", "v=DMARC1; p=none", true},
+		{"CAA", "example.net", "0 issue x", false},
+		{"A", "www.example.net", "203.0.113.1", false},
+		{"MX", "sub.example.net", "mail.example.net", false},
+	} {
+		if got := mailOwnRec(c.typ, c.name, c.value, d, true); got != c.want {
+			t.Fatalf("%s %s %q: %v", c.typ, c.name, c.value, got)
+		}
+	}
+}

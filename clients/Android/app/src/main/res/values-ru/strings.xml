@@ -140,6 +140,8 @@
     <string name="sent_tv">Отправлено на телевизор</string>
     <string name="pair_no_lan">Нет адреса LAN</string>
     <string name="extended_log">Подробный журнал</string>
+    <string name="crash_report">Отчёт о сбое</string>
+    <string name="crash_report_d">После падения отправляется в GitHub. Ключи вырезаются.</string>
     <string name="handshake">рукопожатие</string>
     <string name="details">Подробности</string>
     <string name="mtu">MTU</string>
@@ -220,6 +222,8 @@
     <string name="repository">Репозиторий</string>
     <string name="catalog">Списки</string>
     <string name="catalog_d">Из каталога loft-routes. Свой URL по-прежнему можно вставить.</string>
+    <string name="catalog_empty">В каталоге нет списков.</string>
+    <string name="lists_page_fail">Не удалось открыть страницу.</string>
     <string name="repo_d">Файл .bat с GitHub или своего хоста. Заполняет эту зону. Свои строки не трогает.</string>
     <string name="auto_update_d">Раз в сутки. Свои записи не затирает.</string>
     <string name="no_list">Списка пока нет</string>

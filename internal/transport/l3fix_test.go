@@ -5,6 +5,7 @@ package transport
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"net"
 	"testing"
@@ -255,5 +256,116 @@ func TestInternetPingFollowsExitRules(t *testing.T) {
 	}
 	if icmpOut(egress.Who{Member: "bob"}, net.IPv4(8, 8, 8, 8)) {
 		t.Fatal("mux ping of a blocked member allowed")
+	}
+}
+
+// l3Collect starts a listener that returns everything one connection sends
+// until its FIN.
+func l3Collect(t *testing.T) (*net.TCPAddr, chan []byte) {
+	t.Helper()
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	got := make(chan []byte, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		b, _ := io.ReadAll(c)
+		got <- b
+	}()
+	return ln.Addr().(*net.TCPAddr), got
+}
+
+// lastAck returns the ack number of the newest segment in replies.
+func lastAck(replies chan []byte) uint32 {
+	var ack uint32
+	for {
+		select {
+		case p := <-replies:
+			ihl := int(p[0]&0x0f) * 4
+			ack = be32(p[ihl+8 : ihl+12])
+		default:
+			return ack
+		}
+	}
+}
+
+// TestL3TCPKeepsSegmentsBeyondAGap: a segment that arrives after a missing
+// one is kept, not dropped; when the missing one comes, both go out in
+// order and one ACK covers them. Dropping it made the member resend its
+// whole window after every lost packet, which stalled uploads.
+func TestL3TCPKeepsSegmentsBeyondAGap(t *testing.T) {
+	addr, got := l3Collect(t)
+	src := net.IPv4(10, 8, 0, 4)
+	reply, replies, seq, ack := l3OpenFlow(t, egress.Who{}, src, 40200, addr)
+	if seq == 0 {
+		t.Fatal("dial refused")
+	}
+	time.Sleep(50 * time.Millisecond)
+	d := func(at uint32, s string) []byte {
+		return l3TCPData(src, addr.IP, 40200, uint16(addr.Port), at, ack, []byte(s))
+	}
+	lastAck(replies)
+	l3Inet(reply, egress.Who{}, src, d(seq, "abc"))
+	l3Inet(reply, egress.Who{}, src, d(seq+6, "ghi")) // "def" is missing
+	l3Inet(reply, egress.Who{}, src, d(seq+9, "jk"))
+	if a := lastAck(replies); a != seq+3 {
+		t.Fatalf("ack beyond the gap = %d, want %d", a-seq, 3)
+	}
+	l3Inet(reply, egress.Who{}, src, d(seq+3, "def")) // the gap fills
+	if a := lastAck(replies); a != seq+11 {
+		t.Fatalf("ack after the gap = %d, want %d", a-seq, 11)
+	}
+	l3Inet(reply, egress.Who{}, src, l3TCPDataFIN(src, addr.IP, 40200, uint16(addr.Port), seq+11, ack, nil))
+	select {
+	case b := <-got:
+		if string(b) != "abcdefghijk" {
+			t.Fatalf("outbound got %q", b)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no FIN reached the outbound connection")
+	}
+}
+
+// TestL3TCPAdvertisesRealWindow: segments to the member advertise
+// l3RcvWin (scaled), not the 8 MB a raw 65535 << 7 meant.
+func TestL3TCPAdvertisesRealWindow(t *testing.T) {
+	f := &l3TCPFlow{src: net.IPv4(10, 8, 0, 5), dst: net.IPv4(127, 0, 0, 1), sport: 1, dport: 2}
+	p := l3TCPPacket(f, tcpACK, nil)
+	if w := uint32(binary.BigEndian.Uint16(p[20+14:20+16])) << l3WScale; w != l3RcvWin {
+		t.Fatalf("window %d", w)
+	}
+}
+
+// TestL3TCPNewSynReplacesFlow: a SYN with a new sequence number on the
+// addresses of a known flow is a new connection and gets its own SYN-ACK.
+func TestL3TCPNewSynReplacesFlow(t *testing.T) {
+	// The listener takes one connection; the second dial may be refused,
+	// and a RST answering the new SYN counts as an answer too.
+	addr, _ := l3Collect(t)
+	src := net.IPv4(10, 8, 0, 6)
+	reply, replies, seq, _ := l3OpenFlow(t, egress.Who{}, src, 40300, addr)
+	if seq == 0 {
+		t.Fatal("dial refused")
+	}
+	lastAck(replies)
+	l3Inet(reply, egress.Who{}, src, l3TCPSyn(src, addr.IP, 40300, uint16(addr.Port), 500000))
+	// The old flow may still say goodbye (FIN); wait for the new SYN-ACK.
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case p := <-replies:
+			ihl := int(p[0]&0x0f) * 4
+			if p[ihl+13]&(tcpSYN|tcpRST) != 0 && be32(p[ihl+8:ihl+12]) == 500001 {
+				return
+			}
+		case <-deadline:
+			t.Fatal("new SYN ignored")
+		}
 	}
 }

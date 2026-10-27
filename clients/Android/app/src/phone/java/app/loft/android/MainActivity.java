@@ -575,6 +575,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         CompoundButton re = settings.findViewById(R.id.sw_re);
         CompoundButton ext = settings.findViewById(R.id.sw_ext);
         CompoundButton log = settings.findViewById(R.id.sw_log);
+        CompoundButton crash = settings.findViewById(R.id.sw_crash);
         simple.setChecked(Prefs.simple(this));
         def.setChecked(Prefs.defaultRoute(this));
         split.setChecked(Prefs.split(this));
@@ -582,6 +583,14 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         re.setChecked(Prefs.reconnect(this));
         ext.setChecked(Prefs.showExtIP(this));
         log.setChecked(Prefs.verbose(this));
+        if (!BuildConfig.GITHUB) {
+            View row = settings.findViewById(R.id.row_crash);
+            if (row != null) {
+                row.setVisibility(View.GONE);
+            }
+        } else if (crash != null) {
+            crash.setChecked(Prefs.crashReports(this));
+        }
         simple.setOnCheckedChangeListener((v, on) -> {
             Prefs.p(this).edit().putBoolean("simple", on).apply();
             paintHome();
@@ -599,6 +608,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             paintHome();
         });
         log.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("verbose", on).apply());
+        if (BuildConfig.GITHUB && crash != null) {
+            crash.setOnCheckedChangeListener((v, on) ->
+                    Prefs.p(this).edit().putBoolean("crash", on).apply());
+        }
         // 2. Display choices: speed units, chart style and language.
         Spinner rate = settings.findViewById(R.id.sp_rate);
         rate.setAdapter(spin(getString(R.string.rate_kbit), getString(R.string.rate_kb)));

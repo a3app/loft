@@ -2409,9 +2409,11 @@
   // error and is shown from the reloaded state.
   async function mailPost(path, body, done) {
     toast('Сохраняю…');
-    try { L.ml = await api('POST', path, body); closeDlg(); if (done) toast(done); } catch (e) { toast(e.message); await loadMail(); }
+    let ok = false;
+    try { L.ml = await api('POST', path, body); closeDlg(); if (done) toast(done); ok = true; } catch (e) { toast(e.message); await loadMail(); }
     if (!L.ml.domains.some(d => d.name === L.mlDom)) L.mlDom = (L.ml.domains[0] || {}).name || null;
     render(); loadMailDNS().then(mlRe);
+    return ok;
   }
   L.mailApply = () => mailPost('/api/mail/apply', {}, 'Настройка почты применена');
   L.mailCert = async d => {
@@ -2441,9 +2443,22 @@
     if (nw) L.mlDom = name;
     await mailPost('/api/mail/domain', { name, enabled: $('#md4').checked, dkim: $('#md5').checked, selector: sel === 'mail' ? '' : sel, catch_all: addrs($('#md2').value) }, nw ? 'Домен ' + name + ' добавлен' : 'Домен сохранён');
   };
-  L.mdDel = name => dialog(`Удалить почтовый домен «${esc(name)}»?`, 'Уйдут его ящики и псевдонимы, сервер перестанет принимать для него почту.', '<label class="chk"><input id="mdd" type="checkbox">Удалить и письма с диска</label>',
-    `<button class="btn danger" type="button" onclick="LIVE.mdDelGo('${esc(name)}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
-  L.mdDelGo = name => mailPost('/api/mail/domain', { name, delete: true, drop_mail: $('#mdd').checked }, 'Домен удалён');
+  // The DNS box shows when the domain is in a zone of the Domains screen: then
+  // the panel may have made its records there and can take them away again.
+  L.mdDel = name => {
+    const inZone = (L.ml.zones || []).some(z => name === z || name.endsWith('.' + z));
+    dialog(`Удалить почтовый домен «${esc(name)}»?`, 'Уйдут его ящики и псевдонимы, сервер перестанет принимать для него почту.',
+      '<label class="chk"><input id="mdd" type="checkbox">Удалить и письма с диска</label>' +
+      (inZone ? '<label class="chk"><input id="mdn" type="checkbox" checked>Удалить записи DNS, которые создала панель (MX, DKIM, SPF, DMARC, mail)</label>' : ''),
+      `<button class="btn danger" type="button" onclick="LIVE.mdDelGo('${esc(name)}')">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  };
+  // The answer says how many DNS records went and, in note, what stayed.
+  L.mdDelGo = async name => {
+    const dns = !!($('#mdn') && $('#mdn').checked);
+    if (!await mailPost('/api/mail/domain', { name, delete: true, drop_mail: $('#mdd').checked, drop_dns: dns }, '')) return;
+    const n = L.ml.dns_removed || 0;
+    toast(L.ml.note ? 'Домен удалён. ' + L.ml.note : n ? 'Домен удалён, записей DNS удалено: ' + n : 'Домен удалён');
+  };
   const QUOTAS = [[1024, '1 ГБ'], [3072, '3 ГБ'], [10240, '10 ГБ'], [0, 'без ограничения']];
   // A 14-character password from the browser's crypto RNG, without look-alike
   // characters (no l, o, I, O, 0, 1); shown in clear so it can be passed on.

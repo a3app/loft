@@ -66,6 +66,9 @@ type mailJSON struct {
 	admproto.MailView
 	Users []string `json:"users"` // panel logins, for the owner list
 	Zones []string `json:"zones"` // zones on the Domains screen
+	// After a domain removal: DNS records deleted, and what was left and why.
+	DNSRemoved int    `json:"dns_removed,omitempty"`
+	Note       string `json:"note,omitempty"`
 }
 
 // mailRemember stores the current list of mail domain names for later
@@ -82,8 +85,14 @@ func (s *Server) mailRemember(v admproto.MailView) {
 
 // mailOut replies with the mail view, adding panel logins and zone names.
 func (s *Server) mailOut(w http.ResponseWriter, v admproto.MailView) {
+	s.mailOutWith(w, v, 0, "")
+}
+
+// mailOutWith is mailOut after a domain was removed: dnsRemoved is how many
+// of its DNS records went, note what was left behind and why.
+func (s *Server) mailOutWith(w http.ResponseWriter, v admproto.MailView, dnsRemoved int, note string) {
 	s.mailRemember(v)
-	out := mailJSON{MailView: v, Users: []string{}, Zones: []string{}}
+	out := mailJSON{MailView: v, Users: []string{}, Zones: []string{}, DNSRemoved: dnsRemoved, Note: note}
 	for _, u := range s.Store.List() {
 		out.Users = append(out.Users, u.Login)
 	}
@@ -131,13 +140,157 @@ func (s *Server) mailSave(w http.ResponseWriter, r *http.Request, op string, bod
 	s.mailOut(w, v)
 }
 
-// mailDomain adds or changes a mail domain.
+// mailDomain adds, changes or removes a mail domain. Removing it can also
+// clean up after the domain outside the mail server: with drop_dns the DNS
+// records the panel itself made for it are deleted at the zone's provider,
+// and its mail.<domain> certificate is always forgotten (mailForget).
 func (s *Server) mailDomain(w http.ResponseWriter, r *http.Request) {
-	var in admproto.MailDomainSave
+	var in struct {
+		admproto.MailDomainSave
+		DropDNS bool `json:"drop_dns"`
+	}
 	if !readJSON(w, r, 16<<10, &in) {
 		return
 	}
-	s.mailSave(w, r, admproto.OpMailDomain, in, in.Name)
+	// The helper refuses unknown fields, so it gets the save without drop_dns.
+	if !in.Delete {
+		s.mailSave(w, r, admproto.OpMailDomain, in.MailDomainSave, in.Name)
+		return
+	}
+	auditTarget(r, in.Name)
+	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
+	defer cancel()
+	by := userOf(r).Login
+	adm := s.Adm(by)
+	var v admproto.MailView
+	if err := adm.Call(ctx, admproto.OpMailDomain, in.MailDomainSave, &v); err != nil {
+		admFail(w, err)
+		return
+	}
+	// The domain is gone from the mail server; what follows only tidies up,
+	// so a failure there is reported next to the result, not as an error.
+	name := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(in.Name)), ".")
+	removed, note := s.mailForget(ctx, name, in.DropDNS)
+	if s.syncMailCerts(ctx, by, v.Domains) {
+		adm.Call(ctx, admproto.OpMail, nil, &v)
+	}
+	s.mailOutWith(w, v, removed, note)
+}
+
+// mailForget removes what the panel keeps for a deleted mail domain d: the
+// certificate issued for mail.d alone for mail, and, when dropDNS is set,
+// the DNS records the panel created for the domain (mailOwnRec) in the zone
+// that holds d. Records someone added by hand are never touched: only those
+// in the zone's list of the panel's own records, and only when the
+// provider's current copy still looks like that mail record. It returns how
+// many records it deleted and, when something was left, a note why.
+func (s *Server) mailForget(ctx context.Context, d string, dropDNS bool) (int, string) {
+	s.dom.mu.Lock()
+	defer s.dom.mu.Unlock()
+	s.dom.load()
+	host := "mail." + d
+	s.dom.f.Certs = slices.DeleteFunc(s.dom.f.Certs, func(c certRec) bool {
+		return c.Use == "mail" && len(c.Names) == 1 && c.Names[0] == host
+	})
+	removed, note := 0, ""
+	if dropDNS {
+		removed, note = s.mailDropDNS(ctx, d)
+	}
+	if err := s.dom.save(); err != nil && note == "" {
+		note = err.Error()
+	}
+	return removed, note
+}
+
+// mailDropDNS deletes the panel's own mail records of domain d (see
+// mailForget). s.dom.mu must be held.
+func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
+	z := s.dom.zoneFor(d)
+	if z == nil {
+		return 0, ""
+	}
+	p := s.dom.prov(z.Provider)
+	if p == nil {
+		return 0, "zone " + z.Name + " is managed by hand: remove the mail records there"
+	}
+	api := s.providerAPI(*p)
+	have, err := api.Records(ctx, z.Name)
+	if err != nil {
+		return 0, "DNS records not removed: " + err.Error()
+	}
+	z.reconcileOurs(have)
+	byID := map[string]Record{}
+	for _, rec := range have {
+		byID[rec.ID] = rec
+	}
+	// Pick the targets. An entry whose record is no longer at the provider is
+	// dropped from the list; one whose record now looks different (the zone
+	// was edited by hand since) is left alone, record and entry both.
+	var del []Record
+	skipped := 0
+	keep := z.Ours[:0:0]
+	for _, o := range z.Ours {
+		if !mailOwnRec(o.Type, fqdn(o.Name, z.Name), "", d, false) {
+			keep = append(keep, o)
+			continue
+		}
+		rec, ok := byID[o.ID]
+		switch {
+		case o.ID == "":
+			// Not found unambiguously (reconcileOurs): leave it be.
+			skipped++
+			keep = append(keep, o)
+		case !ok:
+		case rec.Type == o.Type && rec.Name == o.Name && mailOwnRec(rec.Type, fqdn(rec.Name, z.Name), rec.Value, d, true):
+			del = append(del, rec)
+		default:
+			skipped++
+			keep = append(keep, o)
+		}
+	}
+	removed := 0
+	note := ""
+	for _, rec := range del {
+		if err := api.Delete(ctx, z.Name, rec.ID); err != nil {
+			note = fmt.Sprintf("%s %s: %v", rec.Type, fqdn(rec.Name, z.Name), err)
+			// Not deleted: it stays one of the panel's records.
+			keep = append(keep, ourRec{Type: rec.Type, Name: rec.Name, ID: rec.ID})
+			continue
+		}
+		removed++
+	}
+	z.Ours = keep
+	if note == "" && skipped > 0 {
+		note = fmt.Sprintf("%d DNS record(s) changed by hand since the panel made them were left in place", skipped)
+	}
+	return removed, note
+}
+
+// mailOwnRec reports whether a record (type, full name, value) is one of the
+// records the panel writes for mail domain d (mailNeeds): MX at d, A/AAAA at
+// mail.d, SPF at d and at mail.d, DKIM at any selector of d, DMARC at d.
+// With checkValue false only type and name count (the value is not known);
+// with it, a TXT must also start like the panel's record.
+func mailOwnRec(typ, name, value, d string, checkValue bool) bool {
+	host := "mail." + d
+	name = strings.TrimSuffix(strings.ToLower(name), ".")
+	v := strings.TrimSpace(strings.Trim(strings.TrimSpace(value), `"`))
+	txt := func(prefix string) bool { return !checkValue || strings.HasPrefix(v, prefix) }
+	switch {
+	case typ == "MX":
+		return name == d
+	case typ == "A" || typ == "AAAA":
+		return name == host
+	case typ != "TXT":
+		return false
+	case name == d || name == host:
+		return txt("v=spf1")
+	case strings.HasSuffix(name, "._domainkey."+d):
+		return txt("v=DKIM1")
+	case name == "_dmarc."+d:
+		return txt("v=DMARC1")
+	}
+	return false
 }
 
 // mailBox adds, changes or deletes a mailbox. A new password is hashed here,
@@ -628,6 +781,7 @@ func (s *Server) mailDNSCreate(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	z.reconcileOurs(have)
 	// Write each record, re-reading the provider's list after every change so
 	// the next decision sees it.
 	made := 0

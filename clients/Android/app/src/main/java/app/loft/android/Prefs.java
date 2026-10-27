@@ -78,6 +78,11 @@ final class Prefs {
         return p(c).getBoolean("verbose", false);
     }
 
+    /** Send a redacted crash report to GitHub on the next start. GitHub-channel only. */
+    static boolean crashReports(Context c) {
+        return p(c).getBoolean("crash", true);
+    }
+
     /** Draw the speed graph as bars instead of a line. */
     static boolean sparkBars(Context c) {
         return p(c).getBoolean("spark_bars", false);

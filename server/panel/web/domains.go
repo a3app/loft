@@ -178,6 +178,41 @@ func (d *domains) prov(id string) *dnsProv {
 	return nil
 }
 
+// reconcileOurs checks the zone's list of the panel's own records against
+// have, the provider's current records, and repairs ids that point at no
+// record: such an entry takes the id of the one record of its type and
+// name, or an empty id when there is none or several (the panel then goes by
+// type and name, as for a record whose id it never learned). This repairs
+// Namecheap ids saved by earlier versions, which were positions in the
+// list, and any record recreated by hand. It reports whether it changed
+// anything, so the caller can save.
+func (z *zoneRec) reconcileOurs(have []Record) bool {
+	ids := map[string]bool{}
+	for _, r := range have {
+		ids[r.ID] = true
+	}
+	changed := false
+	for i, o := range z.Ours {
+		if o.ID == "" || ids[o.ID] {
+			continue
+		}
+		id := ""
+		n := 0
+		for _, r := range have {
+			if r.Type == o.Type && strings.EqualFold(r.Name, o.Name) {
+				id = r.ID
+				n++
+			}
+		}
+		if n != 1 {
+			id = ""
+		}
+		z.Ours[i].ID = id
+		changed = true
+	}
+	return changed
+}
+
 // remember records rec as one of the panel's own records in the zone,
 // updating the existing entry when it is already known.
 func (z *zoneRec) remember(rec Record, auto bool) {
@@ -569,6 +604,12 @@ func (s *Server) zoneRecords(w http.ResponseWriter, r *http.Request) {
 			fail(w, http.StatusBadGateway, err.Error())
 			return
 		}
+		s.dom.mu.Lock()
+		if z := s.dom.zone(name); z != nil && z.reconcileOurs(recs) {
+			zc.Ours = append([]ourRec(nil), z.Ours...)
+			s.dom.save()
+		}
+		s.dom.mu.Unlock()
 	} else {
 		recs = zc.Manual
 	}
@@ -798,12 +839,22 @@ func (s *Server) followIPs(ctx context.Context) {
 			continue
 		}
 		api := s.providerAPI(*p)
+		// Make sure every id still names the record it was saved for: a
+		// stale one could otherwise delete someone else's record here.
+		have, err := api.Records(ctx, z.Name)
+		if err != nil {
+			s.logf("DNS %s: %v: its records keep the old addresses", z.Name, err)
+			continue
+		}
+		z.reconcileOurs(have)
 		names := map[string]bool{}
 		var keep []ourRec
 		for _, o := range z.Ours {
 			if o.Auto {
 				names[o.Name] = true
-				api.Delete(ctx, z.Name, o.ID)
+				if o.ID != "" {
+					api.Delete(ctx, z.Name, o.ID)
+				}
 				continue
 			}
 			keep = append(keep, o)
