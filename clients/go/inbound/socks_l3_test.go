@@ -10,6 +10,8 @@ import (
 	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/internal/wire"
+	"gvisor.dev/gvisor/pkg/tcpip"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 )
 
 type stubPump struct {
@@ -80,5 +82,29 @@ func TestL3NetSwapKeepsStack(t *testing.T) {
 			t.Fatal("no inbound after swap")
 		case <-time.After(10 * time.Millisecond):
 		}
+	}
+}
+
+func TestL3NetSwapFollowsOverlayIP(t *testing.T) {
+	transport.RememberVis(wire.Status{IP: "10.8.0.2", Gateway: "10.8.0.1"})
+	a := newStubPump()
+	n, err := NewL3Net(a, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.Close()
+	// The node restarted and gave this member another address.
+	transport.RememberVis(wire.Status{IP: "10.8.0.3", Gateway: "10.8.0.1"})
+	b := newStubPump()
+	n.Swap(b, b)
+	if got := n.ourAddr().String(); got != "10.8.0.3" {
+		t.Fatalf("our = %s, want 10.8.0.3", got)
+	}
+	// NIC 0: with a NIC given, gVisor answers yes for any IPv4 address.
+	if n.stk.CheckLocalAddress(0, ipv4.ProtocolNumber, tcpip.AddrFrom4([4]byte{10, 8, 0, 3})) == 0 {
+		t.Fatal("stack does not own the new address")
+	}
+	if n.stk.CheckLocalAddress(0, ipv4.ProtocolNumber, tcpip.AddrFrom4([4]byte{10, 8, 0, 2})) != 0 {
+		t.Fatal("stack still owns the old address")
 	}
 }

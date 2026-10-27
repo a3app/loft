@@ -47,9 +47,10 @@ type L3Net struct {
 	d      transport.Dialer
 	wait   chan struct{}
 
-	ep  *channel.Endpoint
-	stk *stack.Stack
-	our tcpip.Address
+	ep    *channel.Endpoint
+	stk   *stack.Stack
+	ourMu sync.Mutex
+	our   tcpip.Address // overlay address of the stack; Swap may change it
 
 	portMu sync.Mutex
 	ports  map[uint16]struct{}
@@ -88,12 +89,10 @@ func NewL3Net(d transport.Dialer, pump transport.IPPump) (*L3Net, error) {
 	if pump == nil {
 		return nil, fmt.Errorf("l3: no pump")
 	}
-	ip := net.ParseIP(transport.OverlayIP()).To4()
-	if ip == nil {
+	a, ok := overlayAddr()
+	if !ok {
 		return nil, fmt.Errorf("l3: no overlay ip")
 	}
-	var a [4]byte
-	copy(a[:], ip)
 	// The link queue holds packets the stack sends until stackOut passes
 	// them to the tunnel; when it is full, gVisor drops them. 8192 packets
 	// (about 10 MB) keep a full TCP send window of a few flows in it.
@@ -105,13 +104,7 @@ func NewL3Net(d transport.Dialer, pump transport.IPPump) (*L3Net, error) {
 	if err := s.CreateNIC(l3NIC, ep); err != nil {
 		return nil, fmt.Errorf("l3 nic: %s", err)
 	}
-	if err := s.AddProtocolAddress(l3NIC, tcpip.ProtocolAddress{
-		Protocol: ipv4.ProtocolNumber,
-		AddressWithPrefix: tcpip.AddressWithPrefix{
-			Address:   tcpip.AddrFrom4(a),
-			PrefixLen: 32,
-		},
-	}, stack.AddressProperties{}); err != nil {
+	if err := addOverlay(s, a); err != nil {
 		return nil, fmt.Errorf("l3 addr: %s", err)
 	}
 	s.SetRouteTable([]tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: l3NIC}})
@@ -122,7 +115,7 @@ func NewL3Net(d transport.Dialer, pump transport.IPPump) (*L3Net, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	n := &L3Net{
 		pump: pump, d: d, wait: make(chan struct{}),
-		ep: ep, stk: s, our: tcpip.AddrFrom4(a),
+		ep: ep, stk: s, our: a,
 		// Start at a random port: every L3Net of this member shares one
 		// overlay address, so a fixed start reused the last session's
 		// ports while the node may still hold those flows.
@@ -164,7 +157,7 @@ func (n *L3Net) Open(target string) (net.Conn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	c, err := gonet.DialTCPWithBind(ctx, n.stk,
-		tcpip.FullAddress{NIC: l3NIC, Addr: n.our, Port: lp},
+		tcpip.FullAddress{NIC: l3NIC, Addr: n.ourAddr(), Port: lp},
 		tcpip.FullAddress{NIC: l3NIC, Addr: tcpip.AddrFrom4(dst), Port: uint16(p)},
 		ipv4.ProtocolNumber)
 	if err != nil {
@@ -180,7 +173,7 @@ func (n *L3Net) ListenUDP() (net.PacketConn, error) {
 	if lp == 0 {
 		return nil, fmt.Errorf("l3 ports")
 	}
-	laddr := tcpip.FullAddress{NIC: l3NIC, Addr: n.our, Port: lp}
+	laddr := tcpip.FullAddress{NIC: l3NIC, Addr: n.ourAddr(), Port: lp}
 	c, err := gonet.DialUDP(n.stk, &laddr, nil, ipv4.ProtocolNumber)
 	if err != nil {
 		n.freePort(lp)
@@ -272,6 +265,52 @@ func (n *L3Net) Swap(d transport.Dialer, pump transport.IPPump) {
 	if old != nil && old != d {
 		_ = old.Close()
 	}
+	n.followOverlay()
+}
+
+// overlayAddr reads the overlay IPv4 the node gave in its last Status.
+func overlayAddr() (tcpip.Address, bool) {
+	ip := net.ParseIP(transport.OverlayIP()).To4()
+	if ip == nil {
+		return tcpip.Address{}, false
+	}
+	return tcpip.AddrFrom4Slice(ip), true
+}
+
+// addOverlay gives the stack's network card the address a (/32).
+func addOverlay(s *stack.Stack, a tcpip.Address) tcpip.Error {
+	return s.AddProtocolAddress(l3NIC, tcpip.ProtocolAddress{
+		Protocol:          ipv4.ProtocolNumber,
+		AddressWithPrefix: tcpip.AddressWithPrefix{Address: a, PrefixLen: 32},
+	}, stack.AddressProperties{})
+}
+
+func (n *L3Net) ourAddr() tcpip.Address {
+	n.ourMu.Lock()
+	defer n.ourMu.Unlock()
+	return n.our
+}
+
+// followOverlay moves the stack to the overlay address of the new session.
+// A node that restarted hands out addresses again, so after a reconnect the
+// member can get another one. The stack would keep dropping replies sent to
+// the new address, and new connections would leave from the old one.
+// Connections bound to the old address are gone with the old session anyway.
+func (n *L3Net) followOverlay() {
+	a, ok := overlayAddr()
+	if !ok {
+		return
+	}
+	n.ourMu.Lock()
+	defer n.ourMu.Unlock()
+	if a == n.our {
+		return
+	}
+	if err := addOverlay(n.stk, a); err != nil {
+		return
+	}
+	_ = n.stk.RemoveAddress(l3NIC, n.our)
+	n.our = a
 }
 
 // livePump returns the current pump and a channel that closes when the
