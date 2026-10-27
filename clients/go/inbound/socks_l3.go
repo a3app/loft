@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	mrand "math/rand/v2"
 	"net"
 	"strconv"
 	"sync"
@@ -113,7 +114,10 @@ func NewL3Net(d transport.Dialer, pump transport.IPPump) (*L3Net, error) {
 	n := &L3Net{
 		pump: pump, d: d, wait: make(chan struct{}),
 		ep: ep, stk: s, our: tcpip.AddrFrom4(a),
-		ports: make(map[uint16]struct{}), next: 49152,
+		// Start at a random port: every L3Net of this member shares one
+		// overlay address, so a fixed start reused the last session's
+		// ports while the node may still hold those flows.
+		ports: make(map[uint16]struct{}), next: 49152 + uint16(mrand.IntN(16384)),
 		done: make(chan struct{}), cancel: cancel,
 	}
 	go n.stackOut(ctx)
