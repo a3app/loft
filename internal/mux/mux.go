@@ -46,21 +46,23 @@ var ErrCongested = errors.New("mux: congested")
 // always drains pri first, so a large download on one stream cannot delay
 // a new connection or an ACK on another stream.
 type Session struct {
-	mu        sync.Mutex
-	streams   map[uint32]*Stream
-	accept    chan *Stream    // streams opened by the peer, waiting for Accept
-	out       chan wire.Frame // bulk Data waiting for Pull
-	pri       chan wire.Frame // control and small frames; Pull takes these first
-	dgrams    chan dgram      // inbound datagrams waiting for ReadDgram
-	dgramFn   func(string, []byte) bool
-	nextID    atomic.Uint32
-	closed    atomic.Bool
-	client    bool
-	relay     atomic.Bool
-	relayID   atomic.Pointer[string]
-	bytesUp   atomic.Uint64
-	bytesDown atomic.Uint64
-	die       chan struct{} // closed by Close; wakes every waiter
+	mu         sync.Mutex
+	streams    map[uint32]*Stream
+	accept     chan *Stream    // streams opened by the peer, waiting for Accept
+	out        chan wire.Frame // bulk Data waiting for Pull
+	pri        chan wire.Frame // control and small frames; Pull takes these first
+	dgrams     chan dgram      // inbound datagrams waiting for ReadDgram
+	dgramFn    func(string, []byte) bool
+	listsAsk   func(have uint64, offset uint32)
+	listsPiece func(serial uint64, total, offset uint32, body []byte)
+	nextID     atomic.Uint32
+	closed     atomic.Bool
+	client     bool
+	relay      atomic.Bool
+	relayID    atomic.Pointer[string]
+	bytesUp    atomic.Uint64
+	bytesDown  atomic.Uint64
+	die        chan struct{} // closed by Close; wakes every waiter
 	// hold: the node keeps ("parks") this mux alive for a short time after
 	// the front drops, so the client can reconnect and get its streams back.
 	hold     atomic.Bool
@@ -280,7 +282,7 @@ const dgramPri = 512
 // its HTTP jumps download bulk.
 func (s *Session) priFrame(f wire.Frame) bool {
 	switch f.Cmd {
-	case wire.CmdOpen, wire.CmdPing, wire.CmdPong, wire.CmdLeave, wire.CmdTune, wire.CmdFront:
+	case wire.CmdOpen, wire.CmdPing, wire.CmdPong, wire.CmdLeave, wire.CmdTune, wire.CmdFront, wire.CmdLists:
 		return true
 	case wire.CmdDgram:
 		return len(f.Payload) <= dgramPri
@@ -468,6 +470,12 @@ func noteTraffic(f wire.Frame, ctr *atomic.Uint64) {
 	}
 }
 
+// Enqueue is send: queue f for the next Pull. Lists ask/piece use this so
+// a hook does not call the unexported send.
+func (s *Session) Enqueue(f wire.Frame) error {
+	return s.send(f)
+}
+
 // send queues f on out or fails if the session is dead.
 func (s *Session) send(f wire.Frame) error {
 	return s.sendCtx(context.Background(), f)
@@ -573,6 +581,8 @@ func (s *Session) sendCtx(ctx context.Context, f wire.Frame) error {
 //   - Dgram goes to the FilterDgram hook first, then to ReadDgram; if
 //     nobody is reading, it is dropped like a lost UDP packet.
 //   - Pad, Tune, Report and Front are handled by the front, not the mux.
+//   - Lists (stream 0) is the signed address-list command: 12-byte ask or
+//     a piece. Hooks run outside the mux lock; unknown cmds stay ignored.
 func (s *Session) handle(f wire.Frame) {
 	// Police inbound datagrams with a drop. Never waitRate here: a full
 	// token bucket would stall Push and stop reading the front socket.
@@ -653,9 +663,47 @@ func (s *Session) handle(f wire.Frame) {
 	case wire.CmdPong:
 		s.notePong(f.Payload)
 	case wire.CmdPad, wire.CmdTune, wire.CmdReport, wire.CmdFront:
+	case wire.CmdLists:
+		if f.StreamID != 0 {
+			return
+		}
+		if have, off, ok := wire.ParseListsAsk(f.Payload); ok {
+			s.mu.Lock()
+			fn := s.listsAsk
+			s.mu.Unlock()
+			if fn != nil {
+				fn(have, off)
+			}
+			return
+		}
+		if serial, total, off, body, ok := wire.ParseListsPiece(f.Payload); ok {
+			if len(body) > 0 {
+				body = append([]byte(nil), body...)
+			}
+			s.mu.Lock()
+			fn := s.listsPiece
+			s.mu.Unlock()
+			if fn != nil {
+				fn(serial, total, off, body)
+			}
+		}
 	case wire.CmdLeave:
 		s.Close()
 	}
+}
+
+// OnListsAsk is the node hook for a client CmdLists ask (stream 0).
+func (s *Session) OnListsAsk(fn func(have uint64, offset uint32)) {
+	s.mu.Lock()
+	s.listsAsk = fn
+	s.mu.Unlock()
+}
+
+// OnListsPiece is the client hook for a node CmdLists piece (stream 0).
+func (s *Session) OnListsPiece(fn func(serial uint64, total, offset uint32, body []byte)) {
+	s.mu.Lock()
+	s.listsPiece = fn
+	s.mu.Unlock()
 }
 
 // stream looks up a live stream by id.

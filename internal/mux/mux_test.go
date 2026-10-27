@@ -774,3 +774,47 @@ func TestPushRacesKill(t *testing.T) {
 		<-done
 	}
 }
+
+func TestListsAskHook(t *testing.T) {
+	s := NewServer()
+	got := make(chan [2]uint64, 1)
+	s.OnListsAsk(func(have uint64, offset uint32) {
+		got <- [2]uint64{have, uint64(offset)}
+	})
+	s.Push([]wire.Frame{wire.ListsAskFrame(7, 12)})
+	select {
+	case v := <-got:
+		if v[0] != 7 || v[1] != 12 {
+			t.Fatalf("%v", v)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no ask")
+	}
+}
+
+func TestListsPieceHook(t *testing.T) {
+	c := NewClient()
+	got := make(chan struct{}, 1)
+	c.OnListsPiece(func(serial uint64, total, offset uint32, body []byte) {
+		if serial != 3 || total != 4 || offset != 0 || string(body) != "abcd" {
+			t.Errorf("%d %d %d %q", serial, total, offset, body)
+		}
+		got <- struct{}{}
+	})
+	c.Push([]wire.Frame{wire.ListsPieceFrame(3, 4, 0, []byte("abcd"))})
+	select {
+	case <-got:
+	case <-time.After(time.Second):
+		t.Fatal("no piece")
+	}
+}
+
+func TestListsEnqueuePri(t *testing.T) {
+	s := NewServer()
+	if err := s.Enqueue(wire.ListsAskFrame(0, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if s.PriQueued() != 1 {
+		t.Fatalf("pri %d", s.PriQueued())
+	}
+}
