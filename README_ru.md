@@ -20,14 +20,14 @@
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg">
-  <img src="docs/brand/platforms/macos.svg" width="20" height="20" align="absmiddle" alt="macOS">
+  <img src="docs/brand/platforms/macos.svg" width="24" height="24" align="absmiddle" alt="macOS">
 </picture>
 <strong>macOS</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg">arm</a>
 ·
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg">Intel</a>
 &emsp;&emsp;
-<img src="docs/brand/platforms/windows.svg" width="20" height="20" align="absmiddle" alt="Windows">
+<img src="docs/brand/platforms/windows.svg" width="24" height="24" align="absmiddle" alt="Windows">
 <strong>Windows</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip">x86-64</a>
 ·
@@ -36,13 +36,13 @@
 <a href="#скачать">arm64</a>
 </p>
 <p align="center">
-<img src="docs/brand/platforms/android.svg" width="20" height="20" align="absmiddle" alt="Android">
+<img src="docs/brand/platforms/android.svg" width="24" height="24" align="absmiddle" alt="Android">
 <strong>Android</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk">Android</a>
 ·
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk">Google TV</a>
 &emsp;&emsp;
-<img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt="Linux">
+<img src="docs/brand/platforms/linux.svg" width="24" height="24" align="absmiddle" alt="Linux">
 <strong>Linux</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz">arm64</a>
 ·
