@@ -17,45 +17,37 @@
 
 **English** · [Русский](README_ru.md) · [中文](README_zh.md)
 
-<table>
-<tr>
-<td align="center" valign="top" width="50%">
+<p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg">
   <img src="docs/brand/platforms/macos.svg" width="32" alt="macOS">
-</picture><br>
-<strong>macOS</strong><br>
+</picture>
+<strong>macOS</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg">arm</a>
 ·
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg">Intel</a>
-</td>
-<td align="center" valign="top" width="50%">
-<img src="docs/brand/platforms/windows.svg" width="32" alt="Windows"><br>
-<strong>Windows</strong><br>
+&emsp;&emsp;
+<img src="docs/brand/platforms/windows.svg" width="32" alt="Windows">
+<strong>Windows</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip">x86-64</a>
 ·
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip">x86</a>
 ·
 <a href="#download">arm64</a>
-</td>
-</tr>
-<tr>
-<td align="center" valign="top">
-<img src="docs/brand/platforms/android.svg" width="32" alt="Android"><br>
-<strong>Android</strong><br>
+</p>
+<p align="center">
+<img src="docs/brand/platforms/android.svg" width="32" alt="Android">
+<strong>Android</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk">Android</a>
 ·
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk">Google TV</a>
-</td>
-<td align="center" valign="top">
-<img src="docs/brand/platforms/linux.svg" width="32" alt="Linux"><br>
-<strong>Linux</strong><br>
+&emsp;&emsp;
+<img src="docs/brand/platforms/linux.svg" width="32" alt="Linux">
+<strong>Linux</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz">arm64</a>
 ·
 <a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz">amd64</a>
-</td>
-</tr>
-</table>
+</p>
 
 </div>
 
