@@ -61,3 +61,24 @@ func TestParseAddrKinds(t *testing.T) {
 		t.Fatal("cidr")
 	}
 }
+
+func TestParseListEntryMeta(t *testing.T) {
+	if a := ParseListEntry("@dir direct"); a.Kind != KindDir || a.Val != DirDirect {
+		t.Fatalf("%+v", a)
+	}
+	if a := ParseListEntry("@label Russia"); a.Kind != KindLabel || a.Val != "Russia" {
+		t.Fatalf("%+v", a)
+	}
+	if a := ParseListEntry("@name RU direct"); a.Kind != KindLabel || a.Val != "RU direct" {
+		t.Fatalf("%+v", a)
+	}
+	if a := ParseListEntry("@dns 77.88.8.8"); a.Kind != KindDNS || a.Val != "77.88.8.8" {
+		t.Fatalf("%+v", a)
+	}
+	if a := ParseListEntry("@dir sideways"); a.Kind != 0 {
+		t.Fatalf("bad dir: %+v", a)
+	}
+	if a := ParseListEntry(".yandex.ru"); a.Kind != KindSuffix || a.Val != "yandex.ru" {
+		t.Fatalf("%+v", a)
+	}
+}

@@ -26,36 +26,37 @@ type Cap uint64
 
 // Capability bits on Hello/Status. SOCKS, TUN, CDN vendor, OS, and origin names are not caps.
 const (
-	CapMulti     Cap = 1 << iota // several instances on one key
-	CapResume                    // ok_resumed + lease_hold
-	CapStickyIP                  // reserved overlay IP on the key
-	CapVLAN                      // VLAN from the key
-	CapRules                     // switch ACL
-	CapGET                       // GET + header uplink
-	CapWS                        // WebSocket
-	CapStatus                    // Hello/Status with Code
-	CapTimers                    // keepalive / idle / reconnect in Status
-	CapHelloCaps                 // this cap block
-	CapReset                     // CmdReset on streams
-	CapQUIC                      // QUIC/UDP front (loss recovery, migration)
-	CapDgram                     // CmdDgram UDP
-	CapClockless                 // auth without client clock
-	CapTicket                    // Status ticket is the session sid for 0x04 attach
-	CapDecoy                     // Status lists this node's decoy origins
-	CapH2                        // HTTP/2 CONNECT front
-	CapH3                        // HTTP/3 (ALPN h3) front
-	CapMask                      // decoy mask: borrowed origin cert on loft path
-	CapRelay                     // Hello: this session is a relay trunk (ExtraCaps only; not a member default)
-	CapRoster                    // Status may carry a signed relay roster
-	CapLists                     // Status may advertise address-list serial/hash
-	CapP2P                       // peer-to-peer overlay when mesh
-	CapDNS                       // Status may carry DNS servers; gateway:53 is a resolver
-	CapConnect                   // HTTP/2 CONNECT splice; TCP without inner mux
-	CapResin                     // CmdReport + resin/draft GET uplink
-	CapHold                      // mux streams survive a brief front drop
-	CapQUICMark                  // quic front on a decoy node: the Initial must carry the loft mark
-	CapH3Mark                    // h3 front on a decoy node: the Initial must carry the loft mark
-	CapL3                        // HTTP/2 CONNECT carrying AEAD IP datagrams (no mux)
+	CapMulti       Cap = 1 << iota // several instances on one key
+	CapResume                      // ok_resumed + lease_hold
+	CapStickyIP                    // reserved overlay IP on the key
+	CapVLAN                        // VLAN from the key
+	CapRules                       // switch ACL
+	CapGET                         // GET + header uplink
+	CapWS                          // WebSocket
+	CapStatus                      // Hello/Status with Code
+	CapTimers                      // keepalive / idle / reconnect in Status
+	CapHelloCaps                   // this cap block
+	CapReset                       // CmdReset on streams
+	CapQUIC                        // QUIC/UDP front (loss recovery, migration)
+	CapDgram                       // CmdDgram UDP
+	CapClockless                   // auth without client clock
+	CapTicket                      // Status ticket is the session sid for 0x04 attach
+	CapDecoy                       // Status lists this node's decoy origins
+	CapH2                          // HTTP/2 CONNECT front
+	CapH3                          // HTTP/3 (ALPN h3) front
+	CapMask                        // decoy mask: borrowed origin cert on loft path
+	CapRelay                       // Hello: this session is a relay trunk (ExtraCaps only; not a member default)
+	CapRoster                      // Status may carry a signed relay roster
+	CapLists                       // Status may advertise address-list serial/hash
+	CapP2P                         // peer-to-peer overlay when mesh
+	CapDNS                         // Status may carry DNS servers; gateway:53 is a resolver
+	CapConnect                     // HTTP/2 CONNECT splice; TCP without inner mux
+	CapResin                       // CmdReport + resin/draft GET uplink
+	CapHold                        // mux streams survive a brief front drop
+	CapQUICMark                    // quic front on a decoy node: the Initial must carry the loft mark
+	CapH3Mark                      // h3 front on a decoy node: the Initial must carry the loft mark
+	CapL3                          // HTTP/2 CONNECT carrying AEAD IP datagrams (no mux)
+	CapListsInline                 // Lists command inside the session (§6, §10.3)
 	capSentinel
 )
 
@@ -66,7 +67,7 @@ const NodeCaps = CapMulti | CapResume | CapStickyIP | CapVLAN | CapRules |
 	CapGET | CapWS | CapStatus | CapTimers | CapHelloCaps | CapReset |
 	CapQUIC | CapDgram | CapClockless | CapTicket | CapDecoy |
 	CapH2 | CapH3 | CapMask | CapRelay | CapRoster | CapLists | CapP2P | CapDNS |
-	CapConnect | CapResin | CapHold | CapL3
+	CapConnect | CapResin | CapHold | CapL3 | CapListsInline
 
 // MemberCaps is the default Hello offer for loft-front / Supervise.
 // CapRelay is omitted: a member must not self-assert a trunk (hub:* / ctl:1).
@@ -82,6 +83,7 @@ var capName = [...]string{
 	"quic", "dgram", "clockless", "ticket", "decoy",
 	"h2", "h3", "mask", "relay", "roster", "lists", "p2p", "dns",
 	"connect", "resin", "hold", "quic_mark", "h3_mark", "l3",
+	"lists_inline",
 }
 
 // Has reports whether all bits in x are set.
@@ -90,9 +92,8 @@ func (c Cap) Has(x Cap) bool { return c&x == x }
 // Names returns the set bit names in protocol order (multi, resume, …).
 func (c Cap) Names() []string {
 	var out []string
-	for i := 0; i < int(capSentinel); i++ {
-		bit := Cap(1) << i
-		if c.Has(bit) && i < len(capName) {
+	for i := 0; i < len(capName); i++ {
+		if c.Has(Cap(1) << i) {
 			out = append(out, capName[i])
 		}
 	}

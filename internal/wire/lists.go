@@ -18,10 +18,21 @@ import (
 )
 
 // Address-list entry kinds: exact domain, suffix, CIDR.
+// 4–6 are profile metadata and never match a host or an IP (§10.3).
 const (
 	KindExact  byte = 1
 	KindSuffix byte = 2
 	KindCIDR   byte = 3
+	KindDir    byte = 4 // via | direct | drop
+	KindLabel  byte = 5 // display name
+	KindDNS    byte = 6 // local resolver for direct sets: IP or DoH URL
+)
+
+// Operator direction strings carried in kind 4.
+const (
+	DirVia    = "via"
+	DirDirect = "direct"
+	DirDrop   = "drop"
 )
 
 // Addr is one list entry: kind plus value (domain, suffix, or CIDR).
@@ -59,6 +70,37 @@ func ParseAddr(s string) Addr {
 		return Addr{Kind: KindSuffix, Val: strings.ToLower(strings.TrimPrefix(s, "."))}
 	}
 	return Addr{Kind: KindExact, Val: strings.ToLower(s)}
+}
+
+// ParseListEntry classifies a lists.conf value: @dir/@label/@dns/@name
+// metadata (kinds 4–6), else ParseAddr. Unknown @keys are empty.
+func ParseListEntry(s string) Addr {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return Addr{}
+	}
+	if strings.HasPrefix(s, "@") {
+		key, val, _ := strings.Cut(s[1:], " ")
+		key = strings.ToLower(strings.TrimSpace(key))
+		val = strings.TrimSpace(val)
+		switch key {
+		case "dir":
+			d := strings.ToLower(val)
+			if d == DirVia || d == DirDirect || d == DirDrop {
+				return Addr{Kind: KindDir, Val: d}
+			}
+		case "label", "name":
+			if val != "" {
+				return Addr{Kind: KindLabel, Val: val}
+			}
+		case "dns":
+			if val != "" {
+				return Addr{Kind: KindDNS, Val: val}
+			}
+		}
+		return Addr{}
+	}
+	return ParseAddr(s)
 }
 
 // MatchHost is case-insensitive exact or suffix match. CIDR never matches a host.

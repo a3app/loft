@@ -20,7 +20,9 @@ import "encoding/binary"
 // jump queued Data in the same Cookie.
 func Resin(f Frame) bool {
 	switch f.Cmd {
-	case CmdOpen, CmdPing, CmdPong, CmdLeave, CmdTune, CmdReport, CmdFront, CmdClose, CmdReset:
+	case CmdOpen, CmdPing, CmdPong, CmdLeave, CmdTune, CmdReport, CmdFront, CmdLists, CmdClose, CmdReset:
+		// CmdLists is resin on the uplink (client ask). Downlink pieces
+		// are draft and never pass through SplitUplink.
 		return true
 	case CmdDgram:
 		return dgramPort(f.Payload) == 53

@@ -41,6 +41,7 @@ const (
 	CmdTune   byte = 10 // front event (client) or budget/inflight set (node)
 	CmdReport byte = 11 // GET uplink applied-through seq; stream_id 0
 	CmdFront  byte = 12 // which attached front carries bulk mux; stream_id 0
+	CmdLists  byte = 13 // signed address lists inside the session; stream_id 0
 )
 
 // Frame header is 7 bytes; payload is at most 16 KiB.

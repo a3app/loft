@@ -6,7 +6,7 @@ import (
 )
 
 func TestResinClass(t *testing.T) {
-	if !Resin(Frame{Cmd: CmdOpen}) || !Resin(Frame{Cmd: CmdTune}) || !Resin(Frame{Cmd: CmdLeave}) {
+	if !Resin(Frame{Cmd: CmdOpen}) || !Resin(Frame{Cmd: CmdTune}) || !Resin(Frame{Cmd: CmdLeave}) || !Resin(Frame{Cmd: CmdLists}) || !Resin(Frame{Cmd: CmdFront}) {
 		t.Fatal("control is resin")
 	}
 	if !Resin(Frame{Cmd: CmdClose}) || !Resin(Frame{Cmd: CmdReset}) {
