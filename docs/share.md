@@ -15,12 +15,13 @@ Protocol: [protocol.md](protocol.md). iOS UX: [clients/iOS/design/DESIGN.md](../
 A client that accepts a QR payload, a paste, a photo, or a file tries, in order:
 
 1. Trim UTF-8. Strip a leading UTF-8 BOM.
-2. `loft://` → [§2](#2-loft).
-3. `vless://` → VLESS share ([§5](#5-vless)).
-4. `trojan://` → Trojan share ([§6](#6-trojan)).
-5. `sstp://` → SSTP share ([§7](#7-sstp)).
-6. YAML that has `token:` / `password:` / `outbounds:` / `connections:` → import as `.loft` ([§8](#8-loft-file)).
-7. Else reject.
+2. `loft://routes/` → a route profile ([§9](#9-route-profiles)), not a connection. Lists import uses this path.
+3. `loft://` → [§2](#2-loft).
+4. `vless://` → VLESS share ([§5](#5-vless)).
+5. `trojan://` → Trojan share ([§6](#6-trojan)).
+6. `sstp://` → SSTP share ([§7](#7-sstp)).
+7. YAML that has `token:` / `password:` / `outbounds:` / `connections:` → import as `.loft` ([§8](#8-loft-file)). YAML `kind: routes` is [§9](#9-route-profiles), not a connection.
+8. Else reject.
 
 The same detector runs on camera QR, an image from Photos or Files, a `.txt` / `.loft` / YAML file, and a paste field.
 
@@ -296,3 +297,26 @@ Import: each list item becomes a profile on disk. Phone apps still run **one** t
 Export of the selected connection is a list action (iOS/Android: chip on the lamp row; long-press; macOS: row context menu). Settings MAY still export all.
 
 The UI description of a connection is **kind · transport · host**, never transport alone.
+
+---
+
+## 9. Route profiles
+
+A signed lists blob (§10.3) maps to a SplitStore JSON document (`src=op`). Share of that document is a **route profile**, not a loft connection. The connection detector MUST refuse it (`loft://routes` has an empty token, so it must not become a connection named `routes`).
+
+```
+loft://routes/<base64url(SplitJSON)>
+```
+
+`ParseRoutes` also accepts the SplitJSON object itself and YAML:
+
+```yaml
+kind: routes
+name: RU direct
+dns: 77.88.8.8
+src: op
+zones: […]
+services: […]
+```
+
+or `kind: routes` plus `profile:` holding the same base64url payload. Lists **+ Import profile** adds it to the catalog; the active profile is left alone. The operator profile that arrives inside the session (`lists_inline`) overwrites the `op` slot and is read-only.

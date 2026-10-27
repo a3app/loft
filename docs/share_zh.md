@@ -15,12 +15,13 @@ loft 地址是 `loft://`：类型加传输写在一串里。Query 键 `get` `ws`
 能接二维码、粘贴、照片或文件的客户端，按这个顺序试：
 
 1. 去掉 UTF-8 首尾空白。去掉开头的 UTF-8 BOM。
-2. `loft://` → [§2](#2-loft)。
-3. `vless://` → VLESS 分享串（[§5](#5-vless)）。
-4. `trojan://` → Trojan 分享串（[§6](#6-trojan)）。
-5. `sstp://` → SSTP 分享串（[§7](#7-sstp)）。
-6. 带 `token:` / `password:` / `outbounds:` / `connections:` 的 YAML → 当 `.loft` 导入（[§8](#8-loft-文件)）。
-7. 否则拒绝。
+2. `loft://routes/` → 路由配置文件（[§9](#9-路由配置文件)），不是连接。列表里的导入走这条路径。
+3. `loft://` → [§2](#2-loft)。
+4. `vless://` → VLESS 分享串（[§5](#5-vless)）。
+5. `trojan://` → Trojan 分享串（[§6](#6-trojan)）。
+6. `sstp://` → SSTP 分享串（[§7](#7-sstp)）。
+7. 带 `token:` / `password:` / `outbounds:` / `connections:` 的 YAML → 当 `.loft` 导入（[§8](#8-loft-文件)）。YAML `kind: routes` 是 [§9](#9-路由配置文件)，不是连接。
+8. 否则拒绝。
 
 同一个检测器：摄像头二维码、照片或文件里的图、`.txt` / `.loft` / YAML 文件、粘贴栏。
 
@@ -296,3 +297,26 @@ connections:
 导出当前连接是列表动作（iOS/Android：灯那一行上的芯片；长按；macOS：行的上下文菜单）。设置里**可以**仍导出全部。
 
 连接在界面上的描述是 **类型 · 传输 · 主机**，从不只写传输。
+
+---
+
+## 9. 路由配置文件
+
+已签名的列表 blob（§10.3）映射成 SplitStore JSON（`src=op`）。分享这份文档是**路由配置文件**，不是 loft 连接。连接检测器必须拒绝它（`loft://routes` 没有 token，否则会变成名为 `routes` 的连接）。
+
+```
+loft://routes/<base64url(SplitJSON)>
+```
+
+`ParseRoutes` 也接受 SplitJSON 对象本身和 YAML：
+
+```yaml
+kind: routes
+name: RU 直连
+dns: 77.88.8.8
+src: op
+zones: […]
+services: […]
+```
+
+或者 `kind: routes` 加上 `profile:`，里面是同一段 base64url。列表里的 **+ 导入配置文件** 把它加入目录；当前生效的配置文件不动。会话内下发的运营方配置文件（`lists_inline`）覆盖 `op` 槽，并且只读。
