@@ -104,7 +104,23 @@ final class Bat {
      */
     static String emit(SplitStore st, String zoneId) {
         StringBuilder b = new StringBuilder();
-        b.append("@echo off\nREM loft-routes 1.0\nREM zone: ").append(zoneId).append("\n\n");
+        b.append("@echo off\nREM loft-routes 1.0\n");
+        appendZone(b, st, zoneId);
+        return b.toString();
+    }
+
+    /** All zones in one loft-routes file: each block starts with REM zone:. */
+    static String emitAll(SplitStore st) {
+        StringBuilder b = new StringBuilder();
+        b.append("@echo off\nREM loft-routes 1.0\n");
+        for (SplitStore.Zone z : st.zones) {
+            appendZone(b, st, z.id);
+        }
+        return b.toString();
+    }
+
+    private static void appendZone(StringBuilder b, SplitStore st, String zoneId) {
+        b.append("\nREM zone: ").append(zoneId).append("\n");
         SplitStore.Zone z = st.zone(zoneId);
         if (z != null && z.repo != null && !z.repo.isEmpty()) {
             b.append("REM repo: ").append(z.repo).append('\n');
@@ -129,6 +145,5 @@ final class Bat {
                         .append(" 0.0.0.0 :: rem ").append(s.name).append('\n');
             }
         }
-        return b.toString();
     }
 }

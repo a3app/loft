@@ -15,6 +15,7 @@ import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -25,27 +26,31 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
- * Editor for the split-routing lists (SplitStore): which address ranges go
- * through the tunnel and which go direct. One activity with several pages
- * built in code: the list of a zone, zones, one zone, one service, the
- * repository settings and the catalog of ready-made lists. Back returns to
- * the list page first. Saving rebuilds the live TUN when a session is up.
+ * Editor for the split-routing lists (SplitStore). Pages: zone list,
+ * exclusions, zones, one zone, one service, repository, catalog,
+ * import and export. Back returns to the list page first.
  */
 public final class ListsActivity extends LoftActivity {
     private static final int REQ_IN = 8;
     private SplitStore store;
     private String zoneId = SplitStore.GLOBAL;
     private String page = "list";
-    // Id of the zone or service the "zone" / "svc" page is editing.
     private String editing;
-    // Zone whose list URL the catalog writes; page to return to from catalog.
     private String catalogZone = SplitStore.GLOBAL;
     private String catalogBack = "repo";
     private final Handler main = new Handler(Looper.getMainLooper());
+    private Set<String> sel;
+    private SplitStore.Snap undo;
+    private RevealFrame openSwipe;
+    private List<Bat.Row> pendingRows;
+    private String pendingHint = "";
+    private final Runnable hideSnack = this::hideSnack;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,17 +59,53 @@ public final class ListsActivity extends LoftActivity {
         store = SplitStore.load(this);
         ToggleView split = findViewById(R.id.sw_split);
         split.setChecked(Prefs.split(this));
-        split.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("split", on).apply());
+        split.setOnCheckedChangeListener((v, on) ->
+                Prefs.p(this).edit().putBoolean("split", on).apply());
         findViewById(R.id.btn_back).setOnClickListener(v -> onBackPressed());
-        View more = findViewById(R.id.btn_more);
-        if (more != null) {
-            more.setVisibility(View.GONE);
-        }
+        findViewById(R.id.btn_more).setOnClickListener(this::openMore);
+        findViewById(R.id.btn_sel_x).setOnClickListener(v -> {
+            sel = null;
+            show("list");
+        });
+        findViewById(R.id.btn_sel_all).setOnClickListener(v -> {
+            List<String> all = new ArrayList<>();
+            for (SplitStore.Svc s : store.in(zoneId, "")) {
+                all.add(s.id);
+            }
+            if (sel != null && sel.size() == all.size()) {
+                sel.clear();
+            } else {
+                sel = new HashSet<>(all);
+            }
+            show("list");
+        });
+        findViewById(R.id.btn_sel_del).setOnClickListener(v -> {
+            if (sel == null || sel.isEmpty()) {
+                return;
+            }
+            List<String> ids = new ArrayList<>(sel);
+            sel = null;
+            gone(ids);
+        });
+        findViewById(R.id.snack_undo).setOnClickListener(v -> {
+            if (undo != null) {
+                store.restore(undo);
+                undo = null;
+                persist();
+            }
+            hideSnack();
+            show(page);
+        });
         show("list");
     }
 
     @Override
     public void onBackPressed() {
+        if (sel != null) {
+            sel = null;
+            show("list");
+            return;
+        }
         if ("catalog".equals(page)) {
             show(catalogBack);
             return;
@@ -80,51 +121,86 @@ public final class ListsActivity extends LoftActivity {
         store.save(this);
     }
 
-    /** Switches to a page by name and rebuilds it from the store. */
+    private void openMore(View v) {
+        PopupMenu m = new PopupMenu(this, v);
+        m.getMenu().add(0, 1, 0, R.string.split_sel);
+        m.getMenu().add(0, 2, 0, R.string.split_clear);
+        m.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == 1) {
+                sel = new HashSet<>();
+                show("list");
+            } else {
+                openClear(false);
+            }
+            return true;
+        });
+        m.show();
+    }
+
     private void show(String p) {
         page = p;
+        boolean list = "list".equals(p);
+        boolean selecting = list && sel != null;
+        findViewById(R.id.head).setVisibility(selecting ? View.GONE : View.VISIBLE);
+        findViewById(R.id.selbar).setVisibility(selecting ? View.VISIBLE : View.GONE);
+        findViewById(R.id.sw_split).setVisibility(list && !selecting ? View.VISIBLE : View.GONE);
+        findViewById(R.id.btn_more).setVisibility(list && !selecting ? View.VISIBLE : View.GONE);
+        if (selecting) {
+            int n = sel.size();
+            ((TextView) findViewById(R.id.sel_title)).setText(getString(R.string.split_sel_n, n));
+            findViewById(R.id.btn_sel_del).setEnabled(n > 0);
+        }
         TextView title = findViewById(R.id.title);
-        findViewById(R.id.sw_split).setVisibility("list".equals(p) ? View.VISIBLE : View.GONE);
         ViewGroup body = findViewById(R.id.body);
         body.removeAllViews();
-        View page;
+        View content;
         switch (p) {
             case "zones":
                 title.setText(R.string.zones);
-                page = zonesPage();
+                content = zonesPage();
                 break;
             case "zone":
                 title.setText(R.string.zone);
-                page = zonePage();
+                content = zonePage();
                 break;
             case "svc":
-                title.setText(R.string.service);
-                page = svcPage();
+                title.setText(R.string.network);
+                content = svcPage();
                 break;
             case "repo":
                 title.setText(R.string.repository);
-                page = repoPage();
+                content = repoPage();
                 break;
             case "catalog":
                 title.setText(R.string.catalog);
-                page = catalogPage();
+                content = catalogPage();
+                break;
+            case "excl":
+                SplitStore.Zone ez = store.zone(zoneId);
+                title.setText(getString(R.string.split_excl_title, ez == null ? zoneId : ez.name));
+                content = exclPage();
+                break;
+            case "imp":
+                title.setText(R.string.split_import_title);
+                content = impPage();
+                break;
+            case "exp":
+                title.setText(R.string.split_export_title);
+                content = expPage();
                 break;
             default:
-                title.setText(R.string.lists);
-                page = listPage();
+                title.setText(R.string.split);
+                content = listPage();
                 break;
         }
-        body.addView(page, new ViewGroup.LayoutParams(
+        body.addView(content, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
-    /**
-     * Main page: zone chips, the zone's policy, a searchable list of its
-     * services, add (a service or an ignore entry), and import / export as a
-     * .bat file and the repository page.
-     */
     private View listPage() {
         LinearLayout root = col();
+        root.addView(subline(Prefs.split(this)
+                ? getString(R.string.split_sub) : getString(R.string.split_sub_off)));
         LinearLayout zhead = row();
         zhead.addView(label(getString(R.string.zone)),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -137,6 +213,9 @@ public final class ListsActivity extends LoftActivity {
             b.setSelected(z.id.equals(zoneId));
             b.setOnClickListener(v -> {
                 zoneId = z.id;
+                if (sel != null) {
+                    sel.clear();
+                }
                 show("list");
             });
             chips.addView(b);
@@ -148,10 +227,7 @@ public final class ListsActivity extends LoftActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         hsLp.bottomMargin = dp(8);
         root.addView(hs, hsLp);
-        SplitStore.Zone z = store.zone(zoneId);
-        root.addView(policyLine(z != null && z.through
-                ? getString(R.string.policy_through, z.name)
-                : getString(R.string.policy_around, z == null ? zoneId : z.name)));
+        root.addView(policyOf(store.zone(zoneId)));
         EditText search = field("");
         search.setHint(getString(R.string.search));
         search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
@@ -176,9 +252,9 @@ public final class ListsActivity extends LoftActivity {
             @Override
             public View getView(int i, View conv, ViewGroup parent) {
                 if (conv == null) {
-                    conv = makeSvcRow();
+                    conv = getLayoutInflater().inflate(R.layout.row_split, parent, false);
                 }
-                bindSvcRow(conv, rows.get(i));
+                bindSvcRow((RevealFrame) conv, rows.get(i), false);
                 return conv;
             }
         };
@@ -186,113 +262,213 @@ public final class ListsActivity extends LoftActivity {
         empty.setVisibility(View.GONE);
         root.addView(empty);
         ListView lv = new ListView(this);
-        lv.setAdapter(adapter);
         lv.setDivider(new android.graphics.drawable.ColorDrawable(0));
         lv.setDividerHeight(dp(6));
         lv.setSelector(new android.graphics.drawable.ColorDrawable(0));
         lv.setNestedScrollingEnabled(true);
+        if (sel == null) {
+            LinearLayout tail = col(false);
+            int nx = store.exclCount(zoneId);
+            tail.addView(clickRow(getString(R.string.split_excl), nx + " ›",
+                    v -> show("excl")));
+            tail.addView(ghostSm("+ " + getString(R.string.add), v -> {
+                SplitStore.Svc s = new SplitStore.Svc();
+                s.zone = zoneId;
+                s.name = getString(R.string.service);
+                store.services.add(s);
+                persist();
+                editing = s.id;
+                show("svc");
+            }));
+            LinearLayout foot = row();
+            LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            footLp.topMargin = dp(10);
+            foot.setLayoutParams(footLp);
+            foot.addView(mini(getString(R.string.import_routes), v -> {
+                pendingRows = null;
+                show("imp");
+            }), weight(0));
+            foot.addView(mini(getString(R.string.export_routes), v -> show("exp")), weight(6));
+            foot.addView(mini(getString(R.string.repository), v -> show("repo")), weight(6));
+            tail.addView(foot);
+            lv.addFooterView(tail, null, false);
+        }
+        lv.setAdapter(adapter);
         Runnable paint = () -> {
             rows.clear();
-            rows.addAll(store.in(zoneId, search.getText().toString()));
+            rows.addAll(store.in(zoneId, sel != null ? "" : search.getText().toString()));
             empty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
             adapter.notifyDataSetChanged();
         };
         search.addTextChangedListener(new SimpleWatch(paint));
+        search.setVisibility(sel != null ? View.GONE : View.VISIBLE);
         paint.run();
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
-        root.addView(lv, lp);
-        Button add = ghostSm("+ " + getString(R.string.add), v -> new AlertDialog.Builder(this)
-                .setItems(new CharSequence[]{getString(R.string.add_service), getString(R.string.add_ignore)},
-                        (d, w) -> {
-                            SplitStore.Svc s = new SplitStore.Svc();
-                            s.zone = zoneId;
-                            if (w == 1) {
-                                s.name = "ignore";
-                                s.src = "ignore";
-                                s.ignore = true;
-                            } else {
-                                s.name = getString(R.string.service);
-                            }
-                            store.services.add(s);
-                            persist();
-                            editing = s.id;
-                            show("svc");
-                        })
-                .show());
-        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        addLp.topMargin = dp(6);
-        add.setLayoutParams(addLp);
-        root.addView(add);
-        LinearLayout foot = row();
-        LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        footLp.topMargin = dp(10);
-        foot.setLayoutParams(footLp);
-        foot.addView(mini(getString(R.string.import_routes), v -> {
-            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            i.addCategory(Intent.CATEGORY_OPENABLE);
-            i.setType("*/*");
-            startActivityForResult(i, REQ_IN);
-        }), weight(0));
-        foot.addView(mini(getString(R.string.export_routes), v -> {
-            Intent i = new Intent(Intent.ACTION_SEND);
-            i.setType("text/plain");
-            i.putExtra(Intent.EXTRA_TEXT, Bat.emit(store, zoneId));
-            i.putExtra(Intent.EXTRA_SUBJECT, zoneId + ".bat");
-            startActivity(Intent.createChooser(i, getString(R.string.export_routes)));
-        }), weight(6));
-        foot.addView(mini(getString(R.string.repository), v -> show("repo")), weight(6));
-        root.addView(foot);
+        root.addView(lv, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         return root;
     }
 
-    private View makeSvcRow() {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setLayoutParams(new android.widget.AbsListView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        row.setBackgroundResource(R.drawable.bg_card);
-        row.setPadding(dp(12), dp(10), dp(12), dp(10));
-        LinearLayout grow = col(false);
-        TextView n = new TextView(this);
-        n.setTag("n");
-        n.setTextColor(getColor(R.color.snow));
-        n.setTextSize(13.5f);
-        TextView m = new TextView(this);
-        m.setTag("m");
-        m.setTextColor(getColor(R.color.mute));
-        m.setTextSize(10.5f);
-        m.setTypeface(android.graphics.Typeface.MONOSPACE);
-        m.setMaxLines(1);
-        m.setEllipsize(TextUtils.TruncateAt.END);
-        grow.addView(n);
-        grow.addView(m);
-        row.addView(grow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        TextView src = meta("");
-        src.setTag("src");
-        row.addView(src);
-        return row;
+    private View exclPage() {
+        LinearLayout root = col();
+        root.addView(subline(getString(R.string.split_excl_sub)));
+        final List<SplitStore.Svc> rows = new ArrayList<>(store.excls(zoneId));
+        if (rows.isEmpty()) {
+            root.addView(hint(getString(R.string.split_excl_empty)));
+        } else {
+            final BaseAdapter adapter = new BaseAdapter() {
+                @Override
+                public int getCount() {
+                    return rows.size();
+                }
+
+                @Override
+                public Object getItem(int i) {
+                    return rows.get(i);
+                }
+
+                @Override
+                public long getItemId(int i) {
+                    return i;
+                }
+
+                @Override
+                public View getView(int i, View conv, ViewGroup parent) {
+                    if (conv == null) {
+                        conv = getLayoutInflater().inflate(R.layout.row_split, parent, false);
+                    }
+                    bindSvcRow((RevealFrame) conv, rows.get(i), true);
+                    return conv;
+                }
+            };
+            ListView lv = new ListView(this);
+            lv.setAdapter(adapter);
+            lv.setDivider(new android.graphics.drawable.ColorDrawable(0));
+            lv.setDividerHeight(dp(6));
+            lv.setSelector(new android.graphics.drawable.ColorDrawable(0));
+            root.addView(lv, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        }
+        root.addView(ghostSm("+ " + getString(R.string.add), v -> {
+            SplitStore.Svc s = new SplitStore.Svc();
+            s.zone = zoneId;
+            s.name = "ignore";
+            s.src = "ignore";
+            s.ignore = true;
+            store.services.add(s);
+            persist();
+            editing = s.id;
+            show("svc");
+        }));
+        if (!rows.isEmpty()) {
+            Button clr = danger(getString(R.string.split_excl_clear), 14);
+            clr.setOnClickListener(v -> openClear(true));
+            root.addView(clr);
+        }
+        return root;
     }
 
-    private void bindSvcRow(View row, SplitStore.Svc s) {
-        ((TextView) row.findViewWithTag("n")).setText(s.name);
-        ((TextView) row.findViewWithTag("m")).setText(SplitStore.preview(s.cidrs));
-        ((TextView) row.findViewWithTag("src")).setText(s.ignore ? getString(R.string.ignore)
-                : "repo".equals(s.src) ? getString(R.string.from_repo) : getString(R.string.mine));
-        row.setOnClickListener(v -> {
+    private void bindSvcRow(RevealFrame row, SplitStore.Svc s, boolean excl) {
+        row.settleNow(0);
+        TextView name = row.findViewById(R.id.name);
+        TextView sub = row.findViewById(R.id.sub);
+        TextView meta = row.findViewById(R.id.meta);
+        TextView src = row.findViewById(R.id.src);
+        TextView ck = row.findViewById(R.id.ck);
+        TextView act = row.findViewById(R.id.act_del);
+        name.setText(excl ? SplitStore.join(s.cidrs) : s.name);
+        if (excl) {
+            name.setTypeface(android.graphics.Typeface.MONOSPACE);
+            sub.setVisibility(View.GONE);
+            meta.setText(s.name);
+            src.setVisibility(View.GONE);
+            act.setText(R.string.split_back);
+        } else {
+            name.setTypeface(android.graphics.Typeface.DEFAULT);
+            sub.setVisibility(View.VISIBLE);
+            sub.setText(SplitStore.preview(s));
+            meta.setText(svcMeta(s));
+            src.setVisibility(View.VISIBLE);
+            src.setText("repo".equals(s.src) ? getString(R.string.from_repo) : getString(R.string.mine));
+            act.setText(R.string.delete);
+        }
+        boolean picking = sel != null && !excl;
+        ck.setVisibility(picking ? View.VISIBLE : View.GONE);
+        if (picking) {
+            boolean on = sel.contains(s.id);
+            ck.setBackgroundResource(on ? R.drawable.bg_ck_on : R.drawable.bg_ck);
+            ck.setText(on ? "✓" : "");
+            row.lock();
+        } else {
+            row.leftOnly();
+        }
+        row.setListener(new RevealFrame.Listener() {
+            @Override
+            public void onRevealStart(RevealFrame r) {
+                if (openSwipe != null && openSwipe != r) {
+                    openSwipe.close();
+                }
+                openSwipe = r;
+            }
+
+            @Override
+            public void onSettled(RevealFrame r, float tx) {
+            }
+        });
+        View card = row.findViewById(R.id.card);
+        card.setOnClickListener(v -> {
+            if (picking) {
+                if (sel.contains(s.id)) {
+                    sel.remove(s.id);
+                } else {
+                    sel.add(s.id);
+                }
+                show("list");
+                return;
+            }
             editing = s.id;
             show("svc");
         });
+        card.setOnLongClickListener(v -> {
+            if (excl || sel != null) {
+                return false;
+            }
+            sel = new HashSet<>();
+            sel.add(s.id);
+            show("list");
+            return true;
+        });
+        act.setOnClickListener(v -> gone(java.util.Collections.singletonList(s.id)));
     }
 
-    /**
-     * Edit one service: name, prefixes (one per line or comma separated; bad
-     * entries are dropped on save), its zone, and whether it is a route or an
-     * ignore exclusion.
-     */
+    private String svcMeta(SplitStore.Svc s) {
+        List<String> bits = new ArrayList<>();
+        if (!s.cidrs.isEmpty()) {
+            bits.add(getResources().getQuantityString(R.plurals.split_nets, s.cidrs.size(), s.cidrs.size()));
+        }
+        if (!s.domains.isEmpty()) {
+            bits.add(getResources().getQuantityString(R.plurals.split_doms, s.domains.size(), s.domains.size()));
+        }
+        return TextUtils.join(" · ", bits);
+    }
+
+    private View policyOf(SplitStore.Zone z) {
+        LinearLayout box = col(false);
+        String name = z == null ? zoneId : z.name;
+        String line = z != null && z.block ? getString(R.string.policy_block, name)
+                : z != null && z.through ? getString(R.string.policy_through, name)
+                : getString(R.string.policy_around, name);
+        box.addView(policyLine(line));
+        if (z != null && z.block) {
+            TextView d = hint(getString(R.string.split_block_d));
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) d.getLayoutParams();
+            lp.topMargin = 0;
+            lp.bottomMargin = dp(8);
+            box.addView(d);
+        }
+        return box;
+    }
+
     private View svcPage() {
         SplitStore.Svc s = store.svc(editing);
         if (s == null) {
@@ -303,45 +479,62 @@ public final class ListsActivity extends LoftActivity {
         }
         SplitStore.Svc svc = s;
         LinearLayout root = col();
-        root.addView(label(getString(R.string.name)));
-        EditText name = field(svc.name);
-        root.addView(name);
-        root.addView(label(getString(R.string.networks)));
-        EditText nets = field(SplitStore.join(svc.cidrs).replace(' ', '\n'));
-        nets.setMinLines(3);
-        nets.setGravity(Gravity.TOP);
-        root.addView(nets);
-        root.addView(label(getString(R.string.zone)));
-        LinearLayout zseg = new LinearLayout(this);
-        zseg.setOrientation(LinearLayout.HORIZONTAL);
-        int zi = 0;
-        for (int i = 0; i < store.zones.size(); i++) {
-            SplitStore.Zone z = store.zones.get(i);
-            Button b = chip(z.name);
-            if (z.id.equals(svc.zone)) {
-                zi = i;
-            }
-            zseg.addView(b);
-        }
-        Seg.bind(zseg, zi, i -> svc.zone = store.zones.get(i).id);
-        HorizontalScrollView hs = new HorizontalScrollView(this);
-        hs.addView(zseg);
-        root.addView(hs);
+        root.addView(subline(svc.ignore
+                ? getString(R.string.split_add_body_ignore) : getString(R.string.split_add_body)));
         LinearLayout kind = new LinearLayout(this);
         kind.setOrientation(LinearLayout.HORIZONTAL);
         Button route = chip(getString(R.string.kind_route));
         Button ign = chip(getString(R.string.kind_ignore));
         kind.addView(route);
         kind.addView(ign);
-        Seg.bind(kind, svc.ignore ? 1 : 0, i -> {
-            svc.ignore = i == 1;
-            svc.src = svc.ignore ? "ignore" : "me";
-        });
         LinearLayout.LayoutParams kindLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         kindLp.bottomMargin = dp(8);
         kind.setLayoutParams(kindLp);
         root.addView(kind);
+        root.addView(label(getString(R.string.networks)));
+        EditText nets = field(SplitStore.join(svc.cidrs).replace(' ', '\n'));
+        nets.setMinLines(3);
+        nets.setGravity(Gravity.TOP);
+        root.addView(nets);
+        TextView domLab = label(getString(R.string.domains));
+        EditText doms = field(TextUtils.join("\n", svc.domains));
+        doms.setMinLines(2);
+        doms.setGravity(Gravity.TOP);
+        TextView domHint = hint(getString(R.string.domains_d));
+        root.addView(domLab);
+        root.addView(doms);
+        root.addView(domHint);
+        root.addView(label(getString(R.string.name)));
+        EditText name = field(svc.name);
+        root.addView(name);
+        root.addView(label(getString(R.string.zone)));
+        LinearLayout zseg = new LinearLayout(this);
+        zseg.setOrientation(LinearLayout.HORIZONTAL);
+        int zi = 0;
+        for (int i = 0; i < store.zones.size(); i++) {
+            SplitStore.Zone z = store.zones.get(i);
+            zseg.addView(chip(z.name));
+            if (z.id.equals(svc.zone)) {
+                zi = i;
+            }
+        }
+        Seg.bind(zseg, zi, i -> svc.zone = store.zones.get(i).id);
+        HorizontalScrollView hs = new HorizontalScrollView(this);
+        hs.addView(zseg);
+        root.addView(hs);
+        Runnable kindUi = () -> {
+            int vis = svc.ignore ? View.GONE : View.VISIBLE;
+            domLab.setVisibility(vis);
+            doms.setVisibility(vis);
+            domHint.setVisibility(vis);
+        };
+        Seg.bind(kind, svc.ignore ? 1 : 0, i -> {
+            svc.ignore = i == 1;
+            svc.src = svc.ignore ? "ignore" : "me";
+            kindUi.run();
+        });
+        kindUi.run();
         Button save = go(getString(R.string.save), 14);
         save.setOnClickListener(v -> {
             svc.name = name.getText().toString().trim();
@@ -352,19 +545,26 @@ public final class ListsActivity extends LoftActivity {
                     svc.cidrs.add(c.display());
                 }
             }
+            svc.domains.clear();
+            if (!svc.ignore) {
+                for (String line : doms.getText().toString().split("[\\s,]+")) {
+                    String d = line.trim().toLowerCase();
+                    if (!d.isEmpty() && !svc.domains.contains(d)) {
+                        svc.domains.add(d);
+                    }
+                }
+            }
             persist();
             show("list");
         });
         root.addView(save);
-        if (!svc.ignore) {
-            Button del = danger(getString(R.string.delete), 8);
-            del.setOnClickListener(v -> {
-                store.services.remove(svc);
-                persist();
-                show("list");
-            });
-            root.addView(del);
-        }
+        Button del = danger(getString(svc.ignore ? R.string.split_del_excl : R.string.split_del_svc), 8);
+        del.setOnClickListener(v -> {
+            String id = svc.id;
+            show("list");
+            gone(java.util.Collections.singletonList(id));
+        });
+        root.addView(del);
         return scroll(root);
     }
 
@@ -384,8 +584,7 @@ public final class ListsActivity extends LoftActivity {
             n.setTextColor(getColor(R.color.snow));
             row.addView(n);
             TextView m = new TextView(this);
-            m.setText((z.through ? getString(R.string.through_loft) : getString(R.string.around_loft))
-                    + " · " + store.count(z.id));
+            m.setText(dirLabel(z) + " · " + store.count(z.id));
             m.setTextColor(getColor(R.color.mute));
             m.setTextSize(10.5f);
             m.setPadding(0, dp(2), 0, 0);
@@ -409,6 +608,13 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    private String dirLabel(SplitStore.Zone z) {
+        if (z.block) {
+            return getString(R.string.split_blocked);
+        }
+        return getString(z.through ? R.string.through_loft : R.string.around_loft);
+    }
+
     private View zonePage() {
         SplitStore.Zone z = store.zone(editing);
         if (z == null) {
@@ -420,16 +626,24 @@ public final class ListsActivity extends LoftActivity {
         name.setEnabled(!z.builtin);
         root.addView(label(getString(R.string.zone_name)));
         root.addView(name);
+        root.addView(label(getString(R.string.split_rdef)));
         LinearLayout dir = new LinearLayout(this);
         dir.setOrientation(LinearLayout.HORIZONTAL);
-        dir.addView(chip(getString(R.string.through_loft)));
-        dir.addView(chip(getString(R.string.around_loft)));
-        Seg.bind(dir, z.through ? 0 : 1, i -> z.through = i == 0);
+        dir.addView(segBtn(getString(R.string.through_loft)));
+        dir.addView(segBtn(getString(R.string.around_loft)));
+        dir.addView(segBtn(getString(R.string.split_block)));
+        TextView blockD = hint(getString(R.string.split_block_d));
+        Seg.bind(dir, z.dir(), i -> {
+            z.setDir(i);
+            blockD.setVisibility(i == 2 ? View.VISIBLE : View.GONE);
+        });
         LinearLayout.LayoutParams dirLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dirLp.bottomMargin = dp(14);
+        dirLp.bottomMargin = dp(8);
         dir.setLayoutParams(dirLp);
         root.addView(dir);
+        blockD.setVisibility(z.block ? View.VISIBLE : View.GONE);
+        root.addView(blockD);
         root.addView(label(getString(R.string.list_url)));
         EditText url = urlField(z.repo);
         root.addView(urlRow(url, v -> {
@@ -457,11 +671,11 @@ public final class ListsActivity extends LoftActivity {
                 show("zones");
             });
             root.addView(del);
+            root.addView(hint(getString(R.string.split_zones_move)));
         }
         return scroll(root);
     }
 
-    /** Repository settings of the current zone: list URL, auto-update switch, and "pull" to download now. */
     private View repoPage() {
         SplitStore.Zone z = store.zone(zoneId);
         LinearLayout root = col();
@@ -492,13 +706,81 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
+    private View impPage() {
+        LinearLayout root = col();
+        root.addView(subline(getString(R.string.split_import_body)));
+        if (pendingRows == null) {
+            root.addView(ghostSm(getString(R.string.from_file), v -> {
+                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("*/*");
+                startActivityForResult(i, REQ_IN);
+            }));
+            return scroll(root);
+        }
+        root.addView(hint(getString(R.string.split_import_detect, pendingRows.size())));
+        root.addView(label(getString(R.string.zone)));
+        LinearLayout zseg = new LinearLayout(this);
+        zseg.setOrientation(LinearLayout.HORIZONTAL);
+        int zi = 0;
+        String dest = pendingHint;
+        if (store.zone(dest) == null) {
+            dest = zoneId;
+        }
+        final String[] hold = {dest};
+        for (int i = 0; i < store.zones.size(); i++) {
+            SplitStore.Zone z = store.zones.get(i);
+            zseg.addView(chip(z.name));
+            if (z.id.equals(dest)) {
+                zi = i;
+            }
+        }
+        Seg.bind(zseg, zi, i -> hold[0] = store.zones.get(i).id);
+        HorizontalScrollView hs = new HorizontalScrollView(this);
+        hs.addView(zseg);
+        root.addView(hs);
+        Button go = go(getString(R.string.split_import_go, pendingRows.size()), 14);
+        go.setOnClickListener(v -> {
+            int n = store.addRows(hold[0], pendingRows);
+            pendingRows = null;
+            persist();
+            Toast.makeText(this, getString(R.string.split_import_go, n), Toast.LENGTH_SHORT).show();
+            show("list");
+        });
+        root.addView(go);
+        return scroll(root);
+    }
+
+    private View expPage() {
+        LinearLayout root = col();
+        root.addView(subline(getString(R.string.split_export_body)));
+        String bat = Bat.emitAll(store);
+        TextView prev = new TextView(this);
+        prev.setText(bat);
+        prev.setTextColor(getColor(R.color.stone));
+        prev.setTextSize(11);
+        prev.setTypeface(android.graphics.Typeface.MONOSPACE);
+        prev.setPadding(dp(12), dp(10), dp(12), dp(10));
+        prev.setBackgroundResource(R.drawable.bg_field);
+        root.addView(prev);
+        Button save = go(getString(R.string.split_export_save), 14);
+        save.setOnClickListener(v -> {
+            Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("text/plain");
+            i.putExtra(Intent.EXTRA_TEXT, bat);
+            i.putExtra(Intent.EXTRA_SUBJECT, "loft-routes.bat");
+            startActivity(Intent.createChooser(i, getString(R.string.export_routes)));
+        });
+        root.addView(save);
+        return scroll(root);
+    }
+
     private void openCatalog(String zone, String back) {
         catalogZone = zone;
         catalogBack = back;
         show("catalog");
     }
 
-    /** Ready-made lists from the loft-routes repository; picking one sets the zone's list URL. */
     private View catalogPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.catalog_d)));
@@ -546,10 +828,6 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
-    /**
-     * Downloads the zone's .bat list and replaces the zone's repository
-     * services with it; user-added services stay.
-     */
     private void pull(SplitStore.Zone z) {
         if (z.repo == null || z.repo.isEmpty()) {
             Toast.makeText(this, R.string.no_url, Toast.LENGTH_SHORT).show();
@@ -569,8 +847,101 @@ public final class ListsActivity extends LoftActivity {
         }).start();
     }
 
-    // Imported .bat file: goes to the zone named in its "REM zone:" header
-    // when that zone exists, otherwise to the zone on screen.
+    private void gone(List<String> ids) {
+        SplitStore.Snap snap = store.snap();
+        SplitStore.Gone g = store.removeSvcs(ids);
+        if (g.n == 0) {
+            return;
+        }
+        persist();
+        undo = snap;
+        String what;
+        if (g.n == 1) {
+            what = getString(R.string.split_gone, "1");
+            SplitStore.Svc one = null;
+            for (SplitStore.Svc s : snap.services) {
+                if (ids.contains(s.id)) {
+                    one = s;
+                    break;
+                }
+            }
+            if (one != null) {
+                what = getString(one.ignore ? R.string.split_gone_back : R.string.split_gone,
+                        one.ignore && !one.cidrs.isEmpty() ? one.cidrs.get(0) : one.name);
+            }
+        } else {
+            what = getString(R.string.split_gone_n, g.n);
+        }
+        if (g.toExcl) {
+            what = what + " · " + getString(R.string.split_gone_excl);
+        }
+        snack(what);
+        show("list".equals(page) || "excl".equals(page) ? page : "list");
+    }
+
+    private void openClear(boolean excl) {
+        SplitStore.Zone z = store.zone(zoneId);
+        String name = z == null ? zoneId : z.name;
+        int mine = 0;
+        int total = 0;
+        for (SplitStore.Svc s : store.in(zoneId, "")) {
+            total++;
+            if ("me".equals(s.src)) {
+                mine++;
+            }
+        }
+        int fromList = total - mine;
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        if (excl) {
+            b.setTitle(getString(R.string.split_excl_clear_t, name));
+            b.setMessage(R.string.split_excl_clear_sub);
+            b.setPositiveButton(R.string.split_excl_clear, (d, w) -> {
+                SplitStore.Snap snap = store.snap();
+                store.clearZone(zoneId, "excl");
+                persist();
+                undo = snap;
+                snack(getString(R.string.split_gone_clear, name));
+                show("excl");
+            });
+        } else {
+            b.setTitle(getString(R.string.split_clear_t, name));
+            b.setMessage(fromList > 0 ? R.string.split_clear_sub : R.string.split_clear_sub1);
+            if (fromList > 0 && mine > 0) {
+                b.setNeutralButton(getString(R.string.split_clear_me, mine), (d, w) -> doClear("me", name));
+                b.setPositiveButton(getString(R.string.split_clear_all, total), (d, w) -> doClear("all", name));
+            } else if (fromList > 0) {
+                b.setPositiveButton(getString(R.string.split_clear_all, total), (d, w) -> doClear("all", name));
+            } else {
+                b.setPositiveButton(getString(R.string.split_clear_n, mine), (d, w) -> doClear("me", name));
+            }
+        }
+        b.setNegativeButton(R.string.cancel, null);
+        b.show();
+    }
+
+    private void doClear(String how, String name) {
+        SplitStore.Snap snap = store.snap();
+        store.clearZone(zoneId, how);
+        persist();
+        undo = snap;
+        snack(getString(R.string.split_gone_clear, name));
+        show("list");
+    }
+
+    private void snack(String text) {
+        TextView t = findViewById(R.id.snack_t);
+        t.setText(text);
+        findViewById(R.id.snack).setVisibility(View.VISIBLE);
+        main.removeCallbacks(hideSnack);
+        main.postDelayed(hideSnack, 5000);
+    }
+
+    private void hideSnack() {
+        findViewById(R.id.snack).setVisibility(View.GONE);
+        main.removeCallbacks(hideSnack);
+        undo = null;
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -582,15 +953,9 @@ public final class ListsActivity extends LoftActivity {
                 return;
             }
             String body = read(in);
-            String hint = Bat.zoneHint(body);
-            String dest = hint.isEmpty() ? zoneId : hint;
-            if (store.zone(dest) == null) {
-                dest = zoneId;
-            }
-            store.replaceRepo(dest, Bat.parse(body));
-            persist();
-            Toast.makeText(this, R.string.imported, Toast.LENGTH_SHORT).show();
-            show("list");
+            pendingHint = Bat.zoneHint(body);
+            pendingRows = Bat.parse(body);
+            show("imp");
         } catch (Exception e) {
             Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
         }
@@ -604,6 +969,23 @@ public final class ListsActivity extends LoftActivity {
             o.write(b, 0, n);
         }
         return o.toString(StandardCharsets.UTF_8.name());
+    }
+
+    private LinearLayout clickRow(String n, String m, View.OnClickListener l) {
+        LinearLayout row = row();
+        row.setBackgroundResource(R.drawable.bg_card);
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(8);
+        row.setLayoutParams(lp);
+        TextView t = snow(n);
+        t.setTextSize(13.5f);
+        row.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView meta = meta(m);
+        row.addView(meta);
+        row.setOnClickListener(l);
+        return row;
     }
 
     private LinearLayout col() {
@@ -644,6 +1026,13 @@ public final class ListsActivity extends LoftActivity {
         return lp;
     }
 
+    private Button segBtn(String t) {
+        Button b = inflateBtn(R.layout.btn_seg);
+        b.setText(t);
+        b.setLayoutParams(new LinearLayout.LayoutParams(0, dp(32), 1));
+        return b;
+    }
+
     private Button chip(String t) {
         Button b = inflateBtn(R.layout.btn_chip);
         b.setText(t);
@@ -680,6 +1069,10 @@ public final class ListsActivity extends LoftActivity {
         Button b = inflateBtn(R.layout.btn_ghost_sm);
         b.setText(t);
         b.setOnClickListener(l);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(6);
+        b.setLayoutParams(lp);
         return b;
     }
 

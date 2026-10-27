@@ -35,6 +35,8 @@ public final class RevealFrame extends FrameLayout {
     private int slop;
     private float reveal;
     private float thresh;
+    private float minTx;
+    private float maxTx;
 
     public RevealFrame(Context c) {
         super(c);
@@ -55,6 +57,8 @@ public final class RevealFrame extends FrameLayout {
         float d = c.getResources().getDisplayMetrics().density;
         reveal = REVEAL_DP * d;
         thresh = THRESH_DP * d;
+        minTx = -reveal;
+        maxTx = reveal;
         slop = ViewConfiguration.get(c).getScaledTouchSlop();
         // Clip the action layer, not this frame: clipping the card to the
         // same 12dp round eats its 1dp stroke and lets Edit/Delete tint
@@ -82,6 +86,19 @@ public final class RevealFrame extends FrameLayout {
 
     void setListener(Listener l) {
         listener = l;
+    }
+
+    /** List rows only swipe left (Delete / Restore). */
+    void leftOnly() {
+        minTx = -reveal;
+        maxTx = 0f;
+    }
+
+    /** Selection mode: the card does not slide. */
+    void lock() {
+        minTx = 0f;
+        maxTx = 0f;
+        settleNow(0);
     }
 
     View card() {
@@ -189,7 +206,7 @@ public final class RevealFrame extends FrameLayout {
             }
             float dx = e.getX() - x0;
             float dy = e.getY() - y0;
-            if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
+            if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy) && maxTx > minTx) {
                 beginDrag();
                 return true;
             }
@@ -213,11 +230,11 @@ public final class RevealFrame extends FrameLayout {
         if (act == MotionEvent.ACTION_MOVE) {
             float dx = e.getX() - x0;
             float dy = e.getY() - y0;
-            if (!dragging && Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
+            if (!dragging && Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy) && maxTx > minTx) {
                 beginDrag();
             }
             if (dragging) {
-                c.setTranslationX(clamp(start + dx, -reveal, reveal));
+                c.setTranslationX(clamp(start + dx, minTx, maxTx));
                 syncActions();
             }
             return true;
@@ -227,10 +244,10 @@ public final class RevealFrame extends FrameLayout {
                 dragging = false;
                 float x = c.getTranslationX();
                 float target = 0;
-                if (x > thresh) {
-                    target = reveal;
-                } else if (x < -thresh) {
-                    target = -reveal;
+                if (x > thresh && maxTx > 0) {
+                    target = maxTx;
+                } else if (x < -thresh && minTx < 0) {
+                    target = minTx;
                 }
                 snap(target);
                 return true;
