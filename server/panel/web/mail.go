@@ -1,5 +1,14 @@
 package web
 
+// mail.go is the panel's Mail screen: mail domains, mailboxes and aliases
+// for the server's own mail system (Postfix sends and receives, Dovecot
+// keeps the boxes). panel-adm, the root helper reached through admproto,
+// keeps mail.json and writes the mail daemons' files. The panel side does
+// the parts that need no root: it hashes mailbox passwords, checks the
+// domain's DNS records, creates missing ones through the zone's DNS
+// provider (see domains.go and dns.go), and hands the helper the
+// certificates of mail.<domain> issued on the Domains screen.
+
 import (
 	"context"
 	"crypto/rand"
@@ -23,10 +32,9 @@ import (
 	"github.com/a3app/loft/server/panel/auth"
 )
 
-// Mail: the helper keeps mail.json and writes the daemons' files; the panel
-// hashes passwords, checks DNS, creates the missing records through the
-// zone's provider and hands the helper the certificates of mail.<domain>.
-
+// mailCache is the panel's in-memory mail state: the domains seen last (so
+// certificates can be synced without asking the helper again), a checksum
+// of the certificates the helper already has, and recent statistics.
 type mailCache struct {
 	mu      sync.Mutex
 	domains []string // the last mail domains seen, for the certificate sync
@@ -52,12 +60,16 @@ func mailHash(pw string) (string, error) {
 	return fmt.Sprintf("{ARGON2ID}$argon2id$v=%d$m=19456,t=2,p=1$%s$%s", argon2.Version, b64.EncodeToString(salt), b64.EncodeToString(key)), nil
 }
 
+// mailJSON is the Mail screen's data: the helper's view plus the panel
+// logins (to pick a box owner) and the zones known on the Domains screen.
 type mailJSON struct {
 	admproto.MailView
 	Users []string `json:"users"` // panel logins, for the owner list
 	Zones []string `json:"zones"` // zones on the Domains screen
 }
 
+// mailRemember stores the current list of mail domain names for later
+// certificate syncs.
 func (s *Server) mailRemember(v admproto.MailView) {
 	var ds []string
 	for _, d := range v.Domains {
@@ -68,6 +80,7 @@ func (s *Server) mailRemember(v admproto.MailView) {
 	s.mail.mu.Unlock()
 }
 
+// mailOut replies with the mail view, adding panel logins and zone names.
 func (s *Server) mailOut(w http.ResponseWriter, v admproto.MailView) {
 	s.mailRemember(v)
 	out := mailJSON{MailView: v, Users: []string{}, Zones: []string{}}
@@ -83,6 +96,9 @@ func (s *Server) mailOut(w http.ResponseWriter, v admproto.MailView) {
 	ok(w, out)
 }
 
+// mailGet returns the mail state. If certificates changed since the helper
+// last got them, it sends them first and reads the state again, so the
+// screen shows them as installed.
 func (s *Server) mailGet(w http.ResponseWriter, r *http.Request) {
 	var v admproto.MailView
 	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpMail, nil, &v); err != nil {
@@ -95,7 +111,10 @@ func (s *Server) mailGet(w http.ResponseWriter, r *http.Request) {
 	s.mailOut(w, v)
 }
 
-// mailSave runs a save and answers with the new state.
+// mailSave runs a save and answers with the new state. It is shared by the
+// domain, box, alias and apply handlers; target names the change in the
+// audit log. Certificates are synced afterwards, since a new domain may now
+// have one.
 func (s *Server) mailSave(w http.ResponseWriter, r *http.Request, op string, body any, target string) {
 	auditTarget(r, target)
 	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
@@ -112,6 +131,7 @@ func (s *Server) mailSave(w http.ResponseWriter, r *http.Request, op string, bod
 	s.mailOut(w, v)
 }
 
+// mailDomain adds or changes a mail domain.
 func (s *Server) mailDomain(w http.ResponseWriter, r *http.Request) {
 	var in admproto.MailDomainSave
 	if !readJSON(w, r, 16<<10, &in) {
@@ -120,6 +140,9 @@ func (s *Server) mailDomain(w http.ResponseWriter, r *http.Request) {
 	s.mailSave(w, r, admproto.OpMailDomain, in, in.Name)
 }
 
+// mailBox adds, changes or deletes a mailbox. A new password is hashed here,
+// so the helper never sees it in plain text; an empty password keeps the old
+// one. The owner, if set, must be an existing panel login.
 func (s *Server) mailBox(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		admproto.MailBox
@@ -149,6 +172,8 @@ func (s *Server) mailBox(w http.ResponseWriter, r *http.Request) {
 	s.mailSave(w, r, admproto.OpMailBox, req, req.Address)
 }
 
+// mailAlias adds, changes or deletes an alias (an address that forwards to
+// other addresses).
 func (s *Server) mailAlias(w http.ResponseWriter, r *http.Request) {
 	var in admproto.MailAliasSave
 	if !readJSON(w, r, 64<<10, &in) {
@@ -157,10 +182,13 @@ func (s *Server) mailAlias(w http.ResponseWriter, r *http.Request) {
 	s.mailSave(w, r, admproto.OpMailAlias, in, in.From)
 }
 
+// mailApply asks the helper to write all mail files again from mail.json.
 func (s *Server) mailApply(w http.ResponseWriter, r *http.Request) {
 	s.mailSave(w, r, admproto.OpMailApply, nil, "")
 }
 
+// mailStats returns queue and traffic counters, asking the helper at most
+// once a minute; the rest of the time it answers from the cache.
 func (s *Server) mailStats(w http.ResponseWriter, r *http.Request) {
 	s.mail.mu.Lock()
 	st, at := s.mail.stats, s.mail.statsAt
@@ -320,6 +348,9 @@ func mailNeeds(d admproto.MailDomain, ips []net.IP) []mailRec {
 	return out
 }
 
+// lookupState asks public DNS for r and sets its State: ok, missing, or
+// differs (with what is there now in Now). For SPF, HELO and DMARC only
+// records of that kind count, and any policy of the domain's own is accepted.
 func lookupState(ctx context.Context, r *mailRec) {
 	rv := publicDNS
 	var got []string
@@ -363,6 +394,8 @@ func lookupState(ctx context.Context, r *mailRec) {
 	}
 }
 
+// mailDomainOf fetches the mail view from the helper and picks the domain
+// called name from it.
 func (s *Server) mailDomainOf(ctx context.Context, by, name string) (admproto.MailDomain, admproto.MailView, error) {
 	var v admproto.MailView
 	if err := s.Adm(by).Call(ctx, admproto.OpMail, nil, &v); err != nil {
@@ -386,6 +419,7 @@ func (s *Server) mailDNS(w http.ResponseWriter, r *http.Request) {
 		admFail(w, err)
 		return
 	}
+	// 1. Build the wanted records and find the zone and its provider, if any.
 	ips := ServerIPs()
 	recs := mailNeeds(d, ips)
 	s.dom.mu.Lock()
@@ -399,12 +433,15 @@ func (s *Server) mailDNS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.dom.mu.Unlock()
+	// 2. Look every record up in public DNS at once.
 	var wg sync.WaitGroup
 	for i := range recs {
 		wg.Add(1)
 		go func() { defer wg.Done(); lookupState(ctx, &recs[i]) }()
 	}
 	wg.Wait()
+	// 3. With a provider, its own record list decides what still needs
+	// writing (public DNS can lag or show registrar forwarding).
 	var have []Record
 	if dns != nil {
 		have, _ = dns.Records(ctx, zone)
@@ -416,6 +453,10 @@ func (s *Server) mailDNS(w http.ResponseWriter, r *http.Request) {
 		}
 		recs[i].Auto = mailAuto(api, recs[i])
 	}
+	// 4. The reverse name (PTR) of each server address should be the HELO
+	// name, because many receivers distrust mail from an address whose PTR
+	// does not match. Only the hosting provider can set it, so this is a
+	// check only.
 	var ptr []map[string]string
 	for _, ip := range ips {
 		names, _ := net.DefaultResolver.LookupAddr(ctx, ip.String())
@@ -448,6 +489,8 @@ func mailAuto(api bool, r mailRec) bool {
 	return r.State == "differs" && (r.Key == "mx" || r.Key == "a" || r.Key == "dkim")
 }
 
+// dnsValEq compares two record values ignoring case, a trailing dot and
+// extra spaces.
 func dnsValEq(a, b string) bool {
 	norm := func(v string) string {
 		return strings.Join(strings.Fields(strings.TrimSuffix(strings.ToLower(v), ".")), " ")
@@ -455,6 +498,7 @@ func dnsValEq(a, b string) bool {
 	return norm(a) == norm(b)
 }
 
+// sameNameType returns the records in have with rec's type and name.
 func sameNameType(have []Record, rec Record) []Record {
 	var out []Record
 	for _, x := range have {
@@ -465,6 +509,8 @@ func sameNameType(have []Record, rec Record) []Record {
 	return out
 }
 
+// hasTXTPrefix reports whether name has a TXT record starting with prefix
+// (such as "v=spf1"), whatever the rest says.
 func hasTXTPrefix(have []Record, name, prefix string) bool {
 	for _, x := range have {
 		if x.Type == "TXT" && strings.EqualFold(x.Name, name) && strings.HasPrefix(strings.TrimSpace(x.Value), prefix) {
@@ -474,6 +520,8 @@ func hasTXTPrefix(have []Record, name, prefix string) bool {
 	return false
 }
 
+// recIDDesc orders records by provider ID, highest first; IDs that are both
+// numbers are compared as numbers, others as text.
 func recIDDesc(a, b Record) bool {
 	ia, ea := strconv.Atoi(a.ID)
 	ib, eb := strconv.Atoi(b.ID)
@@ -483,6 +531,10 @@ func recIDDesc(a, b Record) bool {
 	return a.ID > b.ID
 }
 
+// mailNeedWrite decides from the provider's record list whether rec must be
+// written: SPF/HELO/DMARC only when the name has none of that kind; MX and
+// DKIM unless exactly one record with the right value exists; A/AAAA unless
+// the address is among those at the name.
 func mailNeedWrite(have []Record, rec mailRec, zone string) bool {
 	dr := Record{Type: rec.Type, Name: relName(rec.Name, zone), Value: rec.Value, Priority: rec.Prio}
 	same := sameNameType(have, dr)
@@ -505,6 +557,8 @@ func mailNeedWrite(have []Record, rec mailRec, zone string) bool {
 // syncMailRec writes rec through the provider. Public DNS is not the source:
 // Namecheap forwarding MX lives outside setHosts, so lookup can say "differs"
 // while getHosts has no MX at all. SPF/DMARC/HELO with any own TXT stay.
+// MX and DKIM replace the first existing record of that name and delete the
+// extra ones; other records are added. It returns 1 when it wrote something.
 func (s *Server) syncMailRec(ctx context.Context, z *zoneRec, api DNSProvider, have []Record, rec mailRec) (int, error) {
 	if !mailNeedWrite(have, rec, z.Name) {
 		return 0, nil
@@ -574,6 +628,8 @@ func (s *Server) mailDNSCreate(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	// Write each record, re-reading the provider's list after every change so
+	// the next decision sees it.
 	made := 0
 	for _, rec := range recs {
 		n, err := s.syncMailRec(ctx, z, api, have, rec)

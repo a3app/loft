@@ -1,5 +1,13 @@
 package web
 
+// presence.go shows who is online. A member is a person with a key to the
+// overlay network; each of their devices is an instance. The node writes
+// node-status.json with who is attached right now and its relays (other
+// nodes that carry traffic for this one); panel-adm hands that file over.
+// The panel adds memory: it remembers when each device of each member was
+// last seen, in seen.json, so the UI can show "last seen" for offline
+// members too.
+
 import (
 	"context"
 	"encoding/json"
@@ -13,9 +21,9 @@ import (
 	"github.com/a3app/loft/server/panel/store"
 )
 
-// Presence: the node says who is attached now (node-status.json); the panel
-// remembers when each device of each member was last seen (seen.json).
-
+// nodeStatus is the part of node-status.json the panel reads: when it was
+// written, each attached device, and each relay with its load and last
+// heartbeat.
 type nodeStatus struct {
 	At      time.Time `json:"at"`
 	Members []struct {
@@ -40,12 +48,17 @@ type nodeStatus struct {
 	} `json:"relays"`
 }
 
+// presence is the last-seen memory, loaded from path on first use and
+// written back after every update.
 type presence struct {
 	mu   sync.Mutex
 	seen map[string]map[string]time.Time // member → instance → last seen
 	path string
 }
 
+// memberPresence is one member's line in the UI: how many devices are online
+// now, how many were ever seen, when one was last seen, and the address,
+// front and traffic of the live connection.
 type memberPresence struct {
 	Online  int       `json:"online"`
 	Devices int       `json:"devices"`
@@ -58,6 +71,7 @@ type memberPresence struct {
 	Key     string    `json:"key,omitempty"` // "current" or "old"; "old" wins if any device still pins the previous key
 }
 
+// readPresence fetches node-status.json through the helper.
 func (s *Server) readPresence(ctx context.Context) (nodeStatus, error) {
 	var st nodeStatus
 	var raw json.RawMessage
@@ -72,6 +86,9 @@ func (s *Server) readPresence(ctx context.Context) (nodeStatus, error) {
 }
 
 // track records what the node reports and returns the members' view.
+// A status file older than a minute is treated as stale (the node is
+// probably stopped), so nobody counts as online, but saved last-seen times
+// are still reported.
 func (s *Server) track(st nodeStatus) map[string]memberPresence {
 	p := &s.pres
 	p.mu.Lock()
@@ -126,6 +143,8 @@ func (s *Server) track(st nodeStatus) map[string]memberPresence {
 	return out
 }
 
+// presenceGet returns the members' presence, the relays, and how many
+// connected devices trust the current or the old controller key.
 func (s *Server) presenceGet(w http.ResponseWriter, r *http.Request) {
 	st, err := s.readPresence(r.Context())
 	if err != nil {

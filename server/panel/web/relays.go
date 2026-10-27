@@ -37,11 +37,11 @@ type relayInstall struct {
 	Key            string   `json:"key"`
 	ControllerURL  string   `json:"controller_url"`
 	ControllerURLs []string `json:"controller_urls"` // the controller, then standby controllers
-	ControllerPub string `json:"controller_pub"`
-	Advertise     string `json:"advertise"`
-	Version       string `json:"version"`
-	Command       string `json:"command"`
-	Config        string `json:"config"` // node.conf for the relay host
+	ControllerPub  string   `json:"controller_pub"`
+	Advertise      string   `json:"advertise"`
+	Version        string   `json:"version"`
+	Command        string   `json:"command"`
+	Config         string   `json:"config"` // node.conf for the relay host
 }
 
 // relayReleases is where loft-node release archives are fetched from; tests
@@ -70,6 +70,8 @@ func (s *Server) relayKeyShow(w http.ResponseWriter, r *http.Request) {
 	s.relayInstallReply(w, r, admproto.OpRelayGet, id)
 }
 
+// relayInstallReply builds the install for relay id (op decides whether
+// the key is new or the stored one) and replies with it.
 func (s *Server) relayInstallReply(w http.ResponseWriter, r *http.Request, op, id string) {
 	inst, err := s.relayInstall(r.Context(), userOf(r).Login, op, id)
 	if err != nil {

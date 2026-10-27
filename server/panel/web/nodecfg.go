@@ -1,5 +1,12 @@
 package web
 
+// nodecfg.go is the Node screen: node.conf settings, the named lists in
+// lists.conf, the service log and the node's secret token. The node is
+// loft-node, the proxy daemon this panel manages; panel-adm (the root
+// helper) reads and writes its files. Saving restarts the node, and the
+// node may carry the browser's own connection to the panel, so saves run as
+// background jobs (see jobs.go) that the UI polls.
+
 import (
 	"context"
 	"fmt"
@@ -12,10 +19,9 @@ import (
 	"github.com/a3app/loft/server/panel/admproto"
 )
 
-// The Node screen: node.conf commands, lists, the service log, the token.
-// Saving restarts the node (which carries the browser's connection), so
-// saves run as jobs.
-
+// nodeCfg returns the node's settings. The mask public key is blanked for
+// roles that may only view the node: keys and tokens are shown only to
+// those who may change them.
 func (s *Server) nodeCfg(w http.ResponseWriter, r *http.Request) {
 	var v admproto.NodeConfig
 	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpNodeConfig, nil, &v); err != nil {
@@ -28,6 +34,8 @@ func (s *Server) nodeCfg(w http.ResponseWriter, r *http.Request) {
 	ok(w, v)
 }
 
+// nodeCfgSave writes node.conf through the helper as a job; the node
+// restarts (relays only reload).
 func (s *Server) nodeCfgSave(w http.ResponseWriter, r *http.Request) {
 	var in admproto.NodeConfig
 	if !readJSON(w, r, 64<<10, &in) {
@@ -43,6 +51,8 @@ func (s *Server) nodeCfgSave(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// nodeLists replaces lists.conf (named lists of addresses or names the node
+// config refers to) as a job; the node reloads.
 func (s *Server) nodeLists(w http.ResponseWriter, r *http.Request) {
 	var in admproto.NodeLists
 	if !readJSON(w, r, 8<<20, &in) {
@@ -58,6 +68,7 @@ func (s *Server) nodeLists(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// nodeLog returns the tail of the node service's log.
 func (s *Server) nodeLog(w http.ResponseWriter, r *http.Request) {
 	var v admproto.NodeLog
 	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpNodeLog, nil, &v); err != nil {
@@ -67,6 +78,9 @@ func (s *Server) nodeLog(w http.ResponseWriter, r *http.Request) {
 	ok(w, v)
 }
 
+// nodeToken replaces the node's secret token (LOFT_TOKEN) with a new random
+// one as a job; the node restarts. Keys derived from the token, such as the
+// mask key, change with it.
 func (s *Server) nodeToken(w http.ResponseWriter, r *http.Request) {
 	by := userOf(r).Login
 	s.startJob(w, by, func(ctx context.Context) (any, error) {

@@ -1,5 +1,12 @@
 package web
 
+// overview.go is the panel's main page (#main): the node's role and fronts
+// (the endpoints clients connect through, such as a GET path or WebSocket),
+// the server's addresses, and its load (CPU, memory, disk, traffic). It is
+// shown to every role that may see the main page, so keys and tokens are
+// left out. Load figures are read straight from /proc here; the node's
+// settings and addresses come from panel-adm.
+
 import (
 	"bufio"
 	"bytes"
@@ -15,15 +22,17 @@ import (
 	"github.com/a3app/loft/server/panel/admproto"
 )
 
-// The overview (#main) for every role that sees it: the node's role and
-// fronts, the server's addresses and its load. Keys and tokens stay out.
-
+// overviewJSON is the main page's data. Node is missing when the helper
+// could not report the node's settings.
 type overviewJSON struct {
 	Node   *overviewNode      `json:"node,omitempty"`
 	Addrs  []admproto.NetAddr `json:"addrs"`
 	Server serverInfo         `json:"server"`
 }
 
+// overviewNode is the safe subset of node.conf for the main page: role
+// (controller or relay), listen and advertised address, fronts and decoy
+// origins.
 type overviewNode struct {
 	Role      string   `json:"role"`
 	Listen    string   `json:"listen"`
@@ -32,6 +41,7 @@ type overviewNode struct {
 	Decoy     []string `json:"decoy"`
 }
 
+// serverInfo is the host's OS, architecture and current load.
 type serverInfo struct {
 	OS       string  `json:"os,omitempty"`
 	Arch     string  `json:"arch"`
@@ -45,6 +55,8 @@ type serverInfo struct {
 	Hours    float64 `json:"hours"` // the span RX/TX cover, up to 24
 }
 
+// overview builds the main page. Helper errors are not fatal here: a part
+// that cannot be read is simply left empty.
 func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	a := s.Adm(userOf(r).Login)
 	out := overviewJSON{Addrs: []admproto.NetAddr{}, Server: readServer()}
@@ -59,6 +71,9 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	ok(w, out)
 }
 
+// readServer collects OS name, CPU, memory and disk use of /, and the
+// traffic of the last day. It reads Linux files and returns zeros for
+// whatever it cannot read.
 func readServer() serverInfo {
 	si := serverInfo{Arch: runtime.GOARCH}
 	if b, err := os.ReadFile("/etc/os-release"); err == nil {
@@ -113,6 +128,8 @@ func cpuTimes() (idle, total uint64) {
 	return idle, total
 }
 
+// meminfo parses /proc/meminfo into name -> value (in KiB, as the file
+// gives them).
 func meminfo() map[string]uint64 {
 	m := map[string]uint64{}
 	f, err := os.Open("/proc/meminfo")
@@ -155,17 +172,22 @@ func netBytes() (rx, tx uint64, okk bool) {
 // say how much went through the last 24 hours (less while the panel is new).
 var traffic = &netRing{}
 
+// netSample is the total received and sent byte counters at one moment.
 type netSample struct {
 	at     time.Time
 	rx, tx uint64
 }
 
+// netRing holds the samples of the last 24 hours; the sampling goroutine
+// starts on first use (once).
 type netRing struct {
 	once sync.Once
 	mu   sync.Mutex
 	s    []netSample
 }
 
+// add takes a sample and drops those older than a day (always keeping at
+// least one).
 func (n *netRing) add() {
 	rx, tx, ok := netBytes()
 	if !ok {
@@ -180,6 +202,10 @@ func (n *netRing) add() {
 	}
 }
 
+// day returns the bytes received and sent over the last day and how many
+// hours that covers. If the machine booted less than a day ago, the
+// counters themselves cover exactly the uptime, so they are returned as
+// they are. Otherwise the difference to the oldest sample is used.
 func (n *netRing) day() (rx, tx uint64, hours float64) {
 	n.once.Do(func() {
 		n.add()
@@ -206,6 +232,7 @@ func (n *netRing) day() (rx, tx uint64, hours float64) {
 	return crx - o.rx, ctx - o.tx, time.Since(o.at).Hours()
 }
 
+// uptime is how long the machine has run, from /proc/uptime (0 if unknown).
 func uptime() time.Duration {
 	b, err := os.ReadFile("/proc/uptime")
 	if err != nil {

@@ -1,5 +1,13 @@
 package web
 
+// wizard.go is the first-run wizard the owner goes through after setup:
+// give the server a DNS name, get Let's Encrypt certificates for the node
+// and the panel, and create the first member (a person with a key to the
+// overlay network) with a ready-to-import link and .loft file. Renew, which
+// keeps those certificates fresh, lives here too. The privileged steps go
+// through panel-adm, the root helper; certificates come from acme.go and
+// domains.go.
+
 import (
 	"context"
 	"fmt"
@@ -30,6 +38,10 @@ type wizardJSON struct {
 	Members   int                `json:"members"`
 }
 
+// wizard returns the state the wizard resumes from: saved settings, this
+// server's addresses, the node's info, and how many members exist. If no
+// domain is saved yet, the node's own host name is offered when it is a
+// valid DNS name.
 func (s *Server) wizard(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Settings.Get()
 	if err != nil {
@@ -64,6 +76,8 @@ func (s *Server) wizard(w http.ResponseWriter, r *http.Request) {
 	ok(w, out)
 }
 
+// checkDomainJSON is the result of a domain check: what the name resolves
+// to, this server's addresses, and whether they match.
 type checkDomainJSON struct {
 	Name      string   `json:"name"`
 	IPs       []string `json:"ips"`
@@ -73,6 +87,8 @@ type checkDomainJSON struct {
 }
 
 // domainCheck resolves name and compares with this server's addresses.
+// Problems are reported in the reply's Error field, not as HTTP errors, so
+// the UI can show them next to the input.
 func (s *Server) domainCheck(w http.ResponseWriter, r *http.Request) {
 	auditSkip(r)
 	var in struct {
@@ -116,6 +132,8 @@ func (s *Server) domainCheck(w http.ResponseWriter, r *http.Request) {
 
 // domainSet renames the server through the daemon and lets the panel answer
 // to the new name at once (the env file carries it over restarts).
+// Certificates saved for an old name are forgotten, since they do not cover
+// the new one.
 func (s *Server) domainSet(w http.ResponseWriter, r *http.Request) {
 	var in admproto.DomainSet
 	if !readJSON(w, r, 1<<10, &in) {
@@ -150,6 +168,8 @@ func (s *Server) domainSet(w http.ResponseWriter, r *http.Request) {
 }
 
 // certIssue gets a Let's Encrypt certificate for the server name and installs it.
+// If the panel has its own name, it gets a certificate as well. Runs as a
+// job because ACME can take a while.
 func (s *Server) certIssue(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Email string `json:"email"`
@@ -184,6 +204,8 @@ func (s *Server) certIssue(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// serverName is the server's DNS name: the saved domain, or else the node's
+// advertised host if that is a real DNS name.
 func (s *Server) serverName(ctx context.Context, by string) (string, error) {
 	st, err := s.Settings.Get()
 	if err != nil {
@@ -204,6 +226,8 @@ func (s *Server) serverName(ctx context.Context, by string) (string, error) {
 
 // issueAndInstall runs ACME and cert.install for target node or panel.
 // DNS-01 is used when the name is in a zone with a DNS provider; else HTTP-01.
+// (HTTP-01 proves the name by serving a file on port 80; DNS-01 by creating
+// a TXT record through the provider.) The e-mail is saved for renewals.
 func (s *Server) issueAndInstall(ctx context.Context, by, name, email, target string) (time.Time, error) {
 	method := "http-01"
 	if _, err := s.dns01For([]string{name}); err == nil {
@@ -255,6 +279,7 @@ func (s *Server) Renew(ctx context.Context) {
 	}
 }
 
+// memberJSON is the new member's key and the ways to hand it over.
 type memberJSON struct {
 	ID   string `json:"id"`
 	Key  string `json:"key"`
@@ -276,6 +301,7 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 	in.ID, in.Name = strings.TrimSpace(in.ID), strings.Join(strings.Fields(in.Name), " ")
 	by := userOf(r).Login
 	s.startJob(w, by, func(ctx context.Context) (any, error) {
+		// 1. Read network.conf and refuse a duplicate member ID.
 		a := s.Adm(by)
 		var n admproto.Network
 		if err := a.Call(ctx, admproto.OpNetworkGet, nil, &n); err != nil {
@@ -290,6 +316,8 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 				return nil, fmt.Errorf("member %s already exists", in.ID)
 			}
 		}
+		// 2. Issue the key, add the member, and save network.conf. Expect
+		// carries the file's hash as read, so a concurrent edit is not lost.
 		var k admproto.IssuedKey
 		if err := a.Call(ctx, admproto.OpMemberKey, admproto.MemberKey{ID: in.ID}, &k); err != nil {
 			return nil, admErr(err)
@@ -298,6 +326,7 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 		if err := a.Call(ctx, admproto.OpNetworkApply, admproto.NetworkApply{Text: netconf.RenderCommands(*nw), Expect: n.SHA256}, nil); err != nil {
 			return nil, admErr(err)
 		}
+		// 3. Build the link, file and QR code from the node's public info.
 		var info admproto.NodeInfo
 		if err := a.Call(ctx, admproto.OpNodeInfo, nil, &info); err != nil {
 			return nil, admErr(err)
@@ -309,11 +338,12 @@ func (s *Server) memberCreate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// memberLink is the loft:// address (docs/share.md §2) and a .loft file with a
-// GET outbound. Query get=/ws=/h2= lists node fronts; YAML keeps one GET
-// outbound and a fronts: list so Hello offers mux caps for 0x04 attach.
-// Status remains source of truth for paths. conn is the connection name;
-// memberID is the outbound-name part «участник».
+// memberLink is the loft:// address (the share-link format in docs/share.md)
+// and a .loft file with a GET outbound. Query get=/ws=/h2= lists node fronts
+// (the ways a client can connect); the YAML keeps one GET outbound and a
+// fronts: list, so the client's Hello offers to attach the other fronts
+// later. The node's Status reply stays the source of truth for paths. conn
+// is the connection name; memberID is the member part of the outbound name.
 func (s *Server) memberLink(in admproto.NodeInfo, key, conn, memberID string) (string, string) {
 	host := in.Host
 	link := "loft://" + url.PathEscape(key) + "@" + host + "/?" + loftFrontQuery(in) + "#" + url.PathEscape(conn)
@@ -422,10 +452,13 @@ func loftMuxFronts(in admproto.NodeInfo) []string {
 	return out
 }
 
+// loftQueryVal escapes a query value but keeps slashes readable, since the
+// values are URL paths.
 func loftQueryVal(s string) string {
 	return strings.ReplaceAll(url.QueryEscape(s), "%2F", "/")
 }
 
+// wizardDone marks the wizard finished, so the UI stops opening it.
 func (s *Server) wizardDone(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.Settings.Update(func(st *store.Settings) { st.WizardDone = true }); err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
@@ -434,6 +467,7 @@ func (s *Server) wizardDone(w http.ResponseWriter, r *http.Request) {
 	ok(w, struct{}{})
 }
 
+// firstNonEmpty returns a, or b when a is empty (same as firstOf).
 func firstNonEmpty(a, b string) string {
 	if a != "" {
 		return a

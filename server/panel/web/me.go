@@ -1,5 +1,10 @@
 package web
 
+// me.go is the signed-in user's own page (#me in the UI): profile and
+// rights, password, personal API token and sessions. Every role may do
+// these things to itself, without the "users" area that users.go needs to
+// manage other people.
+
 import (
 	"net/http"
 	"strconv"
@@ -9,10 +14,10 @@ import (
 	"github.com/a3app/loft/server/panel/store"
 )
 
-// The signed-in user's own page (#me): profile and rights, password, API
-// token and sessions. Every role may do this to itself, without the users
-// area.
-
+// myKey returns the key of the session this request uses: a hash of the
+// cookie value (auth.Key), which is how the session store names sessions.
+// The UI uses keys to mark "this device" and to end sessions without ever
+// seeing another session's secret cookie.
 func (s *Server) myKey(r *http.Request) string {
 	if c, err := r.Cookie(cookieName); err == nil {
 		return auth.Key(c.Value)
@@ -20,6 +25,9 @@ func (s *Server) myKey(r *http.Request) string {
 	return ""
 }
 
+// meGet returns the user's profile and rights, their open sessions (the
+// current one marked), when they were last seen, and their API token's
+// details. The token itself is never shown again, only its last characters.
 func (s *Server) meGet(w http.ResponseWriter, r *http.Request) {
 	u, _ := s.Store.Get(userOf(r).Login)
 	mine := s.myKey(r)
@@ -36,7 +44,9 @@ func (s *Server) meGet(w http.ResponseWriter, r *http.Request) {
 	ok(w, out)
 }
 
-// mePassword needs the current password; the other sessions end.
+// mePassword changes the user's own password. It needs the current one
+// (wrong guesses are slowed down), and then ends the user's other sessions
+// so a stolen session stops working.
 func (s *Server) mePassword(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Current  string `json:"current"`
@@ -70,6 +80,9 @@ func (s *Server) mePassword(w http.ResponseWriter, r *http.Request) {
 	ok(w, struct{}{})
 }
 
+// meToken issues a new personal API token (replacing the old one) or, with
+// revoke, removes it. Only a hash is stored, so the new token is shown in
+// this reply and never again.
 func (s *Server) meToken(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Revoke bool `json:"revoke"`

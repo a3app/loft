@@ -1,5 +1,10 @@
 package web
 
+// users.go manages the people who sign in to the panel: accounts, roles
+// (named sets of view/change rights per panel area), personal API tokens,
+// invitations, open sessions and the audit log of changes. These routes
+// need the "users" area; a user's own page is in me.go.
+
 import (
 	"crypto/rand"
 	"encoding/hex"
@@ -13,9 +18,8 @@ import (
 	"github.com/a3app/loft/server/panel/store"
 )
 
-// Users of the panel: accounts, roles, API tokens, invitations, sessions
-// and the log of changes.
-
+// userJSON is a panel user as the Users screen sees it. Password and token
+// hashes never leave the server; only the token's last characters are shown.
 type userJSON struct {
 	Login       string    `json:"login"`
 	Name        string    `json:"name,omitempty"`
@@ -29,11 +33,15 @@ type userJSON struct {
 	InviteUntil time.Time `json:"invite_until,omitzero"`
 }
 
+// userView turns a stored user into userJSON. A user without a password
+// hash is still waiting on an invitation.
 func userView(u store.User) userJSON {
 	return userJSON{Login: u.Login, Name: u.Name, Role: u.Role, Disabled: u.Disabled, Seen: u.Seen, TokenTail: u.TokenTail,
 		TokenIssued: u.TokenIssued, TokenUsed: u.TokenUsed, Invited: u.Hash == "", InviteUntil: u.InviteUntil}
 }
 
+// usersList returns all users, all roles and the list of panel areas the
+// role editor offers.
 func (s *Server) usersList(w http.ResponseWriter, r *http.Request) {
 	out := []userJSON{}
 	for _, u := range s.Store.List() {
@@ -42,6 +50,8 @@ func (s *Server) usersList(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{"users": out, "roles": s.Store.Roles(), "areas": store.Areas})
 }
 
+// token makes a random secret: prefix plus n random bytes in hex. API
+// tokens use the "lpt_" prefix so they are easy to recognise.
 func token(prefix string, n int) string {
 	b := make([]byte, n)
 	rand.Read(b)
@@ -49,6 +59,9 @@ func token(prefix string, n int) string {
 }
 
 // usersSave adds a user (with a password or an invitation) or changes one.
+// An invitation is a one-time link valid for 24 hours, where the new user
+// sets their own password. A new password or disabling a user ends that
+// user's other sessions.
 func (s *Server) usersSave(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Login    string `json:"login"`
@@ -68,6 +81,7 @@ func (s *Server) usersSave(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "unknown role")
 		return
 	}
+	// 1. Hash the password, if one was sent.
 	var hash string
 	if in.Password != "" {
 		if len([]rune(in.Password)) < auth.MinPassword {
@@ -80,6 +94,8 @@ func (s *Server) usersSave(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 2. A new user needs a password or an invitation link; an existing
+	// one is updated in place.
 	link := ""
 	if in.New {
 		u := store.User{Login: in.Login, Name: in.Name, Role: in.Role, Hash: hash}
@@ -123,6 +139,8 @@ func (s *Server) usersSave(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{"user": userView(u), "invite": link})
 }
 
+// userErr turns a store error into a reply: 404 for an unknown user, 409
+// when the change would leave the panel without an owner, 400 otherwise.
 func (s *Server) userErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -147,6 +165,8 @@ func (s *Server) endSessionsOf(login string, r *http.Request) {
 	}
 }
 
+// usersDelete removes a user (never the caller) and ends all their
+// sessions.
 func (s *Server) usersDelete(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Login string `json:"login"`
@@ -193,6 +213,7 @@ func (s *Server) usersToken(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]string{"token": tok})
 }
 
+// rolesSave creates or changes a role; the store checks it.
 func (s *Server) rolesSave(w http.ResponseWriter, r *http.Request) {
 	var in store.Role
 	if !readJSON(w, r, 8<<10, &in) {
@@ -207,6 +228,8 @@ func (s *Server) rolesSave(w http.ResponseWriter, r *http.Request) {
 	ok(w, ro)
 }
 
+// rolesDelete removes a role by ID; the store refuses if that is not
+// allowed.
 func (s *Server) rolesDelete(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ID string `json:"id"`
@@ -222,6 +245,8 @@ func (s *Server) rolesDelete(w http.ResponseWriter, r *http.Request) {
 	ok(w, struct{}{})
 }
 
+// sessionJSON is one open sign-in session. Key is a hash of the cookie, not
+// the cookie itself; Me marks the caller's own session.
 type sessionJSON struct {
 	Key     string    `json:"key"`
 	User    string    `json:"user"`
@@ -232,6 +257,8 @@ type sessionJSON struct {
 	Me      bool      `json:"me,omitempty"`
 }
 
+// sessionsList returns every open session of every user, and every user
+// who has an API token.
 func (s *Server) sessionsList(w http.ResponseWriter, r *http.Request) {
 	mine := ""
 	if c, err := r.Cookie(cookieName); err == nil {
@@ -250,6 +277,7 @@ func (s *Server) sessionsList(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{"sessions": out, "tokens": toks})
 }
 
+// sessionsEnd ends any user's session by its key.
 func (s *Server) sessionsEnd(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Key string `json:"key"`
@@ -266,6 +294,7 @@ func (s *Server) sessionsEnd(w http.ResponseWriter, r *http.Request) {
 	ok(w, struct{}{})
 }
 
+// auditList returns up to 500 audit log entries, optionally for one user.
 func (s *Server) auditList(w http.ResponseWriter, r *http.Request) {
 	ok(w, s.Audit.List(r.URL.Query().Get("user"), 500))
 }

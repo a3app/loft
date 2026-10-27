@@ -1,5 +1,14 @@
 package web
 
+// settings.go is the Settings screen and the panel's background watcher.
+// The screen covers sign-in session limits, the default language, how
+// connection names in issued .loft files are built, the server's time zone
+// (changed through panel-adm, the root helper), and event letters sent by
+// e-mail through an SMTP server. Watch runs once a minute for the life of
+// the panel: it checks domains and certificates, gives the mail system its
+// certificates, runs backup checks, records presence, and sends those
+// letters.
+
 import (
 	"context"
 	"crypto/tls"
@@ -18,9 +27,8 @@ import (
 	"github.com/a3app/loft/server/panel/store"
 )
 
-// Settings screen: sign-in limits, default language, the server's time
-// zone (through the helper), and event letters through an SMTP server.
-
+// idleChoices and maxChoices are the allowed session limits: how long an
+// unused session lives, and how long any session lives at most.
 var (
 	idleChoices = map[string]time.Duration{"30m": 30 * time.Minute, "8h": 8 * time.Hour, "off": 0}
 	maxChoices  = map[string]time.Duration{"7d": 7 * 24 * time.Hour, "30d": 30 * 24 * time.Hour}
@@ -34,6 +42,7 @@ const (
 	EventBackup = "backup" // a scheduled backup failed
 )
 
+// events lists every event kind, in the order the UI shows them.
 var events = []string{EventCert, EventUpdate, EventNode, EventBackup}
 
 // SessionLimits turns the stored choice into durations (defaults 30m, 7d).
@@ -53,6 +62,8 @@ func SessionLimits(st store.Settings) (idle, max time.Duration) {
 	return idle, max
 }
 
+// notifyJSON is the e-mail settings as the UI sees them. The stored SMTP
+// password is never sent out, only whether there is one.
 type notifyJSON struct {
 	To          string   `json:"to"`
 	Host        string   `json:"host"`
@@ -65,6 +76,8 @@ type notifyJSON struct {
 	Events      []string `json:"events"`
 }
 
+// settingsJSON is the Settings screen's data. Node and Panel are the domain
+// names of the node and the panel (read-only here; the wizard sets them).
 type settingsJSON struct {
 	Node         string             `json:"node"`
 	Panel        string             `json:"panel"`
@@ -76,6 +89,9 @@ type settingsJSON struct {
 	Notify       notifyJSON         `json:"notify"`
 }
 
+// settingsView turns stored settings into settingsJSON, filling in
+// defaults. The store keeps the events that are off, the UI wants those
+// that are on.
 func settingsView(st store.Settings) settingsJSON {
 	n := st.Notify
 	on := []string{}
@@ -91,6 +107,7 @@ func settingsView(st store.Settings) settingsJSON {
 			HasPassword: n.Password != "", From: n.From, Events: on}}
 }
 
+// settingsGet returns the Settings screen's data.
 func (s *Server) settingsGet(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Settings.Get()
 	if err != nil {
@@ -100,6 +117,9 @@ func (s *Server) settingsGet(w http.ResponseWriter, r *http.Request) {
 	ok(w, settingsView(st))
 }
 
+// settingsPanel saves the session limits, language, .loft naming and the
+// port LED style. New session limits are handed to the session store at
+// once.
 func (s *Server) settingsPanel(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionIdle  string              `json:"session_idle"`
@@ -140,6 +160,7 @@ func (s *Server) settingsPanel(w http.ResponseWriter, r *http.Request) {
 	ok(w, settingsView(st))
 }
 
+// timezoneGet returns the server's time zone from the helper.
 func (s *Server) timezoneGet(w http.ResponseWriter, r *http.Request) {
 	var tz admproto.Timezone
 	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpTimezone, nil, &tz); err != nil {
@@ -149,6 +170,7 @@ func (s *Server) timezoneGet(w http.ResponseWriter, r *http.Request) {
 	ok(w, tz)
 }
 
+// timezoneSet changes the server's time zone through the helper.
 func (s *Server) timezoneSet(w http.ResponseWriter, r *http.Request) {
 	var req admproto.Timezone
 	if !readJSON(w, r, 4<<10, &req) {
@@ -163,6 +185,8 @@ func (s *Server) timezoneSet(w http.ResponseWriter, r *http.Request) {
 	ok(w, tz)
 }
 
+// check validates e-mail settings. Empty recipient and server mean letters
+// are switched off, which is always valid.
 func (n notifyJSON) check() error {
 	if n.To == "" && n.Host == "" {
 		return nil // switched off
@@ -190,6 +214,8 @@ func (n notifyJSON) check() error {
 	return nil
 }
 
+// settingsNotify saves the e-mail settings. An empty password keeps the
+// stored one; an empty SMTP user removes it.
 func (s *Server) settingsNotify(w http.ResponseWriter, r *http.Request) {
 	var req notifyJSON
 	if !readJSON(w, r, 8<<10, &req) {
@@ -223,6 +249,8 @@ func (s *Server) settingsNotify(w http.ResponseWriter, r *http.Request) {
 	ok(w, settingsView(st))
 }
 
+// settingsNotifyTest sends a test letter with the saved settings, so the
+// operator can see that letters arrive.
 func (s *Server) settingsNotifyTest(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Settings.Get()
 	if err != nil {
@@ -243,6 +271,8 @@ func (s *Server) settingsNotifyTest(w http.ResponseWriter, r *http.Request) {
 }
 
 // sendMail sends one plain-text letter through the configured server.
+// Security "tls" connects with TLS from the start, "starttls" upgrades a
+// plain connection, "none" stays plain.
 func (s *Server) sendMail(ctx context.Context, st store.Settings, subject, body string) error {
 	n := st.Notify
 	if s.SendMail != nil {
@@ -306,6 +336,8 @@ func (s *Server) sendMail(ctx context.Context, st store.Settings, subject, body 
 	return c.Quit()
 }
 
+// eventOn reports whether letters are set up and event e is not switched
+// off.
 func eventOn(st store.Settings, e string) bool {
 	return st.Notify.To != "" && st.Notify.Host != "" && !slices.Contains(st.Notify.Off, e)
 }
@@ -337,6 +369,8 @@ func (s *Server) Watch(ctx context.Context) {
 	}
 }
 
+// notify sends one event letter and, only if it was sent, calls mark to
+// record that in the settings, so the same event is not mailed again.
 func (s *Server) notify(ctx context.Context, st store.Settings, subject, body string, mark func(*store.Notify)) {
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -347,6 +381,9 @@ func (s *Server) notify(ctx context.Context, st store.Settings, subject, body st
 	s.Settings.Update(func(x *store.Settings) { mark(&x.Notify) })
 }
 
+// watchCerts writes when the node's or the panel's certificate ends within
+// 14 days (renewal starts at 30, so it has been failing), once per
+// certificate.
 func (s *Server) watchCerts(ctx context.Context, st store.Settings) {
 	if !eventOn(st, EventCert) {
 		return
@@ -367,6 +404,9 @@ func (s *Server) watchCerts(ctx context.Context, st store.Settings) {
 	}
 }
 
+// watchUpdate writes once when an update job has finished or failed. A job
+// that ended more than a day ago is only marked as seen, so a fresh panel
+// does not mail about old updates.
 func (s *Server) watchUpdate(ctx context.Context, st store.Settings) {
 	if !eventOn(st, EventUpdate) || s.Adm == nil {
 		return
@@ -386,6 +426,10 @@ func (s *Server) watchUpdate(ctx context.Context, st store.Settings) {
 	s.notify(ctx, st, subject, body, func(n *store.Notify) { n.SentJob = j.ID })
 }
 
+// watchNode counts consecutive checks in which loft-node is not active and
+// writes on the second one (so a quick restart does not cause a letter). It
+// writes only once per outage: NodeDownAt is cleared when the node runs
+// again. It returns the new count.
 func (s *Server) watchNode(ctx context.Context, st store.Settings, down int) int {
 	if !eventOn(st, EventNode) || s.Adm == nil {
 		return 0

@@ -1,5 +1,12 @@
 package web
 
+// update.go keeps loft itself up to date. The panel asks GitHub for the
+// project's releases, records the newest one that ships a panel archive for
+// this machine, and shows it on the Packages screen. Installing is done by
+// panel-adm, the root helper, as a job that updates both the node and the
+// panel. In "auto" mode FollowReleases starts that job on its own inside the
+// chosen time window; in "notify" mode it only checks.
+
 import (
 	"context"
 	"encoding/json"
@@ -22,12 +29,15 @@ import (
 // ReleasesAPI lists the project's releases.
 const ReleasesAPI = "https://api.github.com/repos/a3app/loft/releases?per_page=30"
 
+// tagRe is the release tag form the panel accepts: v1.2.3 with an optional
+// pre-release suffix. Anything else on GitHub is ignored.
 var tagRe = regexp.MustCompile(`^v\d{1,4}\.\d{1,4}\.\d{1,6}(-[0-9A-Za-z.]{1,32})?$`)
 
 // checkEvery is how often the panel asks GitHub (60 requests an hour is the
 // anonymous limit; this is one in six hours).
 const checkEvery = 6 * time.Hour
 
+// ghRelease is the part of a GitHub release the panel reads.
 type ghRelease struct {
 	Tag        string    `json:"tag_name"`
 	Draft      bool      `json:"draft"`
@@ -38,7 +48,9 @@ type ghRelease struct {
 	} `json:"assets"`
 }
 
-// latestRelease picks the newest release that carries the panel for arch.
+// latestRelease picks the newest release that carries the panel for arch
+// (both the archive and its checksum file). Drafts are skipped, and
+// pre-releases unless pre is set.
 func latestRelease(rels []ghRelease, pre bool, arch string) (ghRelease, bool) {
 	var best ghRelease
 	found := false
@@ -100,7 +112,8 @@ func cmpVersion(a, b string) int {
 	return 1
 }
 
-// CheckReleases asks GitHub for the newest release and records it.
+// CheckReleases asks GitHub for the newest release and records it in the
+// settings, together with the check time or the error.
 func (s *Server) CheckReleases(ctx context.Context) (store.Settings, error) {
 	cur, err := s.Settings.Get()
 	if err != nil {
@@ -118,6 +131,8 @@ func (s *Server) CheckReleases(ctx context.Context) (store.Settings, error) {
 	})
 }
 
+// fetchLatest downloads the release list (from ReleasesAPI, or the test
+// override in s.ReleasesAPI) and picks the newest usable release.
 func (s *Server) fetchLatest(ctx context.Context, pre bool) (ghRelease, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -169,6 +184,9 @@ func serverZone() *time.Location {
 	return time.Local
 }
 
+// inWindow reports whether t falls in the update window: "now" is always,
+// "sunday" is 4 to 5 a.m. on Sundays, and anything else ("daily") is 4 to 5
+// a.m. every day, in the server's time zone.
 func inWindow(window string, t time.Time) bool {
 	switch window {
 	case "now":
@@ -181,6 +199,7 @@ func inWindow(window string, t time.Time) bool {
 
 // FollowReleases checks every six hours and, in auto mode, starts the
 // update inside the window. A release that failed is not retried for a day.
+// It wakes every 10 minutes and runs until ctx ends.
 func (s *Server) FollowReleases(ctx context.Context) {
 	tick := time.NewTicker(10 * time.Minute)
 	defer tick.Stop()
@@ -210,6 +229,8 @@ func (s *Server) FollowReleases(ctx context.Context) {
 	}
 }
 
+// updateJSON is the update block on the Packages screen: running version,
+// settings, the last check and whether a newer release is available.
 type updateJSON struct {
 	Version    string    `json:"version"`
 	Mode       string    `json:"mode"`
@@ -222,6 +243,8 @@ type updateJSON struct {
 	Available  bool      `json:"available"`
 }
 
+// updateView builds updateJSON from the settings, filling in defaults
+// (notify, stable channel, daily window).
 func updateView(st store.Settings) updateJSON {
 	u := st.Update
 	return updateJSON{Version: version.Version, Mode: firstOf(u.Mode, "notify"), Channel: firstOf(u.Channel, "stable"),
@@ -229,6 +252,7 @@ func updateView(st store.Settings) updateJSON {
 		Error: u.CheckError, Available: newer(u)}
 }
 
+// firstOf returns a, or b when a is empty.
 func firstOf(a, b string) string {
 	if a != "" {
 		return a
@@ -236,6 +260,7 @@ func firstOf(a, b string) string {
 	return b
 }
 
+// updateGet returns the update block.
 func (s *Server) updateGet(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Settings.Get()
 	if err != nil {
@@ -245,6 +270,9 @@ func (s *Server) updateGet(w http.ResponseWriter, r *http.Request) {
 	ok(w, updateView(st))
 }
 
+// updateSettings saves the mode, channel and window. Changing the channel
+// clears the last result, because the other channel has its own newest
+// release.
 func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Mode, Channel, Window string }
 	if !readJSON(w, r, 4<<10, &req) {
@@ -267,6 +295,7 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 	ok(w, updateView(st))
 }
 
+// oneOf reports whether v is one of l.
 func oneOf(v string, l ...string) bool {
 	for _, x := range l {
 		if v == x {
@@ -276,6 +305,7 @@ func oneOf(v string, l ...string) bool {
 	return false
 }
 
+// updateCheck asks GitHub now instead of waiting for the next check.
 func (s *Server) updateCheck(w http.ResponseWriter, r *http.Request) {
 	st, err := s.CheckReleases(r.Context())
 	if err != nil {

@@ -1,6 +1,26 @@
 // Package web is loft-panel's HTTP side: sign-in, the JSON API under /api/,
 // and the embedded UI. It runs without privileges; anything that touches the
 // node goes through loft-panel-adm.
+//
+// loft-panel is the web admin for a loft server. The node is loft-node, the
+// proxy daemon the panel manages. loft-panel-adm (or "panel-adm") is a small
+// helper that runs as root and does the privileged work: editing node files,
+// restarting services, installing packages. The panel talks to it over a
+// Unix socket with package admproto (one JSON request, one JSON reply); here
+// that is the Adm interface, reached through Server.Adm.
+//
+// Routes: Server.Handler in web.go lists every /api/ route in one place,
+// each wrapped in need, which checks who is calling. A caller signs in with
+// a session cookie (state-changing requests then also send the session's
+// CSRF token) or uses an API token in "Authorization: Bearer". Each route
+// names the panel areas (members, network, mail, ...) and the level
+// (view or change) the caller's role must have; the owner role passes all.
+// Successful changes are written to the audit log.
+//
+// Each feature lives in its own file (mail.go, users.go, relays.go, ...),
+// with its handlers and helpers. The browser UI is the static files in the
+// ui/ directory, embedded into the binary at build time; Server.UIDir serves
+// them from disk instead during development.
 package web
 
 import (
@@ -26,6 +46,9 @@ import (
 	"github.com/a3app/loft/server/panel/store"
 )
 
+// uiFS is the ui/ directory (index.html, scripts, translations) built into
+// the binary, so a release needs no separate web files.
+//
 //go:embed ui
 var uiFS embed.FS
 
@@ -71,18 +94,25 @@ type Server struct {
 	sleep func(time.Duration)
 }
 
+// cookieName is the browser cookie that carries the session ID.
 const cookieName = "loft_panel"
 
 // dummyHash is verified for unknown logins so timing does not reveal them.
 var dummyHash, _ = auth.Hash("not a real password, only for timing")
 
+// errKeyNotStored means the node has no saved copy of a member's key, so it
+// cannot be shown again; a new key has to be issued.
 var errKeyNotStored = errors.New("no stored key for this member")
 
-// Handler returns the full HTTP handler.
+// Handler returns the full HTTP handler: every API route with its access
+// rule, the ACME challenge path, and the UI files for everything else, all
+// behind guard.
 func (s *Server) Handler() (http.Handler, error) {
 	if s.sleep == nil {
 		s.sleep = time.Sleep
 	}
+	// 1. API routes. The first ones need no sign-in (state, setup, login,
+	// invites); the rest go through need with their access rule.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/state", s.state)
 	mux.HandleFunc("POST /api/setup", s.setup)
@@ -198,10 +228,13 @@ func (s *Server) Handler() (http.Handler, error) {
 	if s.ACME != nil {
 		mux.HandleFunc("GET /.well-known/acme-challenge/{token}", s.ACME.challenge)
 	}
+	// 2. Unknown /api/ paths get a JSON 404, not the UI page.
 	noAPI := func(w http.ResponseWriter, r *http.Request) { fail(w, http.StatusNotFound, "no such API") }
 	mux.HandleFunc("GET /api/", noAPI)
 	mux.HandleFunc("POST /api/", noAPI)
 
+	// 3. The UI: from disk in development, otherwise the embedded copy.
+	// no-store makes browsers fetch fresh files after an update.
 	var ui fs.FS
 	if s.UIDir != "" {
 		if _, err := os.Stat(filepath.Join(s.UIDir, "index.html")); err != nil {
@@ -255,6 +288,9 @@ func (s *Server) addHost(name string) {
 	s.Hosts = append(s.Hosts, name)
 }
 
+// hostOK reports whether a request's Host header is one the panel answers
+// to. Loopback names always pass (local tools and the local proxy), and an
+// empty Hosts list lets everything through.
 func (s *Server) hostOK(host string) bool {
 	s.hostsMu.RLock()
 	defer s.hostsMu.RUnlock()
@@ -295,6 +331,10 @@ func clientIP(r *http.Request) string {
 	return h
 }
 
+// secure reports whether the browser reached the panel over HTTPS, either
+// directly or through the local reverse proxy (which says so in
+// X-Forwarded-Proto). Cookies get the Secure flag only then, so sign-in still
+// works over plain HTTP on first setup.
 func secure(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
@@ -312,6 +352,8 @@ func knownIP(ip string) bool {
 	return p != nil && !p.IsLoopback()
 }
 
+// slow returns the per-login delay used when the client address is unknown,
+// creating it on first use.
 func (s *Server) slow() *auth.Slow {
 	if s.Slow == nil {
 		s.Slow = auth.NewSlow()
@@ -319,9 +361,10 @@ func (s *Server) slow() *auth.Slow {
 	return s.Slow
 }
 
+// ctxKey stores the signed-in user in the request context (see userOf).
 type ctxKey struct{}
 
-// Who may call a route: a signed-in user whose role gives Level on one of
+// access says who may call a route: a signed-in user whose role gives Level on one of
 // Areas (comma-separated; empty = any signed-in user), or the owner role.
 type access struct {
 	areas []string
@@ -329,11 +372,14 @@ type access struct {
 	owner bool
 }
 
-// any signed-in user
+// anyone lets any signed-in user through.
 var anyone = access{}
 
+// area builds an access rule: the role needs at least level (view or change)
+// on one of the comma-separated areas a.
 func area(a string, level int) access { return access{areas: strings.Split(a, ","), level: level} }
 
+// ownerOnly limits a route to the owner role (first-run wizard, domain).
 var ownerOnly = access{owner: true}
 
 // allowed reports whether role passes a.
@@ -360,6 +406,7 @@ func (s *Server) allowed(role string, a access) bool {
 // in X-CSRF-Token. A change that succeeded goes to the audit log.
 func (s *Server) need(a access, h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// 1. Find the user: by API token if one is sent, else by session cookie.
 		var u store.User
 		from := clientIP(r)
 		if tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
@@ -396,10 +443,14 @@ func (s *Server) need(a access, h http.HandlerFunc) http.HandlerFunc {
 				}
 			}
 		}
+		// 2. Check the role against the route's access rule.
 		if !s.allowed(u.Role, a) {
 			fail(w, http.StatusForbidden, "your role cannot do this")
 			return
 		}
+		// 3. Run the handler with the user in the context. Reads are not
+		// logged; a change is logged only if it did not fail and the handler
+		// did not call auditSkip.
 		mark := &auditMark{}
 		ctx := context.WithValue(context.WithValue(r.Context(), ctxKey{}, u), markKey{}, mark)
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -414,8 +465,11 @@ func (s *Server) need(a access, h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// markKey stores the request's auditMark in its context.
 type markKey struct{}
 
+// auditMark lets a handler tell need what to write to the audit log:
+// the target of the change, or skip to leave the call out.
 type auditMark struct {
 	target string
 	skip   bool
@@ -442,23 +496,32 @@ func auditSkip(r *http.Request) {
 	}
 }
 
+// statusWriter remembers the status code a handler wrote, so need can tell
+// whether the change succeeded.
 type statusWriter struct {
 	http.ResponseWriter
 	code int
 }
 
+// WriteHeader records the code and passes it on.
 func (w *statusWriter) WriteHeader(c int) { w.code = c; w.ResponseWriter.WriteHeader(c) }
+
+// Flush passes through to the real writer, so streaming handlers still work
+// when wrapped.
 func (w *statusWriter) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
 }
 
+// userOf returns the signed-in user that need put in the request context.
 func userOf(r *http.Request) store.User {
 	u, _ := r.Context().Value(ctxKey{}).(store.User)
 	return u
 }
 
+// meJSON describes the signed-in user to the UI: who they are, what each
+// area allows them, and the CSRF token to send with changes.
 type meJSON struct {
 	Login    string         `json:"login"`
 	Name     string         `json:"name,omitempty"`
@@ -468,6 +531,7 @@ type meJSON struct {
 	CSRF     string         `json:"csrf"`
 }
 
+// me builds meJSON for u, listing a permission for every known area.
 func (s *Server) me(u store.User, csrf string) *meJSON {
 	r, _ := s.Store.RoleOf(u.Role)
 	perms := map[string]int{}
@@ -477,6 +541,10 @@ func (s *Server) me(u store.User, csrf string) *meJSON {
 	return &meJSON{Login: u.Login, Name: u.Name, Role: u.Role, RoleName: r.Name, Perms: perms, CSRF: csrf}
 }
 
+// state is the first call the UI makes on load. It needs no sign-in and says
+// whether the panel still needs an owner (setup), whether the wizard is
+// unfinished, the default language, and, if the cookie is valid, who is
+// signed in.
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		Setup        bool    `json:"setup"`
@@ -504,6 +572,8 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	ok(w, out)
 }
 
+// credJSON is the body of setup and login. Code is the setup code (setup
+// only); Remember keeps the session cookie after the browser closes.
 type credJSON struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
@@ -511,6 +581,8 @@ type credJSON struct {
 	Remember bool   `json:"remember,omitempty"`
 }
 
+// readJSON decodes the request body into v, refusing bodies over max bytes
+// and unknown fields. On failure it answers 400 itself and returns false.
 func readJSON(w http.ResponseWriter, r *http.Request, max int64, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, max)
 	dec := json.NewDecoder(r.Body)
@@ -529,6 +601,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, 4<<10, &in) {
 		return
 	}
+	// 1. Refuse addresses already blocked for too many failures.
 	ip := clientIP(r)
 	known := knownIP(ip)
 	if known {
@@ -537,6 +610,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 2. Only while there is no user yet, and only with the right code.
 	if !s.Store.Empty() {
 		fail(w, http.StatusConflict, "the panel already has an owner")
 		return
@@ -551,6 +625,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusForbidden, "wrong setup code")
 		return
 	}
+	// 3. Create the owner, burn the code and sign the owner in.
 	h, err := auth.Hash(in.Password)
 	if err != nil {
 		fail(w, http.StatusBadRequest, err.Error())
@@ -568,6 +643,9 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 	s.startSession(w, r, in.Login, false)
 }
 
+// login checks a password and starts a session. Failed attempts are slowed
+// down and counted per client address; when the address is unknown (behind
+// the local proxy), they are counted per login instead.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var in credJSON
 	if !readJSON(w, r, 4<<10, &in) {
@@ -613,6 +691,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.startSession(w, r, u.Login, in.Remember)
 }
 
+// startSession creates a session for login, sets its cookie and replies with
+// meJSON. With remember the cookie gets the session's maximum lifetime, so
+// it survives a browser restart.
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, login string, remember bool) {
 	u, _ := s.Store.Get(login)
 	ss := s.Sessions.Create(login, clientIP(r), r.UserAgent(), remember)
@@ -626,6 +707,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, login stri
 	ok(w, s.me(u, ss.CSRF))
 }
 
+// logout ends the current session and clears the cookie.
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(cookieName); err == nil {
 		s.Sessions.Delete(c.Value)
@@ -635,7 +717,11 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // ── network.conf ──
+// network.conf describes the overlay, the members' private virtual network
+// on the node: members, their overlay IPs, access rules, DNS and routes. The
+// panel edits it as text.
 
+// networkGet returns network.conf as the node has it now.
 func (s *Server) networkGet(w http.ResponseWriter, r *http.Request) {
 	var n admproto.Network
 	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpNetworkGet, nil, &n); err != nil {
@@ -645,6 +731,7 @@ func (s *Server) networkGet(w http.ResponseWriter, r *http.Request) {
 	ok(w, n)
 }
 
+// checkJSON is the result of a syntax check: OK, or the parser's error.
 type checkJSON struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
@@ -667,6 +754,10 @@ func (s *Server) networkCheck(w http.ResponseWriter, r *http.Request) {
 	ok(w, checkJSON{OK: true})
 }
 
+// networkApply saves a new network.conf through panel-adm. It runs as a
+// background job because the node restarts to pick it up. The body quotes
+// the file's SHA-256 the editor started from, so two people editing at once
+// cannot silently overwrite each other.
 func (s *Server) networkApply(w http.ResponseWriter, r *http.Request) {
 	var in admproto.NetworkApply
 	if !readJSON(w, r, 1<<20, &in) {
@@ -683,6 +774,8 @@ func (s *Server) networkApply(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// memberKeyOut is a member's key plus the ready-made ways to hand it over:
+// an import link, a config file and the link as a QR code.
 type memberKeyOut struct {
 	admproto.IssuedKey
 	Link string `json:"link,omitempty"`
@@ -690,6 +783,8 @@ type memberKeyOut struct {
 	QR   string `json:"qr,omitempty"`
 }
 
+// wrapIssued adds the link, file and QR code to an issued key. They need the
+// node's host name; if it is unknown the key is returned bare.
 func (s *Server) wrapIssued(ctx context.Context, a Adm, k admproto.IssuedKey) memberKeyOut {
 	out := memberKeyOut{IssuedKey: k}
 	var info admproto.NodeInfo
@@ -700,6 +795,7 @@ func (s *Server) wrapIssued(ctx context.Context, a Adm, k admproto.IssuedKey) me
 	return out
 }
 
+// memberKey issues a new key for a member through panel-adm.
 func (s *Server) memberKey(w http.ResponseWriter, r *http.Request) {
 	var in admproto.MemberKey
 	if !readJSON(w, r, 4<<10, &in) {
@@ -715,6 +811,8 @@ func (s *Server) memberKey(w http.ResponseWriter, r *http.Request) {
 	ok(w, s.wrapIssued(r.Context(), a, k))
 }
 
+// memberKeyGet shows a member's existing key again (404 if the node did not
+// keep it).
 func (s *Server) memberKeyGet(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id == "" {
@@ -750,6 +848,8 @@ func (s *Server) lookupMemberKey(ctx context.Context, by, id string) (admproto.I
 	return k, nil
 }
 
+// nodeStatus reports the node service's state (active, failed, ...), since
+// when, and its version, via panel-adm.
 func (s *Server) nodeStatus(w http.ResponseWriter, r *http.Request) {
 	var st admproto.NodeStatus
 	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpNodeStatus, nil, &st); err != nil {
@@ -759,6 +859,7 @@ func (s *Server) nodeStatus(w http.ResponseWriter, r *http.Request) {
 	ok(w, st)
 }
 
+// nodeRestart restarts the node as a background job.
 func (s *Server) nodeRestart(w http.ResponseWriter, r *http.Request) {
 	by := userOf(r).Login
 	s.startJob(w, by, func(ctx context.Context) (any, error) {
@@ -772,12 +873,15 @@ func (s *Server) nodeRestart(w http.ResponseWriter, r *http.Request) {
 
 // ── replies ──
 
+// ok replies 200 with v as JSON. Replies are never cached because they hold
+// live state and sometimes secrets.
 func ok(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(v)
 }
 
+// fail replies with code and {"error": msg}, which the UI shows to the user.
 func fail(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -793,6 +897,8 @@ func admErr(err error) error {
 	return err
 }
 
+// admFail answers a failed panel-adm call: 503 if the helper is not
+// running, otherwise 422 with its error text.
 func admFail(w http.ResponseWriter, err error) {
 	if errors.Is(err, admproto.ErrUnavailable) {
 		fail(w, http.StatusServiceUnavailable, "loft-panel-adm is not running")
@@ -801,6 +907,7 @@ func admFail(w http.ResponseWriter, err error) {
 	fail(w, http.StatusUnprocessableEntity, err.Error())
 }
 
+// logf writes to the panel's log, if one is set.
 func (s *Server) logf(f string, a ...any) {
 	if s.Log != nil {
 		s.Log.Printf(f, a...)

@@ -1,5 +1,13 @@
 package web
 
+// system.go is the System screen's Linux accounts and the guard; the
+// screen's backups live in backup.go. Linux accounts are the server's own
+// users (for ssh and the like), managed by panel-adm, the root helper. The
+// guard is fail2ban: it bans addresses at the firewall after repeated failed
+// logins or scanner requests. The helper writes fail2ban's files; the panel
+// keeps its own copy of the settings in guard.json, applies the same numbers
+// to its own login limiter, and keeps notes on manual bans.
+
 import (
 	"context"
 	"encoding/json"
@@ -14,10 +22,9 @@ import (
 	"github.com/a3app/loft/server/panel/store"
 )
 
-// System: Linux accounts, the guard and backups (backup.go).
-
 /* ── Linux accounts ── */
 
+// sysUsers lists the server's Linux accounts.
 func (s *Server) sysUsers(w http.ResponseWriter, r *http.Request) {
 	var v admproto.SysUsers
 	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpSysUsers, nil, &v); err != nil {
@@ -27,6 +34,7 @@ func (s *Server) sysUsers(w http.ResponseWriter, r *http.Request) {
 	ok(w, v)
 }
 
+// sysUserSave adds or changes a Linux account through the helper.
 func (s *Server) sysUserSave(w http.ResponseWriter, r *http.Request) {
 	var in admproto.SysUserSave
 	if !readJSON(w, r, 128<<10, &in) {
@@ -41,6 +49,7 @@ func (s *Server) sysUserSave(w http.ResponseWriter, r *http.Request) {
 	ok(w, v)
 }
 
+// sysUserDelete removes a Linux account through the helper.
 func (s *Server) sysUserDelete(w http.ResponseWriter, r *http.Request) {
 	var in admproto.SysUserDelete
 	if !readJSON(w, r, 1<<10, &in) {
@@ -57,14 +66,19 @@ func (s *Server) sysUserDelete(w http.ResponseWriter, r *http.Request) {
 
 /* ── the guard ── */
 
+// guardFile is guard.json in the panel's data directory: the guard settings
+// and the notes on manual bans.
 type guardFile struct {
 	Conf admproto.GuardConf `json:"conf"`
 	// Notes on manual bans, by address: fail2ban keeps no reason.
 	Notes map[string]string `json:"notes,omitempty"`
 }
 
+// defaultGuard is used until the operator saves settings: 5 failures in 10
+// minutes ban for a day; scanners and ssh/mail logins count too.
 var defaultGuard = admproto.GuardConf{Fails: 5, FindMin: 10, BanSec: 86400, Scanners: true, Logins: true, Allow: []string{}}
 
+// loadGuard reads guard.json; a missing or broken file gives the defaults.
 func (s *Server) loadGuard() guardFile {
 	g := guardFile{Conf: defaultGuard}
 	if b, err := os.ReadFile(s.backupPath("guard.json")); err == nil {
@@ -76,6 +90,8 @@ func (s *Server) loadGuard() guardFile {
 	return g
 }
 
+// saveGuard writes guard.json atomically (a crash leaves the old or the new
+// file, never half of one).
 func (s *Server) saveGuard(g guardFile) error {
 	b, _ := json.MarshalIndent(g, "", "  ")
 	return store.WriteAtomic(s.backupPath("guard.json"), append(b, '\n'), 0o600)
@@ -104,6 +120,9 @@ func (s *Server) applyGuard(c admproto.GuardConf) {
 // LoadGuard applies the saved guard settings at start.
 func (s *Server) LoadGuard() { s.applyGuard(s.loadGuard().Conf) }
 
+// guardOut replies with the guard's state, the saved settings, the notes
+// next to each ban, and the caller's own address (so the UI can warn
+// before the operator bans themselves).
 func (s *Server) guardOut(w http.ResponseWriter, r *http.Request, v admproto.GuardView) {
 	g := s.loadGuard()
 	for i, b := range v.Banned {
@@ -112,6 +131,8 @@ func (s *Server) guardOut(w http.ResponseWriter, r *http.Request, v admproto.Gua
 	ok(w, map[string]any{"guard": v, "conf": g.Conf, "you": clientIP(r)})
 }
 
+// guardGet returns the guard's state. If fail2ban is installed but still
+// has only the package's own setup, it writes the panel's settings first.
 func (s *Server) guardGet(w http.ResponseWriter, r *http.Request) {
 	adm := s.Adm(userOf(r).Login)
 	var v admproto.GuardView
@@ -131,6 +152,8 @@ func (s *Server) guardGet(w http.ResponseWriter, r *http.Request) {
 	s.guardOut(w, r, v)
 }
 
+// guardSet saves new guard settings in fail2ban (through the helper), in
+// guard.json and in the panel's login limiter.
 func (s *Server) guardSet(w http.ResponseWriter, r *http.Request) {
 	var in admproto.GuardConf
 	if !readJSON(w, r, 32<<10, &in) {
@@ -171,6 +194,9 @@ func covers(target, ip string) bool {
 	return err == nil && a != nil && n.Contains(a)
 }
 
+// guardBan bans an address or subnet by hand, with an optional note. It
+// refuses to ban the caller's own address, loopback, or anything that
+// overlaps the allowed list.
 func (s *Server) guardBan(w http.ResponseWriter, r *http.Request) {
 	var in admproto.GuardBan
 	if !readJSON(w, r, 2<<10, &in) {
@@ -212,6 +238,7 @@ func (s *Server) guardBan(w http.ResponseWriter, r *http.Request) {
 	s.guardOut(w, r, v)
 }
 
+// guardUnban lifts a ban and forgets its note.
 func (s *Server) guardUnban(w http.ResponseWriter, r *http.Request) {
 	var in admproto.GuardBan
 	if !readJSON(w, r, 1<<10, &in) {
