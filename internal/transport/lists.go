@@ -93,16 +93,43 @@ func RememberLists(l wire.Lists) error {
 		return errListsOld
 	}
 	sets := map[string][]wire.Addr{}
+	kindUse := map[string]Action{}
 	for _, s := range l.Sets {
-		sets[strings.ToLower(s.Name)] = s.Entries
+		name := strings.ToLower(s.Name)
+		sets[name] = s.Entries
+		if name == "" {
+			continue
+		}
+		if dir := s.SetDir(); dir != "" {
+			kindUse[name] = ParseAction(dir)
+		}
 	}
 	nb := &book{sets: sets, ser: l.Serial, hash: l.Hash(), def: ActVia, use: map[string]Action{}}
 	if cur != nil {
 		nb.def = cur.def
-		nb.use = cur.use
+		for k, v := range cur.use {
+			nb.use[k] = v
+		}
+	}
+	for k, v := range kindUse {
+		if _, exists := nb.use[k]; !exists {
+			nb.use[k] = v
+		}
 	}
 	liveBook.Store(nb)
+	if raw, err := l.RouteProfile().SplitJSON(); err == nil {
+		liveProfile.Store(string(raw))
+	}
 	return nil
+}
+
+var liveProfile atomic.Value // string SplitJSON
+
+// ListsProfileJSON is the operator SplitStore document of the last verified
+// lists, or "". gomobile Snapshot carries it for the Android GUI.
+func ListsProfileJSON() string {
+	s, _ := liveProfile.Load().(string)
+	return s
 }
 
 var (
@@ -234,8 +261,12 @@ func BootstrapLists(ctx context.Context, cfg *config.ClientConfig) {
 var listSources atomic.Value // []string
 
 // maybeRefreshLists refetches when Status lists serial/hash is newer than the live book.
+// lists_inline: GET is skipped; AskLists on the live mux fetches the body.
 func maybeRefreshLists(st wire.Status) {
 	if st.ListsSerial == 0 {
+		return
+	}
+	if st.Caps.Has(wire.CapListsInline) {
 		return
 	}
 	if b := liveBook.Load(); b != nil {

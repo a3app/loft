@@ -237,7 +237,7 @@ func ServerCaps(cfg *config.ServerConfig, maskOn bool) wire.Cap {
 		c &^= wire.CapRoster
 	}
 	if len(cfg.Lists) == 0 {
-		c &^= wire.CapLists
+		c &^= wire.CapLists | wire.CapListsInline
 	}
 	return c
 }

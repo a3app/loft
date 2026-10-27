@@ -205,12 +205,14 @@ func adoptServerMux(rest, token []byte) (ms *mux.Session, reused bool) {
 		if p := takeParked(owner, inst); p != nil {
 			attachHello(p, rest)
 			p.SetOwner(owner)
+			bindServerLists(p)
 			return p, true
 		}
 	}
 	ms = mux.NewServer()
 	attachHello(ms, rest)
 	ms.SetOwner(owner)
+	bindServerLists(ms)
 	return ms, false
 }
 

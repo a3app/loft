@@ -196,6 +196,7 @@ func (q *QUIC) Start(ctx context.Context) error {
 		_ = conn.CloseWithError(0, "decoy")
 		return err
 	}
+	AskLists(q.sess, status)
 	q.conn, q.stream, q.key = conn, st, key
 	noteQUICKEX(conn)
 	q.lanes = startBulkLanes(ctx, wire.FrontQUIC, q.cfg, q.token, key, status, q.offer, q.sess, q.done, func(b *GET) {

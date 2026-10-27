@@ -368,6 +368,7 @@ func (g *GET) Start(ctx context.Context) error {
 			return err
 		}
 	}
+	AskLists(g.sess, st)
 	loopCtx, stop := context.WithCancel(context.Background())
 	g.stop = stop
 	g.nextSeq = g.seq.Load() + 1

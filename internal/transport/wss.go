@@ -144,6 +144,7 @@ func (w *WSS) Start(ctx context.Context) error {
 		c.Close(websocket.StatusNormalClosure, "decoy")
 		return err
 	}
+	AskLists(w.sess, st)
 	w.conn = c
 	w.key = key
 	w.lanes = startBulkLanes(ctx, wire.FrontWS, w.cfg, w.token, key, st, w.offer, w.sess, w.done, func(b *GET) {

@@ -140,6 +140,7 @@ func startRaw(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, 
 	}
 	sess, gen := takeClientHold()
 	sess.SetHold(st.Caps.Has(wire.CapHold))
+	AskLists(sess, st)
 	takeInner(front, key, st)
 	var under any
 	if q, ok := conn.(interface{ quicConn() *quic.Conn }); ok {
