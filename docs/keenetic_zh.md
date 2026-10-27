@@ -21,7 +21,7 @@ LAN 主机
                   → TLS 1.3 → CDN 或节点
 ```
 
-每个连接（loft 配置或 VLESS）有自己的 OpkgTun：OpkgTun0、OpkgTun1……所有已启用的连接都在线，由 Keenetic 优先级挑选。SSTP 仍是 Keenetic 原装客户端。
+每个连接（loft 配置、VLESS 或 Trojan）有自己的 OpkgTun：OpkgTun0、OpkgTun1……所有已启用的连接都在线，由 Keenetic 优先级挑选。SSTP 仍是 Keenetic 原装客户端。
 
 ## 2. OpkgTun
 

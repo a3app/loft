@@ -4,19 +4,19 @@
 
 交互模型：[`index.html`](index.html)。品牌：[`brand/`](../../../docs/brand/)。对接：[docs/keenetic_zh.md](../../../docs/keenetic_zh.md)。
 
-面板是小 LAN 站。连接优先级、策略、DNS 路由还在 Keenetic。这个 UI 只保持 loft 和 VLESS 会话在线，并写它们的 YAML。
+面板是小 LAN 站。连接优先级、策略、DNS 路由还在 Keenetic。这个 UI 只保持 loft、VLESS 和 Trojan 会话在线，并写它们的 YAML。
 
 ---
 
 ## 1. 产品
 
-多个具名连接。每个连接一个 OpkgTun、在 Keenetic 里一行，loft 配置和 VLESS 都一样。所有已启用的连接同时保持会话；走哪一个、断开后切到哪一个，由 Keenetic 的优先级和策略决定。
+多个具名连接。每个连接一个 OpkgTun、在 Keenetic 里一行，loft 配置、VLESS 和 Trojan 都一样。所有已启用的连接同时保持会话；走哪一个、断开后切到哪一个，由 Keenetic 的优先级和策略决定。
 
 操作者：
 
 1. 登录 Keenetic 网页后台。
 2. 打开 `http://<lan-ip>:8090/`（cookie 仍有效，否则走原生登录再回来）。
-3. 添加连接：`loft://` 或 `vless://` 链接、手动填写，或导入文件。
+3. 添加连接：`loft://`、`vless://` 或 `trojan://` 链接、手动填写，或导入文件。
 4. 在 Keenetic：**网络规则 → 连接优先级** 把连接放进策略；**DNS 路由** 把域名列表指向它。
 
 没有第二个密码。没有 SSTP 表单：SSTP 仍是 Keenetic 原生客户端。
@@ -26,13 +26,15 @@
 | 界面 | 内容 |
 |------|------|
 | 登录 | 检查 Keenetic 会话。401 → 原生 `/` 带 `return=`。 |
-| 连接 | 列表：灯、名称、类型 · 前端 · OpkgTunN、状态标签（在线 / 错误 / 关闭）、开关。按钮：导入、添加。 |
-| 状态 | 每个连接：状态、覆盖网 IP / 网关、MTU、节点（roster 中“另有 N 个备用”）、当前前端、流量。停止、前端、“Keenetic 优先级”。 |
-| 连接 · loft | 名称；类型切换 loft / VLESS；模式切换 **链接 / 手动**，与桌面客户端一致。链接：`loft://` 地址。手动：访问密钥、地址和端口、连接方式（GET · WS · H2 · QUIC · H3 · L3）、路径。保存、返回、删除。 |
+| 连接 | 列表：灯、名称、类型 · 前端 · OpkgTunN、状态标签（在线 / 错误 / 关闭）、开关。按钮：导入、添加。有新包时，顶部出现“可用 X · 更新”条，点开进入“软件包”。 |
+| 状态 | 每个连接：状态、覆盖网 IP / 网关、MTU、节点（roster 中“另有 N 个备用”）、当前前端、协商的 QUIC 模式、流量。停止、前端、“Keenetic 优先级”。 |
+| 连接 · loft | 名称；类型切换 loft / VLESS / Trojan；模式切换 **链接 / 手动**，与桌面客户端一致。链接：`loft://` 地址。手动：访问密钥、地址和端口、连接方式（GET · WS · H2 · QUIC · H3 · L3）、路径。保存、返回、删除。 |
 | 连接 · VLESS | 同一框架。链接：`vless://`。手动：UUID、地址和端口、安全 TLS / REALITY、传输 TCP / XHTTP、TLS 主机名、TLS 指纹、公钥、short ID、Vision。 |
+| 连接 · Trojan | 同一框架。链接：`trojan://`。手动：密码、地址和端口、安全 TLS / REALITY、传输 TCP / XHTTP、TLS 主机名、TLS 指纹、公钥、short ID。 |
 | 导入 | 拖入或选择 `client.yaml`、`.loft`、`.vpn` 或二维码图片。在下一个空闲 OpkgTun 上新建连接。 |
-| 前端 | 每个 loft 连接：get / ws / h2 / quic / h3 / l3。顺序 = 尝试顺序。与 Status `caps` 取交集。 |
+| 前端 | 每个 loft 连接：get / ws / h2 / quic / h3 / l3。顺序 = 尝试顺序。与 Status `caps` 取交集。quic、h3、l3 的 **QUIC 模式**：关闭 / BBR / 固定速率；固定速率显示 ↑ 和 ↓ Mbit/s。节点在 Status 中同意。 |
 | 日志 | 所有连接的最近 80 行，行首带名称。密钥会缩短。 |
+| 软件包 | 版本、架构、GitHub latest。“自动检查更新”开关、“检查更新”、“更新到 X”：从 `a3app/loft` 最新发布下载本架构的 `.ipk`，校验 SHA256，用 opkg 安装；会话重启。 |
 
 ## 3. Keenetic 原生界面
 
@@ -47,7 +49,7 @@
 
 ## 4. 页面
 
-页面是共用的 `lanui` v2（`clients/go/lanui`）：连接列表、导入、编辑 loft 和 VLESS、日志。平台区块：Keenetic 显示 OpkgTun 名称和优先级入口；MikroTik 保留出口接口和 `uplink.rsc`。Keenetic 上只用网页后台会话登录。
+页面是共用的 `lanui` v2（`clients/go/lanui`）：连接列表、导入、编辑 loft / VLESS / Trojan、带 QUIC 模式的前端、日志、软件包更新。平台区块：Keenetic 显示 OpkgTun 名称和优先级入口；MikroTik 保留出口接口和 `uplink.rsc`。Keenetic 上只用网页后台会话登录。
 
 ## 5. 视觉
 

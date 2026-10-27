@@ -13,7 +13,7 @@ Entware 客户端：每个连接一个 **OpkgTun** 接口，KeeneticOS 拿它们
 | 路由器上 | 角色 |
 |---------------|------|
 | loft（get / ws / h2 / quic / h3 / l3） | loft 覆盖网。每个连接一个 OpkgTun。 |
-| VLESS | 单独的连接，有自己的 OpkgTun。 |
+| VLESS、Trojan | 单独的连接，各有自己的 OpkgTun。 |
 | SSTP、WireGuard、OpenVPN、IPsec、OpenConnect | 系统自带 KeeneticOS。不是这个包。 |
 
 客户端 **不得** 装默认路由。表归 NDM。前置 IP 留在运营商路径上，会话才不会发夹。

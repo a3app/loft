@@ -4,19 +4,19 @@
 
 Interactive mock: [`index.html`](index.html). Brand: [`brand/`](../../../docs/brand/). Integration: [docs/keenetic.md](../../../docs/keenetic.md).
 
-The panel is a small LAN site. Keenetic keeps Connection Priorities, policies, and DNS-based routes. This UI only keeps loft and VLESS sessions up and writes their YAML.
+The panel is a small LAN site. Keenetic keeps Connection Priorities, policies, and DNS-based routes. This UI only keeps loft, VLESS and Trojan sessions up and writes their YAML.
 
 ---
 
 ## 1. Product
 
-Several named connections. Each one is its own OpkgTun and its own row in Keenetic: loft profiles and VLESS alike. Every enabled connection keeps its session up at the same time; Keenetic priorities and policies decide which one carries traffic and what to fall back to.
+Several named connections. Each one is its own OpkgTun and its own row in Keenetic: loft profiles, VLESS and Trojan alike. Every enabled connection keeps its session up at the same time; Keenetic priorities and policies decide which one carries traffic and what to fall back to.
 
 The operator:
 
 1. Logs into Keenetic web admin.
 2. Opens `http://<lan-ip>:8090/` (cookie already valid, or stock login then return).
-3. Adds a connection: a `loft://` or `vless://` link, manual fields, or an imported file.
+3. Adds a connection: a `loft://`, `vless://` or `trojan://` link, manual fields, or an imported file.
 4. In Keenetic: **Network rules → Connection priorities** puts the connection into a policy; **DNS-based routes** send domain lists to it.
 
 No second password. No SSTP form: SSTP stays the stock Keenetic client.
@@ -26,13 +26,15 @@ No second password. No SSTP form: SSTP stays the stock Keenetic client.
 | Screen | What |
 |--------|------|
 | Gate | Checking Keenetic session. 401 → stock `/` with `return=`. |
-| Connections | List: lamp, name, kind · front · OpkgTunN, state tag (up / error / off), on/off switch. Buttons: Import, Add. |
-| Status | Per connection: state, overlay IP / gateway, MTU, node (with “N more in reserve” from the roster), live front, bytes. Stop, Fronts, “Keenetic priorities”. |
-| Connection · loft | Name; type segment loft / VLESS; mode segment **Link / Manual** as in the desktop clients. Link: `loft://` address. Manual: access key, host and port, how to connect (GET · WS · H2 · QUIC · H3 · L3), path. Save, Back, Delete. |
+| Connections | List: lamp, name, kind · front · OpkgTunN, state tag (up / error / off), on/off switch. Buttons: Import, Add. When a newer package is out, an “Available X · Update” strip on top opens Package. |
+| Status | Per connection: state, overlay IP / gateway, MTU, node (with “N more in reserve” from the roster), live front, agreed QUIC mode, bytes. Stop, Fronts, “Keenetic priorities”. |
+| Connection · loft | Name; type segment loft / VLESS / Trojan; mode segment **Link / Manual** as in the desktop clients. Link: `loft://` address. Manual: access key, host and port, how to connect (GET · WS · H2 · QUIC · H3 · L3), path. Save, Back, Delete. |
 | Connection · VLESS | Same frame. Link: `vless://`. Manual: UUID, host and port, security TLS / REALITY, transport TCP / XHTTP, TLS host name, TLS fingerprint, public key, short ID, Vision. |
+| Connection · Trojan | Same frame. Link: `trojan://`. Manual: password, host and port, security TLS / REALITY, transport TCP / XHTTP, TLS host name, TLS fingerprint, public key, short ID. |
 | Import | Drop or pick `client.yaml`, `.loft`, `.vpn` or a QR picture. Creates a new connection with the next free OpkgTun. |
-| Fronts | Per loft connection: get / ws / h2 / quic / h3 / l3. Order = try order. Intersection with Status `caps`. |
+| Fronts | Per loft connection: get / ws / h2 / quic / h3 / l3. Order = try order. Intersection with Status `caps`. **QUIC mode** for quic, h3 and l3: Off / BBR / Fixed rate; fixed shows ↑ and ↓ Mbit/s. The node agrees in Status. |
 | Journal | Last 80 lines from all connections, prefixed by name. Keys are shortened. |
+| Package | Version, architecture, GitHub latest. “Check for updates on its own” switch, “Check for updates”, “Update to X”: downloads the `.ipk` for this architecture from the latest `a3app/loft` release, checks SHA256, installs with opkg; sessions restart. |
 
 ## 3. Keenetic chrome
 
@@ -47,7 +49,7 @@ Optional later: a dashboard *card* that is only a link to `:8090`. Versioned inj
 
 ## 4. Page
 
-The page is shared `lanui` v2 (`clients/go/lanui`): connection list, import, loft and VLESS editing, journal. Platform blocks: Keenetic shows OpkgTun names and the priorities link; MikroTik keeps its uplink and `uplink.rsc`. Login on Keenetic is the web-admin session only.
+The page is shared `lanui` v2 (`clients/go/lanui`): connection list, import, loft / VLESS / Trojan editing, fronts with QUIC mode, journal, package update. Platform blocks: Keenetic shows OpkgTun names and the priorities link; MikroTik keeps its uplink and `uplink.rsc`. Login on Keenetic is the web-admin session only.
 
 ## 5. Visual
 

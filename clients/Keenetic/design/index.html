@@ -151,6 +151,11 @@
     .sw-d.on { background: var(--lamp); }
     .sw-d.on i { left: 16px; background: var(--ink); }
 
+    .upd {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      padding: 9px 12px; margin-bottom: 10px; border-radius: 10px; cursor: pointer;
+      background: rgba(232,184,74,.08); border: 1px solid rgba(232,184,74,.3); font-size: 13px;
+    }
     .drop {
       border: 1px dashed #3a332e; border-radius: 12px; padding: 26px 16px; text-align: center;
       color: var(--mute); font-size: 12.5px; line-height: 1.45; margin: 4px 0 4px;
@@ -243,9 +248,11 @@
     <button type="button" data-go="status" data-i="nStatus">Статус</button>
     <button type="button" data-go="edit" data-i="nEdit">Подключение · loft</button>
     <button type="button" data-go="editvless" data-i="nEditVless">Подключение · VLESS</button>
+    <button type="button" data-go="edittrojan" data-i="nEditTrojan">Подключение · Trojan</button>
     <button type="button" data-go="import" data-i="nImport">Импорт</button>
     <button type="button" data-go="fronts" data-i="nFronts">Фронты loft</button>
     <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
+    <button type="button" data-go="pkg" data-i="nPkg">Пакет</button>
   </nav>
 
   <div class="stage-wrap">
@@ -346,6 +353,10 @@
         <div class="sub">loft</div>
       </header>
       <div class="body">
+        <div class="upd" data-go="pkg">
+          <span><span data-i="uAvail">Доступна</span> 1.0.23</span>
+          <span class="tag wait" data-i="uOpen">Обновить</span>
+        </div>
         <div class="conn" data-go="status">
           <div class="lamp on"></div>
           <div><div class="n">Loft Home</div><div class="m">loft · get · OpkgTun0</div></div>
@@ -367,6 +378,12 @@
         <div class="conn" data-go="edit">
           <div class="lamp"></div>
           <div><div class="n">Loft Backup</div><div class="m">loft · quic · OpkgTun3</div></div>
+          <span class="tag" data-i="stOff">выкл</span>
+          <div class="sw-d"><i></i></div>
+        </div>
+        <div class="conn" data-go="edittrojan">
+          <div class="lamp"></div>
+          <div><div class="n">Trojan FI</div><div class="m">trojan · tls · OpkgTun4</div></div>
           <span class="tag" data-i="stOff">выкл</span>
           <div class="sw-d"><i></i></div>
         </div>
@@ -392,6 +409,7 @@
         <div class="row"><span class="k">MTU</span><span class="mono">1280</span></div>
         <div class="row"><span class="k" data-i="sNode">Нода</span><span class="v">de1.example.com <span class="tag" data-i="sSpare">ещё 2 в запасе</span></span></div>
         <div class="row"><span class="k" data-i="sFront">Фронт</span><span class="v">get · cdn.example.com</span></div>
+        <div class="row"><span class="k" data-i="sCc">Режим QUIC</span><span class="mono">bbr</span></div>
         <div class="row"><span class="k" data-i="sBytes">Трафик</span><span class="mono">↓ 42.1 MiB  ↑ 3.4 MiB</span></div>
         <p class="hint" data-i="sHint">Раздельная маршрутизация и запасной канал — в Keenetic: DNS-маршруты и приоритеты для интерфейса Loft Home.</p>
         <div class="btns">
@@ -420,6 +438,7 @@
         <div class="seg">
           <button type="button" class="on" data-go="edit">loft</button>
           <button type="button" data-go="editvless">VLESS</button>
+          <button type="button" data-go="edittrojan">Trojan</button>
         </div>
         <div class="seg" data-mode="loft">
           <button type="button" class="on" data-m="link" data-i="mLink">Ссылка</button>
@@ -473,6 +492,7 @@
         <div class="seg">
           <button type="button" data-go="edit">loft</button>
           <button type="button" class="on" data-go="editvless">VLESS</button>
+          <button type="button" data-go="edittrojan">Trojan</button>
         </div>
         <div class="seg" data-mode="vless">
           <button type="button" class="on" data-m="link" data-i="mLink">Ссылка</button>
@@ -519,6 +539,64 @@
       <div class="foot">/opt/etc/loft/vless-nl.yaml</div>
     </div>
 
+    <!-- Edit · Trojan -->
+    <div class="panel screen hidden" id="edittrojan">
+      <header>
+        <div class="lamp"></div>
+        <div class="t" data-i="eTitle">Подключение</div>
+        <div class="sub">OpkgTun4</div>
+      </header>
+      <div class="body">
+        <label class="field"><span data-i="eName">Имя</span>
+          <input value="Trojan FI" />
+        </label>
+        <div class="seg-cap" data-i="eKind">Тип</div>
+        <div class="seg">
+          <button type="button" data-go="edit">loft</button>
+          <button type="button" data-go="editvless">VLESS</button>
+          <button type="button" class="on" data-go="edittrojan">Trojan</button>
+        </div>
+        <div class="seg" data-mode="trojan">
+          <button type="button" class="on" data-m="link" data-i="mLink">Ссылка</button>
+          <button type="button" data-m="manual" data-i="mManual">Вручную</button>
+        </div>
+        <div data-pane="trojan-link">
+          <label class="field"><span data-i="tUrl">Ссылка trojan://</span>
+            <input class="mono" value="trojan://••••••••@fi1.example.com:443?security=tls&amp;sni=fi1.example.com&amp;type=tcp" />
+          </label>
+        </div>
+        <div data-pane="trojan-manual" class="hidden">
+          <label class="field"><span data-i="tPass">Пароль</span>
+            <input class="mono" type="password" value="••••••••••" />
+          </label>
+          <div class="pair">
+            <label class="field"><span data-i="eHost">Адрес</span><input class="mono" value="fi1.example.com" /></label>
+            <label class="field"><span data-i="ePort">Порт</span><input class="mono" value="443" /></label>
+          </div>
+          <div class="seg-cap" data-i="vSec">Защита</div>
+          <div class="seg"><button type="button" class="on">TLS</button><button type="button">REALITY</button></div>
+          <div class="seg-cap" data-i="vNet">Транспорт</div>
+          <div class="seg"><button type="button" class="on">TCP</button><button type="button">XHTTP</button></div>
+          <div class="pair" style="grid-template-columns:1fr 1fr">
+            <label class="field"><span data-i="vSni">Имя хоста TLS</span><input class="mono" value="fi1.example.com" /></label>
+            <label class="field"><span data-i="vFp">Отпечаток TLS</span><input class="mono" value="chrome" /></label>
+          </div>
+          <div class="pair">
+            <label class="field"><span data-i="vPbk">Публичный ключ</span><input class="mono" placeholder="pbk" /></label>
+            <label class="field">Short ID<input class="mono" placeholder="sid" /></label>
+          </div>
+        </div>
+        <div class="btns">
+          <button type="button" class="ghost" data-go="list" data-i="eBack">Назад</button>
+          <button type="button" class="go" data-go="list" data-i="eSave">Сохранить</button>
+        </div>
+        <div class="btns" style="margin-top:6px">
+          <button type="button" class="del" data-i="eDel">Удалить</button>
+        </div>
+      </div>
+      <div class="foot">/opt/etc/loft/trojan-fi.yaml</div>
+    </div>
+
     <!-- Import -->
     <div class="panel screen hidden" id="import">
       <header>
@@ -534,7 +612,7 @@
           <button type="button" class="go" data-go="list" data-i="iPick">Выбрать файл</button>
         </div>
       </div>
-      <div class="foot">→ OpkgTun4</div>
+      <div class="foot">→ OpkgTun5</div>
     </div>
 
     <!-- Fronts -->
@@ -554,6 +632,17 @@
           <label><input type="checkbox" /> h3</label>
           <label><input type="checkbox" /> l3</label>
         </div>
+        <div class="seg-cap" style="margin-top:14px" data-i="qTitle">Режим QUIC</div>
+        <div class="seg" data-cc>
+          <button type="button" data-cc="off" data-i="qOff">Выкл</button>
+          <button type="button" class="on" data-cc="bbr">BBR</button>
+          <button type="button" data-cc="fixed" data-i="qFixed">Фиксированная</button>
+        </div>
+        <div class="pair hidden" data-cc-rates style="grid-template-columns:1fr 1fr">
+          <label class="field"><span data-i="qUp">↑ Мбит/с</span><input class="mono" value="20" /></label>
+          <label class="field"><span data-i="qDown">↓ Мбит/с</span><input class="mono" value="100" /></label>
+        </div>
+        <p class="hint" style="margin-top:0" data-i="qHint">Для фронтов quic, h3 и l3. Нода соглашается в Status; итог виден в статусе подключения.</p>
         <div class="row"><span class="k" data-i="fLive">Живой</span><span>get</span></div>
         <div class="row"><span class="k">caps ∩</span><span class="mono">get ws h2 l3</span></div>
         <p class="hint" data-i="fCdn">Профиль CDN (yandex / cloudflare) — порядок заголовков, не возможность протокола.</p>
@@ -581,6 +670,30 @@
         <p class="hint" data-i="jHint">Строки фронта и сессии всех подключений. Ключ сокращается.</p>
       </div>
       <div class="foot">/opt/var/log/loft.log</div>
+    </div>
+
+    <!-- Package -->
+    <div class="panel screen hidden" id="pkg">
+      <header>
+        <div class="lamp on"></div>
+        <div class="t" data-i="pTitle">Пакет</div>
+        <div class="sub">opkg</div>
+      </header>
+      <div class="body">
+        <div class="row"><span class="k" data-i="pVer">Версия</span><span class="mono">1.0.22</span></div>
+        <div class="row"><span class="k" data-i="pArch">Архитектура</span><span class="mono">aarch64-3.10</span></div>
+        <div class="row"><span class="k" data-i="pLatest">GitHub latest</span><span class="v"><span class="tag wait"><span data-i="uAvail">Доступна</span> 1.0.23</span></span></div>
+        <div class="row" style="align-items:center">
+          <div><div style="font-size:13px" data-i="pAuto">Проверять обновления сами</div><div class="k" data-i="pAutoD">GitHub latest, релиз a3app/loft.</div></div>
+          <div class="sw-d on"><i></i></div>
+        </div>
+        <p class="hint" data-i="pHint">Скачает .ipk под эту архитектуру, сверит SHA256 и поставит через opkg. Сессии перезапустятся.</p>
+        <div class="btns">
+          <button type="button" class="ghost" data-i="pCheck">Проверить обновления</button>
+          <button type="button" class="go" data-i="pInstall">Обновить до 1.0.23</button>
+        </div>
+      </div>
+      <div class="foot">loft_1.0.22_aarch64-3.10.ipk</div>
     </div>
   </div>
 
@@ -617,6 +730,16 @@
         fTitle: "Фронты loft",
         fHint: "Порядок попыток внутри одного подключения. Не отдельные строки в Keenetic.",
         fLive: "Живой", fCdn: "Профиль CDN (yandex / cloudflare) — порядок заголовков, не возможность протокола.",
+        nEditTrojan: "Подключение · Trojan", nPkg: "Пакет",
+        tUrl: "Ссылка trojan://", tPass: "Пароль",
+        qTitle: "Режим QUIC", qOff: "Выкл", qFixed: "Фиксированная", qUp: "↑ Мбит/с", qDown: "↓ Мбит/с",
+        qHint: "Для фронтов quic, h3 и l3. Нода соглашается в Status; итог виден в статусе подключения.",
+        sCc: "Режим QUIC",
+        uAvail: "Доступна", uOpen: "Обновить",
+        pTitle: "Пакет", pVer: "Версия", pArch: "Архитектура", pLatest: "GitHub latest",
+        pAuto: "Проверять обновления сами", pAutoD: "GitHub latest, релиз a3app/loft.",
+        pHint: "Скачает .ipk под эту архитектуру, сверит SHA256 и поставит через opkg. Сессии перезапустятся.",
+        pCheck: "Проверить обновления", pInstall: "Обновить до 1.0.23",
         jTitle: "Журнал", jHint: "Строки фронта и сессии всех подключений. Ключ сокращается."
       },
       en: {
@@ -650,6 +773,16 @@
         fTitle: "loft fronts",
         fHint: "Try order inside one connection. Not extra Keenetic rows.",
         fLive: "Live", fCdn: "CDN profile (yandex / cloudflare) is header order, not a protocol cap.",
+        nEditTrojan: "Connection · Trojan", nPkg: "Package",
+        tUrl: "trojan:// link", tPass: "Password",
+        qTitle: "QUIC mode", qOff: "Off", qFixed: "Fixed rate", qUp: "↑ Mbit/s", qDown: "↓ Mbit/s",
+        qHint: "For quic, h3 and l3 fronts. The node agrees in Status; the result shows on the connection status.",
+        sCc: "QUIC mode",
+        uAvail: "Available", uOpen: "Update",
+        pTitle: "Package", pVer: "Version", pArch: "Architecture", pLatest: "GitHub latest",
+        pAuto: "Check for updates on its own", pAutoD: "GitHub latest, a3app/loft release.",
+        pHint: "Downloads the .ipk for this architecture, checks SHA256 and installs it with opkg. Sessions restart.",
+        pCheck: "Check for updates", pInstall: "Update to 1.0.23",
         jTitle: "Journal", jHint: "Front and session lines of every connection. Keys are shortened."
       }
     };
@@ -677,7 +810,15 @@
       b.addEventListener("click", () => show(b.getAttribute("data-go")));
     });
 
-    // Link / Manual switch on both edit screens.
+    // QUIC mode: rates only for the fixed mode.
+    document.querySelectorAll(".seg[data-cc] button").forEach((b) => {
+      b.addEventListener("click", () => {
+        b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+        document.querySelector("[data-cc-rates]").classList.toggle("hidden", b.dataset.cc !== "fixed");
+      });
+    });
+
+    // Link / Manual switch on the edit screens.
     document.querySelectorAll(".seg[data-mode]").forEach((seg) => {
       const kind = seg.dataset.mode;
       seg.querySelectorAll("button[data-m]").forEach((b) => {

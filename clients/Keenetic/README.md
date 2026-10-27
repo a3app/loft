@@ -13,7 +13,7 @@ This directory is the catalog. No binary yet.
 | On the router | Role |
 |---------------|------|
 | loft (get / ws / h2 / quic / h3 / l3) | loft overlay. One OpkgTun per connection. |
-| VLESS | A separate connection with its own OpkgTun. |
+| VLESS, Trojan | Separate connections, each with its own OpkgTun. |
 | SSTP, WireGuard, OpenVPN, IPsec, OpenConnect | Stock KeeneticOS. Not this package. |
 
 The client must not install a default route. NDM owns the table. Front IPs stay on the ISP path so the session does not hairpin.

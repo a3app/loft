@@ -4,7 +4,7 @@ Software 1.0.0. Protocol 1.0. This plan does not raise either version.
 
 ## Goal
 
-A routed loft client on Keenetic where every connection (loft profile or VLESS) shows up as **its own connection** in Connection Priorities and split routing. Operators set token and fronts on a LAN page gated by the Keenetic web-admin session.
+A routed loft client on Keenetic where every connection (loft profile, VLESS or Trojan) shows up as **its own connection** in Connection Priorities and split routing. Operators set token and fronts on a LAN page gated by the Keenetic web-admin session.
 
 ## Out of scope
 
@@ -41,15 +41,17 @@ HTTP on LAN only (`:8090` default). No loft password.
 
 KeeneticOS 5.2: if `/auth` advertises `x-ndw4-authenticate`, use the one-shot redirect token.
 
-UI: shared `lanui` v2. Connection list with on/off per connection; add by link (`loft://`, `vless://`), manual fields, or import (`client.yaml`, `.loft`, `.vpn`, QR picture); per-connection status (overlay, node and reserve, front, bytes), fronts, journal. See design/DESIGN.md.
+UI: shared `lanui` v2. Connection list with on/off per connection; add by link (`loft://`, `vless://`, `trojan://`), manual fields, or import (`client.yaml`, `.loft`, `.vpn`, QR picture); per-connection status (overlay, node and reserve, front, QUIC mode, bytes), fronts with QUIC mode (off / bbr / fixed with up and down Mbit/s), journal, package screen. See design/DESIGN.md.
 
 ### 3. Package
 
-`.ipk` for the three Entware arches. Each connection takes the next free OpkgTunN when it is created; deleting it removes the interface. `prerm` removes all of them. README with OPKG/TUN/TAP and KeeneticOS 5.0+. Optional GitHub Actions job later; not in the first tag.
+`.ipk` for the three Entware arches. Each connection takes the next free OpkgTunN when it is created; deleting it removes the interface. `prerm` removes all of them. The panel can update the package: GitHub latest `a3app/loft`, the `.ipk` for this arch, SHA256 check, `opkg install`, sessions restart. README with OPKG/TUN/TAP and KeeneticOS 5.0+. Optional GitHub Actions job later; not in the first tag.
 
-### 4. VLESS
+### 4. VLESS and Trojan
 
 A separate connection with its own OpkgTun, edited like loft: link or manual (UUID, host, port, TLS / REALITY, TCP / XHTTP, SNI, fingerprint, public key, short ID, Vision).
+
+Trojan is the same: link `trojan://` or manual (password, host, port, TLS / REALITY, TCP / XHTTP, SNI, fingerprint, public key, short ID).
 
 ## Order of work in the Go tree
 
