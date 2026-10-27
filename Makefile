@@ -49,15 +49,26 @@ panel-ui:
 panel-dev: panel-ui
 	go run ./server/panel/devstand -ui server/panel/web/ui
 
+# SUMS writes SHA256SUMS in the current directory: one "<sha256>  <file name>"
+# line for every file below it that matches the find test $(1). The name is the
+# bare file name, without the folder (linux-amd64/ and so on), because the
+# release page lists all assets flat: then "sha256sum -c" works in the folder
+# where a user downloaded them, and every updater finds its file by name.
+# Names carry version and arch, so they stay unique; the last line fails the
+# build if two files ever share a name.
+SUMS = find . -type f \( $(1) \) -print | sort | \
+	while IFS= read -r f; do \
+		if command -v sha256sum >/dev/null 2>&1; then h=$$(sha256sum < "$$f"); else h=$$(shasum -a 256 < "$$f"); fi; \
+		printf '%s  %s\n' "$${h%% *}" "$$(basename "$$f")"; \
+	done > SHA256SUMS && \
+	! awk '{print $$2}' SHA256SUMS | sort | uniq -d | grep .
+
 # Panel tarballs (install.sh inside, loft-node bundled in node/) and .debs for amd64 and arm64.
 PANEL := $(DIST)/panel
 PANEL_DEB := server/panel/debian
 
 dist-panel: panel-ui dist-panel-amd64 dist-panel-arm64
-	cd $(PANEL) && find . \( -name '*.tar.gz' -o -name '*.deb' \) -print | sort | \
-		while IFS= read -r f; do \
-			if command -v sha256sum >/dev/null 2>&1; then sha256sum "$$f"; else shasum -a 256 "$$f"; fi; \
-		done > SHA256SUMS
+	cd $(PANEL) && $(call SUMS,-name '*.tar.gz' -o -name '*.deb')
 	@echo $(PANEL)
 
 dist-panel-amd64:
@@ -138,10 +149,7 @@ dist: dist-node dist-clients
 
 dist-node: dist-clean-legacy dist-debian dist-deb
 	cp $(DEBDIR)/DIST.md $(NODE)/README.md
-	cd $(NODE) && find . \( -name '*.tar.gz' -o -name '*.deb' \) -print | sort | \
-		while IFS= read -r f; do \
-			if command -v sha256sum >/dev/null 2>&1; then sha256sum "$$f"; else shasum -a 256 "$$f"; fi; \
-		done > SHA256SUMS
+	cd $(NODE) && $(call SUMS,-name '*.tar.gz' -o -name '*.deb')
 	@echo $(NODE)
 
 # Cross-compiled CLI (CGO off). Windows is not a target: TUN uses unix.
@@ -162,10 +170,7 @@ dist-clients:
 		tar -C $$dest -czf $(CLIENTS)/go/$$name.tar.gz $(CLIENT_CMDS); \
 		echo $(CLIENTS)/go/$$name.tar.gz; \
 	done
-	cd $(CLIENTS)/go && find . -name '*.tar.gz' -print | sort | \
-		while IFS= read -r f; do \
-			if command -v sha256sum >/dev/null 2>&1; then sha256sum "$$f"; else shasum -a 256 "$$f"; fi; \
-		done > SHA256SUMS
+	cd $(CLIENTS)/go && $(call SUMS,-name '*.tar.gz')
 
 dist-clean-node:
 	rm -rf $(NODE)

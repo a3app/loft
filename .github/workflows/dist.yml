@@ -107,6 +107,17 @@ jobs:
             echo "$f"
           done
           find dist/node dist/panel -name '*.deb' | sort
+      - name: Smoke checksums
+        # The release page lists assets flat, so check each SHA256SUMS the
+        # way a user would: files copied into one folder, then sha256sum -c.
+        run: |
+          set -eu
+          for d in dist/node dist/panel dist/clients/go; do
+            flat=$(mktemp -d)
+            find "$d" -type f \( -name '*.tar.gz' -o -name '*.deb' \) -exec cp {} "$flat"/ \;
+            (cd "$flat" && sha256sum -c "$GITHUB_WORKSPACE/$d/SHA256SUMS")
+            rm -rf "$flat"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: linux
