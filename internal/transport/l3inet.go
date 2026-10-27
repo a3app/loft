@@ -49,7 +49,8 @@ const (
 	// l3SndMax caps the bytes in flight to the member, whatever window it
 	// offers (gVisor and OS stacks offer several MB). The tunnel delivers
 	// such a burst faster than the member's stack takes it in, and the
-	// overflow was dropped; the node does not resend, so the flow hung.
+	// overflow is dropped. It also bounds the copy kept for resending
+	// (l3resend.go).
 	l3SndMax = 1 << 20
 )
 
@@ -66,7 +67,10 @@ type l3Tuple struct {
 // cwin the client's advertised window (scaled by wshift). pend holds data
 // the client sent before the outbound connection was up. ooo holds segments
 // that arrived after a missing one, by sequence number, oooN their bytes.
+// key is the flow's entry in l3TCP, and rs what it needs to resend lost
+// segments to the member (l3resend.go).
 type l3TCPFlow struct {
+	key           l3Tuple
 	who           egress.Who // the member, so its exit rules apply
 	src, dst      net.IP
 	sport, dport  uint16
@@ -82,6 +86,7 @@ type l3TCPFlow struct {
 	ack           chan struct{}
 	ooo           map[uint32][]byte
 	oooN          int
+	rs            l3Resend
 }
 
 // l3UDPFlow is one proxied UDP flow. With exit rules configured it goes out
@@ -322,19 +327,38 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 	l3TCPMu.Lock()
 	f := l3TCP[key]
 	if flags&tcpRST != 0 {
-		if f != nil {
-			f.close()
-			delete(l3TCP, key)
-		}
+		// The member reset the connection: drop the flow.
 		l3TCPMu.Unlock()
+		if f != nil {
+			f.forget()
+		}
 		return
 	}
-	if f != nil && flags&tcpSYN != 0 && flags&tcpACK == 0 && seq+1 != f.rcv {
-		// Not a resend of this flow's SYN (that has the same seq): a new
-		// connection on the same addresses and ports.
-		f.close()
+	if f != nil && flags&tcpSYN != 0 && flags&tcpACK == 0 {
+		if seq+1 == f.rcv {
+			// The member sent its SYN again: our SYN-ACK was lost (or is
+			// still on its way). Answer it again once the outbound dial is
+			// up; until then l3TCPDial sends the first one.
+			l3TCPMu.Unlock()
+			f.mu.Lock()
+			var synack []byte
+			if f.conn != nil && !f.up {
+				synack = l3TCPPacketAt(f, tcpSYN|tcpACK, f.iss, nil)
+			}
+			rep := f.reply
+			f.mu.Unlock()
+			if synack != nil {
+				l3Resends.Add(1)
+				_ = rep(synack)
+			}
+			return
+		}
+		// A SYN with another sequence number: a new connection on the
+		// same addresses and ports. Retire the old flow, start a new one.
 		delete(l3TCP, key)
+		old := f
 		f = nil
+		defer old.forget()
 	}
 	if f == nil {
 		if flags&tcpSYN == 0 || flags&tcpACK != 0 || len(l3TCP) >= l3FlowCap {
@@ -350,7 +374,7 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 			cwin = 65535
 		}
 		f = &l3TCPFlow{
-			who: who, src: src, dst: dst, sport: sport, dport: dport,
+			key: key, who: who, src: src, dst: dst, sport: sport, dport: dport,
 			iss: binary.BigEndian.Uint32(iss[:]), rcv: seq + 1, reply: reply,
 			wshift: shift, cwin: cwin, ack: make(chan struct{}, 1),
 		}
@@ -358,21 +382,33 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 		f.una = f.iss
 		l3TCP[key] = f
 		l3TCPMu.Unlock()
-		go l3TCPDial(key, f)
+		go l3TCPDial(f)
 		return
 	}
 	l3TCPMu.Unlock()
 	if flags&tcpACK != 0 {
+		// The member acknowledges what it got: free those bytes, resend a
+		// missing segment if this ACK points at one (l3resend.go), and wake
+		// the sender in l3TCPDial, which may have room again.
 		ackn := binary.BigEndian.Uint32(th[8:12])
-		win := binary.BigEndian.Uint16(th[14:16])
+		win := uint32(binary.BigEndian.Uint16(th[14:16]))
+		pure := len(payload) == 0 && flags&(tcpSYN|tcpFIN|tcpRST) == 0
 		f.mu.Lock()
-		f.una = ackn
-		f.cwin = uint32(win) << f.wshift
+		resend, finished := f.onAckLocked(ackn, win, pure)
 		select {
 		case f.ack <- struct{}{}:
 		default:
 		}
+		rep := f.reply
 		f.mu.Unlock()
+		if resend != nil {
+			_ = rep(resend)
+		}
+		if finished {
+			// Our FIN is acknowledged: both directions are done.
+			f.forget()
+			return
+		}
 	}
 	f.mu.Lock()
 	if !f.up && flags&tcpACK != 0 {
@@ -478,15 +514,15 @@ func l3TCPTrim(seq, rcv uint32, payload []byte) ([]byte, bool) {
 // copies data from the internet into TCP segments, never having more in
 // flight than the member's window allows, and at most l3SndMax; when that
 // is full it waits for an ACK (or 50 ms) and tries again. The outbound dial
-// follows the member's exit rules, like its mux streams. It sends each
-// segment once: a segment lost on the member's side is not resent yet.
-func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
+// follows the member's exit rules, like its mux streams. Every segment is
+// kept until the member acknowledges it, and sent again if it gets lost
+// (l3resend.go).
+func l3TCPDial(f *l3TCPFlow) {
 	c, err := dialOut(f.who, net.JoinHostPort(f.dst.String(), strconv.Itoa(int(f.dport))))
 	if err != nil {
+		// The site refused: tell the member with a RST, like a real host.
 		_ = f.reply(f.segment(tcpRST|tcpACK, nil))
-		l3TCPMu.Lock()
-		delete(l3TCP, key)
-		l3TCPMu.Unlock()
+		f.forget()
 		return
 	}
 	f.mu.Lock()
@@ -530,6 +566,7 @@ func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 				chunk := append([]byte(nil), buf[off:off+room]...)
 				f.mu.Lock()
 				pkt := l3TCPPacket(f, tcpPSH|tcpACK, chunk)
+				f.sentLocked(f.snd, chunk) // keep a copy until it is acknowledged
 				f.snd += uint32(len(chunk))
 				rep := f.reply
 				f.mu.Unlock()
@@ -538,11 +575,15 @@ func l3TCPDial(key l3Tuple, f *l3TCPFlow) {
 			}
 		}
 		if err != nil {
-			_ = f.reply(f.segment(tcpFIN|tcpACK, nil))
+			// The site is done: send our FIN. The flow stays until the
+			// member acknowledges it (then onAckLocked reports finished),
+			// so a lost FIN or lost last bytes are sent again.
+			f.mu.Lock()
+			fin := f.finLocked()
+			rep := f.reply
+			f.mu.Unlock()
+			_ = rep(fin)
 			f.close()
-			l3TCPMu.Lock()
-			delete(l3TCP, key)
-			l3TCPMu.Unlock()
 			return
 		}
 	}
@@ -570,6 +611,16 @@ func (f *l3TCPFlow) segment(flags byte, payload []byte) []byte {
 // the MSS and window scale options. It reads sport, dport, iss, snd, rcv,
 // src, dst; the caller holds f.mu.
 func l3TCPPacket(f *l3TCPFlow, flags byte, payload []byte) []byte {
+	seq := f.snd
+	if flags&tcpSYN != 0 {
+		seq = f.iss
+	}
+	return l3TCPPacketAt(f, flags, seq, payload)
+}
+
+// l3TCPPacketAt is l3TCPPacket with an explicit sequence number, for
+// segments sent again (l3resend.go). The caller holds f.mu.
+func l3TCPPacketAt(f *l3TCPFlow, flags byte, seq uint32, payload []byte) []byte {
 	hdr := 20
 	var opts []byte
 	if flags&tcpSYN != 0 {
@@ -579,10 +630,6 @@ func l3TCPPacket(f *l3TCPFlow, flags byte, payload []byte) []byte {
 	th := make([]byte, hdr+len(payload))
 	binary.BigEndian.PutUint16(th[0:2], f.dport)
 	binary.BigEndian.PutUint16(th[2:4], f.sport)
-	seq := f.snd
-	if flags&tcpSYN != 0 {
-		seq = f.iss
-	}
 	binary.BigEndian.PutUint32(th[4:8], seq)
 	binary.BigEndian.PutUint32(th[8:12], f.rcv)
 	th[12] = byte(hdr/4) << 4
