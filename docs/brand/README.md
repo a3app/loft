@@ -14,7 +14,7 @@ Solid fills only on the mark and in the tray. A light glow on the window is used
 |-------|-----|-----|
 | Ink | `#1A1714` | app icon ground, mark on light |
 | Stone | `#B7A99A` | L body on dark app icon |
-| Copper | `#C67B3A` | Windows tray |
+| Copper | `#C67B3A` | Windows installer box |
 | Lamp | `#E8B84A` | window, connected |
 | Lamp hi | `#F3D27A` | window highlight on app icon |
 | Snow | `#F3EDE4` | mark on dark, tray on dark |
@@ -78,7 +78,7 @@ On macOS the font is system and includes Cyrillic. On Windows, identical wordmar
 1. The roof covers only the stem of L; the foot extends right. It is an L.
 2. At ≤16px use the `PIX16` grid in `generate.py`. Do not downscale from 1024.
 3. macOS menu bar is a **template image** (black + alpha). The system tints it.
-4. Windows tray defaults to **copper + lamp**.
+4. Windows tray: **snow + lamp** on a dark taskbar (and Windows 7), **ink + lamp** on a light one (`loft-tray-light*`).
 5. Connected: the lamp is on. Disconnected: the same L, window off (macOS: no cut-out).
 6. The word *loft* is lowercase, Avenir Next Demi, tracking −0.04em.
 7. The tagline is the recursive acronym *Loft Overlay For TLS* (LOFT). Title case. The wordmark stays lowercase `loft`.

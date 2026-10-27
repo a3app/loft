@@ -20,14 +20,14 @@
 
 ## 2. 托盘
 
-图标为 [`docs/brand/svg/loft-tray.svg`](../../../docs/brand/svg/loft-tray.svg)：铜色主体，窗口为灯光色（品牌规则 4）。位图位于 [`docs/brand/tray/`](../../../docs/brand/tray/)：16 / 20 / 24 / 32 px，对应 100 / 125 / 150 / 200 % 缩放。不要从 1024 缩小（规则 2）。
+图标为 [`docs/brand/svg/loft-tray.svg`](../../../docs/brand/svg/loft-tray.svg)：主体为 snow `#F3EDE4`，窗口为灯光色（品牌规则 4）；浅色任务栏上主体为墨色（`loft-tray-light*`）。位图位于 [`docs/brand/tray/`](../../../docs/brand/tray/)：16 / 20 / 24 / 32 px，对应 100 / 125 / 150 / 200 % 缩放。不要从 1024 缩小（规则 2）。
 
 | 状态 | 主体 | 窗口 |
 |------|------|------|
-| disconnected | 铜色 | 铜色（`loft-tray-off`） |
-| connecting | 铜色 | 灯光色，闪烁 |
-| connected | 铜色 | 灯光色 `#E8B84A`（`loft-tray`） |
-| error / route closed | 铜色 | 红色 `#E24B4B` |
+| disconnected | snow | snow（`loft-tray-off`） |
+| connecting | snow | 灯光色，闪烁 |
+| connected | snow | 灯光色 `#E8B84A`（`loft-tray`） |
+| error / route closed | snow | 红色 `#E24B4B`（`loft-tray-err`） |
 
 多连接模式沿用 macOS §7 的规则：至少一个会话在线为黄色；至少一个出错为红色。
 

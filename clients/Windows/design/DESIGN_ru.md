@@ -20,14 +20,14 @@
 
 ## 2. Трей
 
-Значок — [`docs/brand/svg/loft-tray.svg`](../../../docs/brand/svg/loft-tray.svg): тело медное, окно — лампа (правило бренда 4). Растры — [`docs/brand/tray/`](../../../docs/brand/tray/): 16 / 20 / 24 / 32 px для масштаба 100 / 125 / 150 / 200 %. Вниз из 1024 не масштабировать (правило 2).
+Значок — [`docs/brand/svg/loft-tray.svg`](../../../docs/brand/svg/loft-tray.svg): тело Snow `#F3EDE4`, окно — лампа (правило бренда 4); на светлой панели задач тело Ink (`loft-tray-light*`). Растры — [`docs/brand/tray/`](../../../docs/brand/tray/): 16 / 20 / 24 / 32 px для масштаба 100 / 125 / 150 / 200 %. Вниз из 1024 не масштабировать (правило 2).
 
 | Состояние | Тело | Окно |
 |-----------|------|------|
-| disconnected | медь | медь (`loft-tray-off`) |
-| connecting | медь | лампа, мигает |
-| connected | медь | лампа `#E8B84A` (`loft-tray`) |
-| error / route closed | медь | красный `#E24B4B` |
+| disconnected | snow | snow (`loft-tray-off`) |
+| connecting | snow | лампа, мигает |
+| connected | snow | лампа `#E8B84A` (`loft-tray`) |
+| error / route closed | snow | красный `#E24B4B` (`loft-tray-err`) |
 
 В режиме multi действует то же правило, что в macOS §7: жёлтый, если жива хотя бы одна сессия; красный, если хотя бы одна в ошибке.
 

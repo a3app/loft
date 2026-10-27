@@ -20,14 +20,14 @@ Builds: **x86 and x64**. The UI is **native Win32** with its own drawing (no Web
 
 ## 2. Tray
 
-The icon is [`docs/brand/svg/loft-tray.svg`](../../../docs/brand/svg/loft-tray.svg): copper body, lamp window (brand rule 4). Rasters are in [`docs/brand/tray/`](../../../docs/brand/tray/): 16 / 20 / 24 / 32 px for 100 / 125 / 150 / 200 % scale. Do not downscale from 1024 (rule 2).
+The icon is [`docs/brand/svg/loft-tray.svg`](../../../docs/brand/svg/loft-tray.svg): snow `#F3EDE4` body, lamp window (brand rule 4); on a light taskbar the body is ink (`loft-tray-light*`). Rasters are in [`docs/brand/tray/`](../../../docs/brand/tray/): 16 / 20 / 24 / 32 px for 100 / 125 / 150 / 200 % scale. Do not downscale from 1024 (rule 2).
 
 | State | Body | Window |
 |-------|------|--------|
-| disconnected | copper | copper (`loft-tray-off`) |
-| connecting | copper | lamp, blinking |
-| connected | copper | lamp `#E8B84A` (`loft-tray`) |
-| error / route closed | copper | red `#E24B4B` |
+| disconnected | snow | snow (`loft-tray-off`) |
+| connecting | snow | lamp, blinking |
+| connected | snow | lamp `#E8B84A` (`loft-tray`) |
+| error / route closed | snow | red `#E24B4B` (`loft-tray-err`) |
 
 In multi mode the macOS §7 rule applies: yellow if at least one session is up; red if at least one has failed.
 

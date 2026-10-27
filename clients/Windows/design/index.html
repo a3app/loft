@@ -140,8 +140,8 @@
     .taskbar .tray svg { display: block; }
     .taskbar .tray .clock { flex-direction: column; line-height: 1.25; font-size: 11.5px; text-align: center; padding: 0 8px; }
     .taskbar .tray .kb { font-size: 11px; letter-spacing: .04em; }
-    .tray-mark .tb { fill: var(--copper); }
-    .tray-mark .tl { fill: var(--copper); }
+    .tray-mark .tb { fill: var(--snow); }
+    .tray-mark .tl { fill: var(--snow); }
     .tray-mark.on .tl { fill: var(--lamp); }
     .tray-mark.err .tl { fill: var(--err); }
 
@@ -1957,7 +1957,7 @@ outbounds:
       const svg = document.getElementById("mb-svg");
       svg.classList.remove("on", "err");
       const hide = ["onboard", "url", "about", "import", "export"].includes(name);
-      // Off: the window is copper like the body (docs/brand loft-tray-off).
+      // Off: the window is snow like the body (docs/brand loft-tray-off).
       let st = "off";
       if (hide) st = "off";
       else if (heldNow || name === "hold" || name === "err" || (multi && name !== "off" && anyErr())) st = "err";

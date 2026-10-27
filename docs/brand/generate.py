@@ -28,6 +28,7 @@ SLATE_HI = "#3A332E"
 LAMP = "#E8B84A"
 LAMP_HI = "#F3D27A"
 COPPER = "#C67B3A"
+TRAY_BODY = "#F3EDE4"  # tray body on a dark taskbar; copper was too loud
 SNOW = "#F3EDE4"
 PAPER = "#E8DFD2"
 MUTE = "#8A7E72"
@@ -217,15 +218,7 @@ def write_svgs() -> None:
         ),
     )
 
-    # Tray source (aligned to 16 grid conceptually, drawn large)
-    write(
-        SVG / "loft-tray.svg",
-        svg_doc(16, mark_group(1, 0.5, 14, 15, COPPER, LAMP)),
-    )
-    write(
-        SVG / "loft-tray-off.svg",
-        svg_doc(16, mark_group(1, 0.5, 14, 15, COPPER, COPPER)),
-    )
+    # Tray SVGs: build_tray
     write(
         SVG / "loft-menubar-template.svg",
         svg_doc(18, mark_group(1.2, 0.6, 15.6, 16.6, "#000", "#000", hole=True)),
@@ -502,27 +495,7 @@ def build_rasters() -> None:
     chrome_shot(SVG / "loft-og.svg", PNG / "github-social-preview.png", 1280, 640)
     export_android_splash()
 
-    # Windows tray — pixel-hinted 16, scaled integer for 32; supersample for others
-    on16 = paint_grid(PIX16, hex_rgba(COPPER), hex_rgba(LAMP), 1)
-    off16 = paint_grid(PIX16, hex_rgba(COPPER), hex_rgba(COPPER), 1)  # lamp off
-    save(on16, TRAY / "loft-tray-16.png")
-    save(off16, TRAY / "loft-tray-off-16.png")
-    save(paint_grid(PIX16, hex_rgba(COPPER), hex_rgba(LAMP), 2), TRAY / "loft-tray-32.png")
-
-    for size in (20, 24, 48, 64):
-        save(
-            raster_supersampled(size, hex_rgba(COPPER), hex_rgba(LAMP)),
-            TRAY / f"loft-tray-{size}.png",
-        )
-        save(
-            raster_supersampled(size, hex_rgba(COPPER), hex_rgba(COPPER)),
-            TRAY / f"loft-tray-off-{size}.png",
-        )
-    save(
-        raster_supersampled(32, hex_rgba(COPPER), hex_rgba(COPPER)),
-        TRAY / "loft-tray-off-32.png",
-    )
-    save(paint_grid(PIX16, hex_rgba(COPPER), hex_rgba(COPPER), 2), TRAY / "loft-tray-off-32.png")
+    build_tray()
     # light-taskbar variant: ink body
     save(paint_grid(PIX16, hex_rgba(INK), hex_rgba(LAMP), 1), TRAY / "loft-tray-16-on-light.png")
     save(paint_grid(PIX16, hex_rgba(SNOW), hex_rgba(LAMP), 1), TRAY / "loft-tray-16-on-dark.png")
@@ -539,6 +512,33 @@ def build_rasters() -> None:
     shutil.copyfile(MENUBAR / "loftTemplate-36.png", MENUBAR / "loftTemplate@2x.png")
     shutil.copyfile(MENUBAR / "loftTemplate-54.png", MENUBAR / "loftTemplate@3x.png")
     shutil.copyfile(MENUBAR / "loftTemplate-44.png", MENUBAR / "loftTemplate-22@2x.png")
+
+
+def build_tray() -> None:
+    """Windows tray PNGs and SVGs: snow body on a dark taskbar, lamp window when connected."""
+    write(SVG / "loft-tray.svg", svg_doc(16, mark_group(1, 0.5, 14, 15, TRAY_BODY, LAMP)))
+    write(SVG / "loft-tray-off.svg", svg_doc(16, mark_group(1, 0.5, 14, 15, TRAY_BODY, TRAY_BODY)))
+    # pixel-hinted 16, scaled integer for 32; supersample for others
+    on16 = paint_grid(PIX16, hex_rgba(TRAY_BODY), hex_rgba(LAMP), 1)
+    off16 = paint_grid(PIX16, hex_rgba(TRAY_BODY), hex_rgba(TRAY_BODY), 1)  # lamp off
+    save(on16, TRAY / "loft-tray-16.png")
+    save(off16, TRAY / "loft-tray-off-16.png")
+    save(paint_grid(PIX16, hex_rgba(TRAY_BODY), hex_rgba(LAMP), 2), TRAY / "loft-tray-32.png")
+
+    for size in (20, 24, 48, 64):
+        save(
+            raster_supersampled(size, hex_rgba(TRAY_BODY), hex_rgba(LAMP)),
+            TRAY / f"loft-tray-{size}.png",
+        )
+        save(
+            raster_supersampled(size, hex_rgba(TRAY_BODY), hex_rgba(TRAY_BODY)),
+            TRAY / f"loft-tray-off-{size}.png",
+        )
+    save(
+        raster_supersampled(32, hex_rgba(TRAY_BODY), hex_rgba(TRAY_BODY)),
+        TRAY / "loft-tray-off-32.png",
+    )
+    save(paint_grid(PIX16, hex_rgba(TRAY_BODY), hex_rgba(TRAY_BODY), 2), TRAY / "loft-tray-off-32.png")
 
 
 def menubar_outline(size: int) -> Image.Image:
@@ -968,9 +968,9 @@ def build_windows() -> None:
         save(badge_img(s, "gear"), WIN / "png" / f"loft-svc-{s}.png")
         save(badge_img(s, "arrows"), WIN / "png" / f"loft-front-{s}.png")
 
-    # Tray: default copper (Win7, dark taskbar), light = ink body for a light taskbar.
+    # Tray: default snow (Win7, dark taskbar), light = ink body for a light taskbar.
     tray_sizes = (16, 20, 24, 32, 40, 48)
-    for theme, body in (("", COPPER), ("-light", INK)):
+    for theme, body in (("", TRAY_BODY), ("-light", INK)):
         for state, lamp in (("", LAMP), ("-off", body), ("-err", ERR)):
             name = f"loft-tray{theme}{state}"
             imgs = [tray_img(s, body, lamp) for s in tray_sizes]
@@ -1019,6 +1019,7 @@ if __name__ == "__main__":
     import sys
 
     if sys.argv[1:] == ["windows"]:
+        build_tray()
         build_windows()
     else:
         main()

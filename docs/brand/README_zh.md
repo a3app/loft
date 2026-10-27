@@ -14,7 +14,7 @@
 |-------|-----|-----|
 | Ink | `#1A1714` | 应用图标底，浅底上的标志 |
 | Stone | `#B7A99A` | 深色应用图标上的 L 身 |
-| Copper | `#C67B3A` | Windows 托盘 |
+| Copper | `#C67B3A` | Windows 安装程序盒子 |
 | Lamp | `#E8B84A` | 窗口，已打开 |
 | Lamp hi | `#F3D27A` | 应用图标上的窗口高光 |
 | Snow | `#F3EDE4` | 深底上的标志，深底上的托盘 |
@@ -78,7 +78,7 @@ macOS 上这是系统字体，带西里尔文。Windows 上要像素级一样的
 1. 屋顶只盖住 L 的竖笔；脚往右伸。这是 L。
 2. ≤16px 用 `generate.py` 里的 `PIX16` 网格。不要从 1024 缩小。
 3. macOS 菜单栏是 **template image**（黑 + alpha）。系统自己上色。
-4. Windows 托盘默认 **copper + lamp**。
+4. Windows 托盘：深色任务栏（及 Windows 7）用 **snow + lamp**，浅色任务栏用 **ink + lamp**（`loft-tray-light*`）。
 5. 已打开：灯亮。已断开：同一个 L，窗口灭（macOS：不挖空）。
 6. 单词 *loft* 小写，Avenir Next Demi，字距 −0.04em。
 7. 标语是递归缩写 *Loft Overlay For TLS*（LOFT）。Title case。wordmark 仍为小写 `loft`。
