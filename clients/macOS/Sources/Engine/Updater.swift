@@ -68,9 +68,9 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
     /// Asset name for the running slice.
     static var dmgName: String {
         #if arch(arm64)
-        return "loft-macos-arm64.dmg"
+        return "loft-macos-arm.dmg"
         #else
-        return "loft-macos-x86_64.dmg"
+        return "loft-macos-intel.dmg"
         #endif
     }
 
@@ -282,13 +282,14 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
         try writeRelaunch(from: staged, onto: dest)
     }
 
-    /// `loft-1.0.28-macos-arm64.dmg` (Dist) or the old unversioned name.
+    /// Dist names `loft-1.0.33-macos-arm.dmg` / `macos-intel.dmg`, plus the
+    /// older arm64 / x86_64 / aarch64 / amd64 tails and the unversioned name.
     private static func asset(_ name: String, matches want: String) -> Bool {
         if name == want { return true }
         #if arch(arm64)
-        let tails = ["-macos-arm64.dmg", "-macos-aarch64.dmg"]
+        let tails = ["-macos-arm.dmg", "-macos-arm64.dmg", "-macos-aarch64.dmg"]
         #else
-        let tails = ["-macos-x86_64.dmg", "-macos-amd64.dmg"]
+        let tails = ["-macos-intel.dmg", "-macos-x86_64.dmg", "-macos-amd64.dmg"]
         #endif
         return tails.contains { name.hasSuffix($0) }
     }

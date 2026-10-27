@@ -5,9 +5,8 @@
 # sign.sh, builds a writable image, lets Finder lay out the window, then
 # compresses it to a read-only UDZO image. With a Developer ID it also signs
 # the .dmg and, when NOTARY_PROFILE names a stored notarytool profile,
-# notarizes and staples it. Output: dist/clients/macOS/loft-VER-macos-ARCH.dmg.
-# ARCH (arm64 or x86_64) only names the file; the app must already be built
-# for that architecture.
+# notarizes and staples it. Output: dist/clients/macOS/loft-VER-macos-{arm,intel}.dmg.
+# ARCH (arm64 or x86_64) is the slice; Dist names are arm / intel.
 set -eu
 
 PACK=$(cd "$(dirname "$0")" && pwd)
@@ -18,15 +17,16 @@ OUTDIR="$ROOT/dist/clients/macOS"
 VER=$(tr -d ' \n' < "$MACOS/VERSION")
 ARCH=${ARCH:-$(uname -m)}
 case "$ARCH" in
-arm64|x86_64) ;;
+arm64) TAG=arm ;;
+x86_64) TAG=intel ;;
 *)
 	echo "dmg: ARCH must be arm64 or x86_64 (got $ARCH)" >&2
 	exit 1
 	;;
 esac
 VOL=loft
-DMG="$OUTDIR/loft-${VER}-macos-${ARCH}.dmg"
-RW="$OUTDIR/loft-${VER}-macos-${ARCH}.rw.dmg"
+DMG="$OUTDIR/loft-${VER}-macos-${TAG}.dmg"
+RW="$OUTDIR/loft-${VER}-macos-${TAG}.rw.dmg"
 
 # shellcheck disable=SC1091
 . "$PACK/identity.sh"
