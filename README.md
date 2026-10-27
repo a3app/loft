@@ -7,7 +7,7 @@
 
 **loft** is an overlay inside TLS. The app connects over popular protocols that run on top of ordinary HTTPS — VLESS, Trojan and SSTP — and over its own protocol, loft.
 
-loft is built for networks where ordinary VPN protocols work poorly or not at all: the link is unstable, only HTTPS is open to the outside, and traffic passes through proxies, CDNs and inspection systems (DPI). From the outside the session is indistinguishable from ordinary HTTPS, and the connection survives drops and network changes.
+loft is built for networks where ordinary VPN protocols work poorly or not at all: the link is unstable, only HTTPS is open to the outside, and traffic passes through proxies, CDNs and inspection systems (DPI). From the outside the handshake looks like a browser's, a scanner without a key is answered by the site the node fronts, and the connection survives drops and network changes.
 
 In the loft protocol, streams are multiplexed over GET, WebSocket, HTTP/2, QUIC or HTTP/3, so CDNs, reverse proxies and TLS terminators pass the session through.
 
