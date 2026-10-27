@@ -1,3 +1,6 @@
+// engine.h: the Engine class, the C++ side of the Sailfish / Aurora app.
+// main.cpp exposes one Engine to QML (qml/pages/MainPage.qml binds to its
+// properties). The implementation is in engine.cpp.
 #ifndef LOFT_SAILFISH_ENGINE_H
 #define LOFT_SAILFISH_ENGINE_H
 
@@ -25,25 +28,32 @@ class Engine : public QObject {
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
 
 public:
+    // Construction loads the saved client.yaml; destruction ends the session.
     explicit Engine(QObject *parent = 0);
     ~Engine();
 
+    // Property accessors. yaml is the pasted text, line the one-line status
+    // shown under it, up "session is live", busy "connect in progress".
     QString yaml() const { return yaml_; }
     void setYaml(const QString &v);
     QString line() const { return line_; }
     bool up() const { return up_; }
     bool busy() const { return busy_; }
 
+    // Called from the Connect / Disconnect buttons in QML.
     Q_INVOKABLE void connectSession();
     Q_INVOKABLE void disconnectSession();
 
 signals:
+    // Change notifications for the properties above.
     void yamlChanged();
     void lineChanged();
     void upChanged();
     void busyChanged();
 
 private slots:
+    // Output and exit of the fallback loft-front process, and state
+    // changes of the ConnMan VPN row.
     void onStdout();
     void onStderr();
     void onFinished(int code);
@@ -66,6 +76,9 @@ private:
         QString kind;
     };
 
+    // Helpers: find loft-front and the data dir, parse the pasted text into
+    // a Session, build loft-front flags, drive the ConnMan row, update the
+    // properties, and save client.yaml. See engine.cpp for each.
     QString binaryPath() const;
     QString dataDir() const;
     bool parseBody(const QString &body, Session *out, QString *err) const;
@@ -82,10 +95,12 @@ private:
     void handleStatus(const QString &line);
     void persistYaml(const QString &body) const;
 
+    // Backing fields of the properties.
     QString yaml_;
     QString line_;
     bool up_;
     bool busy_;
+    /** The fallback loft-front child process; 0 when not running. */
     QProcess *proc_;
     /** Unfinished last line of loft-front's stdout / stderr. */
     QString outRest_;

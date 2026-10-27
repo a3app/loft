@@ -25,6 +25,8 @@ Page {
                 text: "From the street, ordinary HTTPS."
             }
 
+            // The pasted connection. Two-way: shows the saved client.yaml
+            // at start, and every edit goes back to engine.yaml.
             TextArea {
                 id: body
                 width: parent.width
@@ -35,6 +37,8 @@ Page {
                 onTextChanged: engine.yaml = text
             }
 
+            // Connect is off while connecting or connected; Disconnect also
+            // works during a connect, to cancel it.
             Row {
                 x: Theme.horizontalPageMargin
                 spacing: Theme.paddingMedium
@@ -57,6 +61,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
+                // Status line from the engine (state, address, or error).
                 text: engine.line
             }
         }

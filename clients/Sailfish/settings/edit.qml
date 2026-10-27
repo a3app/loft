@@ -29,6 +29,7 @@ VpnPlatformEditDialog {
         return s
     }
 
+    // The main fields of the row; advanced.qml holds the rest.
     Column {
         width: parent.width
 
@@ -69,6 +70,8 @@ VpnPlatformEditDialog {
         }
     }
 
+    // Opening the dialog: fill the fields from the row. An older row with
+    // no Loft.URL shows its Host instead.
     Component.onCompleted: {
         init()
         var url = getProviderProperty("Loft.URL")
@@ -82,6 +85,8 @@ VpnPlatformEditDialog {
         cdnField.text = getProviderProperty("Loft.CDN")
     }
 
+    // Saving: store every field as a Loft.* property, set Host from the
+    // URL, and save the row in connman-vpnd.
     onAccepted: {
         var url = urlField.text
         var host = hostFromUrl(url)

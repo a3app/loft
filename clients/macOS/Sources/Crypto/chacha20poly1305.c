@@ -1,4 +1,9 @@
-/* RFC 8439 ChaCha20-Poly1305 AEAD used by LoftCrypto.seal/open. */
+/* RFC 8439 ChaCha20-Poly1305 AEAD used by LoftCrypto.seal/open.
+
+   Self-contained implementation: ChaCha20 is the stream cipher that hides
+   the data, Poly1305 is the one-time MAC that produces the tag. Public API
+   and usage notes are in chacha20poly1305.h; tests/test_aead.c checks this
+   file against the official RFC 8439 example. */
 #include "chacha20poly1305.h"
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +18,8 @@ static void st32(uint8_t *p, uint32_t v) {
 }
 /* rotl: 32-bit rotate left. */
 static uint32_t rotl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
-/* qr: ChaCha quarter round. */
+/* qr: ChaCha quarter round. Mixes four state words with add, xor, rotate;
+   20 rounds of these make one block of keystream. */
 static void qr(uint32_t *a, uint32_t *b, uint32_t *c, uint32_t *d) {
     *a += *b; *d ^= *a; *d = rotl(*d, 16);
     *c += *d; *b ^= *c; *b = rotl(*b, 12);
@@ -21,7 +27,10 @@ static void qr(uint32_t *a, uint32_t *b, uint32_t *c, uint32_t *d) {
     *c += *d; *b ^= *c; *b = rotl(*b, 7);
 }
 
-/* chacha_block: 20-round ChaCha20 block into `out`. */
+/* chacha_block: 20-round ChaCha20 block into `out`.
+   Produces 64 bytes of keystream from the state `s`. Each loop pass is one
+   "column" round plus one "diagonal" round, so 10 passes = 20 rounds. The
+   input state is added back at the end so the rounds cannot be undone. */
 static void chacha_block(uint8_t out[64], const uint32_t s[16]) {
     uint32_t x[16];
     int i;
@@ -44,7 +53,9 @@ static void chacha_init(uint32_t s[16], const uint8_t key[32], const uint8_t non
     s[13] = ld32(nonce); s[14] = ld32(nonce + 4); s[15] = ld32(nonce + 8);
 }
 
-/* chacha_xor: keystream XOR of `n` bytes starting at `counter`. */
+/* chacha_xor: keystream XOR of `n` bytes starting at `counter`.
+   Encrypts and decrypts alike (XOR twice gives back the input). The block
+   counter goes up by one for each 64-byte block. `out` may equal `in`. */
 static void chacha_xor(uint8_t *out, const uint8_t *in, size_t n,
                        const uint8_t key[32], const uint8_t nonce[12], uint32_t counter) {
     uint32_t s[16];
@@ -61,7 +72,11 @@ static void chacha_xor(uint8_t *out, const uint8_t *in, size_t n,
     }
 }
 
-/* poly1305: one-time MAC (poly1305-donna 32-bit limbs, public domain, Andrew Moon). */
+/* poly1305: one-time MAC (poly1305-donna 32-bit limbs, public domain, Andrew Moon).
+   Computes a 16-byte tag over `m` with a 32-byte key that must be used only
+   once. Numbers are kept as five 26-bit pieces ("limbs") so the math fits in
+   32/64-bit integers. The final steps reduce modulo 2^130-5 without
+   data-dependent branches (constant time), then add the second key half. */
 static void poly1305(uint8_t mac[16], const uint8_t *m, size_t bytes, const uint8_t key[32]) {
     uint32_t r0, r1, r2, r3, r4, s1, s2, s3, s4;
     uint32_t h0 = 0, h1 = 0, h2 = 0, h3 = 0, h4 = 0;
@@ -145,7 +160,10 @@ static void poly1305(uint8_t mac[16], const uint8_t *m, size_t bytes, const uint
     }
 }
 
-/* poly_aead: Poly1305 over AAD || pad || CT || pad || lenAAD || lenCT. */
+/* poly_aead: Poly1305 over AAD || pad || CT || pad || lenAAD || lenCT.
+   Builds the exact byte string RFC 8439 authenticates: the associated data
+   and the ciphertext, each zero-padded to 16 bytes, then both lengths as
+   64-bit little-endian numbers. Copies into one heap buffer for simplicity. */
 static void poly_aead(uint8_t mac[16], const uint8_t key[32],
                       const uint8_t *aad, size_t aad_len,
                       const uint8_t *ct, size_t ct_len) {
@@ -168,7 +186,9 @@ static void poly_aead(uint8_t mac[16], const uint8_t key[32],
     free(buf);
 }
 
-/* loft_aead_encrypt: counter 0 is the Poly1305 key; payload XOR starts at 1. */
+/* loft_aead_encrypt: counter 0 is the Poly1305 key; payload XOR starts at 1.
+   The first keystream block is spent on a fresh one-time Poly1305 key, so
+   each (key, nonce) pair gets its own MAC key. Writes ciphertext then tag. */
 int loft_aead_encrypt(const uint8_t key[32], const uint8_t nonce[12],
                       const uint8_t *aad, size_t aad_len,
                       const uint8_t *pt, size_t pt_len,
@@ -185,7 +205,10 @@ int loft_aead_encrypt(const uint8_t key[32], const uint8_t nonce[12],
     return 0;
 }
 
-/* loft_aead_decrypt: constant-time tag compare, then XOR. -1 on mismatch. */
+/* loft_aead_decrypt: constant-time tag compare, then XOR. -1 on mismatch.
+   The tag is checked before any plaintext is produced, so forged input never
+   reaches the caller. The compare looks at every byte (no early exit) so its
+   timing does not reveal how many tag bytes were right. */
 int loft_aead_decrypt(const uint8_t key[32], const uint8_t nonce[12],
                       const uint8_t *aad, size_t aad_len,
                       const uint8_t *ct, size_t ct_len,

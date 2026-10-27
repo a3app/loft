@@ -1,7 +1,15 @@
+/*
+ SparkView.swift - the small traffic graph on Home: the last minute of
+ download and upload, as smooth lines or bars (a Settings choice), with the
+ current rates next to it. HomeView (App/HomeView.swift) feeds it the samples
+ from HomeSnapshot; colours and height come from App/LoftTheme.swift.
+*/
 import SwiftUI
 
 /// Last-minute ↓ (lamp fill + stroke) and ↑ (ash). Connecting shows the handshake label.
 struct SparkView: View {
+    /// Samples are in 0...1. When `handshake` is set (connecting), that
+    /// text replaces the graph. `showRates` adds the rate texts on the right.
     var down: [Double]
     var up: [Double]
     var handshake: String?
@@ -29,6 +37,7 @@ struct SparkView: View {
         .frame(minHeight: LoftTheme.sparkH)
     }
 
+    /// The handshake label or the chart.
     @ViewBuilder
     private var sparkBody: some View {
         if let handshake {
@@ -42,11 +51,15 @@ struct SparkView: View {
     }
 }
 
+/// The graph itself, drawn on a Canvas.
 private struct SparkChart: View {
     var down: [Double]
     var up: [Double]
     var style: SparkStyle
 
+    /// Bars: download on the upper part, upload below. Lines: download as
+    /// a curve with a fading fill, upload as a thinner curve, and dots at
+    /// the newest samples.
     var body: some View {
         Canvas { ctx, size in
             if style == .bars {
@@ -91,6 +104,8 @@ private struct SparkChart: View {
         .frame(height: LoftTheme.sparkH)
     }
 
+    /// Draws one series as bars in the band from y0 of height h; older
+    /// bars are more transparent.
     private func bars(ctx: GraphicsContext, size: CGSize, arr: [Double], color: Color, y0: CGFloat, h: CGFloat) {
         guard !arr.isEmpty else { return }
         let n = arr.count
@@ -105,6 +120,8 @@ private struct SparkChart: View {
         }
     }
 
+    /// Spreads samples evenly across the width, 0 at the bottom, with a
+    /// small margin so the line is not clipped. Fewer than two gives none.
     private func points(_ arr: [Double], in size: CGSize) -> [CGPoint] {
         guard arr.count > 1 else { return [] }
         let w = max(size.width - 4, 1)
@@ -117,6 +134,8 @@ private struct SparkChart: View {
         }
     }
 
+    /// A smooth path through the points (Catmull-Rom turned into cubic
+    /// Bezier segments).
     private func curve(_ pts: [CGPoint]) -> Path {
         var path = Path()
         guard let first = pts.first else { return path }

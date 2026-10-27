@@ -6,12 +6,16 @@ import Sailfish.Silica 1.0
 Column {
     width: parent.width
 
+    // Fills the fields from the row's saved Loft.* properties when the
+    // editor opens. getProperty comes from the Settings VPN page that hosts
+    // this section.
     function setProperties() {
         userField.text = getProperty("Loft.User")
         sniField.text = getProperty("Loft.SNI")
         configField.text = getProperty("Loft.Config")
     }
 
+    // Writes the fields back to the row when the editor is accepted.
     function updateProperties() {
         updateProvider("Loft.User", userField.text)
         updateProvider("Loft.SNI", sniField.text)

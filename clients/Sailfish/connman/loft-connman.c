@@ -26,6 +26,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/*
+ * Packaged install paths. CMake passes the real ones with -D, because
+ * they differ between the Sailfish and the Aurora package.
+ */
 #ifndef LOFT_FRONT
 #define LOFT_FRONT "/usr/libexec/harbour-loft/loft-front"
 #endif
@@ -33,7 +37,9 @@
 #define LOFT_SCRIPT "/usr/lib/connman/scripts/loft-script"
 #endif
 
+/* The running loft-front, so the signal handler can pass signals on. */
 static pid_t child_pid;
+/* Set by on_signal: a stop was requested, so a failed wait is not an error. */
 static volatile sig_atomic_t got_signal;
 
 /* Forwards a stop signal to loft-front; main then returns its exit code. */
@@ -44,6 +50,8 @@ static void on_signal(int sig)
 		kill(child_pid, sig);
 }
 
+/* strdup that returns NULL for NULL and exits on out-of-memory, so callers
+ * need no error path. */
 static char *xstrdup(const char *s)
 {
 	char *p;
@@ -58,6 +66,7 @@ static char *xstrdup(const char *s)
 	return p;
 }
 
+/* True when path is a non-empty name of an executable file. */
 static int file_ok(const char *path)
 {
 	return path && path[0] && access(path, X_OK) == 0;
@@ -269,6 +278,7 @@ int main(int argc, char **argv)
 	char line[1024];
 	struct sigaction sa;
 
+	/* 1. Read the flags the ConnMan plugin built from the Loft.* properties. */
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--dev") == 0 && i + 1 < argc)
 			dev = argv[++i];
@@ -305,6 +315,8 @@ int main(int argc, char **argv)
 		return 2;
 	}
 
+	/* 2. Find the engine and the notify script. trusted is the server
+	 *    host; ConnMan keeps a route to it outside the tun. */
 	front = find_front();
 	if (!front) {
 		fprintf(stderr, "loft-connman: no loft-front\n");
@@ -313,6 +325,7 @@ int main(int argc, char **argv)
 	script = find_script(script_arg);
 	trusted = host ? xstrdup(host) : host_from_url(url);
 
+	/* 3. Build the loft-front command line. */
 	args[n++] = (char *)front;
 	if (token) {
 		args[n++] = "-token";
@@ -345,6 +358,7 @@ int main(int argc, char **argv)
 	}
 	args[n] = NULL;
 
+	/* 4. Pipe for loft-front's stdout, signal forwarding, then fork+exec. */
 	if (pipe(pipefd) != 0) {
 		perror("pipe");
 		return 2;
@@ -384,6 +398,8 @@ int main(int argc, char **argv)
 		return 2;
 	}
 
+	/* 5. Watch STATUS lines. A failed notify is retried on the next
+	 *    "on" line because notified stays 0. */
 	while (fgets(line, sizeof(line), out)) {
 		char *state, *ip, *gw, *dns, *mtu;
 
@@ -419,6 +435,8 @@ int main(int argc, char **argv)
 	}
 	fclose(out);
 
+	/* 6. loft-front closed its stdout (exited or is exiting): reap it and
+	 *    pass on its exit status (128+signal when it was killed). */
 	if (waitpid(child_pid, &st, 0) < 0) {
 		free(trusted);
 		return got_signal ? 0 : 1;

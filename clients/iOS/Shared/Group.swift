@@ -1,3 +1,12 @@
+/*
+ Group.swift - the small key/value store shared by the two iOS processes.
+ The container app (app.loft.ios) and the Packet Tunnel extension
+ (app.loft.ios.packet-tunnel) run as separate processes, so they exchange
+ state through UserDefaults in the App Group suite `group.app.loft`.
+ This file is compiled into both targets: App/TunnelControl.swift and
+ App/LoftPrefs.swift write these keys, PacketTunnel/PacketTunnelProvider.swift
+ reads them and reports back through `parked` / `holding` / `frontIPs`.
+*/
 import Foundation
 
 /// Settings shared between the app and the Packet Tunnel extension through
@@ -5,7 +14,9 @@ import Foundation
 /// the group suite is how the app hands over the connection YAML and the
 /// extension reports whether it is parked.
 enum Group {
+    /// App Group identifier; must match the entitlement of both targets.
     static let id = "group.app.loft"
+    /// UserDefaults key names, one per property below.
     static let yamlKey = "session.yaml"
     static let holdKey = "hold"
     static let demandKey = "demand"
@@ -14,6 +25,9 @@ enum Group {
     static let holdingKey = "holding"
     static let frontIPsKey = "front.ips"
 
+    /// The shared suite. Falls back to the process's own defaults when the
+    /// group is not available (no entitlement); then the app and the
+    /// extension no longer see each other's values.
     static var defaults: UserDefaults {
         UserDefaults(suiteName: id) ?? .standard
     }
@@ -39,6 +53,7 @@ enum Group {
         set { defaults.set(newValue, forKey: demandKey) }
     }
 
+    /// Comma-separated Wi-Fi names (SSIDs) where On Demand stays off.
     static var trustedWiFi: String {
         get { defaults.string(forKey: trustedKey) ?? "" }
         set { defaults.set(newValue, forKey: trustedKey) }

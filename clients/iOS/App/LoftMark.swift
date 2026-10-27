@@ -1,3 +1,9 @@
+/*
+ LoftMark.swift - the loft logo drawn in SwiftUI (house body with a lit
+ window, the "lamp") and the small A3 heart used in the colophon. The
+ geometry is copied from the brand SVG in its 96x96 box and matches the
+ macOS client's MarkView / HeartView.
+*/
 import SwiftUI
 import UIKit
 
@@ -16,12 +22,14 @@ struct LoftMark: View {
     }
 }
 
+/// The house outline of the logo, scaled to the frame.
 struct LoftMarkBody: Shape {
     func path(in rect: CGRect) -> Path {
         LoftMarkGeometry.scaled(LoftMarkGeometry.body, in: rect)
     }
 }
 
+/// The window (lamp) of the logo, scaled to the frame.
 struct LoftMarkLamp: Shape {
     func path(in rect: CGRect) -> Path {
         LoftMarkGeometry.scaled(LoftMarkGeometry.lamp, in: rect)
@@ -38,6 +46,7 @@ struct LoftHeart: View {
             .accessibilityHidden(true)
     }
 
+    /// The 7x6 heart drawn once, pixel by pixel, in the lamp colour.
     private static let bitmap: UIImage = {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
@@ -51,7 +60,9 @@ struct LoftHeart: View {
     }()
 }
 
+/// Logo paths in brand-SVG coordinates (a 96x96 box).
 private enum LoftMarkGeometry {
+    /// House body: roof peak, the L step on the right, rounded corners.
     static let body: Path = {
         var p = Path()
         let a = CGPoint(x: 37.76, y: 6.72)
@@ -71,11 +82,13 @@ private enum LoftMarkGeometry {
         return p
     }()
 
+    /// The window rectangle.
     static let lamp = Path(
         roundedRect: CGRect(x: 28.8, y: 36.24, width: 17.6, height: 21.84),
         cornerRadius: 2.56
     )
 
+    /// Fits a 96x96 path into rect, keeping its proportions and centring it.
     static func scaled(_ path: Path, in rect: CGRect) -> Path {
         let s = min(rect.width, rect.height) / 96
         guard s > 0 else { return Path() }
@@ -95,11 +108,14 @@ private func svgArc(
     sweep: Bool,
     to p2: CGPoint
 ) {
+    // Uses the standard SVG endpoint-to-centre arc conversion:
+    // 1. Degenerate radii become a straight line.
     var rx = abs(inRx), ry = abs(inRy)
     if rx < 0.001 || ry < 0.001 {
         path.addLine(to: p2)
         return
     }
+    // 2. Scale up radii that are too small to reach both points.
     let dx = (p1.x - p2.x) / 2, dy = (p1.y - p2.y) / 2
     let lam = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry)
     if lam > 1 {
@@ -107,6 +123,7 @@ private func svgArc(
         rx *= s
         ry *= s
     }
+    // 3. Find the ellipse centre (cx, cy).
     let sign: CGFloat = (large == sweep) ? -1 : 1
     let num = rx * rx * ry * ry - rx * rx * dy * dy - ry * ry * dx * dx
     let den = rx * rx * dy * dy + ry * ry * dx * dx
@@ -120,10 +137,12 @@ private func svgArc(
         let a = acos(max(-1, min(1, (ux * vx + uy * vy) / max(u * v, 0.0001))))
         return (ux * vy - uy * vx < 0) ? -a : a
     }
+    // 4. Start angle and sweep, adjusted to the sweep direction.
     let θ1 = ang(1, 0, (dx - cxp) / rx, (dy - cyp) / ry)
     var dθ = ang((dx - cxp) / rx, (dy - cyp) / ry, (-dx - cxp) / rx, (-dy - cyp) / ry)
     if !sweep && dθ > 0 { dθ -= 2 * .pi }
     if sweep && dθ < 0 { dθ += 2 * .pi }
+    // 5. Emit one cubic per quarter turn or less.
     let n = max(1, Int(ceil(abs(dθ) / (.pi / 2))))
     let step = dθ / CGFloat(n)
     for i in 0..<n {

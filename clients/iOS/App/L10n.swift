@@ -1,3 +1,8 @@
+/*
+ L10n.swift - the UI texts of the iOS app in English, Russian and Chinese.
+ Screens call L10n.t(key, locale) with the locale from LoftPrefs. Keys are
+ short ids; a key missing in a language falls back to English.
+*/
 import Foundation
 
 /// Home / Settings copy for Canvas locales. Shared macOS `.lang` tables come in with profiles.
@@ -17,6 +22,7 @@ enum L10n {
         return "en"
     }
 
+    /// language code -> (key -> text). `%@` marks are filled with String(format:).
     private static let table: [String: [String: String]] = [
         "en": [
             "connect": "Connect",

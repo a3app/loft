@@ -1,3 +1,10 @@
+/*
+ ConnectionsView.swift - the Connections screen: the list of saved
+ connections (ConnStore, App/ConnStore.swift) with Connect / Disconnect per
+ row, swipe and context-menu actions, the Add sheet and the full-screen
+ editor (App/ConnEditView.swift). At this stage LoftShell's Connections tab
+ shows a placeholder, and the row buttons only change the Home snapshot.
+*/
 import SwiftUI
 import UIKit
 
@@ -7,10 +14,14 @@ struct ConnectionsView: View {
     @Binding var home: HomeSnapshot
     @Environment(\.locale) private var locale
 
+    /// Add sheet visible; connection waiting for delete confirmation;
+    /// connection open in the editor.
     @State private var showAdd = false
     @State private var pendingDelete: Conn?
     @State private var draft: ConnDraft?
 
+    /// Header, subtitle and the list, plus the Add and Delete dialogs and
+    /// the editor cover. Saving or deleting in the editor updates the store.
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -106,6 +117,7 @@ struct ConnectionsView: View {
         }
     }
 
+    /// Title and the "+" button that opens the Add sheet.
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             Text(L10n.t("conns", locale))
@@ -131,11 +143,14 @@ struct ConnectionsView: View {
         .padding(.top, 4)
     }
 
+    /// Title of the delete confirmation with the connection name.
     private var deleteTitle: String {
         let name = pendingDelete.map { $0.name.isEmpty ? $0.host : $0.name } ?? ""
         return String(format: L10n.t("delTitle", locale), name)
     }
 
+    /// Whether Home shows this connection as connected or connecting
+    /// (matched by display name).
     private func isLive(_ c: Conn) -> Bool {
         let title = c.name.isEmpty ? c.host : c.name
         return (home.isLive || home.mode == .connecting) && home.profile == title
@@ -168,6 +183,8 @@ struct ConnDraft: Identifiable {
 /// One card in the list: a Connect / Disconnect button and the
 /// name, host and protocol, which open the editor.
 struct ConnRow: View {
+    /// `selected`: the active connection (amber border). `live`: Home
+    /// shows it connected, so the button reads Disconnect.
     var conn: Conn
     var selected: Bool
     var live: Bool

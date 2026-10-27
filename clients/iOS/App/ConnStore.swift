@@ -1,3 +1,10 @@
+/*
+ ConnStore.swift - the list of saved connections (Conn) and which one is
+ active. It is kept as JSON in the App Group (Shared/Group.swift). The
+ Connections screen (App/ConnectionsView.swift) and the editor
+ (App/ConnEditView.swift) change it, and the active entry's name and protocol
+ are copied into the Home snapshot (App/HomeModel.swift).
+*/
 import Foundation
 
 /// In-memory / App Group list. YAML profiles come in a later slice.
@@ -7,6 +14,8 @@ import Foundation
 /// password typed by hand; `front` is the loft front (get, ws, h2, quic, h3,
 /// l3) or "auto".
 struct Conn: Identifiable, Equatable, Codable {
+    /// Stable id (a UUID for new entries). `name` may be empty; then the
+    /// host is shown instead. `user` is the SSTP user name.
     var id: String
     var name: String
     var host: String
@@ -30,6 +39,7 @@ struct Conn: Identifiable, Equatable, Codable {
         }
     }
 
+    /// A new empty connection with a fresh id, port 443 and front "auto".
     static func blank(kind: HomeSnapshot.Kind = .loft) -> Conn {
         Conn(
             id: UUID().uuidString,
@@ -54,6 +64,7 @@ struct Conn: Identifiable, Equatable, Codable {
         return lines.joined(separator: "\n") + "\n"
     }
 
+    /// Suggested file name for sharing: "<name or host>.loft".
     var fileName: String {
         let base = name.isEmpty ? host : name
         let safe = base.isEmpty ? "loft" : base
@@ -67,6 +78,7 @@ struct ConnStore: Equatable, Codable {
     var items: [Conn]
     var activeId: String
 
+    /// Three demo connections (loft, SSTP, VLESS) with placeholder keys.
     static let sample = ConnStore(
         items: [
             Conn(
@@ -109,15 +121,20 @@ struct ConnStore: Equatable, Codable {
         activeId: "home"
     )
 
+    /// What a fresh install starts with.
     static let `default` = sample
+    /// App Group key that holds the JSON-encoded store.
     private static let storeKey = "ui.conns"
 
+    /// The active connection, if its id is still in the list.
     var active: Conn? { item(activeId) }
 
+    /// Finds a connection by id.
     func item(_ id: String) -> Conn? {
         items.first { $0.id == id }
     }
 
+    /// Reads the saved store; missing, unreadable or empty data gives the sample.
     static func load() -> ConnStore {
         guard let data = Group.defaults.data(forKey: storeKey),
               let s = try? JSONDecoder().decode(ConnStore.self, from: data),
@@ -126,12 +143,14 @@ struct ConnStore: Equatable, Codable {
         return s
     }
 
+    /// Writes the store as JSON into the App Group.
     func save() {
         if let data = try? JSONEncoder().encode(self) {
             Group.defaults.set(data, forKey: Self.storeKey)
         }
     }
 
+    /// Replaces the connection with the same id, or appends it if new.
     mutating func apply(_ c: Conn) {
         if let i = items.firstIndex(where: { $0.id == c.id }) {
             items[i] = c
@@ -140,6 +159,8 @@ struct ConnStore: Equatable, Codable {
         }
     }
 
+    /// Saves an edited connection and, if it is the active one, updates
+    /// the name and protocol shown on Home.
     mutating func apply(_ c: Conn, home: inout HomeSnapshot) {
         apply(c)
         if c.id == activeId {

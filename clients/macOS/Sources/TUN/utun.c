@@ -1,4 +1,10 @@
-/* Darwin utun: PF_SYSTEM socket plus SCM_RIGHTS fd pass from loft-priv. */
+/* Darwin utun: PF_SYSTEM socket plus SCM_RIGHTS fd pass from loft-priv.
+
+   Small C layer over the macOS utun (virtual tunnel interface) API. The
+   setuid helper loft-priv.c links this file to create the interface; the
+   listen/recv half is the C form of the receiving end of the fd hand-off
+   (the Go session helper loft-front has its own receiver in
+   clients/go/inbound/tun_fd.go). Declarations and overview: utun.h. */
 #include "utun.h"
 #include <sys/socket.h>
 #include <sys/ioctl.h>
@@ -13,7 +19,11 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
-/* loft_utun_open: kernel-picked utun; name_out is "utunN". Returns fd or -1. */
+/* loft_utun_open: kernel-picked utun; name_out is "utunN". Returns fd or -1.
+   A utun is created by connecting a kernel-control socket to the
+   "com.apple.net.utun_control" service; unit 0 lets the kernel choose the
+   next free number, and the chosen name is read back with UTUN_OPT_IFNAME.
+   Needs root, which is why only loft-priv calls it. */
 int loft_utun_open(char name_out[16]) {
     struct ctl_info ci;
     struct sockaddr_ctl sc;
@@ -43,7 +53,10 @@ int loft_utun_open(char name_out[16]) {
     return fd;
 }
 
-/* loft_utun_read: strips the 4-byte AF header; copies IPv4/IPv6 into `ip`. */
+/* loft_utun_read: strips the 4-byte AF header; copies IPv4/IPv6 into `ip`.
+   Every utun packet starts with a 4-byte address family (AF_INET/AF_INET6)
+   that the rest of loft does not want. Returns the IP length, 0 if cap is 0,
+   or the raw read() result when it got no full packet (error / would-block). */
 int loft_utun_read(int fd, uint8_t *ip, size_t cap) {
     uint8_t buf[2048];
     ssize_t n;
@@ -56,7 +69,9 @@ int loft_utun_read(int fd, uint8_t *ip, size_t cap) {
     return (int)n;
 }
 
-/* loft_utun_write: prepends AF_INET/AF_INET6 from the IP version nibble. */
+/* loft_utun_write: prepends AF_INET/AF_INET6 from the IP version nibble.
+   Inverse of loft_utun_read. Returns n, or -1 for an empty, oversized
+   (over ~2 KB) or non-IP packet, or a failed/short write. */
 int loft_utun_write(int fd, const uint8_t *ip, size_t n) {
     uint8_t buf[2048];
     if (n == 0 || n + 4 > sizeof buf) return -1;
@@ -77,7 +92,9 @@ void loft_utun_close(int fd) {
 #include <sys/un.h>
 #include <sys/select.h>
 
-/* loft_utun_listen: AF_UNIX listen socket at sockpath (mode 0600). */
+/* loft_utun_listen: AF_UNIX listen socket at sockpath (mode 0600).
+   Removes a stale socket file first. Mode 0600 keeps other local users from
+   connecting and slipping in a descriptor of their own. */
 int loft_utun_listen(const char *sockpath) {
     int fd;
     struct sockaddr_un un;
@@ -93,7 +110,10 @@ int loft_utun_listen(const char *sockpath) {
     return fd;
 }
 
-/* loft_utun_recv_fd: accept + recvmsg SCM_RIGHTS; sets O_NONBLOCK on the tun fd. */
+/* loft_utun_recv_fd: accept + recvmsg SCM_RIGHTS; sets O_NONBLOCK on the tun fd.
+   Waits up to timeout_ms for loft-priv (see send_fd in loft-priv.c) to
+   connect, then takes one message: the 16-byte interface name as data and
+   the utun fd as ancillary (SCM_RIGHTS) data. Returns the fd or -1. */
 int loft_utun_recv_fd(int lfd, char name_out[16], int timeout_ms) {
     fd_set rs;
     struct timeval tv;

@@ -1,3 +1,10 @@
+/*
+ TunnelControl.swift - the container app's handle on the system VPN.
+ It saves the loft VPN profile in iOS, starts and stops the Packet Tunnel
+ extension (PacketTunnel/PacketTunnelProvider.swift), sends it short text
+ commands, and publishes the VPN status for the screens (HomeView, LoftShell).
+ Settings come from LoftPrefs; shared flags go through Shared/Group.swift.
+*/
 import Foundation
 import NetworkExtension
 
@@ -14,17 +21,22 @@ import NetworkExtension
 /// Reset routes.
 @MainActor
 final class TunnelControl: ObservableObject {
+    /// The system VPN is connected (possibly parked, see `held`).
     @Published var up = false
+    /// The system VPN is connecting or reasserting (re-establishing).
     @Published var busy = false
     /// The tunnel is up but parked: it drops traffic instead of carrying it.
     @Published var held = false
+    /// One-line status or error text for the UI.
     @Published var line = "VPN is in iOS Settings"
 
     /// Last saved (hold, demand, trusted Wi-Fi), so unchanged prefs do not
     /// rewrite the VPN profile.
     private var lastPolicy: (Bool, Bool, String)?
+    /// Observer token for VPN status change notifications.
     private var statusObs: NSObjectProtocol?
 
+    /// Subscribes to iOS VPN status changes so the UI refreshes by itself.
     init() {
         statusObs = NotificationCenter.default.addObserver(
             forName: .NEVPNStatusDidChange, object: nil, queue: .main
@@ -143,10 +155,12 @@ final class TunnelControl: ObservableObject {
         lastPolicy = (false, false, LoftPrefs.load().trustedWiFi)
     }
 
+    /// Current system VPN status; `.invalid` when no loft profile exists.
     private func status() async -> NEVPNStatus {
         (try? await loadMgr())?.connection.status ?? .invalid
     }
 
+    /// The saved loft VPN profile, or nil if it was never created.
     private func loadMgr() async throws -> NETunnelProviderManager? {
         let all = try await NETunnelProviderManager.loadAllFromPreferences()
         return all.first(where: { $0.protocolConfiguration is NETunnelProviderProtocol })

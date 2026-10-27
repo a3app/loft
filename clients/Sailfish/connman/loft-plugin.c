@@ -20,9 +20,12 @@
  * handling works without a loft-specific contract.
  */
 
+/* The ConnMan VPN type and the label shown for the plugin. */
 #define LOFT_VPN_TYPE  "loft"
 #define LOFT_VPN_LABEL "Loft"
 
+/* Where the helper (loft-connman) and the notify script (loft-script) are
+ * installed; CMake normally passes the real paths. */
 #ifndef LOFT_HELPER
 #define LOFT_HELPER "/usr/libexec/harbour-loft/loft-connman"
 #endif
@@ -33,6 +36,9 @@
 #define LOFT_VPN_HELPER LOFT_HELPER
 #define LOFT_VPN_NOTIFY SCRIPTDIR "/loft-script"
 
+/* Everything below needs the ConnMan headers, so it is only built as the
+ * real plugin. Without CONNMAN_PLUGIN only the name constants at the end
+ * are compiled. */
 #if defined(CONNMAN_PLUGIN)
 
 #ifdef HAVE_CONFIG_H
@@ -65,6 +71,7 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #endif
 
+/* System bus connection, taken at plugin load and released at unload. */
 static DBusConnection *connection;
 
 /* A VPN row property (as the app sets it over D-Bus) and the helper flag
@@ -74,6 +81,8 @@ struct loft_opt {
 	const char *arg;
 };
 
+/* Every Loft.* property the plugin knows. The same table drives both the
+ * helper command line (loft_connect) and saving the row (loft_save). */
 static const struct loft_opt loft_options[] = {
 	{ "Loft.Token",  "--token" },
 	{ "Loft.URL",    "--url" },
@@ -111,6 +120,8 @@ static void loft_connect_done(struct loft_data *data, int err)
 	cb(data->provider, user_data, err);
 }
 
+/* Drops the per-connection state. If ConnMan is still waiting for the
+ * connect result, it is told the connect failed (EIO). */
 static void free_loft_data(struct loft_data *data)
 {
 	if (!data)
@@ -156,6 +167,7 @@ static struct nameserver_entry *append_dns(const char *key, const char *value)
 	return entry;
 }
 
+/* Sort order for DNS entries: by their foreign_option_N number. */
 static gint cmp_ns(gconstpointer a, gconstpointer b)
 {
 	const struct nameserver_entry *ea = a;
@@ -168,6 +180,7 @@ static gint cmp_ns(gconstpointer a, gconstpointer b)
 	return 0;
 }
 
+/* Frees one nameserver_entry; used as a GSList free function. */
 static void free_ns_entry(gpointer data)
 {
 	struct nameserver_entry *entry = data;
@@ -201,6 +214,7 @@ static int loft_notify(DBusMessage *msg, struct vpn_provider *provider)
 				DBUS_TYPE_STRING_AS_STRING
 				DBUS_DICT_ENTRY_END_CHAR_AS_STRING;
 
+	/* 1. Check the message shape and read reason and context. */
 	if (!dbus_message_has_signature(msg, signature)) {
 		connman_error("loft notify signature \"%s\" does not match "
 				"expected \"%s\"",
@@ -222,6 +236,7 @@ static int loft_notify(DBusMessage *msg, struct vpn_provider *provider)
 	data = vpn_provider_get_plugin_data(provider);
 	DBG("%p %s %s", vpn_provider_get_name(provider), reason, context);
 
+	/* 2. Only "up" in the "init" context is a live session. */
 	if (g_strcmp0(reason, "up") != 0) {
 		loft_connect_done(data, EIO);
 		return VPN_STATE_DISCONNECT;
@@ -235,6 +250,7 @@ static int loft_notify(DBusMessage *msg, struct vpn_provider *provider)
 		return VPN_STATE_DISCONNECT;
 	}
 
+	/* 3. Walk the environment dictionary and keep the keys we use. */
 	dbus_message_iter_recurse(&iter, &dict);
 	while (dbus_message_iter_get_arg_type(&dict) == DBUS_TYPE_DICT_ENTRY) {
 		struct nameserver_entry *ns_entry;
@@ -264,6 +280,8 @@ static int loft_notify(DBusMessage *msg, struct vpn_provider *provider)
 		dbus_message_iter_next(&dict);
 	}
 
+	/* 4. No address means no session. Otherwise give ConnMan the address,
+	 *    peer and gateway of the tun. */
 	if (!address) {
 		g_slist_free_full(nameserver_list, free_ns_entry);
 		g_free(gateway);
@@ -296,6 +314,7 @@ static int loft_notify(DBusMessage *msg, struct vpn_provider *provider)
 	connman_ipaddress_set_p2p(ipaddress, true);
 	vpn_provider_set_ipaddress(provider, ipaddress);
 
+	/* 5. DNS servers, in the helper's order, as one space-separated list. */
 	if (nameserver_list) {
 		char *nameservers = NULL;
 		GSList *tmp;
@@ -318,6 +337,7 @@ static int loft_notify(DBusMessage *msg, struct vpn_provider *provider)
 		g_free(nameservers);
 	}
 
+	/* 6. Clean up and report a successful connect. */
 	g_free(address);
 	g_free(gateway);
 	g_free(peer);
@@ -357,6 +377,8 @@ static int add_opt(struct connman_task *task, struct vpn_provider *provider,
 	return connman_task_add_argument(task, arg, v);
 }
 
+/* Called by ConnMan when loft-connman exits: lets the generic VPN code mark
+ * the row down, then frees the state. */
 static void loft_died(struct connman_task *task, int exit_code, void *user_data)
 {
 	struct loft_data *data = user_data;
@@ -384,6 +406,7 @@ static int loft_connect(struct vpn_provider *provider,
 
 	(void)dbus_sender;
 
+	/* 1. Allocate the state and attach it to the row. */
 	data = g_try_new0(struct loft_data, 1);
 	if (!data) {
 		cb(provider, user_data, ENOMEM);
@@ -396,6 +419,7 @@ static int loft_connect(struct vpn_provider *provider,
 	data->if_name = g_strdup(if_name);
 	vpn_provider_set_plugin_data(provider, data);
 
+	/* 2. Build the helper's command line. */
 	connman_task_add_argument(task, "--dev", if_name);
 	connman_task_add_argument(task, "--script", LOFT_VPN_NOTIFY);
 
@@ -416,6 +440,8 @@ static int loft_connect(struct vpn_provider *provider,
 		}
 	}
 
+	/* 3. Start the helper. On the error paths cb is cleared first, because
+	 *    returning an error already tells ConnMan the connect failed. */
 	err = connman_task_run(task, loft_died, data, NULL, NULL, NULL);
 	if (err < 0) {
 		data->cb = NULL;
@@ -427,6 +453,7 @@ static int loft_connect(struct vpn_provider *provider,
 	return -EINPROGRESS;
 }
 
+/* Stops the helper; loft_died then does the cleanup. */
 static int loft_disconnect(struct vpn_provider *provider)
 {
 	struct loft_data *data = vpn_provider_get_plugin_data(provider);
@@ -436,6 +463,8 @@ static int loft_disconnect(struct vpn_provider *provider)
 	return 0;
 }
 
+/* The interface ConnMan creates for this type is a layer-3 tun (no
+ * Ethernet frames). */
 static int loft_device_flags(struct vpn_provider *provider)
 {
 	(void)provider;
@@ -469,6 +498,7 @@ static int loft_route_env_parse(struct vpn_provider *provider, const char *key,
 	return 0;
 }
 
+/* The callbacks connman-vpnd uses for rows of type "loft". */
 static struct vpn_driver vpn_driver = {
 	.notify = loft_notify,
 	.connect = loft_connect,
@@ -478,12 +508,14 @@ static struct vpn_driver vpn_driver = {
 	.route_env_parse = loft_route_env_parse,
 };
 
+/* Plugin load: registers the "loft" VPN type with its helper binary. */
 static int loft_init(void)
 {
 	connection = connman_dbus_get_connection();
 	return vpn_register(LOFT_VPN_TYPE, &vpn_driver, LOFT_HELPER);
 }
 
+/* Plugin unload: unregisters the type and drops the bus connection. */
 static void loft_exit(void)
 {
 	vpn_unregister(LOFT_VPN_TYPE);

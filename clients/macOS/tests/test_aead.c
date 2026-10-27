@@ -1,5 +1,9 @@
-/* RFC 8439 §2.8.2 AEAD vector for loft_aead_encrypt/decrypt.
- * Built by `make test-crypto`; binary lands in dist/clients/macOS/obj/. */
+/* RFC 8439 AEAD example vector for loft_aead_encrypt/decrypt.
+ * Built by `make test-crypto`; binary lands in dist/clients/macOS/obj/.
+ * Pins down that Sources/Crypto/chacha20poly1305.c produces exactly the
+ * ciphertext and tag published in the RFC, decrypts it back, and handles
+ * the empty-message edge case. `make app` runs it first, so a broken cipher
+ * stops the build. Exit code 0 means pass. */
 #include "chacha20poly1305.h"
 #include <stdio.h>
 #include <string.h>
@@ -19,7 +23,10 @@ static int unhex(const char *s, uint8_t *out, size_t cap) {
     return (int)n;
 }
 
-/* main: RFC vector encrypt/decrypt plus empty AAD+PT round-trip. */
+/* main: RFC vector encrypt/decrypt plus empty AAD+PT round-trip.
+   Inputs are the RFC's key, nonce, associated data and the "Ladies and
+   Gentlemen of the class of '99" plaintext; `expect` is the RFC's
+   ciphertext with the 16-byte tag appended. Prints the first failure. */
 int main(void) {
     uint8_t key[32], nonce[12], aad[12], pt[114], expect[130], out[160], back[160];
     size_t out_len = 0, back_len = 0;

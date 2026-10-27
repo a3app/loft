@@ -1,7 +1,15 @@
+/*
+ ConnEditView.swift - the full-screen editor for one saved connection (Conn,
+ App/ConnStore.swift). It is opened from the Connections list
+ (App/ConnectionsView.swift) and hands the result back through callbacks; it
+ does not save anything itself. Also holds LoftField, the shared text field.
+*/
 import SwiftUI
 
 /// DESIGN Edit. Camera / YAML disk / Share QR later.
 struct ConnEditView: View {
+    /// `draft` is a private copy; `onSave` gets it only when Save is tapped.
+    /// For a new entry the protocol can be chosen and there is no Delete.
     var isNew: Bool
     @State var draft: Conn
     var onSave: (Conn) -> Void
@@ -13,8 +21,12 @@ struct ConnEditView: View {
     @State private var showSecret = false
     @State private var confirmDelete = false
 
+    /// loft fronts (the HTTP-like transports a loft session can ride on) for
+    /// the manual form; "auto" lets the client pick.
     private let fronts = ["auto", "get", "ws", "h2", "quic", "h3", "l3"]
 
+    /// Cancel, title, name, protocol, the protocol's fields, Save and
+    /// (for existing entries) Delete with a confirmation.
     var body: some View {
         ZStack {
             Color.loftPhone.ignoresSafeArea()
@@ -64,10 +76,12 @@ struct ConnEditView: View {
         }
     }
 
+    /// Display name: the name, or the host if the name is empty.
     private var title: String {
         draft.name.isEmpty ? draft.host : draft.name
     }
 
+    /// Title and, for existing entries, a Share button that shares exportText().
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             Text(L10n.t(isNew ? "newTitle" : "editTitle", locale))
@@ -91,6 +105,7 @@ struct ConnEditView: View {
         .padding(.bottom, 12)
     }
 
+    /// Protocol chips; fixed (one chip) when editing an existing entry.
     private var typeRow: some View {
         HStack(alignment: .center, spacing: 8) {
             Text(L10n.t("vpnType", locale))
@@ -112,6 +127,7 @@ struct ConnEditView: View {
         .padding(.bottom, 14)
     }
 
+    /// One protocol chip, amber when selected.
     private func typeChip(_ k: HomeSnapshot.Kind, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(typeLabel(k))
@@ -126,6 +142,7 @@ struct ConnEditView: View {
         .disabled(!isNew)
     }
 
+    /// Localised protocol name.
     private func typeLabel(_ k: HomeSnapshot.Kind) -> String {
         switch k {
         case .loft: return L10n.t("vpnLoft", locale)
@@ -135,6 +152,7 @@ struct ConnEditView: View {
         }
     }
 
+    /// Switch between "by link" and "manual" entry.
     private var entrySeg: some View {
         HStack(spacing: 2) {
             entryBtn(true, L10n.t("entryLink", locale))
@@ -146,6 +164,7 @@ struct ConnEditView: View {
         .padding(.bottom, 14)
     }
 
+    /// One half of the entry switch.
     private func entryBtn(_ link: Bool, _ title: String) -> some View {
         Button {
             linkMode = link
@@ -192,6 +211,7 @@ struct ConnEditView: View {
         }
     }
 
+    /// Host and port side by side.
     private var hostPort: some View {
         HStack(alignment: .top, spacing: 8) {
             LoftField(label: L10n.t("vlessHost", locale), text: $draft.host, mono: true)
@@ -200,6 +220,7 @@ struct ConnEditView: View {
         }
     }
 
+    /// Segmented picker for the loft front.
     private var frontRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(L10n.t("urlType", locale))
@@ -228,6 +249,8 @@ struct ConnEditView: View {
         .padding(.bottom, 12)
     }
 
+    /// A field for keys and passwords: hidden by default, with a
+    /// Show / Hide button.
     private func secretField(_ label: String, _ text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
@@ -261,6 +284,7 @@ struct ConnEditView: View {
         .padding(.bottom, 12)
     }
 
+    /// Plain or secure text input, depending on `showSecret`.
     @ViewBuilder
     private func secretInput(_ text: Binding<String>) -> some View {
         if showSecret {

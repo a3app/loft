@@ -1,5 +1,13 @@
+// engine.cpp: the Engine class behind the Sailfish / Aurora QML app.
+// It turns the pasted client YAML or share link (loft://, sstp://, vless://,
+// trojan://) into a VPN row for connman-vpnd, the system VPN service, and
+// tracks its state for the UI. When ConnMan cannot be used it runs
+// loft-front (the client engine binary) itself as a SOCKS-only proxy.
+// The ConnMan side of the chain lives in ../connman/.
 #include "engine.h"
 
+// Package name, used to find this flavour's libexec dir (harbour-loft on
+// Sailfish, app.loft.aurora on Aurora); the build sets it.
 #ifndef APP_ID
 #define APP_ID "harbour-loft"
 #endif
@@ -56,6 +64,8 @@ static QString yamlValue(const QString &body, const QString &key)
     return QString();
 }
 
+// Starts idle and loads the client.yaml saved by the last Connect, so the
+// text field is filled again after an app restart.
 Engine::Engine(QObject *parent)
     : QObject(parent)
     , up_(false)
@@ -71,12 +81,15 @@ Engine::Engine(QObject *parent)
     }
 }
 
+// Closing the app also ends the session: the ConnMan row is disconnected
+// and the fallback loft-front, if any, is stopped.
 Engine::~Engine()
 {
     stopConnMan();
     stopProc();
 }
 
+// Setter for the yaml property (bound to the text field in QML).
 void Engine::setYaml(const QString &v)
 {
     if (yaml_ == v) {
@@ -93,6 +106,7 @@ void Engine::connectSession()
     if (busy_ || up_) {
         return;
     }
+    // 1. Parse the text; a parse error is shown and nothing starts.
     const QString body = yaml_.trimmed();
     if (body.isEmpty()) {
         setLine(QStringLiteral("paste YAML or loft://"));
@@ -104,14 +118,17 @@ void Engine::connectSession()
         setLine(err);
         return;
     }
+    // 2. Save it and drop any earlier session.
     persistYaml(body);
     stopProc();
     stopConnMan();
     setBusy(true);
     setLine(QStringLiteral("Connecting…"));
+    // 3. Prefer ConnMan: it gives a real tun for every app.
     if (connectConnMan(s)) {
         return;
     }
+    // 4. Fallback: run loft-front ourselves with only a local SOCKS proxy.
     const QString bin = binaryPath();
     if (bin.isEmpty()) {
         setBusy(false);
@@ -131,6 +148,9 @@ void Engine::connectSession()
     }
 }
 
+// Ends the session. A ConnMan row is disconnected at once. A fallback
+// loft-front is terminated (killed if it does not exit), and onFinished
+// then resets the state.
 void Engine::disconnectSession()
 {
     if (!connmanPath_.isEmpty()) {
@@ -174,6 +194,8 @@ QString Engine::binaryPath() const
     return QString();
 }
 
+// The app's writable data dir (client.yaml, instance file), created if
+// missing.
 QString Engine::dataDir() const
 {
     const QString d = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -236,6 +258,8 @@ bool Engine::connectConnMan(const Session &s)
         return false;
     }
 
+    // 1. Look for an existing "loft" row for the same host, so repeated
+    //    Connects do not pile up rows in Settings.
     const QString host = hostOf(s);
     QString path;
 
@@ -266,6 +290,7 @@ bool Engine::connectConnMan(const Session &s)
         }
     }
 
+    // 2. None found: create the row with the session as Loft.* properties.
     if (path.isEmpty()) {
         QVariantMap props;
         props.insert(QStringLiteral("Type"), QStringLiteral("loft"));
@@ -311,6 +336,8 @@ bool Engine::connectConnMan(const Session &s)
         }
     }
 
+    // 3. Watch the row's State and ask it to connect; the answer comes
+    //    through onConnManProperty.
     connmanPath_ = path;
     bus.connect(QStringLiteral("net.connman.vpn"),
                 path,
@@ -509,6 +536,8 @@ QStringList Engine::argsFor(const Session &s) const
     return a;
 }
 
+// Setters for the QML-facing properties; they emit the change signal only
+// when the value really changes.
 void Engine::setLine(const QString &s)
 {
     if (line_ == s) {
@@ -624,6 +653,7 @@ void Engine::handleStatus(const QString &line)
     }
 }
 
+// The fallback loft-front exited: the session is over.
 void Engine::onFinished(int code)
 {
     Q_UNUSED(code);

@@ -1,4 +1,11 @@
-/* ChaCha20-Poly1305 AEAD (RFC 8439). Bridged into Swift as loft_aead_encrypt/decrypt. */
+/* ChaCha20-Poly1305 AEAD (RFC 8439). Bridged into Swift as loft_aead_encrypt/decrypt.
+
+   AEAD ("authenticated encryption with associated data") encrypts a message
+   and adds a 16-byte tag that proves nobody changed the ciphertext or the
+   extra unencrypted "associated data" (aad). Swift reaches these functions
+   through Sources/Bridging-Header.h; Engine/LoftCrypto.swift wraps them.
+   Plain portable C so the app needs no newer-macOS crypto framework.
+   Implementation: chacha20poly1305.c; test: tests/test_aead.c. */
 
 #pragma once
 #include <stddef.h>
@@ -8,13 +15,17 @@
 extern "C" {
 #endif
 
-/* RFC 8439 AEAD. out must hold pt_len + 16. Returns 0 on success. */
+/* RFC 8439 AEAD. out must hold pt_len + 16. Returns 0 on success.
+   Output is ciphertext followed by the 16-byte tag. A nonce must never be
+   reused with the same key; choosing it is the caller's job. */
 int loft_aead_encrypt(const uint8_t key[32], const uint8_t nonce[12],
                       const uint8_t *aad, size_t aad_len,
                       const uint8_t *pt, size_t pt_len,
                       uint8_t *out, size_t *out_len);
 
-/* ct_len includes the 16-byte tag. out must hold ct_len - 16. */
+/* ct_len includes the 16-byte tag. out must hold ct_len - 16.
+   Returns -1 (and writes nothing) if the input is too short or the tag does
+   not match, i.e. the data was damaged or forged. */
 int loft_aead_decrypt(const uint8_t key[32], const uint8_t nonce[12],
                       const uint8_t *aad, size_t aad_len,
                       const uint8_t *ct, size_t ct_len,

@@ -1,7 +1,17 @@
+/*
+ HomeView.swift - the app shell and the Home screen.
+ LoftShell is the root view: it holds the tab bar (Home, Connections,
+ Settings), the user settings and the TunnelControl, and keeps the Home state
+ in step with the system VPN. HomeView draws the logo, status pill, main
+ button, info plates, traffic graph (App/SparkView.swift) and IP rows.
+ Data comes from HomeSnapshot (App/HomeModel.swift); look from App/LoftTheme.swift.
+*/
 import SwiftUI
 
 /// Root chrome: Home, Connections stub, Settings. Tab bar matches the mock.
 struct LoftShell: View {
+    /// UI state owned by the shell: the open tab, the Home snapshot, the
+    /// settings, and the open Settings sub-page (nil = Settings itself).
     @State private var tab: LoftTab
     @State private var home: HomeSnapshot
     @State private var prefs: LoftPrefs
@@ -10,6 +20,8 @@ struct LoftShell: View {
     /// Canvas previews keep the snapshot. The live app follows Packet Tunnel status.
     var followTunnel: Bool
 
+    /// `initial` and `tab` pick the starting screen (used by previews);
+    /// without `prefs` the saved settings are loaded.
     init(initial: HomeSnapshot = .off, tab: LoftTab = .home, prefs: LoftPrefs? = nil, followTunnel: Bool = true) {
         _home = State(initialValue: initial)
         _tab = State(initialValue: tab)
@@ -17,6 +29,9 @@ struct LoftShell: View {
         self.followTunnel = followTunnel
     }
 
+    /// The current tab with the tab bar below. Every settings change is
+    /// saved and pushed to the VPN profile; VPN status changes update Home.
+    /// On first show the live app applies the saved policy and reads the status.
     var body: some View {
         ZStack {
             Color.loftPhone.ignoresSafeArea()
@@ -68,6 +83,7 @@ struct LoftShell: View {
         }
     }
 
+    /// The Settings tab: the main list, or the sub-page opened from it.
     @ViewBuilder
     private var settingsRoom: some View {
         switch settingsPage {
@@ -87,12 +103,16 @@ struct LoftShell: View {
     }
 }
 
+/// The three tabs of the bottom bar.
 enum LoftTab: String, Hashable {
     case home, connections, settings
 }
 
 /// DESIGN Home. Live Connect talks to Packet Tunnel; Canvas previews keep the snapshot.
 struct HomeView: View {
+    /// `onPill` runs when the status pill is tapped (the shell opens
+    /// Connections). `followTunnel` false makes the button only flip the
+    /// snapshot, for previews.
     @Binding var snapshot: HomeSnapshot
     var prefs: LoftPrefs = .default
     @ObservedObject var tunnel: TunnelControl
@@ -100,6 +120,8 @@ struct HomeView: View {
     var onPill: () -> Void = {}
     @Environment(\.locale) private var locale
 
+    /// Top to bottom: logo block, main button, then plates, graph and IP
+    /// rows, each only when the mode shows it and simple Home is off.
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
@@ -136,6 +158,7 @@ struct HomeView: View {
         }
     }
 
+    /// Logo with the lamp, the "loft" title and the status pill.
     private var hero: some View {
         VStack(spacing: 0) {
             LoftMark(on: snapshot.lampOn)
@@ -165,6 +188,7 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// A row of small key/value cards built from `plateItems`.
     private var plates: some View {
         HStack(spacing: 6) {
             ForEach(plateItems, id: \.key) { item in
@@ -188,10 +212,12 @@ struct HomeView: View {
         }
     }
 
+    /// Label of the rate unit chosen in Settings.
     private var rateUnit: String {
         prefs.bits ? L10n.t("mbit", locale) : L10n.t("kbs", locale)
     }
 
+    /// External IP (if enabled in Settings), overlay IP and route.
     private var ipRows: some View {
         VStack(spacing: 0) {
             if prefs.showExtIP {
@@ -205,6 +231,7 @@ struct HomeView: View {
         }
     }
 
+    /// One "label ... value" line with a divider under it.
     private func ipRow(_ key: String, _ value: String) -> some View {
         HStack {
             Text(key)
@@ -222,6 +249,7 @@ struct HomeView: View {
         }
     }
 
+    /// Status pill text: connection name, plus uptime when connected.
     private var pillText: String {
         switch snapshot.mode {
         case .on, .simple:
@@ -233,6 +261,7 @@ struct HomeView: View {
         }
     }
 
+    /// Main button label for the current mode.
     private var actionTitle: String {
         switch snapshot.mode {
         case .connecting: return L10n.t("cancel", locale)
@@ -241,6 +270,7 @@ struct HomeView: View {
         }
     }
 
+    /// Main button colour style for the current mode.
     private var actionKind: LoftGoButton.Kind {
         switch snapshot.mode {
         case .connecting: return .ghost
@@ -249,6 +279,8 @@ struct HomeView: View {
         }
     }
 
+    /// Main button action. Live: connecting or connected means disconnect,
+    /// otherwise connect. Previews only change the snapshot.
     private func tapPrimary() {
         if followTunnel {
             if snapshot.mode == .connecting || tunnel.busy {
@@ -302,6 +334,7 @@ struct HomeView: View {
 
 /// The big full-width action button (Connect, Cancel, Disconnect).
 struct LoftGoButton: View {
+    /// Colour style: amber "go", neutral "ghost", red "danger".
     enum Kind { case go, ghost, danger }
     var title: String
     var kind: Kind
@@ -321,6 +354,7 @@ struct LoftGoButton: View {
         .buttonStyle(.plain)
     }
 
+    /// Text colour for the style.
     private var fg: Color {
         switch kind {
         case .go: return .loftInk
@@ -329,6 +363,7 @@ struct LoftGoButton: View {
         }
     }
 
+    /// Fill colour for the style.
     private var bg: Color {
         switch kind {
         case .go: return .loftLamp
@@ -356,6 +391,7 @@ struct LoftTabBar: View {
         .overlay(alignment: .top) { Color.loftLine.frame(height: 1) }
     }
 
+    /// One tab button: icon and label, amber when selected.
     private func tabBtn(_ id: LoftTab, _ key: String, _ glyph: LoftTabGlyph) -> some View {
         let on = tab == id
         return Button {
@@ -383,6 +419,7 @@ struct LoftTabBar: View {
 private enum LoftTabGlyph {
     case home, list, settings
 
+    /// The icon outline in 22x22 coordinates, drawn with a stroke.
     var path: Path {
         switch self {
         case .home:

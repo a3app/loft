@@ -1,3 +1,10 @@
+/*
+ SettingsView.swift - the Settings tab and its sub-pages (About, Journal),
+ plus the small reusable pieces they are built from: a settings row, the
+ loft-style switch and a Back frame. Changes go into LoftPrefs
+ (App/LoftPrefs.swift); LoftShell (App/HomeView.swift) saves them and passes
+ hold / On Demand to TunnelControl (App/TunnelControl.swift).
+*/
 import SwiftUI
 
 /// Sub-pages opened from Settings.
@@ -7,12 +14,15 @@ enum SettingsPage: Hashable {
 
 /// DESIGN Settings. Toggles write `LoftPrefs`; hold / demand / Reset routes go to TunnelControl.
 struct SettingsView: View {
+    /// `onOpen` opens a sub-page, `onResetRoutes` runs the Reset routes action.
     @Binding var prefs: LoftPrefs
     var onOpen: (SettingsPage) -> Void = { _ in }
     var onResetRoutes: () -> Void = {}
     @Environment(\.locale) private var locale
+    /// Shows the "reset to defaults" confirmation.
     @State private var confirmDefaults = false
 
+    /// Three groups (general, routing, client) and the links row at the bottom.
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
@@ -62,6 +72,8 @@ struct SettingsView: View {
         }
     }
 
+    /// Title and the Reset button. Reset turns off hold and On Demand and
+    /// asks the shell to stop the VPN, so normal routing comes back.
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             Text(L10n.t("settings", locale))
@@ -85,6 +97,7 @@ struct SettingsView: View {
         .padding(.bottom, 8)
     }
 
+    /// Upper-case group heading.
     private func group(_ key: String) -> some View {
         Text(L10n.t(key, locale))
             .font(LoftTheme.demi(11))
@@ -95,12 +108,15 @@ struct SettingsView: View {
             .padding(.bottom, 2)
     }
 
+    /// A row with a switch; title and subtitle are L10n keys.
     private func toggle(_ title: String, _ sub: String, _ on: Binding<Bool>) -> some View {
         LoftSetRow(title: L10n.t(title, locale), subtitle: L10n.t(sub, locale)) {
             LoftToggle(on: on)
         }
     }
 
+    /// A row with a choice of chips. Each item is (L10n key, selected);
+    /// `pick` gets the tapped index.
     private func chips(_ title: String, _ sub: String, _ items: [(String, Bool)], pick: @escaping (Int) -> Void) -> some View {
         LoftSetRow(title: L10n.t(title, locale), subtitle: L10n.t(sub, locale)) {
             HStack(spacing: 6) {
@@ -122,6 +138,7 @@ struct SettingsView: View {
         }
     }
 
+    /// Split routing switch plus a link to the routing lists page.
     private var splitRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             LoftSetRow(title: L10n.t("split", locale), subtitle: L10n.t("splitD", locale)) {
@@ -135,6 +152,7 @@ struct SettingsView: View {
         }
     }
 
+    /// Text field for trusted Wi-Fi names (comma-separated), used by On Demand.
     private var trustedField: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(L10n.t("trusted", locale))
@@ -156,6 +174,7 @@ struct SettingsView: View {
         .padding(.bottom, 4)
     }
 
+    /// Bottom links: reset to defaults, Journal, About.
     private var links: some View {
         HStack(spacing: 0) {
             link("defaults") { confirmDefaults = true }
@@ -166,6 +185,7 @@ struct SettingsView: View {
         .padding(.top, 16)
     }
 
+    /// One small grey text link.
     private func link(_ key: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(L10n.t(key, locale))
@@ -253,6 +273,7 @@ struct LoftBackChrome<Content: View>: View {
 struct AboutView: View {
     var onBack: () -> Void
     @Environment(\.locale) private var locale
+    /// App version from Info.plist, or a fixed fallback.
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.28"
     }
@@ -298,6 +319,7 @@ struct AboutView: View {
         }
     }
 
+    /// One protocol line: name and its variants.
     private func proto(_ k: String, _ v: String) -> some View {
         HStack {
             Text(k).foregroundStyle(Color.loftSnow)
@@ -353,6 +375,7 @@ struct JournalView: View {
         }
     }
 
+    /// A button-looking label (Copy, Share, Clear); it has no action yet.
     private func ghost(_ key: String) -> some View {
         Text(L10n.t(key, locale))
             .font(LoftTheme.demi(12))

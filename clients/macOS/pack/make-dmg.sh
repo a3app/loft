@@ -1,6 +1,13 @@
 #!/bin/sh
 # Build a UDZO disk image: loft.app, Applications symlink, README.txt.
 # Volume layout (Finder): app left, Applications right — drag to install.
+# Run after `make app` (the Makefile's dmg target calls it). Signs the app via
+# sign.sh, builds a writable image, lets Finder lay out the window, then
+# compresses it to a read-only UDZO image. With a Developer ID it also signs
+# the .dmg and, when NOTARY_PROFILE names a stored notarytool profile,
+# notarizes and staples it. Output: dist/clients/macOS/loft-VER-macos-ARCH.dmg.
+# ARCH (arm64 or x86_64) only names the file; the app must already be built
+# for that architecture.
 set -eu
 
 PACK=$(cd "$(dirname "$0")" && pwd)
@@ -31,7 +38,10 @@ fi
 
 "$PACK/sign.sh" "$APP"
 
+# 1. Stage the volume contents in a temp dir.
 STAGE=$(mktemp -d "${TMPDIR:-/tmp}/loft-dmg.XXXXXX")
+# cleanup: on any exit, unmount a still-attached image and delete the stage
+# dir and the writable intermediate image.
 cleanup() {
 	if [ -n "${MOUNT:-}" ] && [ -d "$MOUNT" ]; then
 		hdiutil detach "$MOUNT" -quiet 2>/dev/null || true
@@ -48,6 +58,7 @@ if [ -f "$MACOS/Resources/loft.icns" ]; then
 	cp "$MACOS/Resources/loft.icns" "$STAGE/.VolumeIcon.icns"
 fi
 
+# 2. Build a writable image and mount it so the window layout can be set.
 rm -f "$DMG" "$RW"
 hdiutil create -ov -volname "$VOL" -fs HFS+ -srcfolder "$STAGE" -format UDRW "$RW" >/dev/null
 
@@ -70,6 +81,8 @@ fi
 # Hide README from the icon grid if Finder layout runs; keep the file visible.
 # Users still see README.txt in the window.
 
+# 3. Ask Finder to arrange icons; the layout is saved in the volume's
+#    .DS_Store. Best effort: a failure only means a plainer window.
 if [ "${CI:-}" != "true" ] && command -v osascript >/dev/null 2>&1; then
 	osascript <<EOF || true
 tell application "Finder"
@@ -97,12 +110,14 @@ end tell
 EOF
 fi
 
+# 4. Unmount and convert to the compressed read-only image that ships.
 sync
 hdiutil detach "$MOUNT" -quiet
 MOUNT=""
 hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
 rm -f "$RW"
 
+# 5. Sign (and optionally notarize) the image itself.
 if [ "$CODESIGN_ID" != "-" ]; then
 	codesign --force --sign "$CODESIGN_ID" --timestamp "$DMG"
 	echo "dmg: signed $DMG"

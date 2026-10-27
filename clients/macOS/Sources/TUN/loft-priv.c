@@ -1,5 +1,28 @@
 /* Setuid helper: open utun, ifconfig, split default, pass fd via SCM_RIGHTS.
-   fork/exec /sbin/ifconfig and /sbin/route. system() from setuid drops euid. */
+   fork/exec /sbin/ifconfig and /sbin/route. system() from setuid drops euid.
+
+   loft-priv is the only part of the macOS client that runs as root. The menu
+   bar app (Engine/Priv.swift) installs it once as setuid root and then runs
+   it with command-line flags for each privileged job:
+   - "holder" mode (--sock): create a utun (virtual tunnel interface, see
+     utun.h), give it the overlay IP (the address inside the loft network),
+     add routes, send the open utun fd to the unprivileged session helper
+     loft-front over a unix socket, then stay alive holding the interface
+     until SIGTERM, and clean up on exit;
+   - one-shot modes: install or remove the "split default" route, pin hosts,
+     apply split-tunnel prefix lists, set or restore system DNS, tidy up after
+     a crash, or find the real (non-tunnel) gateway.
+   Key terms used below:
+   - split default: routes 0.0.0.0/1 and 128.0.0.0/1 into the utun. Together
+     they cover all of IPv4 and are more specific than the normal 0.0.0.0/0
+     default, so they win without deleting it; removing them restores the
+     original path at once.
+   - front: the loft server endpoint the session connects to. Its address is
+     "pinned" (a /32 host route via the real gateway) so the tunnel's own
+     traffic does not loop back into the tunnel.
+   - stamp: a small file in /tmp or /var/run that records what this helper
+     changed, so a later run (even after a crash) can undo exactly that.
+   Linked with utun.c. */
 #include "utun.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,11 +47,18 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 
+/* Defined further down, next to the other gateway helpers. */
 static int gw_on_link(const char *gw);
 static void discover_phys_gw(char *out, size_t n);
 static int first_phys_if(char *out, size_t n);
 
-/* runv: fork/execv `path`; keep euid 0. ignore non-zero if `ignore`. */
+/* runv: fork/execv `path`; keep euid 0. ignore non-zero if `ignore`.
+   Runs a system tool (ifconfig, route, networksetup) directly, without a
+   shell: system() goes through /bin/sh, which drops root when the real user
+   is not root, and a shell would also parse arguments. In the child, setuid(0)
+   makes the real uid root too so the tool sees a full root process.
+   Returns 0 on success (or always when `ignore`), -1 on failure, logging
+   the failed command to stderr unless ignored. */
 static int runv(int ignore, const char *path, char *const argv[]) {
     pid_t pid;
     int st;
@@ -51,10 +81,16 @@ static int runv(int ignore, const char *path, char *const argv[]) {
     return 0;
 }
 
+/* Link-local address that an older layout used as the utun's local end.
+   Still removed during cleanup in case a leftover route points at it, and
+   never accepted as a real gateway. */
 #define TUN_LOCAL "169.254.8.1"
 
 /* ifconfig_tun: p2p IPv4 on utun. NEPacketTunnel / SSTP Connect style is
-   overlay IP as both ends (A --> A) so the kernel sources from that address. */
+   overlay IP as both ends (A --> A) so the kernel sources from that address.
+   A utun is a point-to-point link with a local and a peer address; using the
+   overlay IP for both makes outgoing packets carry the overlay IP as source,
+   which is what the loft network expects. Also sets the MTU and brings it up. */
 static int ifconfig_tun(const char *name, const char *local, const char *peer, const char *mtu) {
     char *argv[] = {
         "ifconfig", (char *)name, "inet", (char *)local, (char *)peer,
@@ -63,7 +99,9 @@ static int ifconfig_tun(const char *name, const char *local, const char *peer, c
     return runv(0, "/sbin/ifconfig", argv);
 }
 
-/* IPv4-only until overlay IPv6 is assigned. Do not install ::/0. */
+/* ifconfig_no_inet6: IPv4-only until overlay IPv6 is assigned. Do not install ::/0.
+   Turns IPv6 off on the utun so macOS does not give it an IPv6 address and
+   try to send IPv6 into a tunnel that cannot carry it yet. */
 static int ifconfig_no_inet6(const char *name) {
     char *argv[] = { "ifconfig", (char *)name, "inet6", "ifdisabled", NULL };
     return runv(1, "/sbin/ifconfig", argv);
@@ -88,14 +126,18 @@ static int route_del_net(const char *net) {
     return runv(1, "/sbin/route", argv);
 }
 
-/* is_split_dest: Darwin prints 0/1 or 0.0.0.0/1 (and the 128.0 half). */
+/* is_split_dest: Darwin prints 0/1 or 0.0.0.0/1 (and the 128.0 half).
+   True if a destination column from `netstat -rn` is one half of the split
+   default, in either of the spellings macOS uses. */
 static int is_split_dest(const char *d) {
     return d && (!strcmp(d, "0/1") || !strcmp(d, "0.0.0.0/1")
         || !strcmp(d, "128.0/1") || !strcmp(d, "128.0.0.0/1"));
 }
 
 /* drop_split_default: remove 0/1 and 128/1. Kernel then stops injecting into utun.
-   Must run BEFORE killing the utun reader and BEFORE wiping /32 pins. */
+   Must run BEFORE killing the utun reader and BEFORE wiping /32 pins.
+   Deletes both spellings by name, then scans the routing table for any copy
+   left behind (there can be several when sibling sessions each added one). */
 static void drop_split_default(void) {
     FILE *fp;
     char line[256];
@@ -122,7 +164,9 @@ static void ifconfig_down(const char *iff) {
 }
 
 /* drop_split_force: drop 0/1, and if a split still points at utun, ifconfig it down.
-   Reset Routes uses this so a dead reader cannot keep filling mbufs. */
+   Reset Routes uses this so a dead reader cannot keep filling mbufs.
+   (mbufs are kernel packet buffers: if nobody reads the utun, packets pile up
+   there.) Remembers up to 8 utun names, downs each once, then drops again. */
 static void drop_split_force(void) {
     FILE *fp;
     char line[256];
@@ -156,7 +200,11 @@ static int route_del_host(const char *ip) {
 }
 
 /* route_add_host: pin `ip` via an on-link gw, else `-interface` of a live NIC.
-   A leftover pin via a dead hotspot hop makes connect() return EADDRNOTAVAIL. */
+   A leftover pin via a dead hotspot hop makes connect() return EADDRNOTAVAIL.
+   A "pin" is a /32 host route that keeps traffic to one address (usually the
+   front) on the real network instead of the tunnel. "On-link" means the
+   gateway is inside a subnet of a physical interface, i.e. reachable now.
+   Returns -1 when there is neither a usable gateway nor a physical NIC. */
 static int route_add_host(const char *ip, const char *gw) {
     char iff[IFNAMSIZ];
     if (gw && gw[0] && gw_on_link(gw)) {
@@ -176,7 +224,8 @@ static int route_add_host(const char *ip, const char *gw) {
 
 
 
-/* cidr24: `a.b.c.0/24` of `ip`. */
+/* cidr24: `a.b.c.0/24` of `ip`. The overlay network is routed as the /24
+   around the overlay IP. A string that is not a dotted IPv4 is copied as is. */
 static void cidr24(const char *ip, char *out, size_t n) {
     unsigned a, b, c, d;
     if (sscanf(ip, "%u.%u.%u.%u", &a, &b, &c, &d) == 4)
@@ -185,7 +234,9 @@ static void cidr24(const char *ip, char *out, size_t n) {
         snprintf(out, n, "%s", ip);
 }
 
-/* route_add_split: add `net` via utun `-interface`, else via `peer`. */
+/* route_add_split: add `net` via utun `-interface`, else via `peer`.
+   Routing by interface name is preferred; the peer address is the fallback
+   for systems where `-interface` fails. Returns 0 if either worked. */
 static int route_add_split(const char *net, const char *name, const char *peer) {
     char *via_if[] = {
         "route", "-n", "add", "-inet", (char *)net, "-interface", (char *)name, NULL
@@ -197,7 +248,10 @@ static int route_add_split(const char *net, const char *name, const char *peer) 
     return runv(0, "/sbin/route", via_gw);
 }
 
-/* route_blackhole: hold default via 127.0.0.1 -blackhole. */
+/* route_blackhole: hold default via 127.0.0.1 -blackhole.
+   Kill-switch used by `--down --hold`: while the tunnel is down, traffic
+   is dropped instead of leaking out over the normal network. A
+   real default route (if any) stays in place; route_unhold removes this one. */
 static int route_blackhole(void) {
     char *argv[] = {
         "route", "-n", "add", "-inet", "0.0.0.0/0", "127.0.0.1", "-blackhole", NULL
@@ -205,6 +259,7 @@ static int route_blackhole(void) {
     return runv(1, "/sbin/route", argv);
 }
 
+/* Stamp file: exists while loft's IPv6 reject route (below) is installed. */
 #define IPV6_DROP_STAMP "/tmp/loft-ipv6-drop"
 
 /* ipv6_drop_global: reject 2000::/3 so Happy Eyeballs gets ENETUNREACH
@@ -225,6 +280,8 @@ static void ipv6_drop_global(void) {
     }
 }
 
+/* ipv6_undrop_global: remove the 2000::/3 reject route and its stamp, so
+   native IPv6 works again. Safe to call when it is not installed. */
 static void ipv6_undrop_global(void) {
     char *argv[] = {
         "route", "-n", "delete", "-inet6", "2000::/3", "::1", NULL
@@ -242,9 +299,11 @@ static int route_unhold(void) {
     return runv(1, "/sbin/route", argv);
 }
 
+/* Path of this holder's stamp file, empty when there is none. */
 static char hold_stamp[64];
 
-/* stamp_hold: /tmp/loft-hold.pid so --reap can find this holder. */
+/* stamp_hold: /tmp/loft-hold.<pid> so --reap can find this holder.
+   The file is empty; the process id in its name is the information. */
 static void stamp_hold(void) {
     snprintf(hold_stamp, sizeof hold_stamp, "/tmp/loft-hold.%d", (int)getpid());
     int fd = open(hold_stamp, O_CREAT | O_WRONLY | O_TRUNC, 0644);
@@ -257,7 +316,9 @@ static void unstamp_hold(void) {
     hold_stamp[0] = 0;
 }
 
-/* comm_is_priv: true if pid's executable basename is loft-priv. */
+/* comm_is_priv: true if pid's executable basename is loft-priv.
+   Guards every kill: a stale stamp may carry a pid that the system has
+   since given to an unrelated process. */
 static int comm_is_priv(pid_t pid) {
     char path[PROC_PIDPATHINFO_MAXSIZE];
     const char *base;
@@ -268,7 +329,10 @@ static int comm_is_priv(pid_t pid) {
 }
 
 /* Holders are started with --sock. --down/--reap/--kill are not. */
-/* argv_has_sock: true if pid was started with --sock (a holder). */
+/* argv_has_sock: true if pid was started with --sock (a holder).
+   Reads the process's arguments with sysctl KERN_PROCARGS2. That buffer
+   starts with argc (an int), then the executable path, padding NULs, and
+   the NUL-separated arguments, which are scanned for "--sock". */
 static int argv_has_sock(pid_t pid) {
     int mib[3] = { CTL_KERN, KERN_PROCARGS2, (int)pid };
     char buf[8192];
@@ -296,7 +360,11 @@ static void kill_holder(pid_t pid, int sig) {
 }
 
 /* Holders run as ruid 0; the GUI cannot signal them. */
-/* reap_others: SIGTERM leftover holders (hold stamps and --sock argv). */
+/* reap_others: SIGTERM leftover holders (hold stamps and --sock argv).
+   Finds holders two ways, because a crash can leave either one missing:
+   1. every /tmp/loft-hold.<pid> stamp (the stamp is deleted as well);
+   2. every running process whose arguments include --sock.
+   kill_holder makes sure only real loft-priv processes are signalled. */
 static void reap_others(int sig) {
     DIR *d;
     struct dirent *e;
@@ -338,12 +406,16 @@ static void reap_others(int sig) {
     free(pids);
 }
 
-/* After dropping 0/1, Darwin may still have default via utun (or none).
-   Put 0/0 back on the pre-loft gateway. */
+/* DNS_SAVE: the DNS servers each macOS "Network Service" (Wi-Fi, Ethernet,
+   ...) had before loft changed them, one "service|ip ip ..." line each
+   ("Empty" = automatic/DHCP). g_did_dns: this process changed DNS. */
 #define DNS_SAVE "/var/run/loft-dns.prev"
 static int g_did_dns;
 
-/* dns_capture: run `path` and copy stdout into `out`. */
+/* dns_capture: run `path` and copy stdout into `out`.
+   Like runv, but keeps the tool's output (NUL-terminated, cut at n-1
+   bytes). Despite the name it is also used for netstat and ipconfig.
+   Returns 0 only if the tool exited with status 0. */
 static int dns_capture(const char *path, char *const argv[], char *out, size_t n) {
     int p[2];
     pid_t pid;
@@ -376,7 +448,9 @@ static int dns_capture(const char *path, char *const argv[], char *out, size_t n
     return (WIFEXITED(st) && WEXITSTATUS(st) == 0) ? 0 : -1;
 }
 
-/* dns_set_svc: networksetup -setdnsservers for one service. */
+/* dns_set_svc: networksetup -setdnsservers for one service.
+   `ips` is a NULL-terminated list; NULL or empty passes "Empty", which tells
+   macOS to go back to the servers it gets automatically (DHCP). */
 static int dns_set_svc(const char *svc, char *const ips[]) {
     char *argv[16];
     int n = 0;
@@ -393,7 +467,9 @@ static int dns_set_svc(const char *svc, char *const ips[]) {
     return runv(1, "/usr/sbin/networksetup", argv);
 }
 
-/* dns_restore: replay DNS_SAVE and unlink it. Unused on the live overlay-DNS-off path. */
+/* dns_restore: replay DNS_SAVE and unlink it. Unused on the live overlay-DNS-off path.
+   Puts every service back to the servers recorded before loft's first
+   change. Does nothing if there is no save file. */
 static void dns_restore(void) {
     FILE *fp;
     char line[512];
@@ -426,7 +502,11 @@ static void dns_restore(void) {
     g_did_dns = 0;
 }
 
-/* dns_apply: push csv nameservers onto every Network Service; save previous. */
+/* dns_apply: push csv nameservers onto every Network Service; save previous.
+   Used when a connection asks for system DNS through the tunnel. Takes up
+   to 8 servers. The previous settings are saved only if no save file exists
+   yet, so applying twice never overwrites the true pre-loft values.
+   Returns 0 (also for an empty list), -1 if services cannot be listed. */
 static int dns_apply(const char *csv) {
     char list[4096];
     char *argv[] = {"networksetup", "-listallnetworkservices", NULL};
@@ -445,10 +525,13 @@ static int dns_apply(const char *csv) {
         tok = strtok(NULL, ",");
     }
     ips[nips] = NULL;
+    /* 1. Parse the comma-separated server list (trimming leading spaces). */
     if (nips == 0) {
         free(dup);
         return 0;
     }
+    /* 2. List all network services; first line is an explanatory header,
+       and lines starting with '*' are disabled services, which are skipped. */
     if (dns_capture("/usr/sbin/networksetup", argv, list, sizeof list) != 0) {
         free(dup);
         return -1;
@@ -466,6 +549,8 @@ static int dns_apply(const char *csv) {
         size_t sl;
         nl = strchr(line, '\n');
         if (nl) *nl = 0;
+        /* 3. Per service: save its current servers (first time only), then
+           set the new ones. */
         if (line[0] != '*' && line[0] != 0 && strncmp(line, "An asterisk", 11) != 0) {
             snprintf(svc, sizeof svc, "%s", line);
             sl = strlen(svc);
@@ -494,6 +579,7 @@ static int dns_apply(const char *csv) {
     return 0;
 }
 
+/* Stamp file: exists while a loft split default (0/1 + 128/1) is installed. */
 #define DID_DEFAULT_STAMP "/tmp/loft-did-default"
 
 /* stamp_default: /tmp/loft-did-default so --down knows to restore 0/0. */
@@ -514,7 +600,12 @@ static int stamped_default(void) {
 
 /* route_restore_default: 0/0 via an on-link gw. A remembered hotspot hop
    (172.20.10.1 after lid-close) is skipped; discover the live Wi-Fi/Ethernet
-   router, else `-interface` of the first physical NIC. */
+   router, else `-interface` of the first physical NIC.
+   Needed because after the split default is dropped, macOS may be left with
+   a default route via the utun, or none at all. `gw` is the gateway the app
+   remembered from before loft; it is replaced when it is missing, is the old
+   TUN_LOCAL, is an interface placeholder ("link#N"), or is no longer on-link.
+   Always returns 0: failures are only logged. */
 static int route_restore_default(const char *gw) {
     char found[64];
     char iff[IFNAMSIZ];
@@ -550,7 +641,11 @@ static int route_restore_default(const char *gw) {
     return 0;
 }
 
-/* send_fd: connect to unix sock and pass the utun fd via SCM_RIGHTS. */
+/* send_fd: connect to unix sock and pass the utun fd via SCM_RIGHTS.
+   `path` is the socket the session helper (loft-front) listens on. The
+   message carries the 16-byte "utunN" name as normal data and the fd as
+   ancillary data; the receiver gets its own copy of the open descriptor.
+   Mirrors loft_utun_recv_fd in utun.c. Returns 0 or -1. */
 static int send_fd(const char *path, int tun, const char *name) {
     int fd;
     struct sockaddr_un un;
@@ -609,20 +704,29 @@ static void each_ip(const char *exclude, void (*fn)(const char *)) {
     free(dup);
 }
 
+/* Gateway that add_excl pins through (set by the mode that calls it). */
 static const char *g_gw;
 
+/* Holder state, kept in globals so hold_cleanup can undo the setup after a
+   signal: overlay IP, peer, pre-loft gateway, the utun fd, whether this
+   holder installed the split default, and the "stop now" flag. */
 static char g_ip[64], g_peer[64], g_gwbuf[64];
 static int g_tun = -1, g_did_default;
 static volatile sig_atomic_t stop_hold;
 static void wipe_excl(void);
 
-/* on_hold_sig: SIGTERM/INT/HUP while holding utun. */
+/* on_hold_sig: SIGTERM/INT/HUP while holding utun.
+   Only sets a flag: almost nothing is safe inside a signal handler, so the
+   main loop wakes from pause() and does the cleanup itself. */
 static void on_hold_sig(int sig) {
     (void)sig;
     stop_hold = 1;
 }
 
-/* hold_cleanup: drop overlay routes, restore 0/0 if we installed it, close utun. */
+/* hold_cleanup: drop overlay routes, restore 0/0 if we installed it, close utun.
+   Runs once when a holder is told to stop. Also removes the IPv6 reject
+   route, restores DNS if this holder changed it, wipes front pins and
+   deletes the hold stamp. */
 static void hold_cleanup(void) {
     char net[32];
     ipv6_undrop_global();
@@ -651,6 +755,8 @@ static void hold_cleanup(void) {
     unstamp_hold();
 }
 
+/* Stamp file: one pinned host IP per line ("exclude" = excluded from the
+   tunnel). Shared by all sessions, so each removes only its own entries. */
 #define EXCL_STAMP "/tmp/loft-exclude"
 
 /* stamp_excl: remember a host loft pinned, so --restore can drop it without a list. */
@@ -675,7 +781,8 @@ static void stamp_excl(const char *ip) {
     fclose(fp);
 }
 
-/* load_excl_list: host IPs from EXCL_STAMP. */
+/* load_excl_list: host IPs from EXCL_STAMP. Skips blank and '#' lines;
+   returns how many were read (at most `max`). */
 static int load_excl_list(char ips[][64], int max) {
     FILE *fp;
     int n = 0;
@@ -761,7 +868,10 @@ static void pin_replace(const char *exclude) {
     rewrite_excl_stamp(neu, nnew);
 }
 
-/* first_phys_if: name of an UP IPv4 NIC (prefer en*), skipping utun/lo/feth. */
+/* first_phys_if: name of an UP IPv4 NIC (prefer en*), skipping utun/lo/feth.
+   en* are Wi-Fi and Ethernet; utun are tunnels (loft's or other VPNs'), lo
+   is loopback and feth are virtual "fake ethernet" pairs. Returns 0 and
+   fills `out`, or -1 when no such interface is up. */
 static int first_phys_if(char *out, size_t n) {
     struct ifaddrs *ifa, *p;
     char fallback[IFNAMSIZ];
@@ -791,7 +901,10 @@ static int first_phys_if(char *out, size_t n) {
     return -1;
 }
 
-/* ipconfig_router: DHCP/static router for `iff`, or 0. */
+/* ipconfig_router: DHCP/static router for `iff`, or 0.
+   Asks macOS for the router configured on one interface. Unlike the routing
+   table this answer is not affected by loft's own routes. Returns 1 and
+   fills `out` with a valid IPv4, else 0. */
 static int ipconfig_router(const char *iff, char *out, size_t n) {
     char buf[128];
     char *argv[] = { "ipconfig", "getoption", (char *)iff, "router", NULL };
@@ -857,7 +970,10 @@ static void discover_phys_gw(char *out, size_t n) {
     freeifaddrs(ifa);
 }
 
-/* gw_on_link: true if `gw` is on a physical IPv4 subnet (not utun/lo/feth). */
+/* gw_on_link: true if `gw` is on a physical IPv4 subnet (not utun/lo/feth).
+   In other words: the address is directly reachable on a real network right
+   now. A gateway remembered from a network the Mac has since left (e.g. a
+   phone hotspot) fails this test. */
 static int gw_on_link(const char *gw) {
     struct ifaddrs *ifa, *p;
     struct in_addr want;
@@ -935,6 +1051,14 @@ static void unstamp_excl(const char *exclude) {
     rewrite_excl_stamp(keep, nkeep);
 }
 
+/* Split tunneling: per-prefix lists of networks that go "via" loft (into
+   the utun) or "direct" (around loft, via the physical gateway). The app
+   (Engine/Priv.swift) writes the wanted lists to the *want* files; after
+   applying them this helper saves what it installed in the *have* files and
+   which utun and gateway it used in SPLIT_META, so the next run only adds
+   and deletes the difference. SPLIT_MAX caps the entries per list.
+   RT_ROUNDUP pads a sockaddr to the 4-byte boundary that routing-socket
+   messages require. */
 #define SPLIT_MAX 65536
 #define SPLIT_WANT_VIA "/tmp/loft-split-want-via"
 #define SPLIT_WANT_DIRECT "/tmp/loft-split-want-direct"
@@ -943,14 +1067,19 @@ static void unstamp_excl(const char *exclude) {
 #define SPLIT_META "/tmp/loft-split-meta"
 #define RT_ROUNDUP(a) ((a) > 0 ? (1 + (((a) - 1) | (sizeof(uint32_t) - 1))) : sizeof(uint32_t))
 
+/* cidr4: one IPv4 prefix. `net` is the network address in host byte order
+   with the host bits cleared; `bits` is the prefix length (0..32). */
 struct cidr4 {
     uint32_t net;
     uint8_t bits;
 };
 
+/* Routing socket (opened on first use by rt_fd) and its message counter. */
 static int g_rtfd = -1;
 static int g_rtseq;
 
+/* cidr_cmp: qsort order for cidr4, by network then prefix length. The split
+   lists are kept sorted this way so split_diff can merge them in one pass. */
 static int cidr_cmp(const void *a, const void *b) {
     const struct cidr4 *x = a, *y = b;
     if (x->net < y->net) return -1;
@@ -977,7 +1106,10 @@ static int parse_cidr4(const char *s, struct cidr4 *out) {
     return 0;
 }
 
-/* cidr_skip: default halves, loopback, link-local, multicast. */
+/* cidr_skip: default halves, loopback, link-local, multicast.
+   Prefixes a split list must never touch: 0/0 and the 0/1 + 128/1 split
+   default are managed separately, and 127/8, 169.254/16 and 224/4 would
+   break the Mac's own local networking. Returns 1 to skip. */
 static int cidr_skip(const struct cidr4 *c) {
     uint32_t net = c->net;
     unsigned bits = c->bits;
@@ -989,13 +1121,17 @@ static int cidr_skip(const struct cidr4 *c) {
     return 0;
 }
 
+/* cidr_fmt: cidr4 back to "a.b.c.d/n" text. */
 static void cidr_fmt(const struct cidr4 *c, char *out, size_t n) {
     snprintf(out, n, "%u.%u.%u.%u/%u",
         (c->net >> 24) & 255, (c->net >> 16) & 255,
         (c->net >> 8) & 255, c->net & 255, c->bits);
 }
 
-/* load_cidrs: unique IPv4 prefixes from `path`. */
+/* load_cidrs: unique IPv4 prefixes from `path`.
+   One prefix per line; blank lines, '#' comments, bad lines and cidr_skip
+   prefixes are ignored. Result is sorted and de-duplicated. A missing file
+   counts as an empty list. Returns the count (at most `cap`). */
 static int load_cidrs(const char *path, struct cidr4 *out, int cap) {
     FILE *fp;
     char line[128];
@@ -1028,6 +1164,7 @@ static int load_cidrs(const char *path, struct cidr4 *out, int cap) {
     return n;
 }
 
+/* save_cidrs: write prefixes to `path`, one per line (the *have* files). */
 static void save_cidrs(const char *path, const struct cidr4 *v, int n) {
     FILE *fp;
     int i;
@@ -1041,13 +1178,21 @@ static void save_cidrs(const char *path, const struct cidr4 *v, int n) {
     fclose(fp);
 }
 
+/* rt_fd: the PF_ROUTE socket, opened once and reused. Writing messages to
+   it changes the kernel routing table directly, which is much faster than
+   running /sbin/route once per prefix for lists of thousands. */
 static int rt_fd(void) {
     if (g_rtfd >= 0) return g_rtfd;
     g_rtfd = socket(PF_ROUTE, SOCK_RAW, AF_UNSPEC);
     return g_rtfd;
 }
 
-/* rt_mod: RTM_ADD / RTM_DELETE one IPv4 prefix via gw or `-interface` iff. */
+/* rt_mod: RTM_ADD / RTM_DELETE one IPv4 prefix via gw or `-interface` iff.
+   Builds a routing-socket message by hand: a header followed by the
+   destination, the gateway (a link-level address naming the interface, or
+   an IPv4 address) and, unless it is a /32 host route, the netmask.
+   "Already exists" and "not found" count as success so callers can be
+   idempotent. Returns 0, or -1 on bad input or a real error. */
 static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *iff) {
     uint8_t buf[256];
     struct rt_msghdr *m;
@@ -1057,6 +1202,7 @@ static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *if
     int flags = RTF_UP | RTF_STATIC;
     unsigned idx = 0;
     int fd, n, tries = 0, replaced = 0;
+    /* 1. Destination address right after the header. */
     memset(buf, 0, sizeof buf);
     m = (struct rt_msghdr *)buf;
     p = buf + sizeof(*m);
@@ -1066,6 +1212,7 @@ static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *if
     sin.sin_addr.s_addr = htonl(c->net);
     memcpy(p, &sin, sizeof sin);
     p += RT_ROUNDUP(sizeof sin);
+    /* 2. Gateway: the interface itself (via loft) or a router IP (direct). */
     if (iff && iff[0]) {
         struct sockaddr_dl sdl;
         size_t nlen;
@@ -1095,6 +1242,7 @@ static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *if
     } else {
         return -1;
     }
+    /* 3. Netmask, or the host flag for a single address. */
     if (c->bits == 32) {
         flags |= RTF_HOST;
     } else {
@@ -1107,6 +1255,8 @@ static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *if
         p += RT_ROUNDUP(sizeof sin);
         addrs |= RTA_NETMASK;
     }
+    /* 4. Fill in the header and send; retry briefly if the kernel is out of
+       buffers (ENOBUFS), which happens when adding many routes quickly. */
     m->rtm_msglen = (u_short)(p - buf);
     m->rtm_version = RTM_VERSION;
     m->rtm_type = (u_char)cmd;
@@ -1139,6 +1289,8 @@ static int rt_mod(int cmd, const struct cidr4 *c, const char *gw, const char *if
 }
 
 /* split_diff: delete have-not-want and/or add want-not-have.
+   Both lists are sorted (cidr_cmp), so one merge-style walk finds the
+   difference. Counters in *added / *deleted only grow on success.
    Callers run deletes on both bags first, then adds, so a prefix
    moving via↔direct is gone from the old hop before the new ADD. */
 static void split_diff(const struct cidr4 *have, int nh,
@@ -1164,6 +1316,7 @@ static void split_diff(const struct cidr4 *have, int nh,
     }
 }
 
+/* split_wipe: delete every prefix in `have` from the given hop. */
 static void split_wipe(const struct cidr4 *have, int n, const char *gw, const char *iff, int *deleted) {
     int i;
     for (i = 0; i < n; i++) {
@@ -1171,6 +1324,8 @@ static void split_wipe(const struct cidr4 *have, int n, const char *gw, const ch
     }
 }
 
+/* split_read_meta: utun name and gateway the installed split lists use
+   ("if=" and "gw=" lines in SPLIT_META); empty strings if unknown. */
 static void split_read_meta(char *iff, size_t ni, char *gw, size_t ng) {
     FILE *fp;
     char line[128];
@@ -1190,6 +1345,7 @@ static void split_read_meta(char *iff, size_t ni, char *gw, size_t ng) {
     fclose(fp);
 }
 
+/* split_write_meta: record the utun and gateway now in use. */
 static void split_write_meta(const char *iff, const char *gw) {
     FILE *fp = fopen(SPLIT_META, "w");
     if (!fp) return;
@@ -1202,7 +1358,9 @@ static int cidr_eq(const struct cidr4 *a, const struct cidr4 *b) {
     return a->net == b->net && a->bits == b->bits;
 }
 
-/* drop_via_from_direct: equal prefix, through-loft wins. */
+/* drop_via_from_direct: equal prefix, through-loft wins.
+   Removes from the direct list every prefix that is also in the via list,
+   compacting in place; returns the new direct count. */
 static int drop_via_from_direct(struct cidr4 *dir, int nd, const struct cidr4 *via, int nv) {
     int w = 0, i, j;
     for (i = 0; i < nd; i++) {
@@ -1217,7 +1375,10 @@ static int drop_via_from_direct(struct cidr4 *dir, int nd, const struct cidr4 *v
 
 /* split_apply: install want-via via utun and want-direct via native gw.
    Direct is applied first so a prefix moving to via is deleted off the
-   native hop before RTM_ADD to utun (EEXIST would otherwise keep it around loft). */
+   native hop before RTM_ADD to utun (EEXIST would otherwise keep it around loft).
+   If the utun is gone, or the gateway is unusable and none can be found,
+   that list is emptied (its routes removed). If the utun or gateway changed
+   since last time, the old routes are wiped and re-added on the new hop. */
 static void split_apply(const char *iff, const char *gw) {
     static struct cidr4 have_via[SPLIT_MAX], want_via[SPLIT_MAX];
     static struct cidr4 have_dir[SPLIT_MAX], want_dir[SPLIT_MAX];
@@ -1225,12 +1386,14 @@ static void split_apply(const char *iff, const char *gw) {
     int nv_h, nv_w, nd_h, nd_w;
     int add_v = 0, del_v = 0, add_d = 0, del_d = 0;
     int via_ok, dir_ok, rebind_via, rebind_dir;
+    /* 1. Load what is installed, what is wanted, and the old hops. */
     split_read_meta(old_if, sizeof old_if, old_gw, sizeof old_gw);
     nv_h = load_cidrs(SPLIT_HAVE_VIA, have_via, SPLIT_MAX);
     nv_w = load_cidrs(SPLIT_WANT_VIA, want_via, SPLIT_MAX);
     nd_h = load_cidrs(SPLIT_HAVE_DIRECT, have_dir, SPLIT_MAX);
     nd_w = load_cidrs(SPLIT_WANT_DIRECT, want_dir, SPLIT_MAX);
     nd_w = drop_via_from_direct(want_dir, nd_w, want_via, nv_w);
+    /* 2. Check that the utun exists and the gateway is reachable. */
     via_ok = iff && iff[0] && if_nametoindex(iff) != 0;
     dir_ok = gw && gw[0] && gw_on_link(gw);
     if (!dir_ok && gw && gw[0]) {
@@ -1243,6 +1406,7 @@ static void split_apply(const char *iff, const char *gw) {
     }
     if (!via_ok) nv_w = 0;
     if (!dir_ok) nd_w = 0;
+    /* 3. Hop changed or unusable: remove everything on the old hop. */
     rebind_via = via_ok && old_if[0] && strcmp(old_if, iff) != 0;
     rebind_dir = dir_ok && old_gw[0] && strcmp(old_gw, gw) != 0;
     if (rebind_via || !via_ok) {
@@ -1253,10 +1417,12 @@ static void split_apply(const char *iff, const char *gw) {
         split_wipe(have_dir, nd_h, old_gw[0] ? old_gw : gw, NULL, &del_d);
         nd_h = 0;
     }
+    /* 4. All deletes first, then all adds (see the ordering note above). */
     if (dir_ok) split_diff(have_dir, nd_h, want_dir, nd_w, gw, NULL, &add_d, &del_d, 1, 0);
     if (via_ok) split_diff(have_via, nv_h, want_via, nv_w, NULL, iff, &add_v, &del_v, 1, 0);
     if (dir_ok) split_diff(have_dir, nd_h, want_dir, nd_w, gw, NULL, &add_d, &del_d, 0, 1);
     if (via_ok) split_diff(have_via, nv_h, want_via, nv_w, NULL, iff, &add_v, &del_v, 0, 1);
+    /* 5. Remember the new state for the next run. */
     save_cidrs(SPLIT_HAVE_VIA, want_via, nv_w);
     save_cidrs(SPLIT_HAVE_DIRECT, want_dir, nd_w);
     split_write_meta(via_ok ? iff : "", dir_ok ? gw : "");
@@ -1265,7 +1431,9 @@ static void split_apply(const char *iff, const char *gw) {
         add_d, del_d, nd_w, dir_ok ? gw : "-");
 }
 
-/* split_clear: drop stamped extra CIDRs. keep_direct leaves around-loft pins. */
+/* split_clear: drop stamped extra CIDRs. keep_direct leaves around-loft pins.
+   Via routes always go (they point into a utun that is going away). Direct
+   routes are kept when another session or a hold may still need them. */
 static void split_clear(int keep_direct) {
     static struct cidr4 have_via[SPLIT_MAX], have_dir[SPLIT_MAX];
     char old_if[IFNAMSIZ], old_gw[64];
@@ -1288,7 +1456,9 @@ static void split_clear(int keep_direct) {
         del_v, keep_direct ? 0 : del_d, keep_direct);
 }
 
-/* rebind_excl: move stamped pins onto a live physical hop (Wi-Fi after iPhone). */
+/* rebind_excl: move stamped pins onto a live physical hop (Wi-Fi after iPhone).
+   Called after the Mac changes network: re-adds every pinned front address
+   via the current gateway (add_excl deletes the old pin first). */
 static void rebind_excl(const char *gw) {
     char ips[64][64];
     char found[64];
@@ -1302,7 +1472,11 @@ static void rebind_excl(const char *gw) {
     for (i = 0; i < n; i++) add_excl(ips[i]);
 }
 
-/* main: --sock hold, --down/--restore/--hold, --set-default/--clear-default, --kill/--reap. */
+/* main: --sock hold, --down/--restore/--hold, --set-default/--clear-default, --kill/--reap.
+   Parses all flags, refuses to run without root, then runs exactly one mode;
+   the order of the checks below decides which flag wins. One-shot modes
+   return at once. With none of them, it becomes a holder: --sock, --ip and
+   --peer are then required. Exit code 0 = done, 1 = failed, 2 = bad usage. */
 int main(int argc, char **argv) {
     const char *sock = NULL, *ip = NULL, *peer = NULL, *mtu = "1280", *gw = NULL, *exclude = NULL, *ifname = NULL, *dns = NULL;
     int i, tun, drop_bh = 0, down = 0, hold = 0, want_default = 0, set_default = 0, clear_default = 0;
@@ -1350,6 +1524,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "loft-priv: need root\n");
         return 1;
     }
+    /* --discover-gw: print the real (non-tunnel) gateway for the app. */
     if (discover) {
         char buf[64];
         discover_phys_gw(buf, sizeof buf);
@@ -1375,6 +1550,8 @@ int main(int argc, char **argv) {
             gw ? gw : "", ours);
         return 0;
     }
+    /* --drop-split: take the split default off (optionally downing a stuck
+       utun) and put the normal default route back. */
     if (drop_split && !sock && !down && !restore) {
         if (split_ifdown) drop_split_force();
         else drop_split_default();
@@ -1384,6 +1561,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "loft-priv: drop-split gw=%s ifdown=%d\n", gw ? gw : "", split_ifdown);
         return 0;
     }
+    /* DNS, split-list and pin jobs, each a single step. */
     if (restore_dns_only && !sock && !down && !restore) {
         dns_restore();
         fprintf(stderr, "loft-priv: dns restore\n");
@@ -1418,6 +1596,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "loft-priv: rebind exclude gw=%s\n", gw ? gw : "");
         return 0;
     }
+    /* --kill PID [--force]: the app cannot signal root holders itself. */
     if (do_kill) {
         if (kill_pid > 1) {
             kill(kill_pid, force ? SIGKILL : SIGTERM);
@@ -1429,6 +1608,8 @@ int main(int argc, char **argv) {
         reap_others(SIGTERM);
         return 0;
     }
+    /* --down / --restore: tear a session's routes down. --overlay limits it
+       to one session; --hold leaves the kill-switch blackhole in place. */
     if (down || restore) {
         int touch_default = !overlay_only && (restore || hold || stamped_default());
         /* Restore always drops 0/1 first, even if the stamp is gone. */
@@ -1476,6 +1657,7 @@ int main(int argc, char **argv) {
         }
         return 0;
     }
+    /* --clear-blackhole without --sock: lift the kill-switch. */
     if (drop_bh && !sock) {
         route_unhold();
         route_restore_default(gw);
@@ -1484,6 +1666,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "loft-priv: unhold gw=%s\n", gw ? gw : "");
         return 0;
     }
+    /* --clear-default / --set-default: manage the split default for a utun
+       held by another process (--name). Pins come first, see below. */
     if (clear_default) {
         drop_split_default();
         route_restore_default(gw);
@@ -1518,6 +1702,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "       loft-priv --cleanup-leftover [--gw G]\n");
         return 2;
     }
+    /* Holder mode. 1. Create the utun and configure its address. */
     tun = loft_utun_open(name);
     if (tun < 0) {
         perror("utun");
@@ -1533,6 +1718,7 @@ int main(int argc, char **argv) {
         loft_utun_close(tun);
         return 1;
     }
+    /* 2. Route the overlay /24 into the utun. */
     (void)ifconfig_no_inet6(name);
     ipv6_drop_global();
     {
@@ -1544,6 +1730,7 @@ int main(int argc, char **argv) {
         else
             fprintf(stderr, "loft-priv: overlay %s failed\n", net);
     }
+    /* 3. Optional full tunnel: pin the fronts, then add the split default. */
     if (want_default) {
         /* IPv4 0/1 split only. Overlay IPv6 later may add inet6 default.
            Pins first: 0/1 without a /32 to the front loops into utun. */
@@ -1568,6 +1755,7 @@ int main(int argc, char **argv) {
     } else {
         fprintf(stderr, "loft-priv: overlay only\n");
     }
+    /* 4. Optional DNS, then hand the fd to the session helper. */
     if (dns && dns[0]) dns_apply(dns);
     if (send_fd(sock, tun, name) != 0) {
         if (want_default) drop_split_default();
@@ -1578,6 +1766,7 @@ int main(int argc, char **argv) {
        while any fd remains (loft-front's SCM_RIGHTS copy). On signal,
        drop lo0 alias and overlay routes — SIGTERM otherwise never
        reaches the lines after pause(). */
+    /* 5. Remember what to undo, install signal handlers, wait, clean up. */
     snprintf(g_ip, sizeof g_ip, "%s", ip);
     snprintf(g_peer, sizeof g_peer, "%s", peer);
     if (gw && gw[0]) snprintf(g_gwbuf, sizeof g_gwbuf, "%s", gw);

@@ -9,6 +9,7 @@ CoverBackground {
         spacing: Theme.paddingMedium
         width: parent.width - 2 * Theme.paddingLarge
 
+            // Status lamp: amber when the session is up.
         Rectangle {
             width: Theme.iconSizeSmall
             height: Theme.iconSizeSmall
@@ -32,6 +33,7 @@ CoverBackground {
         }
     }
 
+        // One button on the cover: connect when idle, disconnect when up.
     CoverActionList {
         CoverAction {
             iconSource: engine.up

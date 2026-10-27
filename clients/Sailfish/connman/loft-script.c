@@ -4,6 +4,11 @@
  *
  * loft-connman sets script_type=up, script_context=init, ifconfig_*,
  * trusted_ip, tun_mtu, foreign_option_N, then execs this binary.
+ *
+ * It is the last link of the chain: loft-plugin.c (inside connman-vpnd)
+ * starts loft-connman.c, which starts loft-front and then this script. The
+ * script only forwards its environment to connman-vpnd, where loft_notify
+ * in loft-plugin.c turns it into the tun address, routes and DNS.
  */
 
 #include <stdio.h>
@@ -17,6 +22,7 @@
 
 extern char **environ;
 
+/* printf-style logging to syslog; this process has no terminal. */
 static void print(const char *format, ...)
 {
 	va_list ap;
@@ -62,6 +68,7 @@ int main(int argc, char *argv[])
 	char **envp, *busname, *interface, *path, *reason, *context;
 	int ret = 0;
 
+	/* 1. Learn where to report and why from the environment. */
 	(void)argc;
 	openlog(basename(argv[0]), LOG_NDELAY | LOG_PID, LOG_DAEMON);
 
@@ -79,6 +86,7 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
+	/* 2. Connect to the system bus and build notify(reason, context). */
 	dbus_error_init(&error);
 	conn = dbus_bus_get(DBUS_BUS_SYSTEM, &error);
 	if (!conn) {
@@ -106,6 +114,7 @@ int main(int argc, char *argv[])
 				DBUS_TYPE_STRING, &context,
 				DBUS_TYPE_INVALID);
 
+	/* 3. Append the whole environment as an a{ss} dictionary and send. */
 	dbus_message_iter_init_append(msg, &iter);
 	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY,
 			DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING

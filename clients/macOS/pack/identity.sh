@@ -1,4 +1,8 @@
 # CODESIGN_ID: Developer ID when CODESIGN_IDENTITY is set, else ad-hoc "-".
+# Sourced (not run) by sign.sh and make-dmg.sh so both pick the same signing
+# identity. "Ad-hoc" signing needs no Apple certificate: the app runs on the
+# build machine, but Gatekeeper warns on other Macs. A Developer ID
+# certificate plus notarization (make-dmg.sh) is what ships to users.
 #   CODESIGN_IDENTITY=-                         ad-hoc (default)
 #   CODESIGN_IDENTITY=auto                      first "Developer ID Application" in the keychain
 #   CODESIGN_IDENTITY="Developer ID Application: Name (TEAMID)"

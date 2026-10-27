@@ -1,3 +1,11 @@
+/*
+ PacketTunnelProvider.swift - the iOS Network Extension that carries the VPN.
+ iOS runs it as its own process; the container app (App/TunnelControl.swift)
+ only starts it and sends "park" / "go". It runs the Go engine from
+ clients/mobile (built with gomobile as the `Mobile` framework), moves IP
+ packets between iOS and the engine, and turns the engine's status into
+ routes, MTU and DNS. Shared state lives in Shared/Group.swift.
+*/
 import Foundation
 import Network
 import NetworkExtension
@@ -20,12 +28,17 @@ import Mobile
 /// feature: nothing leaks to the open network while loft is down. "0/1" in
 /// the line above means that default route.
 final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
+    /// The running Go engine; nil while parked or stopped.
     private var engine: MobileEngine?
+    /// Serial queue for all engine calls, since some of them block.
     private let goQueue = DispatchQueue(label: "app.loft.ios.engine")
+    /// Watches network changes (Wi-Fi <-> cellular).
     private var pathMon: NWPathMonitor?
     /// True while the tunnel is a blackhole without an engine.
     private var parked = false
+    /// The packet read loop has been started (it runs only once).
     private var pumping = false
+    /// The once-a-second engine poll is active.
     private var watching = false
 
     /// iOS asks for the tunnel. Packet reading, path watching and engine
@@ -43,6 +56,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
         }
     }
 
+    /// iOS stops the tunnel: stop watching, stop the engine and clear the
+    /// parked / holding flags so the app sees a clean state.
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         pathMon?.cancel()
         pathMon = nil
@@ -126,6 +141,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
             completion(Self.err("empty session"))
             return
         }
+        // Replace any previous engine and point its packet output at self.
         engine?.stop()
         guard let eng = MobileNewEngine() else {
             completion(Self.err("no engine"))
@@ -133,6 +149,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
         }
         engine = eng
         LoftEngineSetSink(eng, self)
+        // A single-line link is converted to YAML before the engine sees it.
         if !body.contains("\n"), body.lowercased().contains("://") {
             var parseErr: NSError?
             body = MobileParseShare(body, &parseErr)
@@ -158,6 +175,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
         apply(snap, completion: completion)
     }
 
+    /// Stops the engine and switches the tunnel to the blackhole settings.
+    /// The flag is also saved so a restart of the extension stays parked.
     private func park(completion: @escaping @Sendable (Error?) -> Void) {
         engine?.stop()
         engine = nil
@@ -166,6 +185,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
         applyBlackhole(completion: completion)
     }
 
+    /// Starts the packet read loop once.
     private func pumpReads() {
         if pumping { return }
         pumping = true
@@ -202,6 +222,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
         pathMon = mon
     }
 
+    /// Starts the engine health poll.
     private func watchEngine() {
         watching = true
         pollEngine()
@@ -281,6 +302,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LoftPacketSink {
         }
     }
 
+    /// Wraps a message in an NSError for iOS completion handlers.
     private static func err(_ s: String) -> NSError {
         NSError(domain: "app.loft.ios", code: 1, userInfo: [NSLocalizedDescriptionKey: s])
     }

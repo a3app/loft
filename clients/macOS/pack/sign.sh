@@ -1,6 +1,11 @@
 #!/bin/sh
 # Sign loft.app inside-out. Ad-hoc unless CODESIGN_IDENTITY is a Developer ID.
 # Usage: pack/sign.sh path/to/loft.app
+# Called by make-dmg.sh before packing. Code must be signed from the inside
+# out: a bundle's signature covers the already-signed files inside it, so
+# signing an inner file afterwards would break the outer signature. With a
+# Developer ID it also turns on the hardened runtime and a secure timestamp,
+# which Apple's notarization requires.
 set -eu
 
 APP=${1:?usage: sign.sh loft.app}
@@ -22,6 +27,8 @@ else
 	echo "sign: ad-hoc (-)"
 fi
 
+# sign ID PATH: sign one executable with a fixed bundle identifier, so the
+# identity macOS sees for loft-priv / loft-front stays stable across builds.
 sign() {
 	id=$1
 	path=$2
@@ -46,6 +53,7 @@ if [ -x "$APP/Contents/MacOS/loft-front" ]; then
 fi
 sign app.loft.macos "$APP/Contents/MacOS/loft"
 # shellcheck disable=SC2086
+# Finally the bundle itself, then a strict check that everything verifies.
 codesign --force --sign "$CODESIGN_ID" --identifier app.loft.macos $extra "$APP"
 codesign --verify --strict "$APP"
 echo "sign: ok $APP"
