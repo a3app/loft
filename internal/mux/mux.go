@@ -280,10 +280,16 @@ const dgramPri = 512
 // Data on a stream with no bulk waiting in out. Same-stream TLS order
 // stays (queued>0 → out). A new Speedtest ping stream has queued=0 so
 // its HTTP jumps download bulk.
+// Close/Reset join pri when that stream has no bulk in out. Pull's first
+// select races pri against out; EnrolNo (small Data) then Close in out
+// sometimes delivered Close first and the peer saw EOF instead of enrol_no.
 func (s *Session) priFrame(f wire.Frame) bool {
 	switch f.Cmd {
 	case wire.CmdOpen, wire.CmdPing, wire.CmdPong, wire.CmdLeave, wire.CmdTune, wire.CmdFront, wire.CmdLists:
 		return true
+	case wire.CmdClose, wire.CmdReset:
+		st := s.stream(f.StreamID)
+		return st != nil && st.queued.Load() == 0
 	case wire.CmdDgram:
 		return len(f.Payload) <= dgramPri
 	case wire.CmdData:

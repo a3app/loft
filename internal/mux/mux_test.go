@@ -518,6 +518,35 @@ func TestPushParksThenResets(t *testing.T) {
 	}
 }
 
+// TestPullSmallDataThenCloseOrder: EnrolNo is small Data (pri); Close used
+// to sit on out, and Pull(maxWait>0) could pick Close first. 200 times so
+// a select race cannot hide.
+func TestPullSmallDataThenCloseOrder(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		s := NewClient()
+		st := newStream(s, 1)
+		s.mu.Lock()
+		s.streams[1] = st
+		s.mu.Unlock()
+		if _, err := st.Write([]byte("enrol_no")); err != nil {
+			s.Close()
+			t.Fatal(err)
+		}
+		if err := st.Close(); err != nil {
+			s.Close()
+			t.Fatal(err)
+		}
+		got := s.Pull(64*1024, 10*time.Millisecond)
+		s.Close()
+		if len(got) < 2 {
+			t.Fatalf("iter %d got %d", i, len(got))
+		}
+		if got[0].Cmd != wire.CmdData || got[1].Cmd != wire.CmdClose {
+			t.Fatalf("iter %d order %d %d", i, got[0].Cmd, got[1].Cmd)
+		}
+	}
+}
+
 // TestPullCloseDoesNotJumpData keeps graceful Close behind queued Data.
 func TestPullCloseDoesNotJumpData(t *testing.T) {
 	s := NewClient()
@@ -528,6 +557,31 @@ func TestPullCloseDoesNotJumpData(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := s.Pull(64*1024, 0)
+	if len(got) < 2 {
+		t.Fatalf("got %d", len(got))
+	}
+	if got[0].Cmd != wire.CmdData || got[1].Cmd != wire.CmdClose {
+		t.Fatalf("order %d %d", got[0].Cmd, got[1].Cmd)
+	}
+}
+
+// TestPullCloseDoesNotJumpBulkData: Close stays in out behind a chunk bigger
+// than smallPri, so a TCP FIN cannot pass remaining payload.
+func TestPullCloseDoesNotJumpBulkData(t *testing.T) {
+	s := NewClient()
+	defer s.Close()
+	st := newStream(s, 1)
+	s.mu.Lock()
+	s.streams[1] = st
+	s.mu.Unlock()
+	bulk := make([]byte, smallPri+1)
+	if _, err := st.Write(bulk); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got := s.Pull(64*1024, 10*time.Millisecond)
 	if len(got) < 2 {
 		t.Fatalf("got %d", len(got))
 	}
