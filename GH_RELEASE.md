@@ -1,4 +1,4 @@
-# loft 1.0.31
+# loft 1.0.32
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,15 +10,15 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-1.0.31-macos-arm64.dmg` | `loft-1.0.31-macos-x86_64.dmg` |
-| macOS CLI | `loft-1.0.31-darwin-arm64.tar.gz` | `loft-1.0.31-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-1.0.31-linux-arm64.tar.gz` | `loft-1.0.31-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.31-linux-arm64.tar.gz` · `loft-node_1.0.31_arm64.deb` | `loft-node-1.0.31-linux-amd64.tar.gz` · `loft-node_1.0.31_amd64.deb` |
-| Panel | `loft-panel-1.0.31-linux-arm64.tar.gz` · `loft-panel_1.0.31_arm64.deb` | `loft-panel-1.0.31-linux-amd64.tar.gz` · `loft-panel_1.0.31_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-1.0.31-android.apk` · `loft-1.0.31-android-tv.apk` | same fat APKs |
-| Windows portable (7 SP1+, GitHub) | `loft-1.0.31-windows-x64.zip` | `loft-1.0.31-windows-x86.zip` |
+| macOS app (10.13+, ad-hoc signed) | `loft-1.0.32-macos-arm64.dmg` | `loft-1.0.32-macos-x86_64.dmg` |
+| macOS CLI | `loft-1.0.32-darwin-arm64.tar.gz` | `loft-1.0.32-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-1.0.32-linux-arm64.tar.gz` | `loft-1.0.32-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.32-linux-arm64.tar.gz` · `loft-node_1.0.32_arm64.deb` | `loft-node-1.0.32-linux-amd64.tar.gz` · `loft-node_1.0.32_amd64.deb` |
+| Panel | `loft-panel-1.0.32-linux-arm64.tar.gz` · `loft-panel_1.0.32_arm64.deb` | `loft-panel-1.0.32-linux-amd64.tar.gz` · `loft-panel_1.0.32_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-1.0.32-android.apk` · `loft-1.0.32-android-tv.apk` | same fat APKs |
+| Windows portable (7 SP1+, GitHub) | `loft-1.0.32-windows-x64.zip` | `loft-1.0.32-windows-x86.zip` |
 
-Checksums: `loft-clients-1.0.31-SHA256SUMS.txt`, `loft-node-1.0.31-SHA256SUMS.txt`, `loft-panel-1.0.31-SHA256SUMS.txt`, `loft-android-1.0.31-SHA256SUMS.txt`, `loft-windows-1.0.31-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.32-SHA256SUMS.txt`, `loft-node-1.0.32-SHA256SUMS.txt`, `loft-panel-1.0.32-SHA256SUMS.txt`, `loft-android-1.0.32-SHA256SUMS.txt`, `loft-windows-1.0.32-SHA256SUMS.txt`.
 
 CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`.
 
@@ -40,6 +40,27 @@ Not in Dist: iOS / Sailfish / Keenetic / MikroTik clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.32
+
+Protocol stays **loft/1.0**.
+
+Panel:
+
+- Deleting a mail domain can also delete the DNS records the panel made for it (MX, mail A/AAAA, SPF, DKIM, DMARC); a box in the confirmation, on by default. Hand-made or hand-edited records stay. The mail.<domain> certificate goes with the domain.
+- Namecheap: record ids are HostIds, not positions in the zone. Saved ids no longer point at other records after a deletion (leftover ACME challenges, the address-change update). Old saved ids are repaired on the next read of the zone.
+
+Node:
+
+- Built with Go 1.27+, the node turns on HTTP/2 extended CONNECT itself (re-exec once with GODEBUG=http2xconnect=1), so the h2 and l3 fronts keep working.
+
+Dist:
+
+- SHA256SUMS of node, panel and CLI list bare file names, so `sha256sum -c` works in the download folder. CI checks it.
+
+Android:
+
+- Redacted crash reports as GitHub issues. Chrome reflows at a large system font; launcher mark inside the safe zone; the catalog no longer opens blank.
 
 ## 1.0.31
 
@@ -260,7 +281,9 @@ macOS:
 
 Оверлей внутри TLS 1.3. Приложения ходят в локальные SOCKS5 или TUN. Потоки в одном mux, ChaCha20-Poly1305, снаружи обычный HTTPS: GET, WebSocket, HTTP/2, QUIC или HTTP/3. Перед нодой может стоять CDN. Протокол **loft/1.0**. Ссылка `loft://`.
 
-В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`loft-1.0.31-windows-x64.zip` и `loft-1.0.31-windows-x86.zip`). Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic, MikroTik в этот Dist не входят.
+В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`loft-1.0.32-windows-x64.zip` и `loft-1.0.32-windows-x86.zip`). Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic, MikroTik в этот Dist не входят.
+
+1.0.32: панель — при удалении почтового домена можно удалить и его DNS-записи, созданные панелью (галочка, включена по умолчанию), сертификат mail.<домен> уходит вместе с доменом; Namecheap — id записей теперь HostId, а не позиция, старые id чинятся при чтении зоны; нода на Go 1.27+ сама включает расширенный CONNECT HTTP/2 (фронты h2 и l3); SHA256SUMS с голыми именами файлов; Android — отчёты о сбоях в GitHub, крупный системный шрифт, значок в безопасной зоне. Протокол loft/1.0.
 
 1.0.31: профили маршрутов — cap 30 lists_inline, CmdLists 13, kinds 4–6, копия оператора, loft://routes; Android — зона Block, локальный DNS, приложения вокруг туннеля, свайп/выбор/отмена; QUIC — BBR или фиксированная скорость через форк a3app/quic-go, TCP остаётся на ядре; Windows — трей Win7 SP1; mux больше не пишет в закрытый канал; панель — изоляция VLAN, сортировка портов, светодиоды; P2P — запечатанное рукопожатие, witness внутри TLS. Протокол loft/1.0.
 
@@ -276,7 +299,9 @@ macOS:
 
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
-本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`loft-1.0.31-windows-x64.zip` 和 `loft-1.0.31-windows-x86.zip`）。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic / MikroTik 不在这次包里。
+本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`loft-1.0.32-windows-x64.zip` 和 `loft-1.0.32-windows-x86.zip`）。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic / MikroTik 不在这次包里。
+
+1.0.32：面板 — 删除邮件域名时可一并删除面板为其创建的 DNS 记录（确认框中的勾选，默认开启），mail.<域名> 证书随域名删除；Namecheap 记录 id 改用 HostId 而非位置，旧 id 在读取区域时修复；Go 1.27+ 构建的节点自行开启 HTTP/2 扩展 CONNECT（h2、l3 前端）；SHA256SUMS 只写文件名；Android — 崩溃报告发到 GitHub、大号系统字体、图标在安全区内。协议仍是 loft/1.0。
 
 1.0.31：路由配置 — cap 30 lists_inline、CmdLists 13、kinds 4–6、运营方副本、loft://routes；Android — Block 区、本机 DNS、隧道周边应用、滑动/多选/撤销；QUIC 经 a3app/quic-go 分叉切 BBR 或固定速率，TCP 仍走内核默认；Windows 托盘 Win7 SP1；mux 不再往已关闭通道写；面板 VLAN 隔离、端口排序、指示灯；P2P 密封握手，witness 走 TLS。协议仍是 loft/1.0。
 

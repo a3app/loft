@@ -2,7 +2,7 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-ПО 1.0.31. Протокол 1.0. Спецификация: [docs/protocol_ru.md](../../docs/protocol_ru.md). Эксплуатация: [docs/guide_ru.md](../../docs/guide_ru.md).
+ПО 1.0.32. Протокол 1.0. Спецификация: [docs/protocol_ru.md](../../docs/protocol_ru.md). Эксплуатация: [docs/guide_ru.md](../../docs/guide_ru.md).
 
 Здесь собрано всё для установки ноды на Debian: POSIX-установщик, unit systemd, sysctl, командный конфиг и `.deb`.
 
