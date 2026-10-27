@@ -39,6 +39,7 @@ clients/
   go/cmd/loft         CLI：SOCKS5, TUN, kill-switch
   go/cmd/loft-front   会话助手（macOS bundle；Sailfish RPM libexec）
   go/cmd/loft-probe   覆盖网 ICMP/TCP/UDP/DNS/HTTP，不改系统路由
+  go/cmd/loft-bench   GET/WS 吞吐，对照 macOS connect 路径
   go/tools/wsprobe    一次性 GET 握手（手动；不进 dist）
   macOS/Sources       Swift 5 + AppKit 菜单栏；拉起 loft-front
   macOS/pack          DMG（Applications 符号链接）、签名、entitlements
@@ -50,6 +51,8 @@ clients/
   Android/            VpnService（薄 Java 宿主；gomobile AAR；手机和电视 flavor）
   Sailfish/           ConnMan 覆盖网（QML 宿主 + loft-connman 插件 + loft-front；Aurora 是 OMP RPM）
   mobile/             iOS/Android 共用 Go 引擎（loft, SSTP, VLESS）
+lab/
+  devstand/           笔记本上的真实面板与 adm（假 systemctl）；make panel-dev
 ```
 
 `wire` 是协议。`transport` 是这棵树怎么扛它。`cdn` 是部署配置：某个命名边缘的头顺序和 SNI。线上它不能当能力出现。

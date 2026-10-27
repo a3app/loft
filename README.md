@@ -163,7 +163,8 @@ docs/brand        mark and icons
 internal/         wire, mux, crypto, transport, overlay
 server/           loft-node (controller or relay)
 server/panel      loft-panel web admin
-clients/go        loft, loft-front, loft-probe
+clients/go        loft, loft-front, loft-probe, loft-bench
+lab/              public debug stands (panel-dev)
 clients/macOS     menu-bar app (launches loft-front)
 clients/Keenetic  Entware / OpkgTun (loft-keenetic)
 clients/MikroTik  RouterOS 7 container (image + .rsc)

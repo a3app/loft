@@ -36,7 +36,7 @@ server/panel/catalog        the packages the panel may install (keys, apt names,
 server/panel/auth           argon2id, sessions, login limits
 server/panel/store          users.json, settings.json
 server/panel/debian         install.sh, .deb, systemd units, nginx site
-server/panel/devstand       real panel + helper on a laptop (fake systemctl)
+lab/devstand                real panel + helper on a laptop (fake systemctl)
 server/panel/design         UX spec and mock
 ```
 

@@ -39,6 +39,7 @@ clients/
   go/cmd/loft         CLI: SOCKS5, TUN, kill-switch
   go/cmd/loft-front   помощник сессии (бандл macOS; RPM Sailfish, libexec)
   go/cmd/loft-probe   ICMP/TCP/UDP/DNS/HTTP оверлея без переписывания маршрутов
+  go/cmd/loft-bench   пропускная способность GET/WS против пути connect на macOS
   go/tools/wsprobe    одноразовое GET-рукопожатие (вручную; не в dist)
   macOS/Sources       Swift 5 + AppKit, строка меню; запускает loft-front
   macOS/pack          DMG (симлинк Applications), подпись, entitlements
@@ -50,6 +51,8 @@ clients/
   Android/            VpnService (тонкий хост Java; gomobile AAR; flavor телефона и TV)
   Sailfish/           оверлей ConnMan (хост QML + плагин loft-connman + loft-front; Аврора — RPM OMP)
   mobile/             общий движок Go для iOS/Android (loft, SSTP, VLESS)
+lab/
+  devstand/           настоящая панель и adm на ноутбуке (systemctl подменён); make panel-dev
 ```
 
 `wire` — это протокол. `transport` — то, как это дерево его реализует. `cdn` — профиль развёртывания: порядок заголовков и SNI для конкретного края. В канале он **не должен** появляться как возможность протокола.

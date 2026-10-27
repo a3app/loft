@@ -1,7 +1,14 @@
+# Root `go build` dumps. Dist CLI is make {client,front,probe,bench} → dist/clients/go/.
 /loft
 /loft-node
 /loft-front
 /loft-probe
+/loft-bench
+/loft-bench.exe
+/loft-panel
+/loft-panel-adm
+/loft-attach-check
+/*.exe
 /bin/
 dist/
 *.o
@@ -48,9 +55,8 @@ private/
 # Local research lives in ../loft-research, outside this repo. Never commit copies.
 research_notes/
 reports/
+stands/
 
 # GitHub deploy key — local only, never commit
 github-deploy
 github-deploy.pub
-/loft-panel
-/loft-panel-adm

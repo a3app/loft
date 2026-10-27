@@ -36,7 +36,7 @@ server/panel/catalog        пакеты, которые панель может
 server/panel/auth           argon2id, сессии, ограничения входа
 server/panel/store          users.json, settings.json
 server/panel/debian         install.sh, .deb, юниты systemd, сайт nginx
-server/panel/devstand       настоящая панель и помощник на ноутбуке (systemctl подменён)
+lab/devstand                настоящая панель и помощник на ноутбуке (systemctl подменён)
 server/panel/design         UX и макет
 ```
 

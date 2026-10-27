@@ -163,7 +163,8 @@ docs/brand        логотип и иконки
 internal/         протокол, mux, crypto, транспорт, оверлей
 server/           loft-node (controller или relay)
 server/panel      веб-панель loft-panel
-clients/go        loft, loft-front, loft-probe
+clients/go        loft, loft-front, loft-probe, loft-bench
+lab/              публичные отладочные стенды (panel-dev)
 clients/macOS     приложение в строке меню (запускает loft-front)
 clients/Keenetic  Entware / OpkgTun (loft-keenetic)
 clients/MikroTik  контейнер RouterOS 7 (образ + .rsc)

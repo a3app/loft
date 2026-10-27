@@ -47,7 +47,7 @@ panel-ui:
 
 # Real panel and adm ops on a laptop: temp node files, fake systemctl.
 panel-dev: panel-ui
-	go run ./server/panel/devstand -ui server/panel/web/ui
+	go run ./lab/devstand -ui server/panel/web/ui
 
 # SUMS writes SHA256SUMS in the current directory: one "<sha256>  <file name>"
 # line for every file below it that matches the find test $(1). The name is the

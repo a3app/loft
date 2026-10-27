@@ -2,7 +2,7 @@
 // node files live in a temp directory and systemctl is faked (the "node"
 // accepts any config unless it contains "# crash"). Development only.
 //
-//	go run ./server/panel/devstand [-listen 127.0.0.1:8091] [-ui server/panel/web/ui]
+//	go run ./lab/devstand [-listen 127.0.0.1:8091] [-ui server/panel/web/ui]
 package main
 
 import (

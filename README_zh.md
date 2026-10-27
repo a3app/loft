@@ -163,7 +163,8 @@ docs/brand        标志和图标
 internal/         wire, mux, crypto, transport, overlay
 server/           loft-node（控制器或中继）
 server/panel      loft-panel 网页面板
-clients/go        loft, loft-front, loft-probe
+clients/go        loft, loft-front, loft-probe, loft-bench
+lab/              公开调试台（panel-dev）
 clients/macOS     菜单栏应用（拉起 loft-front）
 clients/Keenetic  Entware / OpkgTun（loft-keenetic）
 clients/MikroTik  RouterOS 7 容器（镜像 + .rsc）

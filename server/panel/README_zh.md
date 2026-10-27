@@ -36,7 +36,7 @@ server/panel/catalog        面板可安装的软件包（键、apt 包名、Git
 server/panel/auth           argon2id、会话、登录限制
 server/panel/store          users.json, settings.json
 server/panel/debian         install.sh、.deb、systemd 单元、nginx 站点
-server/panel/devstand       在笔记本上运行真实面板与助手（systemctl 为模拟）
+lab/devstand                在笔记本上运行真实面板与助手（systemctl 为模拟）
 server/panel/design         交互规范与原型
 ```
 

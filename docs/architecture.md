@@ -39,6 +39,7 @@ clients/
   go/cmd/loft         CLI: SOCKS5, TUN, kill-switch
   go/cmd/loft-front   session helper (macOS bundle; Sailfish RPM libexec)
   go/cmd/loft-probe   overlay ICMP/TCP/UDP/DNS/HTTP without rewriting routes
+  go/cmd/loft-bench   GET/WS throughput vs the macOS connect path
   go/tools/wsprobe    one-shot GET handshake (manual; not in dist)
   macOS/Sources       Swift 5 + AppKit menu bar; launches loft-front
   macOS/pack          DMG (Applications symlink), sign, entitlements
@@ -50,6 +51,8 @@ clients/
   Android/            VpnService (thin Java host; gomobile AAR; phone + TV flavors)
   Sailfish/           ConnMan overlay (QML host + loft-connman plugin + loft-front; Aurora is the OMP RPM)
   mobile/             shared Go engine for iOS/Android (loft, SSTP, VLESS)
+lab/
+  devstand/           real panel + adm on a laptop (fake systemctl); make panel-dev
 ```
 
 `wire` is the protocol. `transport` is how this tree carries it. `cdn` is a deployment profile: header order and SNI of a named edge. It MUST NOT appear on the wire as a capability.
