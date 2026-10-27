@@ -1,9 +1,29 @@
+<div align="center">
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/png/loft-lockup-readme-on-dark.png">
-  <img src="docs/brand/png/loft-lockup-readme.png" alt="loft — Loft Overlay For TLS" width="480">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/svg/loft-mark-on-dark.svg">
+  <img src="docs/brand/svg/loft-mark.svg" alt="loft" width="96">
 </picture>
 
+# loft
+
+**跑在 TLS 里面的覆盖网。VLESS、Trojan、SSTP 和 loft 走普通 HTTPS — 支持 macOS、Android 和 Linux。**
+
+[![CI](https://img.shields.io/github/actions/workflow/status/a3app/loft/test.yml?label=ci)](https://github.com/a3app/loft/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/a3app/loft)](https://github.com/a3app/loft/releases)
+[![Downloads](https://img.shields.io/github/downloads/a3app/loft/total)](https://github.com/a3app/loft/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Android%20%7C%20Linux-blue)
+
 [English](README.md) · [Русский](README_ru.md) · **中文**
+
+<a href="https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-macos-arm64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS-2ea44f?style=for-the-badge" alt="下载 loft（macOS）"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android.apk"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Android-2ea44f?style=for-the-badge" alt="下载 loft（Android）"></a>
+<a href="#下载"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux-2ea44f?style=for-the-badge" alt="下载 loft（Linux）"></a>
+
+</div>
+
+---
 
 **loft** 是跑在 TLS 里面的覆盖网。应用可以通过跑在普通 HTTPS 之上的常见协议连接——VLESS、Trojan 和 SSTP，也可以用自有协议 loft。
 

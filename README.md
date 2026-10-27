@@ -1,9 +1,29 @@
+<div align="center">
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/png/loft-lockup-readme-on-dark.png">
-  <img src="docs/brand/png/loft-lockup-readme.png" alt="loft — Loft Overlay For TLS" width="480">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/svg/loft-mark-on-dark.svg">
+  <img src="docs/brand/svg/loft-mark.svg" alt="loft" width="96">
 </picture>
 
+# loft
+
+**Overlay inside TLS. VLESS, Trojan, SSTP and loft over ordinary HTTPS — for macOS, Android and Linux.**
+
+[![CI](https://img.shields.io/github/actions/workflow/status/a3app/loft/test.yml?label=ci)](https://github.com/a3app/loft/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/a3app/loft)](https://github.com/a3app/loft/releases)
+[![Downloads](https://img.shields.io/github/downloads/a3app/loft/total)](https://github.com/a3app/loft/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Android%20%7C%20Linux-blue)
+
 **English** · [Русский](README_ru.md) · [中文](README_zh.md)
+
+<a href="https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-macos-arm64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS-2ea44f?style=for-the-badge" alt="Download loft for macOS"></a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.31/loft-1.0.31-android.apk"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Android-2ea44f?style=for-the-badge" alt="Download loft for Android"></a>
+<a href="#download"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux-2ea44f?style=for-the-badge" alt="Download loft for Linux"></a>
+
+</div>
+
+---
 
 **loft** is an overlay inside TLS. The app connects over popular protocols that run on top of ordinary HTTPS — VLESS, Trojan and SSTP — and over its own protocol, loft.
 
