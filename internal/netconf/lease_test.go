@@ -101,3 +101,62 @@ func TestUnauthorized(t *testing.T) {
 		t.Fatalf("%s", code)
 	}
 }
+
+// TestLeasesSurviveRestart: a member reconnecting after a node restart gets
+// the address it had before, even when another member connects first.
+func TestLeasesSurviveRestart(t *testing.T) {
+	path := t.TempDir() + "/leases.json"
+	r := NewRegistry(office())
+	r.Persist(path)
+	ip1, _, _ := r.Admit("bob", "phone") // bob has no fixed IP: next free one
+	ip2, _, _ := r.Admit("bob", "laptop")
+
+	// The node restarts: a new registry reads the same file.
+	r2 := NewRegistry(office())
+	r2.Persist(path)
+	// laptop comes back first; before, it took phone's address.
+	ip, _, code := r2.Admit("bob", "laptop")
+	if code != wire.OKResumed || ip != ip2 {
+		t.Fatalf("laptop: %s %s, want %s resumed", ip, code, ip2)
+	}
+	ip, _, code = r2.Admit("bob", "phone")
+	if code != wire.OKResumed || ip != ip1 {
+		t.Fatalf("phone: %s %s, want %s resumed", ip, code, ip1)
+	}
+}
+
+// TestRestoreSkipsStaleLeases: leases of removed members and addresses
+// outside the subnet are not brought back.
+func TestRestoreSkipsStaleLeases(t *testing.T) {
+	path := t.TempDir() + "/leases.json"
+	r := NewRegistry(office())
+	r.Persist(path)
+	r.Admit("bob", "phone")
+
+	n := office()
+	n.Members = n.Members[:1] // bob was removed while the node was down
+	r2 := NewRegistry(n)
+	r2.Persist(path)
+	if len(r2.leases) != 0 {
+		t.Fatalf("restored %d leases of a removed member", len(r2.leases))
+	}
+}
+
+// TestRestoredLeaseExpires: a restored lease nobody resumes is freed after
+// the usual hold time.
+func TestRestoredLeaseExpires(t *testing.T) {
+	path := t.TempDir() + "/leases.json"
+	r := NewRegistry(office())
+	r.Persist(path)
+	r.Admit("bob", "phone")
+
+	now := time.Now()
+	r2 := NewRegistry(office())
+	r2.now = func() time.Time { return now }
+	r2.Persist(path)
+	now = now.Add(time.Hour)
+	r2.Admit("alice", "phone") // any Admit runs gc
+	if _, ok := r2.leases[keyOf("bob", "phone")]; ok {
+		t.Fatal("restored lease outlived the hold time")
+	}
+}

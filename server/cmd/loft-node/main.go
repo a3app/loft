@@ -274,6 +274,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// Keep overlay leases in -dir, so after a restart every member that
+	// reconnects in time gets the same overlay IP as before. Without it the
+	// addresses are handed out again in arrival order, and a member in TUN
+	// mode loses its traffic: its system still holds the old address.
+	if o := transport.NetSwitch(); o != nil {
+		o.Reg.Persist(filepath.Join(*dir, "leases.json"))
+	}
 	log.Printf("%s network %s role=%s peers=%s listen %s", version.Line("loft-node"), n.ID, cfg.Role, n.Peers, cfg.Listen)
 	if err := loadEgress(*dir, cfg); err != nil {
 		log.Printf("%v: members leave directly until it is fixed", err)

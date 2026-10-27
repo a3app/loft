@@ -36,6 +36,9 @@ type Registry struct {
 	leases map[string]*Lease // memberID+"\x00"+instanceID
 	byIP   map[string]*Lease
 	now    func() time.Time
+	// path is the lease file set by Persist ("" = memory only). See
+	// lease_store.go for why leases are kept on disk.
+	path string
 }
 
 // NewRegistry holds leases for n. n must remain valid for the registry lifetime.
@@ -105,6 +108,7 @@ func (r *Registry) Admit(memberID, instanceID string) (ip string, inst string, c
 	}
 	r.leases[k] = l
 	r.byIP[ip] = l
+	r.save() // a new lease: write it so a restart does not lose this IP
 	_ = pol
 	return ip, instanceID, wire.OK
 }
@@ -177,6 +181,13 @@ func (r *Registry) hold(m *Member) time.Duration {
 // gc drops offline leases whose Hold has elapsed and frees their IPs.
 func (r *Registry) gc() {
 	now := r.now()
+	dropped := false
+	defer func() {
+		// Write only when something was dropped: gc runs on every Admit.
+		if dropped {
+			r.save()
+		}
+	}()
 	for k, l := range r.leases {
 		m := r.net.MemberByID(l.MemberID)
 		h := DefaultSession().Merge(r.net.Session).Hold()
@@ -188,6 +199,7 @@ func (r *Registry) gc() {
 			if r.byIP[l.IP] == l {
 				delete(r.byIP, l.IP)
 			}
+			dropped = true
 		}
 	}
 }
@@ -266,4 +278,5 @@ func (r *Registry) SetNetwork(n *Network) {
 			}
 		}
 	}
+	r.save() // the reload may have dropped leases; keep the file in step
 }
