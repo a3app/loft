@@ -7,7 +7,7 @@
 
 # loft
 
-**Overlay inside TLS. VLESS, Trojan, SSTP and loft over ordinary HTTPS — for macOS, Windows, Android and Linux.**
+**Overlay inside TLS. VLESS, Trojan, SSTP and loft over ordinary HTTPS.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/a3app/loft/test.yml?label=ci)](https://github.com/a3app/loft/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/a3app/loft)](https://github.com/a3app/loft/releases)
