@@ -17,6 +17,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/a3app/loft/internal/config"
@@ -386,10 +387,23 @@ func l3Urgent(p []byte) bool {
 	}
 }
 
+// l3BadOpen and l3BadSplit count l3 messages dropped whole: ones that did
+// not decrypt, and ones whose packet list did not parse. Both should stay
+// at zero; L3RecvErrors reports them for debugging lost packets.
+var l3BadOpen, l3BadSplit atomic.Uint64
+
+// L3RecvErrors returns how many l3 messages were dropped because they did
+// not decrypt or did not parse.
+func L3RecvErrors() (open, split uint64) { return l3BadOpen.Load(), l3BadSplit.Load() }
+
 // l3Deliver splits one decrypted message into packets and emits each copy.
 func l3Deliver(plain []byte, emit func([]byte)) {
 	pkts, err := wire.SplitL3(plain)
-	if err != nil || len(pkts) == 0 {
+	if err != nil {
+		l3BadSplit.Add(1)
+		return
+	}
+	if len(pkts) == 0 {
 		return
 	}
 	for _, p := range pkts {
@@ -489,6 +503,7 @@ func (s *l3Sess) readLoop(conn net.Conn, key []byte) {
 		}
 		plain, err := ecrypto.Open(key, raw, nil)
 		if err != nil {
+			l3BadOpen.Add(1)
 			continue
 		}
 		l3Deliver(plain, func(pkt []byte) {
@@ -544,6 +559,7 @@ func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth, sock any) {
 		}
 		plain, err := ecrypto.Open(a.Key, raw, nil)
 		if err != nil {
+			l3BadOpen.Add(1)
 			continue
 		}
 		o := NetSwitch()

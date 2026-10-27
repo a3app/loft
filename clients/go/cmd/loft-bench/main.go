@@ -185,6 +185,15 @@ func runFront(ctx context.Context, token, raw, kind, path, origin, cdnName strin
 	}
 	defer d.Close()
 	hsMS := float64(time.Since(t0).Milliseconds())
+	// An l3 front carries IP packets, not mux streams: put a small TCP/IP
+	// stack on it so Open (mux rows) and the SOCKS listener work as on the
+	// other fronts.
+	if w, err := inbound.WrapL3(d); err != nil {
+		return nil, fmt.Errorf("l3 stack: %w", err)
+	} else if w != d {
+		defer w.Close()
+		d = w
+	}
 	ip := transport.OverlayIP()
 	bulk := ""
 	wantLanes := 0

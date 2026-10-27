@@ -52,6 +52,9 @@ const (
 	// overflow is dropped. It also bounds the copy kept for resending
 	// (l3resend.go).
 	l3SndMax = 1 << 20
+	// l3Linger is how long a flow whose FIN the member acknowledged waits
+	// for the member's own FIN before it is dropped anyway.
+	l3Linger = 30 * time.Second
 )
 
 // l3Tuple identifies one NAT flow: member overlay address and port, and the
@@ -87,6 +90,8 @@ type l3TCPFlow struct {
 	ooo           map[uint32][]byte
 	oooN          int
 	rs            l3Resend
+	peerFin       bool        // the member closed its side (its FIN arrived in order)
+	linger        *time.Timer // after our FIN is acknowledged: forget the flow if the member never closes
 }
 
 // l3UDPFlow is one proxied UDP flow. With exit rules configured it goes out
@@ -405,9 +410,19 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 			_ = rep(resend)
 		}
 		if finished {
-			// Our FIN is acknowledged: both directions are done.
-			f.forget()
-			return
+			// Our FIN is acknowledged. The flow ends when the member has
+			// closed its side too; until then its FIN must still get an
+			// ACK, or its stack resends that FIN for minutes.
+			f.mu.Lock()
+			both := f.peerFin
+			if !both && f.linger == nil {
+				f.linger = time.AfterFunc(l3Linger, f.forget)
+			}
+			f.mu.Unlock()
+			if both {
+				f.forget()
+				return
+			}
 		}
 	}
 	f.mu.Lock()
@@ -423,6 +438,9 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 			}
 			f.ooo[seq] = append([]byte(nil), payload...)
 			f.oooN += len(payload)
+			l3OOOKept.Add(1)
+		} else if !dup {
+			l3OOODropped.Add(1) // the keep buffer is full: the member resends it
 		}
 		rep := f.reply
 		f.mu.Unlock()
@@ -436,6 +454,9 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 	}
 	if len(payload) == 0 && !fin {
 		resend := len(th[dataOff:]) > 0 || flags&tcpFIN != 0
+		if resend {
+			l3DupData.Add(1) // bytes we already had: the member resent them
+		}
 		rep := f.reply
 		f.mu.Unlock()
 		if resend {
@@ -452,10 +473,15 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 		}
 	}
 	var c net.Conn
+	done := false
 	if fin {
 		f.rcv++
 		c = f.conn
 		f.ooo, f.oooN = nil, 0 // nothing may follow a FIN
+		f.peerFin = true
+		// If our own FIN was acknowledged already, both sides are closed
+		// once this FIN is acknowledged below.
+		done = f.rs.fin && f.una == f.snd
 	}
 	rep := f.reply
 	f.mu.Unlock()
@@ -465,6 +491,9 @@ func l3InetTCP(reply func([]byte) error, who egress.Who, src, dst net.IP, pkt []
 		}
 	}
 	_ = rep(f.segment(tcpACK, nil))
+	if done {
+		f.forget()
+	}
 }
 
 // drainOOO appends to in (the bytes that arrive in order at f.rcv) the kept

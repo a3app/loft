@@ -77,11 +77,23 @@ func reloadFleet(dir, cfgPath string, cfg *config.ServerConfig) error {
 func writeNodeStatus(dir string) {
 	path := filepath.Join(dir, "node-status.json")
 	for range time.Tick(5 * time.Second) {
+		// L3 counters since start: segments resent to members (lost on
+		// their side) and l3 messages dropped because they did not decrypt
+		// or parse. Growing numbers point at a lossy member link.
+		openErr, splitErr := transport.L3RecvErrors()
 		st := struct {
-			At      time.Time             `json:"at"`
-			Members []transport.Peer      `json:"members"`
-			Relays  []transport.LiveRelay `json:"relays"`
-		}{At: time.Now().UTC(), Members: []transport.Peer{}, Relays: []transport.LiveRelay{}}
+			At         time.Time             `json:"at"`
+			Members    []transport.Peer      `json:"members"`
+			Relays     []transport.LiveRelay `json:"relays"`
+			L3Resends  uint64                `json:"l3_resends"`
+			L3BadOpen  uint64                `json:"l3_bad_open"`
+			L3BadSplit uint64                `json:"l3_bad_split"`
+			L3OOOKept  uint64                `json:"l3_ooo_kept"`
+			L3OOODrop  uint64                `json:"l3_ooo_dropped"`
+			L3DupData  uint64                `json:"l3_dup_data"`
+		}{At: time.Now().UTC(), Members: []transport.Peer{}, Relays: []transport.LiveRelay{},
+			L3Resends: transport.L3Resends(), L3BadOpen: openErr, L3BadSplit: splitErr}
+		st.L3OOOKept, st.L3OOODrop, st.L3DupData = transport.L3UplinkStats()
 		if o := transport.NetSwitch(); o != nil {
 			st.Members = o.Peers()
 		}

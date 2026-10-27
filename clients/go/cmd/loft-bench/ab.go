@@ -84,6 +84,7 @@ type sample struct {
 	down, up      float64 // Mbit/s
 	shaped        bool    // l3 only: the node agreed to shaping
 	stats         transport.L3ShapeStats
+	loss          string // l3 only: client-side drops and resends (L3Net.Stats), for debugging
 	err           string
 }
 
@@ -119,6 +120,18 @@ func abSample(ctx context.Context, p benchParams, kind string, v variant, round 
 	}
 	if w != d {
 		defer w.Close()
+	}
+	// On l3, note what got lost on this side: drops in the gVisor stack,
+	// packets nobody owned, messages that did not decrypt or parse, and
+	// what the stack had to send again toward the node.
+	if ln, ok := w.(*inbound.L3Net); ok {
+		o0, p0 := transport.L3RecvErrors()
+		defer func() {
+			st := ln.Stats()
+			o1, p1 := transport.L3RecvErrors()
+			s.loss = fmt.Sprintf("dropped=%d orphan=%d bad_open=%d bad_split=%d retrans=%d rto=%d fast=%d send_err=%d tlp=%d spurious_rto=%d",
+				st.Dropped, st.Orphan, o1-o0, p1-p0, st.Retransmits, st.Timeouts, st.FastRetransmits, st.SendErrors, st.TLP, st.SpuriousRTO)
+		}()
 	}
 
 	var firsts []float64
@@ -175,7 +188,7 @@ func runAB(ctx context.Context, p benchParams, kinds []string, rounds int, vs []
 			for _, v := range order {
 				s := abSample(ctx, p, kind, v, r)
 				all = append(all, s)
-				fmt.Fprintf(os.Stderr, "ab %s %s round %d: hs=%.0fms first=%.0fms down=%.2f up=%.2f %s\n", kind, v.name, r, s.hsMS, s.firstMS, s.down, s.up, s.err)
+				fmt.Fprintf(os.Stderr, "ab %s %s round %d: hs=%.0fms first=%.0fms down=%.2f up=%.2f %s %s\n", kind, v.name, r, s.hsMS, s.firstMS, s.down, s.up, s.loss, s.err)
 				if cw != nil {
 					_ = cw.Write([]string{s.kind, s.variant, strconv.Itoa(s.round), f1(s.hsMS), f1(s.firstMS), f2(s.down), f2(s.up),
 						strconv.FormatBool(s.shaped), u(s.stats.Payload), u(s.stats.Pad), u(s.stats.ChaffN), u(s.stats.Chaff), u(s.stats.PaddedN), s.err})

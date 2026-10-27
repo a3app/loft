@@ -178,8 +178,23 @@ func TestL3FinResentUntilAcked(t *testing.T) {
 	l3TCPMu.Lock()
 	kept = l3TCP[key] != nil
 	l3TCPMu.Unlock()
+	if !kept {
+		t.Fatal("flow dropped before the member closed its side")
+	}
+	// The member closes its side: its FIN must be acknowledged, and only
+	// then is the flow gone. (Dropping the flow earlier left the member's
+	// FIN unanswered, and its stack resent it on every timeout.)
+	l3Inet(l.reply, egress.Who{}, src, l3TCPDataFIN(src, addr.IP, 41002, uint16(addr.Port), seq, start+2, nil))
+	_, _, _, ok = l.next(time.Second, func(f byte, _ []byte) bool { return f&tcpACK != 0 && f&tcpFIN == 0 })
+	if !ok {
+		t.Fatal("member's FIN not acknowledged")
+	}
+	time.Sleep(50 * time.Millisecond)
+	l3TCPMu.Lock()
+	kept = l3TCP[key] != nil
+	l3TCPMu.Unlock()
 	if kept {
-		t.Fatal("flow kept after its FIN was acknowledged")
+		t.Fatal("flow kept after both sides closed")
 	}
 }
 

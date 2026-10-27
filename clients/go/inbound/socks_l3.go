@@ -11,10 +11,13 @@ package inbound
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	mrand "math/rand/v2"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -59,6 +62,9 @@ type L3Net struct {
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 	up, down  atomic.Uint64
+	orphan    atomic.Uint64 // packets from the tunnel no socket owned (Stats)
+	traceMu   sync.Mutex
+	traceSeen map[string]int // LOFT_L3_TRACE: segments sent so far
 }
 
 // WrapL3 returns n wrapping d when d carries IP. d is returned unchanged otherwise.
@@ -344,7 +350,37 @@ func (n *L3Net) fromL3() {
 		n.tunMu.Unlock()
 		if tun != nil {
 			_, _ = tun.Write(ip)
+		} else {
+			n.orphan.Add(1) // not for our sockets and no TUN: nowhere to go
 		}
+	}
+}
+
+// L3NetStats are drop and retransmission counters of an L3Net, for
+// debugging lost packets on the l3 front: Dropped is packets the gVisor
+// stack threw away (mostly a full receive queue of a socket), Orphan
+// packets from the tunnel that no socket owned, and Retransmits, Timeouts
+// and FastRetransmits what the stack had to send again toward the node.
+type L3NetStats struct {
+	Dropped, Orphan, Retransmits, Timeouts, FastRetransmits uint64
+	// SendErrors are segments the stack could not hand to the link (a full
+	// link queue); TLP and SpuriousRTO count tail-loss probes and timeouts
+	// that turned out needless.
+	SendErrors, TLP, SpuriousRTO uint64
+}
+
+// Stats returns the counters since this L3Net started.
+func (n *L3Net) Stats() L3NetStats {
+	st := n.stk.Stats()
+	return L3NetStats{
+		Dropped:         st.DroppedPackets.Value(),
+		Orphan:          n.orphan.Load(),
+		Retransmits:     st.TCP.Retransmits.Value(),
+		Timeouts:        st.TCP.Timeouts.Value(),
+		FastRetransmits: st.TCP.FastRetransmit.Value(),
+		SendErrors:      st.TCP.SegmentSendErrors.Value(),
+		TLP:             st.TCP.TLPRecovery.Value(),
+		SpuriousRTO:     st.TCP.SpuriousRTORecovery.Value(),
 	}
 }
 
@@ -386,9 +422,42 @@ func (n *L3Net) stackOut(ctx context.Context) {
 			continue
 		}
 		n.up.Add(uint64(len(ip)))
+		if l3Trace {
+			n.trace(ip)
+		}
 		if err := n.writePump(ip); err != nil {
 			return
 		}
+	}
+}
+
+// l3Trace turns on a debug log of TCP segments this stack sends again
+// (LOFT_L3_TRACE=1): the same sequence number and length seen before on
+// the same connection. It shows what the stack is retransmitting.
+// Debug only: it remembers every segment, so it grows for as long as it runs.
+var l3Trace = os.Getenv("LOFT_L3_TRACE") == "1"
+
+// trace logs ip if it repeats a TCP segment already sent (see l3Trace).
+func (n *L3Net) trace(ip []byte) {
+	if len(ip) < 40 || ip[9] != 6 {
+		return
+	}
+	ihl := int(ip[0]&0x0f) * 4
+	th := ip[ihl:]
+	if len(th) < 20 {
+		return
+	}
+	off := int(th[12]>>4) * 4
+	key := fmt.Sprintf("%d>%s.%d:%d/%d", binary.BigEndian.Uint16(th[0:2]), net.IP(ip[16:20]), binary.BigEndian.Uint16(th[2:4]), binary.BigEndian.Uint32(th[4:8]), len(th)-off)
+	n.traceMu.Lock()
+	if n.traceSeen == nil {
+		n.traceSeen = map[string]int{}
+	}
+	n.traceSeen[key]++
+	again := n.traceSeen[key]
+	n.traceMu.Unlock()
+	if again > 1 && (len(th) > off || th[13]&0x03 != 0) {
+		log.Printf("l3 trace: resend #%d %s flags=%#x", again-1, key, th[13])
 	}
 }
 
@@ -467,9 +536,19 @@ type l3Conn struct {
 // Close closes the socket and frees its port once.
 func (c *l3Conn) Close() error {
 	err := c.Conn.Close()
-	c.once.Do(func() { c.n.freePort(c.port) })
+	// Keep the port for a while: Close only starts TCP's closing (FIN,
+	// the peer's ACK and FIN, TIME_WAIT), which the stack finishes with
+	// packets that come later. Freed at once, the port stopped being ours,
+	// those packets were dropped as nobody's (stackOwns), and the stack
+	// resent its FIN for a minute on every connection. Holding it also
+	// keeps a new socket off a port still in TIME_WAIT.
+	c.once.Do(func() { time.AfterFunc(l3PortLinger, func() { c.n.freePort(c.port) }) })
 	return err
 }
+
+// l3PortLinger is how long a closed TCP socket's port stays reserved:
+// longer than gVisor's TIME_WAIT (60 s).
+const l3PortLinger = 70 * time.Second
 
 // l3Packet is a UDP socket on the L3 stack that frees its reserved local
 // port when closed.

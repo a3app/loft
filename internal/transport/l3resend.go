@@ -46,6 +46,17 @@ const (
 // l3Resends counts segments sent a second (or later) time, node-wide.
 var l3Resends atomic.Uint64
 
+// Uplink counters, node-wide: segments from members kept because one
+// before them was missing (l3OOOKept), not kept because the keep buffer was
+// full (l3OOODropped), and segments whose bytes the node already had: the
+// member sent them again (l3DupData). They tell where uplink time goes.
+var l3OOOKept, l3OOODropped, l3DupData atomic.Uint64
+
+// L3UplinkStats returns those uplink counters.
+func L3UplinkStats() (oooKept, oooDropped, dupData uint64) {
+	return l3OOOKept.Load(), l3OOODropped.Load(), l3DupData.Load()
+}
+
 // L3Resends is the number of l3 segments the node sent again so far.
 func L3Resends() uint64 { return l3Resends.Load() }
 
@@ -260,6 +271,9 @@ func (f *l3TCPFlow) forget() {
 	f.mu.Lock()
 	f.rs.gone = true
 	f.stopTimerLocked()
+	if f.linger != nil {
+		f.linger.Stop()
+	}
 	f.mu.Unlock()
 	f.close()
 	l3TCPMu.Lock()
