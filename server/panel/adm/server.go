@@ -59,7 +59,7 @@ func opDeadline(op string) time.Duration {
 	case admproto.OpChannelSave, admproto.OpChannelDelete, admproto.OpChannelSwitch, admproto.OpChannelRules,
 		admproto.OpChannelPrio, admproto.OpChannelPrioDelete, admproto.OpDirectCheck,
 		admproto.OpNodeSave, admproto.OpNodeLists, admproto.OpNodeToken, admproto.OpRelayKey, admproto.OpCtlRoll,
-		admproto.OpMailDomain, admproto.OpMailBox, admproto.OpMailAlias, admproto.OpMailCerts, admproto.OpMailApply:
+		admproto.OpMailDomain, admproto.OpMailBox, admproto.OpMailAlias, admproto.OpMailHelo, admproto.OpMailWebmail, admproto.OpMailCerts, admproto.OpMailApply:
 		return 90 * time.Second
 	case admproto.OpMail, admproto.OpMailStats, admproto.OpSysUsers, admproto.OpSysUserSave, admproto.OpSysUserDelete,
 		admproto.OpGuard, admproto.OpGuardSet, admproto.OpGuardBan, admproto.OpGuardUnban,
@@ -120,7 +120,7 @@ func mutating(op string) bool {
 		admproto.OpChannelSave, admproto.OpChannelDelete, admproto.OpChannelSwitch, admproto.OpChannelRules,
 		admproto.OpChannelPrio, admproto.OpChannelPrioDelete, admproto.OpDirectCheck,
 		admproto.OpNodeSave, admproto.OpNodeLists, admproto.OpNodeToken, admproto.OpRelayKey, admproto.OpCtlRoll,
-		admproto.OpMailDomain, admproto.OpMailBox, admproto.OpMailAlias, admproto.OpMailCerts, admproto.OpMailApply,
+		admproto.OpMailDomain, admproto.OpMailBox, admproto.OpMailAlias, admproto.OpMailHelo, admproto.OpMailWebmail, admproto.OpMailCerts, admproto.OpMailApply,
 		admproto.OpSysUserSave, admproto.OpSysUserDelete, admproto.OpGuardSet, admproto.OpGuardBan, admproto.OpGuardUnban,
 		admproto.OpBackupKey, admproto.OpBackupRun, admproto.OpBackupRestore:
 		return true
@@ -331,6 +331,18 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.MailAliasSave(ctx, b)
+	case admproto.OpMailHelo:
+		var b admproto.MailHeloSave
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.MailHeloSave(ctx, b)
+	case admproto.OpMailWebmail:
+		var b admproto.MailWebmail
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.MailWebmail(ctx, b)
 	case admproto.OpMailCerts:
 		var b admproto.MailCerts
 		if err := strict(req.Body, &b); err != nil {

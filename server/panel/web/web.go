@@ -199,6 +199,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("POST /api/mail/domain", s.need(area("mail", store.Change), s.mailDomain))
 	mux.HandleFunc("POST /api/mail/box", s.need(area("mail", store.Change), s.mailBox))
 	mux.HandleFunc("POST /api/mail/alias", s.need(area("mail", store.Change), s.mailAlias))
+	mux.HandleFunc("POST /api/mail/helo", s.need(area("mail", store.Change), s.mailHelo))
+	mux.HandleFunc("POST /api/mail/webmail", s.need(area("mail", store.Change), s.mailWebmail))
 	mux.HandleFunc("POST /api/mail/apply", s.need(area("mail", store.Change), s.mailApply))
 	mux.HandleFunc("POST /api/mail/cert", s.need(area("mail", store.Change), s.mailCert))
 	mux.HandleFunc("GET /api/system/users", s.need(area("system", store.View), s.sysUsers))

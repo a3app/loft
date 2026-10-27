@@ -73,13 +73,15 @@ const (
 	OpChannelPrioDelete = "channels.prio.delete" // ChannelName (the list ID) → ChannelsView
 	OpDirectCheck       = "channels.direct"      // ChanCheck → ChannelsView (empty kind = off)
 
-	OpMail       = "mail.get"    // → MailView
-	OpMailDomain = "mail.domain" // MailDomainSave → MailView
-	OpMailBox    = "mail.box"    // MailBoxSave → MailView
-	OpMailAlias  = "mail.alias"  // MailAliasSave → MailView
-	OpMailCerts  = "mail.certs"  // MailCerts → MailView (only when they changed)
-	OpMailApply  = "mail.apply"  // → MailView (writes everything again)
-	OpMailStats  = "mail.stats"  // → MailStats
+	OpMail        = "mail.get"     // → MailView
+	OpMailDomain  = "mail.domain"  // MailDomainSave → MailView
+	OpMailBox     = "mail.box"     // MailBoxSave → MailView
+	OpMailAlias   = "mail.alias"   // MailAliasSave → MailView
+	OpMailHelo    = "mail.helo"    // MailHeloSave → MailView
+	OpMailWebmail = "mail.webmail" // MailWebmail → MailWebmailURL
+	OpMailCerts   = "mail.certs"   // MailCerts → MailView (only when they changed)
+	OpMailApply   = "mail.apply"   // → MailView (writes everything again)
+	OpMailStats   = "mail.stats"   // → MailStats
 
 	OpSysUsers      = "sys.users"       // → SysUsers
 	OpSysUserSave   = "sys.user.save"   // SysUserSave → SysUsers
@@ -711,11 +713,29 @@ type MailService struct {
 	State string `json:"state"`
 }
 
+// MailHeloSave sets the name Postfix greets with. Empty Helo returns to
+// mail.<first enabled domain>.
+type MailHeloSave struct {
+	Helo string `json:"helo"`
+}
+
+// MailWebmail asks for a one-click Roundcube URL for Address.
+type MailWebmail struct {
+	Address string `json:"address"`
+}
+
+// MailWebmailURL is that URL; it expires in a couple of minutes.
+type MailWebmailURL struct {
+	URL string `json:"url"`
+}
+
 // MailView is the Mail screen.
 type MailView struct {
 	Installed bool          `json:"installed"`
-	Dovecot   string        `json:"dovecot,omitempty"` // version
-	Helo      string        `json:"helo,omitempty"`    // the name Postfix greets with
+	Dovecot   string        `json:"dovecot,omitempty"`   // version
+	Helo      string        `json:"helo,omitempty"`      // the name Postfix greets with
+	HeloAuto  string        `json:"helo_auto,omitempty"` // mail.<first enabled domain>
+	HeloSet   string        `json:"helo_set,omitempty"`  // stored custom; empty = auto
 	Domains   []MailDomain  `json:"domains"`
 	Boxes     []MailBox     `json:"boxes"`
 	Aliases   []MailAlias   `json:"aliases"`

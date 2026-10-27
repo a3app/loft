@@ -121,7 +121,7 @@ func (s *Server) mailGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // mailSave runs a save and answers with the new state. It is shared by the
-// domain, box, alias and apply handlers; target names the change in the
+// domain, box, alias, HELO and apply handlers; target names the change in the
 // audit log. Certificates are synced afterwards, since a new domain may now
 // have one.
 func (s *Server) mailSave(w http.ResponseWriter, r *http.Request, op string, body any, target string) {
@@ -170,7 +170,7 @@ func (s *Server) mailDomain(w http.ResponseWriter, r *http.Request) {
 	// The domain is gone from the mail server; what follows only tidies up,
 	// so a failure there is reported next to the result, not as an error.
 	name := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(in.Name)), ".")
-	removed, note := s.mailForget(ctx, name, in.DropDNS)
+	removed, note := s.mailForget(ctx, name, v.Helo, in.DropDNS)
 	if s.syncMailCerts(ctx, by, v.Domains) {
 		adm.Call(ctx, admproto.OpMail, nil, &v)
 	}
@@ -184,7 +184,7 @@ func (s *Server) mailDomain(w http.ResponseWriter, r *http.Request) {
 // in the zone's list of the panel's own records, and only when the
 // provider's current copy still looks like that mail record. It returns how
 // many records it deleted and, when something was left, a note why.
-func (s *Server) mailForget(ctx context.Context, d string, dropDNS bool) (int, string) {
+func (s *Server) mailForget(ctx context.Context, d, helo string, dropDNS bool) (int, string) {
 	s.dom.mu.Lock()
 	defer s.dom.mu.Unlock()
 	s.dom.load()
@@ -194,7 +194,7 @@ func (s *Server) mailForget(ctx context.Context, d string, dropDNS bool) (int, s
 	})
 	removed, note := 0, ""
 	if dropDNS {
-		removed, note = s.mailDropDNS(ctx, d)
+		removed, note = s.mailDropDNS(ctx, d, helo)
 	}
 	if err := s.dom.save(); err != nil && note == "" {
 		note = err.Error()
@@ -204,7 +204,7 @@ func (s *Server) mailForget(ctx context.Context, d string, dropDNS bool) (int, s
 
 // mailDropDNS deletes the panel's own mail records of domain d (see
 // mailForget). s.dom.mu must be held.
-func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
+func (s *Server) mailDropDNS(ctx context.Context, d, helo string) (int, string) {
 	z := s.dom.zoneFor(d)
 	if z == nil {
 		return 0, ""
@@ -230,7 +230,7 @@ func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
 	skipped := 0
 	keep := z.Ours[:0:0]
 	for _, o := range z.Ours {
-		if !mailOwnRec(o.Type, fqdn(o.Name, z.Name), "", d, false) {
+		if !mailOwnRec(o.Type, fqdn(o.Name, z.Name), "", d, helo, false) {
 			keep = append(keep, o)
 			continue
 		}
@@ -241,7 +241,7 @@ func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
 			skipped++
 			keep = append(keep, o)
 		case !ok:
-		case rec.Type == o.Type && rec.Name == o.Name && mailOwnRec(rec.Type, fqdn(rec.Name, z.Name), rec.Value, d, true):
+		case rec.Type == o.Type && rec.Name == o.Name && mailOwnRec(rec.Type, fqdn(rec.Name, z.Name), rec.Value, d, helo, true):
 			del = append(del, rec)
 		default:
 			skipped++
@@ -268,12 +268,14 @@ func (s *Server) mailDropDNS(ctx context.Context, d string) (int, string) {
 
 // mailOwnRec reports whether a record (type, full name, value) is one of the
 // records the panel writes for mail domain d (mailNeeds): MX at d, A/AAAA at
-// mail.d, SPF at d and at mail.d, DKIM at any selector of d, DMARC at d.
-// With checkValue false only type and name count (the value is not known);
-// with it, a TXT must also start like the panel's record.
-func mailOwnRec(typ, name, value, d string, checkValue bool) bool {
+// mail.d, SPF at d and at the HELO name when that name is under d, DKIM at
+// any selector of d, DMARC at d. With checkValue false only type and name
+// count (the value is not known); with it, a TXT must also start like the
+// panel's record.
+func mailOwnRec(typ, name, value, d, helo string, checkValue bool) bool {
 	host := "mail." + d
 	name = strings.TrimSuffix(strings.ToLower(name), ".")
+	helo = strings.TrimSuffix(strings.ToLower(helo), ".")
 	v := strings.TrimSpace(strings.Trim(strings.TrimSpace(value), `"`))
 	txt := func(prefix string) bool { return !checkValue || strings.HasPrefix(v, prefix) }
 	switch {
@@ -283,7 +285,7 @@ func mailOwnRec(typ, name, value, d string, checkValue bool) bool {
 		return name == host
 	case typ != "TXT":
 		return false
-	case name == d || name == host:
+	case name == d || name == host || (helo != "" && name == helo && nameUnder(helo, d)):
 		return txt("v=spf1")
 	case strings.HasSuffix(name, "._domainkey."+d):
 		return txt("v=DKIM1")
@@ -291,6 +293,13 @@ func mailOwnRec(typ, name, value, d string, checkValue bool) bool {
 		return txt("v=DMARC1")
 	}
 	return false
+}
+
+// nameUnder reports whether name is d or a name under d.
+func nameUnder(name, d string) bool {
+	name = strings.TrimSuffix(strings.ToLower(name), ".")
+	d = strings.TrimSuffix(strings.ToLower(d), ".")
+	return name == d || strings.HasSuffix(name, "."+d)
 }
 
 // mailBox adds, changes or deletes a mailbox. A new password is hashed here,
@@ -333,6 +342,32 @@ func (s *Server) mailAlias(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mailSave(w, r, admproto.OpMailAlias, in, in.From)
+}
+
+// mailHelo sets the name Postfix greets with (EHLO). Empty returns to
+// mail.<first enabled domain>.
+func (s *Server) mailHelo(w http.ResponseWriter, r *http.Request) {
+	var in admproto.MailHeloSave
+	if !readJSON(w, r, 1<<10, &in) {
+		return
+	}
+	s.mailSave(w, r, admproto.OpMailHelo, in, in.Helo)
+}
+
+// mailWebmail returns a short-lived Roundcube URL already signed in as the
+// mailbox. The helper mints it; the panel never sees the mailbox password.
+func (s *Server) mailWebmail(w http.ResponseWriter, r *http.Request) {
+	var in admproto.MailWebmail
+	if !readJSON(w, r, 1<<10, &in) {
+		return
+	}
+	auditTarget(r, in.Address)
+	var out admproto.MailWebmailURL
+	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpMailWebmail, in, &out); err != nil {
+		admFail(w, err)
+		return
+	}
+	ok(w, out)
 }
 
 // mailApply asks the helper to write all mail files again from mail.json.
@@ -477,10 +512,16 @@ type mailRec struct {
 	Auto  bool   `json:"auto,omitempty"` // the panel can create it
 }
 
-// mailNeeds lists the records of domain d. SPF and DMARC count as present
-// when the domain has its own: the panel never overwrites them.
-func mailNeeds(d admproto.MailDomain, ips []net.IP) []mailRec {
+// mailNeeds lists the records of domain d. helo is the name Postfix greets
+// with; its SPF is listed when that name is under d (and is not d itself,
+// which already has the domain SPF). SPF and DMARC count as present when
+// the domain has its own: the panel never overwrites them.
+func mailNeeds(d admproto.MailDomain, ips []net.IP, helo string) []mailRec {
 	host := "mail." + d.Name
+	helo = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(helo)), ".")
+	if helo == "" {
+		helo = host
+	}
 	out := []mailRec{{Key: "mx", Name: d.Name, Type: "MX", Value: host, Prio: 10}}
 	for _, ip := range ips {
 		t := "AAAA"
@@ -489,11 +530,12 @@ func mailNeeds(d admproto.MailDomain, ips []net.IP) []mailRec {
 		}
 		out = append(out, mailRec{Key: "a", Name: host, Type: t, Value: ip.String()})
 	}
-	out = append(out,
-		mailRec{Key: "spf", Name: d.Name, Type: "TXT", Value: "v=spf1 mx -all"},
-		// SPF of the name the server greets with: checked apart from the
-		// domain's, and without it reports say "HELO does not publish SPF".
-		mailRec{Key: "helo", Name: host, Type: "TXT", Value: "v=spf1 a -all"})
+	out = append(out, mailRec{Key: "spf", Name: d.Name, Type: "TXT", Value: "v=spf1 mx -all"})
+	// SPF of the name the server greets with: checked apart from the
+	// domain's, and without it reports say "HELO does not publish SPF".
+	if helo != d.Name && nameUnder(helo, d.Name) {
+		out = append(out, mailRec{Key: "helo", Name: helo, Type: "TXT", Value: "v=spf1 a -all"})
+	}
 	if d.DKIM && d.DKIMRecord != "" {
 		out = append(out, mailRec{Key: "dkim", Name: firstOf(d.Selector, "mail") + "._domainkey." + d.Name, Type: "TXT", Value: d.DKIMRecord})
 	}
@@ -574,7 +616,7 @@ func (s *Server) mailDNS(w http.ResponseWriter, r *http.Request) {
 	}
 	// 1. Build the wanted records and find the zone and its provider, if any.
 	ips := ServerIPs()
-	recs := mailNeeds(d, ips)
+	recs := mailNeeds(d, ips, v.Helo)
 	s.dom.mu.Lock()
 	s.dom.load()
 	zone, api := "", false
@@ -755,13 +797,13 @@ func (s *Server) mailDNSCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	d, _, err := s.mailDomainOf(ctx, userOf(r).Login, in.Domain)
+	d, v, err := s.mailDomainOf(ctx, userOf(r).Login, in.Domain)
 	if err != nil {
 		admFail(w, err)
 		return
 	}
 	auditTarget(r, d.Name)
-	recs := mailNeeds(d, ServerIPs())
+	recs := mailNeeds(d, ServerIPs(), v.Helo)
 	s.dom.mu.Lock()
 	defer s.dom.mu.Unlock()
 	s.dom.load()

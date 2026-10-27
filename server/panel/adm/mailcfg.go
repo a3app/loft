@@ -24,12 +24,13 @@ import (
 // include mechanism, so there only the keys listed in mailParams change.
 
 const (
-	mailPostfixDir   = "/etc/postfix/loft"
-	mailDovecotConf  = "/etc/dovecot/conf.d/99-loft-panel.conf"
-	mailDovecotUsers = "/etc/dovecot/loft/users"
-	mailDovecotAuth  = "/etc/dovecot/conf.d/10-auth.conf"
-	mailRoot         = "/var/vmail"
-	mailUser         = "vmail"
+	mailPostfixDir     = "/etc/postfix/loft"
+	mailDovecotConf    = "/etc/dovecot/conf.d/99-loft-panel.conf"
+	mailDovecotUsers   = "/etc/dovecot/loft/users"
+	mailDovecotWebmail = "/etc/dovecot/loft/webmail"
+	mailDovecotAuth    = "/etc/dovecot/conf.d/10-auth.conf"
+	mailRoot           = "/var/vmail"
+	mailUser           = "vmail"
 
 	dkimConf      = "/etc/opendkim.conf"
 	dkimKeyTable  = "/etc/opendkim/key.table"
@@ -44,8 +45,13 @@ const (
 	webmailSMTP   = "10587"
 	roundcubeConf = "/etc/roundcube/config.inc.php"
 	roundcubeRoot = "/var/lib/roundcube/public_html"
-	webmailSite   = "/etc/nginx/sites-available/loft-panel-mail.conf"
-	webmailLink   = "/etc/nginx/sites-enabled/loft-panel-mail.conf"
+	// Debian Roundcube's INSTALL_PATH is /var/lib/roundcube; plugins load
+	// from plugins/ under that, not from /usr/share (those are the package
+	// files, linked into var/lib one name at a time).
+	roundcubePlugin      = "/var/lib/roundcube/plugins/loft_login/loft_login.php"
+	roundcubePluginShare = "/usr/share/roundcube/plugins/loft_login/loft_login.php"
+	webmailSite          = "/etc/nginx/sites-available/loft-panel-mail.conf"
+	webmailLink          = "/etc/nginx/sites-enabled/loft-panel-mail.conf"
 )
 
 // mailStore is mail.json.
@@ -53,9 +59,17 @@ type mailStore struct {
 	Domains []admproto.MailDomain `json:"domains"`
 	Boxes   []admproto.MailBox    `json:"boxes"`
 	Aliases []admproto.MailAlias  `json:"aliases"`
+	// Helo is the name Postfix greets with (EHLO). Empty: mail of the
+	// first enabled domain. One name for the whole server, so the PTR
+	// of the public address can match it.
+	Helo string `json:"helo,omitempty"`
 	// DESKey encrypts Roundcube sessions; kept so a save does not sign
 	// everyone out of webmail.
 	DESKey string `json:"des_key,omitempty"`
+	// LoginPass is the IMAP password Roundcube uses for one-click login
+	// from the panel. Dovecot accepts it only from localhost. Empty until
+	// the first apply.
+	LoginPass string `json:"login_pass,omitempty"`
 	// Error is the last apply that failed, shown until one succeeds.
 	Error string `json:"error,omitempty"`
 }
@@ -137,13 +151,21 @@ func (s *mailStore) live() []admproto.MailBox {
 	return out
 }
 
-// helo is the name Postfix greets with: the first domain's mail host. One
-// name for the whole server, so the PTR record names it.
-func (s *mailStore) helo() string {
+// heloAuto is mail.<first enabled domain>, used when Helo is empty.
+func (s *mailStore) heloAuto() string {
 	if on := s.on(); len(on) > 0 {
 		return mailHost(on[0].Name)
 	}
 	return ""
+}
+
+// helo is the name Postfix greets with. A stored Helo wins; otherwise
+// heloAuto. One name for the whole server, so the PTR record names it.
+func (s *mailStore) helo() string {
+	if h := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s.Helo)), "."); h != "" {
+		return h
+	}
+	return s.heloAuto()
 }
 
 // mailHead is the warning comment written at the top of every generated
@@ -314,6 +336,43 @@ func renderUsers(s *mailStore, e mailEnv) string {
 	return b.String()
 }
 
+// renderWebmailUsers is a second Dovecot passwd-file: the same live boxes
+// with LoginPass, accepted only from the loopback so Roundcube can open a
+// mailbox without the person's password.
+func renderWebmailUsers(s *mailStore) string {
+	if s.LoginPass == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(mailHead("panel webmail login; loopback only"))
+	for _, x := range s.live() {
+		fmt.Fprintf(&b, "%s:{PLAIN}%s::::::allow_nets=127.0.0.1/32,::1/128\n", x.Address, s.LoginPass)
+	}
+	return b.String()
+}
+
+// webmailPassdb is the extra Dovecot passdb for renderWebmailUsers.
+func webmailPassdb(s *mailStore, e mailEnv) string {
+	if s.LoginPass == "" || !e.Webmail {
+		return ""
+	}
+	if e.Dovecot24 {
+		return `
+passdb loft_webmail {
+  driver = passwd-file
+  passwd_file_path = ` + mailDovecotWebmail + `
+  default_password_scheme = PLAIN
+}
+`
+	}
+	return `
+passdb {
+  driver = passwd-file
+  args = scheme=PLAIN username_format=%Lu ` + mailDovecotWebmail + `
+}
+`
+}
+
 // renderDovecot is the panel's conf.d file, in the syntax of the installed
 // version: 2.4 rejects 2.3's and the other way round.
 func renderDovecot(s *mailStore, e mailEnv) string {
@@ -338,8 +397,10 @@ auth_username_format = %Lu
 passdb {
   driver = passwd-file
   args = scheme=ARGON2ID username_format=%Lu ` + mailDovecotUsers + `
+  result_failure = continue
+  result_internalfail = continue
 }
-userdb {
+` + webmailPassdb(s, e) + `userdb {
   driver = passwd-file
   args = username_format=%Lu ` + mailDovecotUsers + `
 }
@@ -419,8 +480,10 @@ passdb loft_boxes {
   driver = passwd-file
   passwd_file_path = ` + mailDovecotUsers + `
   default_password_scheme = ARGON2ID
+  result_failure = continue
+  result_internalfail = continue
 }
-userdb loft_boxes {
+` + webmailPassdb(s, e) + `userdb loft_boxes {
   driver = passwd-file
   passwd_file_path = ` + mailDovecotUsers + `
 }
@@ -505,7 +568,8 @@ func mailParams(s *mailStore, e mailEnv) [][2]string {
 		{"milter_default_action", "accept"},
 		{"milter_mail_macros", "i {mail_addr} {client_addr} {client_name} {auth_authen}"},
 	}
-	// The greeting name: the first domain's mail host, else the machine name.
+	// The greeting name: the operator's HELO, else mail of the first
+	// domain, else the machine name.
 	if h := firstNonEmpty(s.helo(), e.Hostname); h != "" {
 		p = append(p, [2]string{"myhostname", h})
 	}
@@ -651,8 +715,73 @@ func renderRoundcube(s *mailStore) string {
 		"$config['des_key'] = " + phpStr(s.DESKey) + ";\n" +
 		// The installer changes settings from a browser without a password.
 		"$config['enable_installer'] = false;\n" +
-		"$config['plugins'] = ['archive', 'zipdownload', 'managesieve'];\n" +
-		"$config['managesieve_host'] = 'localhost';\n"
+		"$config['plugins'] = " + roundcubePlugins(s) + ";\n" +
+		"$config['managesieve_host'] = 'localhost';\n" +
+		roundcubeLoginConf(s)
+}
+
+func roundcubePlugins(s *mailStore) string {
+	if s.LoginPass == "" {
+		return "['archive', 'zipdownload', 'managesieve']"
+	}
+	return "['archive', 'zipdownload', 'managesieve', 'loft_login']"
+}
+
+func roundcubeLoginConf(s *mailStore) string {
+	if s.LoginPass == "" {
+		return ""
+	}
+	return "$config['loft_login_pass'] = " + phpStr(s.LoginPass) + ";\n"
+}
+
+// renderRoundcubePlugin is the Roundcube plugin that logs in from a
+// short-lived token the panel mints (HMAC of expiry and address).
+func renderRoundcubePlugin() string {
+	return `<?php
+class loft_login extends rcube_plugin
+{
+    public $task = 'login';
+
+    function init()
+    {
+        $this->add_hook('startup', array($this, 'startup'));
+        $this->add_hook('authenticate', array($this, 'authenticate'));
+    }
+
+    function startup($args)
+    {
+        if (!empty($_GET['_loft'])) {
+            $args['action'] = 'login';
+        }
+        return $args;
+    }
+
+    function authenticate($args)
+    {
+        $tok = isset($_GET['_loft']) ? $_GET['_loft'] : '';
+        if ($tok === '' || !preg_match('/^([0-9]+)\.([0-9a-f]{64})\.(.+)$/', $tok, $m)) {
+            return $args;
+        }
+        $rc = rcube::get_instance();
+        $key = (string) $rc->config->get('loft_login_pass', '');
+        if ($key === '') {
+            return $args;
+        }
+        $exp = (int) $m[1];
+        $addr = strtolower($m[3]);
+        $mac = hash_hmac('sha256', $exp . ':' . $addr, $key);
+        if ($exp < time() || !hash_equals($m[2], $mac)) {
+            $args['abort'] = true;
+            return $args;
+        }
+        $args['user'] = $addr;
+        $args['pass'] = $key;
+        $args['valid'] = true;
+        $args['cookiecheck'] = false;
+        return $args;
+    }
+}
+`
 }
 
 // renderMailSite is the nginx site for mail.<domain>: HTTP-01 for its

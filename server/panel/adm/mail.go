@@ -8,15 +8,19 @@ package adm
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -156,8 +160,10 @@ const mailSnapFresh = 10 * time.Second
 // blanked so they never leave the helper. When Postfix is not installed it
 // skips asking the host for usage and daemon states.
 func (o *Ops) mailView(ctx context.Context, s *mailStore) admproto.MailView {
-	v := admproto.MailView{Installed: o.mailInstalled(), Helo: s.helo(), Domains: []admproto.MailDomain{},
-		Boxes: []admproto.MailBox{}, Aliases: []admproto.MailAlias{}, Services: []admproto.MailService{}, WebHosts: []string{}, Error: s.Error}
+	v := admproto.MailView{Installed: o.mailInstalled(), Helo: s.helo(), HeloAuto: s.heloAuto(),
+		HeloSet: strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s.Helo)), "."),
+		Domains: []admproto.MailDomain{}, Boxes: []admproto.MailBox{}, Aliases: []admproto.MailAlias{},
+		Services: []admproto.MailService{}, WebHosts: []string{}, Error: s.Error}
 	e := o.mailEnvLite()
 	for _, d := range s.Domains {
 		h := mailHost(d.Name)
@@ -528,6 +534,81 @@ func checkPair(fullchain, key string) (time.Time, error) {
 	return c.NotAfter, nil
 }
 
+// MailHeloSave sets the name Postfix greets with. Empty returns to the
+// first domain's mail host. The name is one for the whole server (myhostname).
+func (o *Ops) MailHeloSave(ctx context.Context, req admproto.MailHeloSave) (admproto.MailView, error) {
+	o.mailMu.Lock()
+	defer o.mailMu.Unlock()
+	s, err := o.readMail()
+	if err != nil {
+		return admproto.MailView{}, err
+	}
+	h := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(req.Helo)), ".")
+	if h != "" && (!mailDomainRe.MatchString(h) || len(h) > 200) {
+		return admproto.MailView{}, fmt.Errorf("%q is not a host name", h)
+	}
+	s.Helo = h
+	return o.mailCommit(ctx, s, nil)
+}
+
+const mailLoginTTL = 2 * time.Minute
+
+// mailLoginToken is the query value Roundcube's loft_login plugin accepts.
+func mailLoginToken(pass, addr string, now time.Time) string {
+	exp := now.Add(mailLoginTTL).Unix()
+	mac := hmac.New(sha256.New, []byte(pass))
+	fmt.Fprintf(mac, "%d:%s", exp, addr)
+	return strconv.FormatInt(exp, 10) + "." + hex.EncodeToString(mac.Sum(nil)) + "." + addr
+}
+
+func mailLoginURL(host, pass, addr string, now time.Time) string {
+	return "https://" + host + "/?_task=login&_loft=" + url.QueryEscape(mailLoginToken(pass, addr, now))
+}
+
+// MailWebmail mints a short-lived URL that opens Roundcube already signed
+// in as address. The mailbox password is not used.
+func (o *Ops) MailWebmail(ctx context.Context, req admproto.MailWebmail) (admproto.MailWebmailURL, error) {
+	o.mailMu.Lock()
+	defer o.mailMu.Unlock()
+	s, err := o.readMail()
+	if err != nil {
+		return admproto.MailWebmailURL{}, err
+	}
+	addr := strings.ToLower(strings.TrimSpace(req.Address))
+	if err := s.localAddr(addr); err != nil {
+		return admproto.MailWebmailURL{}, err
+	}
+	i := s.box(addr)
+	if i < 0 {
+		return admproto.MailWebmailURL{}, errors.New("no such mailbox")
+	}
+	b := s.Boxes[i]
+	_, domain := splitAddr(addr)
+	if !b.Enabled || !s.domainOn(domain) {
+		return admproto.MailWebmailURL{}, errors.New("mailbox is disabled")
+	}
+	e := o.mailEnvLite()
+	if !e.Webmail {
+		return admproto.MailWebmailURL{}, errors.New("webmail is not installed")
+	}
+	host := mailHost(domain)
+	if !e.Certs[host] || e.PHPSock == "" {
+		return admproto.MailWebmailURL{}, errors.New("webmail is not available for this domain")
+	}
+	fresh := s.LoginPass == ""
+	if fresh {
+		s.LoginPass = randText(24)
+	}
+	// The plugin and the loopback passdb land on a full apply. A box save
+	// after an upgrade would only rewrite maps; the first click catches up.
+	if fresh || !exists(o.sys(roundcubePlugin)) {
+		if _, err := o.mailCommitKind(ctx, s, nil, false); err != nil {
+			return admproto.MailWebmailURL{}, err
+		}
+	}
+	return admproto.MailWebmailURL{URL: mailLoginURL(host, s.LoginPass, addr, time.Now())}, nil
+}
+
 // MailApply writes everything again (after a package was installed, say).
 func (o *Ops) MailApply(ctx context.Context) (admproto.MailView, error) {
 	o.mailMu.Lock()
@@ -562,9 +643,14 @@ func (o *Ops) mailCommitKind(ctx context.Context, s *mailStore, drop []string, m
 	if s.DESKey == "" {
 		s.DESKey = randText(24)
 	}
+	loginNew := false
+	if s.LoginPass == "" {
+		s.LoginPass = randText(24)
+		loginNew = true
+	}
 	var aerr error
 	if o.mailInstalled() {
-		if mapsOnly && s.Error == "" {
+		if mapsOnly && s.Error == "" && !loginNew {
 			aerr = o.mailApplyMaps(ctx, s)
 		} else {
 			aerr = o.mailApply(ctx, s)
@@ -710,6 +796,7 @@ func (o *Ops) mailApply(ctx context.Context, s *mailStore) error {
 		{Path: mailPostfixDir + "/sni", Data: renderSNI(s, e), Mode: "0600"},
 		{Path: mailDovecotConf, Data: renderDovecot(s, e), Mode: "0644"},
 		{Path: mailDovecotUsers, Data: renderUsers(s, e), Mode: "0640", Owner: "root", Group: "dovecot"},
+		{Path: mailDovecotWebmail, Data: renderWebmailUsers(s), Mode: "0640", Owner: "root", Group: "dovecot"},
 		{Path: dkimConf, Data: renderDKIMConf(), Mode: "0644"},
 		{Path: dkimKeyTable, Data: renderKeyTable(s), Mode: "0644"},
 		{Path: dkimSignTable, Data: renderSignTable(s), Mode: "0644"},
@@ -734,7 +821,10 @@ func (o *Ops) mailApply(ctx context.Context, s *mailStore) error {
 		}
 	}
 	if e.Webmail {
-		files = append(files, hostFile{Path: roundcubeConf, Data: renderRoundcube(s), Mode: "0640", Owner: "root", Group: "www-data"})
+		plugin := renderRoundcubePlugin()
+		files = append(files, hostFile{Path: roundcubeConf, Data: renderRoundcube(s), Mode: "0640", Owner: "root", Group: "www-data"},
+			hostFile{Path: roundcubePlugin, Data: plugin, Mode: "0644"},
+			hostFile{Path: roundcubePluginShare, Data: plugin, Mode: "0644"})
 	}
 	// main.cf and master.cf change through postconf; they are saved whole
 	// so a failure puts them back as they were.
@@ -818,6 +908,7 @@ func (o *Ops) mailApplyMaps(ctx context.Context, s *mailStore) error {
 		{Path: mailPostfixDir + "/vlogin", Data: renderVLogin(s), Mode: "0644"},
 		{Path: mailPostfixDir + "/norecv", Data: renderNoRecv(s), Mode: "0644"},
 		{Path: mailDovecotUsers, Data: renderUsers(s, e), Mode: "0640", Owner: "root", Group: "dovecot"},
+		{Path: mailDovecotWebmail, Data: renderWebmailUsers(s), Mode: "0640", Owner: "root", Group: "dovecot"},
 	}
 	put, err := o.stage(files)
 	if err != nil {

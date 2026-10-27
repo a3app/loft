@@ -887,7 +887,7 @@ function openRec(i){
  const Z=ZONES.find(x=>x.z===S.arg)||ZONES[0],r=Z.recs[i]||['','A','','',0],nw=i<0,addr=['A','AAAA'].includes(r[1]);
  dialog(nw?'Новая запись':'Запись '+r[0]+' '+r[1],Z.z+(r[4]?' · создана панелью':''),`
   <div class="fld"><label for="rr1">Тип</label><select id="rr1" ${nw?'':'disabled'} onchange="$('#rrP').hidden=!['MX','SRV'].includes(this.value);$('#rrA').hidden=!['A','AAAA'].includes(this.value)">${['A','AAAA','CNAME','MX','TXT','CAA','SRV','NS'].map(t=>`<option ${t===r[1]?'selected':''}>${t}</option>`).join('')}</select></div>
-  <div><div class="fld"><label for="rr2">Имя</label><input id="rr2" class="mono" value="${r[0]}" placeholder="@" ${nw?'':'readonly'}></div><div class="hint">@ — сама зона ${Z.z}.</div></div>
+  <div><div class="fld"><label for="rr2">Имя</label><input id="rr2" class="mono" value="${r[0]}" placeholder="@"></div><div class="hint">@ — сама зона ${Z.z}.</div></div>
   <div id="rrP" ${['MX','SRV'].includes(r[1])?'':'hidden'}><div class="fld"><label for="rr3">Приоритет</label><input id="rr3" class="num" value="${r[3]||10}"></div></div>
   <div class="fld"><label for="rr4">Значение</label><input id="rr4" class="mono" value="${esc(r[2])}" placeholder="${REC_PH[r[1]]||''}"></div>
   <div class="fld"><label for="rr5">TTL</label><select id="rr5">${TTLS.map(t=>`<option ${t===(r[4]?'авто':'1 час')?'selected':''}>${t}</option>`).join('')}</select></div>
@@ -933,7 +933,7 @@ V.mail=()=>{const D=mdCur(),h='mail.'+D.n;return pageHead('Почта','Почт
  `<div class="netbar"><div class="fld" style="margin:0;min-width:220px"><label for="mdz">Домен</label><select id="mdz" onchange="S.md=this.value;render()">${MDOM.map(d=>`<option ${d.n===S.md?'selected':''}>${d.n}</option>`).join('')}</select></div>
   <button class="btn" type="button" style="align-self:flex-end" onclick="openMDom(0)">Настройки домена</button><button class="btn" type="button" style="align-self:flex-end" onclick="openMDom(1)">${ic('i-plus')}Новый домен</button></div>`+
  blk('Ящики','',`<div class="acts"><button class="btn pri" type="button" onclick="openBox(-1)">${ic('i-plus')}Новый ящик</button>${pkgOn('Веб-почта')?`<a class="btn" href="#" onclick="event.preventDefault();toast('https://${h}/')">Открыть веб-почту</a>`:''}</div>`+
-  table(['Адрес','Владелец','Занято','Пересылка','Состояние'],BOXES.map((b,i)=>`<tr class="click" onclick="openBox(${i})"><td class="mono"><b>${b[0]}</b></td><td>${b[1]}</td>
+  table(['Адрес','Владелец','Занято','Пересылка','Состояние'],BOXES.map((b,i)=>`<tr class="click" onclick="openBox(${i})"><td class="mono"><b>${b[0]}</b>${pkgOn('Веб-почта')&&b[5]!=='выключен'?` <button class="btn sm" type="button" onclick="event.stopPropagation();toast('Открываю веб-почту…')">Войти</button>`:''}</td><td>${b[1]}</td>
    <td><span class="qbar"><i style="width:${Math.round(b[2]*100)}%"></i></span><span class="num mute" style="margin-left:8px">${b[3]}</span></td><td class="mono mute">${b[4]}</td><td>${b[5]==='выключен'?pill('выключен'):pill(b[5],'ok')}</td></tr>`).join('')))+
  blk('Псевдонимы','Адреса без своего ящика: письма уходят в указанные ящики.',`<div class="acts"><button class="btn" type="button" onclick="openAlias(-1)">${ic('i-plus')}Добавить псевдоним</button></div>`+
   table(['Адрес','Куда'],ALIASES.map((a,i)=>`<tr class="click" onclick="openAlias(${i})"><td class="mono">${a[0]}</td><td class="mono mute" style="white-space:normal">${a[1]}</td></tr>`).join('')+`<tr class="click" onclick="openMDom(0)"><td class="mono mute">*@${D.n}</td><td class="mute">${D.catch?`<span class="mono">${D.catch}</span>`:'ловить всё — выключено'}</td></tr>`))+
@@ -947,7 +947,12 @@ V.mail=()=>{const D=mdCur(),h='mail.'+D.n;return pageHead('Почта','Почт
  `<section class="card"><div class="card-h"><h2>Службы</h2></div>
   ${[['Postfix · SMTP','работает','ok'],['Dovecot · IMAP','работает','ok'],['OpenDKIM · подпись','работает','ok'],['Rspamd · антиспам',pkgOn('Антиспам')?'работает':PKG.find(x=>x[0]==='Антиспам')[2]==='busy'?'устанавливается…':'не установлен',pkgOn('Антиспам')?'ok':'busy']].map(r=>`<div class="ev"><span style="flex:1 1 auto">${r[0]}</span>${pill(r[1],r[2])}</div>`).join('')}
   <p class="hint" style="margin:12px 0 0">Очередь отправки: 0 · за сутки доставлено в ящики 214, отправлено 58, отклонено 37.</p>
-  <dl class="kv" style="margin-top:16px"><div><dt>IMAP</dt><dd class="mono">${h}:993 · SSL/TLS</dd></div><div><dt>SMTP</dt><dd class="mono">${h}:465 · SSL/TLS, 587 · STARTTLS</dd></div><div><dt>Логин</dt><dd>адрес ящика целиком</dd></div></dl></section></div>`};
+  <dl class="kv" style="margin-top:16px"><div><dt>IMAP</dt><dd class="mono">${h}:993 · SSL/TLS</dd></div><div><dt>SMTP</dt><dd class="mono">${h}:465 · SSL/TLS, 587 · STARTTLS</dd></div><div><dt>Логин</dt><dd>адрес ящика целиком</dd></div><div><dt>HELO</dt><dd class="mono">mail.example.net <button class="btn sm" type="button" onclick="openHelo()">Изменить</button></dd></div></dl></section></div>`};
+function openHelo(){
+ dialog('Имя HELO','Postfix представляется этим именем в SMTP (EHLO). PTR внешнего адреса и A-запись имени должны совпадать с ним — иначе чужие серверы не доверяют исходящей почте.',
+  `<div><div class="fld"><label for="mh1">Имя HELO</label><input id="mh1" class="mono" value="" placeholder="mail.example.net"></div><div class="hint">Пустое поле — mail первого включённого домена.</div></div>`,
+  `<button class="btn pri" type="button" onclick="closeDlg()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+}
 function openMDom(nw){
  const D=nw?{n:'',on:1,dkim:1,catch:''}:mdCur();
  dialog(nw?'Новый почтовый домен':'Домен '+D.n,nw?'Сервер станет принимать почту для домена. Записи DNS и сертификат для mail.<домен> — на этой же странице.':'',`
@@ -970,7 +975,7 @@ function openBox(i){
   <label class="chk"><input type="checkbox" ${b[5]==='только отправка'?'checked':''}>Только отправка — входящие не принимать</label>
   <label class="chk"><input type="checkbox" ${b[5]==='выключен'?'':'checked'}>Ящик включён</label>
   ${nw?'':`<div class="dlg-sec">Настройка почтовой программы</div><dl class="kv"><div><dt>IMAP</dt><dd class="mono">mail.${S.md}:993</dd></div><div><dt>SMTP</dt><dd class="mono">mail.${S.md}:465 / 587</dd></div><div><dt>Логин</dt><dd class="mono">${b[0]}</dd></div></dl>`}`,
-  `<button class="btn pri" type="button" onclick="if(pwCheck($('#dlgRoot'),true)){${nw?'boxMade()':'closeDlg()'}}else toast('Проверьте пароль')">${nw?'Создать':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить ящик" style="margin-left:auto" onclick="boxDel('${b[0]}')">${ic('i-trash')}</button>`}`);
+  `<button class="btn pri" type="button" onclick="if(pwCheck($('#dlgRoot'),true)){${nw?'boxMade()':'closeDlg()'}}else toast('Проверьте пароль')">${nw?'Создать':'Сохранить'}</button>${!nw&&pkgOn('Веб-почта')&&b[5]!=='выключен'?`<button class="btn" type="button" onclick="toast('Открываю веб-почту…')">Войти в веб-почту</button>`:''}<button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить ящик" style="margin-left:auto" onclick="boxDel('${b[0]}')">${ic('i-trash')}</button>`}`);
 }
 function boxMade(){dialog('Ящик carol@'+S.md+' создан','Пароль показан один раз — передайте его владельцу ящика.',`<dl class="kv"><div><dt>Логин</dt><dd class="mono">carol@${S.md}</dd></div><div><dt>Пароль</dt><dd class="mono">Xk7mPq2vRt9w</dd></div><div><dt>IMAP</dt><dd class="mono">mail.${S.md}:993</dd></div><div><dt>SMTP</dt><dd class="mono">mail.${S.md}:465 / 587</dd></div></dl>`,'<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>')}
 function boxDel(a){dialog(`Удалить ящик ${a}?`,'Войти в него больше не получится; письма на этот адрес будут отклоняться.','<label class="chk"><input type="checkbox">Удалить и письма с диска</label>',`<button class="btn danger" type="button" onclick="closeDlg()">Удалить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`)}
@@ -1516,10 +1521,6 @@ function portLeds(link,busy,warn){
  if(portActOn()) return `<span class="leds"><i class="led${link?' on':''}${warn?' warn':''}"></i><i class="led act${busy?' on':''}"></i></span>`;
  return `<i class="led${link?' on':''}${warn?' warn':''}"></i>`;
 }
-function portLegend(){
- if(portActOn()) return `<span><i class="led on rect" style="position:static"></i>линк</span><span><i class="led on warn rect" style="position:static"></i>релей / залип</span><span><i class="led act-on rect" style="position:static"></i>активность</span>`;
- return `<span><i class="led on" style="position:static"></i>в сети</span><span><i class="led on warn" style="position:static"></i>релей / залип</span>`;
-}
 function portBody(num,link,busy,vc,warn){
  const leds=portLeds(!!link,!!busy,!!warn);
  if(portActOn()) return `<span class="jack"${vc?` style="--vc:${vc}"`:''}>${leds}<span class="jnum">${num}</span></span>`;
@@ -1588,7 +1589,7 @@ function faceplate(n,id){
    <button type="button" class="port add${act}" onclick="openMember('new')" aria-label="Добавить порт">${portBody('+',false,false)}<span class="pn">добавить</span></button>
    ${rows.map(s=>`<div class="sg-lab"><b>${esc(s.name)}</b>${s.id?`<span class="sub">VLAN ${s.id}</span>`:''}</div>${ports.map(m=>pj(m,s.id)).join('')}<div></div>`).join('')}
   </div></div>
-  <div class="legend">${n.vlans.map(v=>`<span><i style="background:${vcol(n,v.id)}"></i>${v.id} ${esc(v.name)}</span>`).join('')}<span><i style="background:var(--menu-line-strong)"></i>без VLAN</span>${portLegend()}</div>
+  <div class="legend">${n.vlans.map(v=>`<span><i style="background:${vcol(n,v.id)}"></i>${v.id} ${esc(v.name)}</span>`).join('')}<span><i style="background:var(--menu-line-strong)"></i>без VLAN</span></div>
  </div>
  ${segs.length>1?`<div class="sg-more"><button class="btn" type="button" onclick="S.segMore=!S.segMore;render()">${more?'Скрыть другие сегменты':'Показать другие сегменты'}</button></div>`:''}`;
 }

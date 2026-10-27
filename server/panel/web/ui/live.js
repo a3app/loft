@@ -148,6 +148,9 @@
     [/^an alias needs somewhere to deliver$/, () => 'Укажите, куда доставлять'],
     [/^an alias cannot deliver to itself$/, () => 'Псевдоним не может доставлять сам себе'],
     [/^no such (mail domain|mailbox|alias)$/, m => ({ 'mail domain': 'Такого почтового домена нет', mailbox: 'Такого ящика нет', alias: 'Такого псевдонима нет' })[m[1]]],
+    [/^mailbox is disabled$/, () => 'Ящик выключен'],
+    [/^webmail is not installed$/, () => 'Веб-почта не установлена'],
+    [/^webmail is not available for this domain$/, () => 'Веб-почта недоступна для этого домена'],
     [/^no panel user (.*)$/, m => `Нет пользователя панели ${m[1]}`],
     [/^at most (\d+) (mail domains|mailboxes|aliases)$/, m => `Не больше ${m[1]} ${({ 'mail domains': 'почтовых доменов', mailboxes: 'ящиков', aliases: 'псевдонимов' })[m[2]]}`],
     [/^quota: 0 to \d+ MB$/, () => 'Объём ящика: от 0 до 1 ТБ'],
@@ -1817,7 +1820,7 @@
     'POST /api/settings/panel': 'Изменил настройки панели', 'POST /api/settings/timezone': 'Сменил часовой пояс сервера', 'POST /api/settings/notify': 'Изменил уведомления', 'POST /api/settings/notify/test': 'Отправил пробное письмо',
     'POST /api/channels/prio': 'Сохранил список приоритетов', 'POST /api/channels/prio/delete': 'Удалил список приоритетов', 'POST /api/channels/direct-check': 'Изменил проверку доступности интернета',
     'POST /api/domains/zone': 'Изменил зону', 'POST /api/domains/record': 'Изменил DNS-запись', 'POST /api/domains/provider': 'Изменил DNS-провайдера', 'POST /api/domains/cert': 'Выпустил сертификат', 'POST /api/domains/cert/upload': 'Загрузил сертификат', 'POST /api/domains/cert/delete': 'Удалил сертификат',
-    'POST /api/mail/domain': 'Изменил почтовый домен', 'POST /api/mail/box': 'Изменил ящик', 'POST /api/mail/alias': 'Изменил псевдоним', 'POST /api/mail/apply': 'Применил настройки почты', 'POST /api/mail/dns': 'Создал записи почты в DNS', 'POST /api/mail/cert': 'Выпустил сертификат почты',
+    'POST /api/mail/domain': 'Изменил почтовый домен', 'POST /api/mail/box': 'Изменил ящик', 'POST /api/mail/alias': 'Изменил псевдоним', 'POST /api/mail/helo': 'Изменил имя HELO', 'POST /api/mail/webmail': 'Открыл веб-почту', 'POST /api/mail/apply': 'Применил настройки почты', 'POST /api/mail/dns': 'Создал записи почты в DNS', 'POST /api/mail/cert': 'Выпустил сертификат почты',
     'POST /api/nodecfg': 'Изменил настройки ноды', 'POST /api/nodecfg/lists': 'Изменил списки ноды', 'POST /api/nodecfg/token': 'Сменил токен ноды', 'POST /api/packages/mtproto': 'Изменил MTProto-прокси',
     'POST /api/system/guard': 'Изменил защиту', 'POST /api/system/guard/ban': 'Заблокировал адрес', 'POST /api/system/guard/unban': 'Разблокировал адрес', 'POST /api/system/user': 'Изменил учётную запись Linux', 'POST /api/system/user/delete': 'Удалил учётную запись Linux',
     'POST /api/system/backup/run': 'Сделал резервную копию', 'POST /api/system/backup/settings': 'Изменил расписание копий', 'POST /api/system/backup/store': 'Изменил хранилище копий', 'POST /api/system/backup/phrase': 'Создал фразу восстановления', 'POST /api/system/backup/restore': 'Восстановил из копии', 'POST /api/system/backup/fetch': 'Скачал копию из хранилища', 'POST /api/system/backup/upload': 'Загрузил копию',
@@ -2371,12 +2374,13 @@
     let o = head + bad + `<div class="netbar"><div class="fld" style="margin:0;min-width:220px"><label for="mdz">Домен</label><select id="mdz" onchange="LIVE.pickMDom(this.value)">${M.domains.map(d => `<option ${d.name === D.name ? 'selected' : ''} value="${esc(d.name)}">${esc(d.name)}${d.enabled ? '' : ' · выключен'}</option>`).join('')}</select></div>
       ${own ? `<button class="btn" type="button" style="align-self:flex-end" onclick="LIVE.openMDom('${esc(D.name)}')">Настройки домена</button><button class="btn" type="button" style="align-self:flex-end" onclick="LIVE.openMDom('')">${ic('i-plus')}Новый домен</button>` : ''}</div>`;
     if (!D.enabled) o += `<div class="note" role="status"><span><b>Домен выключен.</b> <span class="mute">Ящики хранятся, но почту для ${esc(D.name)} сервер не принимает и войти в них нельзя.</span></span></div>`;
+    const canWeb = own && M.web_hosts.includes(h);
     o += blk('Ящики', '', `<div class="acts">${own ? `<button class="btn pri" type="button" onclick="LIVE.openBox(-1)">${ic('i-plus')}Новый ящик</button>` : ''}${M.web_hosts.includes(h) ? `<a class="btn" href="https://${esc(h)}/" target="_blank" rel="noopener">Открыть веб-почту</a>` : ''}</div>` +
-      table(['Адрес', 'Владелец', 'Занято', 'Пересылка', 'Состояние'], boxes.map(b => `<tr class="click" onclick="LIVE.openBox(${M.boxes.indexOf(b)})"><td class="mono"><b>${esc(b.address)}</b></td><td>${esc(b.owner || '—')}</td><td>${usedCell(b)}</td><td class="mono mute" style="white-space:normal">${esc((b.forwards || []).join(', ') || '—')}</td><td>${boxState(b)}</td></tr>`).join('') || `<tr><td colspan="5" class="mute">Ящиков нет.</td></tr>`));
+      table(['Адрес', 'Владелец', 'Занято', 'Пересылка', 'Состояние'], boxes.map(b => `<tr class="click" onclick="LIVE.openBox(${M.boxes.indexOf(b)})"><td class="mono"><b>${esc(b.address)}</b>${canWeb && b.enabled ? ` <button class="btn sm" type="button" onclick="event.stopPropagation();LIVE.mailLogin(${esc(JSON.stringify(b.address))})">Войти</button>` : ''}</td><td>${esc(b.owner || '—')}</td><td>${usedCell(b)}</td><td class="mono mute" style="white-space:normal">${esc((b.forwards || []).join(', ') || '—')}</td><td>${boxState(b)}</td></tr>`).join('') || `<tr><td colspan="5" class="mute">Ящиков нет.</td></tr>`));
     o += blk('Псевдонимы', 'Адреса без своего ящика: письма уходят в указанные ящики.', (own ? `<div class="acts"><button class="btn" type="button" onclick="LIVE.openAlias(-1)">${ic('i-plus')}Добавить псевдоним</button></div>` : '') +
       table(['Адрес', 'Куда'], al.map(a => `<tr class="click" onclick="LIVE.openAlias(${M.aliases.indexOf(a)})"><td class="mono">${esc(a.from)}</td><td class="mono mute" style="white-space:normal">${esc(a.to.join(', '))}</td></tr>`).join('') +
         `<tr class="click" onclick="LIVE.openMDom('${esc(D.name)}')"><td class="mono mute">*@${esc(D.name)}</td><td class="mute">${(D.catch_all || []).length ? `<span class="mono">${esc(D.catch_all.join(', '))}</span>` : 'ловить всё — выключено'}</td></tr>`));
-    o += `<div class="cards">` + mailDNSCard(D, own) + mailSvcCard(M, h) + `</div>`;
+    o += `<div class="cards">` + mailDNSCard(D, own) + mailSvcCard(M, h, own) + `</div>`;
     return o;
   }
   // The DNS card: each record with its state (ok, missing, differs). When the
@@ -2396,12 +2400,12 @@
     c += `<p class="hint" style="margin:${own && N.api ? 0 : '16px 0 0'}">${N.api ? `Зона ${esc(N.zone)} ведётся через DNS-провайдера — панель создаст недостающие и поправит чужой MX, A и DKIM; чужие SPF и DMARC не трогает.` : N.zone ? `Зона ${esc(N.zone)} ведётся вручную: внесите эти записи у регистратора.` : 'Домена нет в «Доменах»: внесите записи у регистратора или добавьте зону с DNS-провайдером.'}${ptr.length ? ` PTR для ${esc(ptr.join(', '))} ставится в кабинете хостера: <span class="mono">${esc((N.ptr[0] || {}).want || '')}</span>.` : ''}</p></section>`;
     return c;
   }
-  function mailSvcCard(M, h) {
+  function mailSvcCard(M, h, own) {
     const st = L.mlStats;
     return `<section class="card"><div class="card-h"><h2>Службы</h2></div>` +
       M.services.map(s => `<div class="ev"><span style="flex:1 1 auto">${SVC[s.key] || esc(s.key)}</span>${svcPill(s.state)}</div>`).join('') +
       (st ? `<p class="hint" style="margin:12px 0 0">Очередь отправки: ${st.queue} · за сутки доставлено в ящики ${st.received}, отправлено ${st.sent}, отклонено ${st.rejected}.</p>` : '') +
-      `<dl class="kv" style="margin-top:16px"><div><dt>IMAP</dt><dd class="mono">${esc(h)}:993 · SSL/TLS</dd></div><div><dt>SMTP</dt><dd class="mono">${esc(h)}:465 · SSL/TLS, 587 · STARTTLS</dd></div><div><dt>Логин</dt><dd>адрес ящика целиком</dd></div></dl></section>`;
+      `<dl class="kv" style="margin-top:16px"><div><dt>IMAP</dt><dd class="mono">${esc(h)}:993 · SSL/TLS</dd></div><div><dt>SMTP</dt><dd class="mono">${esc(h)}:465 · SSL/TLS, 587 · STARTTLS</dd></div><div><dt>Логин</dt><dd>адрес ящика целиком</dd></div><div><dt>HELO</dt><dd class="mono">${esc(M.helo || '—')}${own ? ` <button class="btn sm" type="button" onclick="LIVE.openHelo()">Изменить</button>` : ''}</dd></div></dl></section>`;
   }
   L.pickMDom = d => { L.mlDom = d; loadMailDNS().then(mlRe); render(); };
   L.mailCheck = async () => { L.mlDNS = null; render(); toast('Проверяю записи в DNS…'); await loadMailDNS(); render(); };
@@ -2416,6 +2420,16 @@
     return ok;
   }
   L.mailApply = () => mailPost('/api/mail/apply', {}, 'Настройка почты применена');
+  // HELO is one name for the whole server (Postfix myhostname / EHLO), not
+  // per domain. Empty field returns to mail.<first enabled domain>. PTR of
+  // the public address must match it.
+  L.openHelo = () => {
+    const auto = L.ml.helo_auto || '';
+    dialog('Имя HELO', 'Postfix представляется этим именем в SMTP (EHLO). PTR внешнего адреса и A-запись имени должны совпадать с ним — иначе чужие серверы не доверяют исходящей почте.', `
+      <div><div class="fld"><label for="mh1">Имя HELO</label><input id="mh1" class="mono" value="${esc(L.ml.helo_set || '')}" placeholder="${esc(auto)}"></div><div class="hint">Пустое поле — mail первого включённого домена.</div></div>`,
+      `<button class="btn pri" type="button" onclick="LIVE.heloSave()">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>`);
+  };
+  L.heloSave = () => mailPost('/api/mail/helo', { helo: ($('#mh1').value || '').trim().toLowerCase() }, 'HELO сохранён');
   L.mailCert = async d => {
     toast('Выпускаю сертификат для mail.' + d + '…');
     try { await job('/api/mail/cert', { domain: d }); toast('Сертификат для mail.' + d + ' выпущен'); } catch (e) { toast(e.message); }
@@ -2481,8 +2495,19 @@
       <label class="chk"><input id="mb6" type="checkbox" ${b.send_only ? 'checked' : ''}>Только отправка — входящие не принимать</label>
       <label class="chk"><input id="mb7" type="checkbox" ${b.enabled ? 'checked' : ''}>Ящик включён</label>
       ${nw ? '' : `<div class="dlg-sec">Настройка почтовой программы</div><dl class="kv"><div><dt>IMAP</dt><dd class="mono">${esc(host)}:993</dd></div><div><dt>SMTP</dt><dd class="mono">${esc(host)}:465 / 587</dd></div><div><dt>Логин</dt><dd class="mono">${esc(b.address)}</dd></div></dl>`}`,
-      own ? `<button class="btn pri" type="button" onclick="LIVE.boxSave(${i})">${nw ? 'Создать' : 'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить ящик" style="margin-left:auto" onclick="LIVE.boxDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
+      own ? `<button class="btn pri" type="button" onclick="LIVE.boxSave(${i})">${nw ? 'Создать' : 'Сохранить'}</button>${!nw && b.enabled && (L.ml.web_hosts || []).includes(host) ? `<button class="btn" type="button" onclick="LIVE.mailLogin(${esc(JSON.stringify(b.address))})">Войти в веб-почту</button>` : ''}<button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw ? '' : `<button class="icb del" type="button" aria-label="Удалить ящик" style="margin-left:auto" onclick="LIVE.boxDel(${i})">${ic('i-trash')}</button>`}` : `<button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
   };
+  // Open a blank tab first so the popup blocker does not swallow it after
+  // the API round-trip; the helper then mints a short-lived Roundcube URL.
+  L.mailLogin = once(async addr => {
+    const w = window.open('', '_blank');
+    toast('Открываю веб-почту…');
+    try {
+      const r = await api('POST', '/api/mail/webmail', { address: addr });
+      if (!r.url) throw new Error('Веб-почта недоступна');
+      if (w) w.location.replace(r.url); else window.location.href = r.url;
+    } catch (e) { if (w) w.close(); toast(e.message); }
+  });
   // A mailbox password cannot be shown later, so after a create or a password
   // change the page shows the one it just sent, once, with the client settings.
   L.boxSave = async i => {
@@ -2927,7 +2952,7 @@
     const nw = i < 0, r = nw ? { type: 'A', name: '', value: '', priority: 10, ttl: 0 } : L.dzRecs[i], own = L.can('domains');
     dialog(nw ? 'Новая запись' : 'Запись ' + esc(r.name) + ' ' + esc(r.type), esc(L.dz) + (r.ours ? ' · создана панелью' : ''), `
       <div class="fld"><label for="rr1">Тип</label><select id="rr1" ${nw ? '' : 'disabled'} onchange="$('#rrP').hidden=!['MX','SRV'].includes(this.value);$('#rrA').hidden=!['A','AAAA'].includes(this.value)">${['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'CAA', 'SRV', 'NS'].map(t => `<option ${t === r.type ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-      <div><div class="fld"><label for="rr2">Имя</label><input id="rr2" class="mono" value="${esc(r.name)}" placeholder="@" ${nw ? '' : 'readonly'}></div><div class="hint">@ — сама зона ${esc(L.dz)}.</div></div>
+      <div><div class="fld"><label for="rr2">Имя</label><input id="rr2" class="mono" value="${esc(r.name)}" placeholder="@" ${own ? '' : 'readonly'}></div><div class="hint">@ — сама зона ${esc(L.dz)}.</div></div>
       <div id="rrP" ${['MX', 'SRV'].includes(r.type) ? '' : 'hidden'}><div class="fld"><label for="rr3">Приоритет</label><input id="rr3" class="num" value="${r.priority || 10}"></div></div>
       <div class="fld"><label for="rr4">Значение</label><input id="rr4" class="mono" value="${esc(r.value)}" placeholder="${{ A: '203.0.113.10', AAAA: '2001:db8::10', MX: 'mail.example.net', CAA: '0 issue &quot;letsencrypt.org&quot;', SRV: '5 443 vpn.example.net' }[r.type] || ''}"></div>
       <div class="fld"><label for="rr5">TTL</label><select id="rr5">${TTLS.map(([v, l]) => `<option value="${v}" ${(r.ttl || 0) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>

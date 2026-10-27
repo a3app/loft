@@ -28,14 +28,25 @@ func TestMailHash(t *testing.T) {
 
 func TestMailNeeds(t *testing.T) {
 	d := admproto.MailDomain{Name: "example.net", DKIM: true, DKIMRecord: "v=DKIM1; k=rsa; p=AAAA"}
-	recs := mailNeeds(d, []net.IP{net.ParseIP("203.0.113.10"), net.ParseIP("2001:db8::10")})
-	var keys []string
-	for _, r := range recs {
-		keys = append(keys, r.Key+":"+r.Type+":"+r.Name)
+	ips := []net.IP{net.ParseIP("203.0.113.10"), net.ParseIP("2001:db8::10")}
+	keysOf := func(helo string) string {
+		var keys []string
+		for _, r := range mailNeeds(d, ips, helo) {
+			keys = append(keys, r.Key+":"+r.Type+":"+r.Name)
+		}
+		return strings.Join(keys, " ")
 	}
 	want := "mx:MX:example.net a:A:mail.example.net a:AAAA:mail.example.net spf:TXT:example.net helo:TXT:mail.example.net dkim:TXT:mail._domainkey.example.net dmarc:TXT:_dmarc.example.net"
-	if got := strings.Join(keys, " "); got != want {
-		t.Fatalf("got  %s\nwant %s", got, want)
+	if got := keysOf("mail.example.net"); got != want {
+		t.Fatalf("auto helo:\ngot  %s\nwant %s", got, want)
+	}
+	want = "mx:MX:example.net a:A:mail.example.net a:AAAA:mail.example.net spf:TXT:example.net helo:TXT:us1.example.net dkim:TXT:mail._domainkey.example.net dmarc:TXT:_dmarc.example.net"
+	if got := keysOf("us1.example.net"); got != want {
+		t.Fatalf("custom helo:\ngot  %s\nwant %s", got, want)
+	}
+	// HELO on another zone is not this domain's record; the domain SPF stays.
+	if strings.Contains(keysOf("us1.other.example"), "helo:") {
+		t.Fatal("HELO outside the domain still listed")
 	}
 }
 
@@ -146,6 +157,43 @@ func TestMailDNSCreateReplacesForeignMX(t *testing.T) {
 	}
 }
 
+func TestMailHeloAPI(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.owner()
+	e.mail.Helo = "mail.example.net"
+	e.mail.HeloAuto = "mail.example.net"
+	r := e.do("POST", "/api/mail/helo", map[string]string{"helo": "US1.Example.NET."}, c, csrf)
+	if r.code != 200 {
+		t.Fatalf("helo %d %v", r.code, r.body)
+	}
+	if e.mail.Helo != "us1.example.net" || e.mail.HeloSet != "us1.example.net" {
+		t.Fatalf("stored %+v", e.mail)
+	}
+	if got, _ := r.body["helo"].(string); got != "us1.example.net" {
+		t.Fatalf("view helo %v", r.body["helo"])
+	}
+	r = e.do("POST", "/api/mail/helo", map[string]string{"helo": ""}, c, csrf)
+	if r.code != 200 || e.mail.Helo != "mail.example.net" || e.mail.HeloSet != "" {
+		t.Fatalf("auto %d helo=%q set=%q", r.code, e.mail.Helo, e.mail.HeloSet)
+	}
+}
+
+func TestMailWebmailAPI(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.owner()
+	r := e.do("POST", "/api/mail/webmail", map[string]string{"address": "admin@example.net"}, c, csrf)
+	if r.code != 200 {
+		t.Fatalf("webmail %d %v", r.code, r.body)
+	}
+	got, _ := r.body["url"].(string)
+	if got != "https://mail.example.net/?_task=login&_loft=test" {
+		t.Fatalf("url %q", got)
+	}
+	if len(e.ops) == 0 || e.ops[len(e.ops)-1] != admproto.OpMailWebmail {
+		t.Fatalf("ops %v", e.ops)
+	}
+}
+
 // TestMailDomainDeleteDropsOwnDNS: removing a mail domain with drop_dns
 // deletes the mail records the panel made, and only those. A hand-made
 // record, the panel's CAA (not mail), and a panel record edited by hand
@@ -222,22 +270,24 @@ func TestMailDomainDeleteDropsOwnDNS(t *testing.T) {
 func TestMailOwnRec(t *testing.T) {
 	d := "example.net"
 	for _, c := range []struct {
-		typ, name, value string
-		want             bool
+		typ, name, value, helo string
+		want                   bool
 	}{
-		{"MX", "example.net", "mail.example.net", true},
-		{"A", "mail.example.net", "203.0.113.1", true},
-		{"TXT", "example.net", "v=spf1 mx -all", true},
-		{"TXT", "example.net", "google-site-verification=x", false},
-		{"TXT", "mail.example.net", `"v=spf1 a -all"`, true},
-		{"TXT", "old._domainkey.example.net", "v=DKIM1; p=x", true},
-		{"TXT", "_dmarc.example.net", "v=DMARC1; p=none", true},
-		{"CAA", "example.net", "0 issue x", false},
-		{"A", "www.example.net", "203.0.113.1", false},
-		{"MX", "sub.example.net", "mail.example.net", false},
+		{"MX", "example.net", "mail.example.net", "", true},
+		{"A", "mail.example.net", "203.0.113.1", "", true},
+		{"TXT", "example.net", "v=spf1 mx -all", "", true},
+		{"TXT", "example.net", "google-site-verification=x", "", false},
+		{"TXT", "mail.example.net", `"v=spf1 a -all"`, "", true},
+		{"TXT", "us1.example.net", "v=spf1 a -all", "us1.example.net", true},
+		{"TXT", "us1.example.net", "v=spf1 a -all", "", false},
+		{"TXT", "old._domainkey.example.net", "v=DKIM1; p=x", "", true},
+		{"TXT", "_dmarc.example.net", "v=DMARC1; p=none", "", true},
+		{"CAA", "example.net", "0 issue x", "", false},
+		{"A", "www.example.net", "203.0.113.1", "", false},
+		{"MX", "sub.example.net", "mail.example.net", "", false},
 	} {
-		if got := mailOwnRec(c.typ, c.name, c.value, d, true); got != c.want {
-			t.Fatalf("%s %s %q: %v", c.typ, c.name, c.value, got)
+		if got := mailOwnRec(c.typ, c.name, c.value, d, c.helo, true); got != c.want {
+			t.Fatalf("%s %s %q helo=%q: %v", c.typ, c.name, c.value, c.helo, got)
 		}
 	}
 }

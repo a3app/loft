@@ -92,6 +92,25 @@ func (f fakeAdm) Call(_ context.Context, op string, body, out any) error {
 			}
 			set(*f.mail)
 		}
+	case admproto.OpMailHelo:
+		in := body.(admproto.MailHeloSave)
+		if f.mail != nil {
+			h := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(in.Helo)), ".")
+			f.mail.HeloSet = h
+			if h != "" {
+				f.mail.Helo = h
+			} else {
+				f.mail.Helo = f.mail.HeloAuto
+			}
+			set(*f.mail)
+		}
+	case admproto.OpMailWebmail:
+		in := body.(admproto.MailWebmail)
+		host := "mail.example.net"
+		if _, d, ok := strings.Cut(in.Address, "@"); ok {
+			host = "mail." + d
+		}
+		set(admproto.MailWebmailURL{URL: "https://" + host + "/?_task=login&_loft=test"})
 	}
 	return nil
 }

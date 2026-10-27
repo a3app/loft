@@ -2,11 +2,18 @@ package adm
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/a3app/loft/server/panel/admproto"
 )
@@ -110,6 +117,15 @@ func TestMailDovecotTLS(t *testing.T) {
 	}
 	if got["myhostname"] != "mail.example.net" || !strings.Contains(got["smtpd_tls_chain_files"], "mail.example.net.key") {
 		t.Fatalf("params: %v", got)
+	}
+	s.Helo = "us1.example.net"
+	p = mailParams(s, e)
+	got = map[string]string{}
+	for _, kv := range p {
+		got[kv[0]] = kv[1]
+	}
+	if got["myhostname"] != "us1.example.net" {
+		t.Fatalf("custom HELO myhostname: %v", got["myhostname"])
 	}
 	if !strings.Contains(renderSNI(s, e), "mail.example.net\t/etc/loft-panel/mail-tls/mail.example.net.key /etc/loft-panel/mail-tls/mail.example.net.crt") {
 		t.Fatal("sni map")
@@ -256,6 +272,47 @@ func TestMailBoxSaveMapsOnly(t *testing.T) {
 	}
 }
 
+func TestMailHeloSave(t *testing.T) {
+	o, f := mailOps(t)
+	ctx := context.Background()
+	v, err := o.MailDomainSave(ctx, admproto.MailDomainSave{MailDomain: admproto.MailDomain{Name: "example.net", Enabled: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Helo != "mail.example.net" || v.HeloAuto != "mail.example.net" || v.HeloSet != "" {
+		t.Fatalf("auto: %+v", v)
+	}
+	f.scripts = nil
+	v, err = o.MailHeloSave(ctx, admproto.MailHeloSave{Helo: "US1.Example.NET."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Helo != "us1.example.net" || v.HeloSet != "us1.example.net" {
+		t.Fatalf("custom: helo=%q set=%q", v.Helo, v.HeloSet)
+	}
+	got := strings.Join(f.scripts, "\n")
+	if !strings.Contains(got, "postconf -e 'myhostname=us1.example.net'") && !strings.Contains(got, `postconf -e "myhostname=us1.example.net"`) && !strings.Contains(got, "postconf -e myhostname=us1.example.net") {
+		t.Fatalf("apply did not set myhostname:\n%s", got)
+	}
+	s, _ := o.readMail()
+	if s.Helo != "us1.example.net" {
+		t.Fatalf("stored %q", s.Helo)
+	}
+	if _, err := o.MailHeloSave(ctx, admproto.MailHeloSave{Helo: "not a host"}); err == nil {
+		t.Fatal("bad HELO accepted")
+	}
+	if _, err := o.MailHeloSave(ctx, admproto.MailHeloSave{Helo: "us1.example.net\nmyhostname=evil"}); err == nil {
+		t.Fatal("newline HELO accepted")
+	}
+	v, err = o.MailHeloSave(ctx, admproto.MailHeloSave{Helo: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Helo != "mail.example.net" || v.HeloSet != "" {
+		t.Fatalf("back to auto: helo=%q set=%q", v.Helo, v.HeloSet)
+	}
+}
+
 func TestMailRejectsInjection(t *testing.T) {
 	o, _ := mailOps(t)
 	ctx := context.Background()
@@ -298,5 +355,165 @@ func TestMailFailedCheckRestores(t *testing.T) {
 	}
 	if s, _ := o.readMail(); s.Error != "" {
 		t.Fatal("the error stays after a good apply")
+	}
+}
+
+func TestMailLoginToken(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	tok := mailLoginToken("secret", "admin@example.net", now)
+	exp := now.Add(mailLoginTTL).Unix()
+	mac := hmac.New(sha256.New, []byte("secret"))
+	fmt.Fprintf(mac, "%d:%s", exp, "admin@example.net")
+	want := strconv.FormatInt(exp, 10) + "." + hex.EncodeToString(mac.Sum(nil)) + ".admin@example.net"
+	if tok != want {
+		t.Fatalf("got %q want %q", tok, want)
+	}
+	u := mailLoginURL("mail.example.net", "secret", "admin@example.net", now)
+	if !strings.Contains(u, "/?_task=login&_loft=") || strings.Contains(u, "admin@") {
+		t.Fatalf("url should query-escape the address: %s", u)
+	}
+	raw, err := url.QueryUnescape(strings.TrimPrefix(u, "https://mail.example.net/?_task=login&_loft="))
+	if err != nil || raw != tok {
+		t.Fatalf("round-trip %q %v", raw, err)
+	}
+	other := mailLoginToken("secret", "bob@example.net", now)
+	if other == tok {
+		t.Fatal("tokens for different addresses match")
+	}
+}
+
+func TestRenderWebmail(t *testing.T) {
+	s := sampleMail()
+	if renderWebmailUsers(s) != "" || webmailPassdb(s, mailEnv{Webmail: true}) != "" {
+		t.Fatal("empty login pass still rendered")
+	}
+	s.LoginPass = "loop-secret"
+	u := renderWebmailUsers(s)
+	if !strings.Contains(u, "admin@example.net:{PLAIN}loop-secret::::::allow_nets=127.0.0.1/32,::1/128") {
+		t.Fatalf("users:\n%s", u)
+	}
+	if strings.Contains(u, "old@") || strings.Contains(u, "x@example.org") {
+		t.Fatalf("disabled box in webmail users:\n%s", u)
+	}
+	e := mailEnv{Webmail: true}
+	p := webmailPassdb(s, e)
+	if !strings.Contains(p, "scheme=PLAIN") || !strings.Contains(p, mailDovecotWebmail) {
+		t.Fatalf("2.3 passdb:\n%s", p)
+	}
+	e.Dovecot24 = true
+	p = webmailPassdb(s, e)
+	if !strings.Contains(p, "passdb loft_webmail") || !strings.Contains(p, "passwd_file_path = "+mailDovecotWebmail) {
+		t.Fatalf("2.4 passdb:\n%s", p)
+	}
+	if webmailPassdb(s, mailEnv{}) != "" {
+		t.Fatal("passdb without webmail")
+	}
+	c23 := renderDovecot(s, mailEnv{UID: 120, GID: 125, Webmail: true})
+	if !strings.Contains(c23, mailDovecotWebmail) || !strings.Contains(c23, "result_failure = continue") {
+		t.Fatalf("2.3 conf missing webmail passdb or continue:\n%s", c23)
+	}
+	c24 := renderDovecot(s, mailEnv{UID: 120, GID: 125, Webmail: true, Dovecot24: true})
+	if !strings.Contains(c24, "passdb loft_webmail") || !strings.Contains(c24, "result_failure = continue") {
+		t.Fatalf("2.4 conf missing webmail passdb or continue:\n%s", c24)
+	}
+	rc := renderRoundcube(s)
+	if !strings.Contains(rc, "'loft_login'") || !strings.Contains(rc, "$config['loft_login_pass'] = 'loop-secret';") {
+		t.Fatalf("roundcube:\n%s", rc)
+	}
+	pl := renderRoundcubePlugin()
+	for _, w := range []string{"class loft_login", "hash_hmac('sha256'", "hash_equals", "$args['cookiecheck'] = false", "_loft"} {
+		if !strings.Contains(pl, w) {
+			t.Fatalf("plugin lacks %q:\n%s", w, pl)
+		}
+	}
+}
+
+func mailWebmailReady(t *testing.T, o *Ops) {
+	t.Helper()
+	os.MkdirAll(o.sys(roundcubeRoot), 0o755)
+	os.WriteFile(o.sys(roundcubeRoot+"/index.php"), []byte("<?php\n"), 0o644)
+	os.MkdirAll(o.sys("/run/php"), 0o755)
+	os.WriteFile(o.sys("/run/php/php8.3-fpm.sock"), nil, 0o644)
+	os.MkdirAll(o.mailTLSDir(), 0o755)
+	os.WriteFile(filepath.Join(o.mailTLSDir(), "mail.example.net.crt"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(o.mailTLSDir(), "mail.example.net.key"), []byte("x"), 0o644)
+}
+
+func TestMailWebmail(t *testing.T) {
+	o, _ := mailOps(t)
+	ctx := context.Background()
+	if _, err := o.MailDomainSave(ctx, admproto.MailDomainSave{MailDomain: admproto.MailDomain{Name: "example.net", Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.MailBoxSave(ctx, admproto.MailBoxSave{MailBox: admproto.MailBox{Address: "admin@example.net", Hash: testHash, Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.MailBoxSave(ctx, admproto.MailBoxSave{MailBox: admproto.MailBox{Address: "old@example.net", Hash: testHash, Enabled: false}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.MailWebmail(ctx, admproto.MailWebmail{Address: "admin@example.net"}); err == nil || !strings.Contains(err.Error(), "webmail is not installed") {
+		t.Fatalf("want not installed, got %v", err)
+	}
+	mailWebmailReady(t, o)
+	out, err := o.MailWebmail(ctx, admproto.MailWebmail{Address: "Admin@Example.NET"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := o.readMail()
+	if s.LoginPass == "" {
+		t.Fatal("login pass not stored")
+	}
+	tokURL := out.URL
+	if !strings.HasPrefix(tokURL, "https://mail.example.net/?_task=login&_loft=") {
+		t.Fatalf("url %q", tokURL)
+	}
+	raw, err := url.QueryUnescape(strings.TrimPrefix(tokURL, "https://mail.example.net/?_task=login&_loft="))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(raw, ".", 3)
+	if len(parts) != 3 || parts[2] != "admin@example.net" {
+		t.Fatalf("token %q", raw)
+	}
+	exp, _ := strconv.ParseInt(parts[0], 10, 64)
+	if exp < time.Now().Unix() || exp > time.Now().Add(3*time.Minute).Unix() {
+		t.Fatalf("exp %d", exp)
+	}
+	mac := hmac.New(sha256.New, []byte(s.LoginPass))
+	fmt.Fprintf(mac, "%d:%s", exp, "admin@example.net")
+	if hex.EncodeToString(mac.Sum(nil)) != parts[1] {
+		t.Fatal("hmac mismatch")
+	}
+	v, err := o.Mail(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", v), s.LoginPass) {
+		t.Fatal("login pass leaked into the view")
+	}
+	users, _ := os.ReadFile(o.sys(mailDovecotWebmail))
+	if !strings.Contains(string(users), "admin@example.net:{PLAIN}"+s.LoginPass) || strings.Contains(string(users), "old@") {
+		t.Fatalf("webmail users:\n%s", users)
+	}
+	conf, _ := os.ReadFile(o.sys(mailDovecotConf))
+	if !strings.Contains(string(conf), mailDovecotWebmail) {
+		t.Fatalf("dovecot conf missing webmail passdb:\n%s", conf)
+	}
+	rc, _ := os.ReadFile(o.sys(roundcubeConf))
+	if !strings.Contains(string(rc), "'loft_login'") || !strings.Contains(string(rc), s.LoginPass) {
+		t.Fatalf("roundcube:\n%s", rc)
+	}
+	pl, _ := os.ReadFile(o.sys(roundcubePlugin))
+	if !strings.Contains(string(pl), "class loft_login") {
+		t.Fatalf("plugin:\n%s", pl)
+	}
+	if share, _ := os.ReadFile(o.sys(roundcubePluginShare)); !strings.Contains(string(share), "class loft_login") {
+		t.Fatalf("share plugin:\n%s", share)
+	}
+	if _, err := o.MailWebmail(ctx, admproto.MailWebmail{Address: "old@example.net"}); err == nil || !strings.Contains(err.Error(), "mailbox is disabled") {
+		t.Fatalf("disabled: %v", err)
+	}
+	if _, err := o.MailWebmail(ctx, admproto.MailWebmail{Address: "nope@example.net"}); err == nil || !strings.Contains(err.Error(), "no such mailbox") {
+		t.Fatalf("missing: %v", err)
 	}
 }
