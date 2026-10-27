@@ -1,5 +1,15 @@
+/* Windows client GUI: network helpers that run on background threads.
+   - http_get: a plain WinHTTP GET, also used by ui.c to pull split-routing
+     lists from a zone's repository URL.
+   - Update check and download from the GitHub releases of a3app/loft
+     (not in the Store build); the verified zip goes to upd.c to install.
+   - External IP lookup through the local SOCKS5 proxy of loft-front, so the
+     answer shows the address the tunnel exits from.
+   Workers report back by posting WM_LOFT_* messages to the hidden message
+   window (main.c), which frees the posted strings. */
 #include "common.h"
 
+/* url_unescape turns JSON-escaped slashes ("\/") back into "/" in place. */
 static void url_unescape(char *s) {
     char *r, *w;
     if (!s) return;
@@ -10,6 +20,9 @@ static void url_unescape(char *s) {
     *w = 0;
 }
 
+/* http_read reads a whole WinHTTP response body into a new NUL-terminated
+   buffer, growing it as data arrives, and stops at cap - 1 bytes. The
+   caller frees *body. */
 static int http_read(HINTERNET req, char **body, int cap) {
     char *buf;
     int n = 0;
@@ -36,6 +49,11 @@ static int http_read(HINTERNET req, char **body, int cap) {
     return 1;
 }
 
+/* http_get fetches url with a GET and returns the body (at most 4 MB) in
+   *body, which the caller frees. Fails on HTTP status 400 and above.
+   TLS 1.1 and 1.2 are switched on explicitly because Windows 7 does not
+   enable them by default. Requests to GitHub ask for the API's JSON format.
+   Blocking: call it only from a worker thread. timeout_ms 0 means 15 s. */
 int http_get(const char *url, char **body, DWORD timeout_ms) {
     wchar_t wurl[2048], host[256], path[1600], extra[600], full[2048];
     URL_COMPONENTS uc;
@@ -98,6 +116,8 @@ out:
 }
 
 #ifndef LOFT_STORE
+/* http_save downloads url straight into a file (at most 64 MB), deleting
+   the file on any failure. Used for the release zip and its checksum list. */
 static int http_save(const char *url, const wchar_t *path) {
     wchar_t wurl[2048], host[256], upath[1600], extra[600], full[2048];
     URL_COMPONENTS uc;
@@ -157,6 +177,10 @@ out:
 }
 #endif
 
+/* json_str is a tiny JSON lookup: it finds the first "key" in body and
+   copies the string value that follows. It does not parse JSON in general;
+   it is enough for the few fields read from the GitHub release reply and
+   from an external IP service. */
 static int json_str(const char *body, const char *key, char *dst, int n) {
     char pat[64];
     const char *p, *e;
@@ -178,6 +202,8 @@ static int json_str(const char *body, const char *key, char *dst, int n) {
 }
 
 #ifndef LOFT_STORE
+/* find_url scans a GitHub release reply for the first asset download URL
+   that contains part (for example "-windows-x64.zip"). */
 static int find_url(const char *body, const char *part, char *dst, int n) {
     const char *p = body;
     if (!body || !part || !dst || n <= 0) return 0;
@@ -193,6 +219,8 @@ static int find_url(const char *body, const char *part, char *dst, int n) {
     return 0;
 }
 
+/* find_sums finds the download URL of the Windows SHA256SUMS asset in a
+   GitHub release reply. */
 static int find_sums(const char *body, char *dst, int n) {
     const char *p = body;
     if (!body || !dst || n <= 0) return 0;
@@ -208,6 +236,8 @@ static int find_sums(const char *body, char *dst, int n) {
     return 0;
 }
 
+/* url_name returns the file name at the end of a URL, without any
+   "?query". The result may point into a static buffer. */
 static const char *url_name(const char *url) {
     const char *s = url ? strrchr(url, '/') : NULL;
     const char *q;
@@ -225,12 +255,16 @@ static const char *url_name(const char *url) {
     return s;
 }
 
+/* post_upd sends an update result to the UI thread as WM_LOFT_UPD with a
+   heap copy of text. kind 0: a newer version (text is the tag); 2: a
+   failure to log; 3: the update is staged and the app should quit. */
 static void post_upd(WPARAM kind, const char *text) {
     char *d = dupstr(text ? text : "");
     if (!d) return;
     if (!g.msg || !PostMessageW(g.msg, WM_LOFT_UPD, kind, (LPARAM)d)) free(d);
 }
 
+/* zip_suffix names the portable zip that matches this build's architecture. */
 static const char *zip_suffix(void) {
 #if defined(_WIN64)
     return "-windows-x64.zip";
@@ -239,6 +273,10 @@ static const char *zip_suffix(void) {
 #endif
 }
 
+/* update_worker asks GitHub for the latest release and, when its tag is
+   newer than this build and has a zip for this architecture, reports the
+   tag so the UI can offer the update. Nothing is reported when already up
+   to date. */
 static DWORD WINAPI update_worker(LPVOID arg) {
     char *body = NULL;
     char tag[64], url[1024];
@@ -256,6 +294,11 @@ static DWORD WINAPI update_worker(LPVOID arg) {
     return 0;
 }
 
+/* download_worker installs the latest release: it downloads the zip and the
+   SHA256SUMS file to %TEMP%, checks the zip's hash against the list, and
+   hands the zip to upd_stage. Any failure deletes the downloads and is
+   reported. After a successful stage the app is told to quit so the new
+   version can replace it. */
 static DWORD WINAPI download_worker(LPVOID arg) {
     char *body = NULL;
     char url[1024], sums_url[1024], hex[80], line[1100];
@@ -300,12 +343,16 @@ static DWORD WINAPI download_worker(LPVOID arg) {
 }
 #endif
 
+/* thread_detach starts a worker thread and lets it run on its own. If the
+   thread cannot start, arg is freed because no one else will. */
 static void thread_detach(LPTHREAD_START_ROUTINE fn, void *arg) {
     HANDLE th = CreateThread(NULL, 0, fn, arg, 0, NULL);
     if (th) CloseHandle(th);
     else free(arg);
 }
 
+/* net_update_check starts a background update check, if the user allows
+   update checks. The Store build never checks. */
 void net_update_check(void) {
 #ifdef LOFT_STORE
     return;
@@ -315,6 +362,8 @@ void net_update_check(void) {
 #endif
 }
 
+/* net_download starts downloading and installing the latest release in the
+   background. The Store build does nothing. */
 void net_download(void) {
 #ifdef LOFT_STORE
     return;
@@ -324,6 +373,9 @@ void net_download(void) {
 #endif
 }
 
+/* take_ip pulls the IP address out of an external IP service reply: either
+   a JSON object with an "ip" field or plain text. Only the first word is
+   kept. */
 static void take_ip(const char *body, char *dst, int n) {
     const char *p;
     char *q;
@@ -342,6 +394,11 @@ static void take_ip(const char *body, char *dst, int n) {
     *q = 0;
 }
 
+/* socks_get makes a plain HTTP/1.0 GET through the local SOCKS5 proxy on
+   127.0.0.1:socks_port, so the request leaves through the tunnel. The host
+   name is resolved locally to IPv4 and the proxy is asked to connect to
+   that address (no authentication). Returns the body without headers in
+   *body (caller frees), at most about 1 MB. Socket timeouts are 8 s. */
 static int socks_get(int socks_port, int dest_port, const char *host, const char *path, char **body) {
     struct addrinfo hints, *res = NULL;
     SOCKET s = INVALID_SOCKET;
@@ -366,6 +423,8 @@ static int socks_get(int socks_port, int dest_port, const char *host, const char
     in.sin_family = AF_INET;
     in.sin_addr.s_addr = htonl(0x7F000001);
     in.sin_port = htons((unsigned short)socks_port);
+    /* SOCKS5 greeting (version 5, one method: no auth), then CONNECT to the
+       IPv4 address and port. */
     if (connect(s, (struct sockaddr *)&in, sizeof in) != 0) goto fail;
     greq[0] = 5;
     greq[1] = 1;
@@ -414,12 +473,18 @@ fail:
     return 0;
 }
 
+/* ExtJob is the job for extip_worker: the session slot to report to, the
+   local SOCKS port, and the lookup URL from prefs. */
 typedef struct ExtJob {
     int slot;
     int port;
     char url[LOFT_URL];
 } ExtJob;
 
+/* extip_worker looks up the external IP address through SOCKS and posts it
+   (empty on failure) as WM_LOFT_EXTIP. An https:// URL is fetched as plain
+   http on port 80, because socks_get speaks only plain HTTP and Windows 7
+   may not support TLS 1.2. The default service is api.ipify.org. */
 static DWORD WINAPI extip_worker(LPVOID arg) {
     ExtJob *job = (ExtJob *)arg;
     char url[LOFT_URL], host[256], path[512], ip[48];
@@ -461,6 +526,8 @@ static DWORD WINAPI extip_worker(LPVOID arg) {
     return 0;
 }
 
+/* net_extip starts an external IP lookup for a session in the background.
+   It uses the SOCKS port from prefs (default 1080). */
 void net_extip(int slot) {
     ExtJob *job;
     if (slot < 0 || slot >= LOFT_SESS || !g.msg) return;

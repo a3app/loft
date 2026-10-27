@@ -1,11 +1,20 @@
 /* Windows client GUI: the layout and command handling of every window kind
    (main, flyout, menu, settings, edit, routes, journal, about, update, first
    run). Layouts are drawn with draw.c inside chrome.c windows; commands call
-   into session.c and store.c. */
+   into session.c and store.c.
+   Each layout_* function is immediate-mode: it is run again for every paint,
+   every click (to find the control under the mouse) and every size
+   measurement, so drawing and hit areas always agree. ui_button style codes
+   used here: 1 primary (copper), 0 plain field, 2 quiet link, 3 left-aligned
+   row, 7 selected row. Per-window state lives in Win.tab and Win.extra[]. */
 #include "common.h"
 
+/* kinds lists the protocol kinds the edit window cycles through with its
+   "Protocol" button. The first six are loft transports; sstp, vless and
+   trojan are other protocols that loft-front also speaks. */
 static const char *kinds[9] = {"get", "ws", "h2", "quic", "h3", "l3", "sstp", "vless", "trojan"};
 
+/* show_wnd brings a window to the front, restoring it if it is minimized. */
 static void show_wnd(HWND h) {
     if (!h) return;
     if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
@@ -13,11 +22,14 @@ static void show_wnd(HWND h) {
     SetForegroundWindow(h);
 }
 
+/* pname returns the display name of profile i: its name, or its id when the
+   name is empty. */
 static const char *pname(int i) {
     if (i < 0 || i >= g.nprof) return "";
     return g.prof[i].name[0] ? g.prof[i].name : g.prof[i].id;
 }
 
+/* ed_get reads the text of an edit box as trimmed UTF-8. */
 static void ed_get(HWND ed, char *d, int n) {
     wchar_t w[1024];
     if (!d || n <= 0) return;
@@ -29,6 +41,7 @@ static void ed_get(HWND ed, char *d, int n) {
     loft_trim(d);
 }
 
+/* ed_set puts UTF-8 text into an edit box (NULL means empty). */
 static void ed_set(HWND ed, const char *s) {
     wchar_t w[1024];
     if (!ed) return;
@@ -36,6 +49,9 @@ static void ed_set(HWND ed, const char *s) {
     SetWindowTextW(ed, w);
 }
 
+/* make_edit creates a hidden single-line edit box (the only native child
+   controls in these windows; everything else is drawn). secret masks the
+   input for keys. Text is limited to 500 characters. */
 static HWND make_edit(HWND parent, int id, int secret) {
     DWORD st = WS_CHILD | ES_AUTOHSCROLL | WS_TABSTOP;
     HWND ed;
@@ -47,6 +63,9 @@ static HWND make_edit(HWND parent, int id, int secret) {
     return ed;
 }
 
+/* move_ed places an edit box and shows or hides it. The layout functions
+   call it on every pass, so it only touches the window when something has
+   actually changed, to avoid flicker. */
 static void move_ed(HWND ed, int x, int y, int w, int h, int show) {
     RECT r;
     if (!ed) return;
@@ -60,6 +79,8 @@ static void move_ed(HWND ed, int x, int y, int w, int h, int show) {
     if (!show && IsWindowVisible(ed)) ShowWindow(ed, SW_HIDE);
 }
 
+/* nobr copies a translated string and turns each "<br>" into a newline.
+   The shared texts use <br> as a line break. */
 static void nobr(const char *s, char *d, int n) {
     int i = 0;
     if (!s) s = "";
@@ -72,6 +93,7 @@ static void nobr(const char *s, char *d, int n) {
     d[i] = 0;
 }
 
+/* phase_name returns the translated label for a session phase (PH_*). */
 static const char *phase_name(int ph) {
     if (ph == PH_ON) return loft_t("pill_on");
     if (ph == PH_CONNECTING) return loft_t("connecting");
@@ -80,6 +102,8 @@ static const char *phase_name(int ph) {
     return loft_t("pill_off");
 }
 
+/* action_name returns the label of the main connect button for the current
+   overall phase: Disconnect, Cancel, Retry or Connect. */
 static const char *action_name(void) {
     int ph = session_phase();
     if (ph == PH_ON) return loft_t("disconnect");
@@ -88,6 +112,8 @@ static const char *action_name(void) {
     return loft_t("connect");
 }
 
+/* fmt_rate formats the session's up and down traffic counters as
+   "up  down unit", in kilobytes or kilobits per the user's preference. */
 static void fmt_rate(char *d, int n, Sess *s) {
     long long up = s ? s->up : 0;
     long long down = s ? s->down : 0;
@@ -102,6 +128,8 @@ static void fmt_rate(char *d, int n, Sess *s) {
     snprintf(d, (size_t)n, "%lld  %lld %s", up, down, unit);
 }
 
+/* fmt_up formats how long the session has been up as m:ss. Empty unless the
+   session is on. */
 static void fmt_up(char *d, int n, Sess *s) {
     unsigned sec;
     if (!d || n <= 0) return;
@@ -111,6 +139,8 @@ static void fmt_up(char *d, int n, Sess *s) {
     snprintf(d, (size_t)n, "%u:%02u", sec / 60u, sec % 60u);
 }
 
+/* row_kv draws one "label ... value" info row (label from a translation key)
+   and moves *y down past it. */
 static void row_kv(int x, int *y, int w, const char *key, const char *val) {
     int h = sc(26);
     ui_text(x, *y, w / 2, h, loft_t(key), C_MUTE, g.f_small, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -118,6 +148,8 @@ static void row_kv(int x, int *y, int w, const char *key, const char *val) {
     *y += h;
 }
 
+/* field lays out a labelled text field: the caption, then the edit box
+   moved into place under it. Moves *y down past the field. */
 static int field(HWND ed, int x, int *y, int w, const char *label) {
     ui_text(x, *y, w, sc(16), label, C_MUTE, g.f_small, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     *y += sc(16);
@@ -127,6 +159,9 @@ static int field(HWND ed, int x, int *y, int w, const char *label) {
     return 0;
 }
 
+/* journal_text joins the journal (the in-app log, a ring buffer of
+   LOFT_JOURNAL lines in g.journal) into one CRLF-separated string, oldest
+   line first. The caller frees the result. */
 static char *journal_text(void) {
     int count = g.nj < LOFT_JOURNAL ? g.nj : LOFT_JOURNAL;
     int start = g.nj < LOFT_JOURNAL ? 0 : g.nj % LOFT_JOURNAL;
@@ -146,6 +181,8 @@ static char *journal_text(void) {
     return b;
 }
 
+/* journal_sync refreshes the journal window, if it is open, with the
+   current log and scrolls to the last line. */
 void journal_sync(void) {
     HWND h = chrome_find(WK_JOURNAL);
     Win *w;
@@ -169,6 +206,7 @@ void journal_sync(void) {
     free(t);
 }
 
+/* copy_utf puts UTF-8 text on the Windows clipboard as Unicode text. */
 static void copy_utf(const char *s) {
     int nw;
     HGLOBAL mem;
@@ -194,6 +232,11 @@ static void copy_utf(const char *s) {
     CloseClipboard();
 }
 
+/* layout_status draws the status block shared by the main window and the
+   tray flyout: the connection name, phase and uptime, traffic, the connect
+   button, the hold and service notices, the connection picker row, the info
+   rows (external IP, overlay address, front, route, SOCKS) and, in multi
+   mode, one row per other session. Moves *y down past the block. */
 static void layout_status(int x, int *y, int w, int buttons_footer) {
     Sess *s = session_primary();
     char line[180], rate[80], up[32], socks[64];
@@ -214,6 +257,7 @@ static void layout_status(int x, int *y, int w, int buttons_footer) {
     }
     ui_button(ID_CONNECT, x, *y, w, sc(32), action_name(), 1);
     *y += sc(40);
+    /* "Reset routes" is offered while hold keeps the network closed. */
     if (ph == PH_HELD || g.held) {
         ui_button(ID_RESET, x, *y, w, sc(28), loft_t("route.reset"), 0);
         *y += sc(32);
@@ -233,6 +277,7 @@ static void layout_status(int x, int *y, int w, int buttons_footer) {
         *y += sc(34);
     }
 #endif
+    /* Info rows; simple mode hides the technical ones. */
     snprintf(line, sizeof line, "%s    %s  >", loft_t("conn"), g.active >= 0 ? pname(g.active) : "");
     ui_button(ID_CONN_ROW, x, *y, w, sc(26), line, 3);
     *y += sc(28);
@@ -249,6 +294,7 @@ static void layout_status(int x, int *y, int w, int buttons_footer) {
     }
     snprintf(socks, sizeof socks, "127.0.0.1:%d", g.prefs.socks_port > 0 ? g.prefs.socks_port : 1080);
     row_kv(x, y, w, "socks", socks);
+    /* Other sessions get clickable rows with ids 100 + slot (see ui_command). */
     if (g.prefs.multi) {
         for (i = 0; i < LOFT_SESS; i++) {
             if (!g.sess[i].used || &g.sess[i] == s) continue;
@@ -259,6 +305,8 @@ static void layout_status(int x, int *y, int w, int buttons_footer) {
     }
 }
 
+/* layout_fly draws the tray flyout: the status block and an
+   Open / Settings / Quit footer. */
 static void layout_fly(int ww) {
     int x = sc(14);
     int y = sc(10);
@@ -274,6 +322,7 @@ static void layout_fly(int ww) {
     ui_button(ID_QUIT, x + 2 * tw, y, tw, sc(26), loft_t("quit"), 2);
 }
 
+/* layout_menu draws the tray right-click menu as a custom popup. */
 static void layout_menu(int ww) {
     int x = sc(8), y = sc(8), w = ww - sc(16);
     char lab[200];
@@ -311,6 +360,9 @@ static void layout_menu(int ww) {
     ui_button(ID_QUIT, x, y, w, sc(26), loft_t("menu_quit"), 3);
 }
 
+/* layout_list draws the connection picker popup: up to 12 profiles with a
+   check mark on the active one and its live state, then Import, Edit and
+   Add buttons. */
 static void layout_list(int ww) {
     int x = sc(8), y = sc(8), w = ww - sc(16), i, n;
     n = g.nprof > 12 ? 12 : g.nprof;
@@ -341,6 +393,7 @@ static void layout_list(int ww) {
     ui_button(ID_ADD, x, y, w, sc(24), loft_t("conn.add"), 2);
 }
 
+/* layout_lang draws the language picker popup. */
 static void layout_lang(int ww) {
     int i, x = sc(8), y = sc(8), w = ww - sc(16);
     int cur = loft_lang_index(g.prefs.lang);
@@ -352,6 +405,9 @@ static void layout_lang(int ww) {
     }
 }
 
+/* layout_main draws the main window: title bar, status block, the profile
+   list (up to 6, hidden in simple mode) with Import / Add, and a footer with
+   Journal, Split routing and Settings. */
 static void layout_main(HWND hwnd, Win *w, int ww, int hh) {
     int x = sc(16);
     int y = ui_bar(ww, 1) + sc(12);
@@ -382,18 +438,27 @@ static void layout_main(HWND hwnd, Win *w, int ww, int hh) {
     ui_button(ID_SETTINGS, x + 2 * bw / 3, y, bw / 3, sc(26), loft_t("settings"), 2);
 }
 
+/* toggle_row draws a switch with title and subtitle and moves *y past it. */
 static int toggle_row(int id, int x, int *y, int w, int on, const char *title, const char *sub) {
     ui_toggle(id, x, *y, w, on, title, sub);
     *y += sc(48);
     return id;
 }
 
+/* dock_label returns the label for the "taskbar button" preference:
+   always, never, or only while a window is open. */
 static const char *dock_label(void) {
     if (loft_streq(g.prefs.taskbar, "always")) return loft_t("dock_always");
     if (loft_streq(g.prefs.taskbar, "never")) return loft_t("dock_never");
     return loft_t("dock_window");
 }
 
+/* layout_settings draws the settings window with three tabs: general
+   (start with Windows, taskbar, simple mode, units, language, updates,
+   file associations), route (default route, failover, hold, split routing)
+   and client (auto-connect, reconnect, multi mode, shared SOCKS and its
+   port, external IP lookup). The two edit boxes belong to the client tab
+   and are hidden on the others. */
 static void layout_settings(HWND hwnd, Win *w, int ww, int hh) {
     int x = sc(16);
     int y = ui_bar(ww, 1) + sc(8);
@@ -459,6 +524,10 @@ static void layout_settings(HWND hwnd, Win *w, int ww, int hh) {
     ui_button(ID_ABOUT, x + 2 * bw / 3, y, bw / 3, sc(26), loft_t("about"), 2);
 }
 
+/* layout_edit draws the profile editor. Window state: extra[0] is the
+   profile index (-1 for a new one), extra[1] the index into kinds, extra[2]
+   the TUN switch. Edit boxes 0-7 hold name, URL, path, key, SOCKS, DNS,
+   SNI and user. */
 static void layout_edit(HWND hwnd, Win *w, int ww, int hh) {
     int x = sc(16);
     int y = ui_bar(ww, 1) + sc(8);
@@ -491,6 +560,8 @@ static void layout_edit(HWND hwnd, Win *w, int ww, int hh) {
     ui_button(ID_EXPORT, x, y, bw, sc(26), loft_t("export"), 2);
 }
 
+/* layout_first draws the first-run window: name, URL and key fields, an
+   Import button and Continue. */
 static void layout_first(HWND hwnd, Win *w, int ww, int hh) {
     int x = sc(20);
     int y = ui_bar(ww, 1) + sc(16);
@@ -511,6 +582,9 @@ static void layout_first(HWND hwnd, Win *w, int ww, int hh) {
     ui_button(ID_CONT, x, y, bw, sc(32), loft_t("continue"), 1);
 }
 
+/* layout_about draws the About window: name, version, supported protocols,
+   the blurb, and a button that checks for updates (or downloads one already
+   found). */
 static void layout_about(int ww) {
     int x = sc(20);
     int y = ui_bar(ww, 1) + sc(16);
@@ -538,6 +612,8 @@ static void layout_about(int ww) {
     ui_text(x, y, bw, sc(20), loft_t("about.sig"), C_MUTE, g.f_small, DT_CENTER | DT_SINGLELINE);
 }
 
+/* layout_update draws the "new version available" offer with Download,
+   Later and "don't check again" buttons. */
 static void layout_update(int ww) {
     int x = sc(16);
     int y = ui_bar(ww, 1) + sc(12);
@@ -555,6 +631,8 @@ static void layout_update(int ww) {
     ui_button(ID_QUIET, x, y, bw, sc(26), loft_t("upd.quiet"), 2);
 }
 
+/* layout_journal draws the journal window: a read-only multi-line edit box
+   that fills the window, with Copy and Clear buttons below. */
 static void layout_journal(HWND hwnd, Win *w, int ww, int hh) {
     int y = ui_bar(ww, 1);
     int x = sc(12);
@@ -568,6 +646,12 @@ static void layout_journal(HWND hwnd, Win *w, int ww, int hh) {
     ui_button(ID_DELETE, x + sc(118), hh - sc(36), sc(110), sc(26), loft_t("clear_log"), 2);
 }
 
+/* layout_routes draws the split-routing editor. A zone is a named group of
+   address sets with one default direction (through the tunnel or direct);
+   a set is one named CIDR. The window shows the zone tabs, the direction
+   button, a "pull" button when the zone has a repository URL, the zone's
+   sets (up to 8, ids 520 + set index), and fields to add a set. Window
+   state: extra[0] is the selected zone, extra[1] the selected set. */
 static void layout_routes(HWND hwnd, Win *w, int ww, int hh) {
     int x = sc(12);
     int y = ui_bar(ww, 1) + sc(8);
@@ -609,6 +693,9 @@ static void layout_routes(HWND hwnd, Win *w, int ww, int hh) {
     ui_button(ID_BAT, x, y, bw, sc(26), loft_t("split.import.title"), 2);
 }
 
+/* ui_create makes the native edit boxes a window kind needs, right after
+   chrome.c creates the window. Ids start at 710. The settings window is
+   filled with the current SOCKS port and external IP URL. */
 void ui_create(HWND hwnd, Win *w) {
     int i;
     if (!w) return;
@@ -634,6 +721,8 @@ void ui_create(HWND hwnd, Win *w) {
     }
 }
 
+/* ui_layout runs the layout function for the window's kind. The same call
+   paints, hit-tests or measures, depending on the mode set in draw.c. */
 void ui_layout(HWND hwnd, Win *w, int ww, int hh) {
     if (!w || ww <= 0) return;
     switch (w->kind) {
@@ -653,6 +742,8 @@ void ui_layout(HWND hwnd, Win *w, int ww, int hh) {
     }
 }
 
+/* ui_measure runs the layout in measure mode and returns the content
+   height plus a margin, so popups can be sized to fit. */
 int ui_measure(Win *w, int ww) {
     int b;
     draw_set_mode(2);
@@ -662,6 +753,8 @@ int ui_measure(Win *w, int ww) {
     return b + sc(10);
 }
 
+/* ui_click runs the layout in hit mode and returns the id of the control
+   under (x, y), or 0. */
 int ui_click(HWND hwnd, Win *w, int x, int y, int ww, int hh) {
     int id;
     hit_begin(x, y);
@@ -671,6 +764,10 @@ int ui_click(HWND hwnd, Win *w, int x, int y, int ww, int hh) {
     return id;
 }
 
+/* ui_capture saves the settings window's text fields (SOCKS port and
+   external IP URL) into prefs. Called when a field loses focus and before
+   any settings command, so typed values are not lost. Invalid ports and an
+   empty URL are ignored. */
 void ui_capture(Win *w) {
     char b[64], u[LOFT_URL];
     int p;
@@ -683,6 +780,8 @@ void ui_capture(Win *w) {
     store_save_prefs();
 }
 
+/* cycle_dock steps the taskbar preference always -> window -> never and
+   applies it. */
 static void cycle_dock(void) {
     if (loft_streq(g.prefs.taskbar, "always")) loft_strlcpy(g.prefs.taskbar, sizeof g.prefs.taskbar, "window");
     else if (loft_streq(g.prefs.taskbar, "window")) loft_strlcpy(g.prefs.taskbar, sizeof g.prefs.taskbar, "never");
@@ -691,6 +790,9 @@ static void cycle_dock(void) {
     chrome_taskbar();
 }
 
+/* do_connect is the main button: it disconnects when something is up or
+   connecting, otherwise connects the active profile (or the first one), or
+   opens the editor when there are no profiles. */
 static void do_connect(void) {
     int ph = session_phase();
     if (ph == PH_ON || ph == PH_CONNECTING) {
@@ -702,6 +804,9 @@ static void do_connect(void) {
     else open_edit(-1);
 }
 
+/* drop_profile deletes profile i after a confirmation. Its sessions are
+   stopped and detached, and sessions of later profiles have their index
+   shifted down to match the shorter list. */
 static void drop_profile(HWND owner, int i) {
     wchar_t msg[256], title[64];
     int s;
@@ -720,6 +825,10 @@ static void drop_profile(HWND owner, int i) {
     redraw_all();
 }
 
+/* save_edit stores the profile editor. A new profile needs a URL and a key
+   and is added through store_add_parsed. For an existing profile the fields
+   are copied over; the key box is shown empty, so a key is only replaced
+   when the user typed a new one. An empty SOCKS field means "auto". */
 static void save_edit(Win *w) {
     int idx = w->extra[0];
     int ki = w->extra[1];
@@ -773,6 +882,9 @@ static void save_edit(Win *w) {
     store_save_profile(idx);
 }
 
+/* first_continue finishes the first-run window: when URL and key are
+   filled in it adds the profile, then marks first run done and opens the
+   main window. */
 static void first_continue(HWND hwnd, Win *w) {
     char name[LOFT_NAME], url[LOFT_URL], key[LOFT_KEY];
     ed_get(w->ed[0], name, (int)sizeof name);
@@ -795,6 +907,8 @@ static void first_continue(HWND hwnd, Win *w) {
     open_main();
 }
 
+/* delete_set removes the selected address set from the split lists, saves
+   them and re-applies routes. */
 static void delete_set(Win *w) {
     int idx = w->extra[1];
     int i;
@@ -807,11 +921,15 @@ static void delete_set(Win *w) {
     session_apply_split();
 }
 
+/* Pull is the job for pull_worker: which zone to refresh and from what URL. */
 typedef struct Pull {
     int zone;
     char url[512];
 } Pull;
 
+/* pull_worker downloads a zone's address list from its repository URL on a
+   background thread and posts the body (NULL on failure) back as
+   WM_LOFT_PULL. */
 static DWORD WINAPI pull_worker(LPVOID arg) {
     Pull *p = (Pull *)arg;
     char *body = NULL;
@@ -824,6 +942,10 @@ static DWORD WINAPI pull_worker(LPVOID arg) {
     return 0;
 }
 
+/* routes_pulled receives a pulled list on the UI thread and imports it into
+   the zone. The list is a .bat file of "route ADD ... MASK ..." lines; it
+   replaces the zone's earlier repository entries. Then the lists are saved,
+   routes re-applied and the import result (1 or 0) logged. Frees body. */
 void routes_pulled(int zone, char *body) {
     int n = 0;
     char line[64];
@@ -837,6 +959,9 @@ void routes_pulled(int zone, char *body) {
     journal_add(line);
 }
 
+/* import_bat imports a .bat file of "route ADD" commands into the selected
+   zone, replacing its earlier repository entries, then saves and re-applies
+   routes. */
 static void import_bat(HWND owner, Win *w) {
     wchar_t file[MAX_PATH];
     OPENFILENAMEW ofn;
@@ -862,6 +987,9 @@ static void import_bat(HWND owner, Win *w) {
     redraw_all();
 }
 
+/* defaults_apply resets prefs to defaults but keeps the language and the
+   active profile and leaves first run marked as done, then re-applies the settings that
+   touch Windows (file associations, start with Windows, taskbar). */
 static void defaults_apply(void) {
     char lang[8], active[LOFT_ID];
     loft_strlcpy(lang, sizeof lang, g.prefs.lang);
@@ -877,9 +1005,15 @@ static void defaults_apply(void) {
     loft_l10n_set(g.prefs.lang);
 }
 
+/* ui_command performs the action of a clicked control in any window.
+   Ranged ids are handled first (session rows, profiles, languages, zones,
+   address sets), then the fixed ID_* commands. Most toggles flip one pref
+   and save it; ones that change routing call session_apply_split. Ends by
+   repainting the window and the tray icon. */
 void ui_command(HWND hwnd, Win *w, int id) {
     if (!w) return;
     if (w->kind == WK_SET) ui_capture(w);
+    /* A session row in multi mode: retry a failed one, stop any other. */
     if (id >= 100 && id < 100 + LOFT_SESS) {
         int slot = id - 100;
         if (g.sess[slot].phase == PH_ERR && g.sess[slot].profile >= 0) session_connect(g.sess[slot].profile);
@@ -1066,24 +1200,29 @@ void ui_command(HWND hwnd, Win *w, int id) {
     tray_update();
 }
 
+/* open_main shows the main window, creating it if needed. The open_*
+   functions below follow the same pattern for the other window kinds. */
 void open_main(void) {
     HWND h = chrome_find(WK_MAIN);
     if (!h) h = chrome_open(WK_MAIN, sc(400), sc(g.prefs.simple ? 460 : 592));
     show_wnd(h);
 }
 
+/* open_settings shows the settings window. */
 void open_settings(void) {
     HWND h = chrome_find(WK_SET);
     if (!h) h = chrome_open(WK_SET, sc(480), sc(640));
     show_wnd(h);
 }
 
+/* open_about shows the About window. */
 void open_about(void) {
     HWND h = chrome_find(WK_ABOUT);
     if (!h) h = chrome_open(WK_ABOUT, sc(360), sc(480));
     show_wnd(h);
 }
 
+/* open_journal shows the journal window with the current log. */
 void open_journal(void) {
     HWND h = chrome_find(WK_JOURNAL);
     if (!h) h = chrome_open(WK_JOURNAL, sc(520), sc(512));
@@ -1091,12 +1230,16 @@ void open_journal(void) {
     show_wnd(h);
 }
 
+/* open_routes shows the split-routing editor. */
 void open_routes(void) {
     HWND h = chrome_find(WK_ROUTES);
     if (!h) h = chrome_open(WK_ROUTES, sc(480), sc(640));
     show_wnd(h);
 }
 
+/* open_edit opens the profile editor for a profile, or empty for a new one
+   (profile -1, TUN on by default). The key box always starts empty because
+   stored keys are never shown. */
 void open_edit(int profile) {
     HWND h = chrome_find(WK_EDIT);
     Win *w;
@@ -1128,12 +1271,14 @@ void open_edit(int profile) {
     InvalidateRect(h, NULL, FALSE);
 }
 
+/* open_first shows the first-run window. */
 void open_first(void) {
     HWND h = chrome_find(WK_FIRST);
     if (!h) h = chrome_open(WK_FIRST, sc(440), sc(552));
     show_wnd(h);
 }
 
+/* open_update shows the update offer window. */
 void open_update(void) {
     HWND h = chrome_find(WK_UPDATE);
     if (!h) h = chrome_open(WK_UPDATE, sc(360), sc(300));

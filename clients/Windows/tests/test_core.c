@@ -1,4 +1,7 @@
-/* Host-side checks for the pieces that do not need Windows. */
+/* Host-side checks for the pieces that do not need Windows: the portable
+   core in src/ (version compare, translations, profiles, share links,
+   STATUS lines from loft-front, prefs, split routes, quoting). Built and run
+   with the host clang by "make test", so no Windows machine is needed. */
 #include "l10n.h"
 #include "profile.h"
 #include "routes.h"
@@ -8,8 +11,11 @@
 #include <stdio.h>
 #include <string.h>
 
+/* failed counts failed checks; main returns non-zero when it is above 0. */
 static int failed;
 
+/* expect records one check: when cond is false it prints msg and counts a
+   failure, but keeps running so one run shows every broken check. */
 static void expect(int cond, const char *msg) {
     if (!cond) {
         fprintf(stderr, "fail: %s\n", msg);
@@ -17,6 +23,8 @@ static void expect(int cond, const char *msg) {
     }
 }
 
+/* test_semver pins down version comparison for the update check: a "v"
+   prefix is ignored and a missing part counts as zero. */
 static void test_semver(void) {
     expect(loft_newer("1.2.0", "1.1.9"), "newer minor");
     expect(!loft_newer("v1.0.0", "1.0.0"), "same");
@@ -24,6 +32,9 @@ static void test_semver(void) {
     expect(!loft_newer("0.9.0", "1.0.0"), "older");
 }
 
+/* test_l10n checks how texts are merged: the Windows pack wins over the
+   macOS pack for the same key, a missing translation falls back to English,
+   an unknown language uses English, and an unknown key shows the key. */
 static void test_l10n(void) {
     const char *win =
         "var WIN_PACKS = {};\n"
@@ -46,6 +57,9 @@ static void test_l10n(void) {
     expect(loft_streq(loft_t("missing"), "missing"), "key itself");
 }
 
+/* test_profile parses a loft-front YAML config into a profile and checks
+   that the stored YAML never contains the key, the export does, the
+   loft-front argument list carries the token, and wiping clears the key. */
 static void test_profile(void) {
     const char *yaml =
         "name: Office\n"
@@ -87,6 +101,8 @@ static void test_profile(void) {
     expect(p[0].key[0] == 0, "wiped");
 }
 
+/* test_share checks share links: a loft:// link with key, name, type and
+   public key; a loft:// link listing several fronts; and a vless:// link. */
 static void test_share(void) {
     LoftParsed p[4];
     int n = loft_parse_share("loft://lt_abc@cdn.example:444/static/v3/build?type=get&pbk=abcd#Office", "f", p, 4);
@@ -103,6 +119,8 @@ static void test_share(void) {
     expect(loft_streq(p[0].p.name, "Home"), "vless name");
 }
 
+/* test_status parses a loft-front STATUS line; msg is the last field and
+   keeps its spaces. */
 static void test_status(void) {
     LoftStatus st;
     expect(loft_parse_status("STATUS state=on ip=10.8.0.2 gw=10.8.0.1 tun=1 dns=10.8.0.1 mtu=1280 up=10 down=20 front=get msg=hello there", &st), "status");
@@ -112,6 +130,8 @@ static void test_status(void) {
     expect(loft_streq(st.front, "get"), "front");
 }
 
+/* test_prefs loads prefs YAML (keys not given keep their defaults) and
+   saves it back. */
 static void test_prefs(void) {
     LoftPrefs p;
     char buf[1024];
@@ -121,6 +141,8 @@ static void test_prefs(void) {
     expect(loft_prefs_save(&p, buf, sizeof buf) && strstr(buf, "lang: en") != 0, "save");
 }
 
+/* test_routes loads split-routing zones and sets from routes.txt text, adds
+   a set and saves the result. */
 static void test_routes(void) {
     LoftRoutes r;
     char buf[2048];
@@ -137,6 +159,8 @@ static void test_routes(void) {
 
 }
 
+/* test_quote checks that YAML string quoting and unquoting round-trip an
+   embedded quote. */
 static void test_quote(void) {
     char b[64];
     loft_quote("a\"b", b, sizeof b);
@@ -145,6 +169,7 @@ static void test_quote(void) {
     expect(loft_streq(b, "a\"b"), "unquote");
 }
 
+/* main runs every test and prints "ok" when all checks pass. */
 int main(void) {
     test_semver();
     test_quote();

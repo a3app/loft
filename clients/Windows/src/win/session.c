@@ -2,9 +2,17 @@
    (the protocol engine) as a child process, reads its STATUS lines, and asks
    loft-svc (the LocalSystem service with the Wintun adapter, see svc/) through
    svcclient.c to open the TUN and set addresses and routes. Also handles
-   automatic retry and disconnect. */
+   automatic retry and disconnect.
+   A session is one running connection for one profile; sessions live in
+   g.sess[] and are addressed by slot number. All functions here run on the
+   UI thread except reader_thread and tun_worker, which report back by
+   posting messages to the hidden message window (main.c). */
 #include "common.h"
 
+/* host_of copies the bare host name out of a profile URL: it skips the
+   scheme ("loft://"), any "user@" part, the port and the path, and strips
+   the brackets around an IPv6 literal. host is left empty when the URL has
+   no usable host or the host does not fit in n bytes. */
 static void host_of(const char *url, char *host, int n) {
     const char *s, *sl, *at, *end, *colon;
     if (!host || n <= 0) return;
@@ -34,6 +42,11 @@ static void host_of(const char *url, char *host, int n) {
     host[end - s] = 0;
 }
 
+/* fill_excl resolves the profile's server host to IPv4 addresses (at most
+   four) and keeps them in s->excl. These addresses later get "exclude"
+   routes through the physical gateway, because the tunnel's own connection
+   to the server must not be routed back into the tunnel. Runs once per
+   session: a session that already has addresses is left alone. */
 static void fill_excl(Sess *s) {
     char host[256];
     struct addrinfo hints, *res = NULL, *ai;
@@ -60,6 +73,9 @@ static void fill_excl(Sess *s) {
     freeaddrinfo(res);
 }
 
+/* svc_ok sends one command to loft-svc (the service that owns the TUN
+   adapter) and returns 1 on success. On failure the service's reply text
+   goes to the journal, the in-app log the user can open. */
 static int svc_ok(const char *cmd) {
     char resp[256];
     if (svc_call(cmd, resp, (int)sizeof resp)) return 1;
@@ -67,6 +83,13 @@ static int svc_ok(const char *cmd) {
     return 0;
 }
 
+/* apply_routes configures the TUN adapter for a session that is up.
+   The overlay address (the private address the session got inside the loft
+   network) is set as /32, then DNS, then the route table: server
+   exclusions, split-routing lists when split is on, and either the default
+   route through the tunnel or only the overlay /24. "hold" is sent first so
+   the service knows whether to keep the adapter when the session ends.
+   Marks the session as routed. */
 static void apply_routes(Sess *s) {
     char cmd[192];
     char ip[64];
@@ -115,6 +138,9 @@ static void apply_routes(Sess *s) {
     g.held = 0;
 }
 
+/* session_apply_split re-applies routes on every live session that owns the
+   TUN. Called after the user changes split-routing settings or lists, so the
+   new rules take effect without reconnecting. */
 void session_apply_split(void) {
     int i;
     for (i = 0; i < LOFT_SESS; i++) {
@@ -126,6 +152,9 @@ void session_apply_split(void) {
     redraw_all();
 }
 
+/* socks_owner_slot picks the session that serves the shared SOCKS port when
+   several sessions run at once: the one that owns the TUN, otherwise the
+   first used slot. Returns -1 when no session is in use. */
 static int socks_owner_slot(void) {
     int i, first = -1, own = -1;
     for (i = 0; i < LOFT_SESS; i++) {
@@ -136,6 +165,13 @@ static int socks_owner_slot(void) {
     return own >= 0 ? own : first;
 }
 
+/* socks_arg builds the -socks value for loft-front (the local SOCKS5 proxy
+   address, or "off").
+   - The profile may turn SOCKS off or give its own port or host:port.
+   - Otherwise, with shared SOCKS off, each slot gets the base port plus its
+     slot number so several sessions do not fight over one port.
+   - With shared SOCKS on, only the owner slot listens on the base port and
+     the other sessions get "off". */
 static void socks_arg(Sess *s, char *dst, int n) {
     const LoftProfile *p = &g.prof[s->profile];
     if (loft_streq(p->socks, "off")) {
@@ -157,6 +193,10 @@ static void socks_arg(Sess *s, char *dst, int n) {
     else loft_strlcpy(dst, (size_t)n, "off");
 }
 
+/* cmd_put appends one argument to a Windows command line in d, adding a
+   space separator, wrapping the argument in quotes when it contains spaces,
+   tabs or quotes, and escaping inner quotes with a backslash. Output is cut
+   at cap characters and always stays NUL-terminated. */
 static void cmd_put(wchar_t *d, int *len, int cap, const wchar_t *s) {
     int q = 0, i;
     if (!s) s = L"";
@@ -172,11 +212,19 @@ static void cmd_put(wchar_t *d, int *len, int cap, const wchar_t *s) {
     d[*len] = 0;
 }
 
+/* RdArg is what spawn_front hands to reader_thread: the session slot and
+   the read end of the child's output pipe. The thread frees it. */
 typedef struct RdArg {
     int slot;
     HANDLE pipe;
 } RdArg;
 
+/* reader_thread runs on its own thread for each loft-front process. It
+   reads the child's stdout and stderr, splits the bytes into lines (dropping
+   a trailing CR) and posts each non-empty line to the message window as
+   WM_LOFT_STATUS with a heap copy that the receiver frees. Over-long lines
+   are cut at 1023 bytes. When the pipe closes, which means the
+   process has ended, it posts WM_LOFT_EXIT for the slot. */
 static DWORD WINAPI reader_thread(LPVOID arg) {
     RdArg *r = (RdArg *)arg;
     char line[1024];
@@ -207,6 +255,13 @@ static DWORD WINAPI reader_thread(LPVOID arg) {
     return 0;
 }
 
+/* spawn_front starts loft-front.exe (the Go protocol engine, called the
+   "front") for one session. with_tun makes the front use the service's
+   packet pipe \\.\pipe\loft-tun instead of running only as SOCKS. The
+   profile key goes on the command line and every copy of it is wiped from
+   memory right after use. The child is placed in a job object with
+   kill-on-close, so it dies together with loft.exe. Returns 1 when the
+   process is running. */
 static int spawn_front(Sess *s, int with_tun) {
     wchar_t exe[MAX_PATH], dir[MAX_PATH], cmd[8192], ipath[MAX_PATH];
     char socks[64], ipath_u[MAX_PATH * 3];
@@ -231,6 +286,8 @@ static int spawn_front(Sess *s, int with_tun) {
         redraw_all();
         return 0;
     }
+    /* 1. Find the per-profile instance file %APPDATA%\loft\sessions\<id>.
+          The front keeps its state there between runs. */
     exe_dir(dir, MAX_PATH);
     {
         wchar_t sdir[MAX_PATH];
@@ -245,6 +302,7 @@ static int spawn_front(Sess *s, int with_tun) {
         path_join(ipath, MAX_PATH, sdir, wid);
     }
     narrow(ipath, ipath_u, (int)sizeof ipath_u);
+    /* 2. Build the argument list and turn it into one quoted command line. */
     socks_arg(s, socks, (int)sizeof socks);
     key = g.key[s->profile];
     if (!loft_build_argv(&av, "loft-front.exe", &g.prof[s->profile], key, socks, with_tun ? "\\\\.\\pipe\\loft-tun" : NULL, ipath_u))
@@ -257,6 +315,7 @@ static int spawn_front(Sess *s, int with_tun) {
         loft_wipe(warg, sizeof warg);
     }
     for (i = 0; i < av.n; i++) loft_wipe(av.store[i], sizeof av.store[i]);
+    /* 3. One inheritable pipe receives both stdout and stderr; stdin is NUL. */
     memset(&sa, 0, sizeof sa);
     sa.nLength = sizeof sa;
     sa.bInheritHandle = TRUE;
@@ -273,6 +332,8 @@ static int spawn_front(Sess *s, int with_tun) {
     si.hStdInput = nul;
     si.hStdOutput = wr;
     si.hStdError = wr;
+    /* 4. Start the child suspended so it is inside the job object before it
+          runs any code, then resume it. */
     memset(&pi, 0, sizeof pi);
     if (!CreateProcessW(exe, cmd, NULL, NULL, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, NULL, dir, &si, &pi)) {
         journal_add("loft-front");
@@ -295,6 +356,7 @@ static int spawn_front(Sess *s, int with_tun) {
     CloseHandle(pi.hThread);
     CloseHandle(wr);
     if (nul) CloseHandle(nul);
+    /* 5. Remember the handles and start the thread that reads status lines. */
     s->proc = pi.hProcess;
     s->job = job;
     s->out_r = rd;
@@ -312,6 +374,11 @@ static int spawn_front(Sess *s, int with_tun) {
     return 1;
 }
 
+/* tun_worker asks loft-svc to open the TUN adapter. It runs on a
+   background thread because "tun-open" may take up to 30 seconds (driver
+   and adapter setup) and must not freeze the UI. The result goes back as
+   WM_LOFT_TUN: wParam packs the slot (high bits) and the ok flag (bit 0),
+   lParam is the service reply, freed by the message handler. */
 static DWORD WINAPI tun_worker(LPVOID arg) {
     int slot = (int)(intptr_t)arg;
     char *resp = (char *)malloc(256);
@@ -322,6 +389,11 @@ static DWORD WINAPI tun_worker(LPVOID arg) {
     return 0;
 }
 
+/* alloc_slot returns the session slot for a profile. A profile that already
+   has a slot keeps it. Without multi mode (several connections at once)
+   every other session is disconnected first. A new slot is zeroed and bound
+   to the profile; its index also offsets the SOCKS port. Returns -1 when all
+   LOFT_SESS slots are busy. */
 static int alloc_slot(int profile) {
     int i, slot = -1;
     for (i = 0; i < LOFT_SESS; i++) {
@@ -345,6 +417,14 @@ static int alloc_slot(int profile) {
     return slot;
 }
 
+/* session_connect starts (or restarts) the connection for a profile. A
+   profile without a key opens the edit window instead. For a TUN profile
+   only one session may own the adapter, so any other owner gives it up and
+   is restarted as SOCKS-only. If a front is already running for this slot it
+   is killed and session_on_exit spawns the new one (want_spawn). A TUN
+   session first opens the adapter through tun_worker; the front starts when
+   session_tun_ready gets the answer. The Store build has no service, so
+   there it always runs SOCKS-only. */
 void session_connect(int profile) {
     Sess *s;
     int slot, i;
@@ -409,6 +489,11 @@ void session_connect(int profile) {
     redraw_all();
 }
 
+/* session_disconnect_slot stops one session at the user's request. A
+   running front is killed and session_on_exit finishes the job. Otherwise
+   the TUN is either kept closed with hold on (phase "held": the network
+   stays blocked instead of falling back to the direct Internet) or closed
+   for real. */
 void session_disconnect_slot(int slot) {
     Sess *s;
     char resp[64];
@@ -441,6 +526,9 @@ void session_disconnect_slot(int slot) {
     redraw_all();
 }
 
+/* session_disconnect_active stops every session that is up, connecting or
+   owns the TUN. When none is live, it stops the active profile's session
+   instead, for example one that is waiting for a retry. */
 void session_disconnect_active(void) {
     int i, any = 0;
     for (i = 0; i < LOFT_SESS; i++) {
@@ -456,6 +544,10 @@ void session_disconnect_active(void) {
     }
 }
 
+/* session_reset_routes is the "Reset routes" action. It turns hold off (and
+   saves that), stops every session and asks loft-svc to "reset", which
+   removes the tunnel routes and restores the saved default route and DNS so
+   the user gets direct Internet back. */
 void session_reset_routes(void) {
     char resp[128];
     int i;
@@ -477,6 +569,9 @@ void session_reset_routes(void) {
     redraw_all();
 }
 
+/* secret_line reports whether an output line contains any profile key, so
+   such lines never reach the journal. Keys of 6 characters or less are
+   skipped to avoid false matches. */
 static int secret_line(const char *line) {
     int i;
     for (i = 0; i < g.nprof; i++) {
@@ -485,6 +580,11 @@ static int secret_line(const char *line) {
     return 0;
 }
 
+/* session_on_status handles one output line of a front. STATUS lines update
+   the session: message, front name, traffic counters, phase and, when the
+   state is "on", the overlay address and DNS. A TUN session applies routes
+   once it is on, and the external IP lookup starts if enabled. Any other
+   line is copied to the journal unless it contains a key. */
 void session_on_status(int slot, char *line) {
     Sess *s;
     LoftStatus st;
@@ -530,6 +630,16 @@ void session_on_status(int slot, char *line) {
     redraw_all();
 }
 
+/* session_on_exit runs when a front process has ended (posted by
+   reader_thread). It releases the process handles and then decides what
+   comes next, in this order:
+   - a pending restart (want_spawn) spawns the front again, opening the TUN
+     first when needed;
+   - a session that lost the TUN to another one restarts as SOCKS-only;
+   - a user stop closes the TUN or keeps it held;
+   - with auto-reconnect on, a retry timer is armed (2, 4, 6 s, then 30 s;
+     at most 8 tries);
+   - otherwise the session ends in the error or held phase. */
 void session_on_exit(int slot) {
     Sess *s;
     int want, want_tun, restart, tun;
@@ -554,6 +664,7 @@ void session_on_exit(int slot) {
         CloseHandle(s->job);
         s->job = NULL;
     }
+    /* Nothing else to do for a freed slot or while the app is quitting. */
     if (!s->used || g.quit) return;
     want = s->want_spawn;
     want_tun = s->want_tun;
@@ -618,6 +729,11 @@ void session_on_exit(int slot) {
     redraw_all();
 }
 
+/* session_tun_ready receives the tun_worker result. If the session was
+   stopped meanwhile, the adapter just opened is closed again (unless hold is
+   on). On failure the session goes to the error phase; an "err pipe" reply
+   means the service is not reachable, so need_svc tells the UI to offer
+   installing it. On success the front starts with the TUN. */
 void session_tun_ready(int slot, int ok, char *resp) {
     Sess *s;
     if (slot < 0 || slot >= LOFT_SESS) return;
@@ -640,6 +756,9 @@ void session_tun_ready(int slot, int ok, char *resp) {
     spawn_front(s, 1);
 }
 
+/* session_retry runs when a slot's retry timer fires. It starts the session
+   again the same way as the first connect, unless the user stopped it or a
+   front is already running. */
 void session_retry(int slot) {
     Sess *s;
     if (slot < 0 || slot >= LOFT_SESS) return;
@@ -653,6 +772,8 @@ void session_retry(int slot) {
     }
 }
 
+/* session_extip stores the result of the external IP lookup (net_extip),
+   the address the outside world sees for this session. */
 void session_extip(int slot, const char *ip) {
     if (slot < 0 || slot >= LOFT_SESS || !g.sess[slot].used) return;
     g.sess[slot].ext_busy = 0;
@@ -660,6 +781,8 @@ void session_extip(int slot, const char *ip) {
     redraw_all();
 }
 
+/* session_phase folds all sessions into one phase for the tray icon and the
+   main window. Priority: on, connecting, error, held, off. */
 int session_phase(void) {
     int i, on = 0, conn = 0, err = 0, held = 0;
     for (i = 0; i < LOFT_SESS; i++) {
@@ -676,6 +799,9 @@ int session_phase(void) {
     return PH_OFF;
 }
 
+/* session_primary picks the session the UI shows as the main one: the TUN
+   owner, otherwise a session that is up or connecting, otherwise any used
+   slot. Returns NULL when there are no sessions. */
 Sess *session_primary(void) {
     int i, conn = -1, any = -1;
     for (i = 0; i < LOFT_SESS; i++) {

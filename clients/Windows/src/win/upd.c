@@ -1,4 +1,9 @@
-/* Replace the running GitHub build from a portable zip. Store builds do not call this. */
+/* Windows client GUI: self-update. Replaces the running GitHub build from a
+   portable release zip. Store builds do not call this. net.c finds and
+   downloads the zip and checks its SHA-256; this file verifies hashes,
+   unpacks the zip (with puff.c for deflate) and swaps the files in two
+   steps: upd_stage unpacks into a temp folder and starts the new exe, which
+   then runs upd_apply to copy itself over the old install. */
 #include "common.h"
 #include "puff.h"
 
@@ -6,11 +11,16 @@
 #include <userenv.h>
 #include <wchar.h>
 
+/* UPD_MAX caps the zip size and every unpacked file (32 MB) so a broken or
+   hostile archive cannot exhaust memory. */
 #define UPD_MAX (32u * 1024u * 1024u)
 
+/* Lookup table for CRC-32 (the checksum zip stores per file), built once on
+   first use. */
 static unsigned long crc_table[256];
 static int crc_ready;
 
+/* crc_init fills crc_table for the standard zip CRC-32 polynomial. */
 static void crc_init(void) {
     unsigned long n, c;
     int k;
@@ -23,6 +33,7 @@ static void crc_init(void) {
     crc_ready = 1;
 }
 
+/* crc32_bytes computes the zip CRC-32 of a buffer. */
 static unsigned long crc32_bytes(const unsigned char *p, unsigned long n) {
     unsigned long c = 0xfffffffful;
     crc_init();
@@ -30,6 +41,7 @@ static unsigned long crc32_bytes(const unsigned char *p, unsigned long n) {
     return c ^ 0xfffffffful;
 }
 
+/* ru16 and ru32 read little-endian integers from zip headers. */
 static unsigned short ru16(const unsigned char *p) {
     return (unsigned short)(p[0] | (p[1] << 8));
 }
@@ -38,6 +50,8 @@ static unsigned long ru32(const unsigned char *p) {
     return (unsigned long)p[0] | ((unsigned long)p[1] << 8) | ((unsigned long)p[2] << 16) | ((unsigned long)p[3] << 24);
 }
 
+/* hex_eq compares two 64-character SHA-256 hex strings, ignoring letter
+   case. a may be followed by whitespace or the end of the string. */
 static int hex_eq(const char *a, const char *b) {
     int i;
     if (!a || !b) return 0;
@@ -50,6 +64,10 @@ static int hex_eq(const char *a, const char *b) {
     return a[64] == 0 || a[64] == ' ' || a[64] == '\t' || a[64] == '\r' || a[64] == '\n';
 }
 
+/* upd_sha256_hex hashes a file with SHA-256 (Windows CNG, available on
+   Windows 7) and writes the lowercase hex digest to dst, which needs room
+   for 65 bytes. Returns 1 on success. Used to check a downloaded zip against
+   the release's SHA256SUMS. */
 int upd_sha256_hex(const wchar_t *path, char *dst, int n) {
     BCRYPT_ALG_HANDLE alg = NULL;
     BCRYPT_HASH_HANDLE hash = NULL;
@@ -92,6 +110,10 @@ out:
     return ok;
 }
 
+/* upd_sums_match reports whether a SHA256SUMS text contains a line
+   "<hash>  <file>" whose file name ends with name and whose hash equals hex.
+   Blank lines and "#" comments are skipped; a "*" before the name (binary
+   mode in sha256sum output) is allowed. */
 int upd_sums_match(const char *text, const char *name, const char *hex) {
     const char *p;
     if (!text || !name || !name[0] || !hex || !hex[0]) return 0;
@@ -119,6 +141,11 @@ int upd_sums_match(const char *text, const char *name, const char *hex) {
     return 0;
 }
 
+/* name_ok accepts only safe relative paths from inside the zip: no drive
+   letter, no leading slash or dot, no "." or ".." folder parts and no final
+   "..", no backslash,
+   and only letters, digits, '_', '-', '.' and '/'. This stops an archive
+   from writing outside the staging folder. */
 static int name_ok(const char *name) {
     const char *p;
     int dot = 0;
@@ -142,11 +169,14 @@ static int name_ok(const char *name) {
     return dot != 2;
 }
 
+/* mkdir_one creates one folder; an existing folder counts as success. */
 static int mkdir_one(const wchar_t *path) {
     if (CreateDirectoryW(path, NULL)) return 1;
     return GetLastError() == ERROR_ALREADY_EXISTS;
 }
 
+/* ensure_parent creates every missing folder above path, one level at a
+   time (like "mkdir -p" on the parent). */
 static int ensure_parent(const wchar_t *path) {
     wchar_t buf[MAX_PATH];
     wchar_t *s;
@@ -167,6 +197,8 @@ static int ensure_parent(const wchar_t *path) {
     return mkdir_one(buf);
 }
 
+/* write_bytes writes a buffer to a new file, creating parent folders.
+   A failed write deletes the partial file. */
 static int write_bytes(const wchar_t *path, const unsigned char *data, unsigned long n) {
     HANDLE h;
     DWORD wr = 0, off = 0;
@@ -186,6 +218,8 @@ static int write_bytes(const wchar_t *path, const unsigned char *data, unsigned 
     return 1;
 }
 
+/* to_wide checks a zip entry name with name_ok and converts it to a UTF-16
+   Windows relative path with backslashes. Invalid UTF-8 is rejected. */
 static int to_wide(const char *name, wchar_t *dst, int n) {
     wchar_t *w;
     int k;
@@ -198,6 +232,11 @@ static int to_wide(const char *name, wchar_t *dst, int n) {
     return 1;
 }
 
+/* unzip_to extracts a zip archive into dest. It is a small, strict reader
+   for the release zips only: stored or deflated entries (inflated with
+   puff.c), no encryption, at most 256 entries, every size capped by
+   UPD_MAX, every CRC checked and every name checked by name_ok. Any problem
+   stops the whole extraction and returns 0. */
 static int unzip_to(const wchar_t *zip, const wchar_t *dest) {
     HANDLE h;
     DWORD sz, rd = 0;
@@ -219,6 +258,8 @@ static int unzip_to(const wchar_t *zip, const wchar_t *dest) {
         return 0;
     }
     CloseHandle(h);
+    /* 1. Find the end-of-central-directory record by scanning back from the end
+          (it sits within the last 64 KB plus 22 bytes, after an optional comment). */
     n = sz;
     eocd = NULL;
     off = n - 22;
@@ -234,6 +275,7 @@ static int unzip_to(const wchar_t *zip, const wchar_t *dest) {
     count = ru16(eocd + 10);
     off = ru32(eocd + 16);
     if (count == 0 || count > 256 || off >= n) goto done;
+    /* 2. Walk the central directory, one entry per file or folder. */
     cd = buf + off;
     end = eocd;
     for (i = 0; i < count; i++) {
@@ -273,6 +315,7 @@ static int unzip_to(const wchar_t *zip, const wchar_t *dest) {
             if (!ensure_parent(path) || !mkdir_one(path)) goto done;
             continue;
         }
+        /* 3. The file data follows its local header; store it or inflate it. */
         if (local + 30 > n || ru32(buf + local) != 0x04034b50ul) goto done;
         lh = buf + local;
         if (ru16(lh + 6) & 1) goto done;
@@ -306,12 +349,17 @@ done:
     return ok;
 }
 
+/* under_stage reports whether a path is the staging folder "loft-update"
+   (or inside it) and has no "..". It guards rm_tree and upd_apply so they
+   only ever delete or copy from the staging area. */
 static int under_stage(const wchar_t *dir) {
     if (!dir || wcsstr(dir, L"..")) return 0;
     if (wcsrchr(dir, L'\\') && wcscmp(wcsrchr(dir, L'\\') + 1, L"loft-update") == 0) return 1;
     return wcsstr(dir, L"\\loft-update\\") != NULL;
 }
 
+/* rm_tree deletes a folder and everything in it, but only inside the
+   staging area. A path that does not exist counts as removed. */
 static int rm_tree(const wchar_t *dir) {
     wchar_t spec[MAX_PATH], path[MAX_PATH];
     WIN32_FIND_DATAW fd;
@@ -343,6 +391,10 @@ static int rm_tree(const wchar_t *dir) {
     return RemoveDirectoryW(dir) || GetFileAttributesW(dir) == INVALID_FILE_ATTRIBUTES;
 }
 
+/* copy_one copies one file over another. If the target is locked or cannot
+   be overwritten, it is first renamed to "<name>.bak" (Windows allows
+   renaming a file that is in use), the new file is copied in, and the
+   backup is deleted when possible. */
 static int copy_one(const wchar_t *src, const wchar_t *dst) {
     wchar_t bak[MAX_PATH];
     if (CopyFileW(src, dst, FALSE)) return 1;
@@ -355,6 +407,7 @@ static int copy_one(const wchar_t *src, const wchar_t *dst) {
     return 1;
 }
 
+/* copy_tree copies a folder tree file by file with copy_one. */
 static int copy_tree(const wchar_t *src, const wchar_t *dst) {
     wchar_t spec[MAX_PATH];
     WIN32_FIND_DATAW fd;
@@ -388,6 +441,8 @@ static int copy_tree(const wchar_t *src, const wchar_t *dst) {
     return 1;
 }
 
+/* elevated reports whether this process runs with administrator rights
+   (UAC elevation). */
 static int elevated(void) {
     HANDLE tok = NULL;
     TOKEN_ELEVATION el;
@@ -399,6 +454,9 @@ static int elevated(void) {
     return on;
 }
 
+/* launch_user starts exe as the normal desktop user while this process is
+   elevated. It copies the token of the shell process (Explorer) so the
+   restarted app does not keep admin rights. */
 static int launch_user(const wchar_t *exe, const wchar_t *dir) {
     HWND shell = GetShellWindow();
     DWORD pid = 0;
@@ -435,6 +493,8 @@ done:
     return ok;
 }
 
+/* writable checks whether this process may create files in dir by creating
+   and deleting a hidden temp file. */
 static int writable(const wchar_t *dir) {
     wchar_t p[MAX_PATH];
     HANDLE h;
@@ -446,6 +506,9 @@ static int writable(const wchar_t *dir) {
     return 1;
 }
 
+/* relaunch_elevated runs this exe again with --apply-update through the UAC
+   "runas" prompt, for an install folder (such as Program Files) that the
+   user cannot write to. */
 static int relaunch_elevated(const wchar_t *src, unsigned long pid, const wchar_t *dst) {
     SHELLEXECUTEINFOW si;
     wchar_t self[MAX_PATH], params[2048];
@@ -466,6 +529,8 @@ static int relaunch_elevated(const wchar_t *src, unsigned long pid, const wchar_
     return 1;
 }
 
+/* launch_explorer asks explorer.exe to open exe. The program then starts as
+   the normal user; this is the fallback when launch_user fails. */
 static int launch_explorer(const wchar_t *exe) {
     wchar_t params[MAX_PATH + 8];
     SHELLEXECUTEINFOW si;
@@ -481,6 +546,8 @@ static int launch_explorer(const wchar_t *exe) {
     return ShellExecuteExW(&si) ? 1 : 0;
 }
 
+/* start_app starts the updated loft.exe from dir. When the update ran
+   elevated, the app is started as the normal user instead. */
 static int start_app(const wchar_t *dir) {
     wchar_t exe[MAX_PATH], cmd[MAX_PATH + 8];
     STARTUPINFOW si;
@@ -503,6 +570,11 @@ static int start_app(const wchar_t *dir) {
     return 1;
 }
 
+/* upd_apply is the second half of an update, run by the new loft.exe from
+   the staging folder with --apply-update <src> <pid> <dst>. It waits (up to
+   30 s) for the old process pid to exit so its files are free, copies the
+   staged files over the install folder dst, and starts the new version.
+   If dst is not writable it retries once elevated. */
 int upd_apply(const wchar_t *src, unsigned long pid, const wchar_t *dst) {
     HANDLE ph;
     wchar_t exe[MAX_PATH];
@@ -524,6 +596,10 @@ int upd_apply(const wchar_t *src, unsigned long pid, const wchar_t *dst) {
     return start_app(dst);
 }
 
+/* upd_stage is the first half of an update, run by the current app after a
+   verified download. It unpacks the zip into %TEMP%\loft-update, checks
+   that loft.exe is there, and starts that new loft.exe with --apply-update
+   so it can replace this copy after this process exits. */
 int upd_stage(const wchar_t *zip) {
     wchar_t tmp[MAX_PATH], dir[MAX_PATH], exe[MAX_PATH], dest[MAX_PATH], cmd[2048];
     STARTUPINFOW si;

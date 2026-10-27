@@ -4,6 +4,9 @@
    (profile.c, share.c, routes.c). */
 #include "common.h"
 
+/* store_root writes the path of the user's data folder %APPDATA%\loft into
+   d, creating the folder if it is missing. Returns 0 when the AppData path
+   cannot be found. */
 int store_root(wchar_t *d, int n) {
     wchar_t app[MAX_PATH];
     if (!d || n <= 0) return 0;
@@ -14,6 +17,8 @@ int store_root(wchar_t *d, int n) {
     return d[0] != 0;
 }
 
+/* subdir builds the path of a folder inside the data folder (for example
+   "profiles") and creates it if needed. */
 static void subdir(const wchar_t *name, wchar_t *d, int n) {
     wchar_t root[MAX_PATH];
     store_root(root, MAX_PATH);
@@ -21,6 +26,8 @@ static void subdir(const wchar_t *name, wchar_t *d, int n) {
     CreateDirectoryW(d, NULL);
 }
 
+/* id_taken reports whether a loaded profile other than index skip already
+   uses this id. */
 static int id_taken(const char *id, int skip) {
     int i;
     for (i = 0; i < g.nprof; i++) {
@@ -29,6 +36,10 @@ static int id_taken(const char *id, int skip) {
     return 0;
 }
 
+/* unique_id makes sure a new profile has an id no other profile uses. The
+   id is the profile's file name and the name of its stored key, so two
+   profiles must never share one. A missing id is made from the profile name;
+   a taken id gets a "-2", "-3", ... suffix (tried up to 99). */
 static void unique_id(LoftProfile *p) {
     char base[LOFT_ID], tryid[LOFT_ID];
     int n = 2;
@@ -46,6 +57,7 @@ static void unique_id(LoftProfile *p) {
     }
 }
 
+/* profile_path builds the file path profiles\<id>.yaml for a profile. */
 static void profile_path(const char *id, wchar_t *d, int n) {
     wchar_t dir[MAX_PATH], wname[96];
     char name[96];
@@ -55,6 +67,10 @@ static void profile_path(const char *id, wchar_t *d, int n) {
     path_join(d, n, dir, wname);
 }
 
+/* store_load reads everything from disk into the global state g at start-up:
+   prefs, split-routing lists, all profiles with their keys (from key.c),
+   and which profile is active. Missing files leave the defaults in place.
+   It also switches the UI language to the one in prefs. */
 void store_load(void) {
     wchar_t root[MAX_PATH], path[MAX_PATH], dir[MAX_PATH];
     char *text;
@@ -80,6 +96,7 @@ void store_load(void) {
     } else {
         loft_routes_default(&g.routes);
     }
+    /* Load every profiles\*.yaml; the key is stored apart and fetched by id. */
     subdir(L"profiles", dir, MAX_PATH);
     path_join(path, MAX_PATH, dir, L"*.yaml");
     h = FindFirstFileW(path, &fd);
@@ -105,6 +122,7 @@ void store_load(void) {
         } while (FindNextFileW(h, &fd));
         FindClose(h);
     }
+    /* The "active" file names the profile selected last; fall back to the first. */
     path_join(path, MAX_PATH, root, L"active");
     text = file_read(path);
     if (text && text[0]) {
@@ -119,6 +137,8 @@ void store_load(void) {
     loft_l10n_set(g.prefs.lang);
 }
 
+/* store_save_prefs writes prefs.yaml, including the id of the active
+   profile. Returns 1 on success. */
 int store_save_prefs(void) {
     wchar_t root[MAX_PATH], path[MAX_PATH];
     char buf[4096];
@@ -129,6 +149,8 @@ int store_save_prefs(void) {
     return file_write(path, buf);
 }
 
+/* store_save_profile writes profile i to profiles\<id>.yaml. The key is
+   never written into this file; it lives in key.c storage. */
 int store_save_profile(int i) {
     wchar_t path[MAX_PATH];
     char *yaml;
@@ -147,6 +169,8 @@ int store_save_profile(int i) {
     return ok;
 }
 
+/* store_save_active records which profile is active, both in the "active"
+   file and in prefs.yaml. */
 int store_save_active(void) {
     wchar_t root[MAX_PATH], path[MAX_PATH];
     char line[LOFT_ID + 2];
@@ -158,6 +182,7 @@ int store_save_active(void) {
     return file_write(path, line);
 }
 
+/* store_save_routes writes the split-routing lists to routes.txt. */
 int store_save_routes(void) {
     wchar_t root[MAX_PATH], path[MAX_PATH];
     char *buf = (char *)malloc(256 * 1024);
@@ -178,6 +203,10 @@ int store_save_routes(void) {
     return ok;
 }
 
+/* store_add_parsed adds one imported profile: it gets a unique id, its key
+   (if the import carried one) is saved through key.c and wiped from the
+   parsed copy, the profile file is written and the new profile becomes
+   active. Returns the new index, or -1 when the profile list is full. */
 int store_add_parsed(LoftParsed *p) {
     int i;
     if (!p || g.nprof >= LOFT_PROFILES) return -1;
@@ -198,6 +227,10 @@ int store_add_parsed(LoftParsed *p) {
     return i;
 }
 
+/* store_delete_profile removes profile i: its file and stored key are
+   deleted, the in-memory key is wiped, and later profiles move up one place.
+   The active index is adjusted so it still points at the same profile (or at
+   the first one when the active profile was deleted). */
 void store_delete_profile(int i) {
     wchar_t path[MAX_PATH];
     int j;
@@ -220,6 +253,11 @@ void store_delete_profile(int i) {
     store_save_active();
 }
 
+/* import_path imports profiles from a share link (loft://, vless://,
+   trojan://, sstp://) or from a file such as a .loft file. One link or file
+   may hold several profiles (up to 8 here). An import that yields nothing
+   logs an error to the journal. The first successful import also marks the
+   first-run screen as done, then the main window opens. */
 void import_path(const wchar_t *path) {
     char *text = NULL;
     char narrow_path[2048];
@@ -255,6 +293,8 @@ void import_path(const wchar_t *path) {
     redraw_all();
 }
 
+/* import_dialog shows the standard Open File dialog and imports the chosen
+   file. */
 void import_dialog(HWND owner) {
     wchar_t file[MAX_PATH];
     OPENFILENAMEW ofn;
@@ -269,6 +309,9 @@ void import_dialog(HWND owner) {
     if (GetOpenFileNameW(&ofn)) import_path(file);
 }
 
+/* export_profile saves profile idx as a .loft file. The exported file
+   contains the key, so the user must first confirm a warning. The YAML
+   buffer is wiped after writing because it held the key. */
 void export_profile(HWND owner, int idx) {
     wchar_t file[MAX_PATH], msg[640], title[128], wname[160];
     char name[160];
