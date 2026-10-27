@@ -289,6 +289,16 @@ make probe
 | `listen.bind` | Same as `-if`; CLI `-if` wins |
 | `listen.uplink` | RouterOS WAN name for container egress (`ether1`, `lte1`) |
 
+To compare these experimental options with them off, use `loft-bench` (run `loft-bench -serve 0.0.0.0:9474` on the node first; for `l3` pass `-origin <node address>:9474`, since the node does not forward `l3` to its own loopback):
+
+```
+loft-bench -url https://node.example:443 -token lt_… -type h2,l3 -origin 203.0.113.5:9474 \
+  -disorder -l3-shape -ab 10 -csv run.csv     # 10 rounds, off and on alternating
+loft-bench … -disorder -l3-shape -soak 10m    # 10 min off, 10 min on, in alternating slices
+```
+
+`-ab` prints, per front and setting: failures, handshake time and first-byte time on a new connection (median and 95th percentile), download and upload speed, and for `l3_shape` the padding sent in percent of the client's packet bytes. `-soak` prints average speed, transfer errors, session deaths, reconnect time and stalls (a second or more without bytes). The CSV has one line per sample.
+
 Outbound fields: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`, `path`, `cdn` (`yandex` \| `cloudflare` \| empty), `fingerprint` (`chrome` \| `firefox` \| `go`), `header_budget`, `inflight`, `h2_max_age_ms`, `insecure_skip_verify`.
 
 `fingerprint` `chrome` is a uTLS Chrome ClientHello. `firefox` is the other browser shape. `go` is the stock Go cipher list; JA3/JA4 filters already mark it as a non-browser. The protocol requires the browser shape on a path that filters browsers. It does not require uTLS.

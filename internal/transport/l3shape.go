@@ -60,6 +60,39 @@ var l3ShapeAsk atomic.Bool
 // SetL3Shape turns the l3 shaping ask on or off for new l3 sessions.
 func SetL3Shape(on bool) { l3ShapeAsk.Store(on) }
 
+// Shaping counters for this process, over all l3 sessions: IP packet bytes
+// sent, padding bytes added to them, padding-only answers sent and their
+// bytes, and messages that went out padded. loft-bench reads them to show
+// what shaping costs.
+var (
+	l3StatPayload atomic.Uint64
+	l3StatPad     atomic.Uint64
+	l3StatChaffN  atomic.Uint64
+	l3StatChaff   atomic.Uint64
+	l3StatPaddedN atomic.Uint64
+)
+
+// L3ShapeStats is a snapshot of the shaping counters.
+type L3ShapeStats struct {
+	Payload, Pad, ChaffN, Chaff, PaddedN uint64
+}
+
+// L3ShapeCounters returns the shaping counters so far.
+func L3ShapeCounters() L3ShapeStats {
+	return L3ShapeStats{
+		Payload: l3StatPayload.Load(),
+		Pad:     l3StatPad.Load(),
+		ChaffN:  l3StatChaffN.Load(),
+		Chaff:   l3StatChaff.Load(),
+		PaddedN: l3StatPaddedN.Load(),
+	}
+}
+
+// Sub is the change from an earlier snapshot b to s.
+func (s L3ShapeStats) Sub(b L3ShapeStats) L3ShapeStats {
+	return L3ShapeStats{s.Payload - b.Payload, s.Pad - b.Pad, s.ChaffN - b.ChaffN, s.Chaff - b.Chaff, s.PaddedN - b.PaddedN}
+}
+
 // l3ShapeBucket is the padded plaintext size for a message of n bytes: the
 // next power of two from l3ShapeMin, so sizes fall into a few steps instead
 // of revealing the packets inside. Above l3Cork nothing is added.

@@ -204,9 +204,13 @@ func (s *l3Sess) chaff() {
 	if s.werr != nil {
 		return
 	}
-	if err := s.sealWriteLocked(wire.EncodeL3Padded(nil, l3ChaffSize())); err != nil {
+	size := l3ChaffSize()
+	if err := s.sealWriteLocked(wire.EncodeL3Padded(nil, size)); err != nil {
 		s.werr = err
+		return
 	}
+	l3StatChaffN.Add(1)
+	l3StatChaff.Add(uint64(size))
 }
 
 // die flushes pending packets and closes done once.
@@ -316,13 +320,18 @@ func (s *l3Sess) flushLocked() error {
 // size bucket (shaping only).
 func (s *l3Sess) sendLocked(pkts [][]byte, padded bool) error {
 	var plain []byte
+	var payload int
+	for _, p := range pkts {
+		payload += len(p)
+	}
+	l3StatPayload.Add(uint64(payload))
 	switch {
 	case padded:
-		n := 3
-		for _, p := range pkts {
-			n += 2 + len(p)
-		}
-		plain = wire.EncodeL3Padded(pkts, l3ShapeBucket(n))
+		n := 3 + 2*len(pkts) + payload
+		size := l3ShapeBucket(n)
+		plain = wire.EncodeL3Padded(pkts, size)
+		l3StatPaddedN.Add(1)
+		l3StatPad.Add(uint64(size - n))
 	case len(pkts) == 1:
 		plain = wire.EncodeL3(wire.L3IP, pkts[0])
 	default:
@@ -546,3 +555,7 @@ func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth, sock any) {
 		})
 	}
 }
+
+// Shaped reports whether the node agreed to l3 shaping on this session
+// (experimental, see l3shape.go).
+func (l *L3) Shaped() bool { return l != nil && l.inner != nil && l.inner.shape }
