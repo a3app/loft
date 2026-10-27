@@ -60,6 +60,9 @@ macOS 上这是系统字体，带西里尔文。Windows 上要像素级一样的
 | `svg/loft-menubar-template.svg` | macOS `NSStatusItem` 模板 |
 | `app/loft.icns` | macOS bundle |
 | `windows/loft.ico` | Windows 应用：`loft.exe`、安装程序、快捷方式。16–256 px，16 px 来自像素网格 |
+| `windows/loft-setup.ico` | 安装程序 `loft-windows-*-setup.exe`：铜色盒子，正面是点亮的标志 |
+| `windows/loft-svc.ico` | 服务 `loft-svc.exe`：应用图标 + 墨色圆标上的灯光色齿轮 |
+| `windows/loft-front.ico` | `loft-front.exe`：应用图标 + 墨色圆标上的灯光色 ⇄ 箭头 |
 | `windows/loft-file.ico` | 资源管理器中的 `.loft` 文件：纸张加点亮的标志 |
 | `windows/loft-tray{,-off,-err}.ico` | Windows 托盘资源：已连接、已断开、错误（窗口 `#E24B4B`） |
 | `windows/loft-tray-light{,-off,-err}.ico` | 同上，墨色主体，用于浅色任务栏 |

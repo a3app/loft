@@ -844,13 +844,129 @@ def tile_img(w: int, h: int, share: float) -> Image.Image:
     return img
 
 
+# Installer box and the badges on loft-svc.exe and loft-front.exe.
+# 16 px grids: l lid, o ink, c copper; mark from MARK7 goes on the front face.
+BOX16 = [
+    "................",
+    "................",
+    "....llllllll....",
+    "...llllllllll...",
+    "..llllllllllll..",
+    "..oooooooooooo..",
+] + ["..cccccccccccc.."] * 9 + ["................"]
+# Badge: ink circle in the bottom-right corner, 7×7 lamp glyph inside.
+BADGE9 = ["..11111..", ".1111111."] + ["111111111"] * 5 + [".1111111.", "..11111.."]
+GEAR7 = ["..1.1..", ".11111.", "111.111", ".1...1.", "111.111", ".11111.", "..1.1.."]
+ARROWS7 = ["....1..", ".....1.", "1111111", ".......", "1111111", ".1.....", "..1...."]
+
+
+def mix(a: str, b: str, t: float):
+    """Blend two #RRGGBB colours: t = 0 gives a, 1 gives b."""
+    ca, cb = hex_rgba(a), hex_rgba(b)
+    return tuple(round(ca[i] + (cb[i] - ca[i]) * t) for i in range(3)) + (255,)
+
+
+LID = mix(COPPER, SNOW, 0.3)  # the lid catches the light
+
+
+def grid_img(grid, colors, size: int) -> Image.Image:
+    """Paint a 16 grid at 16 or 32 px; unknown chars stay clear."""
+    s = size // 16
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    for y, row in enumerate(grid):
+        for x, ch in enumerate(row):
+            if ch in colors:
+                dr.rectangle((x * s, y * s, x * s + s - 1, y * s + s - 1), fill=colors[ch])
+    return img
+
+
+def setup_img(size: int) -> Image.Image:
+    """Installer: copper box, lighter lid, the lit mark on the front."""
+    if size in (16, 32):
+        grid = [list(r) for r in BOX16]
+        for y, row in enumerate(MARK7):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    grid[7 + y][5 + x] = ch
+        colors = {"l": LID, "o": hex_rgba(INK), "c": hex_rgba(COPPER),
+                  "1": hex_rgba(INK), "2": hex_rgba(LAMP)}
+        return grid_img(grid, colors, size)
+    o = size * 8
+    img = Image.new("RGBA", (o, o), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    x0, x1, top, mid, bot = 0.08 * o, 0.92 * o, 0.12 * o, 0.34 * o, 0.92 * o
+    dr.polygon([(0.22 * o, top), (0.78 * o, top), (x1, mid), (x0, mid)], fill=LID)
+    dr.rounded_rectangle((x0, mid, x1, bot), radius=0.04 * o, fill=hex_rgba(COPPER))
+    dr.rectangle((x0, mid, x1, mid + 0.035 * o), fill=hex_rgba(INK))
+    m = int(0.42 * o)
+    mark = raster_supersampled(m, hex_rgba(INK), hex_rgba(LAMP), pad=0.0)
+    img.alpha_composite(mark, (int((o - m) / 2), int((mid + bot) / 2 - m / 2 + 0.02 * o)))
+    return img.resize((size, size), Image.Resampling.LANCZOS)
+
+
+def badge_img(size: int, glyph: str) -> Image.Image:
+    """App icon with an ink badge bottom-right: gear (service) or arrows (front)."""
+    if size in (16, 32):
+        base = grid_img(["." * 16] * 16, {}, 16)
+        base.alpha_composite(make_app_pixel(16))
+        grid = [["."] * 16 for _ in range(16)]
+        for y, row in enumerate(BADGE9):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    grid[7 + y][7 + x] = "1"
+        for y, row in enumerate(GEAR7 if glyph == "gear" else ARROWS7):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    grid[8 + y][8 + x] = "2"
+        base.alpha_composite(grid_img(grid, {"1": hex_rgba(INK), "2": hex_rgba(LAMP)}, 16))
+        return base.resize((size, size), Image.Resampling.NEAREST)
+    o = size * 8
+    img = app_img(1024).resize((o, o), Image.Resampling.LANCZOS)
+    cx = cy = 0.74 * o
+    r = 0.25 * o
+    gap = 0.035 * o
+    # clear ring so the badge reads apart from the icon
+    hole = Image.new("L", (o, o), 0)
+    ImageDraw.Draw(hole).ellipse((cx - r - gap, cy - r - gap, cx + r + gap, cy + r + gap), fill=255)
+    img.putalpha(Image.composite(Image.new("L", (o, o), 0), img.getchannel("A"), hole))
+    dr = ImageDraw.Draw(img)
+    dr.ellipse((cx - r, cy - r, cx + r, cy + r), fill=hex_rgba(INK))
+    lamp = hex_rgba(LAMP)
+    if glyph == "gear":
+        ro, ri, n = 0.17 * o, 0.125 * o, 8
+        pts = []
+        for i in range(n * 4):
+            a = 2 * math.pi * i / (n * 4) - math.pi / 2
+            rr = ro if i % 4 in (0, 1) else ri
+            pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
+        dr.polygon(pts, fill=lamp)
+        h = 0.055 * o
+        dr.ellipse((cx - h, cy - h, cx + h, cy + h), fill=hex_rgba(INK))
+    else:
+        lw, hw, hl, half = 0.04 * o, 0.065 * o, 0.07 * o, 0.15 * o
+        for dy, d in ((-0.065 * o, 1), (0.065 * o, -1)):
+            y = cy + dy
+            tip = cx + d * half
+            dr.rectangle((min(cx - d * half, tip - d * hl), y - lw / 2,
+                          max(cx - d * half, tip - d * hl), y + lw / 2), fill=lamp)
+            dr.polygon([(tip, y), (tip - d * hl, y - hw), (tip - d * hl, y + hw)], fill=lamp)
+    return img.resize((size, size), Image.Resampling.LANCZOS)
+
+
 def build_windows() -> None:
     """Write the Windows set into windows/: .ico files, tray PNGs, Store assets."""
     app_sizes = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
     ico_write(WIN / "loft.ico", [app_img(s) for s in app_sizes])
     ico_write(WIN / "loft-file.ico", [file_img(s) for s in (16, 20, 24, 32, 40, 48, 64, 96, 256)])
+    ico_write(WIN / "loft-setup.ico", [setup_img(s) for s in app_sizes])
+    ico_write(WIN / "loft-svc.ico", [badge_img(s, "gear") for s in app_sizes])
+    ico_write(WIN / "loft-front.ico", [badge_img(s, "arrows") for s in app_sizes])
     for s in (16, 32, 48, 256):
         save(file_img(s), WIN / "png" / f"loft-file-{s}.png")
+        save(setup_img(s), WIN / "png" / f"loft-setup-{s}.png")
+        save(badge_img(s, "gear"), WIN / "png" / f"loft-svc-{s}.png")
+        save(badge_img(s, "arrows"), WIN / "png" / f"loft-front-{s}.png")
 
     # Tray: default copper (Win7, dark taskbar), light = ink body for a light taskbar.
     tray_sizes = (16, 20, 24, 32, 40, 48)

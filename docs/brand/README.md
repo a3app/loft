@@ -60,6 +60,9 @@ On macOS the font is system and includes Cyrillic. On Windows, identical wordmar
 | `svg/loft-menubar-template.svg` | macOS `NSStatusItem` template |
 | `app/loft.icns` | macOS bundle |
 | `windows/loft.ico` | Windows app: `loft.exe`, setup, shortcuts. 16–256 px, 16 from the pixel grid |
+| `windows/loft-setup.ico` | installer `loft-windows-*-setup.exe`: copper box, the lit mark on the front |
+| `windows/loft-svc.ico` | service `loft-svc.exe`: app icon + lamp gear on an ink badge |
+| `windows/loft-front.ico` | `loft-front.exe`: app icon + lamp ⇄ arrows on an ink badge |
 | `windows/loft-file.ico` | `.loft` files in Explorer: paper sheet with the lit mark |
 | `windows/loft-tray{,-off,-err}.ico` | Windows tray as resources: connected, disconnected, error (`#E24B4B` window) |
 | `windows/loft-tray-light{,-off,-err}.ico` | the same with an ink body for a light taskbar |

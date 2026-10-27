@@ -60,6 +60,9 @@ Ultra Light, Heavy и курсив в lockup не использовать.
 | `svg/loft-menubar-template.svg` | шаблон macOS `NSStatusItem` |
 | `app/loft.icns` | бандл macOS |
 | `windows/loft.ico` | приложение Windows: `loft.exe`, установщик, ярлыки. 16–256 px, 16 из пиксельной сетки |
+| `windows/loft-setup.ico` | установщик `loft-windows-*-setup.exe`: медная коробка, на лицевой стороне горящий знак |
+| `windows/loft-svc.ico` | служба `loft-svc.exe`: иконка приложения + шестерёнка цвета Lamp на круглом значке Ink |
+| `windows/loft-front.ico` | `loft-front.exe`: иконка приложения + стрелки ⇄ цвета Lamp на круглом значке Ink |
 | `windows/loft-file.ico` | файлы `.loft` в Проводнике: бумажный лист с горящим знаком |
 | `windows/loft-tray{,-off,-err}.ico` | трей Windows ресурсами: подключено, отключено, ошибка (окно `#E24B4B`) |
 | `windows/loft-tray-light{,-off,-err}.ico` | то же с телом Ink для светлой панели задач |
