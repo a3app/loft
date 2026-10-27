@@ -250,7 +250,6 @@
     <button type="button" data-go="editvless" data-i="nEditVless">Подключение · VLESS</button>
     <button type="button" data-go="edittrojan" data-i="nEditTrojan">Подключение · Trojan</button>
     <button type="button" data-go="import" data-i="nImport">Импорт</button>
-    <button type="button" data-go="fronts" data-i="nFronts">Фронты loft</button>
     <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
     <button type="button" data-go="pkg" data-i="nPkg">Пакет</button>
   </nav>
@@ -414,7 +413,7 @@
         <p class="hint" data-i="sHint">Раздельная маршрутизация и запасной канал — в Keenetic: DNS-маршруты и приоритеты для интерфейса Loft Home.</p>
         <div class="btns">
           <button type="button" class="ghost" data-i="sStop">Стоп</button>
-          <button type="button" class="ghost" data-go="fronts" data-i="sFronts">Фронты</button>
+          <button type="button" class="ghost" data-adv data-i="sFronts">Фронты</button>
         </div>
         <div class="btns" style="margin-top:8px">
           <button type="button" class="go" data-go="prio" data-i="sKeen">Приоритеты Keenetic</button>
@@ -440,6 +439,11 @@
           <button type="button" data-go="editvless">VLESS</button>
           <button type="button" data-go="edittrojan">Trojan</button>
         </div>
+        <div class="seg" data-tabs>
+          <button type="button" class="on" data-tab="main" data-i="tMain">Соединение</button>
+          <button type="button" data-tab="adv" data-i="tAdv">Расширенные</button>
+        </div>
+        <div data-tabpane="main">
         <div class="seg" data-mode="loft">
           <button type="button" class="on" data-m="link" data-i="mLink">Ссылка</button>
           <button type="button" data-m="manual" data-i="mManual">Вручную</button>
@@ -465,6 +469,32 @@
           <label class="field"><span data-i="ePath">Путь (если давали)</span>
             <input class="mono" value="/static/v3/build" />
           </label>
+        </div>
+        </div>
+        <div data-tabpane="adv" class="hidden">
+          <div class="seg-cap" data-i="fTitle">Фронты</div>
+          <div class="checks" style="margin-top:0">
+            <label><input type="checkbox" checked /> get</label>
+            <label><input type="checkbox" checked /> ws</label>
+            <label><input type="checkbox" checked /> h2</label>
+            <label><input type="checkbox" /> quic</label>
+            <label><input type="checkbox" /> h3</label>
+            <label><input type="checkbox" /> l3</label>
+          </div>
+          <p class="hint" style="margin:0 0 12px" data-i="fHint">Галочки включают фронты. Порядок попыток выбирает loft (select: auto).</p>
+          <div class="seg-cap" data-i="qTitle">Режим QUIC</div>
+          <div class="seg" data-cc>
+            <button type="button" data-cc="off" data-i="qOff">Выкл</button>
+            <button type="button" class="on" data-cc="bbr">BBR</button>
+            <button type="button" data-cc="fixed" data-i="qFixed">Фиксированная</button>
+          </div>
+          <div class="pair hidden" data-cc-rates style="grid-template-columns:1fr 1fr">
+            <label class="field"><span data-i="qUp">↑ Мбит/с</span><input class="mono" value="20" /></label>
+            <label class="field"><span data-i="qDown">↓ Мбит/с</span><input class="mono" value="100" /></label>
+          </div>
+          <p class="hint" style="margin-top:0" data-i="qHint">Для фронтов quic, h3 и l3. Нода соглашается в Status; итог виден в статусе подключения.</p>
+          <div class="row"><span class="k" data-i="fLive">Живой</span><span>get</span></div>
+          <div class="row"><span class="k">caps ∩</span><span class="mono">get ws h2 l3</span></div>
         </div>
         <div class="btns">
           <button type="button" class="ghost" data-go="list" data-i="eBack">Назад</button>
@@ -615,40 +645,6 @@
       <div class="foot">→ OpkgTun5</div>
     </div>
 
-    <!-- Fronts -->
-    <div class="panel screen hidden" id="fronts">
-      <header>
-        <div class="lamp on"></div>
-        <div class="t" data-i="fTitle">Фронты loft</div>
-        <div class="sub">Loft Home</div>
-      </header>
-      <div class="body">
-        <p class="hint" style="margin-top:0" data-i="fHint">Порядок попыток внутри одного подключения. Не отдельные строки в Keenetic.</p>
-        <div class="checks">
-          <label><input type="checkbox" checked /> get</label>
-          <label><input type="checkbox" checked /> ws</label>
-          <label><input type="checkbox" checked /> h2</label>
-          <label><input type="checkbox" /> quic</label>
-          <label><input type="checkbox" /> h3</label>
-          <label><input type="checkbox" /> l3</label>
-        </div>
-        <div class="seg-cap" style="margin-top:14px" data-i="qTitle">Режим QUIC</div>
-        <div class="seg" data-cc>
-          <button type="button" data-cc="off" data-i="qOff">Выкл</button>
-          <button type="button" class="on" data-cc="bbr">BBR</button>
-          <button type="button" data-cc="fixed" data-i="qFixed">Фиксированная</button>
-        </div>
-        <div class="pair hidden" data-cc-rates style="grid-template-columns:1fr 1fr">
-          <label class="field"><span data-i="qUp">↑ Мбит/с</span><input class="mono" value="20" /></label>
-          <label class="field"><span data-i="qDown">↓ Мбит/с</span><input class="mono" value="100" /></label>
-        </div>
-        <p class="hint" style="margin-top:0" data-i="qHint">Для фронтов quic, h3 и l3. Нода соглашается в Status; итог виден в статусе подключения.</p>
-        <div class="row"><span class="k" data-i="fLive">Живой</span><span>get</span></div>
-        <div class="row"><span class="k">caps ∩</span><span class="mono">get ws h2 l3</span></div>
-        <p class="hint" data-i="fCdn">Профиль CDN (yandex / cloudflare) — порядок заголовков, не возможность протокола.</p>
-      </div>
-      <div class="foot">Hello caps · Status intersection</div>
-    </div>
 
     <!-- Journal -->
     <div class="panel screen hidden" id="journal">
@@ -703,7 +699,7 @@
         navCap: "Макет панели на Keenetic. Маршруты и приоритеты — у Keenetic, сессии — у нас.",
         hKeen: "Keenetic", nOther: "Другие подключения", nPrio: "Приоритеты", hPanel: "Панель :8090",
         nGate: "Сессия", nList: "Подключения", nStatus: "Статус", nEdit: "Подключение · loft",
-        nEditVless: "Подключение · VLESS", nImport: "Импорт", nFronts: "Фронты loft", nJournal: "Журнал",
+        nEditVless: "Подключение · VLESS", nImport: "Импорт", nJournal: "Журнал",
         kNet: "Интернет", kOther: "Другие подключения", kRules: "Сетевые правила", kPrio: "Приоритеты",
         kTitle: "Другие подключения",
         kCap: "Каждое подключение loft — свой OpkgTun из Entware. Маршруты задаёт KeeneticOS.",
@@ -727,9 +723,9 @@
         vUrl: "Ссылка vless://", vSec: "Защита", vNet: "Транспорт", vSni: "Имя хоста TLS", vFp: "Отпечаток TLS", vPbk: "Публичный ключ", vVisionD: "xtls-rprx-vision на TCP.",
         iTitle: "Импорт", iBody: "Файл с ключом и адресом, который вам выдали.",
         iDrop: "Перетащите сюда client.yaml, .loft, .vpn или QR-картинку", iPick: "Выбрать файл",
-        fTitle: "Фронты loft",
-        fHint: "Порядок попыток внутри одного подключения. Не отдельные строки в Keenetic.",
-        fLive: "Живой", fCdn: "Профиль CDN (yandex / cloudflare) — порядок заголовков, не возможность протокола.",
+        fTitle: "Фронты", tMain: "Соединение", tAdv: "Расширенные",
+        fHint: "Галочки включают фронты. Порядок попыток выбирает loft (select: auto).",
+        fLive: "Живой",
         nEditTrojan: "Подключение · Trojan", nPkg: "Пакет",
         tUrl: "Ссылка trojan://", tPass: "Пароль",
         qTitle: "Режим QUIC", qOff: "Выкл", qFixed: "Фиксированная", qUp: "↑ Мбит/с", qDown: "↓ Мбит/с",
@@ -746,7 +742,7 @@
         navCap: "Keenetic panel mock. Routes and priorities stay in Keenetic; sessions are ours.",
         hKeen: "Keenetic", nOther: "Other connections", nPrio: "Priorities", hPanel: "Panel :8090",
         nGate: "Session", nList: "Connections", nStatus: "Status", nEdit: "Connection · loft",
-        nEditVless: "Connection · VLESS", nImport: "Import", nFronts: "loft fronts", nJournal: "Journal",
+        nEditVless: "Connection · VLESS", nImport: "Import", nJournal: "Journal",
         kNet: "Internet", kOther: "Other connections", kRules: "Network rules", kPrio: "Priorities",
         kTitle: "Other connections",
         kCap: "Each loft connection is its own OpkgTun from Entware. KeeneticOS owns the routes.",
@@ -770,9 +766,9 @@
         vUrl: "vless:// link", vSec: "Security", vNet: "Transport", vSni: "TLS host name", vFp: "TLS fingerprint", vPbk: "Public key", vVisionD: "xtls-rprx-vision on TCP.",
         iTitle: "Import", iBody: "The file with the key and address you were given.",
         iDrop: "Drop client.yaml, .loft, .vpn or a QR picture here", iPick: "Choose file",
-        fTitle: "loft fronts",
-        fHint: "Try order inside one connection. Not extra Keenetic rows.",
-        fLive: "Live", fCdn: "CDN profile (yandex / cloudflare) is header order, not a protocol cap.",
+        fTitle: "Fronts", tMain: "Connection", tAdv: "Advanced",
+        fHint: "Ticks turn fronts on. loft picks the try order (select: auto).",
+        fLive: "Live",
         nEditTrojan: "Connection · Trojan", nPkg: "Package",
         tUrl: "trojan:// link", tPass: "Password",
         qTitle: "QUIC mode", qOff: "Off", qFixed: "Fixed rate", qUp: "↑ Mbit/s", qDown: "↓ Mbit/s",
@@ -809,6 +805,14 @@
     document.querySelectorAll("[data-go]").forEach((b) => {
       b.addEventListener("click", () => show(b.getAttribute("data-go")));
     });
+
+    // Connection / Advanced tabs on the loft edit screen.
+    function tab(name) {
+      document.querySelectorAll("[data-tabs] button").forEach((x) => x.classList.toggle("on", x.dataset.tab === name));
+      document.querySelectorAll("[data-tabpane]").forEach((x) => x.classList.toggle("hidden", x.dataset.tabpane !== name));
+    }
+    document.querySelectorAll("[data-tabs] button").forEach((b) => b.addEventListener("click", () => tab(b.dataset.tab)));
+    document.querySelector("[data-adv]").addEventListener("click", () => { show("edit"); tab("adv"); });
 
     // QUIC mode: rates only for the fixed mode.
     document.querySelectorAll(".seg[data-cc] button").forEach((b) => {
