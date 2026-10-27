@@ -634,10 +634,10 @@ static void hold_cleanup(void) {
     }
     if (g_peer[0]) route_del_host(g_peer);
     route_del_host(TUN_LOCAL);
-    /* --set-default is a one-shot and does not set g_did_default.
-       Only drop 0/1 / rewrite 0/0 if loft actually installed the split default.
-       Overlay-only cleanup must not steal WireGuard's 0/1. */
-    if (g_did_default || stamped_default()) {
+    /* --set-default is a different process and only leaves the stamp.
+       This holder drops 0/1 only if it installed the split itself.
+       A sibling utun's exit must not steal another session's default. */
+    if (g_did_default) {
         drop_split_default();
         if (g_gwbuf[0]) route_restore_default(g_gwbuf);
         unstamp_default();
@@ -1465,8 +1465,8 @@ int main(int argc, char **argv) {
                 hold ? "hold" : (touch_default ? "restore" : "overlay"),
                 gw ? gw : "", overlay_only);
         fflush(stderr);
-        /* Reap in a child so this --down can exit even if a holder is slow. */
-        {
+        /* Full down reaps stragglers. --overlay is one session; sibling holders stay. */
+        if (!overlay_only) {
             pid_t k = fork();
             if (k == 0) {
                 usleep(150000);
