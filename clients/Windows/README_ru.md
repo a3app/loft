@@ -2,7 +2,7 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-Клиент в трее для Windows 7 SP1 и новее. Окно вторично. Продукт, профили, маршрут и тексты совпадают с клиентом macOS. Здесь только Windows-часть: оболочка Win32, служба с Wintun и уже существующий сеанс `loft-front`.
+Клиент в трее. x86 и x86-64: Windows 7 SP1 и новее. arm64: Windows 10 on ARM / Windows 11 ARM. Окно вторично. Продукт, профили, маршрут и тексты совпадают с клиентом macOS. Здесь только Windows-часть: оболочка Win32, служба с Wintun и уже существующий сеанс `loft-front`.
 
 Наложение для устойчивого канала администратора. Это не средство обхода блокировок.
 
@@ -27,7 +27,7 @@ make test
 make front GO_WIN7=/path/to/go-win7/bin/go GOROOT=/path/to/go-win7
 ```
 
-`make` пишет `dist/clients/Windows/x86` и `dist/clients/Windows/x64`: `loft.exe`, `loft-svc.exe`, `lang/`, `tray/`, `wintun.dll`. Каталог `dist/` в gitignore. `wintun.dll` копируется из `wintun-check/dist`. Makefile того теста качает `wintun-0.14.1.zip` и сверяет SHA-256 `07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51`.
+`make` пишет `dist/clients/Windows/x86` и `dist/clients/Windows/x64`: `loft.exe`, `loft-svc.exe`, `lang/`, `tray/`, `wintun.dll`. С `LLVM_MINGW` или `aarch64-w64-mingw32-clang` ещё и `arm64`. Каталог `dist/` в gitignore. `wintun.dll` копируется из `wintun-check/dist`. Makefile того теста качает `wintun-0.14.1.zip` и сверяет SHA-256 `07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51`. В zip также есть `wintun/bin/arm64/wintun.dll`.
 
 `make test` собирает переносимые разборщики хостовым компилятором и гоняет их. Окно не открывает.
 
@@ -39,12 +39,13 @@ make front GO_WIN7=/path/to/go-win7/bin/go GOROOT=/path/to/go-win7
 
 `make release` собирает два канала.
 
-GitHub, Windows 7 SP1 и новее, x86 и x64:
+GitHub portable zip:
 
 | Файл | Что это |
 |------|---------|
-| `dist/clients/Windows/github/loft-<версия>-windows-x64.zip` и `loft-<версия>-windows-x86.zip` | Portable. Распаковать и запустить. Службу ставит первое включение туннеля. |
-| `dist/clients/Windows/github/loft-windows-x64-setup.exe` и `loft-windows-x86-setup.exe` | Установщик. Program Files, служба loft, меню Пуск, удаление. MSI нет. |
+| `loft-<версия>-windows-x86-64.zip` и `loft-<версия>-windows-x86.zip` | Portable. Windows 7 SP1 и новее. Распаковать и запустить. Службу ставит первое включение туннеля. |
+| `loft-<версия>-windows-arm64.zip` | Portable. Windows 10 on ARM / Windows 11 ARM. Та же раскладка. На железе здесь не гоняли. |
+| `loft-windows-x64-setup.exe` и `loft-windows-x86-setup.exe` | Установщик. Program Files, служба loft, меню Пуск, удаление. MSI нет. Только x86-64 и x86. |
 
 `make portable` пишет эти zip и `loft-windows-<версия>-SHA256SUMS.txt`. Сборка GitHub при запуске читает последний релиз `a3app/loft`. Более новый тег с подходящим zip заменяет каталог запущенного exe и стартует снова. Dist на теге `v*` собирает zip с `VER` из корневого `VERSION` и кладёт их в Release. `loft-front.exe` попадает в пакет, если его уже собрал `make front`. Workflow собирает этот бинарь закреплённым SDK XTLS/go-win7.
 

@@ -12,7 +12,7 @@ WINTUN_VER    := 0.14.1
 WINTUN_SHA256 := 07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51
 WINTUN_ZIP    := dist/wintun-$(WINTUN_VER).zip
 
-all: dist/x86/loft-wintun-check.exe dist/x64/loft-wintun-check.exe dist/x86/wintun.dll dist/x64/wintun.dll
+all: dist/x86/loft-wintun-check.exe dist/x64/loft-wintun-check.exe dist/x86/wintun.dll dist/x64/wintun.dll dist/arm64/wintun.dll
 
 dist/x86/loft-wintun-check.exe: *.go go.mod
 	mkdir -p $(@D)
@@ -36,6 +36,10 @@ dist/x86/wintun.dll: $(WINTUN_ZIP)
 dist/x64/wintun.dll: $(WINTUN_ZIP)
 	mkdir -p $(@D)
 	unzip -p $< wintun/bin/amd64/wintun.dll > $@
+
+dist/arm64/wintun.dll: $(WINTUN_ZIP)
+	mkdir -p $(@D)
+	unzip -p $< wintun/bin/arm64/wintun.dll > $@
 
 zip: all
 	cd dist && rm -f loft-wintun-check-win7.zip && zip -qr loft-wintun-check-win7.zip x86 x64

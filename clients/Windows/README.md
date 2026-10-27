@@ -2,7 +2,7 @@
 
 **English** · [Русский](README_ru.md) · [中文](README_zh.md)
 
-Tray client for Windows 7 SP1 and later. The window is secondary. Product, profiles, route and texts match the macOS client. This tree is the Windows part: a Win32 shell, a service that owns Wintun, and the existing `loft-front` session.
+Tray client. x86 and x86-64: Windows 7 SP1 and later. arm64: Windows 10 on ARM / Windows 11 ARM. The window is secondary. Product, profiles, route and texts match the macOS client. This tree is the Windows part: a Win32 shell, a service that owns Wintun, and the existing `loft-front` session.
 
 Operator overlay for a stable admin channel. Not a bypass product.
 
@@ -27,7 +27,7 @@ make test
 make front GO_WIN7=/path/to/go-win7/bin/go GOROOT=/path/to/go-win7
 ```
 
-`make` writes `dist/clients/Windows/x86` and `dist/clients/Windows/x64`: `loft.exe`, `loft-svc.exe`, `lang/`, `tray/`, `wintun.dll`. `dist/` is gitignored. `wintun.dll` is copied from `wintun-check/dist`. That Makefile fetches `wintun-0.14.1.zip` and checks SHA-256 `07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51`.
+`make` writes `dist/clients/Windows/x86` and `dist/clients/Windows/x64`: `loft.exe`, `loft-svc.exe`, `lang/`, `tray/`, `wintun.dll`. With `LLVM_MINGW` or `aarch64-w64-mingw32-clang` it also writes `arm64`. `dist/` is gitignored. `wintun.dll` is copied from `wintun-check/dist`. That Makefile fetches `wintun-0.14.1.zip` and checks SHA-256 `07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51`. The zip also contains `wintun/bin/arm64/wintun.dll`.
 
 `make test` compiles the portable parsers with the host compiler and runs them. It does not open a window.
 
@@ -39,12 +39,13 @@ The client version is `clients/Windows/VERSION` (1.0.0). It is not the repositor
 
 `make release` writes two channels.
 
-GitHub, Windows 7 SP1 and later, x86 and x64:
+GitHub portable zips:
 
 | File | What it is |
 |------|------------|
-| `dist/clients/Windows/github/loft-<version>-windows-x64.zip` and `loft-<version>-windows-x86.zip` | Portable. Unzip and run. The first tunnel connect installs the service. |
-| `dist/clients/Windows/github/loft-windows-x64-setup.exe` and `loft-windows-x86-setup.exe` | Installer. Program Files, the loft service, Start menu, uninstaller. No MSI. |
+| `loft-<version>-windows-x86-64.zip` and `loft-<version>-windows-x86.zip` | Portable. Windows 7 SP1 and later. Unzip and run. The first tunnel connect installs the service. |
+| `loft-<version>-windows-arm64.zip` | Portable. Windows 10 on ARM / Windows 11 ARM. Same layout. Not run on hardware here. |
+| `loft-windows-x64-setup.exe` and `loft-windows-x86-setup.exe` | Installer. Program Files, the loft service, Start menu, uninstaller. No MSI. x86-64 and x86 only. |
 
 `make portable` writes those zips and `loft-windows-<version>-SHA256SUMS.txt`. The GitHub build checks the latest `a3app/loft` release at launch. A newer tag with the matching zip replaces the directory of the running exe and starts again. Dist on a `v*` tag builds the zips with `VER` from the repository `VERSION` and attaches them to the Release. `loft-front.exe` is included when `make front` has already produced it. The workflow builds that binary with the pinned XTLS/go-win7 SDK.
 
