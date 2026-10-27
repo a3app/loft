@@ -406,14 +406,6 @@ go test ./internal/wire ./internal/crypto ./internal/mux ./internal/netconf ./in
 
 线协议测试覆盖帧、Hello/Status、名册篡改、列表、机群。传输测试覆盖诱饵 session_id、拉名册、覆盖网策略。TCP loopback 上的伪装在部分主机上可以跳过。`make test` 还跑 `server/debian/install_os_test.sh`。
 
-**Tor 可达性。** `loft-reach`（`make reach`）检查 Tor 能否从当前线路连到 Tor 网络：不用网桥、逐一使用 Tor Browser 内置网桥（obfs4、snowflake、meek 等）、使用文件中的网桥（`-bridges`），以及经正在运行的 loft 客户端（`-loft-socks`，默认 `127.0.0.1:1080`）。每种情况各自启动一个数据目录为空的 tor，等待 `Bootstrapped 100%`，再向 check.torproject.org 确认请求确实从 Tor 出口发出。tor 和传输插件取自 Tor Browser（`-tor-browser`，默认在常见安装位置查找）。结果写入 `loft-reach-<UTC 时间>/report.md` 和 `logs/<情况>.log`；其中的 IP 地址、网桥指纹与证书以及主目录均已替换。
-
-```bash
-loft-reach -network "China Mobile 4G" -place Shanghai
-loft-reach -cases direct,builtin:obfs4,loft -timeout 5m
-loft-reach -list
-```
-
 ---
 
 ## 12. GitHub Actions
