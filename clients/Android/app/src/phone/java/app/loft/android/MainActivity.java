@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -141,6 +142,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             adapter.reload();
         }
         onLoft();
+        paintAppsRow();
     }
 
     @Override
@@ -587,6 +589,38 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 startActivity(new Intent(this, ListsActivity.class));
         settings.findViewById(R.id.btn_lists).setOnClickListener(openLists);
         settings.findViewById(R.id.btn_routes).setOnClickListener(openLists);
+        settings.findViewById(R.id.row_apps).setOnClickListener(v ->
+                startActivity(new Intent(this, AppsActivity.class)));
+        paintAppsRow();
+        Spinner dns = settings.findViewById(R.id.sp_dns);
+        EditText dnsAddr = settings.findViewById(R.id.dns_addr);
+        dns.setAdapter(spin(getString(R.string.ldns_sys),
+                getString(R.string.ldns_custom), getString(R.string.ldns_doh)));
+        int dnsIdx = "doh".equals(Prefs.dnsMode(this)) ? 2
+                : "ip".equals(Prefs.dnsMode(this)) ? 1 : 0;
+        dnsAddr.setText(Prefs.dnsAddr(this));
+        paintDnsRow(dnsIdx, dnsAddr);
+        dns.setSelection(dnsIdx);
+        dns.setOnItemSelectedListener(new SimplePick(i -> {
+            String m = i == 2 ? "doh" : i == 1 ? "ip" : "sys";
+            Prefs.p(this).edit().putString("local_dns", m).apply();
+            paintDnsRow(i, dnsAddr);
+        }));
+        dnsAddr.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                Prefs.p(MainActivity.this).edit()
+                        .putString("local_dns_addr", s.toString().trim()).apply();
+            }
+        });
         settings.findViewById(R.id.btn_defaults).setOnClickListener(v ->
                 new AlertDialog.Builder(this)
                         .setMessage(R.string.defaults_q)
@@ -645,6 +679,31 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             o.write(b, 0, n);
         }
         return o.toString(StandardCharsets.UTF_8.name());
+    }
+
+    private void paintAppsRow() {
+        if (settings == null) {
+            return;
+        }
+        TextView t = settings.findViewById(R.id.apps_mode);
+        if (t == null) {
+            return;
+        }
+        String mode = Prefs.appMode(this);
+        int n = Prefs.appSet(this, mode).size();
+        String label = "only".equals(mode) ? getString(R.string.apps_only)
+                : "except".equals(mode) ? getString(R.string.apps_except)
+                : getString(R.string.apps_all);
+        t.setText(n > 0 && !"all".equals(mode) ? label + " · " + n : label);
+    }
+
+    private static void paintDnsRow(int i, EditText addr) {
+        if (i == 0) {
+            addr.setVisibility(View.GONE);
+            return;
+        }
+        addr.setVisibility(View.VISIBLE);
+        addr.setHint(i == 2 ? "https://dns.example/dns-query" : "77.88.8.8");
     }
 
     private ArrayAdapter<String> spin(String... items) {

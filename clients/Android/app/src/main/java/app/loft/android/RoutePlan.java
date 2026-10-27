@@ -69,10 +69,14 @@ final class RoutePlan {
 
         List<Cidr> extraThrough = new ArrayList<>();
         List<Cidr> extraBypass = new ArrayList<>();
+        List<Cidr> extraDrop = new ArrayList<>();
         if (split && store != null) {
             extraThrough.addAll(store.through());
             extraBypass.addAll(store.around());
             extraBypass.addAll(store.ignores());
+            extraDrop.addAll(store.blocked());
+            extraThrough.addAll(extraDrop);
+            p.drop.addAll(extraDrop);
         }
 
         List<Cidr> v4 = new ArrayList<>();
@@ -110,9 +114,6 @@ final class RoutePlan {
             }
         }
         bypass.addAll(extraBypass);
-        if (!p.drop.isEmpty()) {
-            bypass.addAll(p.drop);
-        }
 
         if (!canExclude) {
             if (!bypass.isEmpty()) {

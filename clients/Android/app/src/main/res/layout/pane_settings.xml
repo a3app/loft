@@ -400,6 +400,115 @@
                 android:layout_height="26dp" />
         </LinearLayout>
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_setrow"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingRight="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:text="@string/local_dns"
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:lineSpacingMultiplier="1.35"
+                    android:text="@string/local_dns_d"
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
+
+                <EditText
+                    android:id="@+id/dns_addr"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_field"
+                    android:fontFamily="monospace"
+                    android:hint="77.88.8.8"
+                    android:inputType="textUri"
+                    android:paddingLeft="10dp"
+                    android:paddingTop="8dp"
+                    android:paddingRight="10dp"
+                    android:paddingBottom="8dp"
+                    android:textColor="@color/snow"
+                    android:textColorHint="@color/mute"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <Spinner
+                android:id="@+id/sp_dns"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_select"
+                android:overlapAnchor="false"
+                android:popupBackground="@color/ink2"
+                android:spinnerMode="dropdown" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/row_apps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_setrow"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingRight="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:text="@string/apps"
+                    android:textAppearance="@style/TextAppearance.Loft.RowK"
+                    android:textColor="@color/snow" />
+
+                <TextView
+                    android:id="@+id/apps_mode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:text="@string/apps_all"
+                    android:textAppearance="@style/TextAppearance.Loft.RowS"
+                    android:textColor="@color/mute" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="›"
+                android:textColor="@color/mute"
+                android:textSize="18sp" />
+        </LinearLayout>
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

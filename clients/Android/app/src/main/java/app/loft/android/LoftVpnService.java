@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.net.InetAddress;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -234,7 +235,9 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
         RoutePlan rp = RoutePlan.of(this, snap);
         String key = ip + "|" + ip6 + "|" + snap.getDNS() + "|" + snap.getFrontIPs()
-                + "|" + snap.getMTU() + "|" + rp.key();
+                + "|" + snap.getMTU() + "|" + rp.key()
+                + "|" + Prefs.appMode(this) + Prefs.appSet(this, Prefs.appMode(this)).hashCode()
+                + "|" + Prefs.dnsMode(this) + "|" + Prefs.dnsAddr(this);
         synchronized (tunLock) {
             if (key.equals(lastAddr) && tun != null) {
                 paint(snap);
@@ -259,18 +262,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                     b.allowFamily(android.system.OsConstants.AF_INET6);
                 }
             }
-            if (snap.getDNS() != null) {
-                for (String s : snap.getDNS().split(",")) {
-                    String d = s.trim();
-                    if (d.isEmpty()) {
-                        continue;
-                    }
-                    InetAddress a = Cidr.numeric(d);
-                    if (a != null) {
-                        b.addDnsServer(a);
-                    }
-                }
-            }
+            addDns(b, snap);
             int fail = 0;
             for (Cidr c : rp.include) {
                 try {
@@ -299,6 +291,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             if (fail > 8) {
                 Journal.add("routes " + fail + " failed");
             }
+            addApps(b);
             if (underlying != null && Build.VERSION.SDK_INT >= 22) {
                 b.setUnderlyingNetworks(new Network[]{underlying});
             }
@@ -610,7 +603,9 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
      */
     private final SharedPreferences.OnSharedPreferenceChangeListener routeWatch = (sp, k) -> {
         if (!("split".equals(k) || "default_route".equals(k)
-                || "lan_bypass".equals(k) || "split_store".equals(k))) {
+                || "lan_bypass".equals(k) || "split_store".equals(k)
+                || "app_mode".equals(k) || "app_except".equals(k) || "app_only".equals(k)
+                || "local_dns".equals(k) || "local_dns_addr".equals(k))) {
             return;
         }
         go.execute(() -> {
@@ -641,6 +636,51 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         st.save(this);
         Journal.add("routes pulled");
         rebuildRoutes();
+    }
+
+    private void addDns(Builder b, Snapshot snap) {
+        if ("ip".equals(Prefs.dnsMode(this))) {
+            InetAddress a = Cidr.numeric(Prefs.dnsAddr(this));
+            if (a != null) {
+                b.addDnsServer(a);
+                return;
+            }
+        }
+        if (snap.getDNS() == null) {
+            return;
+        }
+        for (String s : snap.getDNS().split(",")) {
+            String d = s.trim();
+            if (d.isEmpty()) {
+                continue;
+            }
+            InetAddress a = Cidr.numeric(d);
+            if (a != null) {
+                b.addDnsServer(a);
+            }
+        }
+    }
+
+    private void addApps(Builder b) {
+        String mode = Prefs.appMode(this);
+        if ("all".equals(mode)) {
+            return;
+        }
+        Set<String> pkgs = Prefs.appSet(this, mode);
+        if (pkgs.isEmpty()) {
+            return;
+        }
+        for (String pkg : pkgs) {
+            try {
+                if ("only".equals(mode)) {
+                    b.addAllowedApplication(pkg);
+                } else {
+                    b.addDisallowedApplication(pkg);
+                }
+            } catch (Exception e) {
+                Journal.add("app " + pkg + " " + e.getMessage());
+            }
+        }
     }
 
     private void rebuildRoutes() {

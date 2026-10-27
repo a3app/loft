@@ -28,6 +28,7 @@ final class SplitStore {
     // CATALOG lists the zones offered there, with names in en / ru / zh.
     static final String LOCAL = "local";
     static final String GLOBAL = "global";
+    static final String BLOCK = "block";
     static final String REPO_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
     // Same window as macOS SplitStore.maybePull: skip if pulled less than 20 h ago.
     static final long AUTO_MS = 20L * 60 * 60 * 1000;
@@ -54,9 +55,27 @@ final class SplitStore {
         String name = "";
         boolean builtin;
         boolean through;
+        boolean block;
         String repo = "";
         boolean auto = true;
         long pulled;
+
+        boolean isThrough() {
+            return !block && through;
+        }
+
+        boolean isAround() {
+            return !block && !through;
+        }
+
+        int dir() {
+            return block ? 2 : through ? 0 : 1;
+        }
+
+        void setDir(int i) {
+            block = i == 2;
+            through = i == 0;
+        }
     }
 
     /**
@@ -72,6 +91,19 @@ final class SplitStore {
         String src = "me"; // me | repo | ignore
         boolean ignore;
         final List<String> cidrs = new ArrayList<>();
+        final List<String> domains = new ArrayList<>();
+    }
+
+    /** Snapshot of zones + services for the 5 s undo snackbar. */
+    static final class Snap {
+        final List<Zone> zones = new ArrayList<>();
+        final List<Svc> services = new ArrayList<>();
+    }
+
+    /** Result of removing services: count, and whether list nets moved to exclusions. */
+    static final class Gone {
+        int n;
+        boolean toExcl;
     }
 
     /**
@@ -99,6 +131,7 @@ final class SplitStore {
                     zone.name = z.optString("name");
                     zone.builtin = z.optBoolean("builtin");
                     zone.through = z.optBoolean("through");
+                    zone.block = z.optBoolean("block");
                     zone.repo = z.optString("repo");
                     zone.auto = z.optBoolean("auto", true);
                     zone.pulled = z.optLong("pulled", 0);
@@ -126,6 +159,15 @@ final class SplitStore {
                             }
                         }
                     }
+                    JSONArray domains = s.optJSONArray("domains");
+                    if (domains != null) {
+                        for (int j = 0; j < domains.length(); j++) {
+                            String d = domains.optString(j).trim().toLowerCase(Locale.US);
+                            if (!d.isEmpty() && !svc.domains.contains(d)) {
+                                svc.domains.add(d);
+                            }
+                        }
+                    }
                     st.services.add(svc);
                 }
             }
@@ -135,6 +177,8 @@ final class SplitStore {
         }
         if (st.zone(LOCAL) == null || st.zone(GLOBAL) == null) {
             st.seed();
+        } else if (st.zone(BLOCK) == null) {
+            st.zones.add(blockZone());
         }
         return st;
     }
@@ -149,6 +193,7 @@ final class SplitStore {
                 j.put("name", z.name);
                 j.put("builtin", z.builtin);
                 j.put("through", z.through);
+                j.put("block", z.block);
                 j.put("repo", z.repo);
                 j.put("auto", z.auto);
                 j.put("pulled", z.pulled);
@@ -167,6 +212,11 @@ final class SplitStore {
                     cidrs.put(x);
                 }
                 j.put("cidrs", cidrs);
+                JSONArray domains = new JSONArray();
+                for (String d : s.domains) {
+                    domains.put(d);
+                }
+                j.put("domains", domains);
                 ss.put(j);
             }
             o.put("zones", zs);
@@ -195,6 +245,7 @@ final class SplitStore {
         global.auto = true;
         zones.add(local);
         zones.add(global);
+        zones.add(blockZone());
         Svc lan = new Svc();
         lan.id = "lan";
         lan.name = "LAN";
@@ -204,6 +255,17 @@ final class SplitStore {
         lan.cidrs.add("172.16.0.0/12");
         lan.cidrs.add("192.168.0.0/16");
         services.add(lan);
+    }
+
+    private static Zone blockZone() {
+        Zone z = new Zone();
+        z.id = BLOCK;
+        z.name = "Block";
+        z.builtin = true;
+        z.through = false;
+        z.block = true;
+        z.auto = true;
+        return z;
     }
 
     /**
@@ -263,12 +325,12 @@ final class SplitStore {
         return n;
     }
 
-    /** Services in a zone whose name or prefixes contain the search text. */
+    /** Non-ignore services in a zone whose name, prefixes or domains contain the search text. */
     List<Svc> in(String zoneId, String q) {
         String needle = q == null ? "" : q.trim().toLowerCase(Locale.US);
         List<Svc> out = new ArrayList<>();
         for (Svc s : services) {
-            if (!zoneId.equals(s.zone)) {
+            if (!zoneId.equals(s.zone) || s.ignore) {
                 continue;
             }
             if (!needle.isEmpty() && !hit(s, needle)) {
@@ -277,6 +339,164 @@ final class SplitStore {
             out.add(s);
         }
         return out;
+    }
+
+    /** Ignore entries of a zone. */
+    List<Svc> excls(String zoneId) {
+        List<Svc> out = new ArrayList<>();
+        for (Svc s : services) {
+            if (zoneId.equals(s.zone) && s.ignore) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    int exclCount(String zoneId) {
+        int n = 0;
+        for (Svc s : services) {
+            if (zoneId.equals(s.zone) && s.ignore) {
+                n += s.cidrs.size();
+            }
+        }
+        return n;
+    }
+
+    Snap snap() {
+        Snap s = new Snap();
+        for (Zone z : zones) {
+            s.zones.add(copyZone(z));
+        }
+        for (Svc x : services) {
+            s.services.add(copySvc(x));
+        }
+        return s;
+    }
+
+    void restore(Snap s) {
+        if (s == null) {
+            return;
+        }
+        zones.clear();
+        services.clear();
+        for (Zone z : s.zones) {
+            zones.add(copyZone(z));
+        }
+        for (Svc x : s.services) {
+            services.add(copySvc(x));
+        }
+    }
+
+    Gone removeSvcs(List<String> ids) {
+        Gone g = new Gone();
+        if (ids == null || ids.isEmpty()) {
+            return g;
+        }
+        List<Svc> extra = new ArrayList<>();
+        Iterator<Svc> it = services.iterator();
+        while (it.hasNext()) {
+            Svc s = it.next();
+            if (!ids.contains(s.id)) {
+                continue;
+            }
+            it.remove();
+            g.n++;
+            if ("repo".equals(s.src) && !s.ignore) {
+                g.toExcl = true;
+                for (String c : s.cidrs) {
+                    Svc ign = new Svc();
+                    ign.name = s.name;
+                    ign.zone = s.zone;
+                    ign.src = "ignore";
+                    ign.ignore = true;
+                    ign.cidrs.add(c);
+                    extra.add(ign);
+                }
+            }
+        }
+        services.addAll(extra);
+        return g;
+    }
+
+    /** how: "me" own services, "all" every service and unlink the list, "excl" exclusions. */
+    void clearZone(String id, String how) {
+        Iterator<Svc> it = services.iterator();
+        while (it.hasNext()) {
+            Svc s = it.next();
+            if (!id.equals(s.zone)) {
+                continue;
+            }
+            if ("excl".equals(how)) {
+                if (s.ignore) {
+                    it.remove();
+                }
+            } else if ("me".equals(how)) {
+                if (!s.ignore && "me".equals(s.src)) {
+                    it.remove();
+                }
+            } else if (!s.ignore) {
+                it.remove();
+            }
+        }
+        if ("all".equals(how)) {
+            Zone z = zone(id);
+            if (z != null) {
+                z.repo = "";
+                z.auto = false;
+            }
+        }
+    }
+
+    /** Adds parsed rows that this zone does not already hold. Returns how many were new. */
+    int addRows(String zoneId, List<Bat.Row> rows) {
+        int n = 0;
+        if (rows == null) {
+            return 0;
+        }
+        for (Bat.Row r : rows) {
+            if (r == null || r.cidr == null || r.cidr.isEmpty() || hasCidr(zoneId, r.cidr)) {
+                continue;
+            }
+            if (r.ignore) {
+                Svc ign = findIgnore(zoneId, r.cidr);
+                if (ign == null) {
+                    ign = new Svc();
+                    ign.name = "ignore";
+                    ign.zone = zoneId;
+                    ign.src = "ignore";
+                    ign.ignore = true;
+                    ign.cidrs.add(r.cidr);
+                    services.add(ign);
+                } else if (!ign.cidrs.contains(r.cidr)) {
+                    ign.cidrs.add(r.cidr);
+                }
+                n++;
+                continue;
+            }
+            String name = r.name == null || r.name.isEmpty() ? r.cidr : r.name;
+            Svc s = findRepo(zoneId, name);
+            if (s == null) {
+                s = new Svc();
+                s.name = name;
+                s.zone = zoneId;
+                s.src = "me";
+                services.add(s);
+            }
+            if (!s.cidrs.contains(r.cidr)) {
+                s.cidrs.add(r.cidr);
+            }
+            n++;
+        }
+        return n;
+    }
+
+    private boolean hasCidr(String zoneId, String cidr) {
+        for (Svc s : services) {
+            if (zoneId.equals(s.zone) && s.cidrs.contains(cidr)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Deletes a user zone; its services move to the global zone. Built-in zones cannot be deleted. */
@@ -382,10 +602,27 @@ final class SplitStore {
         return out;
     }
 
+    /** Prefixes of every blocking zone. They go into the tunnel, then destDropped. */
+    List<Cidr> blocked() {
+        List<Cidr> out = new ArrayList<>();
+        for (Zone z : zones) {
+            if (!z.block) {
+                continue;
+            }
+            for (Svc s : services) {
+                if (!z.id.equals(s.zone) || s.ignore) {
+                    continue;
+                }
+                addCidrs(s, out);
+            }
+        }
+        return out;
+    }
+
     private List<Cidr> cidrs(boolean through) {
         List<Cidr> out = new ArrayList<>();
         for (Zone z : zones) {
-            if (z.through != through) {
+            if (z.block || z.through != through) {
                 continue;
             }
             for (Svc s : services) {
@@ -429,6 +666,16 @@ final class SplitStore {
         return cidrs.get(0) + " +" + (cidrs.size() - 1);
     }
 
+    static String preview(Svc s) {
+        if (s.cidrs != null && !s.cidrs.isEmpty()) {
+            return preview(s.cidrs);
+        }
+        if (s.domains != null && !s.domains.isEmpty()) {
+            return preview(s.domains);
+        }
+        return "";
+    }
+
     private static boolean hit(Svc s, String needle) {
         if (s.name.toLowerCase(Locale.US).contains(needle)) {
             return true;
@@ -438,7 +685,37 @@ final class SplitStore {
                 return true;
             }
         }
+        for (String d : s.domains) {
+            if (d.contains(needle)) {
+                return true;
+            }
+        }
         return false;
+    }
+
+    private static Zone copyZone(Zone z) {
+        Zone n = new Zone();
+        n.id = z.id;
+        n.name = z.name;
+        n.builtin = z.builtin;
+        n.through = z.through;
+        n.block = z.block;
+        n.repo = z.repo;
+        n.auto = z.auto;
+        n.pulled = z.pulled;
+        return n;
+    }
+
+    private static Svc copySvc(Svc s) {
+        Svc n = new Svc();
+        n.id = s.id;
+        n.name = s.name;
+        n.zone = s.zone;
+        n.src = s.src;
+        n.ignore = s.ignore;
+        n.cidrs.addAll(s.cidrs);
+        n.domains.addAll(s.domains);
+        return n;
     }
 
     /** True when the zone has auto-update on, a list URL, and no pull in AUTO_MS. */

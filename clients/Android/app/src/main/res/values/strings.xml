@@ -225,7 +225,7 @@
     <string name="ext_ip_d">After connect, ask a service for the address through this session.</string>
     <string name="hold_and">On Android these are the system Always-on VPN and Block connections without VPN.</string>
     <string name="split_d">A zone goes through loft or around it. A service only belongs to a zone.</string>
-    <string name="lists">Lists</string>
+    <string name="lists">Route lists</string>
     <string name="zones">Zones</string>
     <string name="zone">Zone</string>
     <string name="repository">Repository</string>
@@ -243,6 +243,32 @@
     <string name="search">Find a service</string>
     <string name="policy_through">%1$s · Through loft</string>
     <string name="policy_around">%1$s · Bypass loft</string>
+    <string name="policy_block">%1$s · Blocked</string>
+    <string name="split_block">Block</string>
+    <string name="split_blocked">Blocked</string>
+    <string name="split_block_d">While loft is on, connections to this zone’s networks are refused at once and its domains don’t resolve.</string>
+    <string name="domains">Domains</string>
+    <string name="domains_d">One per line; a domain covers its subdomains.</string>
+    <string name="apps">Apps</string>
+    <string name="apps_all">All through loft</string>
+    <string name="apps_except">All except selected</string>
+    <string name="apps_only">Only selected</string>
+    <string name="apps_seg_all">All</string>
+    <string name="apps_seg_except">Except</string>
+    <string name="apps_seg_only">Only</string>
+    <string name="apps_d_all">All apps follow the routing rules.</string>
+    <string name="apps_d_except">Selected apps go direct, around the tunnel. The rest follow the routing rules.</string>
+    <string name="apps_d_only">Only selected apps go through the tunnel. The rest go direct.</string>
+    <string name="apps_all_h">To send banking and government apps direct, pick “Except” and check them.</string>
+    <string name="apps_lock">Apps around the tunnel don’t see zones, Block or the local DNS. If Android’s “Block connections without VPN” is on, they get no network.</string>
+    <string name="apps_search">Find an app</string>
+    <string name="apps_sys">Show system apps</string>
+    <string name="apps_cnt">Selected: %d</string>
+    <string name="local_dns">Local DNS</string>
+    <string name="local_dns_d">Resolves the domains of “bypass loft” zones. Other names go through the node’s DNS; Block zone domains don’t resolve.</string>
+    <string name="ldns_sys">System</string>
+    <string name="ldns_custom">Own address</string>
+    <string name="ldns_doh">DoH</string>
     <string name="lan">LAN</string>
     <string name="mine">own</string>
     <string name="from_repo">list</string>
@@ -309,6 +335,10 @@
     <plurals name="split_nets">
         <item quantity="one">%d network</item>
         <item quantity="other">%d networks</item>
+    </plurals>
+    <plurals name="split_doms">
+        <item quantity="one">%d domain</item>
+        <item quantity="other">%d domains</item>
     </plurals>
     <string name="export_this">This connection</string>
     <string name="export_all">All connections</string>

@@ -7,8 +7,10 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * App settings in SharedPreferences "loft.prefs": UI options, routing
@@ -117,6 +119,51 @@ final class Prefs {
         } catch (Exception ignored) {
         }
         p(c).edit().putString("routes", a.toString()).apply();
+    }
+
+    /** sys | ip | doh. DoH is stored; VpnService.Builder still takes an address. */
+    static String dnsMode(Context c) {
+        String m = p(c).getString("local_dns", "sys");
+        return "ip".equals(m) || "doh".equals(m) ? m : "sys";
+    }
+
+    static String dnsAddr(Context c) {
+        String u = p(c).getString("local_dns_addr", "");
+        return u == null ? "" : u.trim();
+    }
+
+    /** all | except | only */
+    static String appMode(Context c) {
+        String m = p(c).getString("app_mode", "all");
+        return "except".equals(m) || "only".equals(m) ? m : "all";
+    }
+
+    static Set<String> appSet(Context c, String mode) {
+        Set<String> out = new LinkedHashSet<>();
+        String key = "except".equals(mode) ? "app_except" : "app_only";
+        String raw = p(c).getString(key, "[]");
+        try {
+            JSONArray a = new JSONArray(raw);
+            for (int i = 0; i < a.length(); i++) {
+                String pkg = a.optString(i).trim();
+                if (!pkg.isEmpty()) {
+                    out.add(pkg);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return out;
+    }
+
+    static void setAppSet(Context c, String mode, Set<String> pkgs) {
+        JSONArray a = new JSONArray();
+        if (pkgs != null) {
+            for (String p : pkgs) {
+                a.put(p);
+            }
+        }
+        String key = "except".equals(mode) ? "app_except" : "app_only";
+        p(c).edit().putString(key, a.toString()).apply();
     }
 
     static String applyLang(Context c) {

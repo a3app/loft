@@ -214,7 +214,7 @@
     <string name="ext_ip_d">连接后通过本会话向服务查询地址。</string>
     <string name="hold_and">在 Android 上这是系统的「始终开启的 VPN」和「阻止不使用 VPN 的连接」。</string>
     <string name="split_d">区域经 loft 或绕过。服务只属于某个区域。</string>
-    <string name="lists">列表</string>
+    <string name="lists">路由列表</string>
     <string name="zones">区域</string>
     <string name="zone">区域</string>
     <string name="repository">仓库</string>
@@ -232,6 +232,32 @@
     <string name="search">查找服务</string>
     <string name="policy_through">%1$s · 经 loft</string>
     <string name="policy_around">%1$s · 绕过 loft</string>
+    <string name="policy_block">%1$s · 已阻止</string>
+    <string name="split_block">阻止</string>
+    <string name="split_blocked">已阻止</string>
+    <string name="split_block_d">loft 开启时，到此区域网络的连接会被立即拒绝，其域名也不解析。</string>
+    <string name="domains">域名</string>
+    <string name="domains_d">每行一个；域名包含其子域。</string>
+    <string name="apps">应用</string>
+    <string name="apps_all">全部经 loft</string>
+    <string name="apps_except">除所选外全部</string>
+    <string name="apps_only">仅所选</string>
+    <string name="apps_seg_all">全部</string>
+    <string name="apps_seg_except">除外</string>
+    <string name="apps_seg_only">仅</string>
+    <string name="apps_d_all">所有应用按分流规则走。</string>
+    <string name="apps_d_except">所选应用直连，不走隧道。其余按分流规则走。</string>
+    <string name="apps_d_only">只有所选应用走隧道。其余直连。</string>
+    <string name="apps_all_h">要让银行和政务应用直连，选「除外」并勾选它们。</string>
+    <string name="apps_lock">不走隧道的应用不受区域、Block 和本地 DNS 影响。如果 Android 开启了「屏蔽未使用 VPN 的连接」，它们将无法联网。</string>
+    <string name="apps_search">查找应用</string>
+    <string name="apps_sys">显示系统应用</string>
+    <string name="apps_cnt">已选：%d</string>
+    <string name="local_dns">本地 DNS</string>
+    <string name="local_dns_d">解析「绕过 loft」区域的域名。其他名称经节点 DNS；Block 区域的域名不解析。</string>
+    <string name="ldns_sys">系统</string>
+    <string name="ldns_custom">自有地址</string>
+    <string name="ldns_doh">DoH</string>
     <string name="lan">局域网</string>
     <string name="mine">自定义</string>
     <string name="from_repo">列表</string>
@@ -298,6 +324,10 @@
     <plurals name="split_nets">
         <item quantity="one">%d 个网段</item>
         <item quantity="other">%d 个网段</item>
+    </plurals>
+    <plurals name="split_doms">
+        <item quantity="one">%d 个域名</item>
+        <item quantity="other">%d 个域名</item>
     </plurals>
     <string name="export_this">此连接</string>
     <string name="export_all">全部连接</string>

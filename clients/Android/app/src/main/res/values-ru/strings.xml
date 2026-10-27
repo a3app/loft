@@ -214,7 +214,7 @@
     <string name="ext_ip_d">После подключения запросить адрес у сервиса через это соединение.</string>
     <string name="hold_and">На Android это системные «VPN всегда включён» и «Блокировать подключения без VPN».</string>
     <string name="split_d">Трафик зоны идёт через loft или в обход. Сервис только принадлежит зоне.</string>
-    <string name="lists">Списки</string>
+    <string name="lists">Списки маршрутов</string>
     <string name="zones">Зоны</string>
     <string name="zone">Зона</string>
     <string name="repository">Репозиторий</string>
@@ -232,6 +232,32 @@
     <string name="search">Найти сервис</string>
     <string name="policy_through">%1$s · через loft</string>
     <string name="policy_around">%1$s · в обход loft</string>
+    <string name="policy_block">%1$s · блокируется</string>
+    <string name="split_block">Блокировать</string>
+    <string name="split_blocked">Блокируется</string>
+    <string name="split_block_d">Пока включён loft, соединения к сетям этой зоны сразу получают отказ, а её домены не резолвятся.</string>
+    <string name="domains">Домены</string>
+    <string name="domains_d">По одному в строке; домен включает поддомены.</string>
+    <string name="apps">Приложения</string>
+    <string name="apps_all">Все через loft</string>
+    <string name="apps_except">Все, кроме выбранных</string>
+    <string name="apps_only">Только выбранные</string>
+    <string name="apps_seg_all">Все</string>
+    <string name="apps_seg_except">Кроме</string>
+    <string name="apps_seg_only">Только</string>
+    <string name="apps_d_all">Все приложения идут по правилам маршрутизации.</string>
+    <string name="apps_d_except">Выбранные приложения идут напрямую, мимо туннеля. Остальные — по правилам маршрутизации.</string>
+    <string name="apps_d_only">Через туннель идут только выбранные приложения. Остальные — напрямую.</string>
+    <string name="apps_all_h">Чтобы банки и Госуслуги шли напрямую, выберите «Кроме» и отметьте их.</string>
+    <string name="apps_lock">Приложения мимо туннеля не видят зон, Block и местного DNS. Если в Android включено «Блокировать подключения без VPN», они останутся без сети.</string>
+    <string name="apps_search">Найти приложение</string>
+    <string name="apps_sys">Показывать системные</string>
+    <string name="apps_cnt">Выбрано: %d</string>
+    <string name="local_dns">Местный DNS</string>
+    <string name="local_dns_d">Резолвит домены зон «в обход loft». Остальные имена — через DNS ноды, домены зоны Block не резолвятся.</string>
+    <string name="ldns_sys">Системный</string>
+    <string name="ldns_custom">Свой адрес</string>
+    <string name="ldns_doh">DoH</string>
     <string name="lan">LAN</string>
     <string name="mine">свои</string>
     <string name="from_repo">список</string>
@@ -300,6 +326,12 @@
         <item quantity="few">%d сети</item>
         <item quantity="many">%d сетей</item>
         <item quantity="other">%d сетей</item>
+    </plurals>
+    <plurals name="split_doms">
+        <item quantity="one">%d домен</item>
+        <item quantity="few">%d домена</item>
+        <item quantity="many">%d доменов</item>
+        <item quantity="other">%d доменов</item>
     </plurals>
     <string name="export_this">Это подключение</string>
     <string name="export_all">Все подключения</string>

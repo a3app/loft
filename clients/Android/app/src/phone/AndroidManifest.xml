@@ -54,6 +54,9 @@
         <activity
             android:name=".ListsActivity"
             android:exported="false" />
+        <activity
+            android:name=".AppsActivity"
+            android:exported="false" />
         <service
             android:name=".LoftTileService"
             android:exported="true"

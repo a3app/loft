@@ -60,6 +60,22 @@ public final class RoutePlanTest {
     }
 
     @Test
+    public void splitBlockGoesToDropAndInclude() {
+        SplitStore st = new SplitStore();
+        st.seed();
+        SplitStore.Svc ads = new SplitStore.Svc();
+        ads.name = "Ads";
+        ads.zone = SplitStore.BLOCK;
+        ads.cidrs.add("6.6.6.0/24");
+        st.services.add(ads);
+        RoutePlan p = RoutePlan.build(true, false, true, st, true,
+                "10.8.0.2", 24, "", 0, "", "");
+        assertTrue(hasPrefix(p.include, "6.6.6.0/24"));
+        assertTrue(hasPrefix(p.drop, "6.6.6.0/24"));
+        assertFalse(hasPrefix(p.exclude, "6.6.6.0/24"));
+    }
+
+    @Test
     public void splitIgnoreIsExclude() {
         SplitStore st = new SplitStore();
         st.seed();
