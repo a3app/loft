@@ -1,17 +1,23 @@
-# Loft Windows client. Windows 7 SP1 and later, x86 and x64.
+# Loft Windows client. x86 and x86-64: Windows 7 SP1 and later.
+# arm64: Windows 10 on ARM / Windows 11 ARM. Built with llvm-mingw when present.
 # Artifacts: ../../dist/clients/Windows/  (same tree as macOS, iOS, Android).
 #
-#   make                         x86 and x64: loft.exe, loft-svc.exe, lang, tray, wintun.dll
-#   make portable                GitHub portable zips (both arches) and SHA256SUMS
+#   make                         x86 and x64; arm64 too if LLVM_MINGW or clang is set
+#   make portable                GitHub portable zips and SHA256SUMS
 #   make release                 portable zips, setup exes, Store layout
 #   make test                    host clang tests of the portable parsers
 #
 # Dist passes VER from the repository VERSION so the GitHub build matches the
 # release tag. A local make keeps clients/Windows/VERSION.
 #   make front GO_WIN7=/path/to/go-win7/bin/go GOROOT=/path/to/go-win7
+#   make front-arm64             loft-front.exe for arm64 with official Go
 #
 # GO_WIN7 is a patched Go (XTLS/go-win7). Official Go 1.21+ cannot target Windows 7.
-# With GO_WIN7 unset, loft-front.exe is skipped. wintun.dll is not in git.
+# arm64 front uses stock Go (GOOS=windows GOARCH=arm64). With GO_WIN7 unset,
+# x86/x64 loft-front.exe is skipped. wintun.dll is not in git.
+#
+# Dist zip names: windows-x86-64, windows-x86, windows-arm64.
+# Build dirs stay x64 / x86 / arm64.
 
 ROOT := $(abspath ../..)
 DIST := $(ROOT)/dist/clients/Windows
@@ -20,6 +26,14 @@ CC64 := x86_64-w64-mingw32-gcc
 CC86 := i686-w64-mingw32-gcc
 WR64 := x86_64-w64-mingw32-windres
 WR86 := i686-w64-mingw32-windres
+LLVM_MINGW ?=
+ifneq ($(strip $(LLVM_MINGW)),)
+CCARM := $(LLVM_MINGW)/bin/aarch64-w64-mingw32-clang
+WRARM := $(LLVM_MINGW)/bin/aarch64-w64-mingw32-windres
+else
+CCARM := $(shell command -v aarch64-w64-mingw32-clang 2>/dev/null)
+WRARM := $(shell command -v aarch64-w64-mingw32-windres 2>/dev/null)
+endif
 
 CFLAGS := -std=c11 -Wall -Wextra -O2 -DUNICODE -D_UNICODE \
 	-D_WIN32_WINNT=0x0601 -DWINVER=0x0601 \
@@ -35,9 +49,14 @@ HDR := src/util.h src/json.h src/l10n.h src/profile.h src/share.h src/routes.h s
 GUI_LIBS := -lws2_32 -lcrypt32 -lwinhttp -lshell32 -lcomdlg32 -lole32 -luuid -lgdi32 -luser32 -ladvapi32 -luserenv -lbcrypt
 SVC_LIBS := -liphlpapi -ladvapi32 -lws2_32 -luser32 -lshell32
 
-.PHONY: all test front assets clean release github portable store payload
+.PHONY: all test front front-arm64 assets clean release github portable store payload
+
+ARM_OK := $(if $(and $(CCARM),$(WRARM)),1,)
 
 all: $(DIST)/x64/loft.exe $(DIST)/x86/loft.exe $(DIST)/x64/loft-svc.exe $(DIST)/x86/loft-svc.exe assets front
+ifeq ($(ARM_OK),1)
+all: $(DIST)/arm64/loft.exe $(DIST)/arm64/loft-svc.exe
+endif
 
 ICONS := $(ROOT)/docs/brand/windows
 
@@ -77,9 +96,25 @@ $(DIST)/x64/loft-svc.exe: svc/loft-svc.c $(DIST)/x64/svc.res
 $(DIST)/x86/loft-svc.exe: svc/loft-svc.c $(DIST)/x86/svc.res
 	$(CC86) $(CFLAGS) -o $@ svc/loft-svc.c $(DIST)/x86/svc.res $(SVC_LIBS)
 
+$(DIST)/arm64/app.res: res/app.rc res/app.manifest $(ICONS)/loft.ico $(ICONS)/loft-file.ico
+	mkdir -p $(@D)
+	$(WRARM) -O coff -I $(ICONS) -o $@ res/app.rc
+
+$(DIST)/arm64/svc.res: res/svc.rc res/app.manifest $(ROOT)/docs/brand/windows/loft-svc.ico
+	mkdir -p $(@D)
+	$(WRARM) -O coff -I $(ROOT)/docs/brand/windows -o $@ res/svc.rc
+
+$(DIST)/arm64/loft.exe: $(GUI_SRC) $(HDR) $(DIST)/arm64/app.res VERSION
+	$(CCARM) $(CFLAGS) -o $@ $(GUI_SRC) $(DIST)/arm64/app.res $(GUI_LIBS)
+
+$(DIST)/arm64/loft-svc.exe: svc/loft-svc.c $(DIST)/arm64/svc.res
+	$(CCARM) $(CFLAGS) -o $@ svc/loft-svc.c $(DIST)/arm64/svc.res $(SVC_LIBS)
+
 assets:
 	@set -e; \
-	for a in x64 x86; do \
+	arches="x64 x86"; \
+	if [ -f $(DIST)/arm64/loft.exe ] || [ "$(ARM_OK)" = 1 ]; then arches="$$arches arm64"; fi; \
+	for a in $$arches; do \
 	  mkdir -p $(DIST)/$$a/lang $(DIST)/$$a/tray; \
 	  cp ../macOS/lang/*.lang $(DIST)/$$a/lang/; \
 	  cp design/lang/win.lang $(DIST)/$$a/lang/win.lang; \
@@ -111,6 +146,21 @@ else
 		-o $(DIST)/x86/loft-front.exe ./clients/go/cmd/loft-front
 endif
 
+# Official Go. Dist runs this before overwriting GOROOT with go-win7.
+front-arm64:
+ifeq ($(ARM_OK),1)
+	@set -e; \
+	front=$(ROOT)/clients/go/cmd/loft-front; \
+	trap 'rm -f "$$front"/rsrc_windows_arm64.syso' EXIT; \
+	mkdir -p $(DIST)/arm64; \
+	$(WRARM) -O coff -I $(ROOT)/docs/brand/windows -o "$$front"/rsrc_windows_arm64.syso res/front.rc; \
+	cd $(ROOT) && GOOS=windows GOARCH=arm64 CGO_ENABLED=0 \
+		go build -trimpath -ldflags="-s -w" \
+		-o $(DIST)/arm64/loft-front.exe ./clients/go/cmd/loft-front
+else
+	@echo "skip arm64 loft-front.exe (set LLVM_MINGW or aarch64-w64-mingw32-clang)"
+endif
+
 test:
 	clang -std=c11 -Wall -Wextra -Isrc -o /tmp/loft-core-test tests/test_core.c \
 		src/util.c src/json.c src/l10n.c src/profile.c src/share.c src/routes.c
@@ -126,32 +176,40 @@ clean:
 
 release: github store
 
-portable: $(DIST)/github/loft-$(VER)-windows-x64.zip $(DIST)/github/loft-$(VER)-windows-x86.zip
+portable: payload
+	@set -e; \
+	mkdir -p $(DIST)/github; \
+	zips=""; \
+	for a in x64 x86 arm64; do \
+	  [ -f $(DIST)/payload/$$a/loft.exe ] || continue; \
+	  case $$a in x64) tag=x86-64 ;; x86) tag=x86 ;; arm64) tag=arm64 ;; esac; \
+	  z=$(DIST)/github/loft-$(VER)-windows-$$tag.zip; \
+	  rm -f "$$z"; \
+	  ( cd $(DIST)/payload/$$a && COPYFILE_DISABLE=1 zip -9 -X -r "$$z" . -x '.*' -x '*/.*' ); \
+	  zips="$$zips loft-$(VER)-windows-$$tag.zip"; \
+	done; \
+	[ -n "$$zips" ]; \
+	cd $(DIST)/github && \
+	( command -v sha256sum >/dev/null && sha256sum $$zips || shasum -a 256 $$zips ) \
+	  > loft-windows-$(VER)-SHA256SUMS.txt
 
 github: portable \
 	$(DIST)/github/loft-windows-x64-setup.exe $(DIST)/github/loft-windows-x86-setup.exe
 
 payload: $(DIST)/x64/loft.exe $(DIST)/x86/loft.exe $(DIST)/x64/loft-svc.exe $(DIST)/x86/loft-svc.exe assets
+ifeq ($(ARM_OK),1)
+payload: $(DIST)/arm64/loft.exe $(DIST)/arm64/loft-svc.exe
+endif
 	@set -e; \
-	for a in x64 x86; do \
+	arches="x64 x86"; \
+	if [ -f $(DIST)/arm64/loft.exe ]; then arches="$$arches arm64"; fi; \
+	for a in $$arches; do \
 	  rm -rf $(DIST)/payload/$$a; \
 	  mkdir -p $(DIST)/payload/$$a; \
 	  cp $(DIST)/$$a/loft.exe $(DIST)/$$a/loft-svc.exe $(DIST)/$$a/wintun.dll $(DIST)/payload/$$a/; \
 	  cp -R $(DIST)/$$a/lang $(DIST)/$$a/tray $(DIST)/payload/$$a/; \
 	  if [ -f $(DIST)/$$a/loft-front.exe ]; then cp $(DIST)/$$a/loft-front.exe $(DIST)/payload/$$a/; fi; \
 	done
-
-$(DIST)/github/loft-$(VER)-windows-x64.zip $(DIST)/github/loft-$(VER)-windows-x86.zip: payload
-	@set -e; \
-	mkdir -p $(DIST)/github; \
-	for a in x64 x86; do \
-	  rm -f $(DIST)/github/loft-$(VER)-windows-$$a.zip $(DIST)/github/loft-windows-$$a.zip; \
-	  ( cd $(DIST)/payload/$$a && COPYFILE_DISABLE=1 zip -9 -X -r "$(DIST)/github/loft-$(VER)-windows-$$a.zip" . -x '.*' -x '*/.*' ); \
-	done; \
-	cd $(DIST)/github && \
-	( command -v sha256sum >/dev/null && sha256sum loft-$(VER)-windows-x64.zip loft-$(VER)-windows-x86.zip \
-	  || shasum -a 256 loft-$(VER)-windows-x64.zip loft-$(VER)-windows-x86.zip ) \
-	  > loft-windows-$(VER)-SHA256SUMS.txt
 
 $(DIST)/x64/loft-setup-stub.exe: setup/loft-setup.c VERSION $(DIST)/x64/setup.res
 	$(CC64) $(CFLAGS) -o $@ setup/loft-setup.c $(DIST)/x64/setup.res -luser32 -lgdi32 -lshell32 -lole32 -luuid -ladvapi32 -luserenv

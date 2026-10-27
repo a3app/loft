@@ -17,13 +17,37 @@
 
 [English](README.md) · **Русский** · [中文](README_zh.md)
 
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20arm64-2ea44f?style=for-the-badge" alt="Скачать loft для macOS arm64"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20x86__64-2ea44f?style=for-the-badge" alt="Скачать loft для macOS x86_64"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x64-2ea44f?style=for-the-badge" alt="Скачать loft для Windows x64"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x86-2ea44f?style=for-the-badge" alt="Скачать loft для Windows x86"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Android-2ea44f?style=for-the-badge" alt="Скачать loft для Android"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20arm64-2ea44f?style=for-the-badge" alt="Скачать loft для Linux arm64"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20amd64-2ea44f?style=for-the-badge" alt="Скачать loft для Linux amd64"></a>
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg">
+  <img src="docs/brand/platforms/macos.svg" width="32" alt="macOS">
+</picture>
+<strong>macOS</strong>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg">arm</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg">Intel</a>
+&emsp;&emsp;
+<img src="docs/brand/platforms/windows.svg" width="32" alt="Windows">
+<strong>Windows</strong>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip">x86-64</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip">x86</a>
+·
+<a href="#скачать">arm64</a>
+</p>
+<p align="center">
+<img src="docs/brand/platforms/android.svg" width="32" alt="Android">
+<strong>Android</strong>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk">Android</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk">Google TV</a>
+&emsp;&emsp;
+<img src="docs/brand/platforms/linux.svg" width="32" alt="Linux">
+<strong>Linux</strong>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz">arm64</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz">amd64</a>
+</p>
 
 </div>
 
@@ -88,7 +112,7 @@ loft рассчитан на сети, где обычные VPN-протоко�
 
 <img src="docs/img/android/ru-tv.png" alt="loft на Android TV" width="640">
 
-Клиент для Windows живёт в трее. Windows 7 SP1 и новее. Распаковать и запустить; службу ставит первое включение туннеля. Zip с GitHub заменяет свой каталог из Dist.
+Клиент для Windows живёт в трее. x86 и x86-64: Windows 7 SP1 и новее. arm64: Windows 10 on ARM / Windows 11 ARM. Распаковать и запустить; службу ставит первое включение туннеля. Zip с GitHub заменяет свой каталог из Dist.
 
 ## Панель
 
@@ -160,14 +184,14 @@ make node       # ./loft-node
 make client     # dist/clients/go/loft
 make macos      # dist/clients/macOS/loft.app
 make macos-dmg  # dist/clients/macOS/loft-*-macos-<arch>.dmg
-make macos-dmgs # оба DMG, arm64 и x86_64 (CI)
+make macos-dmgs # оба DMG, arm и intel (CI)
 make android    # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios        # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
 make windows    # dist/clients/Windows/x64 и x86
 make dist       # tarball/.deb ноды + архивы CLI
 ```
 
-Тег `vX.Y.Z` (как в `VERSION`) запускает GitHub Actions: тесты, `make dist`, DMG для arm64 и x86_64 (подпись ad-hoc), Windows portable zip (x64 и x86, Win7 SP1), Release и пинг pkg.go.dev. Вручную: Actions → Dist.
+Тег `vX.Y.Z` (как в `VERSION`) запускает GitHub Actions: тесты, `make dist`, DMG arm и intel (подпись ad-hoc), Windows portable zip (x86-64 и x86 на Win7 SP1+, arm64 на Windows 10/11 ARM), Release и пинг pkg.go.dev. Вручную: Actions → Dist.
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'

@@ -13,7 +13,7 @@
 | [`MikroTik/`](MikroTik/) | RouterOS 7 container. Mock: [`MikroTik/design/index.html`](MikroTik/design/index.html) |
 | [`iOS/`](iOS/) | Packet Tunnel. Thin host + appex. Mock: [`iOS/design/index.html`](iOS/design/index.html). Apple TV: [`iOS/PLAN.md`](iOS/PLAN.md) phase 6 |
 | [`Android/`](Android/) | VpnService. Thin Java host. Phone + TV flavors. Mock: [`Android/design/index.html`](Android/design/index.html) |
-| [`Windows/`](Windows/) | Tray client. Win7 SP1 and later. Win32 shell + loft-svc. UX: [`Windows/design/DESIGN.md`](Windows/design/DESIGN.md) |
+| [`Windows/`](Windows/) | Tray client. x86/x64 Win7 SP1+; arm64 Win10/11 ARM. Win32 shell + loft-svc. UX: [`Windows/design/DESIGN.md`](Windows/design/DESIGN.md) |
 | [`Sailfish/`](Sailfish/) | ConnMan overlay. Thin QML host + loft-front. Aurora OS is the OMP RPM. Mock: [`Sailfish/design/index.html`](Sailfish/design/index.html) |
 | [`mobile/`](mobile/) | Shared Go engine (`gomobile bind`). No GUI. |
 

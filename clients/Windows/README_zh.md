@@ -2,7 +2,7 @@
 
 [English](README.md) · [Русский](README_ru.md) · **中文**
 
-Windows 7 SP1 及更新版本的托盘客户端。窗口是次要的。产品、配置、路由和文案与 macOS 客户端一致。本目录是 Windows 部分：Win32 外壳、持有 Wintun 的服务，以及已有的 `loft-front` 会话。
+托盘客户端。x86 和 x86-64：Windows 7 SP1 及更高。arm64：Windows 10 on ARM / Windows 11 ARM。窗口是次要的。产品、配置、路由和文案与 macOS 客户端一致。本目录是 Windows 部分：Win32 外壳、持有 Wintun 的服务，以及已有的 `loft-front` 会话。
 
 面向运营方的 overlay，用来维持稳定的管理通道。不是绕过封锁的产品。
 
@@ -27,7 +27,7 @@ make test
 make front GO_WIN7=/path/to/go-win7/bin/go GOROOT=/path/to/go-win7
 ```
 
-`make` 写入 `dist/clients/Windows/x86` 和 `dist/clients/Windows/x64`：`loft.exe`、`loft-svc.exe`、`lang/`、`tray/`、`wintun.dll`。`dist/` 被 gitignore。`wintun.dll` 从 `wintun-check/dist` 复制。该测试的 Makefile 下载 `wintun-0.14.1.zip`，并核对 SHA-256 `07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51`。
+`make` 写入 `dist/clients/Windows/x86` 和 `dist/clients/Windows/x64`：`loft.exe`、`loft-svc.exe`、`lang/`、`tray/`、`wintun.dll`。有 `LLVM_MINGW` 或 `aarch64-w64-mingw32-clang` 时还会写 `arm64`。`dist/` 被 gitignore。`wintun.dll` 从 `wintun-check/dist` 复制。该测试的 Makefile 下载 `wintun-0.14.1.zip`，并核对 SHA-256 `07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51`。zip 里还有 `wintun/bin/arm64/wintun.dll`。
 
 `make test` 用主机编译器编译可移植解析器并运行。不打开窗口。
 
@@ -39,12 +39,13 @@ make front GO_WIN7=/path/to/go-win7/bin/go GOROOT=/path/to/go-win7
 
 `make release` 产出两个渠道。
 
-GitHub，Windows 7 SP1 及更高，x86 和 x64：
+GitHub portable zip：
 
 | 文件 | 是什么 |
 |------|--------|
-| `dist/clients/Windows/github/loft-<版本>-windows-x64.zip` 和 `loft-<版本>-windows-x86.zip` | Portable。解压即用。第一次打开隧道时安装服务。 |
-| `dist/clients/Windows/github/loft-windows-x64-setup.exe` 和 `loft-windows-x86-setup.exe` | 安装程序。Program Files、loft 服务、开始菜单、卸载。没有 MSI。 |
+| `loft-<版本>-windows-x86-64.zip` 和 `loft-<版本>-windows-x86.zip` | Portable。Windows 7 SP1 及更高。解压即用。第一次打开隧道时安装服务。 |
+| `loft-<版本>-windows-arm64.zip` | Portable。Windows 10 on ARM / Windows 11 ARM。同一套布局。这里没有在真机上跑过。 |
+| `loft-windows-x64-setup.exe` 和 `loft-windows-x86-setup.exe` | 安装程序。Program Files、loft 服务、开始菜单、卸载。没有 MSI。仅 x86-64 和 x86。 |
 
 `make portable` 写出这些 zip 和 `loft-windows-<版本>-SHA256SUMS.txt`。GitHub 版本启动时读取 `a3app/loft` 最新发布。更新的标签若带匹配的 zip，就替换正在运行的 exe 所在目录并重新启动。`v*` 标签上的 Dist 用仓库 `VERSION` 作为 `VER` 编译 zip，并挂到 Release。若已执行 `make front`，包内含 `loft-front.exe`。workflow 用固定的 XTLS/go-win7 SDK 编译这个二进制。
 

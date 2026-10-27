@@ -17,13 +17,37 @@
 
 **English** · [Русский](README_ru.md) · [中文](README_zh.md)
 
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20arm64-2ea44f?style=for-the-badge" alt="Download loft for macOS arm64"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-macOS%20x86__64-2ea44f?style=for-the-badge" alt="Download loft for macOS x86_64"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x64-2ea44f?style=for-the-badge" alt="Download loft for Windows x64"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Windows%20x86-2ea44f?style=for-the-badge" alt="Download loft for Windows x86"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Android-2ea44f?style=for-the-badge" alt="Download loft for Android"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20arm64-2ea44f?style=for-the-badge" alt="Download loft for Linux arm64"></a>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Linux%20amd64-2ea44f?style=for-the-badge" alt="Download loft for Linux amd64"></a>
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg">
+  <img src="docs/brand/platforms/macos.svg" width="32" alt="macOS">
+</picture>
+<strong>macOS</strong>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg">arm</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg">Intel</a>
+&emsp;&emsp;
+<img src="docs/brand/platforms/windows.svg" width="32" alt="Windows">
+<strong>Windows</strong>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip">x86-64</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip">x86</a>
+·
+<a href="#download">arm64</a>
+</p>
+<p align="center">
+<img src="docs/brand/platforms/android.svg" width="32" alt="Android">
+<strong>Android</strong>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk">Android</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk">Google TV</a>
+&emsp;&emsp;
+<img src="docs/brand/platforms/linux.svg" width="32" alt="Linux">
+<strong>Linux</strong>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz">arm64</a>
+·
+<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz">amd64</a>
+</p>
 
 </div>
 
@@ -88,7 +112,7 @@ The Android phone is a system VPN (`VpnService`). Named connections, a `loft://`
 
 <img src="docs/img/android/en-tv.png" alt="loft on Android TV" width="640">
 
-The Windows client sits in the tray. Windows 7 SP1 and later. Unzip and run; the first tunnel connect installs the service. GitHub zips replace their own directory from Dist.
+The Windows client sits in the tray. x86 and x86-64: Windows 7 SP1 and later. arm64: Windows 10 on ARM / Windows 11 ARM. Unzip and run; the first tunnel connect installs the service. GitHub zips replace their own directory from Dist.
 
 ## Panel
 
@@ -160,14 +184,14 @@ make node       # ./loft-node
 make client     # dist/clients/go/loft
 make macos      # dist/clients/macOS/loft.app
 make macos-dmg  # dist/clients/macOS/loft-*-macos-<arch>.dmg
-make macos-dmgs # both arm64 and x86_64 DMGs (CI)
+make macos-dmgs # both arm and intel DMGs (CI)
 make android    # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios        # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
 make windows    # dist/clients/Windows/x64 and x86
 make dist       # node tarballs/.deb + CLI archives
 ```
 
-A tag `vX.Y.Z` matching `VERSION` runs GitHub Actions: tests, `make dist`, macOS DMGs for arm64 and x86_64 (ad-hoc), Windows portable zips (x64 and x86, Win7 SP1), a Release, and a pkg.go.dev ping. The same Dist workflow may be started by hand from Actions.
+A tag `vX.Y.Z` matching `VERSION` runs GitHub Actions: tests, `make dist`, macOS DMGs (arm and intel, ad-hoc), Windows portable zips (x86-64 and x86 on Win7 SP1+, arm64 on Windows 10/11 ARM), a Release, and a pkg.go.dev ping. The same Dist workflow may be started by hand from Actions.
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'

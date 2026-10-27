@@ -428,8 +428,8 @@ A tag `vX.Y.Z` must match the root `VERSION` file. That tag builds:
 
 - node tarballs and `.deb` (linux amd64, arm64)
 - CLI archives (`loft`, `loft-front`, `loft-probe`, `loft-bench` for linux/darwin, amd64/arm64)
-- macOS DMGs, ad-hoc signed: `loft-*-macos-arm64.dmg` and `loft-*-macos-x86_64.dmg` (`BUMP=0` so CI does not rewrite `clients/macOS/VERSION`). The runner is Apple Silicon; Intel is a Swift/Go cross-compile (`ARCH=x86_64`).
+- macOS DMGs, ad-hoc signed: `loft-*-macos-arm.dmg` and `loft-*-macos-intel.dmg` (`BUMP=0` so CI does not rewrite `clients/macOS/VERSION`). The runner is Apple Silicon; Intel is a Swift/Go cross-compile (`ARCH=x86_64`).
 
-and publishes a GitHub Release. Dist also fetches the tag into [proxy.golang.org](https://proxy.golang.org) and requests [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft) so the module page follows the release. Asset names include the version (`loft-1.0.32-macos-arm64.dmg`, `loft-node_1.0.32_amd64.deb`). Re-running the workflow on the same tag replaces the files. Without a tag, Actions → Dist → Run workflow only uploads artifacts.
+and publishes a GitHub Release. Dist also fetches the tag into [proxy.golang.org](https://proxy.golang.org) and requests [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft) so the module page follows the release. Asset names include the version (`loft-1.0.32-macos-arm.dmg`, `loft-node_1.0.32_amd64.deb`). Re-running the workflow on the same tag replaces the files. Without a tag, Actions → Dist → Run workflow only uploads artifacts.
 
 Local packages: `make dist`. Local DMG without bumping the macOS marketing version: `make macos-dmg BUMP=0`. Developer ID and notarization stay on a Mac with a keychain; they are not in Actions.

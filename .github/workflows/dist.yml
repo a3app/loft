@@ -142,14 +142,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: macOS DMGs arm64 + x86_64 (ad-hoc, no VERSION bump)
+      - name: macOS DMGs arm + intel (ad-hoc, no VERSION bump)
         run: make macos-dmgs BUMP=0
       - name: Smoke DMGs
         run: |
           set -eu
           ver=$(tr -d ' \n' < clients/macOS/VERSION)
-          test -f "dist/clients/macOS/loft-${ver}-macos-arm64.dmg"
-          test -f "dist/clients/macOS/loft-${ver}-macos-x86_64.dmg"
+          test -f "dist/clients/macOS/loft-${ver}-macos-arm.dmg"
+          test -f "dist/clients/macOS/loft-${ver}-macos-intel.dmg"
           ls -l dist/clients/macOS/*.dmg
       - name: Drop scratch images
         run: rm -f dist/clients/macOS/*.rw.dmg
@@ -238,8 +238,23 @@ jobs:
           go-version-file: go.mod
       - name: mingw-w64
         run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64 gcc-mingw-w64-i686 zip unzip
+      - name: llvm-mingw (Windows ARM64)
+        run: |
+          set -eu
+          ver=20261020
+          tar=llvm-mingw-${ver}-ucrt-ubuntu-22.04-x86_64.tar.xz
+          curl -fsSL -o /tmp/llvm-mingw.tar.xz \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/${ver}/${tar}"
+          echo "55064b60b991a1e1e8090b8c2f84e82b22cfe5903d12c159d65064cf5e8ae335  /tmp/llvm-mingw.tar.xz" | sha256sum -c -
+          sudo tar -C /opt -xJf /tmp/llvm-mingw.tar.xz
+          echo "LLVM_MINGW=/opt/llvm-mingw-${ver}-ucrt-ubuntu-22.04-x86_64" >> "$GITHUB_ENV"
+      - name: Wintun 0.14.1
+        run: make -C clients/Windows/wintun-check dist/x64/wintun.dll dist/x86/wintun.dll dist/arm64/wintun.dll
+      - name: loft-front Windows ARM64
+        run: make -C clients/Windows front-arm64 LLVM_MINGW="${LLVM_MINGW}"
       # Pinned XTLS/go-win7. Official Go 1.21+ cannot target Windows 7.
       # The zip is the SDK itself (bin/, src/, pkg/) or a top-level go/ directory.
+      # ARM64 front already built: this overwrites GOROOT.
       - name: Patched Go for Windows 7
         run: |
           set -eu
@@ -254,9 +269,7 @@ jobs:
           fi
           GOTOOLCHAIN=local "$sdk/bin/go" version
           echo "LOFT_GOROOT=$sdk" >> "$GITHUB_ENV"
-      - name: Wintun 0.14.1
-        run: make -C clients/Windows/wintun-check dist/x64/wintun.dll dist/x86/wintun.dll
-      - name: loft-front
+      - name: loft-front Win7
         run: |
           set -eu
           test -x "${LOFT_GOROOT}/bin/go"
@@ -265,7 +278,7 @@ jobs:
         run: |
           set -eu
           ver=$(tr -d ' \n' < VERSION)
-          make -C clients/Windows portable VER="$ver"
+          make -C clients/Windows portable VER="$ver" LLVM_MINGW="${LLVM_MINGW}"
       - name: Smoke
         run: |
           set -eu
@@ -273,7 +286,7 @@ jobs:
           sums="dist/clients/Windows/github/loft-windows-${ver}-SHA256SUMS.txt"
           test -f "$sums"
           (cd dist/clients/Windows/github && sha256sum -c "loft-windows-${ver}-SHA256SUMS.txt")
-          for a in x64 x86; do
+          for a in x86-64 x86 arm64; do
             z="dist/clients/Windows/github/loft-${ver}-windows-${a}.zip"
             test -f "$z"
             unzip -t "$z" >/dev/null
@@ -311,14 +324,14 @@ jobs:
           ver=$(tr -d ' \n' < VERSION)
           found() { find artifacts -type f -name "$1" | grep -q .; }
           for need in \
-            "loft-${ver}-macos-arm64.dmg" "loft-${ver}-macos-x86_64.dmg" \
+            "loft-${ver}-macos-arm.dmg" "loft-${ver}-macos-intel.dmg" \
             "loft-${ver}-darwin-arm64.tar.gz" "loft-${ver}-darwin-amd64.tar.gz" \
             "loft-${ver}-linux-arm64.tar.gz" "loft-${ver}-linux-amd64.tar.gz" \
             "loft-node-${ver}-linux-arm64.tar.gz" "loft-node-${ver}-linux-amd64.tar.gz" \
             "loft-node_${ver}_arm64.deb" "loft-node_${ver}_amd64.deb" \
             "loft-panel-${ver}-linux-arm64.tar.gz" "loft-panel-${ver}-linux-amd64.tar.gz" \
             "loft-panel_${ver}_arm64.deb" "loft-panel_${ver}_amd64.deb" \
-            "loft-${ver}-windows-x64.zip" "loft-${ver}-windows-x86.zip" \
+            "loft-${ver}-windows-x86-64.zip" "loft-${ver}-windows-x86.zip" "loft-${ver}-windows-arm64.zip" \
             "loft-windows-${ver}-SHA256SUMS.txt" \
             "loft-clients-${ver}-SHA256SUMS.txt" "loft-node-${ver}-SHA256SUMS.txt" "loft-panel-${ver}-SHA256SUMS.txt"
           do

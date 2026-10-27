@@ -203,7 +203,7 @@ static int json_str(const char *body, const char *key, char *dst, int n) {
 
 #ifndef LOFT_STORE
 /* find_url scans a GitHub release reply for the first asset download URL
-   that contains part (for example "-windows-x64.zip"). */
+   that contains part (for example "-windows-x86-64.zip"). */
 static int find_url(const char *body, const char *part, char *dst, int n) {
     const char *p = body;
     if (!body || !part || !dst || n <= 0) return 0;
@@ -264,12 +264,17 @@ static void post_upd(WPARAM kind, const char *text) {
     if (!g.msg || !PostMessageW(g.msg, WM_LOFT_UPD, kind, (LPARAM)d)) free(d);
 }
 
-/* zip_suffix names the portable zip that matches this build's architecture. */
-static const char *zip_suffix(void) {
-#if defined(_WIN64)
-    return "-windows-x64.zip";
+/* find_zip picks the portable zip for this architecture. Prefers the Dist
+   names windows-x86-64 / windows-arm64; still accepts the older windows-x64.
+   llvm-mingw clang defines __aarch64__, not MSVC _M_ARM64. */
+static int find_zip(const char *body, char *dst, int n) {
+#if defined(_M_ARM64) || defined(__aarch64__)
+    return find_url(body, "-windows-arm64.zip", dst, n);
+#elif defined(_WIN64)
+    if (find_url(body, "-windows-x86-64.zip", dst, n)) return 1;
+    return find_url(body, "-windows-x64.zip", dst, n);
 #else
-    return "-windows-x86.zip";
+    return find_url(body, "-windows-x86.zip", dst, n);
 #endif
 }
 
@@ -285,7 +290,7 @@ static DWORD WINAPI update_worker(LPVOID arg) {
         post_upd(2, "update");
         return 0;
     }
-    if (!json_str(body, "tag_name", tag, (int)sizeof tag) || !loft_newer(tag, LOFT_VERSION) || !find_url(body, zip_suffix(), url, (int)sizeof url)) {
+    if (!json_str(body, "tag_name", tag, (int)sizeof tag) || !loft_newer(tag, LOFT_VERSION) || !find_zip(body, url, (int)sizeof url)) {
         free(body);
         return 0;
     }
@@ -306,7 +311,7 @@ static DWORD WINAPI download_worker(LPVOID arg) {
     const char *name;
     char *sums = NULL;
     (void)arg;
-    if (!http_get("https://api.github.com/repos/a3app/loft/releases/latest", &body, 20000) || !body || !find_url(body, zip_suffix(), url, (int)sizeof url)) {
+    if (!http_get("https://api.github.com/repos/a3app/loft/releases/latest", &body, 20000) || !body || !find_zip(body, url, (int)sizeof url)) {
         free(body);
         post_upd(2, "update");
         return 0;

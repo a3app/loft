@@ -88,7 +88,10 @@ func NewL3Net(d transport.Dialer, pump transport.IPPump) (*L3Net, error) {
 	}
 	var a [4]byte
 	copy(a[:], ip)
-	ep := channel.New(2048, 1280, tcpip.LinkAddress("\x02\x00\x00\x00\x00\x03"))
+	// The link queue holds packets the stack sends until stackOut passes
+	// them to the tunnel; when it is full, gVisor drops them. 8192 packets
+	// (about 10 MB) keep a full TCP send window of a few flows in it.
+	ep := channel.New(8192, 1280, tcpip.LinkAddress("\x02\x00\x00\x00\x00\x03"))
 	s := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol},
