@@ -111,6 +111,7 @@ type GET struct {
 	// ws/h2/quic/h3 session (not an HTTP GET). Empty on a real GET: the CDN
 	// socket is not a bulk lane.
 	ownerFront   string
+	cc           byte // congestion control Status chose; QUIC lanes follow it
 	ownerArm     func(*GET)
 	ownerDown    func()
 	ownerOnce    atomic.Bool
@@ -336,6 +337,7 @@ func (g *GET) Start(ctx context.Context) error {
 	}
 	RememberVis(st)
 	takeInner(wire.FrontGET, key, st)
+	takeCC(st, nil)
 	g.caps = st.Caps
 	g.ticket = append([]byte(nil), st.Ticket...)
 	g.fronts = append([]wire.FrontEP(nil), st.Fronts...)
@@ -1796,7 +1798,8 @@ type GETServer struct {
 type serverSess struct {
 	id         string
 	key        []byte
-	hello      []byte // eph_n || Seal(Status) for idempotent handshake retry
+	cc         atomic.Uint32 // congestion control the 0x02 agreed; lanes follow it
+	hello      []byte        // eph_n || Seal(Status) for idempotent handshake retry
 	mux        *mux.Session
 	once       sync.Once
 	mu         sync.Mutex

@@ -333,7 +333,7 @@ func (ss *serverSess) armOwner() {
 // sealed Front frame naming this front, and reads uplink batches until the
 // socket ends. A Front frame naming "get" from the client means "stop using
 // lanes": every lane closes and GET carries the mux again.
-func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
+func serveAttach(conn io.ReadWriteCloser, blob []byte, front string, under any) {
 	defer conn.Close()
 	sid, gotFront, _, err := ecrypto.ParseAttach(blob)
 	if err != nil || gotFront != front {
@@ -350,6 +350,9 @@ func serveAttach(conn io.ReadWriteCloser, blob []byte, front string) {
 	if _, _, nonce, err := ecrypto.FinishAttach(ss.key, blob); err != nil {
 		return
 	} else if err := ss.takeAttachNonce(nonce); err != nil {
+		return
+	}
+	if !laneCC(byte(ss.cc.Load()), under) {
 		return
 	}
 	ss.armOwner()

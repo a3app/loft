@@ -139,6 +139,10 @@ func startBulkLanes(ctx context.Context, front string, cfg config.Outbound, toke
 	if sess == nil || done == nil || !st.Caps.Has(wire.CapTicket) || !validGETSID(string(st.Ticket)) || len(key) == 0 {
 		return nil
 	}
+	// A fixed rate is agreed for the session; more lanes would multiply it.
+	if st.CC == wire.CCFixed {
+		return nil
+	}
 	g := &GET{
 		cfg:        cfg,
 		token:      append([]byte(nil), token...),
@@ -150,6 +154,7 @@ func startBulkLanes(ctx context.Context, front string, cfg config.Outbound, toke
 		fronts:     append([]wire.FrontEP(nil), st.Fronts...),
 		done:       done,
 		ownerFront: front,
+		cc:         st.CC,
 		ownerArm:   arm,
 		ownerDown:  down,
 	}
@@ -822,6 +827,7 @@ func (g *GET) attachQUIC(ctx context.Context, o config.Outbound) error {
 	if err != nil {
 		return fmt.Errorf("attach quic: %w", err)
 	}
+	switchQUIC(conn, g.cc, 0)
 	st, err := conn.OpenStreamSync(ctx)
 	if err != nil {
 		_ = conn.CloseWithError(0, "stream")
@@ -862,7 +868,11 @@ func (g *GET) attachH3(ctx context.Context, o config.Outbound) error {
 			if tc == nil {
 				tc = tlsCfg
 			}
-			return dialQUIC(dialCtx, addr, g.token, tc, qc)
+			c, err := dialQUIC(dialCtx, addr, g.token, tc, qc)
+			if err == nil {
+				switchQUIC(c, g.cc, 0)
+			}
+			return c, err
 		},
 	}
 	pr, pw := io.Pipe()

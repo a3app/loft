@@ -240,7 +240,7 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 		if err != nil {
 			return err
 		}
-		setClientCC(cc, up, down)
+		SetClientCC(cc, up, down)
 	}
 	EnsureInstance()
 	if cfg != nil {

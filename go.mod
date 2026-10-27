@@ -35,3 +35,5 @@ tool (
 	golang.org/x/mobile/cmd/gobind
 	golang.org/x/mobile/cmd/gomobile
 )
+
+replace github.com/quic-go/quic-go => github.com/a3app/quic-go v0.59.1-loft.1

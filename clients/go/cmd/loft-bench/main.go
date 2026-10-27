@@ -17,6 +17,7 @@ import (
 	"github.com/a3app/loft/internal/protect"
 	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/internal/version"
+	"github.com/a3app/loft/internal/wire"
 )
 
 // main is either -serve (node-side origin) or the client suite against a front.
@@ -36,6 +37,9 @@ func main() {
 	switchOn := flag.Bool("switch", false, "keep SOCKS up and rotate -type while HTTPS flows")
 	bytesN := flag.Int("bytes", 2<<20, "payload size for down/up")
 	httpN := flag.Int("http", 1<<20, "HTTPS body for internet/direct samples")
+	ccName := flag.String("cc", "", "congestion control ask: off | bbr | fixed; empty = off")
+	ccUp := flag.Uint("cc-up", 0, "fixed: upload rate, Mbit/s")
+	ccDown := flag.Uint("cc-down", 0, "fixed: download rate, Mbit/s")
 	timeout := flag.Duration("timeout", 45*time.Second, "per-case deadline")
 	ifName := flag.String("if", "", "outbound interface or local IP")
 	h2MaxAge := flag.Duration("h2-max-age", 0, "GET HTTP/2 recycle; 0 keep until error")
@@ -45,6 +49,12 @@ func main() {
 	}
 	benchDecoy = strings.TrimSpace(*decoy)
 	benchPBK = strings.TrimSpace(*pbk)
+	cc, err := wire.ParseCCName(*ccName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "loft-bench: %v\n", err)
+		os.Exit(2)
+	}
+	transport.SetClientCC(cc, uint32(*ccUp)*1000, uint32(*ccDown)*1000)
 
 	if *serve != "" {
 		if err := serveOrigin(*serve); err != nil {

@@ -56,6 +56,9 @@ func main() {
 	socks := flag.String("socks", config.DebugSOCKS5, "SOCKS5 listen; empty/off to disable")
 	cdnName := flag.String("cdn", "", "edge profile: yandex | cloudflare")
 	innerName := flag.String("inner", "", "data cipher ask: clear | chacha | aes; empty = chacha")
+	ccName := flag.String("cc", "", "congestion control ask: off | bbr | fixed; empty = off")
+	ccUp := flag.Uint("cc-up", 0, "fixed: upload rate, Mbit/s")
+	ccDown := flag.Uint("cc-down", 0, "fixed: download rate, Mbit/s")
 	edgeURL := flag.String("edge", "", "CDN URL for the first GET; other fronts use -url")
 	decoy := flag.String("decoy", "", "direct-path decoy SNI (dest hostname)")
 	pbk := flag.String("pbk", "", "node X25519 public, hex or base64url")
@@ -159,6 +162,11 @@ func main() {
 	cfg := frontConfig(*token, *rawURL, *kind, *path, *muxOn, *cdnName)
 	cfg.Inner = strings.TrimSpace(*innerName)
 	if _, _, err := cfg.InnerAsk(); err != nil {
+		fmt.Fprintf(os.Stderr, "loft-front: %v\n", err)
+		os.Exit(2)
+	}
+	cfg.CC, cfg.CCUpMbps, cfg.CCDownMbps = strings.TrimSpace(*ccName), uint32(*ccUp), uint32(*ccDown)
+	if _, _, _, err := cfg.CCAsk(); err != nil {
 		fmt.Fprintf(os.Stderr, "loft-front: %v\n", err)
 		os.Exit(2)
 	}

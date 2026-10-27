@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/quic-go/quic-go"
 	"golang.org/x/net/http2"
 
 	"github.com/a3app/loft/internal/config"
@@ -162,7 +163,10 @@ type pipeConn struct {
 	io.Reader
 	io.Writer
 	closer func() error
+	qc     *quic.Conn // the QUIC connection under an h3 CONNECT, nil on h2
 }
+
+func (p *pipeConn) quicConn() *quic.Conn { return p.qc }
 
 // Close closes both sides of the CONNECT stream.
 func (p *pipeConn) Close() error {

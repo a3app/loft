@@ -373,6 +373,7 @@ func l3Handshake(conn net.Conn, token []byte, offer wire.Cap, addr, sni string) 
 		return nil, err
 	}
 	takeInner(wire.FrontL3, key, st)
+	takeCC(st, nil)
 	return key, nil
 }
 
@@ -427,8 +428,8 @@ func (s *l3Sess) readLoop(conn net.Conn, key []byte) {
 // This is the node side. Each packet from the client goes to
 // Overlay.DeliverL3; packets for this client come back through link, which
 // the overlay holds as this session's l3Sink. When the CONNECT ends, the
-// lease is released. sock is the TCP connection under TLS, nil when unknown.
-func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth, sock net.Conn) {
+// lease is released. sock is the QUIC connection under HTTP/3, nil on TCP.
+func serveL3(conn net.Conn, info NodeInfo, a ecrypto.Auth, sock any) {
 	defer conn.Close()
 	link := &l3Sess{conn: conn, key: a.Key, in: make(chan []byte, l3InCap), done: make(chan struct{})}
 	st := info.Status("l3")

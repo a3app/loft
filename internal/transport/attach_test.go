@@ -185,7 +185,7 @@ func TestAttachRejectsBadHMACAndReplay(t *testing.T) {
 		if err != nil {
 			return
 		}
-		serveAttach(sa, blob, wire.FrontH2)
+		serveAttach(sa, blob, wire.FrontH2, nil)
 	}()
 	badKey := make([]byte, 32)
 	copy(badKey, g.key)
@@ -209,7 +209,7 @@ func TestAttachRejectsBadHMACAndReplay(t *testing.T) {
 		if err != nil {
 			return
 		}
-		serveAttach(sa2, blob, wire.FrontH2)
+		serveAttach(sa2, blob, wire.FrontH2, nil)
 	}()
 	good, err := ecrypto.MakeAttach(g.key, g.sid, wire.FrontH2)
 	if err != nil {
@@ -225,7 +225,7 @@ func TestAttachRejectsBadHMACAndReplay(t *testing.T) {
 	sa3, ca3 := net.Pipe()
 	t.Cleanup(func() { _ = sa3.Close(); _ = ca3.Close() })
 	go func() {
-		serveAttach(sa3, good, wire.FrontH2)
+		serveAttach(sa3, good, wire.FrontH2, nil)
 	}()
 	_ = ca3.SetReadDeadline(time.Now().Add(2 * time.Second))
 	if _, err := readMsg(ca3); err == nil {
@@ -247,7 +247,7 @@ func TestAttachFrontMismatch(t *testing.T) {
 		if err != nil {
 			return
 		}
-		serveAttach(sa, b, wire.FrontH2)
+		serveAttach(sa, b, wire.FrontH2, nil)
 	}()
 	if err := writeMsg(ca, blob); err != nil {
 		t.Fatal(err)

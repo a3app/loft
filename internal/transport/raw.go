@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/quic-go/quic-go"
+
 	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
 	"github.com/a3app/loft/internal/mux"
@@ -139,6 +141,11 @@ func startRaw(ctx context.Context, conn net.Conn, token []byte, offer wire.Cap, 
 	sess, gen := takeClientHold()
 	sess.SetHold(st.Caps.Has(wire.CapHold))
 	takeInner(front, key, st)
+	var under any
+	if q, ok := conn.(interface{ quicConn() *quic.Conn }); ok {
+		under = q.quicConn()
+	}
+	takeCC(st, under)
 	s := &rawSess{conn: conn, sess: sess, key: key, holdGen: gen, done: make(chan struct{})}
 	s.lanes = startBulkLanes(ctx, front, cfg, token, key, st, offer, sess, s.done, func(b *GET) {
 		s.gate.handover()
@@ -228,8 +235,8 @@ func serveRaw(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces) {
 // stream, so the node says nothing to a prober. On success the node adopts
 // a parked mux for the same member and instance if there is one, binds a
 // ticket so other fronts can attach, and sends sealed Status. sock is the
-// TCP connection under TLS, nil when unknown.
-func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string, sock net.Conn) {
+// QUIC connection under an h3 CONNECT, nil on TCP.
+func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string, sock any) {
 	defer conn.Close()
 	raw, err := readMsg(conn)
 	if err != nil {
@@ -239,7 +246,7 @@ func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string
 		front = wire.FrontH2
 	}
 	if ecrypto.LooksLikeAttach(raw) {
-		serveAttach(conn, raw, front)
+		serveAttach(conn, raw, front, sock)
 		return
 	}
 	if seen == nil {
@@ -269,6 +276,9 @@ func serveRawAs(conn net.Conn, info NodeInfo, seen *ecrypto.Nonces, front string
 	}
 	applyInner(&st, front, a.Rest)
 	applyCC(&st, front, a.Rest, sock)
+	if ss != nil {
+		ss.cc.Store(uint32(st.CC))
+	}
 	sealed, err := ecrypto.Seal(key, st.Encode(), nil)
 	if err != nil {
 		return

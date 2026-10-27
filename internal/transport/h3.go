@@ -117,6 +117,7 @@ func (h *H3) Start(ctx context.Context) error {
 		MinVersion:         tls.VersionTLS13,
 	}
 	dialCtx := ctx
+	var dialed *quic.Conn // the connection Dial made; Status may switch its sender
 	tr := &http3.Transport{
 		TLSClientConfig: tlsCfg,
 		QUICConfig:      quicCfg(),
@@ -130,6 +131,7 @@ func (h *H3) Start(ctx context.Context) error {
 				return nil, err
 			}
 			noteQUICKEX(c)
+			dialed = c
 			return c, nil
 		},
 	}
@@ -172,7 +174,7 @@ func (h *H3) Start(ctx context.Context) error {
 		_ = tr.Close()
 		return fmt.Errorf("h3 connect: status %d", resp.StatusCode)
 	}
-	conn := &pipeConn{Reader: resp.Body, Writer: pw, closer: func() error {
+	conn := &pipeConn{Reader: resp.Body, Writer: pw, qc: dialed, closer: func() error {
 		_ = pw.Close()
 		return resp.Body.Close()
 	}}
@@ -248,7 +250,7 @@ func serveUDP(certFile, keyFile string, info NodeInfo, fronts []string, listen f
 	if err != nil {
 		return err
 	}
-	h3s := &http3.Server{Handler: newH3Handler(info), TLSConfig: tlsCfg}
+	h3s := &http3.Server{Handler: newH3Handler(info), TLSConfig: tlsCfg, ConnContext: quicContext}
 	seen := ecrypto.NewNonces()
 	for {
 		c, err := ln.Accept(context.Background())

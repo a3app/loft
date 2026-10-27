@@ -191,6 +191,7 @@ func (q *QUIC) Start(ctx context.Context) error {
 	RememberVis(status)
 	q.sess.SetHold(status.Caps.Has(wire.CapHold))
 	takeInner(wire.FrontQUIC, key, status)
+	takeCC(status, conn)
 	if err := adoptDecoy(addr, sni, status, true); err != nil {
 		_ = conn.CloseWithError(0, "decoy")
 		return err
@@ -353,7 +354,7 @@ func serveQUICStream(c *quic.Conn, st *quic.Stream, seen *ecrypto.Nonces, info N
 		return
 	}
 	if ecrypto.LooksLikeAttach(raw) {
-		serveAttach(st, raw, wire.FrontQUIC)
+		serveAttach(st, raw, wire.FrontQUIC, c)
 		return
 	}
 	a, err := frontAuth(info.Token, raw, seen)
@@ -371,6 +372,10 @@ func serveQUICStream(c *quic.Conn, st *quic.Stream, seen *ecrypto.Nonces, info N
 		defer ss.releaseTicket()
 	}
 	applyInner(&status, wire.FrontQUIC, a.Rest)
+	applyCC(&status, wire.FrontQUIC, a.Rest, c)
+	if ss != nil {
+		ss.cc.Store(uint32(status.CC))
+	}
 	sealed, err := ecrypto.Seal(key, status.Encode(), nil)
 	if err != nil {
 		return

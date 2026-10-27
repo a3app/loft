@@ -139,6 +139,7 @@ func (w *WSS) Start(ctx context.Context) error {
 	RememberVis(st)
 	w.sess.SetHold(st.Caps.Has(wire.CapHold))
 	takeInner(wire.FrontWS, key, st)
+	takeCC(st, nil)
 	if err := adoptDecoy(addr, sni, st, strings.TrimSpace(w.cfg.CDN) == ""); err != nil {
 		c.Close(websocket.StatusNormalClosure, "decoy")
 		return err
@@ -452,7 +453,7 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			},
 			close: func() error { return c.Close(websocket.StatusNormalClosure, "") },
 		}
-		serveAttach(wrap, auth, wire.FrontWS)
+		serveAttach(wrap, auth, wire.FrontWS, nil)
 		return
 	}
 	if s.Seen == nil {
@@ -481,7 +482,6 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer ss.releaseTicket()
 	}
 	applyInner(&st, wire.FrontWS, a.Rest)
-	applyCC(&st, wire.FrontWS, a.Rest, sockOf(r.Context()))
 	sealed, err := ecrypto.Seal(key, st.Encode(), nil)
 	if err != nil {
 		return
