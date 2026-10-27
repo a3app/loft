@@ -10,6 +10,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// share_routes.go imports and exports split-tunnel rules ("routes"): which
+// zones and services go through the tunnel and which go direct. The rules
+// travel as SplitStore JSON, wrapped in a loft://routes/ link or a YAML
+// document. share.go handles connections; this file handles only rules.
+
 // ParseRoutes turns a loft://routes/… link, a YAML kind: routes document, or
 // a SplitJSON object into the operator/link SplitStore JSON. It is not a
 // connection: ParseShare refuses loft://routes.
@@ -59,6 +64,8 @@ func EncodeRoutes(splitJSON string) string {
 	return "loft://routes/" + base64.RawURLEncoding.EncodeToString([]byte(splitJSON))
 }
 
+// routesFromURL checks that raw is a loft://routes/<payload> link and decodes
+// the payload. Both loft://routes/x and the opaque form loft:routes/x are read.
 func routesFromURL(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || !strings.EqualFold(u.Scheme, "loft") {
@@ -78,6 +85,8 @@ func routesFromURL(raw string) (string, error) {
 	return decodeRoutesPayload(p)
 }
 
+// decodeRoutesPayload base64url-decodes a routes payload (with or without
+// padding) and returns it only if it looks like SplitStore JSON.
 func decodeRoutesPayload(p string) (string, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(p)
 	if err != nil {
@@ -92,6 +101,8 @@ func decodeRoutesPayload(p string) (string, error) {
 	return string(raw), nil
 }
 
+// looksLikeSplit reports whether b is JSON with non-empty "zones" and
+// "services" fields, the minimum a SplitStore document must have.
 func looksLikeSplit(b []byte) bool {
 	var d struct {
 		Zones    json.RawMessage `json:"zones"`

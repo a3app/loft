@@ -19,6 +19,8 @@ import (
 // SOCKS5 (RFC 1928, RFC 1929) and HTTP CONNECT clients. under dials the
 // proxy itself (directly, or through the channel named in via).
 
+// dialFn opens a connection the way net.Dialer.DialContext does. It lets a
+// proxy client reach its proxy either directly or through another channel.
 type dialFn func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // socksAddr encodes host:port as a SOCKS5 address: a type byte (1 IPv4,
@@ -54,6 +56,7 @@ func socksAddr(target string) ([]byte, error) {
 // returns the address the proxy bound (for UDP ASSOCIATE, where to send
 // datagrams).
 func socksHandshake(c net.Conn, user, pass string, cmd byte, target string) (bound string, err error) {
+	// 1. Greeting: offer the login methods.
 	methods := []byte{5, 1, 0}
 	if user != "" {
 		methods = []byte{5, 2, 0, 2}
@@ -68,6 +71,7 @@ func socksHandshake(c net.Conn, user, pass string, cmd byte, target string) (bou
 	if r[0] != 5 {
 		return "", errors.New("not a SOCKS5 proxy")
 	}
+	// 2. Log in if the proxy chose username/password.
 	switch r[1] {
 	case 0:
 	case 2:
@@ -88,6 +92,7 @@ func socksHandshake(c net.Conn, user, pass string, cmd byte, target string) (bou
 	default:
 		return "", errors.New("the proxy accepts no method we offer")
 	}
+	// 3. Send the command and read the reply with the bound address.
 	addr, err := socksAddr(target)
 	if err != nil {
 		return "", err
@@ -105,6 +110,8 @@ func socksHandshake(c net.Conn, user, pass string, cmd byte, target string) (bou
 	return readSocksAddr(c, h[3])
 }
 
+// socksReply turns a SOCKS5 reply code into readable text for error
+// messages. Unknown codes give an empty string.
 func socksReply(code byte) string {
 	return map[byte]string{1: "general failure", 2: "not allowed", 3: "network unreachable", 4: "host unreachable",
 		5: "connection refused", 6: "TTL expired", 7: "command not supported", 8: "address type not supported"}[code]
@@ -217,6 +224,7 @@ type bufConn struct {
 	r *bufio.Reader
 }
 
+// Read takes bytes from the buffered reader first, then from the connection.
 func (b *bufConn) Read(p []byte) (int, error) { return b.r.Read(p) }
 
 // socksUDP is a UDP ASSOCIATE: datagrams to and from relay carry a SOCKS
@@ -297,13 +305,20 @@ func (u *socksUDP) ReadFrom(buf []byte) (int, string, error) {
 	}
 }
 
+// Close ends the association: it closes the control TCP connection (which
+// tells the proxy to drop the relay) and the local UDP socket. Safe to call
+// more than once.
 func (u *socksUDP) Close() error {
 	u.once.Do(func() { u.ctl.Close(); u.pc.Close() })
 	return nil
 }
 
+// byteReader is a tiny io.Reader over a byte slice. After a read, b holds
+// what is left, so ReadFrom can find where the payload starts once the
+// SOCKS address has been parsed.
 type byteReader struct{ b []byte }
 
+// Read copies from the front of b and drops what it copied.
 func (r *byteReader) Read(p []byte) (int, error) {
 	if len(r.b) == 0 {
 		return 0, io.EOF

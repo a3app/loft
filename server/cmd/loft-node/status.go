@@ -14,6 +14,12 @@ import (
 	"github.com/a3app/loft/server/origin"
 )
 
+// status.go holds the files the node shares with loft-panel: it merges the
+// panel's lists.conf into the config, reloads the relay allowlist on SIGHUP,
+// and writes node-status.json (connected members, live relays) every 5 s.
+// A relay is a node that forwards clients to the controller, the node that
+// owns the network's members and keys.
+
 // mergeLists adds lists.conf (written by loft-panel) to the lists of
 // node.conf; a name in lists.conf replaces the same name.
 func mergeLists(dir string, cfg *config.ServerConfig) error {

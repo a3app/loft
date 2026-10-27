@@ -49,6 +49,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "if %s\n", s)
 	}
 
+	// 1. Build the list of probes from the arguments (or the default suite).
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -58,6 +59,9 @@ func main() {
 		os.Exit(2)
 	}
 
+	// 2. Open the path ("via") the probes travel: a loft session of our own,
+	// an SSTP session, or the SOCKS5 port of a running loft client. The
+	// handshake gets at most 45 seconds.
 	hs, cancelHS := context.WithTimeout(ctx, 45*time.Second)
 	v, err := openVia(hs, viaArgs{
 		viaKind: *viaKind, token: *token, rawURL: *rawURL, kind: *kind, path: *path,
@@ -74,6 +78,7 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "loft-probe via=%s %s  (no system routes)\n", v.kind(), v.detail())
 
+	// 3. Run every probe and print the table; any failure gives exit code 1.
 	var rs []result
 	for _, sp := range specs {
 		n := 1
@@ -135,6 +140,8 @@ func collectSpecs(args []string, protoFlag string) ([]spec, error) {
 	return out, nil
 }
 
+// viaArgs carries the command-line flags that openVia needs to choose and
+// open a via. token doubles as the SSTP password.
 type viaArgs struct {
 	viaKind, token, rawURL, kind, path, cfgPath, socks, user, sni string
 	insecure, pap, verbose, wantICMP                              bool
@@ -203,6 +210,9 @@ func openVia(ctx context.Context, a viaArgs) (via, error) {
 	}
 }
 
+// openSSTPFrom opens an SSTP via. Flags win; any field left empty is filled
+// from the GUI profile given with -c (URL, SNI, user, password, PAP/CHAP,
+// TLS check, DNS). It fails if URL, user or password is still missing.
 func openSSTPFrom(ctx context.Context, a viaArgs) (via, error) {
 	url, user, pass, sni := a.rawURL, a.user, a.token, a.sni
 	insecure, pap := a.insecure, a.pap

@@ -36,6 +36,16 @@ func ListenSOCKS5(addr string, d transport.Dialer) (net.Listener, error) {
 }
 
 // handleSOCKS serves one SOCKS5 client: handshake, then CONNECT or UDP ASSOCIATE.
+//
+// Steps for CONNECT:
+//  1. Read the greeting and the request; UDP ASSOCIATE goes to its own
+//     handler.
+//  2. Normalise the target host. Plain IPv6 is refused at once while the
+//     overlay has no IPv6, so the browser retries over IPv4.
+//  3. Ask the routing rules (transport.LookupAddr) what to do: drop the
+//     connection, dial it directly from this machine, or (the default)
+//     open a stream to the node through d.
+//  4. Send the SOCKS reply and copy bytes both ways until either side ends.
 func handleSOCKS(c net.Conn, d transport.Dialer) {
 	defer c.Close()
 	if tc, ok := c.(*net.TCPConn); ok {
@@ -129,6 +139,15 @@ func drain(c net.Conn) {
 }
 
 // handleUDPAssociate binds a local UDP socket and relays SOCKS UDP over mux datagrams.
+//
+// Steps:
+//  1. Bind a UDP socket on 127.0.0.1 and tell the client its port.
+//  2. A mux front sends each datagram as a mux Dgram frame.
+//  3. A front without a mux session but with its own UDP sockets (SSTP,
+//     L3) relays through one such socket, resolving names with the
+//     front's LookupIP4 when it has one.
+//  4. Either way the association lives as long as the client keeps the
+//     TCP control connection open: the final Read blocks until it closes.
 func handleUDPAssociate(c net.Conn, d transport.Dialer) {
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {

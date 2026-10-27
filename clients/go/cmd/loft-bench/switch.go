@@ -14,6 +14,8 @@ import (
 	"github.com/a3app/loft/internal/transport"
 )
 
+// hop is one event from Supervise: a front came up (o), or Supervise
+// ended with err.
 type hop struct {
 	o   config.Outbound
 	err error
@@ -40,6 +42,8 @@ func runSwitch(ctx context.Context, token, raw, path, cdnName string, muxOn bool
 		hops <- hop{err: err}
 	}()
 
+	// One SOCKS5 listener for the whole run; it follows whatever front the
+	// Holder has, which is the point of the test.
 	ln, err := inbound.ListenSOCKS5("127.0.0.1:0", h)
 	if err != nil {
 		return nil, fmt.Errorf("socks: %w", err)
@@ -47,6 +51,8 @@ func runSwitch(ctx context.Context, token, raw, path, cdnName string, muxOn bool
 	defer ln.Close()
 	socksAddr := ln.Addr().String()
 
+	// For each front that comes up: sample HTTPS through SOCKS, then close
+	// the live front so Supervise moves on to the next one not yet measured.
 	var rows []row
 	prev := ""
 	for i := 0; i < len(kinds); i++ {

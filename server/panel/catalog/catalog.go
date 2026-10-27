@@ -289,6 +289,9 @@ func (p *Plan) Check() error {
 	return nil
 }
 
+// order is a package's position in the catalog list, used to sort a plan
+// into a fixed order no matter how the browser listed it. Unknown keys sort
+// last.
 func order(key string) int {
 	for i, p := range all {
 		if p.Key == key {

@@ -1,6 +1,12 @@
 package main
 
 // Mux, SOCKS, and direct HTTPS measurements.
+//
+// The mux is loft's multiplexer: many streams inside one connection to the
+// node, opened with Dialer.Open. Mux rows talk straight to the bench origin
+// (origin.go) through such streams; SOCKS rows go through a local SOCKS5
+// listener like an app would; the direct row fetches from Cloudflare without
+// loft, as a baseline for the same network.
 
 import (
 	"context"
@@ -166,6 +172,7 @@ func measureDirect(ctx context.Context, httpN int, timeout time.Duration) []row 
 	return []row{r}
 }
 
+// mbit converts n bytes moved in d into megabits per second.
 func mbit(n int, d time.Duration) float64 {
 	if d <= 0 {
 		return 0
@@ -173,6 +180,8 @@ func mbit(n int, d time.Duration) float64 {
 	return float64(n) / d.Seconds() * 8 / 1e6
 }
 
+// withConn dials a connection, runs one measurement fn on it under timeout
+// and closes it. It returns the time fn reported.
 func withConn(ctx context.Context, timeout time.Duration, dial func(context.Context) (net.Conn, error), fn func(net.Conn) (time.Duration, error)) (time.Duration, error) {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -185,6 +194,9 @@ func withConn(ctx context.Context, timeout time.Duration, dial func(context.Cont
 	return fn(c)
 }
 
+// httpsThrough times an HTTPS download of n bytes from speed.cloudflare.com
+// through the SOCKS5 proxy at socksAddr. On failure it prints the first
+// bytes received, which shows when something other than TLS answered.
 func httpsThrough(ctx context.Context, socksAddr string, n int, timeout time.Duration) (time.Duration, error) {
 	var peek *peekConn
 	tr := &http.Transport{
@@ -211,6 +223,7 @@ type peekConn struct {
 	head []byte
 }
 
+// Read reads from the connection and keeps up to the first 24 bytes.
 func (p *peekConn) Read(b []byte) (int, error) {
 	n, err := p.Conn.Read(b)
 	if n > 0 && len(p.head) < 24 {
@@ -222,11 +235,15 @@ func (p *peekConn) Read(b []byte) (int, error) {
 	return n, err
 }
 
+// httpsDirect downloads n bytes from speed.cloudflare.com without loft.
 func httpsDirect(ctx context.Context, n int, timeout time.Duration) error {
 	_, err := httpsGet(ctx, http.DefaultTransport, n, timeout)
 	return err
 }
 
+// httpsGet downloads n bytes from speed.cloudflare.com over tr and returns
+// the time from request to the end of the body. A non-200 answer or a body
+// under half of n counts as an error.
 func httpsGet(ctx context.Context, tr http.RoundTripper, n int, timeout time.Duration) (time.Duration, error) {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

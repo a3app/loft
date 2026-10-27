@@ -42,6 +42,7 @@ func main() {
 	envPath := flag.String("env", "/etc/loft/loft.env", "environment file with LOFT_TOKEN (for -promote)")
 	rollKey := flag.Int("roll-key", 0, "replace the controller key; pinned clients and relays follow for this many days (restart the node after)")
 	flag.Parse()
+	// 1. One-shot commands: print something or change files, then exit.
 	if *showVer {
 		version.Print("loft-node")
 		return
@@ -70,6 +71,8 @@ func main() {
 		return
 	}
 
+	// 2. Load the overlay config (network.conf and friends) and pick the
+	// listen address.
 	// A standby that took over by itself starts from the controller's files.
 	promoted := autoPromoted(*dir)
 	if promoted {
@@ -99,6 +102,8 @@ func main() {
 	if addr == "" {
 		addr = "127.0.0.1:7643"
 	}
+	// 3. Load the server config (node.conf); without -c, run as a plain
+	// controller with default paths.
 	var cfg *config.ServerConfig
 	if *cfgPath != "" {
 		var err error
@@ -114,6 +119,9 @@ func main() {
 			Role:    "controller",
 		}
 	}
+	// 4. Standby handling: a promoted standby runs with the controller's
+	// config; a normal standby gets a hook to take over when asked. A
+	// controller that was fenced (replaced by a standby) refuses to start.
 	if promoted && cfg.IsReplica() {
 		sb := filepath.Join(*dir, "standby")
 		ctlConf, err := os.ReadFile(filepath.Join(sb, "node.conf"))
@@ -149,6 +157,7 @@ func main() {
 		}
 		transport.FenceFn = func(t wire.Takeover) { fence(*dir, t) }
 	}
+	// 5. Command-line flags and LOFT_TOKEN override the config file.
 	if *listen != "" {
 		cfg.Listen = *listen
 	} else if cfg.Listen == "" {
@@ -166,6 +175,7 @@ func main() {
 	if err := mergeLists(*dir, cfg); err != nil {
 		log.Fatal(err)
 	}
+	// 6. Member keys: keep only the members listed in network.conf.
 	ring, err := identity.Load(filepath.Join(*dir, "members.keys"))
 	if err != nil {
 		log.Fatal(err)
@@ -178,6 +188,8 @@ func main() {
 	}
 	ring.Filter(want)
 	transport.AuthKeys = ring
+	// 7. Fleet keys: a relay reads the key its controller issued; a
+	// controller loads the keys of its relays.
 	if cfg.IsRelay() {
 		key, err := os.ReadFile(filepath.Join(*dir, "relay.key"))
 		if err != nil {
@@ -196,6 +208,7 @@ func main() {
 	// AuthShared: LOFT_TOKEN as client secret only when the ring is empty.
 	// Non-empty members.keys never mixes the node token, even if the flag is on.
 	transport.AuthShared = cfg.AuthShared
+	// 8. Allowed inner ciphers and congestion-control algorithms.
 	innerIDs, err := cfg.InnerIDs()
 	if err != nil {
 		log.Fatal(err)
@@ -249,6 +262,8 @@ func main() {
 			log.Printf("session trace %s", cfg.Trace)
 		}
 	}
+	// 9. Build the HTTPS origin, start background jobs (exit rules, status
+	// files, SIGHUP reload) and serve until the process ends.
 	h, err := origin.New(cfg, n)
 	if err != nil {
 		log.Fatal(err)
@@ -326,6 +341,12 @@ func reloadOnHUP(dir, cfgPath string, cfg *config.ServerConfig) {
 	}
 }
 
+// reload re-reads network.conf (the member list) and members.keys from dir
+// and swaps them into the running node. Keys of members missing from
+// network.conf, or with a different key hash, are dropped, so only listed
+// members can log in. The overlay switch closes only the sessions whose
+// member entry changed. Exit rules (egress.conf) are reloaded too; a bad
+// egress.conf keeps the previous rules.
 func reload(dir string, cfg *config.ServerConfig) error {
 	n, err := netconf.LoadDir(dir)
 	if err != nil {

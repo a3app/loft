@@ -1,6 +1,9 @@
 package inbound
 
-// SocksGate is a SOCKS5 listen that can rebind without tearing the mux Dialer.
+// socks_gate.go holds SocksGate, the SOCKS5 listener whose address can be
+// changed while the client runs. The Dialer (the live connection to the
+// node, carrying a mux: many streams over one connection) stays as it is;
+// only the local listening socket is replaced.
 
 import (
 	"net"
@@ -79,6 +82,7 @@ func (g *SocksGate) Close() error {
 	return nil
 }
 
+// closeLocked closes and forgets the listener. The caller holds g.mu.
 func (g *SocksGate) closeLocked() {
 	if g.ln == nil {
 		return
@@ -87,6 +91,7 @@ func (g *SocksGate) closeLocked() {
 	g.ln = nil
 }
 
+// addrLocked is the listen address or empty. The caller holds g.mu.
 func (g *SocksGate) addrLocked() string {
 	if g.ln == nil {
 		return ""
@@ -94,6 +99,9 @@ func (g *SocksGate) addrLocked() string {
 	return g.ln.Addr().String()
 }
 
+// sameSOCKSAddr reports whether the bound address got already satisfies the
+// requested address want, so Set can skip a needless rebind. Port 0 ("any
+// free port") never matches, because the caller asked for a fresh port.
 func sameSOCKSAddr(got, want string) bool {
 	if got == want {
 		return true
@@ -106,6 +114,7 @@ func sameSOCKSAddr(got, want string) bool {
 	return gp == wp && hostOfSOCKS(got) == hostOfSOCKS(want)
 }
 
+// hostOfSOCKS is the host part of addr, or addr itself if it has no port.
 func hostOfSOCKS(addr string) string {
 	h, _, err := net.SplitHostPort(addr)
 	if err != nil {

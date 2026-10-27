@@ -2,6 +2,13 @@ package inbound
 
 // SSTP SOCKS dialer: userspace IPv4 (gVisor) over the PPP session.
 // kernelDial used the host stack, so SOCKS left via en0.
+//
+// SSTP is Microsoft's VPN protocol: PPP (a point-to-point link that carries
+// IP packets) inside TLS. loft can use an SSTP server as its way out. The
+// server hands out one IPv4 address; SSTPNet runs a small TCP/IP stack in
+// user space (gVisor) on that address, so SOCKS connections leave through
+// the SSTP session instead of the host's normal network card. Packets that
+// the stack does not own go to an attached TUN, if any.
 
 import (
 	"context"
@@ -30,6 +37,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 )
 
+// sstpNIC is the id of the single virtual network card in the gVisor stack.
 const sstpNIC = 1
 
 // SSTPNet is a transport.Dialer that opens TCP/UDP on the SSTP overlay IP.
@@ -142,6 +150,11 @@ func (n *SSTPNet) AttachTUN(tun io.ReadWriteCloser) {
 	go n.fromTUN(tun)
 }
 
+// Open makes a TCP connection to target ("host:port") from the SSTP address.
+// A host name is resolved through the SSTP DNS servers first. Only IPv4 is
+// supported. Each connection reserves a local port so incoming packets for
+// it can be told apart from TUN traffic (see stackOwns). The dial gives up
+// after 20 seconds.
 func (n *SSTPNet) Open(target string) (net.Conn, error) {
 	host, portStr, err := net.SplitHostPort(target)
 	if err != nil {
@@ -241,9 +254,14 @@ func (n *SSTPNet) LookupIP4(host string) (net.IP, error) {
 	return n.lookup4(host)
 }
 
+// Session is nil: SSTP carries plain IP, not a loft mux session.
 func (n *SSTPNet) Session() *mux.Session { return nil }
+
+// Done is closed when the SSTP session ends and the Dialer must be replaced.
 func (n *SSTPNet) Done() <-chan struct{} { return n.done }
 
+// Close stops the packet goroutines and the stack, closes the attached TUN,
+// and closes Done. It is safe to call more than once.
 func (n *SSTPNet) Close() error {
 	n.closeOnce.Do(func() {
 		n.cancel()
@@ -261,6 +279,9 @@ func (n *SSTPNet) Close() error {
 	return nil
 }
 
+// fromSSTP reads every IP packet that arrives over SSTP. Packets for our
+// own sockets go into the gVisor stack; the rest go to the attached TUN.
+// When the session read fails, the whole SSTPNet is closed.
 func (n *SSTPNet) fromSSTP() {
 	defer n.Close()
 	for {
@@ -286,6 +307,9 @@ func (n *SSTPNet) fromSSTP() {
 	}
 }
 
+// fromTUN reads packets from the kernel TUN and sends them over SSTP. Pings
+// to our own overlay address are answered locally, because the SSTP server
+// would not answer them.
 func (n *SSTPNet) fromTUN(tun io.ReadWriteCloser) {
 	buf := make([]byte, 2048)
 	for {
@@ -310,6 +334,9 @@ func (n *SSTPNet) fromTUN(tun io.ReadWriteCloser) {
 	}
 }
 
+// stackOut takes packets the gVisor stack wants to send and writes them to
+// the SSTP session. A frame with an Ethernet header is trimmed to its IPv4
+// payload; anything that is not IPv4 is skipped.
 func (n *SSTPNet) stackOut(ctx context.Context) {
 	for {
 		pkt := n.ep.ReadContext(ctx)
@@ -335,6 +362,9 @@ func (n *SSTPNet) stackOut(ctx context.Context) {
 	}
 }
 
+// toStack hands an incoming packet to the gVisor stack if one of our
+// sockets owns it and reports whether it did. An ICMP "packet too big"
+// message lowers the MTU first, whoever owns it.
 func (n *SSTPNet) toStack(ip []byte) bool {
 	if v := sstp.ICMPNextHopMTU(ip); v > 0 {
 		n.applyPMTU(v)
@@ -350,6 +380,9 @@ func (n *SSTPNet) toStack(ip []byte) bool {
 	return true
 }
 
+// stackOwns reports whether ip is for one of our sockets: a TCP or UDP
+// packet to a port we reserved, or an ICMP error about a packet we sent
+// from such a port.
 func (n *SSTPNet) stackOwns(ip []byte) bool {
 	port, proto, ok := ipv4DstPort(ip)
 	if ok && (proto == 6 || proto == 17) && n.hasPort(port) {
@@ -361,6 +394,9 @@ func (n *SSTPNet) stackOwns(ip []byte) bool {
 	return false
 }
 
+// applyPMTU lowers the stack and session MTU (the largest packet size) to
+// v after the path reported it, but never below 1280, the IPv6 minimum
+// that the rest of loft also uses. A larger value is ignored.
 func (n *SSTPNet) applyPMTU(v int) {
 	if v < 1280 {
 		v = 1280
@@ -399,6 +435,9 @@ func icmpInnerSrcPort(ip []byte) (uint16, bool) {
 	return binary.BigEndian.Uint16(inner[iihl : iihl+2]), true
 }
 
+// lookup4 resolves host to an IPv4 address through the SSTP DNS servers.
+// Each server is asked over UDP first and then over TCP, since some
+// networks drop one of the two. The last error is returned if all fail.
 func (n *SSTPNet) lookup4(host string) (net.IP, error) {
 	n.logf("dns %s", host)
 	var last error
@@ -489,6 +528,8 @@ func ResolveDNS(ipcp []net.IP, peer net.IP, extra []net.IP, replace bool) []net.
 	return v4DNS(append(auto, extra...))
 }
 
+// v4DNS keeps only usable IPv4 addresses from in, without duplicates.
+// Each address is copied so later changes to in do not affect the result.
 func v4DNS(in []net.IP) []net.IP {
 	var out []net.IP
 	seen := map[string]struct{}{}
@@ -507,6 +548,17 @@ func v4DNS(in []net.IP) []net.IP {
 	return out
 }
 
+// lookupDNS asks one DNS server for the A record (IPv4 address) of name,
+// with the query travelling through the SSTP session itself.
+//
+// Steps:
+//  1. Build an A query with a time-based id.
+//  2. Connect to server:53 over TCP (Open) or UDP (DialUDP), with an
+//     8-second deadline for the whole exchange.
+//  3. Over TCP, DNS messages carry a 2-byte length prefix: write it with
+//     the query, read the reply length (12..4096 bytes, 12 being the DNS
+//     header), then the reply. Over UDP one datagram goes each way.
+//  4. Pick the first IPv4 address out of the reply with dnsA.
 func (n *SSTPNet) lookupDNS(server, name string, tcpMode bool) (net.IP, error) {
 	id := uint16(time.Now().UnixNano())
 	q := dnsQueryA(name, id)
@@ -558,6 +610,9 @@ func (n *SSTPNet) lookupDNS(server, name string, tcpMode bool) (net.IP, error) {
 	return dnsA(buf[:nr])
 }
 
+// allocPort reserves a free local port from 49152 up (the range meant for
+// temporary ports), wrapping around at the top. It returns 0 if none of
+// 16384 tries found a free port.
 func (n *SSTPNet) allocPort() uint16 {
 	n.portMu.Lock()
 	defer n.portMu.Unlock()
@@ -575,12 +630,14 @@ func (n *SSTPNet) allocPort() uint16 {
 	return 0
 }
 
+// freePort gives back a port taken by allocPort.
 func (n *SSTPNet) freePort(p uint16) {
 	n.portMu.Lock()
 	delete(n.ports, p)
 	n.portMu.Unlock()
 }
 
+// hasPort reports whether port p is reserved by one of our sockets.
 func (n *SSTPNet) hasPort(p uint16) bool {
 	n.portMu.Lock()
 	_, ok := n.ports[p]
@@ -588,6 +645,8 @@ func (n *SSTPNet) hasPort(p uint16) bool {
 	return ok
 }
 
+// sstpConn is a TCP or connected UDP socket on the SSTP stack that frees
+// its reserved local port when closed.
 type sstpConn struct {
 	net.Conn
 	n    *SSTPNet
@@ -595,12 +654,15 @@ type sstpConn struct {
 	once sync.Once
 }
 
+// Close closes the socket and frees its port once.
 func (c *sstpConn) Close() error {
 	err := c.Conn.Close()
 	c.once.Do(func() { c.n.freePort(c.port) })
 	return err
 }
 
+// sstpPacket is an unconnected UDP socket on the SSTP stack that frees its
+// reserved local port when closed.
 type sstpPacket struct {
 	net.PacketConn
 	n    *SSTPNet
@@ -608,12 +670,15 @@ type sstpPacket struct {
 	once sync.Once
 }
 
+// Close closes the socket and frees its port once.
 func (c *sstpPacket) Close() error {
 	err := c.PacketConn.Close()
 	c.once.Do(func() { c.n.freePort(c.port) })
 	return err
 }
 
+// logPkt logs the addresses of the first 12 packets in either direction.
+// That is enough to see whether traffic flows without flooding the log.
 func (n *SSTPNet) logPkt(dir string, ip []byte) {
 	n.seen++
 	if n.seen > 12 {
@@ -627,6 +692,8 @@ func (n *SSTPNet) logPkt(dir string, ip []byte) {
 	n.logf("%s %s → %s proto=%d n=%d", dir, src, dst, proto, len(ip))
 }
 
+// asIPv4 returns b as an IPv4 packet: as is, or with a 14-byte Ethernet
+// header removed. It returns nil for anything else.
 func asIPv4(b []byte) []byte {
 	if len(b) >= 20 && b[0]>>4 == 4 {
 		return b
@@ -637,6 +704,7 @@ func asIPv4(b []byte) []byte {
 	return nil
 }
 
+// headN is the first n bytes of b (or all of b), for hex dumps in logs.
 func headN(b []byte, n int) []byte {
 	if len(b) < n {
 		return b
@@ -644,6 +712,8 @@ func headN(b []byte, n int) []byte {
 	return b[:n]
 }
 
+// ipv4Ends reads the source, destination and protocol number of an IPv4
+// packet for logging.
 func ipv4Ends(ip []byte) (src, dst net.IP, proto byte, ok bool) {
 	if len(ip) < 20 || ip[0]>>4 != 4 {
 		return nil, nil, 0, false
@@ -651,6 +721,9 @@ func ipv4Ends(ip []byte) (src, dst net.IP, proto byte, ok bool) {
 	return net.IP(ip[12:16]), net.IP(ip[16:20]), ip[9], true
 }
 
+// dnsQueryA builds a DNS query for the A record of name: a 12-byte header
+// asking for recursion, then the name as length-prefixed labels, then type
+// A, class IN. Empty or too long labels (over 63 bytes) are skipped.
 func dnsQueryA(name string, id uint16) []byte {
 	q := make([]byte, 12)
 	binary.BigEndian.PutUint16(q[0:2], id)
@@ -668,6 +741,16 @@ func dnsQueryA(name string, id uint16) []byte {
 	return q
 }
 
+// dnsA returns the first IPv4 address in a DNS reply.
+//
+// Steps:
+//  1. Check the 12-byte header and fail on any error code (rcode).
+//  2. Skip the question section. Names are skipped label by label; a
+//     compression pointer (two top bits set) ends a name in 2 bytes. At
+//     most 16 labels are followed, so a malformed reply cannot loop.
+//  3. Walk the answers. Each record has a name, then 10 fixed bytes (type,
+//     class, TTL, data length), then its data. The first record of type A
+//     with 4 bytes of data is the answer; others (such as CNAME) are passed.
 func dnsA(msg []byte) (net.IP, error) {
 	if len(msg) < 12 {
 		return nil, fmt.Errorf("short dns")

@@ -74,6 +74,8 @@ func newStack(ifc tunIO, d transport.Dialer, our net.IP, ipnet *net.IPNet) (*tun
 	_ = s.SetForwardingDefaultAndAllNICs(ipv4.ProtocolNumber, true)
 	s.SetRouteTable([]tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: nicID}})
 
+	// Give the stack our overlay address, if known, so it can also act as
+	// an endpoint and not only forward.
 	ts := &tunStack{ep: ep, stk: s, ifc: ifc, d: d, net: ipnet, nat: make(map[uint32][4]byte), udp: make(map[string][]io.Writer), udpNat: make(map[string][]udpFlow)}
 	if our != nil {
 		ts.our = our.To4()
@@ -94,6 +96,9 @@ func newStack(ifc tunIO, d transport.Dialer, our net.IP, ipnet *net.IPNet) (*tun
 		}
 	}
 
+	// TCP: every new connection the stack accepts is spliced to a stream.
+	// DNS to the overlay gateway is answered locally; otherwise the routing
+	// rules pick drop, direct dial, or a mux stream through d.
 	tcpFwd := tcp.NewForwarder(s, 0, 1024, func(r *tcp.ForwarderRequest) {
 		id := r.ID()
 		dest := net.JoinHostPort(id.LocalAddress.String(), strconv.Itoa(int(id.LocalPort)))
@@ -141,6 +146,8 @@ func newStack(ifc tunIO, d transport.Dialer, our net.IP, ipnet *net.IPNet) (*tun
 	})
 	s.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpFwd.HandlePacket)
 
+	// UDP that was not already handled on the fast path (handleUDP) gets a
+	// gVisor socket relayed by relayUDP.
 	udpFwd := udp.NewForwarder(s, func(r *udp.ForwarderRequest) {
 		id := r.ID()
 		dest := net.JoinHostPort(id.LocalAddress.String(), strconv.Itoa(int(id.LocalPort)))
@@ -157,6 +164,7 @@ func newStack(ifc tunIO, d transport.Dialer, our net.IP, ipnet *net.IPNet) (*tun
 	})
 	s.SetTransportProtocolHandler(udp.ProtocolNumber, udpFwd.HandlePacket)
 
+	// Hook datagrams on the current session and start the packet loops.
 	ts.Attach(d)
 	ctx, cancel := context.WithCancel(context.Background())
 	ts.outCancel = cancel
@@ -257,6 +265,8 @@ func (t *tunStack) emit(pkt []byte) {
 	}
 }
 
+// writeTUN writes one packet into the TUN. Write errors are ignored: a lost
+// packet is recovered by TCP or is acceptable for UDP and ICMP.
 func (t *tunStack) writeTUN(pkt []byte) {
 	if t.ifc == nil || len(pkt) == 0 {
 		return
@@ -264,6 +274,9 @@ func (t *tunStack) writeTUN(pkt []byte) {
 	_, _ = t.ifc.Write(pkt)
 }
 
+// emitLoop is the single writer that drains the emit queue into the TUN
+// until ctx is cancelled, so packets from many goroutines do not write to
+// the device at the same time.
 func (t *tunStack) emitLoop(ctx context.Context) {
 	for {
 		select {
@@ -361,6 +374,10 @@ func (t *tunStack) injectUDP(addr string, data []byte) bool {
 }
 
 // relayUDP copies gVisor UDP payloads to mux WriteDgram or ListenUDP until idle or error.
+// With a mux session, replies come back through the session's datagram
+// filter and are delivered to conn by dest (addUDP). Without one, a
+// dedicated UDP socket of the front is used and a goroutine copies its
+// replies back into conn. A flow quiet for udpIdle is closed.
 func (t *tunStack) relayUDP(conn *gonet.UDPConn, dest string) {
 	defer conn.Close()
 	if t.d == nil {

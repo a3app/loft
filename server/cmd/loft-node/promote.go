@@ -97,11 +97,15 @@ func controllerState(dir, cfgPath string, cfg *config.ServerConfig) map[string][
 // itself: from then on it starts as the controller from its standby copy.
 const promotedMark = "promoted"
 
+// autoPromoted reports whether the promotedMark file exists in dir, that is,
+// whether this standby already took over by itself.
 func autoPromoted(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, promotedMark))
 	return err == nil
 }
 
+// markPromoted writes the promotedMark file (with the current UTC time), so
+// the next start of loft-node runs this standby as the controller.
 func markPromoted(dir string) error {
 	return os.WriteFile(filepath.Join(dir, promotedMark), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o600)
 }
@@ -150,6 +154,8 @@ func copyState(dir string, like os.FileInfo) error {
 // writes the controller's node.conf with this host's listen, address,
 // certificate and decoy, and puts the controller's token into envPath.
 func promote(dir, cfgPath, envPath string) error {
+	// 1. Check that this is a standby with a received copy of the
+	// controller's state.
 	sb := filepath.Join(dir, "standby")
 	if _, err := os.Stat(filepath.Join(sb, "received")); err != nil {
 		return errors.New("promote: no controller state in " + sb + " (is this a standby that has reached its controller?)")
@@ -164,6 +170,8 @@ func promote(dir, cfgPath, envPath string) error {
 	if !mine.IsReplica() {
 		return errors.New("promote: this node is not a standby (role replica)")
 	}
+	// 2. Build the new node.conf and check that it parses before anything
+	// is changed on disk.
 	ctlConf, err := os.ReadFile(filepath.Join(sb, "node.conf"))
 	if err != nil {
 		return fmt.Errorf("promote: controller node.conf: %w", err)
@@ -176,6 +184,8 @@ func promote(dir, cfgPath, envPath string) error {
 	if _, err := config.ParseCommands(text); err != nil {
 		return fmt.Errorf("promote: %w", err)
 	}
+	// 3. Take the controller's files, sign a new controller generation (so
+	// relays fence the old controller), then write node.conf and the token.
 	st, err := os.Stat(dir)
 	if err != nil {
 		return err

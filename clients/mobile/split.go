@@ -89,6 +89,8 @@ func hostOf(raw string) string {
 	return strings.Trim(s, "[]")
 }
 
+// joinComma joins a list with commas, the form Snapshot uses because
+// gomobile cannot export slices.
 func joinComma(ss []string) string {
 	return strings.Join(ss, ",")
 }

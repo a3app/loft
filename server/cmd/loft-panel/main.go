@@ -28,8 +28,12 @@ import (
 	"github.com/a3app/loft/server/panel/web"
 )
 
+// defaultData is where the panel keeps users.json, sessions, settings and
+// backups unless -data says otherwise.
 const defaultData = "/var/lib/loft-panel"
 
+// main picks the subcommand (serve when the first argument is missing or is
+// a flag) and runs it; any error ends the process with status 1.
 func main() {
 	args := os.Args[1:]
 	cmd := "serve"
@@ -55,6 +59,12 @@ func main() {
 	}
 }
 
+// serve runs the panel's web server until SIGINT or SIGTERM. It opens the
+// user store and saved sessions, builds the web.Server that talks to the
+// root helper loft-panel-adm over its unix socket, prints a one-time setup
+// code while no owner exists, and starts the background jobs (certificate
+// renewal, release checks, event letters). On a signal it lets running
+// requests finish for up to 10 s.
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	listen := fs.String("listen", "127.0.0.1:8091", "HTTP listen address (nginx proxies to it)")
@@ -69,6 +79,7 @@ func serve(args []string) error {
 		fmt.Println("loft-panel", version.Version)
 		return nil
 	}
+	// 1. Open the data directory: users, settings and saved sessions.
 	lg := log.New(os.Stderr, "", 0)
 	if err := os.MkdirAll(*data, 0o700); err != nil {
 		return err
@@ -90,6 +101,8 @@ func serve(args []string) error {
 	if err := os.Remove(filepath.Join(*data, "member-keys.json")); err != nil && !errors.Is(err, os.ErrNotExist) {
 		lg.Printf("member-keys.json: %v", err)
 	}
+	// 2. Build the web server. Each request that changes the node goes to
+	// loft-panel-adm, signed with the login of the user who asked (by).
 	srv := &web.Server{Store: st, Sessions: sess, Limit: auth.NewLimiter(), UIDir: *ui, Log: lg,
 		Settings: settings, Audit: store.OpenAudit(*data), ACME: &web.ACME{Dir: *data, URL: *acmeDir},
 		Adm: func(by string) web.Adm { return admproto.Client{Path: *sock, By: by} }}
@@ -102,6 +115,8 @@ func serve(args []string) error {
 			srv.Hosts = append(srv.Hosts, h)
 		}
 	}
+	// 3. First start: without an owner, the panel asks for a setup code that
+	// only someone with shell access can read.
 	if !st.Empty() {
 		os.Remove(filepath.Join(*data, "setup.code")) // an owner exists: the code is spent
 	}
@@ -116,6 +131,7 @@ func serve(args []string) error {
 	if *ui != "" {
 		lg.Printf("WARNING: UI served from %s, not the built-in copy", *ui)
 	}
+	// 4. Serve HTTP with strict timeouts and run background jobs.
 	h, err := srv.Handler()
 	if err != nil {
 		return err
@@ -135,6 +151,7 @@ func serve(args []string) error {
 		return err
 	case <-ctx.Done():
 	}
+	// 5. Signal received: shut down gracefully.
 	sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return hs.Shutdown(sctx)
@@ -185,6 +202,8 @@ func passwd(args []string) error {
 	if err != nil {
 		return err
 	}
+	// A new login is created; an existing one gets the new password and is
+	// enabled again.
 	if _, err := st.Get(login); errors.Is(err, store.ErrNotFound) {
 		r := *role
 		if r == "" {
@@ -215,6 +234,9 @@ func passwd(args []string) error {
 	return nil
 }
 
+// keepOwner gives dir/name the same owner and group as dir. passwd may run
+// as root; without this, the rewritten file would belong to root and the
+// panel's own user could no longer read it.
 func keepOwner(dir, name string) {
 	st, err := os.Stat(dir)
 	if err != nil {
@@ -266,6 +288,7 @@ func readPassword() (string, error) {
 	return a, nil
 }
 
+// users prints every panel user with role, enabled state and last sign-in.
 func users(args []string) error {
 	fs := flag.NewFlagSet("users", flag.ExitOnError)
 	data := fs.String("data", defaultData, "data directory")

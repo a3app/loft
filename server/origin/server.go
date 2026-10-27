@@ -28,6 +28,8 @@ import (
 
 // New builds the origin HTTP handler: roster, lists, H2, splice, GET, WebSocket, cover.
 func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
+	// 1. The overlay switch (member traffic) and the node info that every
+	// front sends to clients.
 	info := nodeInfo(cfg)
 	if n != nil {
 		transport.SetNetSwitch(transport.NewOverlay(n))
@@ -35,6 +37,8 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 			info.Caps &^= wire.CapP2P
 		}
 	}
+	// 2. A controller signs the roster (the list of nodes clients may use)
+	// and the lists with its key; relays have no controller key.
 	if !cfg.IsRelay() {
 		priv, err := ecrypto.LoadControllerKey(cfg.ControllerKey)
 		if err == nil {
@@ -59,6 +63,8 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 			transport.ListsBlob = currentListsBlob
 		}
 	}
+	// 3. The front servers. The GET front adapts to the CDN in front of the
+	// node (edge and CDN profile).
 	edge, err := cfg.EdgeByte()
 	if err != nil {
 		return nil, err
@@ -241,6 +247,9 @@ var (
 	listsKey ed25519.PrivateKey
 )
 
+// currentLists returns the serial and hash of the signed lists now in
+// force (0 and nil before any). The node advertises them in its info reply,
+// so a client can tell whether its copy of the lists is stale.
 func currentLists() (uint64, []byte) {
 	if l := lists.Load(); l != nil {
 		return l.serial, l.hash
@@ -248,6 +257,8 @@ func currentLists() (uint64, []byte) {
 	return 0, nil
 }
 
+// currentListsBlob returns the serial and the whole signed lists payload,
+// for transport to send to clients that ask for the lists themselves.
 func currentListsBlob() (uint64, []byte) {
 	if l := lists.Load(); l != nil {
 		return l.serial, l.blob

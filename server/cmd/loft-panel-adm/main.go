@@ -29,6 +29,8 @@ import (
 	"github.com/a3app/loft/server/panel/admproto"
 )
 
+// main runs one of the one-shot subcommands named in the package doc, or,
+// with no subcommand, serves the socket for the panel until a signal.
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "wire-node" {
 		wireNode(os.Args[2:])
@@ -63,6 +65,7 @@ func main() {
 	}
 }
 
+// lookup returns the numeric user and primary group IDs of a system user.
 func lookup(name string) (uid, gid int, err error) {
 	u, err := user.Lookup(name)
 	if err != nil {
@@ -73,10 +76,16 @@ func lookup(name string) (uid, gid int, err error) {
 	return uid, gid, nil
 }
 
+// run is the helper's main loop. It must run as root. It creates the unix
+// socket so that only root and the panel's group can reach it (directory
+// 0750, socket 0660), and accepts only connections whose peer is the panel
+// user. Node files it writes get the node user as owner. It returns when the
+// socket is closed by SIGINT or SIGTERM.
 func run(sock, panelUser, nodeUser, dir, nodeBin string, lg *log.Logger) error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("must run as root")
 	}
+	// 1. Resolve the panel and node users to numeric IDs.
 	puid, pgid, err := lookup(panelUser)
 	if err != nil {
 		return fmt.Errorf("panel user: %w", err)
@@ -88,6 +97,8 @@ func run(sock, panelUser, nodeUser, dir, nodeBin string, lg *log.Logger) error {
 	ops := adm.Defaults()
 	ops.Dir, ops.UID, ops.GID, ops.NodeBin = dir, nuid, ngid, nodeBin
 
+	// 2. Create the socket with tight ownership and mode; a stale socket
+	// file from an earlier run is removed first.
 	sd := filepath.Dir(sock)
 	if err := os.MkdirAll(sd, 0o750); err != nil {
 		return err
@@ -109,12 +120,14 @@ func run(sock, panelUser, nodeUser, dir, nodeBin string, lg *log.Logger) error {
 		ln.Close()
 		return err
 	}
+	// 3. Close the listener on a signal, which ends Serve below.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sig
 		ln.Close()
 	}()
+	// 4. Serve requests; a background loop re-applies routing every 20 s.
 	lg.Printf("loft-panel-adm %s on %s for %s (uid %d)", version.Version, sock, panelUser, puid)
 	srv := &adm.Server{Ops: ops, Allow: adm.PeerUID(puid), Log: lg}
 	// Channel interfaces come and go: keep their routing tables in place.
@@ -184,6 +197,9 @@ func runJob(args []string) {
 	}
 }
 
+// netCmd runs net-boot (apply the saved network setup at boot) or
+// net-revert (undo the held network change -id that the user did not
+// confirm in time). Either step gets one minute.
 func netCmd(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	id := fs.String("id", "", "the held change")

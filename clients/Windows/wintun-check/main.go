@@ -35,10 +35,15 @@ const (
 	peerIP      = "10.255.0.2"
 )
 
+// out is where say and step print: the console, and after main opens the
+// log file, the console and the file together.
 var out io.Writer = os.Stdout
 
+// say prints one line of the report.
 func say(format string, a ...interface{}) { fmt.Fprintf(out, format+"\n", a...) }
 
+// step prints the result of one check as "[OK  ] name: detail" or
+// "[FAIL] name: detail", so a tester can find the failed step at a glance.
 func step(name string, ok bool, detail string) {
 	mark := "OK  "
 	if !ok {
@@ -51,6 +56,10 @@ func step(name string, ok bool, detail string) {
 	}
 }
 
+// main makes sure the program runs as administrator (relaunching itself
+// through the UAC prompt if not), opens the log file next to the program,
+// runs the checks and prints the final verdict. The window waits for Enter
+// so the tester can read the result before it closes.
 func main() {
 	exe, _ := os.Executable()
 	dir := filepath.Dir(exe)
@@ -85,6 +94,11 @@ func main() {
 	}
 }
 
+// run does the checks listed at the top of this file, in order, and stops at
+// the first failure. dir is the program's folder, where wintun.dll must lie.
+// Deferred calls undo every step that succeeded (session, address, adapter,
+// driver), so the machine is left as it was. It reports true only if ping
+// got answers through the adapter.
 func run(dir string) bool {
 	say("loft-wintun-check · %s", time.Now().Format("2006-01-02 15:04:05"))
 	say("Сборка: %s, %s", runtime.GOARCH, runtime.Version())
@@ -269,6 +283,8 @@ func echoReply(p []byte, peer [4]byte) []byte {
 	return r
 }
 
+// checksum computes the 16-bit one's-complement Internet checksum used in the
+// IPv4 and ICMP headers. The checksum field must be zero before the call.
 func checksum(b []byte) uint16 {
 	var s uint32
 	for i := 0; i+1 < len(b); i += 2 {
@@ -285,12 +301,18 @@ func checksum(b []byte) uint16 {
 
 // ── Wintun API ──
 
+// wintun holds the functions of wintun.dll that the test calls. The DLL is
+// the user-mode side of the Wintun driver: it creates adapters and moves
+// packets between the program and the adapter through a "session" (a pair of
+// shared ring buffers).
 type wintun struct {
 	createAdapter, closeAdapter, deleteDriver, driverVersion, adapterLUID,
 	startSession, endSession, readEvent, receive, releaseRecv, allocSend, send,
 	setLogger *syscall.Proc
 }
 
+// bindWintun looks up every function of wintun.dll that the test needs and
+// fails if any is missing, for example when the DLL is too old or broken.
 func bindWintun(d *syscall.DLL) (*wintun, error) {
 	w := &wintun{}
 	for name, dst := range map[string]**syscall.Proc{
@@ -317,6 +339,8 @@ func bindWintun(d *syscall.DLL) (*wintun, error) {
 	return w, nil
 }
 
+// logLine prints one message from the Wintun driver's own log. wintun.dll
+// calls it through loggerCallback (see logger_amd64.go and logger_386.go).
 func logLine(level uintptr, msg *uint16) {
 	lv := [...]string{"info", "warn", "err"}
 	l := "?"
@@ -326,6 +350,8 @@ func logLine(level uintptr, msg *uint16) {
 	say("  wintun %s: %s", l, utf16z(msg))
 }
 
+// utf16z converts a zero-terminated UTF-16 string from a Windows API to a Go
+// string.
 func utf16z(p *uint16) string {
 	if p == nil {
 		return ""
@@ -350,6 +376,9 @@ var (
 	iphlpapi = syscall.NewLazyDLL("iphlpapi.dll")
 )
 
+// osVersion returns the real Windows version and service pack. RtlGetVersion
+// is used instead of GetVersionEx because the latter can lie to programs
+// without a compatibility manifest.
 func osVersion() (major, minor, build uint32, sp string) {
 	type osvi struct {
 		size, major, minor, build, platform uint32
@@ -361,6 +390,8 @@ func osVersion() (major, minor, build uint32, sp string) {
 	return v.major, v.minor, v.build, syscall.UTF16ToString(v.csd[:])
 }
 
+// wow64 reports whether this 32-bit program runs on 64-bit Windows. Wintun
+// needs the build that matches the system, so the test stops in that case.
 func wow64() bool {
 	var b int32
 	p := kernel32.NewProc("IsWow64Process")
@@ -372,11 +403,16 @@ func wow64() bool {
 	return b != 0
 }
 
+// isAdmin reports whether the program runs with administrator rights, which
+// installing the driver and changing addresses require.
 func isAdmin() bool {
 	r, _, _ := shell32.NewProc("IsUserAnAdmin").Call()
 	return r != 0
 }
 
+// relaunchAsAdmin starts the program again with the "runas" verb, which shows
+// the UAC prompt. It reports whether the new copy was started (ShellExecute
+// returns a value above 32 on success).
 func relaunchAsAdmin(exe string) bool {
 	verb, _ := syscall.UTF16PtrFromString("runas")
 	file, _ := syscall.UTF16PtrFromString(exe)
@@ -398,6 +434,8 @@ func unaddr(idx uint32) {
 		fmt.Sprintf("name=%d", idx), "address="+localIP).Run()
 }
 
+// luidToIndex converts an interface LUID (the 64-bit ID Wintun returns) to
+// the interface index that netsh understands.
 func luidToIndex(luid uint64) (uint32, error) {
 	var idx uint32
 	r, _, _ := iphlpapi.NewProc("ConvertInterfaceLuidToIndex").Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&idx)))
@@ -407,6 +445,9 @@ func luidToIndex(luid uint64) (uint32, error) {
 	return idx, nil
 }
 
+// hotfixes returns the list of installed Windows updates as printed by wmic.
+// run looks for the two SHA-2 updates that Windows 7 needs to accept the
+// driver's signature.
 func hotfixes() string {
 	b, _ := exec.Command("wmic", "qfe", "get", "HotFixID").CombinedOutput()
 	return string(b)
@@ -425,6 +466,8 @@ func oem(b []byte) string {
 	return strings.ReplaceAll(syscall.UTF16ToString(buf[:n]), "\r\n", "\n")
 }
 
+// pause waits for Enter, so the console window does not close before the
+// tester has read the result.
 func pause() {
 	fmt.Println("\nНажмите Enter, чтобы закрыть окно.")
 	fmt.Scanln()

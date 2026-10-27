@@ -165,6 +165,7 @@ func loftYAML(raw string) (string, error) {
 	if err != nil || !strings.EqualFold(u.Scheme, "loft") {
 		return "", fmt.Errorf("loft://")
 	}
+	// 1. Token, host, port, path and the common options from the link.
 	token := ""
 	if u.User != nil {
 		token, _ = url.QueryUnescape(u.User.Username())
@@ -194,6 +195,8 @@ func loftYAML(raw string) (string, error) {
 	}
 	scheme := strings.ToLower(q.Get("scheme"))
 	portN, _ := strconv.Atoi(port)
+	// 2. One outbound per front listed in the query (new links), or a
+	// single outbound from ?type= (old links).
 	keys := []string{"get", "ws", "h2", "h3", "quic"}
 	var listed []string
 	for _, k := range keys {
@@ -231,6 +234,7 @@ func loftYAML(raw string) (string, error) {
 		}
 		outs = []config.Outbound{loftOutbound(name, typ, host, port, portN, scheme, path, fp, cdn, pbk)}
 	}
+	// 3. Give extra outbounds distinct names and build the client config.
 	if len(outs) > 1 {
 		for i := range outs {
 			if i == 0 {

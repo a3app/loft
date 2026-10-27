@@ -17,6 +17,11 @@ import (
 	"github.com/a3app/loft/internal/transport"
 )
 
+// egress.go connects the node to internal/egress, the rules that decide how
+// members' traffic leaves this server (directly, through a VPN interface, a
+// proxy or an SSTP session). It loads egress.conf, which loft-panel writes,
+// and publishes channel state to egress-status.json for the panel to show.
+
 // loadEgress reads egress.conf from dir (written by loft-panel) and swaps
 // the exit rules in. No file: everything leaves directly, as before.
 func loadEgress(dir string, cfg *config.ServerConfig) error {
@@ -60,6 +65,9 @@ func dialSSTP(ctx context.Context, ch egress.Channel) (egress.SSTPConn, error) {
 	return n, nil
 }
 
+// dumpEgressStatus writes the current channel state (or an empty list when
+// there are no exit rules) to dir/egress-status.json. It writes a temp file
+// and renames it, so the panel never reads a half-written file.
 func dumpEgressStatus(dir string) {
 	path := filepath.Join(dir, "egress-status.json")
 	var st []egress.Status

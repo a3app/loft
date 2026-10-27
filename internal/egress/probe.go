@@ -14,14 +14,22 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
+// probe.go is the link check of the egress router. A channel (or the host
+// default route, "direct") with a check configured is probed in the
+// background by TCP, TLS or ping; while it fails, the priority lists in
+// router.go skip it and traffic moves on to the next step.
+
 // autoProbes are HTTPS hosts Automatic mode tries; any one success is enough.
 // The probe goroutine reads the list while a test (or a later reload) may replace it.
 var autoProbes atomic.Value // []string
 
+// init sets the default Automatic-mode probe hosts. Tests swap the list
+// for local servers.
 func init() {
 	autoProbes.Store([]string{"ya.ru:443", "nic.ru:443", "google.com:443"})
 }
 
+// autoProbeList returns the current Automatic-mode probe hosts.
 func autoProbeList() []string {
 	v, _ := autoProbes.Load().([]string)
 	return v
@@ -42,7 +50,7 @@ func (r *Router) probe(cs *chanState) {
 		fails = 3
 	}
 	wait := min(every, 5*time.Second)
-	bad := 0
+	bad := 0 // failures in a row
 	t := time.NewTimer(0)
 	defer t.Stop()
 	for {
@@ -57,6 +65,7 @@ func (r *Router) probe(cs *chanState) {
 		if r.ctx.Err() != nil {
 			return
 		}
+		// Update the link state and log only when it flips.
 		cs.mu.Lock()
 		was := cs.noLink
 		if err == nil {
@@ -168,6 +177,8 @@ func pingDev(ctx context.Context, dev, host string) error {
 	if d, ok := ctx.Deadline(); ok {
 		pc.SetDeadline(d)
 	}
+	// Send one echo request, then read until the matching reply or the
+	// deadline.
 	id := os.Getpid() & 0xffff
 	msg := icmp.Message{Type: ipv4.ICMPTypeEcho, Body: &icmp.Echo{ID: id, Seq: 1, Data: []byte("loft")}}
 	b, err := msg.Marshal(nil)

@@ -114,6 +114,8 @@ func (e *Engine) Start(yamlStr string) error {
 	}
 	e.mu.Unlock()
 
+	// 1. Parse the YAML and check that the first outbound is a kind this
+	// engine can run.
 	cfg, extra, err := decodeFile([]byte(yamlStr))
 	if err != nil {
 		e.setErr(err)
@@ -139,6 +141,8 @@ func (e *Engine) Start(yamlStr string) error {
 		return err
 	}
 
+	// 2. Resolve server addresses while the real network is still the route,
+	// then reset the engine state for a fresh session.
 	if runtime.GOOS == "android" {
 		_ = protect.BindUplink("")
 	}
@@ -171,6 +175,8 @@ func (e *Engine) Start(yamlStr string) error {
 	e.bytesDown.Store(0)
 	e.mu.Unlock()
 
+	// 3. Run the session in the background and wait for its first result.
+	// On a timeout the last dial error (if any) explains what went wrong.
 	transport.ClearDialError()
 	go e.run(ctx, cfg, extra, kind, pipe, pathCh, ready)
 
@@ -219,6 +225,9 @@ func (e *Engine) Stop() {
 	e.state = "stopped"
 	e.mu.Unlock()
 
+	// Close everything outside the lock: Close may block, and the session
+	// goroutine may need the lock to finish. The stack owns the pipe, so the
+	// pipe is closed directly only when there is no stack.
 	if cancel != nil {
 		cancel()
 	}
@@ -313,6 +322,7 @@ func (e *Engine) Snapshot() *Snapshot {
 	tc := e.trojan
 	kind := e.kind
 	e.mu.Unlock()
+	// Tunnel settings come from transport's process-wide state.
 	s.IP, s.Prefix = splitPrefix(transport.OverlayIP(), 24)
 	s.Gateway = transport.OverlayGateway()
 	s.IP6, s.Prefix6 = splitPrefix(transport.OverlayIPv6(), 64)
@@ -322,6 +332,7 @@ func (e *Engine) Snapshot() *Snapshot {
 	if dns := transport.OverlayDNS(); len(dns) > 0 {
 		s.DNS = joinComma(dns)
 	}
+	// Prefer the live client's own byte counters when it has them.
 	switch {
 	case h != nil && loftTypes[kind]:
 		up, down := h.Bytes()
@@ -375,6 +386,8 @@ func (e *Engine) SetSink(s PacketSink) {
 	}
 }
 
+// setErr moves the engine into the "error" state and keeps the message for
+// Snapshot, so the app can show why the session stopped.
 func (e *Engine) setErr(err error) {
 	e.mu.Lock()
 	e.state = "error"
@@ -384,6 +397,8 @@ func (e *Engine) setErr(err error) {
 	e.mu.Unlock()
 }
 
+// addBytes adds to the upload and download byte counters shown in Snapshot.
+// It uses atomics because packet pumps call it from several goroutines.
 func (e *Engine) addBytes(up, down int64) {
 	if up != 0 {
 		e.bytesUp.Add(up)
@@ -434,6 +449,7 @@ func (e *Engine) runLoft(ctx context.Context, cfg *config.ClientConfig, pipe *pa
 	signal := func(err error) { once.Do(func() { ready <- err }) }
 	path = transport.MergePath(ctx, path, transport.WatchStall(ctx, h, nil))
 	err := transport.SuperviseOn(ctx, only, path, func(d transport.Dialer, o config.Outbound) {
+		// Put the new connection into the Holder (or into the live L3Net).
 		if live, ok := h.Live().(*inbound.L3Net); ok {
 			if p, ok := d.(transport.IPPump); ok {
 				live.Swap(d, p)
@@ -453,6 +469,8 @@ func (e *Engine) runLoft(ctx context.Context, cfg *config.ClientConfig, pipe *pa
 		e.kind = o.Type
 		e.mtu = loftMTU
 		e.mu.Unlock()
+		// First connect: start the stack and release Start. Later
+		// connects only re-attach it.
 		if st == nil {
 			ip := transport.OverlayIP()
 			dev, err := inbound.StartStack(pipe, "pkt", h, ip)
@@ -516,6 +534,7 @@ func (e *Engine) runSSTP(ctx context.Context, cfg *config.ClientConfig, extra fi
 	signal := func(err error) { once.Do(func() { ready <- err }) }
 	delay := time.Duration(0)
 	for {
+		// 1. Wait out the retry delay; a path change cuts it short.
 		if delay > 0 {
 			select {
 			case <-ctx.Done():
@@ -527,6 +546,7 @@ func (e *Engine) runSSTP(ctx context.Context, cfg *config.ClientConfig, extra fi
 			case <-time.After(delay):
 			}
 		}
+		// 2. Dial in a child context that a path change cancels.
 		child, cancel := context.WithCancel(ctx)
 		go func() {
 			select {
@@ -545,6 +565,8 @@ func (e *Engine) runSSTP(ctx context.Context, cfg *config.ClientConfig, extra fi
 			}
 			continue
 		}
+		// 3. Up: publish the PPP address and DNS, then pump packets until
+		// the session ends.
 		delay = 0
 		ip := sess.IP.String()
 		gw := ""
@@ -562,6 +584,7 @@ func (e *Engine) runSSTP(ctx context.Context, cfg *config.ClientConfig, extra fi
 		e.mu.Unlock()
 		signal(nil)
 		_ = e.pumpSSTP(child, sess, pipe)
+		// 4. Down: forget the session and go round again.
 		_ = sess.Close()
 		cancel()
 		e.mu.Lock()
@@ -669,6 +692,7 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 			case <-time.After(delay):
 			}
 		}
+		// Build a client and probe the server before reporting the tunnel up.
 		cli, err := vless.New(vless.Config{
 			URL:      o.URL,
 			UUID:     cfg.Token,
@@ -696,6 +720,7 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 			}
 			continue
 		}
+		// Up: publish the synthetic address and start or re-attach the stack.
 		delay = 0
 		transport.RememberOverlay(vless.TunIP, vless.TunIP)
 		e.mu.Lock()
@@ -721,6 +746,7 @@ func (e *Engine) runVLESS(ctx context.Context, cfg *config.ClientConfig, extra f
 		}
 		up = true
 		signal(nil)
+		// Wait for the end: stop, path change or a dead client.
 		select {
 		case <-ctx.Done():
 			_ = cli.Close()
@@ -774,6 +800,7 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 			case <-time.After(delay):
 			}
 		}
+		// Build a client and probe the server before reporting the tunnel up.
 		cli, err := trojan.New(trojan.Config{
 			URL:      o.URL,
 			Password: cfg.Token,
@@ -801,6 +828,7 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 			}
 			continue
 		}
+		// Up: publish the synthetic address and start or re-attach the stack.
 		delay = 0
 		transport.RememberOverlay(trojan.TunIP, trojan.TunIP)
 		e.mu.Lock()
@@ -826,6 +854,7 @@ func (e *Engine) runTrojan(ctx context.Context, cfg *config.ClientConfig, extra 
 		}
 		up = true
 		signal(nil)
+		// Wait for the end: stop, path change or a dead client.
 		select {
 		case <-ctx.Done():
 			_ = cli.Close()

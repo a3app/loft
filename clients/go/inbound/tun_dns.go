@@ -115,6 +115,9 @@ func serveLocalDNSTCP(c net.Conn) {
 	}
 }
 
+// dnsQType returns the record type asked for in DNS query q (for example
+// A or AAAA), or 0 if q is too short. It skips the 12-byte header and the
+// question name to reach the type field.
 func dnsQType(q []byte) uint16 {
 	if len(q) < 12 {
 		return 0
@@ -138,6 +141,10 @@ func dnsQType(q []byte) uint16 {
 	return binary.BigEndian.Uint16(q[off : off+2])
 }
 
+// dnsNoData turns query q into an empty successful answer: the name exists
+// but has no records of that type. It is used for AAAA (IPv6) questions
+// while the overlay has no IPv6, so apps fall back to IPv4 at once instead
+// of waiting.
 func dnsNoData(q []byte) []byte {
 	if len(q) < 12 {
 		return nil
@@ -153,6 +160,8 @@ func dnsNoData(q []byte) []byte {
 	return out
 }
 
+// dnsFail turns query q into a SERVFAIL answer (error code 2, "server
+// failure"), so the app gives up or tries another server quickly.
 func dnsFail(q []byte) []byte {
 	if len(q) < 12 {
 		return nil

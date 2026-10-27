@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+// settings.go keeps the panel's settings (server name, certificates, update
+// mode, sign-in limits, language, notifications and so on) in settings.json
+// in the data directory. Users and roles live separately in users.json
+// (store.go).
+
 // Settings is the panel's own state besides users: the server name chosen
 // in the wizard, the ACME contact, where the wizard stopped.
 type Settings struct {
@@ -83,6 +88,9 @@ func (s Settings) OutboundName(host, member, front string) string {
 	return strings.Join(p, "-")
 }
 
+// hostLabel reduces an advertise address such as "https://Vpn.Example.net:443/"
+// to the bare lower-case host name ("vpn.example.net"): scheme, path, port,
+// IPv6 brackets and a trailing dot are removed.
 func hostLabel(host string) string {
 	h := strings.TrimSpace(host)
 	h = strings.TrimPrefix(h, "https://")
@@ -151,6 +159,8 @@ func (f *SettingsFile) Get() (Settings, error) {
 	return f.read()
 }
 
+// read loads settings.json; a missing file gives empty settings, not an
+// error, because a fresh panel has none yet.
 func (f *SettingsFile) read() (Settings, error) {
 	var s Settings
 	b, err := os.ReadFile(f.path)

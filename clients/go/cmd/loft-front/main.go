@@ -1,5 +1,14 @@
 // Command loft-front is the GUI helper: GET/WS/H2/QUIC/H3/L3 front, SOCKS5, and
 // in-process or loft-priv TUN. It prints STATUS lines on stdout.
+//
+// The desktop apps start loft-front as a child process: it connects to the
+// server over one or more "fronts" (ways of packing loft traffic into HTTPS:
+// get, ws, h2, quic, h3, l3), or speaks SSTP, VLESS or Trojan to a foreign
+// server, and gives the apps a local SOCKS5 port and optionally a TUN device
+// (a virtual network card that captures all traffic). loft-priv is the small
+// privileged helper that creates the TUN and passes its file descriptor here
+// over a unix socket. The app reads the STATUS lines (state, overlay IP,
+// byte rates) to draw its window.
 package main
 
 import (
@@ -141,9 +150,11 @@ func main() {
 		transport.SetInstanceFile(*instanceFile)
 	}
 
+	// The context ends on Ctrl-C or SIGTERM; everything below stops with it.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// SSTP, VLESS and Trojan are not loft protocols and have their own loops.
 	if strings.EqualFold(*kind, "sstp") {
 		runSSTP(ctx, *rawURL, *user, *token, *socks, *tunSock, *probe, *insecure, *pap, *sni, *verbose, *dnsList, *dnsReplace)
 		return
@@ -157,6 +168,8 @@ func main() {
 		return
 	}
 
+	// Build the loft client config from the flags and check the cipher and
+	// congestion-control asks before dialing anything.
 	status("connecting", "front", "", false)
 
 	cfg := frontConfig(*token, *rawURL, *kind, *path, *muxOn, *cdnName)
@@ -191,6 +204,8 @@ func main() {
 		return
 	}
 
+	// The Holder is what SOCKS5 and TUN dial through. Supervise swaps the live
+	// front inside it on every reconnect, so local connections survive.
 	h := &transport.Holder{}
 	defer h.Close()
 	// atomic.Value rejects a second concrete type. get then h3 is a panic.
@@ -209,6 +224,9 @@ func main() {
 	}
 	defer serveSOCKS(ctx, *socks, h).Close()
 
+	// TUN state. bringTUN runs after each (re)connect: the first time it
+	// creates the device (named pipe, existing device or a new one), later it
+	// only re-attaches the Holder.
 	var (
 		tunMu   sync.Mutex
 		tunDev  *inbound.Device
@@ -271,6 +289,8 @@ func main() {
 		_ = c.Close()
 	}()
 
+	// With -tun-sock, loft-priv creates the utun and sends its fd over the
+	// socket; the device starts as soon as the fd arrives.
 	if *tunSock != "" {
 		ln, err := inbound.ListenTUNSock(*tunSock)
 		if err != nil {
@@ -299,6 +319,8 @@ func main() {
 		}
 	}
 
+	// Run Supervise: keep one front up, reconnect on network change or stall,
+	// and on each new front update the Holder, the TUN and the STATUS line.
 	first := make(chan struct{})
 	var once sync.Once
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
@@ -345,6 +367,7 @@ func main() {
 			stop()
 		}
 	}()
+	// Wait for the first connection, then report byte rates every second.
 	select {
 	case <-first:
 	case <-ctx.Done():
@@ -707,6 +730,11 @@ func outboundHosts(raw string) []string {
 }
 
 // runVLESS is VLESS TCP+TLS: SOCKS5 and optional utun via the userspace stack.
+//
+// Steps: dial and probe the VLESS server (connection errors go to STATUS),
+// fix the overlay IP to vless.TunIP, serve SOCKS5, accept a utun fd from
+// loft-priv if asked, then print byte rates every second until the context
+// ends or the client dies.
 func runVLESS(ctx context.Context, rawURL, uuid, socks, tunSock string, probe, insecure bool, sni string) {
 	status("connecting", "vless", "", false)
 	live := atomic.Bool{}
@@ -784,6 +812,8 @@ func runVLESS(ctx context.Context, rawURL, uuid, socks, tunSock string, probe, i
 }
 
 // runTrojan is Trojan TCP+TLS / REALITY / XHTTP: SOCKS5 and optional utun via the userspace stack.
+//
+// The steps are the same as runVLESS, with a Trojan client.
 func runTrojan(ctx context.Context, rawURL, password, socks, tunSock string, probe, insecure bool, sni string) {
 	status("connecting", "trojan", "", false)
 	live := atomic.Bool{}
@@ -861,6 +891,12 @@ func runTrojan(ctx context.Context, rawURL, password, socks, tunSock string, pro
 }
 
 // runSSTP is the SSTP VPN path: TLS + PPP, then packet TUN and optional SOCKS.
+//
+// Steps: dial SSTP (TLS, then PPP login), remember the PPP peer as the
+// gateway, wrap the session in SSTPNet (a userspace TCP/IP stack so SOCKS
+// connections leave through the PPP link, not the host network), apply the
+// -dns choice, serve SOCKS5, accept a utun fd from loft-priv if asked, then
+// print byte rates every second until the context ends or the session dies.
 func runSSTP(ctx context.Context, rawURL, user, pass, socks, tunSock string, probe bool, insecure, pap bool, sni string, verbose bool, dnsList string, dnsReplace bool) {
 	status("connecting", "sstp", "", false)
 	live := atomic.Bool{}
@@ -993,6 +1029,11 @@ func statusDNS(state, msg, ip string, tun bool, dns string, up, down uint64) {
 	statusMTU(state, msg, ip, tun, dns, 0, up, down)
 }
 
+// statusMTU writes one STATUS line on stdout for the GUI as key=value pairs:
+// state, overlay IP, overlay gateway, whether the TUN is up, DNS servers,
+// MTU (SSTP only, when known), byte rates while on, overlay routes, the live
+// front and the fronts learned from the server. The other status* helpers
+// all end here.
 func statusMTU(state, msg, ip string, tun bool, dns string, mtu int, up, down uint64) {
 	tunS := "0"
 	if tun {

@@ -2,6 +2,12 @@
 
 package inbound
 
+// tun_pipe_windows.go is the client side of the Windows packet pipe. On
+// Windows the loft service owns the Wintun adapter (the virtual network
+// card) and runs with admin rights; loft-front runs without them and gets
+// IP packets from the service through a named pipe. Each packet travels as
+// a 4-byte little-endian length followed by the packet bytes.
+
 import (
 	"encoding/binary"
 	"fmt"
@@ -38,10 +44,17 @@ func OpenPacketPipe(name string) (tunIO, error) {
 	}
 }
 
+// Name is the interface name reported to the rest of the client ("Loft").
 func (p *packetPipe) Name() string { return p.name }
 
+// Close closes the pipe; the service sees the end of the stream.
 func (p *packetPipe) Close() error { return p.f.Close() }
 
+// Read returns one IP packet. It reads the length header, then the packet
+// into an internal buffer, and copies it to b. A zero length means the
+// service closed the pipe on purpose (io.EOF). A length outside 20..65535
+// means the stream is broken, since no IPv4 packet is shorter than its
+// 20-byte header.
 func (p *packetPipe) Read(b []byte) (int, error) {
 	var hdr [4]byte
 	if _, err := io.ReadFull(p.f, hdr[:]); err != nil {
@@ -68,6 +81,7 @@ func (p *packetPipe) Read(b []byte) (int, error) {
 	return n, nil
 }
 
+// Write sends one IP packet to the service: the length header, then b.
 func (p *packetPipe) Write(b []byte) (int, error) {
 	if len(b) == 0 || len(b) > 65535 {
 		return 0, fmt.Errorf("tun pipe: write %d", len(b))

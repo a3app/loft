@@ -1,6 +1,11 @@
 package main
 
 // Bench origin protocol on the node loopback: echo, download, upload.
+//
+// "loft-bench -serve" runs this origin on the node; the client side reaches
+// it through the loft tunnel, so the numbers measure loft and not the
+// internet beyond the node. Each TCP connection carries one command: a byte
+// 'E', 'D' or 'U', followed for D and U by a 4-byte big-endian size.
 
 import (
 	"encoding/binary"
@@ -34,6 +39,8 @@ func serveOrigin(addr string) error {
 	}
 }
 
+// tuneOrigin turns off Nagle's delay and enlarges the socket buffers, so
+// the origin itself does not limit the measured speed.
 func tuneOrigin(c net.Conn) {
 	if tc, ok := c.(*net.TCPConn); ok {
 		_ = tc.SetNoDelay(true)
@@ -158,6 +165,7 @@ func originUpload(c net.Conn, n int) (time.Duration, error) {
 	return time.Since(t0), nil
 }
 
+// writeCmdSize sends a command byte followed by n as a 4-byte big-endian size.
 func writeCmdSize(c net.Conn, cmd byte, n int) error {
 	var hdr [5]byte
 	hdr[0] = cmd
@@ -166,6 +174,7 @@ func writeCmdSize(c net.Conn, cmd byte, n int) error {
 	return err
 }
 
+// readU32 reads a 4-byte big-endian number.
 func readU32(r io.Reader) (int, error) {
 	var b [4]byte
 	if _, err := io.ReadFull(r, b[:]); err != nil {
@@ -174,6 +183,7 @@ func readU32(r io.Reader) (int, error) {
 	return int(binary.BigEndian.Uint32(b[:])), nil
 }
 
+// putU32 writes n as a 4-byte big-endian number.
 func putU32(w io.Writer, n uint32) error {
 	var b [4]byte
 	binary.BigEndian.PutUint32(b[:], n)

@@ -18,6 +18,12 @@ import (
 	"time"
 )
 
+// archive.go is the plain (not yet encrypted) layer of a backup: Write packs
+// the chosen parts of the server into a tar.gz with a manifest, and Extract
+// unpacks one into a directory. Extract treats the archive as hostile: names
+// and symlinks that would land outside the target directory are refused.
+// crypt.go wraps this stream in encryption.
+
 // Part is a piece of the server a copy may hold. The panel's own data and
 // the node's always go together; mail is optional because it can be large.
 type Part struct {
@@ -82,6 +88,8 @@ func Write(w io.Writer, root, host string, parts []string) (Manifest, error) {
 				if err != nil {
 					return err
 				}
+				// Paths are stored as part name + system path, e.g.
+				// node/etc/loft/node.conf; skipped subtrees stay out.
 				sys := "/" + strings.TrimPrefix(filepath.ToSlash(strings.TrimPrefix(full, root)), "/")
 				for _, s := range p.Skip {
 					if sys == s || strings.HasPrefix(sys, s+"/") {
@@ -98,6 +106,7 @@ func Write(w io.Writer, root, host string, parts []string) (Manifest, error) {
 				if err != nil {
 					return err
 				}
+				// Sockets, pipes and devices cannot be restored; leave them out.
 				if info.Mode()&(fs.ModeSocket|fs.ModeNamedPipe|fs.ModeDevice) != 0 {
 					return nil
 				}
@@ -121,6 +130,7 @@ func Write(w io.Writer, root, host string, parts []string) (Manifest, error) {
 				if !info.Mode().IsRegular() {
 					return nil
 				}
+				// Copy a regular file and record its SHA-256 in the manifest.
 				f, err := os.Open(full)
 				if errors.Is(err, fs.ErrNotExist) {
 					return nil
@@ -145,6 +155,7 @@ func Write(w io.Writer, root, host string, parts []string) (Manifest, error) {
 			}
 		}
 	}
+	// The manifest goes last, so it can list every file written above.
 	mb, _ := json.MarshalIndent(m, "", " ")
 	if err := tw.WriteHeader(&tar.Header{Name: "manifest.json", Mode: 0o600, Size: int64(len(mb)), ModTime: m.Created, Typeflag: tar.TypeReg}); err != nil {
 		return m, err
@@ -190,6 +201,9 @@ func destIn(dir, name string) (string, error) {
 	return dst, nil
 }
 
+// inside reports whether path p is root itself or lies under it, judged by
+// the cleaned path text only (symlinks are not resolved; evalInside does
+// that).
 func inside(root, p string) bool {
 	p = filepath.Clean(p)
 	rel, err := filepath.Rel(root, p)
@@ -255,6 +269,7 @@ func evalInside(root, p string) error {
 	return nil
 }
 
+// hasDotDot reports whether any component of p is "..".
 func hasDotDot(p string) bool {
 	for _, c := range strings.Split(filepath.ToSlash(p), "/") {
 		if c == ".." {
@@ -272,6 +287,7 @@ func mkdirAllNoFollow(dir string, perm os.FileMode) error {
 	if dir == "" || dir == "." {
 		return nil
 	}
+	// 1. Walk up until an existing directory, refusing symlinks on the way.
 	var missing []string
 	p := dir
 	for {
@@ -295,6 +311,8 @@ func mkdirAllNoFollow(dir string, perm os.FileMode) error {
 		}
 		p = parent
 	}
+	// 2. Create the missing ones top-down and check each again, in case
+	// something swapped in a link meanwhile.
 	for i := len(missing) - 1; i >= 0; i-- {
 		if err := os.Mkdir(missing[i], perm); err != nil && !errors.Is(err, fs.ErrExist) {
 			return err
@@ -310,6 +328,9 @@ func mkdirAllNoFollow(dir string, perm os.FileMode) error {
 	return nil
 }
 
+// createFile creates dst for writing, mode 0600. It fails if anything is
+// already there and never follows a symlink, so an archive cannot overwrite
+// an existing file or write through a planted link.
 func createFile(dst string) (*os.File, error) {
 	return os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o600)
 }
@@ -351,6 +372,8 @@ func Extract(r io.Reader, dir string, want []string, own Owner) (Manifest, error
 		return m, err
 	}
 	root = filepath.Clean(root)
+	// 1. Unpack entry by entry. got collects the SHA-256 of each file
+	// written, to compare with the manifest at the end.
 	tr := tar.NewReader(gz)
 	got := map[string]string{}
 	for {
@@ -367,6 +390,7 @@ func Extract(r io.Reader, dir string, want []string, own Owner) (Manifest, error
 			}
 			continue
 		}
+		// Every name must land inside dir, even for parts not wanted.
 		dst, err := destIn(dir, h.Name)
 		if err != nil {
 			return m, err
@@ -407,6 +431,7 @@ func Extract(r io.Reader, dir string, want []string, own Owner) (Manifest, error
 		default:
 			return m, fmt.Errorf("the copy holds an unexpected %s entry", h.Name)
 		}
+		// Restore mode, owner and time (links keep their own).
 		if h.Typeflag != tar.TypeSymlink {
 			os.Chmod(dst, h.FileInfo().Mode().Perm())
 			if own != nil {
@@ -417,6 +442,8 @@ func Extract(r io.Reader, dir string, want []string, own Owner) (Manifest, error
 			os.Chtimes(dst, h.ModTime, h.ModTime)
 		}
 	}
+	// 2. Check against the manifest: every wanted file present and equal,
+	// nothing extra, and every wanted part in the copy.
 	if m.Files == nil {
 		return m, errors.New("the copy has no manifest: it was cut off")
 	}

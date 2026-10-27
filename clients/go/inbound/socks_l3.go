@@ -1,6 +1,13 @@
 package inbound
 
 // L3 SOCKS dialer: gVisor IPv4 over an IPPump (same shape as SSTPNet).
+//
+// An L3 front carries raw IP packets to the node (an IPPump) instead of mux
+// streams. SOCKS still needs TCP connections, so L3Net runs a small TCP/IP
+// stack in user space (gVisor) on the client's overlay address and sends
+// its packets through the pump. Packets the stack does not own go to the
+// attached TUN. The pump can be swapped on reconnect while the stack, the
+// SOCKS listener and the TUN keep running.
 
 import (
 	"context"
@@ -26,6 +33,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 )
 
+// l3NIC is the id of the single virtual network card in the gVisor stack.
 const l3NIC = 1
 
 // L3Net is a Dialer that opens TCP/UDP on the L3 overlay IP.
@@ -186,11 +194,23 @@ func (n *L3Net) LookupIP4(host string) (net.IP, error) {
 	return ips[0].To4(), nil
 }
 
+// Session is nil: an L3 front carries IP, not a mux session.
 func (n *L3Net) Session() *mux.Session { return nil }
+
+// Done is closed when L3Net is closed.
 func (n *L3Net) Done() <-chan struct{} { return n.done }
 
+// ConnBytes is the IP bytes sent (up) and received (down) through the pump.
 func (n *L3Net) ConnBytes() (uint64, uint64) { return n.up.Load(), n.down.Load() }
 
+// Close shuts L3Net down for good. Readers waiting for a new pump are woken
+// so they see Done and exit.
+//
+// Steps:
+//  1. Stop stackOut and the gVisor stack.
+//  2. Close the attached TUN, which also ends fromTUN.
+//  3. Drop the pump and wake everyone blocked on the old wait channel.
+//  4. Close the front's Dialer, then close Done.
 func (n *L3Net) Close() error {
 	n.closeOnce.Do(func() {
 		n.cancel()
@@ -241,6 +261,8 @@ func (n *L3Net) Swap(d transport.Dialer, pump transport.IPPump) {
 	}
 }
 
+// livePump returns the current pump and a channel that closes when the
+// pump is swapped or L3Net is closed.
 func (n *L3Net) livePump() (transport.IPPump, <-chan struct{}) {
 	n.pumpMu.RLock()
 	p, wait := n.pump, n.wait
@@ -248,6 +270,9 @@ func (n *L3Net) livePump() (transport.IPPump, <-chan struct{}) {
 	return p, wait
 }
 
+// writePump sends one packet through the current pump. If there is no pump
+// or the write fails, it waits for the next Swap and tries again, so a
+// reconnect does not drop the packet. It fails only once L3Net is closed.
 func (n *L3Net) writePump(ip []byte) error {
 	for {
 		p, wait := n.livePump()
@@ -276,6 +301,13 @@ func (n *L3Net) AttachTUN(tun io.ReadWriteCloser) {
 	go n.fromTUN(tun)
 }
 
+// fromL3 reads packets from the pump for as long as L3Net lives.
+//
+// Steps:
+//  1. Take the current pump. With no pump, or after a read error, wait for
+//     a Swap (or Close) instead of giving up: the front is being replaced.
+//  2. Packets for our own sockets go into the gVisor stack.
+//  3. Everything else is written to the attached TUN, if any.
 func (n *L3Net) fromL3() {
 	for {
 		p, wait := n.livePump()
@@ -309,6 +341,8 @@ func (n *L3Net) fromL3() {
 	}
 }
 
+// fromTUN reads packets from the kernel TUN and sends them through the
+// pump. It returns when the TUN read fails or L3Net is closed.
 func (n *L3Net) fromTUN(tun io.ReadWriteCloser) {
 	buf := make([]byte, 2048)
 	for {
@@ -327,6 +361,8 @@ func (n *L3Net) fromTUN(tun io.ReadWriteCloser) {
 	}
 }
 
+// stackOut takes packets the gVisor stack wants to send and writes them to
+// the pump. Anything that is not IPv4 is skipped.
 func (n *L3Net) stackOut(ctx context.Context) {
 	for {
 		pkt := n.ep.ReadContext(ctx)
@@ -349,6 +385,8 @@ func (n *L3Net) stackOut(ctx context.Context) {
 	}
 }
 
+// toStack hands an incoming packet to the gVisor stack if one of our
+// sockets owns it and reports whether it did.
 func (n *L3Net) toStack(ip []byte) bool {
 	if !n.stackOwns(ip) {
 		return false
@@ -361,6 +399,9 @@ func (n *L3Net) toStack(ip []byte) bool {
 	return true
 }
 
+// stackOwns reports whether ip is for one of our sockets: a TCP or UDP
+// packet to a port we reserved, or an ICMP error about a packet we sent
+// from such a port.
 func (n *L3Net) stackOwns(ip []byte) bool {
 	port, proto, ok := ipv4DstPort(ip)
 	if ok && (proto == 6 || proto == 17) && n.hasPort(port) {
@@ -372,6 +413,9 @@ func (n *L3Net) stackOwns(ip []byte) bool {
 	return false
 }
 
+// allocPort reserves a free local port from 49152 up (the range meant for
+// temporary ports), wrapping around at the top. It returns 0 if none of
+// 16384 tries found a free port.
 func (n *L3Net) allocPort() uint16 {
 	n.portMu.Lock()
 	defer n.portMu.Unlock()
@@ -389,12 +433,14 @@ func (n *L3Net) allocPort() uint16 {
 	return 0
 }
 
+// freePort gives back a port taken by allocPort.
 func (n *L3Net) freePort(p uint16) {
 	n.portMu.Lock()
 	delete(n.ports, p)
 	n.portMu.Unlock()
 }
 
+// hasPort reports whether port p is reserved by one of our sockets.
 func (n *L3Net) hasPort(p uint16) bool {
 	n.portMu.Lock()
 	_, ok := n.ports[p]
@@ -402,6 +448,8 @@ func (n *L3Net) hasPort(p uint16) bool {
 	return ok
 }
 
+// l3Conn is a TCP socket on the L3 stack that frees its reserved local
+// port when closed.
 type l3Conn struct {
 	net.Conn
 	n    *L3Net
@@ -409,12 +457,15 @@ type l3Conn struct {
 	once sync.Once
 }
 
+// Close closes the socket and frees its port once.
 func (c *l3Conn) Close() error {
 	err := c.Conn.Close()
 	c.once.Do(func() { c.n.freePort(c.port) })
 	return err
 }
 
+// l3Packet is a UDP socket on the L3 stack that frees its reserved local
+// port when closed.
 type l3Packet struct {
 	net.PacketConn
 	n    *L3Net
@@ -422,6 +473,7 @@ type l3Packet struct {
 	once sync.Once
 }
 
+// Close closes the socket and frees its port once.
 func (c *l3Packet) Close() error {
 	err := c.PacketConn.Close()
 	c.once.Do(func() { c.n.freePort(c.port) })

@@ -1,5 +1,11 @@
 // Package inbound is the loft client listener: SOCKS5, userspace TUN
 // (ICMP/UDP/TCP), Darwin/Linux DNS and routes, optional overlay IPv6.
+//
+// "Inbound" means where local traffic enters the client: apps either talk
+// to the SOCKS5 proxy (socks5.go) or the system routes their packets into a
+// TUN, a virtual network interface (this file). Both hand the traffic to a
+// transport.Dialer, the live session to the loft node. The overlay is the
+// private network the node gives its members, with addresses like 10.7.0.x.
 package inbound
 
 import (
@@ -46,6 +52,8 @@ func (d *Device) Attach(dial transport.Dialer) {
 	}
 }
 
+// ipPumpOf reports whether front d carries raw IP packets (an L3 front),
+// either directly or through an IPPump method, and returns that pump.
 func ipPumpOf(d transport.Dialer) (transport.IPPump, bool) {
 	if p, ok := d.(transport.IPPump); ok {
 		return p, true
@@ -161,6 +169,21 @@ func AttachTUN(device, cidr string, d transport.Dialer) (*Device, error) {
 	return openTUN(device, cidr, false, d, nil, true)
 }
 
+// openTUN is the shared body of StartTUN and AttachTUN. It opens a TUN with
+// the given name (or a system-chosen one for "" and "auto"), configures it
+// unless noExec is set, and picks the packet path: an L3 front gets raw
+// packet copying, any other front gets the userspace stack. On any error
+// everything set up so far is undone.
+//
+// Steps:
+//  1. Open the TUN interface.
+//  2. Unless noExec (the system's network manager owns the interface), give
+//     it the overlay address and the extra routes the node announced.
+//  3. Look through a transport.Holder (which swaps fronts on reconnect) to
+//     the current front. L3 fronts take IP packets as they are, so no
+//     userspace stack is needed.
+//  4. Any other front carries mux streams: run the userspace TCP/IP stack
+//     that turns packets into streams.
 func openTUN(device, cidr string, killSwitch bool, d transport.Dialer, exclude []string, noExec bool) (*Device, error) {
 	if cidr == "" {
 		cidr = OverlayCIDR(transport.OverlayIP(), "")
@@ -219,6 +242,12 @@ func openTUN(device, cidr string, killSwitch bool, d transport.Dialer, exclude [
 	return openDevice(ifc, st, extraUndo, killSwitch, exclude, noExec)
 }
 
+// openDevice wraps an opened TUN into a Device. Unless noExec is set it also
+// sends traffic into the TUN: either a kill-switch (traffic cannot leave
+// outside the tunnel) or just the split default routes, then the overlay
+// DNS. All of it is collected into one undo that Device.Close runs. If the
+// kill-switch cannot be set, everything is torn down and an error returned,
+// because silently running without it would leak traffic.
 func openDevice(ifc tunIO, st *tunStack, extraUndo func(), killSwitch bool, exclude []string, noExec bool) (*Device, error) {
 	if noExec {
 		return &Device{ts: st, ifc: ifc}, nil

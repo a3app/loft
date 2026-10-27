@@ -1,4 +1,13 @@
 // Package lanui is the LAN operator page for loft (MikroTik :8090).
+//
+// When the loft client runs as a container on a MikroTik router, there is no
+// GUI. This package serves a small web page inside the container (listen.http
+// in client.yaml, usually :8090) where the operator sees the status, the log
+// tail and can change the key, server URL, front type and uplink interface.
+// A "front" is the way loft packs its traffic into HTTPS (get, ws, h2, ...).
+// The page also hands out uplink.rsc, a RouterOS script that sends the
+// container's traffic out through the chosen WAN. The command that owns the
+// session (cmd/loft) supplies the Live and Apply callbacks.
 package lanui
 
 import (
@@ -17,9 +26,13 @@ import (
 	"github.com/a3app/loft/internal/config"
 )
 
+// page holds index.html, the single-page UI, built into the binary.
+//
 //go:embed index.html
 var page embed.FS
 
+// cookieName is the login cookie. srcNet is the container's network on the
+// router (veth/bridge, see docs/mikrotik.md); uplink.rsc routes it.
 const (
 	cookieName = "loft-lan"
 	srcNet     = "172.31.20.0/24"
@@ -108,6 +121,9 @@ type Server struct {
 	secret string
 }
 
+// token returns the random value stored in the login cookie. It is made once
+// per process, so restarting loft logs everyone out. If the system random
+// source fails, a fixed value is used instead.
 func (s *Server) token() string {
 	s.once.Do(func() {
 		var b [16]byte
@@ -120,6 +136,9 @@ func (s *Server) token() string {
 	return s.secret
 }
 
+// ok reports whether the request may see and change settings: always when no
+// password is set, otherwise only with the right login cookie (compared in
+// constant time so the value cannot be guessed by timing).
 func (s *Server) ok(r *http.Request) bool {
 	if s.Pass == "" {
 		return true
@@ -131,6 +150,7 @@ func (s *Server) ok(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(s.token())) == 1
 }
 
+// mux routes the page and its JSON API.
 func (s *Server) mux() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("/", s.page)
@@ -150,6 +170,8 @@ func (s *Server) Listen() error {
 	return http.ListenAndServe(s.Addr, s.mux())
 }
 
+// page serves index.html at "/" and 404 elsewhere. no-store keeps a browser
+// from showing an old copy after an upgrade.
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -165,10 +187,14 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 
+// cookieSecure marks the cookie Secure only when the page came over TLS;
+// on plain http a Secure cookie would never be sent back.
 func cookieSecure(r *http.Request) bool {
 	return r != nil && r.TLS != nil
 }
 
+// login (POST /login) checks the form password and sets the login cookie.
+// With no password configured, login is refused: there is nothing to log in to.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -190,6 +216,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// status (GET /api/status) returns the live Status. Without a valid login it
+// answers 401 with need_pass set, so the page knows to show the password box.
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	if !s.ok(r) {
 		w.Header().Set("Content-Type", "application/json")
@@ -206,6 +234,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(st)
 }
 
+// lines (GET /api/log) returns the recent log lines kept in the Ring.
 func (s *Server) lines(w http.ResponseWriter, r *http.Request) {
 	if !s.ok(r) {
 		http.Error(w, "forbidden", http.StatusUnauthorized)
@@ -219,6 +248,8 @@ func (s *Server) lines(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+// save (POST /api/save) reads a Patch, checks the uplink interface name and
+// passes the patch to Apply, which rewrites the config and reconnects.
 func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -249,6 +280,8 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// rsc (GET /api/uplink.rsc) returns the RouterOS script for the uplink the
+// session currently uses, for the operator to /import on the router.
 func (s *Server) rsc(w http.ResponseWriter, r *http.Request) {
 	if !s.ok(r) {
 		http.Error(w, "forbidden", http.StatusUnauthorized)

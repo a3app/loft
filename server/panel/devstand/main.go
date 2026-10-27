@@ -26,12 +26,19 @@ import (
 	"github.com/a3app/loft/server/panel/web"
 )
 
+// main builds a throw-away server in a temp directory and serves the panel
+// on it. The real adm.Ops (the operations loft-panel-adm does as root) run
+// against that directory, with every system command (systemctl, dpkg-query,
+// systemd-run, shell scripts) replaced by a fake that answers just enough
+// for the UI. The panel talks to them over a unix socket, as in production.
 func main() {
 	listen := flag.String("listen", "127.0.0.1:8091", "HTTP address")
 	ui := flag.String("ui", "", "UI directory (default: built-in)")
 	flag.Parse()
 	lg := log.New(os.Stderr, "devstand: ", 0)
 
+	// 1. Lay out the temp tree: node data with a seeded network, the
+	// panel's data under fs/ (the fake system root) and node config in etc/.
 	root, err := os.MkdirTemp("", "loft-devstand-")
 	if err != nil {
 		lg.Fatal(err)
@@ -51,6 +58,9 @@ func main() {
 	os.WriteFile(filepath.Join(etc, "node.conf"), []byte("role controller\nlisten :443\nget_path /static/js\nadvertise https://vpn.example.net\ndecoy 127.0.0.1:8443\ndecoy_proxy enable\n"), 0o640)
 	os.WriteFile(filepath.Join(etc, "panel.env"), []byte("PANEL_HOSTS=vpn.example.net\n"), 0o640)
 	os.WriteFile(filepath.Join(node, "controller.seed"), []byte("devstand-controller-seed-32bytes"), 0o600)
+	// 2. Root operations with a fake systemctl: a restart "fails" when
+	// network.conf contains "# crash", so the panel's rollback path can be
+	// tried.
 	ops := &adm.Ops{Dir: node, Unit: "loft-node.service", UID: -1, GID: -1, Settle: 300 * time.Millisecond,
 		Etc: etc, PanelEnv: filepath.Join(etc, "panel.env"), NginxSite: filepath.Join(etc, "nginx-site.conf"), NginxTest: func() error { return nil }, PanelTLS: filepath.Join(etc, "panel-tls"),
 		Systemctl: func(_ context.Context, args ...string) (string, error) {
@@ -122,6 +132,8 @@ func main() {
 		}
 		return "", nil
 	}
+	// 3. Serve the operations on a unix socket, like loft-panel-adm (but with
+	// no peer check).
 	sock := filepath.Join(os.TempDir(), fmt.Sprintf("lpdev-%d.sock", os.Getpid()))
 	os.Remove(sock)
 	ln, err := net.Listen("unix", sock)
@@ -131,6 +143,7 @@ func main() {
 	defer os.Remove(sock)
 	go (&adm.Server{Ops: ops, Log: lg}).Serve(ln)
 
+	// 4. The real panel web server with a fixed setup code.
 	st, _ := store.Open(data)
 	srv := &web.Server{Store: st, Sessions: auth.NewSessions(), Limit: auth.NewLimiter(), SetupCode: "000000-000000", UIDir: *ui, Log: lg,
 		Settings: store.OpenSettings(data), ACME: &web.ACME{Dir: data},

@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+// roles.go is panel access control: each role gives every area (section) of
+// the panel a level (none, view or change). Three roles are built in; the
+// owner may edit operator and viewer and add custom roles, which are saved
+// in users.json next to the users.
+
 // Areas are the panel's sections; a role gives each one a level.
 var Areas = []string{"main", "node", "members", "segments", "network", "domains", "mail", "packages", "users", "system", "settings"}
 
@@ -30,6 +35,10 @@ type Role struct {
 	Builtin bool           `json:"builtin,omitempty"`
 }
 
+// builtinRoles returns fresh copies of the three built-in roles with their
+// default permissions: owner may change everything; operator may change the
+// day-to-day areas, only view node, packages and system, and cannot see users
+// or settings; viewer may view everything except users.
 func builtinRoles() []Role {
 	all := func(v int) map[string]int {
 		m := map[string]int{}
@@ -59,6 +68,9 @@ func (s *Store) Roles() []Role {
 	return s.rolesLocked()
 }
 
+// rolesLocked lists every role: the built-in ones first (operator and viewer
+// with any saved edits; owner always as defined), then custom roles sorted
+// by name. The caller holds s.mu.
 func (s *Store) rolesLocked() []Role {
 	out := builtinRoles()
 	for i := range out {
@@ -102,6 +114,7 @@ func (s *Store) SaveRole(r Role) (Role, error) {
 	if r.ID == RoleOwner {
 		return Role{}, errors.New("the owner role cannot be changed")
 	}
+	// 1. Keep only known areas, each with a valid level.
 	perms := map[string]int{}
 	for _, a := range Areas {
 		v := r.Perms[a]
@@ -115,6 +128,7 @@ func (s *Store) SaveRole(r Role) (Role, error) {
 	if s.roles == nil {
 		s.roles = map[string]Role{}
 	}
+	// 2. A new role gets a short random-looking ID from its name and time.
 	if r.ID == "" {
 		if r.Name == "" || len(r.Name) > 40 {
 			return Role{}, errors.New("role name: 1–40 characters")
@@ -122,6 +136,8 @@ func (s *Store) SaveRole(r Role) (Role, error) {
 		h := sha256.Sum256([]byte(r.Name + time.Now().String()))
 		r.ID = "r-" + hex.EncodeToString(h[:4])
 	}
+	// 3. Names: a new custom role must not repeat an existing name; built-in
+	// roles keep their fixed names.
 	builtin := r.ID == RoleOperator || r.ID == RoleViewer
 	old, had := s.roles[r.ID]
 	if !builtin && !had {
@@ -143,6 +159,7 @@ func (s *Store) SaveRole(r Role) (Role, error) {
 	} else if r.Name == "" {
 		r.Name = old.Name
 	}
+	// 4. Save; on a write error the in-memory change is undone.
 	r.Perms, r.Builtin = perms, builtin
 	s.roles[r.ID] = r
 	if err := s.saveLocked(func() {

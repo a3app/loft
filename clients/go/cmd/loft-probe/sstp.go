@@ -1,6 +1,11 @@
 package main
 
 // SSTP via for loft-probe: userspace TCP/UDP/ICMP over the PPP session.
+//
+// A "via" (see via.go) is the path probes take. This one dials an SSTP VPN
+// server (TLS, then PPP) and runs inbound.SSTPNet, a userspace TCP/IP stack,
+// on top, so probes leave through the VPN without a utun device or system
+// routes. The rest of the file reads the desktop app's SSTP profile YAML.
 
 import (
 	"context"
@@ -69,6 +74,9 @@ func openSSTP(ctx context.Context, url, user, pass, sni string, insecure, pap, v
 	return v, nil
 }
 
+// udpFromIP extracts the payload and the sender "ip:port" from an IPv4 UDP
+// packet. ok is false for anything else. openSSTP's tap uses it to pass UDP
+// answers (DNS, for example) to waitDgram.
 func udpFromIP(ip []byte) ([]byte, string, bool) {
 	if len(ip) < 28 || ip[0]>>4 != 4 || ip[9] != 17 {
 		return nil, "", false
@@ -82,6 +90,9 @@ func udpFromIP(ip []byte) ([]byte, string, bool) {
 	return append([]byte(nil), ip[ihl+8:]...), net.JoinHostPort(src, strconv.Itoa(sport)), true
 }
 
+// looksIPv4 reports whether data is a whole IPv4 packet carrying ICMP, TCP
+// or UDP. writeDgram sends such packets raw into the PPP link (that is how
+// ICMP probes are built) and treats anything else as a UDP payload.
 func looksIPv4(data []byte) bool {
 	if len(data) < 20 || data[0]>>4 != 4 {
 		return false
@@ -97,10 +108,13 @@ func looksIPv4(data []byte) bool {
 	return false
 }
 
+// kind names this via in the output.
 func (v *sstpVia) kind() string { return "sstp" }
 
+// canICMP is true: raw IP packets can go through PPP.
 func (v *sstpVia) canICMP() bool { return true }
 
+// overlayIP returns the address the SSTP server gave this client over PPP.
 func (v *sstpVia) overlayIP() string {
 	if v.sess.IP != nil {
 		return v.sess.IP.String()
@@ -108,6 +122,8 @@ func (v *sstpVia) overlayIP() string {
 	return ""
 }
 
+// detail describes the session for the header line: IP, PPP peer, whether
+// MPPE encryption is on, and the DNS servers in use.
 func (v *sstpVia) detail() string {
 	s := fmt.Sprintf("ip=%s peer=%s mppe=%v", v.sess.IP, v.sess.Peer, v.sess.MPPE)
 	if dns := inbound.JoinDNS(v.net.DNS()); dns != "" {
@@ -116,6 +132,8 @@ func (v *sstpVia) detail() string {
 	return s
 }
 
+// dialTCP opens a TCP connection through the userspace stack and applies
+// the context deadline to it.
 func (v *sstpVia) dialTCP(ctx context.Context, hostport string) (net.Conn, error) {
 	c, err := v.net.Open(hostport)
 	if err != nil {
@@ -130,6 +148,8 @@ func (v *sstpVia) dialTCP(ctx context.Context, hostport string) (net.Conn, error
 	return c, nil
 }
 
+// writeDgram sends data to addr: a whole IPv4 packet goes into PPP as is,
+// anything else is sent as one UDP datagram from a fresh local port.
 func (v *sstpVia) writeDgram(addr string, data []byte) error {
 	if looksIPv4(data) {
 		return v.sess.WriteIP(data)
@@ -143,6 +163,8 @@ func (v *sstpVia) writeDgram(addr string, data []byte) error {
 	return err
 }
 
+// waitDgram returns the first datagram seen by the tap for which match is
+// true. It fails when ctx ends or the SSTP session closes.
 func (v *sstpVia) waitDgram(ctx context.Context, match func(datagram) bool) (datagram, error) {
 	for {
 		select {
@@ -158,6 +180,7 @@ func (v *sstpVia) waitDgram(ctx context.Context, match func(datagram) bool) (dat
 	}
 }
 
+// close shuts the stack and the SSTP session once; later calls do nothing.
 func (v *sstpVia) close() error {
 	v.once.Do(func() {
 		_ = v.net.Close()
@@ -180,6 +203,8 @@ type guiProfile struct {
 	Outbounds  []yamlOutbound `yaml:"outbounds"`
 }
 
+// dnsString returns the profile's dns field as one comma-separated string;
+// the YAML may hold either a string or a list.
 func (p *guiProfile) dnsString() string {
 	switch v := p.DNS.(type) {
 	case string:
@@ -200,6 +225,7 @@ func (p *guiProfile) dnsString() string {
 	}
 }
 
+// yamlOutbound is one entry of the profile's outbounds list.
 type yamlOutbound struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
@@ -208,6 +234,7 @@ type yamlOutbound struct {
 	SNI  string `yaml:"sni"`
 }
 
+// loadGUIProfile reads and parses a desktop app profile YAML.
 func loadGUIProfile(path string) (*guiProfile, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -220,6 +247,9 @@ func loadGUIProfile(path string) (*guiProfile, error) {
 	return &p, nil
 }
 
+// sstpOutbound returns the profile's SSTP outbound: the first entry of type
+// sstp, or the first entry when the profile selects "sstp". ok is false when
+// the profile is not an SSTP one.
 func (p *guiProfile) sstpOutbound() (yamlOutbound, bool) {
 	for _, o := range p.Outbounds {
 		if strings.EqualFold(o.Type, "sstp") {
@@ -232,6 +262,8 @@ func (p *guiProfile) sstpOutbound() (yamlOutbound, bool) {
 	return yamlOutbound{}, false
 }
 
+// tlsInsecure reports whether the profile turns TLS certificate checking off
+// (tls_check: false). A missing field means checking stays on.
 func (p *guiProfile) tlsInsecure() bool {
 	if p.TLSCheck == nil {
 		return false

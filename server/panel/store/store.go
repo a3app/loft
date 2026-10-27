@@ -53,6 +53,7 @@ var loginRe = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,31}$`)
 // ValidLogin is lower-case latin, digits, . _ -, starts with a letter, ≤ 32.
 func ValidLogin(s string) bool { return loginRe.MatchString(s) }
 
+// builtinRole reports whether r is the ID of a built-in role.
 func builtinRole(r string) bool { return r == RoleOwner || r == RoleOperator || r == RoleViewer }
 
 // validRoleLocked reports a built-in or saved role.
@@ -61,6 +62,7 @@ func (s *Store) validRoleLocked(r string) bool {
 	return builtinRole(r) || ok
 }
 
+// file is the on-disk shape of users.json.
 type file struct {
 	Version int    `json:"version"`
 	Users   []User `json:"users"`
@@ -82,6 +84,7 @@ type fileStamp struct {
 	size int64
 }
 
+// stamp reads the file's modification time and size (zero when missing).
 func stamp(path string) fileStamp {
 	st, err := os.Stat(path)
 	if err != nil {
@@ -236,6 +239,8 @@ func (s *Store) Delete(login string) error {
 	return s.saveLocked(func() { s.u[login] = old })
 }
 
+// ownersLocked counts enabled owners. Update and Delete use it to refuse a
+// change that would leave the panel without one. The caller holds s.mu.
 func (s *Store) ownersLocked() int {
 	n := 0
 	for _, u := range s.u {

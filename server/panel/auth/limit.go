@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+// limit.go is the brute-force guard of the panel sign-in: it counts failed
+// logins per client address and blocks an address that fails too often.
+// The panel's "guard" settings page changes its limits through Set.
+
 // Limiter blocks an address after Fails failed logins within Window, for Block.
 // It also slows every failure a little so guessing is expensive even below
 // the limit (the caller sleeps Delay).
@@ -31,6 +35,8 @@ func (l *Limiter) Set(fails int, window, block time.Duration, allow []*net.IPNet
 	l.Fails, l.Window, l.Block, l.allow = fails, window, block, allow
 }
 
+// allowed reports whether ip is inside one of the allow networks, which are
+// never counted or blocked. The caller holds l.mu.
 func (l *Limiter) allowed(ip string) bool {
 	a := net.ParseIP(ip)
 	for _, n := range l.allow {
@@ -41,6 +47,8 @@ func (l *Limiter) allowed(ip string) bool {
 	return false
 }
 
+// tries is one address's record: the times of recent failures (at) and,
+// when blocked, the moment the block ends (until).
 type tries struct {
 	at    []time.Time
 	until time.Time

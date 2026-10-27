@@ -18,6 +18,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// router.go is the run-time half of egress: Router holds the live state of
+// every channel from egress.conf (see config.go), picks a priority list for
+// each member's connection (Route), and dials through the first channel that
+// is up (DialTCP). probe.go keeps channel link checks, proxy.go speaks to
+// SOCKS5/HTTP proxies, udp.go carries datagrams, limit.go caps speed.
+
 // SSTPConn is a held SSTP session that can open TCP and UDP through it
 // (the node wires clients/go/inbound.SSTPNet in; this package does not
 // import it, to keep transport free of client code).
@@ -178,6 +184,7 @@ func (r *Router) holdSSTP(cs *chanState) {
 			}
 			continue
 		}
+		// Up: publish the session for dialOn and wait until it ends.
 		wait = 5 * time.Second
 		cs.mu.Lock()
 		cs.sstp, cs.sstpState, cs.lastErr = s, "up", ""
@@ -356,6 +363,8 @@ func (r *Router) DialTCP(ctx context.Context, who Who, target string) (net.Conn,
 	if err != nil {
 		return nil, "", err
 	}
+	// Walk the steps of the chosen priority list; Direct and Block are
+	// special steps, the rest are channel names.
 	var last error = errBlocked
 	route := r.Route(who, host)
 	steps := r.steps(route, true)
@@ -465,23 +474,28 @@ type counted struct {
 	once sync.Once
 }
 
+// Read reads from the connection and adds the bytes to the channel's rx.
 func (c *counted) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)
 	c.cs.rx.Add(uint64(n))
 	return n, err
 }
 
+// Write writes to the connection and adds the bytes to the channel's tx.
 func (c *counted) Write(p []byte) (int, error) {
 	n, err := c.Conn.Write(p)
 	c.cs.tx.Add(uint64(n))
 	return n, err
 }
 
+// Close closes the connection and lowers the channel's open count once.
 func (c *counted) Close() error {
 	c.once.Do(func() { c.cs.conns.Add(-1) })
 	return c.Conn.Close()
 }
 
+// count raises the channel's open-connection count and wraps c so its
+// traffic is added to the channel's counters (shown in Status).
 func (r *Router) count(cs *chanState, c net.Conn) net.Conn {
 	cs.conns.Add(1)
 	return &counted{Conn: c, cs: cs}
@@ -550,6 +564,8 @@ func (r *Router) directUp() bool {
 	return !r.direct.noLinkNow()
 }
 
+// noLinkNow reports, under the lock, whether the link check currently says
+// the channel has no link.
 func (cs *chanState) noLinkNow() bool {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()

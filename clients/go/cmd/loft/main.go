@@ -64,6 +64,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// h is the Holder that SOCKS5 and TUN dial through; Supervise puts each
+	// new connection into it. The optional drive log records reconnects and
+	// stalls for debugging.
 	h := &transport.Holder{}
 	var drv *transport.Drive
 	if *driveOn {
@@ -118,9 +121,11 @@ func main() {
 	}
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
 
+	// Start the outbound: Supervise keeps a front connected in the background.
 	sess := &session{parent: ctx, pathCh: pathCh, h: h, bringTUN: bringTUN, drv: drv}
 	sess.start(cfg)
 
+	// The local SOCKS5 listener is always on.
 	ln, err := inbound.ListenSOCKS5(cfg.Listen.SOCKS5, h)
 	if err != nil {
 		log.Fatal(err)
@@ -128,6 +133,8 @@ func main() {
 	defer ln.Close()
 	log.Printf("socks5 %s", cfg.Listen.SOCKS5)
 
+	// Optional LAN page (MikroTik container): log lines are copied into a ring
+	// buffer so the page can show them.
 	if cfg.Listen.HTTP != "" {
 		ring := lanui.NewRing(80)
 		log.SetOutput(io.MultiWriter(os.Stderr, ring))
@@ -148,9 +155,17 @@ func main() {
 		}()
 	}
 
+	// Run until Ctrl-C or SIGTERM; deferred calls close TUN and SOCKS5.
 	<-ctx.Done()
 }
 
+// session restarts the connection to the server (the "outbound") when the LAN
+// page saves new settings. It keeps the cancel function of the running
+// Supervise loop, so start can stop the old loop before starting a new one,
+// and remembers the name and type of the front that is up now for the page.
+//
+// h is the Holder that SOCKS5 and TUN read from: the live connection can be
+// replaced under it without closing the local listeners.
 type session struct {
 	mu       sync.Mutex
 	cancel   context.CancelFunc
@@ -163,6 +178,12 @@ type session struct {
 	name     string
 }
 
+// start cancels any previous Supervise loop and starts a new one for cfg.
+// Supervise keeps one front connected and reconnects on failure; each time
+// a front comes up the callback puts it into the Holder. If the front carries
+// raw IP packets (an IPPump, the l3 front), it is wrapped in L3Net so SOCKS
+// connections ride the same IP tunnel; an existing L3Net just gets the new
+// pump swapped in. Then the TUN device is brought up or re-attached.
 func (s *session) start(cfg *config.ClientConfig) {
 	s.mu.Lock()
 	if s.cancel != nil {
@@ -202,6 +223,10 @@ func (s *session) start(cfg *config.ClientConfig) {
 	}()
 }
 
+// liveStatus builds the LAN page's status: version, bound interface and
+// overlay IP (the client's address inside the loft virtual network), the
+// settings read fresh from the config file, the front that is actually up,
+// and whether the TUN device exists.
 func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.Device) lanui.Status {
 	st := lanui.Status{
 		Version: version.Line("loft"),
@@ -234,6 +259,10 @@ func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.
 	return st
 }
 
+// applyPatch saves the LAN page's changes: it updates the token and the first
+// outbound in the config file, writes uplink.rsc next to it, and restarts the
+// session so the new settings take effect at once. Empty fields keep their
+// old values; the uplink is always taken from the patch (empty clears it).
 func applyPatch(path string, p lanui.Patch, sess *session) error {
 	cfg, err := config.LoadClient(path)
 	if err != nil {

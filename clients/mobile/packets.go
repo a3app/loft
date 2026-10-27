@@ -32,6 +32,7 @@ type packetPipe struct {
 	sink PacketSink
 }
 
+// newPacketPipe makes an empty pipe with pipeCap slots in each direction.
 func newPacketPipe() *packetPipe {
 	return &packetPipe{
 		in:  make(chan []byte, pipeCap),

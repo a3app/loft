@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+// session.go keeps signed-in browsers. The cookie holds a random session ID;
+// the store keeps only its SHA-256 (key), so a leaked sessions.json cannot
+// be replayed as cookies. Sessions end after Idle without use (unless the
+// user chose "remember me") or after Max in total.
+
 // Session is one signed-in browser. The cookie carries ID; CSRF is sent back
 // in a header on every state-changing request.
 type Session struct {
@@ -223,6 +228,7 @@ func (s *Sessions) DeleteKey(k string) {
 // Key is the store key of a cookie value.
 func Key(id string) string { return key(id) }
 
+// key is the hex SHA-256 of a session ID, the form the store keeps.
 func key(id string) string {
 	h := sha256.Sum256([]byte(id))
 	return hex.EncodeToString(h[:])

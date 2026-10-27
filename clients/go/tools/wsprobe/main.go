@@ -16,6 +16,9 @@ import (
 	"github.com/a3app/loft/internal/transport"
 )
 
+// main connects one GET front, opens a stream to -open through it, sends a
+// plain HTTP/1.1 GET and prints the status line and the first 200 body
+// bytes. Despite the name, it uses the GET front, not WebSocket.
 func main() {
 	token := flag.String("token", os.Getenv("LOFT_TOKEN"), "member key")
 	rawURL := flag.String("url", os.Getenv("LOFT_URL"), "GET front URL")
@@ -30,6 +33,7 @@ func main() {
 		os.Exit(2)
 	}
 
+	// Connect the front; the handshake and the fetch share one timeout.
 	o := config.Outbound{
 		Name: "probe-get", Type: "get",
 		URL: *rawURL, Path: *path,
@@ -44,6 +48,7 @@ func main() {
 	}
 	defer d.Close()
 	fmt.Fprintf(os.Stderr, "up overlay=%s\n", transport.OverlayIP())
+	// Open a mux stream to -open and do one HTTP request over it.
 	c, err := d.Open(*open)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open %v\n", err)

@@ -37,6 +37,8 @@ import (
 // Magic starts every copy.
 const Magic = "LOFTBAK1"
 
+// chunk is the plain-text size of one encrypted chunk (1 MiB); only the
+// last chunk may be shorter.
 const chunk = 1 << 20
 
 // phraseAlphabet has no 0/O, 1/I/L: the phrase is written down by hand.
@@ -111,12 +113,18 @@ type Header struct {
 	Eph     string    `json:"ephemeral"` // this copy's own key
 }
 
+// streamKey derives the AES-256 key of one copy with HKDF-SHA256 from the
+// X25519 shared secret, bound to both public keys (this copy's ephemeral key
+// and the recipient's), so the key belongs to this copy and recipient only.
 func streamKey(shared, eph, pub []byte) []byte {
 	k := make([]byte, 32)
 	io.ReadFull(hkdf.New(sha256.New, shared, nil, append(append([]byte("loft backup v1"), eph...), pub...)), k)
 	return k
 }
 
+// sealer encrypts the plain stream: it collects bytes into chunk-sized
+// pieces and writes each one as a 4-byte big-endian length followed by the
+// AES-GCM ciphertext. n counts chunks for the nonce; ad is the header.
 type sealer struct {
 	w      io.Writer
 	aead   cipher.AEAD
@@ -126,6 +134,9 @@ type sealer struct {
 	closed bool
 }
 
+// nonce is the 12-byte GCM nonce of chunk n: the number in the first eight
+// bytes and 1 in the final byte for the last chunk. Because the flag is part
+// of the nonce, a reader can tell the true end from a copy cut short.
 func nonce(n uint64, last bool) []byte {
 	b := make([]byte, 12)
 	binary.BigEndian.PutUint64(b, n)
@@ -135,6 +146,7 @@ func nonce(n uint64, last bool) []byte {
 	return b
 }
 
+// flush encrypts the buffered bytes as chunk number s.n and writes them out.
 func (s *sealer) flush(last bool) error {
 	ct := s.aead.Seal(nil, nonce(s.n, last), s.buf, s.ad)
 	s.n++
@@ -148,6 +160,8 @@ func (s *sealer) flush(last bool) error {
 	return err
 }
 
+// Write buffers p and writes out every chunk that fills up. The last,
+// partly filled chunk waits for Close.
 func (s *sealer) Write(p []byte) (int, error) {
 	n := 0
 	for len(p) > 0 {
@@ -172,6 +186,8 @@ func (s *sealer) Close() error {
 	return s.flush(true)
 }
 
+// pubBytes decodes a base64 X25519 public key and returns it both parsed
+// and as raw bytes.
 func pubBytes(b64 string) (*ecdh.PublicKey, []byte, error) {
 	b, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
@@ -233,6 +249,8 @@ func ReadHeader(r io.Reader) (Header, []byte, error) {
 // ErrPhrase is a phrase that does not open the copy.
 var ErrPhrase = errors.New("the recovery phrase does not match this copy")
 
+// opener decrypts the chunk stream written by sealer. It is an io.Reader
+// that yields plain bytes; done is set once the chunk marked last is read.
 type opener struct {
 	r    io.Reader
 	aead cipher.AEAD
@@ -242,6 +260,10 @@ type opener struct {
 	done bool
 }
 
+// Read returns plain bytes, decrypting the next chunk when the current one
+// is used up. Each chunk is first tried as a middle chunk, then as the last
+// one; if neither opens, the copy is damaged. A stream that ends before the
+// last chunk is reported as cut off rather than as a clean end.
 func (o *opener) Read(p []byte) (int, error) {
 	for o.buf == nil || o.buf.Len() == 0 {
 		if o.done {
