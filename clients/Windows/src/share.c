@@ -10,12 +10,14 @@
 #include <stdio.h>
 #include <string.h>
 
+/* add_copy appends name to the comma-separated list dst (no duplicate check). */
 static void add_copy(char *dst, size_t n, const char *name) {
     size_t u = strlen(dst);
     if (u && u + 1 < n) dst[u++] = ',';
     if (u < n) loft_strlcpy(dst + u, n - u, name);
 }
 
+/* hexval returns the value of one hex digit, or -1. */
 static int hexval(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -23,6 +25,8 @@ static int hexval(char c) {
     return -1;
 }
 
+/* urldec percent-decodes the first n bytes of s into dst and turns '+' into a
+   space, as in a URL query. A bad %xx escape is copied as is. */
 static void urldec(const char *s, size_t n, char *dst, size_t dn) {
     size_t w = 0, i;
     for (i = 0; i < n && w + 1 < dn; i++) {
@@ -39,6 +43,9 @@ static void urldec(const char *s, size_t n, char *dst, size_t dn) {
     dst[w] = 0;
 }
 
+/* qget looks up key in the query string q (without the leading '?') and
+   writes its decoded value into dst. A missing key, or a key with no "=value",
+   gives "". Stops at the '#' fragment. */
 static const char *qget(const char *q, const char *key, char *dst, size_t n) {
     size_t kn = strlen(key);
     const char *s = q ? q : "";
@@ -59,6 +66,7 @@ static const char *qget(const char *q, const char *key, char *dst, size_t n) {
     return dst;
 }
 
+/* qhas reports whether key appears in query q, with or without a value. */
 static int qhas(const char *q, const char *key) {
     size_t kn = strlen(key);
     const char *s = q ? q : "";
@@ -71,6 +79,14 @@ static int qhas(const char *q, const char *key) {
     return 0;
 }
 
+/* parse_loft reads a loft:// share link into d. Shape:
+   loft://TOKEN@host[:port][/path][?query][#name]. The part before '@' is the
+   secret key (a "user:" prefix is dropped). The host becomes an https URL
+   (or the scheme from ?scheme=); #name becomes the profile name, else the
+   host. Query keys get/ws/h2/h3/quic list the fronts the server offers, with
+   their paths as values; without them ?type= picks one kind and the URL path
+   is the GET path. cdn, pbk (the mask public key) and edge are copied as is.
+   Returns 0 if the link has no key or host. */
 static int parse_loft(const char *uri, LoftParsed *d) {
     const char *s, *at, *host, *path, *query, *frag;
     char token[LOFT_KEY], hostbuf[256], port[8], qv[LOFT_PATH];
@@ -86,6 +102,7 @@ static int parse_loft(const char *uri, LoftParsed *d) {
         if (colon) memmove(token, colon + 1, strlen(colon + 1) + 1);
     }
     host = at + 1;
+    /* Split host[:port] from what follows. */
     path = host;
     while (*path && *path != '/' && *path != '?' && *path != '#') path++;
     if (path == host) return 0;
@@ -102,6 +119,7 @@ static int parse_loft(const char *uri, LoftParsed *d) {
             loft_strlcpy(port, sizeof port, "443");
         }
     }
+    /* Find the query and the #fragment, whichever come after the host. */
     query = "";
     frag = "";
     if (*path == '/') {
@@ -116,6 +134,7 @@ static int parse_loft(const char *uri, LoftParsed *d) {
         path = "";
     }
     loft_profile_clear(&d->p);
+    /* Fill the profile: key, name and id first. */
     loft_strlcpy(d->key, sizeof d->key, token);
     d->p.has_key = token[0] != 0;
     if (frag && *frag == '#') {
@@ -123,6 +142,7 @@ static int parse_loft(const char *uri, LoftParsed *d) {
     }
     if (!d->p.name[0]) loft_strlcpy(d->p.name, sizeof d->p.name, hostbuf);
     loft_slug(d->p.name, d->p.id, sizeof d->p.id);
+    /* With a query: URL from host and scheme, then front list or single kind. */
     if (query && *query == '?') {
         char scheme[16];
         qget(query + 1, "scheme", scheme, sizeof scheme);
@@ -158,6 +178,7 @@ static int parse_loft(const char *uri, LoftParsed *d) {
                 loft_strlcpy(d->p.path, sizeof d->p.path, "/static/v3/build");
         }
     } else {
+        /* No query: a plain GET profile on https. */
         snprintf(d->p.url, sizeof d->p.url, "https://%s%s%s", hostbuf,
                  loft_streq(port, "443") ? "" : ":", loft_streq(port, "443") ? "" : port);
         loft_strlcpy(d->p.kind, sizeof d->p.kind, "get");
@@ -169,6 +190,11 @@ static int parse_loft(const char *uri, LoftParsed *d) {
     return token[0] && hostbuf[0];
 }
 
+/* parse_userinfo reads an sstp://, vless:// or trojan:// link, all shaped
+   scheme://SECRET@host... The whole link (minus #name) is kept as the
+   profile URL, because loft-front takes these links as they are. The secret
+   is user:password for sstp, the UUID for vless, and the password for trojan.
+   Without #name the host becomes the name. */
 static int parse_userinfo(const char *scheme, const char *uri, LoftParsed *d) {
     const char *s, *at, *host;
     char info[LOFT_KEY];
@@ -222,6 +248,8 @@ static int parse_userinfo(const char *scheme, const char *uri, LoftParsed *d) {
     return d->p.url[0] != 0;
 }
 
+/* parse_one parses one trimmed line as a share link of any supported scheme.
+   Returns 0 if it is not a link. */
 static int parse_one(const char *line, LoftParsed *d) {
     char tmp[2048];
     loft_strlcpy(tmp, sizeof tmp, line);
@@ -233,6 +261,11 @@ static int parse_one(const char *line, LoftParsed *d) {
     return 0;
 }
 
+/* loft_parse_share is the import entry point for files, pasted text and
+   share links handed over on the command line (win/store.c). Multi-line text
+   is read one link per line; if no line is a link (or text is a single
+   non-link line) the text is handed to loft_parse_blob as YAML. Returns the
+   number of profiles in out. */
 int loft_parse_share(const char *text, const char *file_name, LoftParsed *out, int max) {
     const char *s;
     int n;

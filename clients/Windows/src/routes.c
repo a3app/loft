@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 
+/* zone_init sets up one built-in zone. via says whether the zone's networks
+   go through Loft (1) or straight out, bypassing it (0). */
 static void zone_init(LoftZone *z, const char *id, const char *name, int via) {
     memset(z, 0, sizeof *z);
     loft_strlcpy(z->id, sizeof z->id, id);
@@ -18,6 +20,8 @@ static void zone_init(LoftZone *z, const char *id, const char *name, int via) {
     z->auto_pull = 1;
 }
 
+/* loft_routes_default gives the starting state: no services and two built-in
+   zones, "local" (bypasses Loft) and "global" (goes through Loft). */
 void loft_routes_default(LoftRoutes *r) {
     memset(r, 0, sizeof *r);
     zone_init(&r->zones[0], "local", "Local", 0);
@@ -25,6 +29,7 @@ void loft_routes_default(LoftRoutes *r) {
     r->nz = 2;
 }
 
+/* find_zone returns the zone with this id, or NULL. */
 static LoftZone *find_zone(LoftRoutes *r, const char *id) {
     int i;
     for (i = 0; i < r->nz; i++)
@@ -32,6 +37,13 @@ static LoftZone *find_zone(LoftRoutes *r, const char *id) {
     return 0;
 }
 
+/* loft_routes_load reads routes.txt. The file is a list of blocks separated
+   by blank lines. A block that starts with "zone: id" describes a zone (name,
+   repo URL to pull lists from, built-in flag, default direction, auto pull);
+   a block that starts with "set: id" describes one service: a named network
+   (cidr), the zone it belongs to, and where it came from (src: me = added by
+   the user, repo = pulled from the zone's list, ignore = kept but not routed).
+   Unknown zones are created on the fly. Always returns 1. */
 int loft_routes_load(LoftRoutes *r, const char *text) {
     char line[1024];
     const char *s = text ? text : "";
@@ -76,6 +88,7 @@ int loft_routes_load(LoftRoutes *r, const char *text) {
             mode = 1;
             continue;
         }
+        /* Start of a service block. */
         if (loft_starts(line, "set:")) {
 
             if (r->ns >= LOFT_SETS) continue;
@@ -89,6 +102,7 @@ int loft_routes_load(LoftRoutes *r, const char *text) {
             mode = 2;
             continue;
         }
+        /* Any other "key: value" line belongs to the current block. */
         c = strchr(line, ':');
         if (!c) continue;
         *c = 0;
@@ -118,6 +132,8 @@ int loft_routes_load(LoftRoutes *r, const char *text) {
     return 1;
 }
 
+/* loft_routes_save writes all zones, then all services, in the format
+   loft_routes_load reads. Returns 0 if dst is too small. */
 int loft_routes_save(const LoftRoutes *r, char *dst, size_t n) {
     int i;
     size_t u = 0;
@@ -142,6 +158,9 @@ int loft_routes_save(const LoftRoutes *r, char *dst, size_t n) {
     return 1;
 }
 
+/* loft_routes_add appends one service for cidr. A missing name uses the cidr,
+   a missing zone means "global", a missing src means "me". Returns 0 when the
+   table is full or cidr is empty. */
 int loft_routes_add(LoftRoutes *r, const char *zone, const char *name, const char *cidr, const char *src) {
     LoftSet *s;
     if (!r || r->ns >= LOFT_SETS || !cidr || !cidr[0]) return 0;
@@ -155,6 +174,8 @@ int loft_routes_add(LoftRoutes *r, const char *zone, const char *name, const cha
     return 1;
 }
 
+/* mask_bits turns a dotted netmask such as 255.255.0.0 into a prefix length
+   (16), counting leading one bits. Returns -1 for text that is not a mask. */
 static int mask_bits(const char *mask) {
     unsigned a, b, c, d, n = 0, i;
     unsigned long v;
@@ -168,6 +189,10 @@ static int mask_bits(const char *mask) {
     return (int)n;
 }
 
+/* loft_routes_import_bat replaces the pulled (src=repo) services of zone with
+   the networks in a Keenetic-style .bat route list. Each useful line looks like
+   "route ADD 1.2.3.0 MASK 255.255.255.0 ... rem Name"; the text after rem
+   becomes the service name. Services the user added by hand stay. */
 int loft_routes_import_bat(LoftRoutes *r, const char *zone, const char *text) {
     char line[512];
     const char *s = text ? text : "";
@@ -178,6 +203,7 @@ int loft_routes_import_bat(LoftRoutes *r, const char *zone, const char *text) {
         if (loft_streq(r->sets[i].zone, z) && loft_streq(r->sets[i].src, "repo")) continue;
         r->sets[w++] = r->sets[i];
     }
+    /* The old pulled rows of this zone are gone; now read the new list. */
     r->ns = w;
     while (*s) {
         size_t ln = 0;

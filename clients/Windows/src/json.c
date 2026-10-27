@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* loft_map_free releases every key and value and leaves m empty and reusable. */
 void loft_map_free(LoftStrMap *m) {
     int i;
     if (!m) return;
@@ -22,6 +23,8 @@ void loft_map_free(LoftStrMap *m) {
     memset(m, 0, sizeof *m);
 }
 
+/* loft_map_get returns the value stored under key, or NULL. A linear scan:
+   a pack holds a few hundred strings and lookups are not hot. */
 const char *loft_map_get(const LoftStrMap *m, const char *key) {
     int i;
     if (!m || !key) return 0;
@@ -31,6 +34,8 @@ const char *loft_map_get(const LoftStrMap *m, const char *key) {
     return 0;
 }
 
+/* map_put appends a copy of key k and value v (lengths kn and vn), growing the
+   arrays by doubling. Returns 0 when memory runs out. */
 static int map_put(LoftStrMap *m, const char *k, size_t kn, const char *v, size_t vn) {
     char *ks, *vs;
     if (m->n == m->cap) {
@@ -113,6 +118,10 @@ static int parse_string(const char *s, char *buf, size_t bufn, const char **end)
     return 1;
 }
 
+/* loft_map_parse reads the first {...} object in obj and stores each
+   "key": "string" pair in m. Values that are objects, arrays, numbers or
+   literals are skipped, not stored. Returns 1 when the closing brace was
+   reached, 0 on malformed input (pairs read before the error stay in m). */
 int loft_map_parse(LoftStrMap *m, const char *obj) {
     const char *s = obj;
     char key[256], val[4096];
@@ -158,6 +167,10 @@ int loft_map_parse(LoftStrMap *m, const char *obj) {
     return 0;
 }
 
+/* loft_map_pack finds pack_name["code"] (or with single quotes) in a lang-pack
+   script, takes the {...} object that follows it and parses it into m. The
+   design lang files are JavaScript that assign one object per language into a
+   table, so this avoids running any script. */
 int loft_map_pack(LoftStrMap *m, const char *text, const char *pack_name, const char *code) {
     char needle[64];
     const char *p, *s;

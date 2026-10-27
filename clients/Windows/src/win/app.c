@@ -4,13 +4,19 @@
    main.c calls app_boot; the rest of src/win reads g. */
 #include "common.h"
 
+/* g is the one global App: settings, profiles, keys, sessions, open windows,
+   GDI objects and the journal. All of it is touched only from the GUI thread;
+   worker threads post window messages instead. */
 App g;
 
+/* sc scales a size given in 96-DPI pixels to the screen DPI read at start.
+   Windows 7 has no per-monitor DPI API, so one system DPI is used everywhere. */
 int sc(int px) {
     int d = g.dpi > 0 ? g.dpi : 96;
     return MulDiv(px, d, 96);
 }
 
+/* exe_dir writes the folder that holds loft.exe into d. */
 void exe_dir(wchar_t *d, int n) {
     wchar_t *slash;
     if (!d || n <= 0) return;
@@ -20,12 +26,18 @@ void exe_dir(wchar_t *d, int n) {
     if (slash) *slash = 0;
 }
 
+/* exe_file writes the full path of file name next to loft.exe into d. */
 void exe_file(wchar_t *d, int n, const wchar_t *name) {
     wchar_t dir[MAX_PATH];
     exe_dir(dir, MAX_PATH);
     path_join(d, n, dir, name);
 }
 
+/* load_lang reads the language packs from the lang folder next to the exe:
+   one <code>.lang per language with the texts shared with the macOS client,
+   plus win.lang with the Windows-only texts for all languages. Missing files
+   are skipped (keys then show as is). Finally selects the language from the
+   settings. */
 static void load_lang(void) {
     wchar_t dir[MAX_PATH], path[MAX_PATH];
     static const char *codes[] = {"en", "fr", "de", "it", "pt", "ru", "vi", "zh", "ja", "ko"};
@@ -55,6 +67,9 @@ static void load_lang(void) {
     loft_l10n_set(g.prefs.lang);
 }
 
+/* journal_file appends line with a timestamp to journal.log in the store
+   folder, but only when diagnostics are on (g.prefs.diag). Past about 1.5 MB
+   the log rotates: journal.log -> .1 -> .2, and the oldest is dropped. */
 static void journal_file(const char *line) {
     wchar_t root[MAX_PATH], path[MAX_PATH], older[MAX_PATH];
     HANDLE h;
@@ -85,6 +100,9 @@ static void journal_file(const char *line) {
     CloseHandle(h);
 }
 
+/* journal_add records one event in the journal: an in-memory ring of the last
+   LOFT_JOURNAL lines shown in the Journal window, plus the file when
+   diagnostics are on. Then refreshes the open windows. */
 void journal_add(const char *line) {
     if (!line || !line[0]) return;
     loft_strlcpy(g.journal[g.nj % LOFT_JOURNAL], 240, line);
@@ -94,6 +112,9 @@ void journal_add(const char *line) {
     redraw_all();
 }
 
+/* fonts_make creates the shared fonts once, sized for the current DPI:
+   Segoe UI regular, medium and semibold for the UI, Consolas for addresses
+   and logs, and a small Segoe UI. */
 void fonts_make(void) {
     LOGFONTW lf;
     if (g.f_ui) return;
@@ -119,6 +140,8 @@ void fonts_make(void) {
     g.f_small = CreateFontIndirectW(&lf);
 }
 
+/* brushes_make creates the shared brushes and the edge pen once, one per
+   palette colour from common.h, so painting code never creates GDI objects. */
 void brushes_make(void) {
     if (g.br_ink) return;
     g.br_ink = CreateSolidBrush(C_INK);
@@ -134,6 +157,7 @@ void brushes_make(void) {
     g.pen_edge = CreatePen(PS_SOLID, 1, C_EDGE);
 }
 
+/* fonts_free deletes all shared fonts, brushes and the pen and clears them. */
 void fonts_free(void) {
     if (g.f_ui) DeleteObject(g.f_ui);
     if (g.f_med) DeleteObject(g.f_med);
@@ -157,6 +181,9 @@ void fonts_free(void) {
     g.pen_edge = NULL;
 }
 
+/* app_boot prepares the app before any window opens: reads the DPI, loads
+   settings, profiles, keys and routes from disk (store_load), then the
+   language packs, fonts and brushes. */
 void app_boot(void) {
     HDC dc = GetDC(NULL);
     g.dpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
@@ -170,6 +197,10 @@ void app_boot(void) {
     brushes_make();
 }
 
+/* app_shutdown cleans up on exit: removes the tray icon, stops every
+   loft-front process, wipes keys from memory and frees GDI objects. Unless
+   "hold" is on (block traffic while disconnected), it also tells the service
+   to release the hold and close the tunnel adapter. */
 void app_shutdown(void) {
     int i;
     tray_remove();

@@ -7,9 +7,16 @@
 
 #include <wchar.h>
 
+/* click_pending and click_ms tell a single left click on the tray icon from
+   a double click: a single click waits for the double-click time (timer
+   T_CLICK) before it opens the small flyout; a second click in that time opens
+   the main window instead. */
 static int click_pending;
 static DWORD click_ms;
 
+/* on_tray_left handles a left click on the tray icon. Clicks closer than
+   40 ms are ignored, because Windows can report one click twice
+   (WM_LBUTTONUP and NIN_SELECT). */
 static void on_tray_left(void) {
     DWORD now = GetTickCount();
     if (now - click_ms < 40) return;
@@ -24,6 +31,11 @@ static void on_tray_left(void) {
     SetTimer(g.msg, T_CLICK, GetDoubleClickTime(), NULL);
 }
 
+/* handle_cmd acts on a command line: every argument except --tray is a .loft
+   file or a share link to import. other is 1 when the line came from a second
+   launch of loft.exe; then the main window is shown if nothing was imported.
+   On our own start-up, a first run with no profiles opens the welcome window,
+   --tray starts with no window, and otherwise the main window opens. */
 static void handle_cmd(const wchar_t *cmd, int other) {
     int argc = 0, i, tray = 0, opened = 0;
     wchar_t **argv;
@@ -48,6 +60,8 @@ static void handle_cmd(const wchar_t *cmd, int other) {
     } else if (!tray && !chrome_find(WK_MAIN)) open_main();
 }
 
+/* quit_app starts an orderly exit: closes popups and destroys the message
+   window, whose WM_DESTROY runs app_shutdown and ends the message loop. */
 void quit_app(void) {
     if (g.quit) return;
     g.quit = 1;
@@ -55,6 +69,12 @@ void quit_app(void) {
     if (g.msg) DestroyWindow(g.msg);
 }
 
+/* msg_proc is the window procedure of the hidden message window. It is the
+   hub where events from other threads and from Windows arrive on the GUI
+   thread: tray icon clicks, timers, status lines from loft-front, process exit,
+   external IP, update results, service replies for the tunnel, pulled route
+   lists and command lines from second launches. Strings passed in lp were
+   malloc'd by the sender and are freed here. */
 static LRESULT CALLBACK msg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_LOFT_TRAY:
@@ -109,6 +129,9 @@ static LRESULT CALLBACK msg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         free(ip);
         return 0;
     }
+    /* Update check results: wp 0 = a newer version (lp) is available,
+       3 = the update is staged and the app must exit so it can be replaced,
+       anything else = a message for the journal. */
     case WM_LOFT_UPD:
         if (wp == 3) {
             if (lp) journal_add((char *)lp);
@@ -122,6 +145,7 @@ static LRESULT CALLBACK msg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         } else if (lp) journal_add((char *)lp);
         free((void *)lp);
         return 0;
+    /* wp packs the session slot (above bit 8) and the ok flag (bit 0). */
     case WM_LOFT_TUN: {
         int packed = (int)wp;
         char *resp = (char *)lp;
@@ -148,6 +172,11 @@ static LRESULT CALLBACK msg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/* wWinMain is the program entry. Steps: apply a pending update when started
+   as the updater; hand the command line to an already running copy and exit;
+   otherwise create the hidden message window, load everything, set up the
+   tray, process the command line, auto-connect if asked, and run the message
+   loop until quit. */
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     WNDCLASSW wc;
     MSG msg;
@@ -158,6 +187,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     (void)prev;
     (void)cmdline;
     (void)show;
+    /* 1. Updater mode: the new loft.exe, run from the staging folder with
+       "--apply-update SRC PID DST", waits for the old process and copies
+       itself over the old install (upd.c), then exits. */
     argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argv) {
         for (ai = 1; ai + 3 < argc; ai++) {
@@ -170,6 +202,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
         }
         LocalFree(argv);
     }
+    /* 2. One copy per user session: the named mutex already exists, so pass
+       our command line to the running copy via WM_COPYDATA and exit. */
     mx = CreateMutexW(NULL, TRUE, L"Local\\LoftClient");
     if (mx && GetLastError() == ERROR_ALREADY_EXISTS) {
         HWND h = FindWindowW(L"LoftMsg", L"Loft");
@@ -184,6 +218,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
         CloseHandle(mx);
         return 0;
     }
+    /* 3. First copy: create the hidden message window and boot. */
     g.inst = inst;
     SetProcessDPIAware();
     WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -198,6 +233,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     assoc_apply();
     login_apply();
 #endif
+    /* 4. Tray, first-run flag, command line, auto-connect, update check. */
     tray_init();
     if (g.nprof > 0 && !g.prefs.first_done) {
         g.prefs.first_done = 1;

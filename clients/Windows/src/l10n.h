@@ -6,10 +6,12 @@
 
 #define LOFT_LANGS 10
 
+/* The language list: code, native name, and code -> index. */
 const char *loft_lang_code(int i);
 const char *loft_lang_native(int i);
 int loft_lang_index(const char *code);
 
+/* Loading packs and choosing the current language. */
 void loft_l10n_reset(void);
 int loft_l10n_add_macos(const char *code, const char *text);
 int loft_l10n_add_win(const char *code, const char *text);

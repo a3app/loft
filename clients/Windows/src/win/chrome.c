@@ -4,24 +4,33 @@
    and clicks to ui.c. Drawing primitives live in draw.c. */
 #include "common.h"
 
+/* hot_hw/hot_on remember which window has the mouse over its close button,
+   so it is drawn highlighted. cls_ok says the window class is registered. */
 static HWND hot_hw;
 static int hot_on;
 static int cls_ok;
 
+/* chrome_close_hot reports whether hwnd's close button is under the mouse. */
 int chrome_close_hot(HWND hwnd) { return hot_hw == hwnd && hot_on; }
 
+/* chrome_set_close_hot records the window whose close button is highlighted. */
 void chrome_set_close_hot(HWND hwnd, int on) {
     hot_hw = hwnd;
     hot_on = on;
 }
 
+/* chrome_win returns the Win record (window kind, edit controls, state)
+   attached to one of our windows, or NULL for any other window. */
 Win *chrome_win(HWND hwnd) {
     if (!hwnd) return NULL;
     return (Win *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 }
 
+/* is_pop reports whether a window kind is a popup (flyout, menus, lists):
+   no title bar, closes when it loses focus. */
 static int is_pop(int kind) { return pop_kind(kind); }
 
+/* round_hwnd clips the window to a rounded rectangle (16 px corners at 96 DPI). */
 static void round_hwnd(HWND hwnd) {
     RECT rc;
     int rad = sc(16);
@@ -29,6 +38,7 @@ static void round_hwnd(HWND hwnd) {
     SetWindowRgn(hwnd, CreateRoundRectRgn(0, 0, (rc.right - rc.left) + 1, (rc.bottom - rc.top) + 1, rad, rad), TRUE);
 }
 
+/* redraw_all asks every open window to repaint, after state changes. */
 void redraw_all(void) {
     int i;
     for (i = 0; i < g.nwin; i++) {
@@ -36,6 +46,7 @@ void redraw_all(void) {
     }
 }
 
+/* place_center sizes hwnd to w x h and centres it in the primary work area. */
 void place_center(HWND hwnd, int w, int h) {
     RECT work;
     int x, y;
@@ -45,6 +56,11 @@ void place_center(HWND hwnd, int w, int h) {
     SetWindowPos(hwnd, HWND_TOP, x, y, w, h, SWP_NOACTIVATE);
 }
 
+/* place_fly puts a popup next to the tray icon. It finds which screen edge the
+   taskbar is on from where the icon sits (bottom by default) and opens the
+   popup on the inner side of it, kept 4 px inside the work area. If Windows
+   cannot report the icon position, a spot near the bottom-right corner is
+   assumed. */
 void place_fly(HWND hwnd, int w, int h) {
     NOTIFYICONIDENTIFIER id;
     RECT ir, work;
@@ -86,6 +102,10 @@ void place_fly(HWND hwnd, int w, int h) {
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE);
 }
 
+/* chrome_hide closes a window the way the close button does: it saves the
+   edit fields first (ui_capture), then hides it. The window object stays so
+   it reopens with its state. With taskbar mode "always" a normal window is
+   minimised instead, so it stays on the taskbar. */
 void chrome_hide(HWND hwnd) {
     Win *w = chrome_win(hwnd);
     if (!w) {
@@ -100,6 +120,8 @@ void chrome_hide(HWND hwnd) {
     ShowWindow(hwnd, SW_HIDE);
 }
 
+/* chrome_taskbar applies the taskbar setting to open non-popup windows:
+   "never" makes them tool windows (no taskbar button), otherwise app windows. */
 void chrome_taskbar(void) {
     int i;
     int tool = loft_streq(g.prefs.taskbar, "never");
@@ -112,6 +134,12 @@ void chrome_taskbar(void) {
     }
 }
 
+/* wnd_proc is the window procedure shared by all our borderless windows. The
+   window has no system frame, so this code does the frame's work: paints
+   the whole window off-screen and copies it in one go (no flicker), drags
+   the window by its top 32 px, tracks the close button highlight, turns
+   clicks into commands through ui.c, closes popups on Esc or loss of focus,
+   and imports .loft files dropped on the main, welcome and edit windows. */
 static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     Win *w = chrome_win(hwnd);
     switch (msg) {
@@ -128,6 +156,8 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_ERASEBKGND:
         return 1;
+    /* Paint into a memory bitmap: background, the window's content (ui_layout
+       draws and lays out in one pass), a 1 px edge, then copy to the screen. */
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC dc, mem;
@@ -222,6 +252,9 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         break;
+    /* A popup that lost focus to a non-popup window closes shortly after, via
+       the T_FOCUS timer in main.c, so moving between our popups does not close
+       them. */
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE && w && is_pop(w->kind)) {
             HWND other = (HWND)lp;
@@ -254,6 +287,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/* register_cls registers the "LoftWnd" class used by every window, once. */
 static void register_cls(void) {
     WNDCLASSW wc;
     if (cls_ok) return;
@@ -267,6 +301,7 @@ static void register_cls(void) {
     cls_ok = RegisterClassW(&wc) != 0;
 }
 
+/* chrome_find returns the open window of this kind, or NULL. */
 HWND chrome_find(int kind) {
     int i;
     for (i = 0; i < g.nwin; i++) {
@@ -276,6 +311,11 @@ HWND chrome_find(int kind) {
     return NULL;
 }
 
+/* chrome_open creates a new hidden window of the given kind, w x h pixels;
+   h 0 means "as tall as the content" (ui_measure). Popups go next to the
+   tray icon and stay on top; other windows are centred and follow the
+   taskbar setting. The caller shows it. Returns NULL if LOFT_WINS windows
+   already exist. */
 HWND chrome_open(int kind, int w, int h) {
     Win *wp;
     HWND hwnd;

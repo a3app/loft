@@ -4,6 +4,8 @@
    Used by store.c. */
 #include "common.h"
 
+/* key_path builds the key file path for profile id, keys\<id>.bin under the
+   store root, creating the keys folder if needed. */
 static void key_path(const char *id, wchar_t *d, int n) {
     wchar_t root[MAX_PATH], dir[MAX_PATH], wname[80];
     char name[80];
@@ -15,6 +17,9 @@ static void key_path(const char *id, wchar_t *d, int n) {
     path_join(d, n, dir, wname);
 }
 
+/* key_save encrypts key with DPAPI for the current Windows user (no prompt
+   allowed) and writes the result to the profile's key file. Returns 0 on
+   failure or when key is empty. */
 int key_save(const char *id, const char *key) {
     DATA_BLOB in, out;
     wchar_t path[MAX_PATH];
@@ -34,6 +39,9 @@ int key_save(const char *id, const char *key) {
     return ok;
 }
 
+/* key_load reads and decrypts the key file of profile id into key (n bytes,
+   cut if longer). All temporary copies are wiped. Returns 1 when a non-empty
+   key was read. */
 int key_load(const char *id, char *key, int n) {
     DATA_BLOB in, out;
     wchar_t path[MAX_PATH];
@@ -65,6 +73,7 @@ int key_load(const char *id, char *key, int n) {
     return key[0] != 0;
 }
 
+/* key_delete removes the key file of profile id, when a profile is deleted. */
 void key_delete(const char *id) {
     wchar_t path[MAX_PATH];
     if (!id || !id[0]) return;

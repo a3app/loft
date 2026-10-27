@@ -11,6 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* loft_profile_clear resets p to the defaults a new profile starts with:
+   TUN and mux on, server certificate checked, SOCKS port picked automatically,
+   and the GET front with its usual path. (A front is one way of carrying the
+   session over HTTPS: get, ws, h2, quic, h3 or l3; mux is the stream
+   multiplexer inside the session.) */
 void loft_profile_clear(LoftProfile *p) {
     if (!p) return;
     memset(p, 0, sizeof *p);
@@ -22,6 +27,9 @@ void loft_profile_clear(LoftProfile *p) {
     loft_strlcpy(p->path, sizeof p->path, "/static/v3/build");
 }
 
+/* known_kind reports whether k is a connection kind the client understands:
+   the loft fronts, the foreign protocols loft-front can also speak (sstp,
+   vless, trojan), or "loft" as an alias of get. */
 static int known_kind(const char *k) {
     return loft_strieq(k, "get") || loft_strieq(k, "ws") || loft_strieq(k, "h2") ||
            loft_strieq(k, "quic") || loft_strieq(k, "h3") || loft_strieq(k, "l3") ||
@@ -29,6 +37,8 @@ static int known_kind(const char *k) {
            loft_strieq(k, "loft");
 }
 
+/* add_front appends name to the comma-separated front list dst unless it is
+   already there. */
 static void add_front(char *dst, size_t n, const char *name) {
     if (!name || !name[0]) return;
     if (dst[0] && !strstr(dst, name)) {
@@ -40,6 +50,8 @@ static void add_front(char *dst, size_t n, const char *name) {
     }
 }
 
+/* split_kv cuts a "key: value" line at the first colon, trims both halves and
+   unquotes the value. Returns 0 when there is no colon or the key is empty. */
 static int split_kv(char *line, char **k, char **v) {
     char *c = strchr(line, ':');
     if (!c) return 0;
@@ -52,6 +64,11 @@ static int split_kv(char *line, char **k, char **v) {
     return (*k)[0] != 0;
 }
 
+/* apply_head stores one top-level profile field k = v into p. The secret
+   (token, uuid or password, depending on the kind) goes to keybuf instead,
+   because the key never lives inside LoftProfile. "fronts" can be an inline
+   list [get, ws] or the start of a block list; *in_fronts tells the caller
+   that "- name" lines that follow are fronts. */
 static void apply_head(LoftProfile *p, char *keybuf, const char *k, const char *v, int *in_fronts) {
     if (loft_streq(k, "name")) loft_strlcpy(p->name, sizeof p->name, v);
     else if (loft_streq(k, "kind") || loft_streq(k, "type")) {
@@ -109,6 +126,10 @@ static void apply_head(LoftProfile *p, char *keybuf, const char *k, const char *
     }
 }
 
+/* finish_one turns the fields gathered so far into one finished profile in
+   dst: fills a missing name (from the file name, else "Loft"), normalises the
+   kind, makes an id from the name, copies the key and sets has_key. Returns 0
+   when there is neither a URL nor a key, so empty sections are dropped. */
 static int finish_one(LoftParsed *dst, const LoftProfile *head, const char *key, const char *file_name) {
     if (!head->url[0] && !key[0]) return 0;
     dst->p = *head;
@@ -125,6 +146,13 @@ static int finish_one(LoftParsed *dst, const LoftProfile *head, const char *key,
     return 1;
 }
 
+/* loft_parse_blob reads profile YAML (a .loft file or pasted text) into up to
+   max profiles in out and returns how many it found. It is a small line-based
+   reader, not a full YAML parser. It understands three shapes: one flat
+   profile, a "connections:" list of several profiles, and the loft CLI config
+   with an "outbounds:" list, whose first entries fill the URL, kind, paths and
+   key and whose types become the front list. file_name names a profile that
+   has no name of its own. */
 int loft_parse_blob(const char *text, const char *file_name, LoftParsed *out, int max) {
     char line[1024];
     const char *s;
@@ -158,6 +186,7 @@ int loft_parse_blob(const char *text, const char *file_name, LoftParsed *out, in
         if (*s == '\n') s++;
         loft_trim(line);
         if (!line[0] || line[0] == '#') continue;
+        /* Section headers switch the reader's mode and carry no fields. */
         if (loft_streq(line, "connections:")) {
             in_conn = 1;
             in_out = 0;
@@ -169,6 +198,8 @@ int loft_parse_blob(const char *text, const char *file_name, LoftParsed *out, in
             in_fronts = 0;
             continue;
         }
+        /* A "- " prefix starts a list item. In a connections list it closes the
+           previous profile. */
         dashed = loft_starts(line, "- ");
         if (dashed) memmove(line, line + 2, strlen(line + 2) + 1);
         loft_trim(line);
@@ -178,6 +209,7 @@ int loft_parse_blob(const char *text, const char *file_name, LoftParsed *out, in
             loft_wipe(key, sizeof key);
             in_out = 0;
         }
+        /* Lines of a block-style fronts list. */
         if (in_fronts && !in_out) {
             if (dashed) {
                 add_front(head.fronts, sizeof head.fronts, line);
@@ -186,6 +218,9 @@ int loft_parse_blob(const char *text, const char *file_name, LoftParsed *out, in
             in_fronts = 0;
         }
         if (!split_kv(line, &k, &v)) continue;
+        /* Inside outbounds: a new "- " item starts a fresh outbound; the first
+           value seen for each field wins, except that each type's path goes to its
+           own slot (ws_path, h2_path, ...). */
         if (in_out) {
             if (dashed && saw_ob) {
                 memset(ob_name, 0, sizeof ob_name);
@@ -224,6 +259,7 @@ int loft_parse_blob(const char *text, const char *file_name, LoftParsed *out, in
         apply_head(&head, key, k, v, &in_fronts);
     }
 
+    /* The last (or only) profile has no following item to close it. */
     if (n < max && (head.url[0] || key[0])) {
         if (finish_one(&out[n], &head, key, file_name)) n++;
     }
@@ -231,6 +267,7 @@ int loft_parse_blob(const char *text, const char *file_name, LoftParsed *out, in
     return n;
 }
 
+/* append adds s to the string in dst; returns 0 if it would not fit. */
 static int append(char *dst, size_t n, const char *s) {
     size_t u = strlen(dst), m = strlen(s);
     if (u + m + 1 > n) return 0;
@@ -238,6 +275,11 @@ static int append(char *dst, size_t n, const char *s) {
     return 1;
 }
 
+/* loft_profile_yaml writes p as canonical profile YAML into dst. key is
+   written only when non-empty (export to a .loft file); the profile file
+   saved on disk passes no key, because the key is kept apart, encrypted with
+   DPAPI. The layout is a flat head plus a one-item outbounds list, so the same
+   text also reads as a loft CLI config. Returns 0 if dst is too small. */
 int loft_profile_yaml(const LoftProfile *p, const char *key, char *dst, size_t n) {
     char q[LOFT_URL * 2];
     const char *kind;
@@ -249,6 +291,7 @@ int loft_profile_yaml(const LoftProfile *p, const char *key, char *dst, size_t n
     if (loft_strieq(kind, "vless") || loft_strieq(kind, "trojan") || loft_strieq(kind, "sstp")) {
         if (!append(dst, n, "kind: ") || !append(dst, n, kind) || !append(dst, n, "\n")) return 0;
     }
+    /* The secret's field name depends on the kind. */
     if (key && key[0]) {
         const char *field = "token";
         if (loft_strieq(kind, "vless")) field = "uuid";
@@ -287,6 +330,7 @@ int loft_profile_yaml(const LoftProfile *p, const char *key, char *dst, size_t n
     if (p->fronts[0]) {
         if (!append(dst, n, "fronts: [") || !append(dst, n, p->fronts) || !append(dst, n, "]\n")) return 0;
     }
+    /* Local listeners: the SOCKS5 port and whether TUN is used. */
     if (!append(dst, n, "listen:\n  socks5: ")) return 0;
     if (!p->socks[0]) {
         if (!append(dst, n, "false\n")) return 0;
@@ -297,6 +341,7 @@ int loft_profile_yaml(const LoftProfile *p, const char *key, char *dst, size_t n
     if (!append(dst, n, p->tun ? "  tun: auto\n" : "  tun: false\n")) return 0;
     if (!append(dst, n, p->mux ? "mux: true\n" : "mux: false\n")) return 0;
     loft_quote(p->name, q, sizeof q);
+    /* The single outbound: where and how to reach the server. */
     if (!append(dst, n, "outbounds:\n  - name: ") || !append(dst, n, q) || !append(dst, n, "\n    type: ")) return 0;
     if (!append(dst, n, kind) || !append(dst, n, "\n    url: ")) return 0;
     loft_quote(p->url, q, sizeof q);
@@ -316,17 +361,26 @@ int loft_profile_yaml(const LoftProfile *p, const char *key, char *dst, size_t n
     return 1;
 }
 
+/* arg appends one argument to v; extra arguments past LOFT_ARGS are dropped. */
 static void arg(LoftArgv *v, const char *s) {
     if (!v || v->n >= LOFT_ARGS) return;
     loft_strlcpy(v->store[v->n], LOFT_ARGN, s ? s : "");
     v->n++;
 }
 
+/* arg2 appends a flag and its value. */
 static void arg2(LoftArgv *v, const char *a, const char *b) {
     arg(v, a);
     arg(v, b);
 }
 
+/* loft_build_argv builds the command line that starts loft-front (the Go
+   session engine) for profile p: bin first, then the flags. socks is the
+   local SOCKS5 address or "off"; tun_pipe is the named pipe to the loft
+   service when the tunnel is used; instance_file is the per-profile file
+   where loft-front keeps its overlay instance_id between runs. Flags that make no sense for the kind are
+   left out (for example -fronts for sstp/vless/trojan/l3). Returns the
+   argument count. */
 int loft_build_argv(LoftArgv *v, const char *bin, const LoftProfile *p, const char *key,
                     const char *socks, const char *tun_pipe, const char *instance_file) {
     const char *kind;
@@ -362,6 +416,9 @@ int loft_build_argv(LoftArgv *v, const char *bin, const LoftProfile *p, const ch
     return v->n;
 }
 
+/* loft_prefs_default fills p with the settings of a fresh install: Russian
+   UI, file and link association on, failover and reconnect on, external IP
+   shown, update check on, SOCKS share on port 1080, rates in bits. */
 void loft_prefs_default(LoftPrefs *p) {
     if (!p) return;
     memset(p, 0, sizeof *p);
@@ -380,6 +437,9 @@ void loft_prefs_default(LoftPrefs *p) {
     p->rate_bits = 1;
 }
 
+/* pref_val finds the line "key: value" in the prefs text (leading spaces
+   allowed) and copies the unquoted value into buf. buf is "" when the key is
+   absent, so callers keep their default. */
 static const char *pref_val(const char *yaml, const char *key, char *buf, size_t n) {
     const char *s = yaml;
     size_t kn = strlen(key);
@@ -411,6 +471,9 @@ static const char *pref_val(const char *yaml, const char *key, char *buf, size_t
     return buf;
 }
 
+/* loft_prefs_load starts from the defaults and overrides each setting found
+   in yaml. Unknown or invalid values (taskbar mode, port out of range) leave
+   the default. A NULL yaml just gives the defaults. */
 void loft_prefs_load(LoftPrefs *p, const char *yaml) {
     char buf[LOFT_URL];
     loft_prefs_default(p);
@@ -466,6 +529,8 @@ void loft_prefs_load(LoftPrefs *p, const char *yaml) {
     if (buf[0]) p->rate_bits = loft_bool(buf, 1);
 }
 
+/* loft_prefs_save writes every setting to dst in the format
+   loft_prefs_load reads. Returns 0 if dst was too small. */
 int loft_prefs_save(const LoftPrefs *p, char *dst, size_t n) {
     if (!p || !dst) return 0;
     return snprintf(dst, n,
@@ -487,6 +552,11 @@ int loft_prefs_save(const LoftPrefs *p, char *dst, size_t n) {
                     p->socks_port, p->rate_bits ? "true" : "false") < (int)n;
 }
 
+/* loft_parse_status parses one status line printed by loft-front, such as
+   "STATUS state=on ip=10.0.0.2 tun=1 up=123 down=456 msg=free text". Fields are
+   key=value separated by spaces; msg= is always last and keeps its spaces, so
+   it is cut off first. Unknown keys are ignored. Returns 1 when a state was
+   present. */
 int loft_parse_status(const char *line, LoftStatus *st) {
     const char *s, *msg;
     char head[768];
@@ -495,6 +565,7 @@ int loft_parse_status(const char *line, LoftStatus *st) {
     st->mux = -1;
     s = line;
     if (loft_starts(s, "STATUS ")) s += 7;
+    /* Split off the free-text msg tail before reading the key=value head. */
     msg = strstr(s, " msg=");
     if (!msg && loft_starts(s, "msg=")) msg = s - 1;
     if (msg) {

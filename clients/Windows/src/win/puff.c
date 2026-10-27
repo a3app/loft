@@ -1,3 +1,8 @@
+/* Windows client GUI: third-party code. puff is Mark Adler's small "inflate"
+   decoder from the zlib project (deflate is the compression used inside .zip
+   files); the comments below are his. upd.c uses it to unpack the
+   self-update zip, so the client needs no zlib. */
+
 /*
  * puff.c
  * Copyright (C) 2002-2013 Mark Adler

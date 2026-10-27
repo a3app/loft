@@ -1,5 +1,12 @@
+/* Windows client GUI: per-user shell integration in the HKCU registry.
+   assoc_apply makes Windows open .loft profile files and loft:// links with
+   this loft.exe (or removes that), and login_apply adds or removes the
+   "start at sign-in" entry. Both follow the switches in the settings window
+   (g.prefs) and are called at start-up and when those switches change. */
 #include "common.h"
 
+/* reg_sz creates key root\sub if needed and sets its default value to the
+   string value. Returns 1 on success. */
 static int reg_sz(HKEY root, const wchar_t *sub, const wchar_t *value) {
     HKEY k = NULL;
     LONG e;
@@ -19,6 +26,8 @@ static void exe_icon(wchar_t *d, int n, int id) {
     if (n > 0) d[n - 1] = 0;
 }
 
+/* exe_cmd writes the shell "open" command for this exe: "path" "%1", where
+   Windows puts the file or link in place of %1. */
 static void exe_cmd(wchar_t *d, int n) {
     wchar_t p[MAX_PATH];
     GetModuleFileNameW(NULL, p, MAX_PATH);
@@ -26,6 +35,13 @@ static void exe_cmd(wchar_t *d, int n) {
     if (n > 0) d[n - 1] = 0;
 }
 
+/* assoc_apply registers or removes the .loft file type (Loft.Profile) and the
+   loft:// URL protocol under HKCU\Software\Classes, following
+   g.prefs.assoc_file and g.prefs.assoc_link. Registration always points at the
+   running exe, so a moved portable copy fixes itself on the next start. If the
+   installer left an "assoc.off" file next to the exe (the user unticked the
+   association box), both switches are turned off once and the marker is
+   deleted. */
 void assoc_apply(void) {
     wchar_t cmd[MAX_PATH + 32], mark[MAX_PATH], icon[MAX_PATH + 16];
     exe_file(mark, MAX_PATH, L"assoc.off");
@@ -57,6 +73,9 @@ void assoc_apply(void) {
     }
 }
 
+/* login_apply adds or removes the "Loft" value under the current user's
+   Run key, so Windows starts loft.exe --tray (straight to the tray, no
+   window) at sign-in when g.prefs.login is on. */
 void login_apply(void) {
     HKEY k = NULL;
     wchar_t p[MAX_PATH], cmd[MAX_PATH + 16];

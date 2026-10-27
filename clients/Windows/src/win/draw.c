@@ -4,10 +4,15 @@
    disagree. chrome.c switches the mode. */
 #include "common.h"
 
+/* State of the current pass. mode: 0 = paint into pdc, 1 = hit test at
+   (hx, hy) and remember the first control id found in hid, 2 = measure only
+   (bottom grows to the lowest edge drawn, giving the content height).
+   chrome.c starts paint passes; ui.c starts hit and measure passes. */
 static HDC pdc;
 static HWND phwnd;
 static int mode, hx, hy, hid, bottom;
 
+/* paint_begin starts a paint pass of window hwnd into device context dc. */
 void paint_begin(HWND hwnd, HDC dc) {
     phwnd = hwnd;
     pdc = dc;
@@ -16,6 +21,7 @@ void paint_begin(HWND hwnd, HDC dc) {
     hid = 0;
 }
 
+/* hit_begin starts a hit-test pass for a click at x, y; nothing is drawn. */
 void hit_begin(int x, int y) {
     mode = 1;
     hx = x;
@@ -24,6 +30,7 @@ void hit_begin(int x, int y) {
     pdc = NULL;
 }
 
+/* draw_set_mode starts a pass in mode m with nothing drawn and no hit yet. */
 void draw_set_mode(int m) {
     mode = m;
     bottom = 0;
@@ -31,18 +38,24 @@ void draw_set_mode(int m) {
     hid = 0;
 }
 
+/* draw_bottom returns the lowest y reached in this pass (used to size windows). */
 int draw_bottom(void) { return bottom; }
 
+/* hit_id returns the id of the control under the click, or 0. */
 int hit_id(void) { return hid; }
 
+/* span records that something occupies rows y to y+h. */
 static void span(int y, int h) {
     if (y + h > bottom) bottom = y + h;
 }
 
+/* inside reports whether the hit-test point lies in the rectangle. */
 static int inside(int x, int y, int w, int h) {
     return hx >= x && hy >= y && hx < x + w && hy < y + h;
 }
 
+/* text_w draws wide text in the box with DrawText flags fmt. & is shown as
+   is (DT_NOPREFIX) rather than marking a keyboard shortcut. */
 static void text_w(int x, int y, int w, int h, const wchar_t *s, COLORREF c, HFONT f, unsigned fmt) {
     RECT r;
     HFONT old;
@@ -60,20 +73,24 @@ static void text_w(int x, int y, int w, int h, const wchar_t *s, COLORREF c, HFO
     SelectObject(pdc, old);
 }
 
+/* text_u is text_w for UTF-8 text. */
 static void text_u(int x, int y, int w, int h, const char *s, COLORREF c, HFONT f, unsigned fmt) {
     wchar_t buf[768];
     widen(s ? s : "", buf, 768);
     text_w(x, y, w, h, buf, c, f, fmt);
 }
 
+/* ui_text draws UTF-8 text s; colour c, font f (NULL = UI font). */
 void ui_text(int x, int y, int w, int h, const char *s, COLORREF c, HFONT f, unsigned fmt) {
     text_u(x, y, w, h, s, c, f, fmt);
 }
 
+/* ui_text_key draws the translated text of a language-pack key. */
 void ui_text_key(int x, int y, int w, int h, const char *key, COLORREF c, HFONT f, unsigned fmt) {
     ui_text(x, y, w, h, loft_t(key), c, f, fmt);
 }
 
+/* ui_fill fills a rectangle with brush b. */
 void ui_fill(int x, int y, int w, int h, HBRUSH b) {
     RECT r;
     span(y, h);
@@ -85,6 +102,7 @@ void ui_fill(int x, int y, int w, int h, HBRUSH b) {
     FillRect(pdc, &r, b);
 }
 
+/* ui_line draws a 1 px horizontal divider in the edge colour. */
 void ui_line(int x, int y, int w) {
     HPEN old;
     span(y, 1);
@@ -95,6 +113,9 @@ void ui_line(int x, int y, int w) {
     SelectObject(pdc, old);
 }
 
+/* mark draws the small Loft sign, s pixels square: a copper block with a
+   window. lamp picks the window colour: 0 copper (off), 1 lamp yellow,
+   2 error red. */
 static void mark(int x, int y, int s, int lamp) {
     RECT body, win;
     HBRUSH lamp_br;
@@ -120,6 +141,10 @@ static void mark(int x, int y, int s, int lamp) {
     FillRect(pdc, &win, lamp_br);
 }
 
+/* ui_bar draws the custom title bar across width ww: sign, the word Loft,
+   and with buttons set the minimise and close buttons (close turns red under
+   the mouse). In hit mode it reports HIT_MIN or HIT_CLOSE. Returns the bar
+   height. */
 int ui_bar(int ww, int buttons) {
     int h = sc(32);
     int bw = sc(46);
@@ -155,6 +180,10 @@ int ui_bar(int ww, int buttons) {
     return h;
 }
 
+/* ui_button draws a button and makes it clickable as id. style: 0 field
+   grey, 1 copper (main action), 2 quiet text, 4 red (danger), 7 left-aligned
+   lamp-coloured text; anything else is left-aligned plain text (a menu row).
+   Returns id. */
 int ui_button(int id, int x, int y, int w, int h, const char *label, int style) {
     HBRUSH br = NULL;
     COLORREF fg = C_SNOW;
@@ -185,6 +214,8 @@ int ui_button(int id, int x, int y, int w, int h, const char *label, int style) 
     return id;
 }
 
+/* ui_toggle draws a settings row: title, an optional grey sub line, and an
+   on/off switch at the right. The whole row is clickable as id. */
 int ui_toggle(int id, int x, int y, int w, int on, const char *title, const char *sub) {
     int h = sc(46);
     int sw = sc(36);
@@ -208,6 +239,8 @@ int ui_toggle(int id, int x, int y, int w, int on, const char *title, const char
     return id;
 }
 
+/* ui_hit_row makes a rectangle clickable as id without drawing anything, for
+   rows whose look is drawn by other calls. */
 int ui_hit_row(int id, int x, int y, int w, int h) {
     span(y, h);
     if (mode == 1 && hid == 0 && inside(x, y, w, h)) hid = id;

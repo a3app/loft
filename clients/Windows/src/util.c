@@ -1,11 +1,13 @@
 /* Windows client, portable core (also built into the host tests): small string
    helpers (bounded copy, trim, compare, quoting, version compare, slugs,
-   secure wipe) used by the other src/*.c files and the Win32 code in src/win. */
+   secure wipe) used by the other .c files in src/ and the Win32 code in src/win. */
 #include "util.h"
 
 #include <ctype.h>
 #include <string.h>
 
+/* loft_strlcpy copies src into dst of size n, always ending with a NUL and
+   cutting the text short if it does not fit. A NULL src gives "". */
 void loft_strlcpy(char *dst, size_t n, const char *src) {
     size_t i;
     if (n == 0) return;
@@ -14,11 +16,14 @@ void loft_strlcpy(char *dst, size_t n, const char *src) {
     dst[i] = 0;
 }
 
+/* loft_streq reports whether two strings are equal. Two NULLs count as equal;
+   NULL and a real string do not. */
 int loft_streq(const char *a, const char *b) {
     if (!a || !b) return a == b;
     return strcmp(a, b) == 0;
 }
 
+/* loft_strieq is loft_streq that ignores ASCII letter case. */
 int loft_strieq(const char *a, const char *b) {
     if (!a || !b) return a == b;
     while (*a && *b) {
@@ -29,6 +34,7 @@ int loft_strieq(const char *a, const char *b) {
     return *a == 0 && *b == 0;
 }
 
+/* loft_trim removes spaces, tabs and line breaks from both ends of s, in place. */
 void loft_trim(char *s) {
     char *a;
     size_t n;
@@ -42,10 +48,12 @@ void loft_trim(char *s) {
     }
 }
 
+/* loft_lower turns ASCII letters in s to lower case, in place. */
 void loft_lower(char *s) {
     for (; s && *s; s++) *s = (char)tolower((unsigned char)*s);
 }
 
+/* loft_starts reports whether s begins with pfx. */
 int loft_starts(const char *s, const char *pfx) {
     size_t n;
     if (!s || !pfx) return 0;
@@ -53,6 +61,8 @@ int loft_starts(const char *s, const char *pfx) {
     return strncmp(s, pfx, n) == 0;
 }
 
+/* loft_bool reads a yes/no word from a config file (true/on/1/yes/auto or
+   false/off/0/no/-). Anything else, or an empty value, returns fallback. */
 int loft_bool(const char *v, int fallback) {
     if (!v || !v[0]) return fallback;
     if (loft_strieq(v, "true") || loft_strieq(v, "on") || loft_strieq(v, "1") || loft_strieq(v, "yes") || loft_strieq(v, "auto"))
@@ -62,6 +72,9 @@ int loft_bool(const char *v, int fallback) {
     return fallback;
 }
 
+/* loft_quote writes s into dst as a double-quoted string for the YAML-like
+   files the client saves: quotes and backslashes get a backslash, a line break
+   becomes \n. Text that does not fit is cut. loft_unquote reverses it. */
 void loft_quote(const char *s, char *dst, size_t n) {
     size_t i = 0;
     if (n == 0) return;
@@ -83,6 +96,8 @@ void loft_quote(const char *s, char *dst, size_t n) {
     dst[i] = 0;
 }
 
+/* loft_unquote trims s, strips one pair of matching '...' or "..." quotes and
+   undoes the escapes loft_quote writes. Works in place. */
 void loft_unquote(char *s) {
     size_t n, r, w;
     if (!s) return;
@@ -105,6 +120,9 @@ void loft_unquote(char *s) {
     s[w] = 0;
 }
 
+/* semver_part reads one numeric part of a version such as "v1.2.3" (an
+   optional leading v is skipped), moves *p past it and its dot, and returns
+   the number. Missing parts read as 0. */
 static int semver_part(const char **p) {
     int n = 0;
     if (**p == 'v' || **p == 'V') (*p)++;
@@ -116,6 +134,9 @@ static int semver_part(const char **p) {
     return n;
 }
 
+/* loft_newer reports whether version remote is newer than local, comparing
+   major.minor.patch as numbers. The update check uses it to decide whether a
+   release on GitHub should be offered. */
 int loft_newer(const char *remote, const char *local) {
     const char *a = remote ? remote : "";
     const char *b = local ? local : "";
@@ -130,6 +151,8 @@ int loft_newer(const char *remote, const char *local) {
     return 0;
 }
 
+/* loft_wipe zeroes n bytes at p through a volatile pointer, so the compiler
+   cannot drop the write. Used to clear keys from memory after use. */
 void loft_wipe(void *p, size_t n) {
     volatile unsigned char *b = p;
     size_t i;
@@ -137,6 +160,11 @@ void loft_wipe(void *p, size_t n) {
     for (i = 0; i < n; i++) b[i] = 0;
 }
 
+/* loft_slug turns a display name into a short plain id (profiles and route
+   entries use it as their id): lower-case ASCII letters and digits, with runs
+   of space, '-' or '_' folded into one '-'. Other characters (for example
+   Cyrillic) are dropped; an empty result becomes "connection". Returns the
+   length. */
 int loft_slug(const char *name, char *dst, size_t n) {
     size_t i = 0;
     int dash = 0;

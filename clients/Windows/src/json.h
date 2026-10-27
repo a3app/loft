@@ -2,6 +2,7 @@
 #ifndef LOFT_JSON_H
 #define LOFT_JSON_H
 
+/* LoftStrMap is a simple key -> value list of owned UTF-8 strings. */
 typedef struct LoftStrMap {
     char **keys;
     char **vals;

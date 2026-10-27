@@ -4,11 +4,15 @@
    list and language list. */
 #include "common.h"
 
+/* Signatures of the few GDI+ flat-API functions used to turn a PNG into an
+   icon. GDI+ is loaded at run time with LoadLibrary, so the build needs no
+   GDI+ headers or import library. */
 typedef int(WINAPI *GpStartup)(ULONG_PTR *, const void *, void *);
 typedef int(WINAPI *GpFromFile)(const wchar_t *, void **);
 typedef int(WINAPI *GpHicon)(void *, HICON *);
 typedef int(WINAPI *GpDispose)(void *);
 
+/* GpIn mirrors GdiplusStartupInput, the settings passed to GdiplusStartup. */
 typedef struct GpIn {
     UINT32 GdiplusVersion;
     void *DebugEventCallback;
@@ -16,6 +20,9 @@ typedef struct GpIn {
     BOOL SuppressExternalCodecs;
 } GpIn;
 
+/* png_icon loads a PNG file as an icon through GDI+, starting GDI+ on first
+   use. Returns NULL when GDI+ or the file is not available; the caller then
+   draws the icon itself. */
 static HICON png_icon(const wchar_t *path) {
     static HMODULE mod;
     static GpStartup pStart;
@@ -50,6 +57,8 @@ static HICON png_icon(const wchar_t *path) {
 /* Light taskbar (Windows 10+): ink body. Dark taskbar and Windows 7: snow body. */
 static int light;
 
+/* taskbar_light reads the Windows 10+ "SystemUsesLightTheme" setting.
+   Missing (Windows 7) counts as a dark taskbar. */
 static int taskbar_light(void) {
     DWORD v = 0, n = sizeof v;
     if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
@@ -58,6 +67,11 @@ static int taskbar_light(void) {
     return v != 0;
 }
 
+/* icon_dib draws the fallback tray icon in code when the PNGs are missing:
+   the Loft sign (a block with a window) px pixels square, with a transparent
+   margin. The body colour follows the taskbar (dark sign on a light taskbar);
+   the window is plain for state 0, lamp yellow for 1 (connected) and red for
+   2 (error). */
 static HICON icon_dib(int px, int state) {
     BITMAPINFO bi;
     HDC dc, mem;
@@ -139,6 +153,7 @@ static HICON icon_dib(int px, int state) {
     return ic;
 }
 
+/* icon_px picks the tray icon size for the screen DPI (16 px at 100%). */
 static int icon_px(void) {
     if (g.dpi >= 192) return 32;
     if (g.dpi >= 144) return 24;
@@ -159,6 +174,8 @@ static HICON load_png(int px, int state) {
     return png_icon(path);
 }
 
+/* tip_set writes the tray tooltip in the UI language: "Loft - Connected
+   <profile name>" or "Loft - No active connections". */
 static void tip_set(void) {
     wchar_t line[128], a[80], name[80];
     Sess *s = session_primary();
@@ -183,6 +200,9 @@ static void tip_set(void) {
     lstrcpynW(g.nid.szTip, line, 128);
 }
 
+/* icon_which picks the icon for the current state: on, off, or error/held.
+   While connecting it alternates between on and off (g.blink), so the icon
+   blinks. */
 static int icon_which(void) {
     int ph = session_phase();
     if (ph == PH_ON) return 1;
@@ -191,6 +211,8 @@ static int icon_which(void) {
     return 0;
 }
 
+/* icons_load (re)loads the three tray icons (off, on, error) for the current
+   DPI and taskbar colour, from tray PNGs or drawn by icon_dib. */
 static void icons_load(void) {
     int i, px = icon_px();
     light = taskbar_light();
@@ -201,6 +223,9 @@ static void icons_load(void) {
     }
 }
 
+/* tray_init adds the icon to the notification area. Clicks arrive at the
+   hidden message window as WM_LOFT_TRAY. A failed add leaves tray_on 0, and
+   the other tray calls then do nothing. */
 void tray_init(void) {
     icons_load();
     memset(&g.nid, 0, sizeof g.nid);
@@ -218,6 +243,8 @@ void tray_init(void) {
     }
 }
 
+/* tray_update refreshes icon and tooltip after a state change, and runs the
+   blink timer only while a session is connecting. */
 void tray_update(void) {
     if (!g.tray_on) return;
     g.nid.cbSize = NOTIFYICONDATAW_V3_SIZE;
@@ -237,6 +264,7 @@ void tray_theme(void) {
     tray_update();
 }
 
+/* tray_remove deletes the tray icon on exit. */
 void tray_remove(void) {
     if (!g.tray_on) return;
     g.nid.cbSize = NOTIFYICONDATAW_V3_SIZE;
@@ -245,10 +273,13 @@ void tray_remove(void) {
     g.tray_on = 0;
 }
 
+/* pop_kind reports whether a window kind is a popup: the tray flyout, the
+   connection list, the tray menu or the language list. */
 int pop_kind(int kind) {
     return kind == WK_FLY || kind == WK_LIST || kind == WK_MENU || kind == WK_LANG;
 }
 
+/* pop_close hides every popup and stops the focus-watch timer. */
 void pop_close(void) {
     int i;
     int kinds[4] = {WK_FLY, WK_LIST, WK_MENU, WK_LANG};
@@ -259,6 +290,7 @@ void pop_close(void) {
     if (g.msg) KillTimer(g.msg, T_FOCUS);
 }
 
+/* fly_close hides the flyout and the connection list opened from it. */
 void fly_close(void) {
     HWND h = chrome_find(WK_FLY);
     HWND list = chrome_find(WK_LIST);
@@ -266,6 +298,8 @@ void fly_close(void) {
     if (list) ShowWindow(list, SW_HIDE);
 }
 
+/* show_pop shows a popup, brings it to the front, and starts the focus-watch
+   timer that closes popups once focus moves elsewhere. */
 static void show_pop(HWND h) {
     if (!h) return;
     ShowWindow(h, SW_SHOW);
@@ -273,6 +307,8 @@ static void show_pop(HWND h) {
     if (g.msg) SetTimer(g.msg, T_FOCUS, 250, NULL);
 }
 
+/* fly_toggle opens the flyout (the small status panel shown by a left click
+   on the tray icon) next to the icon, or closes it if it is open. */
 void fly_toggle(void) {
     HWND h = chrome_find(WK_FLY);
     int w = sc(300), hh;
@@ -289,6 +325,8 @@ void fly_toggle(void) {
     show_pop(h);
 }
 
+/* menu_popup opens the tray menu (right click) at the mouse pointer, kept
+   inside the work area. */
 void menu_popup(void) {
     HWND h;
     POINT pt;
@@ -309,6 +347,8 @@ void menu_popup(void) {
     show_pop(h);
 }
 
+/* list_popup opens the connection list beside anchor (by default the flyout,
+   else the menu): to its left, or to its right when there is no room. */
 void list_popup(HWND anchor) {
     HWND h;
     RECT fr, work;
@@ -331,6 +371,8 @@ void list_popup(HWND anchor) {
     show_pop(h);
 }
 
+/* lang_popup opens the language list below anchor (or the mouse pointer),
+   above it when there is no room below. */
 void lang_popup(HWND anchor) {
     HWND h;
     RECT fr, work;

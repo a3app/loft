@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 
+/* Buffer sizes for profile fields, the profile table and loft-front's argv. */
 #define LOFT_ID 40
 #define LOFT_NAME 128
 #define LOFT_URL 512
@@ -13,6 +14,9 @@
 #define LOFT_ARGS 40
 #define LOFT_ARGN 700
 
+/* LoftProfile is one saved connection: server URL, kind (front or foreign
+   protocol), paths per front, SNI, DNS and local listener options. has_key
+   says whether a secret exists for it in the DPAPI key store. */
 typedef struct LoftProfile {
     char id[LOFT_ID];
     char name[LOFT_NAME];
@@ -42,16 +46,19 @@ typedef struct LoftProfile {
     int has_key;
 } LoftProfile;
 
+/* LoftParsed is a profile read from a file or link, together with its secret. */
 typedef struct LoftParsed {
     LoftProfile p;
     char key[LOFT_KEY];
 } LoftParsed;
 
+/* LoftArgv holds the argument strings for starting loft-front. */
 typedef struct LoftArgv {
     char store[LOFT_ARGS][LOFT_ARGN];
     int n;
 } LoftArgv;
 
+/* Profile defaults, YAML import/export and the loft-front command line. */
 void loft_profile_clear(LoftProfile *p);
 int loft_parse_blob(const char *text, const char *file_name, LoftParsed *out, int max);
 /* Canonical YAML. include_key writes the secret; the on-disk profile passes 0. */
@@ -59,6 +66,8 @@ int loft_profile_yaml(const LoftProfile *p, const char *key, char *dst, size_t n
 int loft_build_argv(LoftArgv *v, const char *bin, const LoftProfile *p, const char *key,
                     const char *socks, const char *tun_pipe, const char *instance_file);
 
+/* LoftPrefs is the app-wide settings file (prefs.yaml): language, active
+   profile, and the switches from the settings window. */
 typedef struct LoftPrefs {
     char lang[8];
     char active[LOFT_ID];

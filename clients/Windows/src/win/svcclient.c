@@ -1,5 +1,17 @@
+/* Windows client GUI: the client side of the loft service (loft-svc.exe, a
+   Windows service running as LocalSystem that owns the Wintun tunnel adapter,
+   its address, routes and DNS). loft.exe runs as the normal user and cannot
+   change network settings itself, so it sends one-line text commands such as
+   "tun-open" or "route CIDR" over the control pipe \\.\pipe\loft-ctl and
+   reads one text reply. The command list is in svc/loft-svc.c (on_cmd).
+   Also installs the service on demand. Callers: session.c and app.c. */
 #include "common.h"
 
+/* svc_call_to sends cmd to the service and copies its reply into resp (n
+   bytes), waiting at most ms milliseconds (0 means 8 s). Returns 1 when the
+   reply starts with "ok" or "status". When the pipe cannot be reached at all
+   the reply is "err pipe <code>"; callers use that to tell "service not
+   installed or not running" apart from a refused command. */
 int svc_call_to(const char *cmd, char *resp, int n, DWORD ms) {
     char buf[512];
     DWORD got = 0;
@@ -43,12 +55,18 @@ int svc_call_to(const char *cmd, char *resp, int n, DWORD ms) {
     return strncmp(buf, "ok", 2) == 0 || strncmp(buf, "status", 6) == 0;
 }
 
+/* svc_call is svc_call_to with the usual timeout: 8 s, or 30 s for
+   tun-open, because creating the adapter can take a while on first use. */
 int svc_call(const char *cmd, char *resp, int n) {
     DWORD ms = 8000;
     if (cmd && strncmp(cmd, "tun-open", 8) == 0) ms = 30000;
     return svc_call_to(cmd, resp, n, ms);
 }
 
+/* svc_install_interactive runs "loft-svc.exe --install" from the app folder
+   with the "runas" verb, so Windows shows the administrator (UAC) prompt.
+   Waits up to two minutes and returns 1 when the installer exited with 0.
+   Returns 0 when loft-svc.exe is missing or the user declined the prompt. */
 int svc_install_interactive(void) {
     wchar_t path[MAX_PATH];
     SHELLEXECUTEINFOW sei;

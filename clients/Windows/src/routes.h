@@ -4,9 +4,12 @@
 
 #include <stddef.h>
 
+/* Table limits: zones and services ("sets") in routes.txt. */
 #define LOFT_ZONES 16
 #define LOFT_SETS 256
 
+/* LoftZone is a group of services with one default direction: through Loft
+   or bypassing it. repo is an optional URL of a route list to pull. */
 typedef struct LoftZone {
     char id[32];
     char name[64];
@@ -16,6 +19,7 @@ typedef struct LoftZone {
     int auto_pull;
 } LoftZone;
 
+/* LoftSet is one service: a named network (cidr) inside a zone. */
 typedef struct LoftSet {
     char id[32];
     char name[64];
@@ -24,6 +28,7 @@ typedef struct LoftSet {
     char cidr[80];
 } LoftSet;
 
+/* LoftRoutes is the whole routes.txt in memory. */
 typedef struct LoftRoutes {
     LoftZone zones[LOFT_ZONES];
     LoftSet sets[LOFT_SETS];
