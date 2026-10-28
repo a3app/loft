@@ -37,6 +37,13 @@ final class RoutePlan {
     /** Blocked prefixes: routed into the tunnel, then their packets are thrown away. */
     final List<Cidr> drop = new ArrayList<>();
     /**
+     * {@code drop} as sorted ranges for the per-packet check (see
+     * compileDrop); null when nothing is dropped. Volatile because the TUN
+     * reader thread reads them while another thread may compile a new plan.
+     */
+    private volatile Ranges drop4;
+    private volatile Ranges drop6;
+    /**
      * The overlay subnets: the private network the node hands out to its
      * members (this device's tunnel address plus prefix). Null when absent.
      */
@@ -171,6 +178,7 @@ final class RoutePlan {
         }
         p.include.addAll(v4);
         p.include.addAll(v6);
+        p.compileDrop();
         return p;
     }
 
@@ -209,31 +217,44 @@ final class RoutePlan {
      * address sits at byte 16 of an IPv4 header and byte 24 of an IPv6 header.
      */
     boolean destDropped(byte[] pkt) {
-        if (pkt == null || pkt.length < 20 || drop.isEmpty()) {
+        return pkt != null && destDropped(pkt, pkt.length);
+    }
+
+    /**
+     * Same check for the first {@code n} bytes of {@code buf}, so the TUN
+     * reader can test its reusable read buffer without copying the packet.
+     * Uses the sorted drop ranges (binary search, no allocation).
+     */
+    boolean destDropped(byte[] buf, int n) {
+        Ranges d4 = drop4;
+        Ranges d6 = drop6;
+        if (buf == null || n < 20 || d4 == null) {
             return false;
         }
-        int ver = (pkt[0] >> 4) & 0xf;
-        Cidr dst;
-        try {
-            if (ver == 4) {
-                byte[] a = new byte[]{pkt[16], pkt[17], pkt[18], pkt[19]};
-                dst = new Cidr(a, 32, false);
-            } else if (ver == 6 && pkt.length >= 40) {
-                byte[] a = new byte[16];
-                System.arraycopy(pkt, 24, a, 0, 16);
-                dst = new Cidr(a, 128, true);
-            } else {
-                return false;
-            }
-        } catch (Exception e) {
-            return false;
+        int ver = (buf[0] >> 4) & 0xf;
+        if (ver == 4) {
+            return d4.contains(buf, 16);
         }
-        for (Cidr d : drop) {
-            if (d.contains(dst)) {
-                return true;
-            }
+        if (ver == 6 && n >= 40) {
+            return d6.contains(buf, 24);
         }
         return false;
+    }
+
+    /**
+     * Compiles {@code drop} into the sorted ranges destDropped searches. build
+     * calls it once; call it again only if {@code drop} is changed by hand.
+     * Leaves both null when nothing is dropped, so the per-packet check is a
+     * single null test.
+     */
+    void compileDrop() {
+        if (drop.isEmpty()) {
+            drop4 = null;
+            drop6 = null;
+            return;
+        }
+        drop6 = Ranges.of(drop, true);
+        drop4 = Ranges.of(drop, false);
     }
 
     // Front IPs become /32 or /128 excludes: traffic to the node itself must

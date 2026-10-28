@@ -161,20 +161,18 @@ final class Cidr {
     }
 
     /**
-     * Removes every prefix in {@code cut} from every prefix in {@code set}.
-     * Each cut can split a prefix into many (up to one per bit), so long cut
-     * lists produce long results; the work grows with set size times cut size.
+     * Removes every prefix in {@code cut} from every prefix in {@code set} and
+     * returns the fewest prefixes that cover what is left. Works per family on
+     * sorted ranges (see Ranges), so the cost grows with the list sizes added
+     * together, not multiplied: thousands of bypass prefixes on Android 12 and
+     * older stay fast. Overlapping or adjacent prefixes in {@code set} come
+     * back merged, which also shortens the route table handed to Android.
      */
     static List<Cidr> subtractAll(List<Cidr> set, List<Cidr> cut) {
-        List<Cidr> cur = new ArrayList<>(set);
-        for (Cidr c : cut) {
-            List<Cidr> next = new ArrayList<>();
-            for (Cidr x : cur) {
-                next.addAll(subtract(x, c));
-            }
-            cur = next;
-        }
-        return cur;
+        List<Cidr> out = new ArrayList<>();
+        out.addAll(Ranges.of(set, false).minus(Ranges.of(cut, false)).toCidrs());
+        out.addAll(Ranges.of(set, true).minus(Ranges.of(cut, true)).toCidrs());
+        return out;
     }
 
     /**
