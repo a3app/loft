@@ -931,10 +931,27 @@ final class SplitStore {
      * number of rows in the downloaded list; the caller saves.
      */
     int pullZone(Zone z) throws Exception {
-        if (z == null || z.repo == null || z.repo.trim().isEmpty()) {
+        if (z == null) {
             throw new IOException("no url");
         }
-        URL u = new URL(z.repo.trim());
+        List<Bat.Row> rows = fetch(z.repo);
+        replaceRepo(z.id, rows);
+        z.pulled = System.currentTimeMillis();
+        return rows.size();
+    }
+
+    /**
+     * Downloads and parses a .bat list without touching any store. The Lists
+     * screen uses it so the download can run in the background while the
+     * screen keeps editing its own store; the rows are merged in afterwards.
+     * Same rules as pullZone: http(s) only, PULL_MAX bytes at most, an empty
+     * list is an error. Blocking network call: worker thread only.
+     */
+    static List<Bat.Row> fetch(String repo) throws Exception {
+        if (repo == null || repo.trim().isEmpty()) {
+            throw new IOException("no url");
+        }
+        URL u = new URL(repo.trim());
         String sch = u.getProtocol();
         if (!"http".equalsIgnoreCase(sch) && !"https".equalsIgnoreCase(sch)) {
             throw new IOException("no url");
@@ -948,9 +965,7 @@ final class SplitStore {
             if (rows.isEmpty()) {
                 throw new IOException("empty list");
             }
-            replaceRepo(z.id, rows);
-            z.pulled = System.currentTimeMillis();
-            return rows.size();
+            return rows;
         } finally {
             c.disconnect();
         }
