@@ -43,10 +43,33 @@ func tlsToken(o config.Outbound, token []byte) []byte {
 }
 
 // helloID maps a fingerprint name to a uTLS ClientHelloID (default Chrome).
+//
+// Why there is a choice at all: users in Russia report that DPI treats some
+// ClientHellos as more suspicious than others when they go to hosting
+// addresses. Chrome is the one most proxies imitate, so it is the first to
+// be watched; Firefox, Edge, 360 Browser and QQ Browser are reported to pass
+// more often. These are observations, not a published rule, so the
+// fingerprint is a setting to try, not a fix.
+//
+// Every name here must offer TLS 1.3 with an X25519 key share: the
+// session_id mark (sid v2 and v3) and the mask are built from that share.
+// That is why uTLS's Android (OkHttp) and 360 Browser 7.5 are not offered:
+// both are TLS 1.2 hellos without a key share. TestFingerprintsHandshake
+// checks every name against both node paths.
+//
+// The uTLS versions are old (Edge 106, 360 Browser 11, QQ Browser 11.1,
+// Firefox 120). An outdated version can stand out by itself; newer ones need
+// a newer uTLS or a ClientHello captured from the real browser.
 func helloID(fp string) utls.ClientHelloID {
 	switch fp {
 	case "firefox":
 		return utls.HelloFirefox_Auto
+	case "edge":
+		return utls.HelloEdge_106
+	case "360":
+		return utls.Hello360_11_0
+	case "qq":
+		return utls.HelloQQ_Auto
 	case "go":
 		return utls.HelloGolang
 	default:

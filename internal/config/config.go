@@ -124,7 +124,7 @@ type Outbound struct {
 	URL          string `yaml:"url"`
 	Path         string `yaml:"path"`
 	SNI          string `yaml:"sni"`
-	Fingerprint  string `yaml:"fingerprint"` // chrome | firefox | go
+	Fingerprint  string `yaml:"fingerprint"` // chrome | firefox | edge | 360 | qq | go
 	Decoy        string `yaml:"decoy"`       // optional last-known node identity (host or host:port); empty = discover
 	HeaderBudget int    `yaml:"header_budget"`
 	Inflight     int    `yaml:"inflight"`
