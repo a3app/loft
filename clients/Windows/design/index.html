@@ -1208,8 +1208,7 @@
         const selected = p.id === activeId;
         const err = multi && p.err;
         const live = err ? false : (multi ? p.up : selected && p.up);
-        const port = socksOf(p);
-        const host = p.host + (p.socks ? " · " + port : "");
+        const host = p.host;
         let side = "";
         if (simpleOn) side = err ? t("fail") : "";
         else if (multi) {

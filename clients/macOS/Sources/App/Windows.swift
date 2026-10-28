@@ -565,12 +565,7 @@ final class ConnectionsWindowController: NSWindowController {
             }
             row.host.isHidden = simple
             if !simple {
-                var sub = Palette.hostOf(p.url)
-                if p.socksOn {
-                    let port = Palette.socksPort(engine.store.socksBind(for: p))
-                    if !port.isEmpty { sub += " · " + port }
-                }
-                row.host.stringValue = sub
+                row.host.stringValue = Palette.hostOf(p.url)
                 row.host.frame = NSRect(x: textX, y: 32, width: max(40, sideX - textX - 8), height: 18)
             }
             row.side.isHidden = sideStr.isEmpty
