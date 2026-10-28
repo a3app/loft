@@ -289,7 +289,7 @@ curl -sI --max-time 8 https://cdn.example.com/static/v3/build
 
 期望是节点的应答，状态不是 502/504。裸 `/static/v3/build` 没有会话 — 节点普通的掩护页/404。
 
-然后 GET 会话。`loft-bench` 默认 `-path` 是 `/static/js`，要盖掉：
+然后 GET 会话。不给 `-path` 时 `loft-bench` 用默认 GET 路径 `/static/v3/build`；节点的 `get_path` 不同就用 `-path` 指定：
 
 ```bash
 make bench

@@ -326,15 +326,15 @@ func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 	switch kind {
 	case "get":
 		o.URL = httpOrigin(raw)
-		if o.Path == "" || o.Path == "/static/js" {
-			o.Path = "/static/v3/build"
+		if o.Path == "" {
+			o.Path = config.DefaultGETPath
 		}
 	case "ws":
 		o.URL = withWSPath(wsURL(raw), "/api/v1/sync")
 	case "h2", "h3":
 		o.URL = httpOrigin(raw)
-		if o.Path == "" || o.Path == "/static/js" {
-			o.Path = "/api/v1/tunnel"
+		if o.Path == "" {
+			o.Path = config.DefaultH2Path
 		}
 	case "quic":
 		o.URL = httpOrigin(raw)

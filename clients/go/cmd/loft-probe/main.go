@@ -21,7 +21,10 @@ func main() {
 	token := flag.String("token", os.Getenv("LOFT_TOKEN"), "member key")
 	rawURL := flag.String("url", os.Getenv("LOFT_URL"), "front URL")
 	kind := flag.String("type", "auto", "get | ws | h2 | quic | h3 | sstp | auto")
-	path := flag.String("path", "/static/js", "GET path")
+	// Empty means "not given": the profile's path, else the front's default.
+	// (It used to default to "/static/js", and that string doubled as "not
+	// given", so a node really serving /static/js could not be probed.)
+	path := flag.String("path", "", "front path; empty = the profile's, else the default for -type")
 	user := flag.String("user", "", "SSTP username")
 	sni := flag.String("sni", "", "SSTP TLS ServerName")
 	pap := flag.Bool("pap", false, "SSTP: allow PAP and CHAP-MD5")
@@ -284,10 +287,10 @@ func openMuxFrom(ctx context.Context, token, rawURL, kind, path, cfgPath string)
 	if kind == "" || kind == "auto" {
 		kind = o.Type
 	}
-	if path == "" || path == "/static/js" {
-		if o.Path != "" {
-			path = o.Path
-		}
+	// The profile's path belongs to its own front type: a GET path is no
+	// use to h2 when -type overrides the type.
+	if path == "" && kind == o.Type {
+		path = o.Path
 	}
 	url := rawURL
 	if url == "" {

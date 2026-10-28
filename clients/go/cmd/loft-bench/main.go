@@ -27,7 +27,10 @@ func main() {
 	serve := flag.String("serve", "", "listen host:port as bench origin (run on the node)")
 	token := flag.String("token", os.Getenv("LOFT_TOKEN"), "member key")
 	rawURL := flag.String("url", envOr("LOFT_URL", "https://loft.example.com:444"), "front URL")
-	path := flag.String("path", "/static/js", "GET path")
+	// Empty means "not given" and picks the default for the front. (It used
+	// to default to "/static/js", which also meant "not given", so a node
+	// really serving /static/js could not be benchmarked over GET.)
+	path := flag.String("path", "", "front path; empty = the default for -type")
 	origin := flag.String("origin", "127.0.0.1:9474", "bench origin the node dials (loopback on the node)")
 	types := flag.String("type", "ws,get", "comma list: get,ws,h2,quic,h3,l3 or all")
 	cdnName := flag.String("cdn", "", "edge profile: yandex (GET, 16 KiB Cookie, verify TLS)")

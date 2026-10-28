@@ -289,7 +289,7 @@ curl -sI --max-time 8 https://cdn.example.com/static/v3/build
 
 Ожидается ответ ноды со статусом не 502/504. Голый `/static/v3/build` без сессии даёт обычный cover/404 ноды.
 
-Затем проверьте GET-сессию. У `loft-bench` по умолчанию `-path` — `/static/js`, его нужно переопределить:
+Затем проверьте GET-сессию. Без `-path` `loft-bench` идёт на GET-путь по умолчанию, `/static/v3/build`; если у ноды другой `get_path`, укажите его в `-path`:
 
 ```bash
 make bench

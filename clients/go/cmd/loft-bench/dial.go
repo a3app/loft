@@ -94,8 +94,8 @@ func outboundFor(raw, kind, path, cdnName string, muxOn bool) config.Outbound {
 	switch kind {
 	case "get":
 		o.URL = httpOrigin(raw)
-		if o.Path == "" || o.Path == "/static/js" {
-			o.Path = "/static/v3/build"
+		if o.Path == "" {
+			o.Path = config.DefaultGETPath
 		}
 	case "ws":
 		o.URL = withWSPath(wsURL(raw), "/api/v1/sync")
