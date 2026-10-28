@@ -784,6 +784,41 @@
     .edit-foot .btn.connect { margin: 0; }
     .edit-alt { display: flex; justify-content: space-between; gap: 8px; }
     .edit-alt .btn { width: auto; flex: 1; margin-top: 2px; }
+
+    /* ── Persian (RTL) ── windows and popover mirror; the macOS menu bar and the traffic lights do not. */
+    #scene[dir="rtl"] {
+      --ui: "SF Arabic", "Geeza Pro", "Avenir Next", system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, "SF Arabic", "Geeza Pro", monospace;
+    }
+    #scene[dir="rtl"] .pop-rate div, #scene[dir="rtl"] .spark span { unicode-bidi: plaintext; }
+    #scene[dir="rtl"] * { letter-spacing: 0 !important; }
+    #scene[dir="rtl"] .traffic { direction: ltr; }
+    #scene[dir="rtl"] .hint, #scene[dir="rtl"] .label, #scene[dir="rtl"] .warn,
+    #scene[dir="rtl"] .offer .quiet, #scene[dir="rtl"] .mmenu button,
+    #scene[dir="rtl"] .conn-menu button, #scene[dir="rtl"] [style*="text-align:left"] { text-align: right !important; }
+    #scene[dir="rtl"] .rrow .meta, #scene[dir="rtl"] .pop-rate { text-align: left; }
+    #scene[dir="rtl"] .pop-rate { margin-left: 0; margin-right: auto; }
+    #scene[dir="rtl"] .about .spec { text-align: right; }
+    #scene[dir="rtl"] .about .spec .k { text-align: left; }
+    #scene[dir="rtl"] .split-bar .ign { margin-right: 0; margin-left: auto; }
+    #scene[dir="rtl"] .split-bar .pm button:first-child { border-radius: 0 6px 6px 0; }
+    #scene[dir="rtl"] .split-bar .pm button:last-child { border-radius: 6px 0 0 6px; border-left: 1px solid #3a332e; border-right: 0; }
+    #scene[dir="rtl"] .route-tag, #scene[dir="rtl"] .pop-badge { margin-left: 0; margin-right: 6px; }
+    #scene[dir="rtl"] .chev { margin-left: 0; margin-right: 4px; }
+    #scene[dir="rtl"] .mbanner { padding: 8px 12px 8px 8px; }
+    #scene[dir="rtl"] .conn-menu { left: auto; right: calc(100% + 6px); }
+    #scene[dir="rtl"] .toggle i { left: auto; right: 2px; transition: right .2s ease; }
+    #scene[dir="rtl"] .toggle.on i { left: auto; right: 16px; }
+    #scene[dir="rtl"] .loft-check.on::after { left: auto; right: 5px; }
+    #scene[dir="rtl"] .loft-select { background-position: left 10px center; padding: 7px 12px 7px 28px; }
+    #scene[dir="rtl"] .loft-select.wide { padding: 9px 12px 9px 28px; }
+    /* Keys, addresses, ports, paths and logs stay left-to-right inside the mirrored layout. */
+    #scene[dir="rtl"] .fmt, #scene[dir="rtl"] .file, #scene[dir="rtl"] .log { direction: ltr; unicode-bidi: isolate; }
+    /* These hold either an address or a Persian phrase: the first letter decides. */
+    #scene[dir="rtl"] .u, #scene[dir="rtl"] .v, #scene[dir="rtl"] .split-native { direction: ltr; unicode-bidi: plaintext; }
+    #scene[dir="rtl"] .u, #scene[dir="rtl"] .v, #scene[dir="rtl"] .split-native { text-align: right; }
+    #scene[dir="rtl"] .fmt, #scene[dir="rtl"] .file { text-align: left; }
+    #scene[dir="rtl"] input.field, #scene[dir="rtl"] input.url-field { unicode-bidi: plaintext; text-align: start; }
   </style>
 </head>
 <body>
@@ -806,6 +841,7 @@
       <button type="button" data-lang="pt">PT</button>
       <button type="button" data-lang="ru">RU</button>
       <button type="button" data-lang="vi">VI</button>
+      <button type="button" data-lang="fa">FA</button>
     </div>
     <h4 id="board-scenes">Scenes</h4>
     <button class="on" data-scene="hero" data-i18n="nav.hero">Overview</button>
@@ -882,17 +918,20 @@
   <script src="../lang/ja.lang"></script>
   <script src="../lang/ko.lang"></script>
   <script src="../lang/vi.lang"></script>
+  <script src="../lang/fa.lang"></script>
   <script>
-    const LANGS = ["en", "fr", "ka", "de", "it", "pt", "ru", "vi", "zh", "ja", "ko"];
+    const LANGS = ["en", "fr", "ka", "de", "it", "pt", "ru", "vi", "fa", "zh", "ja", "ko"];
     const I18N = L10N_PACKS;
     const params = new URLSearchParams(location.search);
     let lang = LANGS.includes(params.get("lang")) ? params.get("lang") : "en";
     let current = "hero";
     const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+    // Persian writes counters with its own digits; addresses, ports and versions stay 0–9.
+    const num = (n) => lang === "fa" ? String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]) : String(n);
     const PROFILES = [
-      { id: "office", ru: "Офис", en: "Office", de: "Büro", fr: "Bureau", pt: "Escritório", zh: "办公室", it: "Ufficio", ja: "オフィス", ko: "사무실", vi: "Văn phòng", host: "cdn.example.com", path: "/static/v3/build", kind: "get", file: "office.loft", socks: "1080", ip: "10.8.17.4", gw: "10.8.17.1", up: true, err: false, tun: true },
-      { id: "lab", ru: "Lab", en: "Lab", de: "Labor", fr: "Labo", pt: "Lab", zh: "实验室", it: "Lab", ja: "ラボ", ko: "랩", vi: "Lab", host: "app.example.com", path: "/api/v1/sync", kind: "ws", file: "lab.loft", socks: "1081", ip: "10.8.18.2", gw: "10.8.18.1", up: true, err: false, tun: true },
-      { id: "home", ru: "Дом", en: "Home", de: "Zuhause", fr: "Maison", pt: "Casa", zh: "家", it: "Casa", ja: "ホーム", ko: "집", vi: "Nhà", host: "edge.home.lan", path: "", kind: "get", file: "home.loft", socks: "1082", ip: "10.8.19.3", gw: "10.8.19.1", up: false, err: false, tun: false },
+      { id: "office", ru: "Офис", en: "Office", de: "Büro", fr: "Bureau", pt: "Escritório", zh: "办公室", it: "Ufficio", ja: "オフィス", ko: "사무실", fa: "دفتر", vi: "Văn phòng", host: "cdn.example.com", path: "/static/v3/build", kind: "get", file: "office.loft", socks: "1080", ip: "10.8.17.4", gw: "10.8.17.1", up: true, err: false, tun: true },
+      { id: "lab", ru: "Lab", en: "Lab", de: "Labor", fr: "Labo", pt: "Lab", zh: "实验室", it: "Lab", ja: "ラボ", ko: "랩", fa: "آزمایشگاه", vi: "Lab", host: "app.example.com", path: "/api/v1/sync", kind: "ws", file: "lab.loft", socks: "1081", ip: "10.8.18.2", gw: "10.8.18.1", up: true, err: false, tun: true },
+      { id: "home", ru: "Дом", en: "Home", de: "Zuhause", fr: "Maison", pt: "Casa", zh: "家", it: "Casa", ja: "ホーム", ko: "집", fa: "خانه", vi: "Nhà", host: "edge.home.lan", path: "", kind: "get", file: "home.loft", socks: "1082", ip: "10.8.19.3", gw: "10.8.19.1", up: false, err: false, tun: false },
     ];
     let activeId = "office";
     let multi = params.get("multi") === "1";
@@ -913,12 +952,12 @@
     const ZONE_PRESETS = ["local", "global", "block"];
     const LIST_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
     const LIST_CATALOG = [
-      { id: "global", file: "global.bat", en: "World", ru: "Мир", de: "Welt", fr: "Monde", pt: "Mundo", zh: "全球", it: "Mondo", ja: "世界", ko: "세계", vi: "Thế giới" },
-      { id: "ru", file: "ru.bat", en: "Russia", ru: "Россия", de: "Russland", fr: "Russie", pt: "Rússia", zh: "俄罗斯", it: "Russia", ja: "ロシア", ko: "러시아", vi: "Nga" },
-      { id: "cn", file: "cn.bat", en: "China", ru: "Китай", de: "China", fr: "Chine", pt: "China", zh: "中国", it: "Cina", ja: "中国", ko: "중국", vi: "Trung Quốc" },
-      { id: "ir", file: "ir.bat", en: "Iran", ru: "Иран", de: "Iran", fr: "Iran", pt: "Irã", zh: "伊朗", it: "Iran", ja: "イラン", ko: "이란", vi: "Iran" },
-      { id: "kz", file: "kz.bat", en: "Kazakhstan", ru: "Казахстан", de: "Kasachstan", fr: "Kazakhstan", pt: "Cazaquistão", zh: "哈萨克斯坦", it: "Kazakistan", ja: "カザフスタン", ko: "카자흐스탄", vi: "Kazakhstan" },
-      { id: "by", file: "by.bat", en: "Belarus", ru: "Беларусь", de: "Belarus", fr: "Biélorussie", pt: "Bielorrússia", zh: "白俄罗斯", it: "Bielorussia", ja: "ベラルーシ", ko: "벨라루스", vi: "Belarus" },
+      { id: "global", file: "global.bat", en: "World", ru: "Мир", de: "Welt", fr: "Monde", pt: "Mundo", zh: "全球", it: "Mondo", ja: "世界", ko: "세계", fa: "جهان", vi: "Thế giới" },
+      { id: "ru", file: "ru.bat", en: "Russia", ru: "Россия", de: "Russland", fr: "Russie", pt: "Rússia", zh: "俄罗斯", it: "Russia", ja: "ロシア", ko: "러시아", fa: "روسیه", vi: "Nga" },
+      { id: "cn", file: "cn.bat", en: "China", ru: "Китай", de: "China", fr: "Chine", pt: "China", zh: "中国", it: "Cina", ja: "中国", ko: "중국", fa: "چین", vi: "Trung Quốc" },
+      { id: "ir", file: "ir.bat", en: "Iran", ru: "Иран", de: "Iran", fr: "Iran", pt: "Irã", zh: "伊朗", it: "Iran", ja: "イラン", ko: "이란", fa: "ایران", vi: "Iran" },
+      { id: "kz", file: "kz.bat", en: "Kazakhstan", ru: "Казахстан", de: "Kasachstan", fr: "Kazakhstan", pt: "Cazaquistão", zh: "哈萨克斯坦", it: "Kazakistan", ja: "カザフスタン", ko: "카자흐스탄", fa: "قزاقستان", vi: "Kazakhstan" },
+      { id: "by", file: "by.bat", en: "Belarus", ru: "Беларусь", de: "Belarus", fr: "Biélorussie", pt: "Bielorrússia", zh: "白俄罗斯", it: "Bielorussia", ja: "ベラルーシ", ko: "벨라루스", fa: "بلاروس", vi: "Belarus" },
     ];
     const listURL = (e) => LIST_BASE + e.file;
     const REPO_GLOBAL = listURL(LIST_CATALOG[0]);
@@ -985,9 +1024,9 @@
       { id: "gpt", ru: "ChatGPT", en: "ChatGPT", de: "ChatGPT", fr: "ChatGPT", pt: "ChatGPT", zh: "ChatGPT", it: "ChatGPT", ja: "ChatGPT", ko: "ChatGPT", region: "global", cidrs: ["104.18.32.0/24"], domains: ["chatgpt.com", "openai.com"], src: "me" },
       { id: "nf", ru: "Netflix", en: "Netflix", region: "global", cidrs: ["45.57.0.0/16", "108.175.32.0/20"], src: "repo" },
       { id: "yandex", ru: "Яндекс", en: "Yandex", de: "Yandex", fr: "Yandex", pt: "Yandex", zh: "Yandex", it: "Yandex", ja: "Yandex", ko: "Yandex", region: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24"], domains: ["yandex.ru", "ya.ru", "yastatic.net"], src: "me" },
-      { id: "ads", ru: "Реклама", en: "Ads", de: "Werbung", fr: "Publicité", pt: "Publicidade", zh: "广告", it: "Pubblicità", ja: "広告", ko: "광고", vi: "Quảng cáo", region: "block", cidrs: [], domains: ["doubleclick.net", "adfox.ru"], src: "me" },
-      { id: "lan", ru: "Локальная сеть", en: "LAN", de: "LAN", fr: "LAN", pt: "LAN", zh: "局域网", it: "LAN", ja: "LAN", ko: "로컬 네트워크", region: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
-      { id: "ign", ru: "Игнор", en: "Ignore", de: "Ignorieren", fr: "Ignorer", pt: "Ignorar", zh: "忽略", it: "Ignora", ja: "無視", ko: "무시", vi: "Bỏ qua", region: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
+      { id: "ads", ru: "Реклама", en: "Ads", de: "Werbung", fr: "Publicité", pt: "Publicidade", zh: "广告", it: "Pubblicità", ja: "広告", ko: "광고", fa: "تبلیغات", vi: "Quảng cáo", region: "block", cidrs: [], domains: ["doubleclick.net", "adfox.ru"], src: "me" },
+      { id: "lan", ru: "Локальная сеть", en: "LAN", de: "LAN", fr: "LAN", pt: "LAN", zh: "局域网", it: "LAN", ja: "LAN", ko: "로컬 네트워크", fa: "شبکهٔ محلی", region: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "me" },
+      { id: "ign", ru: "Игнор", en: "Ignore", de: "Ignorieren", fr: "Ignorer", pt: "Ignorar", zh: "忽略", it: "Ignora", ja: "無視", ko: "무시", fa: "نادیده‌گرفته", vi: "Bỏ qua", region: "local", cidrs: ["104.16.0.0/12"], src: "ignore" },
     ];
     const locName = (o) => o[lang] || o.en || o.ru || "";
     const rname = (r) => locName(r);
@@ -1058,7 +1097,7 @@
       const ids = zoneIds();
       const btns = ids.map((id) => {
         const n = routesIn(id).length;
-        return `<button type="button" class="${regionTab === id ? "on" : ""}" data-region="${id}">${zoneLabel(id)} <span class="n">${n}</span></button>`;
+        return `<button type="button" class="${regionTab === id ? "on" : ""}" data-region="${id}">${zoneLabel(id)} <span class="n">${num(n)}</span></button>`;
       }).join("");
       return `<div class="split-tabs">${btns}</div>`;
     };
@@ -1116,9 +1155,9 @@
         { id: "block", builtin: true, def: "block", repo: "", auto: true },
       ],
       routes: [
-        { id: "op-ru", ru: "Россия", en: "Russia", de: "Russland", fr: "Russie", pt: "Rússia", zh: "俄罗斯", it: "Russia", ja: "ロシア", ko: "러시아", vi: "Nga", region: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24", "213.59.200.0/22"], domains: ["yandex.ru", "gosuslugi.ru", "sberbank.ru"], src: "op" },
-        { id: "op-lan", ru: "Локальная сеть", en: "LAN", zh: "局域网", ko: "로컬 네트워크", region: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "op" },
-        { id: "op-ads", ru: "Реклама", en: "Ads", de: "Werbung", fr: "Publicité", pt: "Publicidade", zh: "广告", it: "Pubblicità", ja: "広告", ko: "광고", vi: "Quảng cáo", region: "block", cidrs: [], domains: ["doubleclick.net", "adfox.ru"], src: "op" },
+        { id: "op-ru", ru: "Россия", en: "Russia", de: "Russland", fr: "Russie", pt: "Rússia", zh: "俄罗斯", it: "Russia", ja: "ロシア", ko: "러시아", fa: "روسیه", vi: "Nga", region: "local", cidrs: ["5.255.255.0/24", "77.88.8.0/24", "213.59.200.0/22"], domains: ["yandex.ru", "gosuslugi.ru", "sberbank.ru"], src: "op" },
+        { id: "op-lan", ru: "Локальная сеть", en: "LAN", zh: "局域网", ko: "로컬 네트워크", fa: "شبکهٔ محلی", region: "local", cidrs: ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"], src: "op" },
+        { id: "op-ads", ru: "Реклама", en: "Ads", de: "Werbung", fr: "Publicité", pt: "Publicidade", zh: "广告", it: "Pubblicità", ja: "広告", ko: "광고", fa: "تبلیغات", vi: "Quảng cáo", region: "block", cidrs: [], domains: ["doubleclick.net", "adfox.ru"], src: "op" },
       ],
     };
     const PROFS = [{ id: "own", src: "own" }, { id: "op", src: "op", conn: "Office", data: OP_DATA }];
@@ -1205,7 +1244,7 @@
       const name = pname(p);
       const lamp = locked || fail ? "err" : live ? "on" : "";
       const primary = fail
-        ? `<button class="btn connect err" data-go="on">${t("retry_wait").replace("%d", "3")}</button>`
+        ? `<button class="btn connect err" data-go="on">${t("retry_wait").replace("%d", num("3"))}</button>`
         : live
           ? `<button class="btn connect on">${t("disconnect")}</button>`
           : `<button class="btn connect" data-go="on">${t("pop_connect")}</button>`;
@@ -1293,10 +1332,10 @@
     // The bar under a Lists table: + −, the zone's ignore list, and the ⋯ menu.
     const splitBar = (main) => {
       const n = ignoresIn(regionTab).length;
-      if (ro()) return main ? `<div class="split-bar"><button type="button" class="ghost-sm ign" data-go="splitexcl">${t("split.ign.title")} · ${n} ›</button></div>` : "";
+      if (ro()) return main ? `<div class="split-bar"><button type="button" class="ghost-sm ign" data-go="splitexcl">${t("split.ign.title")} · ${num(n)} ›</button></div>` : "";
       return `<div class="split-bar">
         <div class="pm"><button type="button" data-mplus title="${escAttr(t("split.plus"))}">+</button><button type="button" data-mminus title="${escAttr(main ? t("split.minus") : t("split.back"))}" ${msel.size ? "" : "disabled"}>−</button></div>
-        ${main ? `<button type="button" class="ghost-sm ign" data-go="splitexcl">${t("split.ign.title")} · ${n} ›</button>` : `<span class="ign"></span>`}
+        ${main ? `<button type="button" class="ghost-sm ign" data-go="splitexcl">${t("split.ign.title")} · ${num(n)} ›</button>` : `<span class="ign"></span>`}
         <button type="button" class="more" data-mmore aria-label="⋯">⋯</button>
       </div>`;
     };
@@ -1324,13 +1363,13 @@
         if (mclear === "ign") {
           h = t("split.ign.clear.t").replace("%@", zoneLabel(z));
           p = t("split.ign.clear.sub");
-          btns = b("ign", t("split.ign.clear.go").replace("%d", ignoresIn(z).length));
+          btns = b("ign", t("split.ign.clear.go").replace("%d", num(ignoresIn(z).length)));
         } else {
           h = t("split.clear.t").replace("%@", zoneLabel(z));
           p = fromList ? t("split.clear.sub") : t("split.clear.sub1");
           btns = fromList
-            ? (mine ? b("me", t("split.clear.me").replace("%d", mine)) : "") + b("all", t("split.clear.all").replace("%d", svcs.length))
-            : b("me", t("split.clear.n").replace("%d", mine));
+            ? (mine ? b("me", t("split.clear.me").replace("%d", num(mine))) : "") + b("all", t("split.clear.all").replace("%d", num(svcs.length)))
+            : b("me", t("split.clear.n").replace("%d", num(mine)));
         }
         html += `<div class="msheet"><div class="alert"><h2>${h}</h2><p>${p}</p>${btns}<button type="button" data-mclr="cancel">${t("cancel")}</button></div></div>`;
       }
@@ -1379,7 +1418,7 @@
         r.cidrs.forEach((c) => ROUTES.push(Object.assign({}, r, { id: "ig" + ++ignSeq, cidrs: [c], src: "ignore" })));
       });
       const one = gone[0];
-      const what = gone.length > 1 ? t("split.gone.n").replace("%d", gone.length)
+      const what = gone.length > 1 ? t("split.gone.n").replace("%d", num(gone.length))
         : one.src === "ignore" ? t("split.gone.back").replace("%@", one.cidrs[0]) : t("split.gone").replace("%@", rname(one));
       msel = new Set();
       mshowBanner(toIgn ? what + " · " + t("split.gone.excl") : what);
@@ -1735,7 +1774,7 @@ outbounds:
           const nd = (r.domains || []).length;
           return `<div class="rrow ${msel.has(r.id) ? "sel" : ""}" data-rid="${r.id}">
             <div><div class="n">${rname(r)}</div><div class="u">${n ? r.cidrs.slice(0, 2).join(" ") + (n > 2 ? " …" : "") : r.domains.slice(0, 2).join(" ")}</div></div>
-            <div class="meta">${[n ? n + " " + net : "", nd ? nd + " " + domWord(nd) : ""].filter(Boolean).join(" · ")}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : r.src === "op" ? t("split.src.op") : t("split.src.me")}</div></div>
+            <div class="meta">${[n ? num(n) + " " + net : "", nd ? num(nd) + " " + domWord(nd) : ""].filter(Boolean).join(" · ")}<div class="src">${r.src === "ignore" ? t("split.src.ignore") : r.src === "repo" ? t("split.src.repo") : r.src === "op" ? t("split.src.op") : t("split.src.me")}</div></div>
           </div>`;
         }).join("");
         return `
@@ -1932,7 +1971,7 @@ outbounds:
           const n = routesIn(id).length;
           const net = netWord(n);
           const file = zoneRepoFile(z);
-          const sub = file ? n + " " + net + " · " + file : n + " " + net;
+          const sub = file ? num(n) + " " + net + " · " + file : num(n) + " " + net;
           return `<div class="rrow" data-zid="${id}">
             <div><div class="n">${zoneLabel(id)}</div><div class="u">${sub}</div></div>
             <div class="meta">${dirLabel(z.def === "block" ? "block" : !!z.def)}${z.builtin ? `<div class="src">${t("split.zones.builtin")}</div>` : ""}</div>
@@ -1959,7 +1998,7 @@ outbounds:
           <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
           <div class="body" style="text-align:left;padding:8px 28px 18px">
             <h1 style="text-align:center;font-size:1.2rem">${t("split.zones.edit.title")}</h1>
-            <p>${z.builtin ? t("split.zones.builtin") + " · " + n + " " + net : n + " " + net}</p>
+            <p>${z.builtin ? t("split.zones.builtin") + " · " + num(n) + " " + net : num(n) + " " + net}</p>
             <div class="label">${t("split.zones.name")}</div>
             <input class="field sm" data-zname value="${zoneLabel(z.id).replace(/"/g, "&quot;")}" ${z.builtin ? "disabled" : ""} />
             <div class="label">${t("split.rdef")}</div>
@@ -2082,6 +2121,7 @@ outbounds:
 
     function paintBoard() {
       document.documentElement.lang = lang;
+      sceneEl.dir = lang === "fa" ? "rtl" : "ltr";
       document.getElementById("board-sub").textContent = t("board.sub");
       document.getElementById("board-lang").textContent = t("board.lang");
       document.getElementById("board-scenes").textContent = t("board.scenes");
