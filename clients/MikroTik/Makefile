@@ -16,8 +16,13 @@ loft-bin:
 		-o clients/MikroTik/pack/loft ./clients/go/cmd/loft
 
 # docker save → pack/loft-linux-$(GOARCH).tar  (upload as <disk>/loft/loft.tar)
+# --provenance=false --sbom=false: recent Docker (containerd image store)
+# otherwise adds an attestation manifest next to the image, and `docker save`
+# then writes an index of indexes. RouterOS cannot read that and stops with
+# "no config found in manifest". Without attestations the tar holds one plain
+# image manifest, which RouterOS unpacks.
 image: loft-bin
-	docker build --platform $(PLATFORM) -f pack/Dockerfile -t loft-mikrotik:$(VERSION)-$(GOARCH) pack
+	docker build --provenance=false --sbom=false --platform $(PLATFORM) -f pack/Dockerfile -t loft-mikrotik:$(VERSION)-$(GOARCH) pack
 	docker save loft-mikrotik:$(VERSION)-$(GOARCH) -o pack/loft-linux-$(GOARCH).tar
 	@echo pack/loft-linux-$(GOARCH).tar
 

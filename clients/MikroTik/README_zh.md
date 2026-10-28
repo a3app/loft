@@ -13,7 +13,7 @@ MikroTik **RouterOS 7** 上的容器客户端。就是 Linux CLI 那份 `loft`�
 | SOCKS5 `172.31.20.2:1080` | 容器 `running` 且日志有 `socks5` 即可。浏览器和 SSH 走这里。 |
 | LAN 页 `http://172.31.20.2:8090/` | 状态、成员密钥、节点 URL、**RouterOS 出口**（`ether1`、`lte1` …）。写 YAML 和 `uplink.rsc`。 |
 | LAN 网关 | 日志出现 `tun up` 之后。然后 `policy.rsc` 把地址列表标进 `loft` 表。 |
-| 前置 | 绑在 `eth0`（`loft -if eth0`），GET/WS/H2/QUIC/H3 不会绕进覆盖网。 |
+| 前置 | 绑在 `veth-loft`（`loft -if 172.31.20.1`），GET/WS/H2/QUIC/H3 不会绕进覆盖网。 |
 
 RouterOS 管包**往哪走**（mangle、路由表、address-list）。loft 管隧道在信道上**长什么样**。
 

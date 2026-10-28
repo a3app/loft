@@ -18,7 +18,7 @@ LAN 主机
   → [tun up] mangle 列表 loft-lan
       → 表 loft → 172.31.20.2
           → loft TUN
-              → loft  get|ws|h2|quic|h3  走 eth0
+              → loft  get|ws|h2|quic|h3  走 veth-loft
                   → TLS 1.3 → CDN 或节点
 ```
 
@@ -36,7 +36,7 @@ RouterOS 7.12+，额外包 `container`（arm、arm64、x86 / CHR）。做一次 
 /container             name=loft  mount /data  file=loft.tar
 ```
 
-入口：`loft -c /data/client.yaml -if eth0`。YAML 是运营方的文件；LAN 页 `http://172.31.20.2:8090/` 会写它。镜像：scratch + CA 证书 + 静态 linux `loft`。
+入口：`loft -c /data/client.yaml -if 172.31.20.1`。`-if` 给的是 veth 网关地址，不是接口名：RouterOS 容器里的接口名跟 veth 一样（`veth-loft`），没有 `eth0`，loft 绑定到子网包含该地址的接口。YAML 是运营方的文件；LAN 页 `http://172.31.20.2:8090/` 会写它。镜像：scratch + CA 证书 + 静态 linux `loft`。
 
 ## 3. 先 SOCKS
 
@@ -50,7 +50,7 @@ RouterOS 容器里的 `/dev/net/tun` 不保证有。日志出现 `tun up` 时：
 
 - 表 `loft`，默认路由经 `172.31.20.2`
 - address-list `loft-lan`（前缀自己改）
-- mangle prerouting：src 列表，dst `!172.31.20.0/24`，mark-routing `loft`
+- mangle prerouting：src 列表，dst `!172.31.20.0/24`，`dst-address-type=!local`，mark-routing `loft`。没有 `!local`，LAN 就连不上路由器本身：它的 DNS、WebFig、Winbox 都会进隧道
 
 RouterOS 自身不装新的 default route。没有 TUN 时，0/0 经容器 IP 会打环（容器默认网关就是 ROS 的 veth）。
 
@@ -58,7 +58,7 @@ RouterOS 自身不装新的 default route。没有 TUN 时，0/0 经容器 IP �
 
 `listen.http: 0.0.0.0:8090` 是小运营页（状态、密钥、URL、前置、出口）。可选 `listen.http_pass`。Winbox 的 cookie 到不了。
 
-**出口** 是 RouterOS 的 WAN 名（`ether1`、`lte1`、`pppoe-out1`）。容器始终把前置绑在 `eth0`。保存会写 `/data/uplink.rsc`。导入：
+**出口** 是 RouterOS 的 WAN 名（`ether1`、`lte1`、`pppoe-out1`）。容器始终把前置绑在 `veth-loft`。保存会写 `/data/uplink.rsc`。导入：
 
 ```
 /import disk1/loft/data/uplink.rsc
@@ -68,7 +68,7 @@ RouterOS 自身不装新的 default route。没有 TUN 时，0/0 经容器 IP �
 
 ## 6. 发夹
 
-策略把 LAN 的 `0/0` 丢进容器时，去节点的 GET/WS 也会被吞。loft 把前置绑在 `eth0`（`-if eth0`）。mangle 跳过 `172.31.20.0/24`。YAML 里 `kill_switch: false`；netns 里面 loft 仍会装 split default——容器这样才能当网关。
+策略把 LAN 的 `0/0` 丢进容器时，去节点的 GET/WS 也会被吞。loft 把前置绑在 `veth-loft`（`-if 172.31.20.1`）。mangle 跳过 `172.31.20.0/24`。YAML 里 `kill_switch: false`；netns 里面 loft 仍会装 split default——容器这样才能当网关。
 
 ## 7. 板子
 

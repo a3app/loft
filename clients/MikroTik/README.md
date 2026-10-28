@@ -13,7 +13,7 @@ Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/mikroti
 | SOCKS5 `172.31.20.2:1080` | Always, once the container is `running` and the log shows `socks5`. Tools and browsers use this today. |
 | LAN page `http://172.31.20.2:8090/` | Status, member key, node URL, **RouterOS uplink** (`ether1`, `lte1`, …). Writes YAML and `uplink.rsc`. |
 | LAN gateway | After the log shows `tun up`. Then `policy.rsc` marks a LAN list into table `loft`. |
-| Fronts | Bound on `eth0` (`loft -if eth0`) so GET/WS/H2/QUIC/H3 do not hairpin into the overlay. |
+| Fronts | Bound on `veth-loft` (`loft -if 172.31.20.1`) so GET/WS/H2/QUIC/H3 do not hairpin into the overlay. |
 
 RouterOS owns **where** packets go (mangle, routing tables, address-lists). loft owns **how** the session looks on the wire.
 

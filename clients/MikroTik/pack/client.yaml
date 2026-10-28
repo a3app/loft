@@ -1,6 +1,6 @@
 # loft on RouterOS. Mount this file at /data/client.yaml.
 # SOCKS is the path that always works. TUN becomes a LAN gateway
-# when the container has /dev/net/tun (entrypoint still binds fronts on eth0).
+# when the container has /dev/net/tun (entrypoint still binds fronts on veth-loft).
 # LAN page: http://172.31.20.2:8090  — uplink is the RouterOS WAN name.
 
 listen:

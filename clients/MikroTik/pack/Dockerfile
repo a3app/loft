@@ -8,4 +8,8 @@ COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY loft /loft
 COPY client.yaml /data/client.yaml.example
 ENTRYPOINT ["/loft"]
-CMD ["-c", "/data/client.yaml", "-if", "eth0"]
+# -if takes the veth gateway from install.rsc (172.31.20.1), not a name.
+# Inside a RouterOS container the interface is named after the veth
+# ("veth-loft"), there is no eth0; with an address loft picks whichever
+# interface has it in its subnet, so a renamed veth still works.
+CMD ["-c", "/data/client.yaml", "-if", "172.31.20.1"]

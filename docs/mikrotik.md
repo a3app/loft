@@ -18,7 +18,7 @@ LAN host
   → [tun up] mangle list loft-lan
       → table loft → 172.31.20.2
           → loft TUN
-              → loft  get|ws|h2|quic|h3  on eth0
+              → loft  get|ws|h2|quic|h3  on veth-loft
                   → TLS 1.3 → CDN or node
 ```
 
@@ -36,7 +36,7 @@ RouterOS 7.12+ extra package `container` (arm, arm64, x86 / CHR). `device-mode c
 /container             name=loft  mount /data  file=loft.tar
 ```
 
-Entrypoint: `loft -c /data/client.yaml -if eth0`. YAML is the operator file; the LAN page at `http://172.31.20.2:8090/` writes it. Image is scratch + CA store + static linux `loft`.
+Entrypoint: `loft -c /data/client.yaml -if 172.31.20.1`. `-if` gets the veth gateway address, not an interface name: inside a RouterOS container the interface is named after the veth (`veth-loft`), there is no `eth0`, and loft binds to the interface whose subnet holds that address. YAML is the operator file; the LAN page at `http://172.31.20.2:8090/` writes it. Image is scratch + CA store + static linux `loft`.
 
 ## 3. SOCKS first
 
@@ -50,7 +50,7 @@ Do not run `policy.rsc` on SOCKS alone.
 
 - table `loft`, default via `172.31.20.2`
 - address-list `loft-lan` (edit the prefix)
-- mangle prerouting: src list, dst `!172.31.20.0/24`, mark-routing `loft`
+- mangle prerouting: src list, dst `!172.31.20.0/24`, `dst-address-type=!local`, mark-routing `loft`. Without `!local` the LAN loses the router itself: its DNS, WebFig and Winbox go into the tunnel
 
 RouterOS itself does not get a new default route. Without TUN, 0/0 via the container IP loops (container default is the ROS veth gateway).
 
@@ -58,7 +58,7 @@ RouterOS itself does not get a new default route. Without TUN, 0/0 via the conta
 
 `listen.http: 0.0.0.0:8090` serves a small operator page (status, key, URL, front, uplink). Optional `listen.http_pass`. Winbox cookie is not shared.
 
-**Uplink** is a RouterOS WAN name (`ether1`, `lte1`, `pppoe-out1`). The container always binds fronts on `eth0`. Save writes `/data/uplink.rsc`. Import it:
+**Uplink** is a RouterOS WAN name (`ether1`, `lte1`, `pppoe-out1`). The container always binds fronts on `veth-loft`. Save writes `/data/uplink.rsc`. Import it:
 
 ```
 /import disk1/loft/data/uplink.rsc
@@ -68,7 +68,7 @@ That pins `172.31.20.0/24` to table `loft-wan` → the named interface. Empty up
 
 ## 6. Hairpin
 
-A policy that sends LAN `0/0` into the container also wants to swallow GET/WS to the node. loft binds fronts on `eth0` (`-if eth0`). The mangle skips `172.31.20.0/24`. `kill_switch: false` in the YAML; loft still adds split defaults *inside* the netns, which is what makes the container a gateway.
+A policy that sends LAN `0/0` into the container also wants to swallow GET/WS to the node. loft binds fronts on `veth-loft` (`-if 172.31.20.1`). The mangle skips `172.31.20.0/24`. `kill_switch: false` in the YAML; loft still adds split defaults *inside* the netns, which is what makes the container a gateway.
 
 ## 7. Boards
 

@@ -18,7 +18,7 @@ RouterOS решает, **куда** идут пакеты (mangle, таблиц�
   → [tun up] mangle список loft-lan
       → таблица loft → 172.31.20.2
           → TUN loft
-              → loft  get|ws|h2|quic|h3  с eth0
+              → loft  get|ws|h2|quic|h3  с veth-loft
                   → TLS 1.3 → CDN или нода
 ```
 
@@ -36,7 +36,7 @@ SSTP, WireGuard, IPsec и L2TP остаются штатными клиента�
 /container             name=loft  mount /data  file=loft.tar
 ```
 
-Точка входа: `loft -c /data/client.yaml -if eth0`. YAML — файл оператора, его записывает LAN-страница `http://172.31.20.2:8090/`. Образ: scratch + хранилище CA + статический linux-бинарник `loft`.
+Точка входа: `loft -c /data/client.yaml -if 172.31.20.1`. `-if` получает адрес шлюза veth, а не имя интерфейса: внутри контейнера RouterOS интерфейс называется как veth (`veth-loft`), `eth0` там нет, и loft привязывается к интерфейсу, в подсети которого лежит этот адрес. YAML — файл оператора, его записывает LAN-страница `http://172.31.20.2:8090/`. Образ: scratch + хранилище CA + статический linux-бинарник `loft`.
 
 ## 3. Сначала SOCKS
 
@@ -50,7 +50,7 @@ SSTP, WireGuard, IPsec и L2TP остаются штатными клиента�
 
 - таблица `loft`, default через `172.31.20.2`
 - address-list `loft-lan` (префикс правит оператор)
-- mangle prerouting: src список, dst `!172.31.20.0/24`, mark-routing `loft`
+- mangle prerouting: src список, dst `!172.31.20.0/24`, `dst-address-type=!local`, mark-routing `loft`. Без `!local` LAN теряет сам роутер: его DNS, WebFig и Winbox уходят в туннель
 
 Сам RouterOS нового маршрута по умолчанию не получает. Без TUN маршрут 0/0 через IP контейнера зацикливается (маршрут по умолчанию у контейнера — шлюз veth на ROS).
 
@@ -58,7 +58,7 @@ SSTP, WireGuard, IPsec и L2TP остаются штатными клиента�
 
 `listen.http: 0.0.0.0:8090` отдаёт небольшую страницу оператора (статус, ключ, URL, фронт, выход). Пароль можно задать в `listen.http_pass`. Cookie Winbox на эту страницу не распространяется.
 
-**Выход** — имя WAN-интерфейса в RouterOS (`ether1`, `lte1`, `pppoe-out1`). Контейнер всегда привязывает фронты к `eth0`. При сохранении записывается `/data/uplink.rsc`. Импортируйте его:
+**Выход** — имя WAN-интерфейса в RouterOS (`ether1`, `lte1`, `pppoe-out1`). Контейнер всегда привязывает фронты к `veth-loft`. При сохранении записывается `/data/uplink.rsc`. Импортируйте его:
 
 ```
 /import disk1/loft/data/uplink.rsc
@@ -68,7 +68,7 @@ SSTP, WireGuard, IPsec и L2TP остаются штатными клиента�
 
 ## 6. Петля
 
-Политика, которая отправляет LAN `0/0` в контейнер, захватит и GET/WS-соединения с нодой. loft привязывает фронты к `eth0` (`-if eth0`). Mangle пропускает `172.31.20.0/24`. В YAML стоит `kill_switch: false`; внутри netns loft всё равно ставит раздельные маршруты по умолчанию (split default), и именно благодаря этому контейнер становится шлюзом.
+Политика, которая отправляет LAN `0/0` в контейнер, захватит и GET/WS-соединения с нодой. loft привязывает фронты к `veth-loft` (`-if 172.31.20.1`). Mangle пропускает `172.31.20.0/24`. В YAML стоит `kill_switch: false`; внутри netns loft всё равно ставит раздельные маршруты по умолчанию (split default), и именно благодаря этому контейнер становится шлюзом.
 
 ## 7. Платы
 
