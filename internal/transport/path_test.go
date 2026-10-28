@@ -4,9 +4,12 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"os"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -128,5 +131,23 @@ func TestWatchPathIgnoresOverlaySrc(t *testing.T) {
 	case <-ch:
 		t.Fatal("overlay src must not fire")
 	case <-ctx.Done():
+	}
+}
+
+// After one "permission denied" (Android 11+ netlink), interface lookups stop
+// trying and answer "" at once; other errors do not latch.
+func TestIfaceDeniedLatch(t *testing.T) {
+	ifaceDenied.Store(false)
+	t.Cleanup(func() { ifaceDenied.Store(false) })
+	noteDenied(errors.New("no such interface"))
+	if ifaceDenied.Load() {
+		t.Fatal("plain error latched")
+	}
+	noteDenied(&os.SyscallError{Syscall: "netlinkrib", Err: syscall.EACCES})
+	if !ifaceDenied.Load() {
+		t.Fatal("EACCES not latched")
+	}
+	if ifaceIPv4("lo") != "" || ifaceByIP("127.0.0.1") != "" {
+		t.Fatal("lookup ran after denial")
 	}
 }

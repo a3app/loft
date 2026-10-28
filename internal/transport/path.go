@@ -14,8 +14,11 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"net"
+	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/a3app/loft/internal/protect"
@@ -77,10 +80,30 @@ func physicalAddr() string {
 	return eg
 }
 
+// ifaceDenied latches once listing interfaces fails with "permission
+// denied". Android 11 and later forbid apps the netlink socket that Go's
+// net.Interfaces and net.InterfaceByName use, so on a phone these calls can
+// never succeed. WatchStall samples the path once a second; without the
+// latch each sample would retry, and every retry costs a syscall plus an
+// SELinux denial line in the system log. The phone learns about path
+// changes from the OS instead (Engine.NotifyPathChange).
+var ifaceDenied atomic.Bool
+
+// noteDenied records a permission error from an interface lookup.
+func noteDenied(err error) {
+	if err != nil && errors.Is(err, os.ErrPermission) {
+		ifaceDenied.Store(true)
+	}
+}
+
 // ifaceIPv4 is the first IPv4 on named iface, or empty.
 func ifaceIPv4(name string) string {
+	if ifaceDenied.Load() {
+		return ""
+	}
 	ifi, err := net.InterfaceByName(name)
 	if err != nil {
+		noteDenied(err)
 		return ""
 	}
 	addrs, err := ifi.Addrs()
@@ -152,13 +175,18 @@ func ifaceByIP(ip string) string {
 	if want == nil {
 		return ""
 	}
+	if ifaceDenied.Load() {
+		return ""
+	}
 	ifis, err := net.Interfaces()
 	if err != nil {
+		noteDenied(err)
 		return ""
 	}
 	for _, ifi := range ifis {
 		addrs, err := ifi.Addrs()
 		if err != nil {
+			noteDenied(err)
 			continue
 		}
 		for _, a := range addrs {
