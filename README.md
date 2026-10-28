@@ -23,30 +23,30 @@
   <img src="docs/brand/platforms/macos.svg" width="24" height="24" align="absmiddle" alt="macOS">
 </picture>
 <strong>macOS</strong>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg">arm</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-macos-arm.dmg">arm</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg">Intel</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-macos-intel.dmg">Intel</a>
 &emsp;&emsp;
 <img src="docs/brand/platforms/windows.svg" width="24" height="24" align="absmiddle" alt="Windows">
 <strong>Windows</strong>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip">x86-64</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-windows-x86-64.zip">x86-64</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip">x86</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-windows-x86.zip">x86</a>
 ·
-<a href="#download">arm64</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-windows-arm64.zip">arm64</a>
 </p>
 <p align="center">
 <img src="docs/brand/platforms/android.svg" width="24" height="24" align="absmiddle" alt="Android">
 <strong>Android</strong>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk">Android</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-android.apk">Android</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk">Google TV</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-android-tv.apk">Google TV</a>
 &emsp;&emsp;
 <img src="docs/brand/platforms/linux.svg" width="24" height="24" align="absmiddle" alt="Linux">
 <strong>Linux</strong>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz">arm64</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-linux-arm64.tar.gz">arm64</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz">amd64</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-linux-amd64.tar.gz">amd64</a>
 </p>
 
 </div>
@@ -61,7 +61,7 @@ In the loft protocol, streams are multiplexed over GET, WebSocket, HTTP/2, QUIC 
 
 The protocol is **loft/1.0**. Connections are shared as **`loft://`**. YAML `kind: loft`.
 
-This repository is the specification together with a reference node, a web panel, and clients (a macOS application, a Windows tray client, Android phone and TV, and CLI tools for Linux and macOS). Software `1.0.32`. A third party may implement loft from [docs/protocol.md](docs/protocol.md).
+This repository is the specification together with a reference node, a web panel, and clients (a macOS application, a Windows tray client, Android phone and TV, and CLI tools for Linux and macOS). Software `1.0.33`. A third party may implement loft from [docs/protocol.md](docs/protocol.md).
 
 ## Contents
 
@@ -81,20 +81,21 @@ The intended use is operator access: a laboratory LAN reached from outside, a se
 
 ## Download
 
-Binaries are published in the [latest GitHub Release](https://github.com/a3app/loft/releases/latest). Dist names include the version (`loft-1.0.32-macos-arm64.dmg`).
+Binaries are published in the [latest GitHub Release](https://github.com/a3app/loft/releases/latest). Dist names include the version (`loft-1.0.33-macos-arm.dmg`).
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app | [DMG](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-macos-x86_64.dmg) |
-| macOS CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-darwin-amd64.tar.gz) |
-| Linux CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-linux-amd64.tar.gz) |
-| Node | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node_1.0.32_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node_1.0.32_amd64.deb) |
-| Panel | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel_1.0.32_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel_1.0.32_amd64.deb) |
-| Android | [phone APK](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android.apk) · [TV APK](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-android-tv.apk) | same fat APKs |
-| Windows | [x64 zip](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x64.zip) | [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.32/loft-1.0.32-windows-x86.zip) |
+| macOS app | [DMG](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-macos-arm.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-macos-intel.dmg) |
+| macOS CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-darwin-amd64.tar.gz) |
+| Linux CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-linux-amd64.tar.gz) |
+| Node | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.33/loft-node-1.0.33-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.33/loft-node_1.0.33_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.33/loft-node-1.0.33-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.33/loft-node_1.0.33_amd64.deb) |
+| Panel | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.33/loft-panel-1.0.33-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.33/loft-panel_1.0.33_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.33/loft-panel-1.0.33-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.33/loft-panel_1.0.33_amd64.deb) |
+| Android | [phone APK](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-android.apk) · [TV APK](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-android-tv.apk) | same fat APKs |
+| Windows | [arm64 zip](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-windows-arm64.zip) | [x86-64 zip](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-windows-x86-64.zip) · [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.33/loft-1.0.33-windows-x86.zip) |
+| MikroTik | [arm64 tar](https://github.com/a3app/loft/releases/download/v1.0.33/loft-mikrotik-1.0.33-arm64.tar) · [armv7 tar](https://github.com/a3app/loft/releases/download/v1.0.33/loft-mikrotik-1.0.33-armv7.tar) | [amd64 tar](https://github.com/a3app/loft/releases/download/v1.0.33/loft-mikrotik-1.0.33-amd64.tar) |
 | iOS | source only ([clients/iOS/](clients/iOS/)); in development and App Store publication | no Dist binary |
 
-Checksums: [clients](https://github.com/a3app/loft/releases/download/v1.0.32/loft-clients-1.0.32-SHA256SUMS.txt) · [node](https://github.com/a3app/loft/releases/download/v1.0.32/loft-node-1.0.32-SHA256SUMS.txt) · [panel](https://github.com/a3app/loft/releases/download/v1.0.32/loft-panel-1.0.32-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.32/loft-android-1.0.32-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.32/loft-windows-1.0.32-SHA256SUMS.txt). The macOS DMG is the menu-bar application (ad-hoc signed). CLI archives contain `loft`, `loft-front`, `loft-probe`, and `loft-bench`. GitHub Android is sideload and self-updates from Dist; Play builds compile the updater out. Windows is a portable zip (7 SP1+); unzip and run.
+Checksums: [clients](https://github.com/a3app/loft/releases/download/v1.0.33/loft-clients-1.0.33-SHA256SUMS.txt) · [node](https://github.com/a3app/loft/releases/download/v1.0.33/loft-node-1.0.33-SHA256SUMS.txt) · [panel](https://github.com/a3app/loft/releases/download/v1.0.33/loft-panel-1.0.33-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.33/loft-android-1.0.33-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.33/loft-windows-1.0.33-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.33/loft-mikrotik-1.0.33-SHA256SUMS.txt). The macOS DMG is the menu-bar application (ad-hoc signed). CLI archives contain `loft`, `loft-front`, `loft-probe`, and `loft-bench`. GitHub Android is sideload and self-updates from Dist; Play builds compile the updater out. Windows portable: x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik is also `ghcr.io/a3app/loft-mikrotik:1.0.33`.
 
 ## App
 

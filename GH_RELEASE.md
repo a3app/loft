@@ -1,4 +1,4 @@
-# loft 1.0.32
+# loft 1.0.33
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,25 +10,27 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-1.0.32-macos-arm64.dmg` | `loft-1.0.32-macos-x86_64.dmg` |
-| macOS CLI | `loft-1.0.32-darwin-arm64.tar.gz` | `loft-1.0.32-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-1.0.32-linux-arm64.tar.gz` | `loft-1.0.32-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.32-linux-arm64.tar.gz` · `loft-node_1.0.32_arm64.deb` | `loft-node-1.0.32-linux-amd64.tar.gz` · `loft-node_1.0.32_amd64.deb` |
-| Panel | `loft-panel-1.0.32-linux-arm64.tar.gz` · `loft-panel_1.0.32_arm64.deb` | `loft-panel-1.0.32-linux-amd64.tar.gz` · `loft-panel_1.0.32_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-1.0.32-android.apk` · `loft-1.0.32-android-tv.apk` | same fat APKs |
-| Windows portable (7 SP1+, GitHub) | `loft-1.0.32-windows-x64.zip` | `loft-1.0.32-windows-x86.zip` |
+| macOS app (10.13+, ad-hoc signed) | `loft-1.0.33-macos-arm.dmg` | `loft-1.0.33-macos-intel.dmg` |
+| macOS CLI | `loft-1.0.33-darwin-arm64.tar.gz` | `loft-1.0.33-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-1.0.33-linux-arm64.tar.gz` | `loft-1.0.33-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.33-linux-arm64.tar.gz` · `loft-node_1.0.33_arm64.deb` | `loft-node-1.0.33-linux-amd64.tar.gz` · `loft-node_1.0.33_amd64.deb` |
+| Panel | `loft-panel-1.0.33-linux-arm64.tar.gz` · `loft-panel_1.0.33_arm64.deb` | `loft-panel-1.0.33-linux-amd64.tar.gz` · `loft-panel_1.0.33_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-1.0.33-android.apk` · `loft-1.0.33-android-tv.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-1.0.33-windows-arm64.zip` | `loft-1.0.33-windows-x86-64.zip` · `loft-1.0.33-windows-x86.zip` |
+| MikroTik container | `loft-mikrotik-1.0.33-arm64.tar` · `loft-mikrotik-1.0.33-armv7.tar` | `loft-mikrotik-1.0.33-amd64.tar` |
 
-Checksums: `loft-clients-1.0.32-SHA256SUMS.txt`, `loft-node-1.0.32-SHA256SUMS.txt`, `loft-panel-1.0.32-SHA256SUMS.txt`, `loft-android-1.0.32-SHA256SUMS.txt`, `loft-windows-1.0.32-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.33-SHA256SUMS.txt`, `loft-node-1.0.33-SHA256SUMS.txt`, `loft-panel-1.0.33-SHA256SUMS.txt`, `loft-android-1.0.33-SHA256SUMS.txt`, `loft-windows-1.0.33-SHA256SUMS.txt`, `loft-mikrotik-1.0.33-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.33`.
 
-Not in Dist: iOS / Sailfish / Keenetic / MikroTik clients (catalog and mocks).
+Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 
 ## What it does
 
 - **macOS app** — menu bar. Named connections, import `loft://` or `.loft`, local SOCKS5 and TUN, split routes, reconnect, failover.
 - **Android** — phone `VpnService` and Leanback TV. Named connections, `loft://` / `.loft` import, overlay as one system VPN. GitHub APKs self-update from Dist; Play builds compile the updater out.
-- **Windows** — tray client, Windows 7 SP1 and later. Unzip and run. The GitHub build replaces its own directory from the next release zip. The Store layout is not in this Dist.
+- **Windows** — tray client. x86-64 and x86: Windows 7 SP1 and later. arm64: Windows 10/11 ARM. Unzip and run. The GitHub build replaces its own directory from the next release zip. The Store layout is not in this Dist.
+- **MikroTik** — RouterOS container. Upload a docker-save tarball, or pull `ghcr.io/a3app/loft-mikrotik`.
 
 | Home | Connections |
 |:--:|:--:|
@@ -40,6 +42,38 @@ Not in Dist: iOS / Sailfish / Keenetic / MikroTik clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.33
+
+Protocol stays **loft/1.0**.
+
+Dist:
+
+- GUI assets: `macos-arm` / `macos-intel` DMG, `windows-x86-64` / `x86` / `arm64` zip. CLI and Debian names stay Go/ISA. The updater still accepts the old suffixes.
+- MikroTik container tarballs (amd64, arm64, armv7) and `ghcr.io/a3app/loft-mikrotik`.
+
+Android:
+
+- Scan paste is a textarea. The add-connection sheet is two floating cards, as in the mock.
+- Settings, About, and Scan reflow at a large system font.
+- The connections list no longer shows the SOCKS port.
+
+MikroTik / LAN page:
+
+- SOCKS5 can be off. LAN gateway is nat (default) or route.
+
+Node:
+
+- Overlay leases survive a restart. Linux TUN is configured over netlink.
+- Ping to a VLAN member's own gateway; member internet ping says when it cannot.
+
+macOS:
+
+- Georgian UI language.
+
+Panel:
+
+- HELO name and one-click Roundcube login.
 
 ## 1.0.32
 
@@ -281,7 +315,9 @@ macOS:
 
 Оверлей внутри TLS 1.3. Приложения ходят в локальные SOCKS5 или TUN. Потоки в одном mux, ChaCha20-Poly1305, снаружи обычный HTTPS: GET, WebSocket, HTTP/2, QUIC или HTTP/3. Перед нодой может стоять CDN. Протокол **loft/1.0**. Ссылка `loft://`.
 
-В Dist: приложение macOS (DMG arm64 и x86_64), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`loft-1.0.32-windows-x64.zip` и `loft-1.0.32-windows-x86.zip`). Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic, MikroTik в этот Dist не входят.
+В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik. Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic в этот Dist не входят.
+
+1.0.33: Dist — имена GUI `macos-arm`/`macos-intel` и `windows-x86-64`/`x86`/`arm64`, контейнер MikroTik; Android — многострочная вставка ссылки, шит добавления двумя карточками, крупный шрифт на Настройках/О программе/Scan, без порта SOCKS в списке; MikroTik — SOCKS можно выключить, LAN nat или route; нода — аренды overlay после рестарта, TUN через netlink; macOS — грузинский UI; панель — HELO и вход в Roundcube. Протокол loft/1.0.
 
 1.0.32: панель — при удалении почтового домена можно удалить и его DNS-записи, созданные панелью (галочка, включена по умолчанию), сертификат mail.<домен> уходит вместе с доменом; Namecheap — id записей теперь HostId, а не позиция, старые id чинятся при чтении зоны; нода на Go 1.27+ сама включает расширенный CONNECT HTTP/2 (фронты h2 и l3); SHA256SUMS с голыми именами файлов; Android — отчёты о сбоях в GitHub, крупный системный шрифт, значок в безопасной зоне. Протокол loft/1.0.
 
@@ -299,7 +335,9 @@ macOS:
 
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
-本 Dist：macOS 应用（arm64 / x86_64 DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`loft-1.0.32-windows-x64.zip` 和 `loft-1.0.32-windows-x86.zip`）。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic / MikroTik 不在这次包里。
+本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic 不在这次包里。
+
+1.0.33：Dist — GUI 文件名改为 `macos-arm`/`macos-intel` 和 `windows-x86-64`/`x86`/`arm64`，加入 MikroTik 容器；Android — 粘贴栏改为多行、添加连接为两张卡片、大号系统字体下的设置/关于/扫描、连接列表不再写 SOCKS 端口；MikroTik — SOCKS 可关，LAN nat 或 route；节点 — overlay 租约跨重启，Linux TUN 走 netlink；macOS — 格鲁吉亚语界面；面板 — HELO 与 Roundcube 一键登录。协议仍是 loft/1.0。
 
 1.0.32：面板 — 删除邮件域名时可一并删除面板为其创建的 DNS 记录（确认框中的勾选，默认开启），mail.<域名> 证书随域名删除；Namecheap 记录 id 改用 HostId 而非位置，旧 id 在读取区域时修复；Go 1.27+ 构建的节点自行开启 HTTP/2 扩展 CONNECT（h2、l3 前端）；SHA256SUMS 只写文件名；Android — 崩溃报告发到 GitHub、大号系统字体、图标在安全区内。协议仍是 loft/1.0。
 
