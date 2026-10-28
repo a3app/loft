@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- View tag keys used by code (not layout ids). -->
+<resources>
+    <!-- Ui.bgRes: the background drawable resource last set on a view, so it is not set again. -->
+    <item name="ui_bg_res" type="id" />
+</resources>
