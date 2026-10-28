@@ -1,4 +1,4 @@
-# loft 1.0.36
+# loft 1.0.37
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,18 +10,18 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-1.0.36-macos-arm.dmg` | `loft-1.0.36-macos-intel.dmg` |
-| macOS CLI | `loft-1.0.36-darwin-arm64.tar.gz` | `loft-1.0.36-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-1.0.36-linux-arm64.tar.gz` | `loft-1.0.36-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.36-linux-arm64.tar.gz` · `loft-node_1.0.36_arm64.deb` | `loft-node-1.0.36-linux-amd64.tar.gz` · `loft-node_1.0.36_amd64.deb` |
-| Panel | `loft-panel-1.0.36-linux-arm64.tar.gz` · `loft-panel_1.0.36_arm64.deb` | `loft-panel-1.0.36-linux-amd64.tar.gz` · `loft-panel_1.0.36_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-1.0.36-android.apk` · `loft-1.0.36-android-tv.apk` | same fat APKs |
-| Windows portable (GitHub) | `loft-1.0.36-windows-arm64.zip` | `loft-1.0.36-windows-x86-64.zip` · `loft-1.0.36-windows-x86.zip` |
-| MikroTik container | `loft-mikrotik-1.0.36-arm64.tar` · `loft-mikrotik-1.0.36-armv7.tar` | `loft-mikrotik-1.0.36-amd64.tar` |
+| macOS app (10.13+, ad-hoc signed) | `loft-1.0.37-macos-arm.dmg` | `loft-1.0.37-macos-intel.dmg` |
+| macOS CLI | `loft-1.0.37-darwin-arm64.tar.gz` | `loft-1.0.37-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-1.0.37-linux-arm64.tar.gz` | `loft-1.0.37-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.37-linux-arm64.tar.gz` · `loft-node_1.0.37_arm64.deb` | `loft-node-1.0.37-linux-amd64.tar.gz` · `loft-node_1.0.37_amd64.deb` |
+| Panel | `loft-panel-1.0.37-linux-arm64.tar.gz` · `loft-panel_1.0.37_arm64.deb` | `loft-panel-1.0.37-linux-amd64.tar.gz` · `loft-panel_1.0.37_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-1.0.37-android.apk` · `loft-1.0.37-android-tv.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-1.0.37-windows-arm64.zip` | `loft-1.0.37-windows-x86-64.zip` · `loft-1.0.37-windows-x86.zip` |
+| MikroTik container | `loft-mikrotik-1.0.37-arm64.tar` · `loft-mikrotik-1.0.37-armv7.tar` | `loft-mikrotik-1.0.37-amd64.tar` |
 
-Checksums: `loft-clients-1.0.36-SHA256SUMS.txt`, `loft-node-1.0.36-SHA256SUMS.txt`, `loft-panel-1.0.36-SHA256SUMS.txt`, `loft-android-1.0.36-SHA256SUMS.txt`, `loft-windows-1.0.36-SHA256SUMS.txt`, `loft-mikrotik-1.0.36-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.37-SHA256SUMS.txt`, `loft-node-1.0.37-SHA256SUMS.txt`, `loft-panel-1.0.37-SHA256SUMS.txt`, `loft-android-1.0.37-SHA256SUMS.txt`, `loft-windows-1.0.37-SHA256SUMS.txt`, `loft-mikrotik-1.0.37-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.36`.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.37`.
 
 Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 
@@ -42,6 +42,14 @@ Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.37
+
+Protocol stays **loft/1.0**.
+
+Android:
+
+- The Settings footer links no longer bunch in the middle: Reset sits at the left, Log in the centre, About at the right, each taking an equal third of the width.
 
 ## 1.0.36
 
@@ -352,6 +360,8 @@ macOS:
 
 В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik. Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic в этот Dist не входят.
 
+1.0.37: Android — ссылки в подвале «Настроек» больше не жмутся к центру: «Сброс» слева, «Журнал» по центру, «О приложении» справа, каждая занимает треть ширины. Протокол loft/1.0.
+
 1.0.36: Android — на Android 15+ приложение рисуется «от края до края», и у части экранов верхний ряд (заголовок, кнопка «Списки маршрутов», стрелка «назад») уходил под статус-бар и вырез камеры, где его нельзя было нажать; теперь каждый экран держит контент ниже системных панелей и выше навигации и клавиатуры. Протокол loft/1.0.
 
 1.0.35: Android — с включённой раздельной маршрутизацией приложения больше не вылетают: большие списки давали VPN около 7000 маршрутов, и Android не мог передать такую таблицу приложениям; теперь маршрутов не больше 1200, списки, которые помещаются, не меняются, большие объединяются в более широкие блоки по краям; блок-лист по-прежнему проверяется точно. Протокол loft/1.0.
@@ -377,6 +387,8 @@ macOS:
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
 本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic 不在这次包里。
+
+1.0.37：Android — 设置底部的链接不再挤在中间："重置"靠左、"日志"居中、"关于"靠右，各占三分之一宽度。协议仍是 loft/1.0。
 
 1.0.36：Android — 在 Android 15 及以上系统应用全屏绘制到边缘，部分界面的顶部（标题、"路由列表"按钮、返回箭头）会被状态栏和摄像头挖孔遮住、无法点击；现在每个界面都把内容保持在系统栏下方、导航栏与键盘上方。协议仍是 loft/1.0。
 

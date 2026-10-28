@@ -2,7 +2,7 @@
 
 [English](README.md) · [Русский](README_ru.md) · **中文**
 
-软件 1.0.36。协议 1.0。协议规范：[docs/protocol_zh.md](../../docs/protocol_zh.md)。运营：[docs/guide_zh.md](../../docs/guide_zh.md)。
+软件 1.0.37。协议 1.0。协议规范：[docs/protocol_zh.md](../../docs/protocol_zh.md)。运营：[docs/guide_zh.md](../../docs/guide_zh.md)。
 
 这个目录是节点的 Debian 布局：POSIX 安装脚本、systemd unit、sysctl、命令配置、还有 `.deb`。
 

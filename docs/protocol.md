@@ -4,7 +4,7 @@
 
 This document specifies **loft/1.0**, a multiplexed overlay carried inside ordinary HTTPS. A third-party implementation that follows this text MAY interoperate with a loft node. The Go program in this repository is one implementation. License: [Apache-2.0](../LICENSE).
 
-Protocol version loft/1.0 (`0x0100`) is independent of the implementation version string (`VERSION`, currently 1.0.36). The handshake carries both. Keywords **MUST**, **MUST NOT**, **SHOULD**, **MAY** follow [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119). A receiver MUST ignore unknown trailing fields of Hello and Status.
+Protocol version loft/1.0 (`0x0100`) is independent of the implementation version string (`VERSION`, currently 1.0.37). The handshake carries both. Keywords **MUST**, **MUST NOT**, **SHOULD**, **MAY** follow [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119). A receiver MUST ignore unknown trailing fields of Hello and Status.
 
 Operation of the reference node: [guide.md](guide.md). Source layout: [architecture.md](architecture.md).
 
