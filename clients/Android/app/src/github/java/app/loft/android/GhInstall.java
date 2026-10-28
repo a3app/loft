@@ -16,7 +16,8 @@ import android.os.Bundle;
 
 /**
  * PackageInstaller callback, started by the PendingIntent that
- * Channel.commit() passes to the install session. The first session may
+ * Channel.prepare() builds for the install session (committed later on the
+ * main thread by Channel.Ready.commit()). The first session may
  * still raise a confirm sheet (the system asks once before this app becomes
  * the "update owner"). After that, sessions marked USER_ACTION_NOT_REQUIRED
  * install silently.

@@ -16,6 +16,7 @@ import android.app.PendingIntent;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
@@ -140,8 +141,20 @@ public final class Channel {
             @Override public void onActivitySaveInstanceState(Activity a, Bundle s) {}
             @Override public void onActivityDestroyed(Activity a) {}
         });
-        if (!BuildConfig.DEBUG && canInstall(app)) {
-            auto(app);
+        if (!BuildConfig.DEBUG) {
+            // Deciding whether to check at all asks PackageManager (install
+            // permission), reads the settings file from disk (time of the
+            // last check) and asks ConnectivityManager (metered network).
+            // None of that is needed to draw the first screen, and this runs
+            // inside Application.onCreate, before any screen appears, so it
+            // is done on the background pool instead. Only the final step
+            // (claiming busy and starting the check, which paints the button)
+            // goes back to the main thread; see auto().
+            Ui.bg(() -> {
+                if (canInstall(app)) {
+                    auto(app);
+                }
+            });
         }
     }
 
@@ -175,9 +188,13 @@ public final class Channel {
         uiStatus = new WeakReference<>(status);
         uiAct = new WeakReference<>(a);
         btn.setOnClickListener(v -> tap(a));
-        paint(idleMsg(a), true);
-        if (awaitingPerm && canInstall(a)) {
-            onResume(a);
+        // Ask PackageManager for the install permission once and reuse the
+        // answer for the status text, the button label and the "resume after
+        // the permission screen" test, instead of asking three times.
+        boolean can = canInstall(a);
+        paint(idleMsg(a, can), true, can);
+        if (awaitingPerm && can) {
+            resume(a, can);
         }
     }
 
@@ -188,12 +205,27 @@ public final class Channel {
      * Main thread (ActivityLifecycleCallbacks).
      */
     static void onResume(Activity a) {
+        resume(a, null);
+    }
+
+    /**
+     * Body of {@link #onResume}. {@code known} is the install permission when
+     * the caller has just asked PackageManager for it (attach does), or null
+     * to ask here. This runs on every activity resume in the app, so the
+     * permission is asked at most once per resume, and only when the answer
+     * is actually needed (most resumes need nothing and ask nothing).
+     */
+    private static void resume(Activity a, Boolean known) {
         // The invisible installer trampoline is not a real screen; ignore it.
         if (a instanceof GhInstall) {
             return;
         }
         Activity cur = uiAct != null ? uiAct.get() : null;
-        if (awaitingPerm && canInstall(a)) {
+        Boolean can = known;
+        if (awaitingPerm && can == null) {
+            can = canInstall(a);
+        }
+        if (awaitingPerm && can) {
             awaitingPerm = false;
             if (busy.compareAndSet(false, true)) {
                 if (wantInstall && pending != null && pending.hasApk()) {
@@ -205,7 +237,9 @@ public final class Channel {
             }
         }
         if (a == cur && !busy.get()) {
-            paint(idleMsg(a), true);
+            // Reuse the answer from above if there is one; one ask either way.
+            boolean c = can != null ? can : canInstall(a);
+            paint(idleMsg(a, c), true, c);
         }
     }
 
@@ -273,6 +307,13 @@ public final class Channel {
      * Background check at app start, at most once every 6 hours and only on an
      * unmetered network, so it never spends mobile data. The time of the last
      * check is kept in Prefs ("gh_checked") so the limit survives restarts.
+     *
+     * <p>Called from a background thread (see {@link #boot}): the two tests
+     * below touch the disk and a system service, so they run there. Starting
+     * the check paints the update button, which only the main thread may do,
+     * so that part is posted. busy is claimed on the main thread too, in the
+     * same step as the start, exactly as a tap would do it, so a tap that
+     * lands in between simply wins and this background check is skipped.
      */
     private static void auto(Context ctx) {
         long last = Prefs.p(ctx).getLong("gh_checked", 0);
@@ -282,10 +323,12 @@ public final class Channel {
         if (isMetered(ctx)) {
             return;
         }
-        if (!busy.compareAndSet(false, true)) {
-            return;
-        }
-        startCheck(ctx.getApplicationContext(), true);
+        main.post(() -> {
+            if (!busy.compareAndSet(false, true)) {
+                return;
+            }
+            startCheck(ctx.getApplicationContext(), true);
+        });
     }
 
     /**
@@ -359,9 +402,10 @@ public final class Channel {
      * against the published sum, checks it is the same package signed with the
      * same certificate, and then hands it to the system installer. Debug builds
      * stop early: they are signed with a different key, so a release APK could
-     * not replace them. Download and checks run on a "loft-gh" thread; the
-     * hand-off to the installer is posted to the main thread. The caller must
-     * already hold {@code busy}.
+     * not replace them. Download, checks and the slow part of the hand-off
+     * (copying into the install session, or preparing the installer intent)
+     * run on a "loft-gh" thread; only the final hand-off to the installer is
+     * posted to the main thread. The caller must already hold {@code busy}.
      */
     private static void startInstall(Context ctx, Gh.Rel rel, boolean silent) {
         if (BuildConfig.DEBUG) {
@@ -403,31 +447,81 @@ public final class Channel {
                     main.post(() -> done(ctx.getString(R.string.channel_bad_sign)));
                     return;
                 }
-                // 4. Hand it to the system installer on the main thread.
+                // 4. Hand it to the system installer.
                 // Xiaomi: copy out of cache (MIUI cannot read cache FileProvider
                 // URIs) and prompt from a dialog click — Handler.post startActivity
                 // is dropped as a background start on HyperOS.
-                final File shown = oemSheet(ctx) ? stageApk(ctx, apk) : apk;
+                final boolean oem = oemSheet(ctx);
+                final File shown = oem ? stageApk(ctx, apk) : apk;
                 lastApk = shown;
+                // Everything slow about the hand-off is done here, still on
+                // this background thread, so the main thread never freezes:
+                //  - Xiaomi path: build the installer intent and grant the
+                //    installers read access to the file (a PackageManager
+                //    query plus several system calls). Only the
+                //    startActivity itself must wait for the main thread,
+                //    because on HyperOS it has to run inside the user's tap
+                //    on the dialog button.
+                //  - AOSP path: copy the whole APK (up to 128 MB) into a
+                //    PackageInstaller session and fsync it. On slow storage
+                //    that takes seconds; on the main thread it froze the
+                //    screen and could trigger "app not responding".
+                // If any of this fails here, the main-thread step below falls
+                // back exactly as before (same error paths, same messages).
+                Intent sheet = null;
+                Ready ready = null;
+                Exception prepErr = null;
+                if (oem) {
+                    try {
+                        sheet = sheetIntent(ctx, shown);
+                    } catch (Exception e) {
+                        // Leave sheet null: openSheet on the main thread then
+                        // builds the intent itself and reports the same error.
+                        sheet = null;
+                    }
+                } else {
+                    // Show "installing" while the copy runs, rather than
+                    // leaving "downloading" up for the seconds it takes.
+                    main.post(() -> paint(ctx.getString(R.string.channel_installing), false));
+                    try {
+                        ready = prepare(ctx, shown);
+                    } catch (Exception e) {
+                        prepErr = e;
+                    }
+                }
+                final Intent sheetF = sheet;
+                final Ready readyF = ready;
+                final Exception prepErrF = prepErr;
                 main.post(() -> {
                     paint(ctx.getString(R.string.channel_installing), false);
                     try {
                         // Xiaomi path: ask from a dialog when a screen is
                         // open, else try the installer directly.
-                        if (oemSheet(ctx)) {
+                        if (oem) {
                             Activity a = uiAct != null ? uiAct.get() : null;
                             if (a != null && !a.isFinishing()) {
-                                promptSheet(a, shown);
+                                promptSheet(a, shown, sheetF);
                                 return;
                             }
-                            openSheet(ctx, shown);
+                            openSheet(ctx, shown, sheetF);
                             busy.set(false);
                             paint(ctx.getString(R.string.channel_confirm), true);
                             return;
                         }
                         // AOSP path: PackageInstaller session, plus a
-                        // watchdog in case no callback ever arrives.
-                        commit(ctx, shown);
+                        // watchdog in case no callback ever arrives. A
+                        // failed copy above lands in the same fallback as a
+                        // failed commit always did.
+                        if (prepErrF != null) {
+                            throw prepErrF;
+                        }
+                        // The commit and the watchdog stay together in this
+                        // one main-thread step, as before: the installer's
+                        // answer (GhInstall -> onInstall, also on the main
+                        // thread) can then only run after the watchdog is
+                        // set, so onInstall always cancels it and a stale
+                        // watchdog never reopens the installer later.
+                        readyF.commit();
                         main.removeCallbacks(watch);
                         main.postDelayed(watch, 20_000);
                     } catch (Exception e) {
@@ -495,13 +589,45 @@ public final class Channel {
     }
 
     /**
-     * Writes the APK into a PackageInstaller session and commits it. Silent
+     * A PackageInstaller session that already holds the whole APK (copied
+     * and fsynced) plus the callback to commit it with. Made by
+     * {@link #prepare} on the "loft-gh" thread; {@link #commit} is then the
+     * only step left for the main thread, and it is quick.
+     */
+    private static final class Ready {
+        /** Open session with the APK fully written into it. */
+        final PackageInstaller.Session s;
+        /** Where the system sends the install result (starts GhInstall). */
+        final IntentSender cb;
+
+        /** Holds the session and callback as given. */
+        Ready(PackageInstaller.Session s, IntentSender cb) {
+            this.s = s;
+            this.cb = cb;
+        }
+
+        /**
+         * Hands the session to the system and closes our handle to it. Main
+         * thread: the caller sets the watchdog right after, in the same step.
+         */
+        void commit() {
+            s.commit(cb);
+            s.close();
+        }
+    }
+
+    /**
+     * Writes the APK into a PackageInstaller session, ready to commit. Silent
      * install is requested only when this app already owns updates (API 34+);
      * otherwise the system must show a confirm sheet. The result arrives in
-     * {@link GhInstall}. Note: it is called from a main.post() block, so the
-     * whole APK copy into the session and the fsync run on the main thread.
+     * {@link GhInstall} once {@link Ready#commit} is called.
+     *
+     * <p>Runs on the "loft-gh" download thread, not the main thread: it copies
+     * the whole APK (up to 128 MB) into the session and fsyncs it, which can
+     * take seconds on slow phone storage. It used to run inside a main.post()
+     * block and froze the screen for that long.
      */
-    private static void commit(Context ctx, File apk) throws Exception {
+    private static Ready prepare(Context ctx, File apk) throws Exception {
         Context app = ctx.getApplicationContext();
         PackageInstaller pi = app.getPackageManager().getPackageInstaller();
         PackageInstaller.SessionParams p =
@@ -546,8 +672,8 @@ public final class Channel {
         } else {
             cb = PendingIntent.getActivity(app, id, i, flags);
         }
-        s.commit(cb.getIntentSender());
-        s.close();
+        // Not committed here: see Ready and the caller in startInstall.
+        return new Ready(s, cb.getIntentSender());
     }
 
     /**
@@ -555,8 +681,16 @@ public final class Channel {
      * system installer is allowed to start. A Handler.post startActivity after
      * the download is treated as a background start and dropped. If the dialog
      * cannot be shown, it tries the installer directly.
+     *
+     * <p>{@code prepared} is the installer intent already built (and its read
+     * grants already given) on the download thread by {@link #sheetIntent},
+     * so the button tap only has to call startActivity. It may be null (if
+     * preparing it failed); then the tap builds it itself, as it always used
+     * to. The startActivity itself must stay in the tap, never moved to a
+     * background thread or a later post: HyperOS only lets the installer
+     * open from inside the user's gesture.
      */
-    private static void promptSheet(Activity a, File apk) {
+    private static void promptSheet(Activity a, File apk, Intent prepared) {
         Journal.add("update oem " + Build.MANUFACTURER + "/" + Build.BRAND + "/" + Build.MODEL);
         busy.set(false);
         paint(a.getString(R.string.channel_ready), true);
@@ -568,7 +702,7 @@ public final class Channel {
                     .setMessage(msg)
                     .setPositiveButton(R.string.channel_install, (d, w) -> {
                         try {
-                            openSheet(a, apk);
+                            openSheet(a, apk, prepared);
                             paint(a.getString(R.string.channel_confirm), true);
                         } catch (Exception e) {
                             Journal.add("update sheet " + e.getMessage());
@@ -581,7 +715,7 @@ public final class Channel {
         } catch (Exception e) {
             Journal.add("update prompt " + e.getMessage());
             try {
-                openSheet(a, apk);
+                openSheet(a, apk, prepared);
                 paint(a.getString(R.string.channel_confirm), true);
             } catch (Exception e2) {
                 Journal.add("update sheet " + e2.getMessage());
@@ -638,9 +772,45 @@ public final class Channel {
      * installer packages and to every app that can open an APK, so whichever
      * installer ends up handling it can read the file. Throws if no activity
      * can open it.
+     *
+     * <p>Builds the intent and gives the grants right here, on the calling
+     * (main) thread. That is kept for the rare paths that have no
+     * background step before them (second tap, watchdog, installer failure);
+     * the normal Xiaomi path prepares the intent on the download thread and
+     * uses {@link #openSheet(Context, File, Intent)}.
+     */
+    private static void openSheet(Context ctx, File apk) {
+        startSheet(ctx, sheetIntent(ctx, apk));
+    }
+
+    /**
+     * Same as {@link #openSheet(Context, File)}, but uses {@code prepared}
+     * (an intent from {@link #sheetIntent}, grants already given) when there
+     * is one, so only the quick startActivity runs on the main thread. With
+     * null it builds everything here, exactly like the two-argument form.
+     */
+    private static void openSheet(Context ctx, File apk, Intent prepared) {
+        if (prepared == null) {
+            openSheet(ctx, apk);
+            return;
+        }
+        startSheet(ctx, prepared);
+    }
+
+    /**
+     * Builds the "open this APK in the system installer" intent and grants
+     * read access to the file, as described on {@link #openSheet(Context, File)}.
+     * Does not start anything, so it is safe on any thread: the download
+     * thread calls it ahead of time, because the PackageManager query and
+     * the grant calls below are system calls that should not run while the
+     * user waits on the main thread. The grants stay in force after this
+     * returns (until revoked or reboot), so starting the intent later is
+     * fine. The intent also carries the grant flags and the URI as ClipData,
+     * so whichever app finally opens it gets access at start time as well.
+     * Throws if the FileProvider cannot serve the file.
      */
     @SuppressWarnings("deprecation")
-    private static void openSheet(Context ctx, File apk) {
+    private static Intent sheetIntent(Context ctx, File apk) {
         Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".update", apk);
         int grant = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
         Intent i = new Intent(Intent.ACTION_VIEW);
@@ -649,10 +819,8 @@ public final class Channel {
         i.putExtra("android.intent.extra.INSTALLER_PACKAGE_NAME", ctx.getPackageName());
         i.setClipData(ClipData.newRawUri("", uri));
         i.addFlags(grant);
-        // Starting from a non-activity context (or a closing screen) needs a new task.
-        if (!(ctx instanceof Activity) || ((Activity) ctx).isFinishing()) {
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        }
+        // The "new task" flag is decided at start time in startSheet, since
+        // it depends on the screen that starts the intent, not this one.
         String[] installers = {
                 "com.miui.packageinstaller",
                 "com.miui.global.packageinstaller",
@@ -673,6 +841,21 @@ public final class Channel {
             }
         } catch (Exception ignored) {
         }
+        return i;
+    }
+
+    /**
+     * Starts an intent from {@link #sheetIntent}. Main thread, and on
+     * MIUI/HyperOS from inside a user tap where there is one. Works on a
+     * copy so the prepared intent can be started again (a second tap) with
+     * the flags decided fresh each time.
+     */
+    private static void startSheet(Context ctx, Intent prepared) {
+        Intent i = new Intent(prepared);
+        // Starting from a non-activity context (or a closing screen) needs a new task.
+        if (!(ctx instanceof Activity) || ((Activity) ctx).isFinishing()) {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
         ctx.startActivity(i);
     }
 
@@ -692,11 +875,32 @@ public final class Channel {
     }
 
     /**
-     * True when this build is MIUI or HyperOS (property present). Reads
-     * system properties through reflection, because
-     * android.os.SystemProperties is a hidden API with no public access.
+     * True when this build is MIUI or HyperOS (property present). The answer
+     * is worked out once, by {@link MiuiOnce}, and kept: these are read-only
+     * "ro." properties of the firmware, so they cannot change while the
+     * process lives, and the reflection lookup is not free.
      */
     private static boolean miui() {
+        return MiuiOnce.IS;
+    }
+
+    /**
+     * Holder for the cached {@link #miui} answer. Java runs a class's static
+     * setup exactly once, on first use, and makes other threads wait for it,
+     * so this is a thread-safe "compute once" without any locking of our
+     * own: oemSheet() is called from both the main and the "loft-gh" thread.
+     */
+    private static final class MiuiOnce {
+        /** The cached answer, filled on first use of this class. */
+        static final boolean IS = probeMiui();
+    }
+
+    /**
+     * The actual MIUI/HyperOS test behind {@link #miui}. Reads system
+     * properties through reflection, because android.os.SystemProperties is
+     * a hidden API with no public access.
+     */
+    private static boolean probeMiui() {
         try {
             Class<?> c = Class.forName("android.os.SystemProperties");
             java.lang.reflect.Method get = c.getMethod("get", String.class, String.class);
@@ -836,18 +1040,46 @@ public final class Channel {
         return s != null && s.length > 0 ? s[0].toByteArray() : null;
     }
 
-    /** Installed version name (e.g. "1.2.3"), falling back to the build's own. Asks PackageManager on every call. */
+    /**
+     * Installed version name, cached by {@link #current}. It cannot change
+     * while this process lives: installing an update kills the old process
+     * and starts a new one, which asks again. Written from whichever thread
+     * asks first (main or "loft-gh"); volatile so every thread sees it, and
+     * two threads racing to fill it just write the same value.
+     */
+    private static volatile String curVer;
+
+    /**
+     * Installed version name (e.g. "1.2.3"), falling back to the build's own.
+     * Asks PackageManager only the first time (see {@link #curVer}); paint()
+     * and idleMsg() used to ask it on every redraw of the settings screen.
+     */
     private static String current(Context c) {
+        String v = curVer;
+        if (v != null) {
+            return v;
+        }
         try {
-            return c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
+            v = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
         } catch (Exception e) {
+            // Not cached: a failed ask may succeed next time.
             return BuildConfig.VERSION_NAME;
         }
+        // versionName can in theory be null; keep the old behaviour of
+        // returning it as is, but only cache a real value.
+        if (v != null) {
+            curVer = v;
+        }
+        return v;
     }
 
-    /** Status text when nothing is running: permission needed, update available, or "check for updates". */
-    private static String idleMsg(Context c) {
-        if (!canInstall(c)) {
+    /**
+     * Status text when nothing is running: permission needed, update
+     * available, or "check for updates". {@code can} is the install
+     * permission, already asked by the caller so it is not asked twice.
+     */
+    private static String idleMsg(Context c, boolean can) {
+        if (!can) {
             return c.getString(R.string.channel_perm_d);
         }
         if (pending != null && pending.hasApk() && Ver.cmp(pending.ver, current(c)) > 0) {
@@ -861,6 +1093,17 @@ public final class Channel {
      * text, if the screen is still open. Main thread only: it touches views.
      */
     private static void paint(String msg, boolean enable) {
+        paint(msg, enable, null);
+    }
+
+    /**
+     * Same as {@link #paint(String, boolean)}. {@code known} is the install
+     * permission when the caller already asked PackageManager for it in this
+     * same step (attach and onResume do, for the status text), or null to
+     * ask here. Either way the permission is asked at most once per paint,
+     * and only when a screen is actually bound.
+     */
+    private static void paint(String msg, boolean enable, Boolean known) {
         Activity a = uiAct != null ? uiAct.get() : null;
         Button btn = uiBtn != null ? uiBtn.get() : null;
         TextView status = uiStatus != null ? uiStatus.get() : null;
@@ -868,7 +1111,8 @@ public final class Channel {
             return;
         }
         btn.setEnabled(enable);
-        if (!canInstall(a)) {
+        boolean can = known != null ? known : canInstall(a);
+        if (!can) {
             btn.setText(R.string.channel_allow);
         } else if (pending != null && pending.hasApk() && Ver.cmp(pending.ver, current(a)) > 0) {
             btn.setText(R.string.channel_install);
