@@ -15,6 +15,7 @@
     <string name="settings">Настройки</string>
     <string name="scan">Сканировать QR-код</string>
     <string name="paste">Вставить ссылку</string>
+    <string name="paste_btn">Вставить</string>
     <string name="from_file">Из файла</string>
     <string name="from_gallery">Из галереи</string>
     <string name="manual">Вручную</string>

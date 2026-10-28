@@ -13,6 +13,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -65,6 +66,8 @@ public final class ScanActivity extends LoftActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scan);
+        Fit.buttonRow(findViewById(R.id.scan_pick));
+        Fit.buttonRow(findViewById(R.id.scan_actions));
         findViewById(R.id.btn_close).setOnClickListener(v -> finish());
         findViewById(R.id.btn_paste).setOnClickListener(v -> {
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
@@ -295,7 +298,7 @@ public final class ScanActivity extends LoftActivity {
                 msg.append("  ").append(p.host());
             }
         }
-        new android.app.AlertDialog.Builder(this)
+        AlertDialog dlg = new AlertDialog.Builder(this)
                 .setTitle(title.isEmpty() ? getString(R.string.imported) : title)
                 .setMessage(msg.toString())
                 .setPositiveButton(R.string.confirm_imported, (d, w) -> {
@@ -305,6 +308,8 @@ public final class ScanActivity extends LoftActivity {
                 })
                 .setNegativeButton(R.string.cancel, (d, w) -> got.set(false))
                 .setOnCancelListener(d -> got.set(false))
-                .show();
+                .create();
+        dlg.show();
+        Fit.alertButtons(dlg);
     }
 }

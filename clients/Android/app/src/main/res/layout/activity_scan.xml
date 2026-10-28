@@ -48,6 +48,7 @@
         android:textSize="12sp" />
 
     <LinearLayout
+        android:id="@+id/scan_pick"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -98,6 +99,7 @@
         android:textColorHint="@color/mute" />
 
     <LinearLayout
+        android:id="@+id/scan_actions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -109,7 +111,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/paste" />
+            android:text="@string/paste_btn" />
 
         <Button
             android:id="@+id/btn_add"

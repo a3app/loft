@@ -26,7 +26,6 @@ import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -696,45 +695,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                         .setNegativeButton(R.string.cancel, null)
                         .show());
         Channel.attach(this, settings);
-        fitSettingsLinks();
-    }
-
-    /**
-     * Footer links sit in one centered row. A large system font makes
-     * About overflow the row; then they stack so the caption stays whole.
-     */
-    private void fitSettingsLinks() {
-        LinearLayout row = settings.findViewById(R.id.settings_links);
-        if (row == null) {
-            return;
-        }
-        row.post(() -> {
-            int inner = row.getWidth();
-            if (inner <= 0) {
-                return;
-            }
-            int need = 0;
-            for (int i = 0; i < row.getChildCount(); i++) {
-                View c = row.getChildAt(i);
-                c.measure(
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-                need += c.getMeasuredWidth();
-            }
-            if (need <= inner) {
-                return;
-            }
-            row.setOrientation(LinearLayout.VERTICAL);
-            row.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-            for (int i = 0; i < row.getChildCount(); i++) {
-                View c = row.getChildAt(i);
-                LinearLayout.LayoutParams lp =
-                        (LinearLayout.LayoutParams) c.getLayoutParams();
-                lp.width = LinearLayout.LayoutParams.MATCH_PARENT;
-                lp.weight = 0;
-                c.setLayoutParams(lp);
-            }
-        });
+        Fit.buttonRow(settings.findViewById(R.id.settings_links));
     }
 
     /**

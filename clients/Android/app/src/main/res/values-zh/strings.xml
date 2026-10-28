@@ -15,6 +15,7 @@
     <string name="settings">设置</string>
     <string name="scan">扫描二维码</string>
     <string name="paste">粘贴链接</string>
+    <string name="paste_btn">粘贴</string>
     <string name="from_file">从文件</string>
     <string name="from_gallery">从相册</string>
     <string name="manual">手动</string>
