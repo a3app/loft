@@ -10,6 +10,9 @@
     <string name="channel_checking">Checking…</string>
     <string name="channel_downloading">Downloading…</string>
     <string name="channel_installing">Installing…</string>
+    <string name="channel_confirm">Confirm the system prompt</string>
+    <string name="channel_ready">Downloaded · tap Update</string>
+    <string name="channel_cancel">Update cancelled</string>
     <string name="channel_current">Up to date</string>
     <string name="channel_available">%s is ready</string>
     <string name="channel_none">That release has no APK yet</string>

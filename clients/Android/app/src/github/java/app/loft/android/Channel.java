@@ -9,25 +9,32 @@
 package app.loft.android;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
+import android.app.AlertDialog;
 import android.app.Application;
 import android.app.PendingIntent;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
 import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+
+import androidx.core.content.FileProvider;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -36,12 +43,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.security.MessageDigest;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * GitHub self-update. Compiled only into the github flavor.
- * Install-unknown-apps is asked once; later sessions use
- * {@code USER_ACTION_NOT_REQUIRED} plus update-ownership.
+ * Install-unknown-apps is asked once. Silent PackageInstaller sessions run
+ * only when this app already owns updates (API 34+). MIUI/HyperOS does not
+ * honor USER_ACTION_NOT_REQUIRED for sideload and blocks a confirm sheet
+ * started from a BroadcastReceiver, so those devices open the system
+ * installer on the APK itself.
  */
 public final class Channel {
     // busy: one check or install at a time. awaitingPerm / wantInstall remember
@@ -55,9 +66,33 @@ public final class Channel {
     private static volatile boolean awaitingPerm;
     private static volatile boolean wantInstall;
     private static Gh.Rel pending;
+    private static File lastApk;
     private static WeakReference<Button> uiBtn;
     private static WeakReference<TextView> uiStatus;
     private static WeakReference<Activity> uiAct;
+    private static final Runnable watch = () -> {
+        if (!busy.get()) {
+            return;
+        }
+        Journal.add("update no installer callback");
+        Activity a = uiAct != null ? uiAct.get() : null;
+        File apk = lastApk;
+        if (a != null && !a.isFinishing() && apk != null && apk.isFile()) {
+            try {
+                openSheet(a, apk);
+                busy.set(false);
+                paint(a.getString(R.string.channel_confirm), true);
+                return;
+            } catch (Exception e) {
+                Journal.add("update sheet " + e.getMessage());
+            }
+        }
+        if (a != null) {
+            done(a.getString(R.string.channel_fail));
+        } else {
+            busy.set(false);
+        }
+    };
 
     private Channel() {}
 
@@ -125,6 +160,9 @@ public final class Channel {
      * release, or check again. Otherwise just refresh the idle status text.
      */
     static void onResume(Activity a) {
+        if (a instanceof GhInstall) {
+            return;
+        }
         Activity cur = uiAct != null ? uiAct.get() : null;
         if (awaitingPerm && canInstall(a)) {
             awaitingPerm = false;
@@ -154,6 +192,20 @@ public final class Channel {
         if (pending != null && pending.hasApk() && Ver.cmp(pending.ver, current(a)) > 0) {
             if (BuildConfig.DEBUG) {
                 done(a.getString(R.string.channel_debug));
+                return;
+            }
+            // HyperOS drops startActivity from a download callback. A second
+            // tap is a user gesture and can open the already-downloaded APK.
+            File apk = lastApk;
+            if (apk != null && apk.isFile() && apk.length() > 0) {
+                try {
+                    openSheet(a, apk);
+                    busy.set(false);
+                    paint(a.getString(R.string.channel_confirm), true);
+                } catch (Exception e) {
+                    Journal.add("update sheet " + e.getMessage());
+                    startInstall(a.getApplicationContext(), pending, false);
+                }
                 return;
             }
             startInstall(a.getApplicationContext(), pending, false);
@@ -219,6 +271,7 @@ public final class Channel {
                 Prefs.p(ctx).edit().putLong("gh_checked", System.currentTimeMillis()).apply();
                 main.post(() -> onCheck(ctx, rel, silent));
             } catch (Exception e) {
+                Journal.add("update check " + e.getMessage());
                 main.post(() -> {
                     pending = null;
                     if (silent) {
@@ -233,8 +286,8 @@ public final class Channel {
 
     /**
      * Result of a check. A background check installs a newer release right away
-     * when it can (release build, permission granted, unmetered); otherwise the
-     * button just offers it.
+     * when it can (release build, permission granted, unmetered, not MIUI);
+     * otherwise the button just offers it.
      */
     private static void onCheck(Context ctx, Gh.Rel rel, boolean silent) {
         pending = rel;
@@ -255,7 +308,7 @@ public final class Channel {
             return;
         }
         if (silent) {
-            if (BuildConfig.DEBUG || !canInstall(ctx) || isMetered(ctx)) {
+            if (BuildConfig.DEBUG || !canInstall(ctx) || isMetered(ctx) || oemSheet(ctx)) {
                 busy.set(false);
                 paint(ctx.getString(R.string.channel_available, rel.ver), true);
                 return;
@@ -292,6 +345,7 @@ public final class Channel {
         paint(ctx.getString(R.string.channel_downloading), false);
         final String ua = "loft-android/" + current(ctx);
         final File apk = new File(ctx.getCacheDir(), "loft-update.apk");
+        lastApk = apk;
         new Thread(() -> {
             try {
                 // 1. Get the expected hash for this APK from the checksum file.
@@ -314,16 +368,43 @@ public final class Channel {
                     return;
                 }
                 // 4. Hand it to the system installer on the main thread.
+                // Xiaomi: copy out of cache (MIUI cannot read cache FileProvider
+                // URIs) and prompt from a dialog click — Handler.post startActivity
+                // is dropped as a background start on HyperOS.
+                final File shown = oemSheet(ctx) ? stageApk(ctx, apk) : apk;
+                lastApk = shown;
                 main.post(() -> {
                     paint(ctx.getString(R.string.channel_installing), false);
                     try {
-                        commit(ctx, apk);
-                        busy.set(false);
+                        if (oemSheet(ctx)) {
+                            Activity a = uiAct != null ? uiAct.get() : null;
+                            if (a != null && !a.isFinishing()) {
+                                promptSheet(a, shown);
+                                return;
+                            }
+                            openSheet(ctx, shown);
+                            busy.set(false);
+                            paint(ctx.getString(R.string.channel_confirm), true);
+                            return;
+                        }
+                        commit(ctx, shown);
+                        main.removeCallbacks(watch);
+                        main.postDelayed(watch, 20_000);
                     } catch (Exception e) {
-                        done(ctx.getString(R.string.channel_fail));
+                        Journal.add("update commit " + e.getMessage());
+                        try {
+                            Activity a = uiAct != null ? uiAct.get() : null;
+                            openSheet(a != null ? a : ctx, shown);
+                            busy.set(false);
+                            paint(ctx.getString(R.string.channel_confirm), true);
+                        } catch (Exception e2) {
+                            Journal.add("update sheet " + e2.getMessage());
+                            done(ctx.getString(R.string.channel_fail));
+                        }
                     }
                 });
             } catch (Exception e) {
+                Journal.add("update " + e.getMessage());
                 main.post(() -> {
                     if (silent) {
                         busy.set(false);
@@ -336,10 +417,44 @@ public final class Channel {
     }
 
     /**
-     * Writes the APK into a PackageInstaller session and commits it. On API 31+
-     * the session asks for no user action, and on API 34+ for update ownership,
-     * so after the first confirmed install later updates can go through
-     * silently. The result arrives in GhInstall.
+     * PackageInstaller result from {@link GhInstall}. Keep {@code busy} until
+     * this arrives so the row does not look idle while the system sheet is up.
+     */
+    static void onInstall(Context ctx, int st, String msg) {
+        main.removeCallbacks(watch);
+        Journal.add("update status " + st + (msg == null || msg.isEmpty() ? "" : " " + msg));
+        if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            paint(ctx.getString(R.string.channel_confirm), false);
+            return;
+        }
+        if (st == PackageInstaller.STATUS_SUCCESS) {
+            done(ctx.getString(R.string.channel_current));
+            return;
+        }
+        if (st == PackageInstaller.STATUS_FAILURE_ABORTED) {
+            done(ctx.getString(R.string.channel_cancel));
+            return;
+        }
+        File apk = lastApk;
+        Activity a = uiAct != null ? uiAct.get() : null;
+        if (apk != null && apk.isFile()) {
+            try {
+                openSheet(a != null && !a.isFinishing() ? a : ctx, apk);
+                busy.set(false);
+                paint(ctx.getString(R.string.channel_confirm), true);
+                return;
+            } catch (Exception e) {
+                Journal.add("update sheet " + e.getMessage());
+            }
+        }
+        done(ctx.getString(R.string.channel_fail));
+    }
+
+    /**
+     * Writes the APK into a PackageInstaller session and commits it. Silent
+     * install is requested only when this app already owns updates (API 34+);
+     * otherwise the system must show a confirm sheet. The result arrives in
+     * {@link GhInstall}.
      */
     private static void commit(Context ctx, File apk) throws Exception {
         Context app = ctx.getApplicationContext();
@@ -347,11 +462,11 @@ public final class Channel {
         PackageInstaller.SessionParams p =
                 new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
         p.setAppPackageName(app.getPackageName());
-        if (Build.VERSION.SDK_INT >= 31) {
-            p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
-        }
         if (Build.VERSION.SDK_INT >= 34) {
             p.setRequestUpdateOwnership(true);
+        }
+        if (Build.VERSION.SDK_INT >= 31 && ownsUpdates(app)) {
+            p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
         }
         p.setSize(apk.length());
         int id = pi.createSession(p);
@@ -366,14 +481,189 @@ public final class Channel {
             s.fsync(out);
         }
         Intent i = new Intent(app, GhInstall.class);
-        i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= 31) {
             flags |= PendingIntent.FLAG_MUTABLE;
         }
-        PendingIntent cb = PendingIntent.getBroadcast(app, id, i, flags);
+        PendingIntent cb;
+        if (Build.VERSION.SDK_INT >= 34) {
+            ActivityOptions opts = ActivityOptions.makeBasic();
+            opts.setPendingIntentBackgroundActivityStartMode(
+                    ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+            cb = PendingIntent.getActivity(app, id, i, flags, opts.toBundle());
+        } else {
+            cb = PendingIntent.getActivity(app, id, i, flags);
+        }
         s.commit(cb.getIntentSender());
         s.close();
+    }
+
+    /**
+     * MIUI/HyperOS dialog whose positive button is a user gesture, so the
+     * system installer is allowed to start. A Handler.post startActivity after
+     * the download is treated as a background start and dropped.
+     */
+    private static void promptSheet(Activity a, File apk) {
+        Journal.add("update oem " + Build.MANUFACTURER + "/" + Build.BRAND + "/" + Build.MODEL);
+        busy.set(false);
+        paint(a.getString(R.string.channel_ready), true);
+        try {
+            String msg = pending != null
+                    ? a.getString(R.string.channel_available, pending.ver)
+                    : a.getString(R.string.channel_ready);
+            new AlertDialog.Builder(a)
+                    .setMessage(msg)
+                    .setPositiveButton(R.string.channel_install, (d, w) -> {
+                        try {
+                            openSheet(a, apk);
+                            paint(a.getString(R.string.channel_confirm), true);
+                        } catch (Exception e) {
+                            Journal.add("update sheet " + e.getMessage());
+                            done(a.getString(R.string.channel_fail));
+                        }
+                    })
+                    .setNegativeButton(android.R.string.cancel, (d, w) ->
+                            paint(a.getString(R.string.channel_ready), true))
+                    .show();
+        } catch (Exception e) {
+            Journal.add("update prompt " + e.getMessage());
+            try {
+                openSheet(a, apk);
+                paint(a.getString(R.string.channel_confirm), true);
+            } catch (Exception e2) {
+                Journal.add("update sheet " + e2.getMessage());
+                done(a.getString(R.string.channel_fail));
+            }
+        }
+    }
+
+    /**
+     * Copy the APK to app-specific external storage. MIUI's installer often
+     * cannot read a FileProvider URI that points at getCacheDir().
+     */
+    private static File stageApk(Context ctx, File apk) {
+        File dir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (dir == null) {
+            dir = ctx.getExternalCacheDir();
+        }
+        if (dir == null) {
+            return apk;
+        }
+        if (!dir.exists() && !dir.mkdirs()) {
+            return apk;
+        }
+        File dst = new File(dir, "loft-update.apk");
+        if (dst.getAbsolutePath().equals(apk.getAbsolutePath())) {
+            return apk;
+        }
+        try (InputStream in = new FileInputStream(apk);
+             OutputStream out = new FileOutputStream(dst)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+            }
+        } catch (Exception e) {
+            Journal.add("update stage " + e.getMessage());
+            return apk;
+        }
+        if (dst.length() != apk.length()) {
+            Journal.add("update stage size");
+            return apk;
+        }
+        return dst;
+    }
+
+    /**
+     * Opens the downloaded APK in the system installer. Used on MIUI/HyperOS,
+     * where PackageInstaller sessions for sideload often finish with no sheet
+     * and no callback, and as a fallback when a session fails.
+     */
+    @SuppressWarnings("deprecation")
+    private static void openSheet(Context ctx, File apk) {
+        Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".update", apk);
+        int grant = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(uri, "application/vnd.android.package-archive");
+        i.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+        i.putExtra("android.intent.extra.INSTALLER_PACKAGE_NAME", ctx.getPackageName());
+        i.setClipData(ClipData.newRawUri("", uri));
+        i.addFlags(grant);
+        if (!(ctx instanceof Activity) || ((Activity) ctx).isFinishing()) {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        String[] installers = {
+                "com.miui.packageinstaller",
+                "com.miui.global.packageinstaller",
+                "com.google.android.packageinstaller",
+                "com.android.packageinstaller",
+        };
+        for (String pkg : installers) {
+            try {
+                ctx.grantUriPermission(pkg, uri, grant);
+            } catch (Exception ignored) {
+            }
+        }
+        try {
+            for (ResolveInfo r : ctx.getPackageManager().queryIntentActivities(i, 0)) {
+                if (r.activityInfo != null) {
+                    ctx.grantUriPermission(r.activityInfo.packageName, uri, grant);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        ctx.startActivity(i);
+    }
+
+    /**
+     * True on Xiaomi/Redmi/POCO, whose installer does not run sideload
+     * PackageInstaller sessions the AOSP way. Also true when MIUI/HyperOS
+     * properties are set, even if manufacturer was rewritten.
+     */
+    static boolean oemSheet(Context ctx) {
+        if (miui()) {
+            return true;
+        }
+        String m = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase(Locale.US);
+        String b = Build.BRAND == null ? "" : Build.BRAND.toLowerCase(Locale.US);
+        return m.contains("xiaomi") || m.contains("redmi") || b.contains("xiaomi")
+                || b.contains("redmi") || b.contains("poco");
+    }
+
+    /** True when this build is MIUI or HyperOS (property present). */
+    private static boolean miui() {
+        try {
+            Class<?> c = Class.forName("android.os.SystemProperties");
+            java.lang.reflect.Method get = c.getMethod("get", String.class, String.class);
+            String[] keys = {
+                    "ro.miui.ui.version.name",
+                    "ro.mi.os.version.name",
+                    "ro.hyperos.version.name",
+            };
+            for (String k : keys) {
+                String v = (String) get.invoke(null, k, "");
+                if (v != null && !v.isEmpty()) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /** True when this app is the update owner (API 34+), so silent sessions are allowed. */
+    private static boolean ownsUpdates(Context ctx) {
+        if (Build.VERSION.SDK_INT < 34) {
+            return false;
+        }
+        try {
+            String owner = ctx.getPackageManager()
+                    .getInstallSourceInfo(ctx.getPackageName())
+                    .getUpdateOwnerPackageName();
+            return ctx.getPackageName().equals(owner);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -400,26 +690,51 @@ public final class Channel {
      */
     private static boolean samePackage(Context ctx, File apk) {
         PackageManager pm = ctx.getPackageManager();
-        int flags = sigFlags();
         PackageInfo mine;
         PackageInfo got;
         try {
-            mine = pm.getPackageInfo(ctx.getPackageName(), flags);
-            String path = apk.getAbsolutePath();
-            got = pm.getPackageArchiveInfo(path, flags);
-            if (got != null && got.applicationInfo != null) {
-                got.applicationInfo.sourceDir = path;
-                got.applicationInfo.publicSourceDir = path;
-            }
+            mine = pm.getPackageInfo(ctx.getPackageName(), sigFlags());
+            got = archiveInfo(pm, apk);
         } catch (Exception e) {
+            Journal.add("update sign " + e.getMessage());
             return false;
         }
         if (got == null || got.packageName == null || !got.packageName.equals(ctx.getPackageName())) {
+            Journal.add("update pkg " + (got == null ? "null" : got.packageName));
             return false;
         }
         byte[] a = firstCert(mine);
         byte[] b = firstCert(got);
-        return a != null && b != null && MessageDigest.isEqual(a, b);
+        if (a == null || b == null) {
+            Journal.add("update cert missing");
+            return false;
+        }
+        return MessageDigest.isEqual(a, b);
+    }
+
+    /** Package info of an on-disk APK, with sourceDir set so signing reads work. */
+    @SuppressWarnings("deprecation")
+    private static PackageInfo archiveInfo(PackageManager pm, File apk) {
+        String path = apk.getAbsolutePath();
+        PackageInfo got = pm.getPackageArchiveInfo(path, sigFlags());
+        if (got == null) {
+            got = pm.getPackageArchiveInfo(path, PackageManager.GET_SIGNATURES);
+        }
+        if (got != null && got.applicationInfo != null) {
+            got.applicationInfo.sourceDir = path;
+            got.applicationInfo.publicSourceDir = path;
+        }
+        if (got != null && firstCert(got) == null) {
+            PackageInfo legacy = pm.getPackageArchiveInfo(path, PackageManager.GET_SIGNATURES);
+            if (legacy != null) {
+                if (legacy.applicationInfo != null) {
+                    legacy.applicationInfo.sourceDir = path;
+                    legacy.applicationInfo.publicSourceDir = path;
+                }
+                return legacy;
+            }
+        }
+        return got;
     }
 
     /** PackageManager flag that asks for signing certificates, old or new API. */
@@ -440,11 +755,13 @@ public final class Channel {
     private static byte[] firstCert(PackageInfo pi) {
         if (Build.VERSION.SDK_INT >= 28) {
             SigningInfo si = pi.signingInfo;
-            if (si == null) {
-                return null;
+            if (si != null) {
+                Signature[] s = si.hasMultipleSigners()
+                        ? si.getApkContentsSigners() : si.getSigningCertificateHistory();
+                if (s != null && s.length > 0) {
+                    return s[0].toByteArray();
+                }
             }
-            Signature[] s = si.hasMultipleSigners() ? si.getApkContentsSigners() : si.getSigningCertificateHistory();
-            return s != null && s.length > 0 ? s[0].toByteArray() : null;
         }
         Signature[] s = pi.signatures;
         return s != null && s.length > 0 ? s[0].toByteArray() : null;
@@ -493,6 +810,7 @@ public final class Channel {
 
     /** Ends the current check or install: frees {@code busy} and shows {@code msg}. */
     private static void done(String msg) {
+        main.removeCallbacks(watch);
         busy.set(false);
         paint(msg, true);
     }

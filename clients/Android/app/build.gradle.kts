@@ -3,7 +3,8 @@ plugins {
 }
 
 val androidDist = rootProject.projectDir.resolve("../../dist/clients/Android").canonicalFile
-val loftVersion = rootProject.projectDir.resolve("../../VERSION").readText().trim()
+val loftVersion = (System.getenv("LOFT_VERSION")
+    ?: rootProject.projectDir.resolve("../../VERSION").readText()).trim()
 
 fun loftVersionCode(v: String): Int {
     val core = v.substringBefore('-')

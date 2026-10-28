@@ -1,30 +1,31 @@
 /*
- * Android client, "github" build flavor only: receives the result of an APK
- * install started by Channel.java (the GitHub self-updater). PackageInstaller
- * reports back here through a broadcast once the install session finishes or
- * needs the user's confirmation.
+ * Android client, "github" build flavor only: trampoline Activity for the
+ * PackageInstaller session started by Channel.java. A BroadcastReceiver cannot
+ * start the system confirm sheet on MIUI/HyperOS (background-activity rules);
+ * an Activity can.
  */
 package app.loft.android;
 
-import android.content.BroadcastReceiver;
-import android.content.Context;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.os.Build;
-import android.widget.Toast;
+import android.os.Bundle;
 
 /**
  * PackageInstaller callback. First session may still raise a confirm sheet
  * (update-ownership). After that USER_ACTION_NOT_REQUIRED is silent.
  */
-public final class GhInstall extends BroadcastReceiver {
+public final class GhInstall extends Activity {
     /**
-     * Handles one install status. When the system needs the user to confirm,
-     * it hands back an activity intent; start it. Any other non-success status
-     * shows a short error.
+     * Reads the installer status. When the system needs a confirm sheet, starts
+     * that intent from this activity (a user-visible task). Any other status
+     * is handed to Channel so the Settings row can update.
      */
     @Override
-    public void onReceive(Context c, Intent in) {
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        Intent in = getIntent();
         int st = in.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
         if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             Intent next;
@@ -35,12 +36,19 @@ public final class GhInstall extends BroadcastReceiver {
             }
             if (next != null) {
                 next.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                c.startActivity(next);
+                try {
+                    startActivity(next);
+                    Channel.onInstall(this, st, null);
+                } catch (Exception e) {
+                    Channel.onInstall(this, PackageInstaller.STATUS_FAILURE, e.getMessage());
+                }
+            } else {
+                Channel.onInstall(this, PackageInstaller.STATUS_FAILURE, "no confirm");
             }
+            finish();
             return;
         }
-        if (st != PackageInstaller.STATUS_SUCCESS) {
-            Toast.makeText(c, R.string.channel_fail, Toast.LENGTH_SHORT).show();
-        }
+        Channel.onInstall(this, st, in.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE));
+        finish();
     }
 }

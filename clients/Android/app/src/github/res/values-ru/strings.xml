@@ -10,6 +10,9 @@
     <string name="channel_checking">Проверка…</string>
     <string name="channel_downloading">Скачивание…</string>
     <string name="channel_installing">Установка…</string>
+    <string name="channel_confirm">Подтверди в системном окне</string>
+    <string name="channel_ready">Скачано · нажми Обновить</string>
+    <string name="channel_cancel">Обновление отменено</string>
     <string name="channel_current">Актуально</string>
     <string name="channel_available">Есть %s</string>
     <string name="channel_none">В этом релизе ещё нет APK</string>

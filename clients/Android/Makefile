@@ -25,6 +25,7 @@ test: $(AAR)
 	$(GRADLE) --project-cache-dir $(DIST)/.gradle :app:testPhoneGithubDebugUnitTest :app:testPhoneStoreDebugUnitTest
 
 # Long-lived GitHub key in secrets/ (gitignored). Dist and sideload share it.
+# LOFT_VERSION=1.0.32 make release — older signed APK to test the in-app updater.
 release: $(AAR)
 	@test -f "$(KEY)" || { echo "missing $(KEY) — run: make -C clients/Android github-key" >&2; exit 1; }
 	@test -f "$(PASSFILE)" || { echo "missing $(PASSFILE)" >&2; exit 1; }

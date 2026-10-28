@@ -10,6 +10,9 @@
     <string name="channel_checking">检查中…</string>
     <string name="channel_downloading">下载中…</string>
     <string name="channel_installing">安装中…</string>
+    <string name="channel_confirm">请在系统提示中确认</string>
+    <string name="channel_ready">已下载 · 点更新</string>
+    <string name="channel_cancel">已取消更新</string>
     <string name="channel_current">已是最新</string>
     <string name="channel_available">%s 可用</string>
     <string name="channel_none">该版本还没有 APK</string>
