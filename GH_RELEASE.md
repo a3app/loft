@@ -1,4 +1,4 @@
-# loft 1.0.33
+# loft 1.0.34
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,18 +10,18 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-1.0.33-macos-arm.dmg` | `loft-1.0.33-macos-intel.dmg` |
-| macOS CLI | `loft-1.0.33-darwin-arm64.tar.gz` | `loft-1.0.33-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-1.0.33-linux-arm64.tar.gz` | `loft-1.0.33-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.33-linux-arm64.tar.gz` · `loft-node_1.0.33_arm64.deb` | `loft-node-1.0.33-linux-amd64.tar.gz` · `loft-node_1.0.33_amd64.deb` |
-| Panel | `loft-panel-1.0.33-linux-arm64.tar.gz` · `loft-panel_1.0.33_arm64.deb` | `loft-panel-1.0.33-linux-amd64.tar.gz` · `loft-panel_1.0.33_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-1.0.33-android.apk` · `loft-1.0.33-android-tv.apk` | same fat APKs |
-| Windows portable (GitHub) | `loft-1.0.33-windows-arm64.zip` | `loft-1.0.33-windows-x86-64.zip` · `loft-1.0.33-windows-x86.zip` |
-| MikroTik container | `loft-mikrotik-1.0.33-arm64.tar` · `loft-mikrotik-1.0.33-armv7.tar` | `loft-mikrotik-1.0.33-amd64.tar` |
+| macOS app (10.13+, ad-hoc signed) | `loft-1.0.34-macos-arm.dmg` | `loft-1.0.34-macos-intel.dmg` |
+| macOS CLI | `loft-1.0.34-darwin-arm64.tar.gz` | `loft-1.0.34-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-1.0.34-linux-arm64.tar.gz` | `loft-1.0.34-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.34-linux-arm64.tar.gz` · `loft-node_1.0.34_arm64.deb` | `loft-node-1.0.34-linux-amd64.tar.gz` · `loft-node_1.0.34_amd64.deb` |
+| Panel | `loft-panel-1.0.34-linux-arm64.tar.gz` · `loft-panel_1.0.34_arm64.deb` | `loft-panel-1.0.34-linux-amd64.tar.gz` · `loft-panel_1.0.34_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-1.0.34-android.apk` · `loft-1.0.34-android-tv.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-1.0.34-windows-arm64.zip` | `loft-1.0.34-windows-x86-64.zip` · `loft-1.0.34-windows-x86.zip` |
+| MikroTik container | `loft-mikrotik-1.0.34-arm64.tar` · `loft-mikrotik-1.0.34-armv7.tar` | `loft-mikrotik-1.0.34-amd64.tar` |
 
-Checksums: `loft-clients-1.0.33-SHA256SUMS.txt`, `loft-node-1.0.33-SHA256SUMS.txt`, `loft-panel-1.0.33-SHA256SUMS.txt`, `loft-android-1.0.33-SHA256SUMS.txt`, `loft-windows-1.0.33-SHA256SUMS.txt`, `loft-mikrotik-1.0.33-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.34-SHA256SUMS.txt`, `loft-node-1.0.34-SHA256SUMS.txt`, `loft-panel-1.0.34-SHA256SUMS.txt`, `loft-android-1.0.34-SHA256SUMS.txt`, `loft-windows-1.0.34-SHA256SUMS.txt`, `loft-mikrotik-1.0.34-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.33`.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.34`.
 
 Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 
@@ -42,6 +42,25 @@ Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.34
+
+Protocol stays **loft/1.0**.
+
+Android — smoothness and stability (UI hangs on Xiaomi HyperOS):
+
+- The VPN session runs on its own thread. The once-a-second poll no longer re-reads the route lists, re-saves the route profiles or rebuilds the notification on the UI thread.
+- Route lists and route profiles moved out of shared preferences into their own files, written atomically in the background. Settings changes no longer rewrite megabytes.
+- Settings changes are merged into one tunnel rebuild. Screens redraw only what changed, at most ten times a second.
+- The TUN reader no longer leaks a thread on every tunnel rebuild, allocates nothing per packet, and checks the block list by binary search.
+- Saved connections are written atomically. A keystore hiccup at start can no longer wipe them.
+- Apps, Lists, Scan, Share QR, TV and the self-updater do disk, network and system work in the background. On TV, D-pad focus no longer jumps every second.
+- Fixed: quick-settings tile on Android 14+, duplicate import after rotation, stop during the handshake, list download racing with edits.
+- Every Android source file is commented for newcomers.
+
+Engine:
+
+- No more retrying interface lookups that Android 11+ denies once a second.
 
 ## 1.0.33
 
@@ -317,6 +336,8 @@ macOS:
 
 В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik. Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic в этот Dist не входят.
 
+1.0.34: Android — плавность и стабильность (подвисания на Xiaomi HyperOS): сессия VPN на своём потоке, ежесекундный опрос больше не перечитывает списки и не пересохраняет профили на потоке интерфейса; списки и профили маршрутов — в отдельных файлах с атомарной записью в фоне; изменения настроек сливаются в одну пересборку туннеля, экраны перерисовывают только изменившееся; поток чтения TUN не утекает при пересборке и не выделяет память на пакет; сохранённые подключения пишутся атомарно и не теряются при сбое хранилища ключей; плитка на Android 14+, повторный импорт после поворота, стоп во время рукопожатия исправлены; на TV фокус пульта больше не прыгает. Движок не повторяет запрещённые Android 11+ запросы интерфейсов. Протокол loft/1.0.
+
 1.0.33: Dist — имена GUI `macos-arm`/`macos-intel` и `windows-x86-64`/`x86`/`arm64`, контейнер MikroTik; Android — многострочная вставка ссылки, шит добавления двумя карточками, крупный шрифт на Настройках/О программе/Scan, без порта SOCKS в списке; MikroTik — SOCKS можно выключить, LAN nat или route; нода — аренды overlay после рестарта, TUN через netlink; macOS — грузинский UI; панель — HELO и вход в Roundcube. Протокол loft/1.0.
 
 1.0.32: панель — при удалении почтового домена можно удалить и его DNS-записи, созданные панелью (галочка, включена по умолчанию), сертификат mail.<домен> уходит вместе с доменом; Namecheap — id записей теперь HostId, а не позиция, старые id чинятся при чтении зоны; нода на Go 1.27+ сама включает расширенный CONNECT HTTP/2 (фронты h2 и l3); SHA256SUMS с голыми именами файлов; Android — отчёты о сбоях в GitHub, крупный системный шрифт, значок в безопасной зоне. Протокол loft/1.0.
@@ -336,6 +357,8 @@ macOS:
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
 本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic 不在这次包里。
+
+1.0.34：Android 流畅度与稳定性（小米 HyperOS 卡顿）— VPN 会话跑在独立线程，每秒轮询不再在界面线程重读路由列表或重存配置；路由列表与路由配置移到独立文件，后台原子写入；设置改动合并为一次隧道重建，界面只重绘变化部分；TUN 读线程不再在重建时泄漏、每包不分配内存；已存连接原子写入，密钥库故障不再清空；修复 Android 14+ 快捷开关、旋转后重复导入、握手中停止；电视遥控焦点不再跳动。引擎不再反复尝试 Android 11+ 禁止的网卡查询。协议仍是 loft/1.0。
 
 1.0.33：Dist — GUI 文件名改为 `macos-arm`/`macos-intel` 和 `windows-x86-64`/`x86`/`arm64`，加入 MikroTik 容器；Android — 粘贴栏改为多行、添加连接为两张卡片、大号系统字体下的设置/关于/扫描、连接列表不再写 SOCKS 端口；MikroTik — SOCKS 可关，LAN nat 或 route；节点 — overlay 租约跨重启，Linux TUN 走 netlink；macOS — 格鲁吉亚语界面；面板 — HELO 与 Roundcube 一键登录。协议仍是 loft/1.0。
 
