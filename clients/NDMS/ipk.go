@@ -29,6 +29,11 @@ func WriteIPK(path string, m IPKMeta) error {
 	}
 	ctrl := tarGzip([]tarFile{
 		{Name: "control", Mode: 0o644, Body: []byte(controlText(m))},
+		// conffiles lists the paths opkg treats as user settings: on an
+		// upgrade it keeps a file the operator has edited instead of
+		// overwriting it (the package's version lands beside it as
+		// .ipk-new). Without this, every upgrade would wipe client.yaml.
+		{Name: "conffiles", Mode: 0o644, Body: []byte("/opt/etc/loft/client.yaml\n")},
 		{Name: "prerm", Mode: 0o755, Body: m.Prerm},
 		{Name: "postinst", Mode: 0o755, Body: m.Postinst},
 	})
@@ -40,6 +45,12 @@ func WriteIPK(path string, m IPKMeta) error {
 		{Name: "opt/etc/loft/", Mode: 0o755, Dir: true},
 		{Name: "opt/bin/loft-ndms", Mode: 0o755, Body: m.Bin},
 		{Name: "opt/etc/init.d/S99loft", Mode: 0o755, Body: m.Init},
+		// The tracked config itself, seeded from the sample. opkg writes
+		// it on first install and preserves the operator's edits on every
+		// later upgrade (see the conffiles entry above). 0600 because it
+		// holds connection tokens.
+		{Name: "opt/etc/loft/client.yaml", Mode: 0o600, Body: m.Sample},
+		// The sample stays as a plain, readable reference copy.
 		{Name: "opt/etc/loft/client.yaml.sample", Mode: 0o644, Body: m.Sample},
 	})
 	var buf bytes.Buffer

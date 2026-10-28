@@ -1,9 +1,14 @@
 package ndms
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -419,6 +424,91 @@ func TestIPK(t *testing.T) {
 		t.Fatal(names)
 	}
 }
+
+// TestIPKConffiles checks that the package marks client.yaml as a conffile
+// (so opkg preserves operator edits on upgrade) and actually ships that
+// file, seeded from the sample.
+func TestIPKConffiles(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "t.ipk")
+	sample := []byte("connections: []\n")
+	if err := WriteIPK(path, IPKMeta{
+		Version: "1.0.35", Arch: "aarch64-3.10",
+		Bin: []byte("abc"), Init: []byte("#!/bin/sh\n"), Sample: sample,
+		Prerm: []byte("#!/bin/sh\n"), Postinst: []byte("#!/bin/sh\n"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// control.tar.gz lists /opt/etc/loft/client.yaml in conffiles.
+	ctrl := tarMembers(t, arMember(t, b, "control.tar.gz"))
+	if got := strings.TrimSpace(string(ctrl["conffiles"])); got != "/opt/etc/loft/client.yaml" {
+		t.Fatalf("conffiles = %q", got)
+	}
+	// data.tar.gz ships the tracked config, with the sample's content.
+	data := tarMembers(t, arMember(t, b, "data.tar.gz"))
+	if _, ok := data["opt/etc/loft/client.yaml"]; !ok {
+		t.Fatal("client.yaml not shipped")
+	}
+	if !bytes.Equal(data["opt/etc/loft/client.yaml"], sample) {
+		t.Fatal("client.yaml not seeded from sample")
+	}
+}
+
+// arMember returns one System V ar member's body by name.
+func arMember(t *testing.T, ar []byte, want string) []byte {
+	t.Helper()
+	rest := ar[len("!<arch>\n"):]
+	for len(rest) >= 60 {
+		hdr := rest[:60]
+		rest = rest[60:]
+		name := strings.TrimRight(strings.TrimSpace(string(hdr[0:16])), "/")
+		var size int
+		_, _ = fmtSscan(string(hdr[48:58]), &size)
+		body := rest[:size]
+		rest = rest[size:]
+		if size%2 == 1 && len(rest) > 0 && rest[0] == '\n' {
+			rest = rest[1:]
+		}
+		if name == want {
+			return body
+		}
+	}
+	t.Fatalf("ar member %s not found", want)
+	return nil
+}
+
+// tarMembers gunzips a .tar.gz and returns every regular file's body by name.
+func tarMembers(t *testing.T, gzBody []byte) map[string][]byte {
+	t.Helper()
+	gz, err := gzip.NewReader(bytes.NewReader(gzBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(gz)
+	out := map[string][]byte{}
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.Typeflag == tar.TypeReg {
+			b, _ := io.ReadAll(tr)
+			out[h.Name] = b
+		}
+	}
+	return out
+}
+
+// fmtSscan is fmt.Sscanf for one decimal, split out so the test needs no
+// extra import at the call site.
+func fmtSscan(s string, n *int) (int, error) { return fmt.Sscanf(s, "%d", n) }
 
 // TestRedact hides a member key, a UUID, a trojan userinfo secret, and user:password.
 func TestRedact(t *testing.T) {
