@@ -20,6 +20,7 @@ func ParseRoutes(body []byte) (string, bool) {
 	return walkRoutes(v)
 }
 
+// walkRoutes returns the first object that looks like an IPv4 default route.
 func walkRoutes(v any) (string, bool) {
 	switch t := v.(type) {
 	case map[string]any:
@@ -41,6 +42,9 @@ func walkRoutes(v any) (string, bool) {
 	return "", false
 }
 
+// defaultIface accepts destination 0.0.0.0/0, "default", or 0.0.0.0.
+// The interface may sit on the route or inside a nested gateway object.
+// The name must match ispRe so a garbage field is not passed to ndmc.
 func defaultIface(t map[string]any) (string, bool) {
 	d := firstString(t, "destination", "dst", "network", "prefix")
 	if d != "0.0.0.0/0" && d != "default" && d != "0.0.0.0" {
@@ -57,6 +61,7 @@ func defaultIface(t map[string]any) (string, bool) {
 	return "", false
 }
 
+// firstString returns the first present string among keys.
 func firstString(t map[string]any, keys ...string) string {
 	for _, k := range keys {
 		if s, ok := t[k].(string); ok {
@@ -120,6 +125,8 @@ func fetchRoutes(ctx context.Context, rci string) (string, bool) {
 	return routesFrom(ctx, http.MethodPost, base, body)
 }
 
+// routesFrom performs one RCI request and parses a 200 body.
+// Any other status, or a body that is not a route table, is a miss.
 func routesFrom(ctx context.Context, method, raw string, body io.Reader) (string, bool) {
 	req, err := http.NewRequestWithContext(ctx, method, raw, body)
 	if err != nil {

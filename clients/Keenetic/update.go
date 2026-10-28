@@ -43,11 +43,13 @@ type Update struct {
 	SHA     string `json:"-"`
 }
 
+// ghAsset is one file on a GitHub release.
 type ghAsset struct {
 	Name string `json:"name"`
 	URL  string `json:"browser_download_url"`
 }
 
+// ghRelease is the part of releases/latest this client reads.
 type ghRelease struct {
 	Tag    string    `json:"tag_name"`
 	Assets []ghAsset `json:"assets"`
@@ -112,10 +114,15 @@ func LatestRelease(ctx context.Context, arch string) (Update, error) {
 	}, nil
 }
 
+// currentVersion is version.Version without a leading v.
+// An ldflags value of "dev", or an empty injection, stays non-numeric,
+// and Newer will not report that build as Ready against a real tag.
 func currentVersion() string {
 	return strings.TrimPrefix(strings.TrimSpace(version.Version), "v")
 }
 
+// userAgent is loft-keenetic/<version>. A dev or empty build omits the
+// version so the request is not attributed to a release that does not exist.
 func userAgent() string {
 	v := currentVersion()
 	if v == "" || v == "dev" {
@@ -151,6 +158,9 @@ func Newer(latest, current string) bool {
 	return false
 }
 
+// parts splits a dotted numeric version. dev, empty, and any non-numeric
+// component return nil. Newer treats nil latest as "not a release" and
+// nil current as older than any dotted latest.
 func parts(s string) []int {
 	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
 	if s == "" || s == "dev" {
@@ -206,6 +216,8 @@ func DownloadIPK(ctx context.Context, up Update, dst string) error {
 	return os.WriteFile(dst, body, 0o644)
 }
 
+// getLimited downloads at most n bytes. The package cap is 80 MiB and
+// the digest cap is 64 KiB. A non-200 is an error; the body is not kept.
 func getLimited(ctx context.Context, raw string, n int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {

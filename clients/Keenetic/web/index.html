@@ -273,6 +273,9 @@
     <div class="foot" id="foot"></div>
   </div>
   <script>
+    // LAN page. It talks only to this origin. Mutations send X-Loft: 1.
+    // A 401 shows the gate and keeps the stock-admin login URL.
+    // Poll is 3s on the list, status, package and journal screens.
     const I18N = {
       en: {
         connections:"Connections", import:"Import", add:"Add", journal:"Journal", package:"Package",
@@ -335,6 +338,7 @@
         saved:"已保存", none:"—"
       }
     };
+    // FRONTS is the editor order. The server sorts the same way.
     const FRONTS = ["get","ws","h2","quic","h3","l3"];
     let lang = "en";
     let screen = "list";
@@ -346,11 +350,13 @@
     let loginURL = "";
     let poll;
 
+    // t looks up a string. {name} placeholders come from map. Missing keys fall back to English, then to the key.
     function t(k, map) {
       let s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
       if (map) Object.keys(map).forEach(function (key) { s = s.replace("{"+key+"}", map[key]); });
       return s;
     }
+    // setLang stores the choice and rewrites every [data-i] node. English is first in the header, Chinese last.
     function setLang(l) {
       lang = I18N[l] ? l : "en";
       try { localStorage.setItem("loft-lang", lang); } catch (e) {}
@@ -364,6 +370,7 @@
       });
       paint();
     }
+    // pickLang uses the saved choice, else ru* / zh* from the navigator, else English.
     function pickLang() {
       let s = "";
       try { s = localStorage.getItem("loft-lang") || ""; } catch (e) {}
@@ -373,6 +380,7 @@
       if (n.indexOf("zh") === 0) return "zh";
       return "en";
     }
+    // show switches the visible card. The connections tab stays on for status, edit and import.
     function show(name) {
       screen = name;
       ["list","status","edit","import","log","pkg","gate"].forEach(function (id) {
@@ -384,6 +392,7 @@
       if (name === "log") loadLog();
       if (name === "list" || name === "pkg" || name === "status") refresh();
     }
+    // api fetches this origin. Non-GET requests set X-Loft. 401 opens the gate and does not follow a redirect.
     async function api(path, opt) {
       opt = opt || {};
       opt.headers = opt.headers || {};
@@ -401,11 +410,13 @@
       if (!text) return null;
       try { return JSON.parse(text); } catch (e) { return text; }
     }
+    // lamp is the connection mark: on when up, err when the snap says error, stone otherwise.
     function lamp(node, state) {
       node.classList.remove("on","err");
       if (state === "up") node.classList.add("on");
       else if (state === "error") node.classList.add("err");
     }
+    // tag is the state label. An unknown state is shown as off.
     function tag(node, state) {
       node.className = "tag";
       const key = state === "up" ? "upS" : (state === "error" || state === "off" || state === "connecting" ? state : "off");
@@ -414,6 +425,7 @@
       else if (state === "connecting") node.classList.add("wait");
       else if (state === "error") node.classList.add("bad");
     }
+    // bytes formats a sysfs counter as B, KiB, MiB or GiB.
     function bytes(n) {
       n = Number(n) || 0;
       if (n < 1024) return n + " B";
@@ -421,6 +433,8 @@
       if (n < 1073741824) return (n/1048576).toFixed(1) + " MiB";
       return (n/1073741824).toFixed(2) + " GiB";
     }
+    // paint redraws the list, the update strip and the package fields from the last /api/status.
+    // The header lamp is up if any row is up, else error if any row is error.
     function paint() {
       const foot = location.origin + "/ · " + t("lan");
       document.getElementById("foot").textContent = foot;
@@ -470,6 +484,7 @@
       document.getElementById("pk-latest").textContent = (up.latest || t("none"));
       document.getElementById("pk-auto").checked = !!status.check_updates;
     }
+    // refresh loads /api/status. An auth error is already handled by api; other errors go to the footer.
     async function refresh() {
       try {
         status = await api("/api/status");
@@ -479,17 +494,21 @@
         if (String(e.message) !== "auth") document.getElementById("foot").textContent = e.message;
       }
     }
+    // toggle enables or disables one connection. Off keeps the OpkgTun object and drops the session.
     async function toggle(id, on) {
       try { await api("/api/conn/toggle", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({id:id, enabled:on})}); }
       catch (e) {}
       refresh();
     }
+    // openStatus loads the full record, including secrets, for the status card.
     async function openStatus(id) {
       show("status");
       const j = await api("/api/conn?id=" + encodeURIComponent(id));
       cur = j.conn; cur.snap = j.snap || {};
       fillStatus();
     }
+    // fillStatus renders the snap. A disabled connection is shown off even if the snap still says up.
+    // reserve is "N more in reserve" from the configured outbound count, not a live roster.
     function fillStatus() {
       const c = cur || {};
       const s = c.snap || {};
@@ -509,25 +528,32 @@
       document.getElementById("st-bytes").textContent = bytes(s.rx) + " ↓  " + bytes(s.tx) + " ↑";
       document.getElementById("st-err").textContent = s.err || "";
     }
+    // priorities opens the stock admin on port 80. Keenetic has no stable deep link for the priority page.
     function priorities() {
       location.href = "http://" + location.hostname + "/";
     }
+    // stopConn disables the open connection. It does not delete the NDM interface.
     async function stopConn() {
       if (!cur) return;
       await toggle(cur.id, false);
       cur.enabled = false;
       fillStatus();
     }
+    // removeConn deletes the record. The parent then runs "no interface" for that OpkgTun.
     async function removeConn() {
       if (!cur) return;
       await api("/api/conn?id=" + encodeURIComponent(cur.id), {method:"DELETE"});
       cur = null;
       show("list");
     }
+    // openFronts opens the editor scrolled to the front list, and returns to status on save.
     function openFronts() {
       backTo = "status";
       openEdit(cur, true);
     }
+    // openEdit fills the form. A new connection is loft, link mode, front get, port 443, opkg -1.
+    // An imported file profile is shown as link when it has a URL, otherwise as manual.
+    // Saving that form clears the profile on the server.
     function openEdit(c, advanced) {
       cur = c ? Object.assign({}, c) : {kind:"loft", mode:"link", enabled:true, opkg:-1, fronts:["get"], port:443, cc:"off"};
       if (cur.snap) delete cur.snap;
@@ -573,6 +599,7 @@
       show("edit");
       if (advanced) document.getElementById("box-fronts").scrollIntoView();
     }
+    // setKind selects loft, vless or trojan and shows only that kind's fields.
     function setKind(k) {
       kind = k;
       document.querySelectorAll("#seg-kind button").forEach(function (b) {
@@ -580,6 +607,7 @@
       });
       applyMode();
     }
+    // setMode selects link or manual. Link hides host, port and the per-kind fields.
     function setMode(m) {
       mode = m;
       document.querySelectorAll("#seg-mode button").forEach(function (b) {
@@ -587,6 +615,7 @@
       });
       applyMode();
     }
+    // applyMode hides sections that do not apply. Fixed-rate inputs show only for loft with cc=fixed.
     function applyMode() {
       const link = mode === "link";
       document.getElementById("box-link").classList.toggle("hidden", !link);
@@ -604,10 +633,13 @@
       });
     }
     document.getElementById("f-cc").addEventListener("change", applyMode);
+    // num reads an integer field. Empty or garbage is 0, which the server treats as "unset" for rates.
     function num(id) {
       const n = parseInt(document.getElementById(id).value, 10);
       return isNaN(n) ? 0 : n;
     }
+    // saveEdit posts the form. Empty secret fields are sent empty so the server keeps the stored secret.
+    // opkg -1 asks for the next free OpkgTun. connect is the first ticked front.
     async function saveEdit() {
       const msg = document.getElementById("ed-msg");
       msg.className = "msg";
@@ -651,6 +683,7 @@
         msg.textContent = e.message;
       }
     }
+    // doImport posts the textarea. SSTP lines come back in skipped; they are not connections.
     async function doImport() {
       const msg = document.getElementById("im-msg");
       msg.className = "msg";
@@ -666,6 +699,7 @@
         msg.textContent = e.message;
       }
     }
+    // sendFile posts one dropped or picked file. The server decides QR versus YAML.
     async function sendFile(file) {
       const msg = document.getElementById("im-msg");
       const fd = new FormData();
@@ -680,6 +714,7 @@
         msg.textContent = e.message;
       }
     }
+    // Click and drop both import the first file. dragover is cancelled so the browser does not navigate.
     const drop = document.getElementById("drop");
     drop.addEventListener("click", function () { document.getElementById("file").click(); });
     drop.addEventListener("dragover", function (e) { e.preventDefault(); });
@@ -690,6 +725,7 @@
     document.getElementById("file").addEventListener("change", function () {
       if (this.files[0]) sendFile(this.files[0]);
     });
+    // loadLog shows the last 80 redacted lines. Keys are already shortened on the server.
     async function loadLog() {
       try {
         const lines = await api("/api/log");
@@ -698,10 +734,12 @@
         document.getElementById("log").textContent = e.message;
       }
     }
+    // setAuto stores the six-hour GitHub check. The check does not install.
     async function setAuto(on) {
       try { await api("/api/package/auto", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({on: !!on})}); }
       catch (e) { document.getElementById("pk-msg").textContent = e.message; }
     }
+    // checkPkg asks GitHub for this arch. ready means a newer dotted tag that has an ipk and a sha256 sidecar.
     async function checkPkg() {
       const msg = document.getElementById("pk-msg");
       msg.className = "msg";
@@ -715,6 +753,7 @@
         msg.textContent = e.message;
       }
     }
+    // installPkg runs opkg. The running process is stopped by prerm; postinst starts the new one.
     async function installPkg() {
       const msg = document.getElementById("pk-msg");
       msg.className = "msg";
@@ -727,6 +766,7 @@
         msg.textContent = e.message;
       }
     }
+    // goLogin leaves for the stock admin, which sends the browser back via ?return=.
     function goLogin() { if (loginURL) location.href = loginURL; }
     setLang(pickLang());
     document.getElementById("foot").textContent = location.origin + "/ · " + t("lan");

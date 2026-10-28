@@ -30,34 +30,39 @@ type File struct {
 // Conn is one OpkgTun. Mode is link, manual, or file (an imported profile
 // the editor has not saved over yet).
 type Conn struct {
-	ID       string   `yaml:"id" json:"id"`
-	Name     string   `yaml:"name" json:"name"`
-	Enabled  bool     `yaml:"enabled" json:"enabled"`
-	Opkg     int      `yaml:"opkg" json:"opkg"`
-	Kind     string   `yaml:"kind" json:"kind"`
-	Mode     string   `yaml:"mode" json:"mode"`
-	Link     string   `yaml:"link,omitempty" json:"link,omitempty"`
+	ID      string `yaml:"id" json:"id"`
+	Name    string `yaml:"name" json:"name"` // ndmc description, at most 32 runes
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Opkg    int    `yaml:"opkg" json:"opkg"` // 0..15; -1 asks Put for the next free index
+	Kind    string `yaml:"kind" json:"kind"` // loft, vless or trojan
+	Mode    string `yaml:"mode" json:"mode"` // link, manual or file
+	Link    string `yaml:"link,omitempty" json:"link,omitempty"`
+	// Profile is an imported YAML document. The editor clears it on save
+	// so the fields below become the source.
 	Profile  string   `yaml:"profile,omitempty" json:"profile,omitempty"`
 	Token    string   `yaml:"token,omitempty" json:"token,omitempty"`
 	Host     string   `yaml:"host,omitempty" json:"host,omitempty"`
 	Port     int      `yaml:"port,omitempty" json:"port,omitempty"`
 	Path     string   `yaml:"path,omitempty" json:"path,omitempty"`
-	Connect  string   `yaml:"connect,omitempty" json:"connect,omitempty"`
+	Connect  string   `yaml:"connect,omitempty" json:"connect,omitempty"` // front shown before the session is up
 	Fronts   []string `yaml:"fronts,omitempty" json:"fronts,omitempty"`
-	CC       string   `yaml:"cc,omitempty" json:"cc,omitempty"`
+	CC       string   `yaml:"cc,omitempty" json:"cc,omitempty"` // off, bbr or fixed; TCP fronts stay off
 	CCUp     int      `yaml:"cc_up_mbps,omitempty" json:"cc_up_mbps,omitempty"`
 	CCDown   int      `yaml:"cc_down_mbps,omitempty" json:"cc_down_mbps,omitempty"`
 	UUID     string   `yaml:"uuid,omitempty" json:"uuid,omitempty"`
 	Password string   `yaml:"password,omitempty" json:"password,omitempty"`
-	Security string   `yaml:"security,omitempty" json:"security,omitempty"`
-	Network  string   `yaml:"network,omitempty" json:"network,omitempty"`
+	Security string   `yaml:"security,omitempty" json:"security,omitempty"` // tls, reality or none
+	Network  string   `yaml:"network,omitempty" json:"network,omitempty"`   // tcp or xhttp
 	SNI      string   `yaml:"sni,omitempty" json:"sni,omitempty"`
 	FP       string   `yaml:"fp,omitempty" json:"fp,omitempty"`
 	PBK      string   `yaml:"public_key,omitempty" json:"public_key,omitempty"`
 	SID      string   `yaml:"short_id,omitempty" json:"short_id,omitempty"`
-	Vision   bool     `yaml:"vision,omitempty" json:"vision,omitempty"`
+	Vision   bool     `yaml:"vision,omitempty" json:"vision,omitempty"` // vless+tcp only
 }
 
+// norm fills listen, auth and RCI when the YAML omits them.
+// CheckUpdates stays false when absent: the sample sets it explicitly,
+// and a missing bool must not turn the GitHub check on.
 func (f *File) norm() {
 	if f.Listen.HTTP == "" {
 		f.Listen.HTTP = ":8090"
@@ -92,6 +97,7 @@ func (s *Store) Load() (File, error) {
 	return s.read()
 }
 
+// read decodes the file and applies norm. The caller holds s.mu.
 func (s *Store) read() (File, error) {
 	b, err := os.ReadFile(s.path)
 	if err != nil {
@@ -105,6 +111,8 @@ func (s *Store) read() (File, error) {
 	return f, nil
 }
 
+// write replaces the file via a sibling temp and rename, mode 0600.
+// The YAML holds member keys and proxy passwords.
 func (s *Store) write(f File) error {
 	f.norm()
 	b, err := yaml.Marshal(&f)
@@ -132,8 +140,11 @@ func (s *Store) Update(fn func(*File) error) error {
 	return s.write(f)
 }
 
+// idRe is the connection id: one file name under the state directory,
+// and one argument of -session. A slash or ".." cannot match.
 var idRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
 
+// newID is eight hex characters from four random bytes.
 func newID() string {
 	var b [4]byte
 	_, _ = rand.Read(b[:])
@@ -212,6 +223,9 @@ func (s *Store) Put(c Conn, fromEditor bool) (Conn, error) {
 	return out, err
 }
 
+// keepSecrets copies token, password, uuid, public key and link from old
+// when the posted field is empty. The editor does not echo a secret it
+// was not given again, and an empty box means "leave it".
 func keepSecrets(old, c Conn) Conn {
 	if strings.TrimSpace(c.Token) == "" {
 		c.Token = old.Token
@@ -231,6 +245,8 @@ func keepSecrets(old, c Conn) Conn {
 	return c
 }
 
+// nextOpkg is the lowest free index in 0..OpkgMax. self is ignored so an
+// update of the same connection does not count its own index as taken.
 func nextOpkg(list []Conn, self string) (int, error) {
 	used := map[int]bool{}
 	for _, c := range list {

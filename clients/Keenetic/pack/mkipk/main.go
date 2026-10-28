@@ -9,6 +9,7 @@ import (
 	"github.com/a3app/loft/clients/Keenetic"
 )
 
+// main reads the binary, the init scripts and the sample YAML, then writes one .ipk.
 func main() {
 	bin := flag.String("bin", "", "loft-keenetic binary")
 	out := flag.String("out", "", "output .ipk path")
@@ -45,6 +46,7 @@ func main() {
 	}
 }
 
+// exit prints err and stops the packager with status 1.
 func exit(err error) {
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)

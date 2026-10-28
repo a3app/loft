@@ -70,6 +70,10 @@ func importBundle(raw string) ([]Conn, bool) {
 	if err := yaml.Unmarshal([]byte(raw), &probe); err != nil {
 		return nil, false
 	}
+	// A desktop client.yaml has connections and a token. Accept this
+	// package's file (a keenetic: key), or connections that have neither
+	// a token nor outbounds. Anything else falls through to share parsing,
+	// which must run second: a bundle would otherwise be read as one profile.
 	if probe.Keenetic.IsZero() && !(len(probe.Connections) > 0 && probe.Token == "" && len(probe.Outbounds) == 0) {
 		return nil, false
 	}
@@ -89,6 +93,11 @@ func importBundle(raw string) ([]Conn, bool) {
 	return out, true
 }
 
+// connFromDoc maps one share document to a Conn. SSTP and a routes
+// document are skipped: SSTP is the stock Keenetic client, and a route
+// profile is not a tunnel. A vless or trojan outbound is stored as a link.
+// Any other document is mode file, so the profile YAML is what the child runs
+// until the editor saves over it.
 func connFromDoc(doc string) (Conn, string, error) {
 	var meta struct {
 		Name      string            `yaml:"name"`
@@ -162,6 +171,8 @@ func connFromDoc(doc string) (Conn, string, error) {
 	return c, "", nil
 }
 
+// fmtPort writes a numeric port. LookupPort also accepts a service name.
+// A value it rejects leaves the destination unchanged.
 func fmtPort(dst *int, p string) {
 	n, err := net.LookupPort("tcp", p)
 	if err != nil {

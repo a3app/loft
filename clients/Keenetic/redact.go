@@ -6,8 +6,10 @@ import (
 )
 
 var (
-	reToken  = regexp.MustCompile(`lt_[A-Za-z0-9_-]{4,}`)
-	reUUID   = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
+	reToken = regexp.MustCompile(`lt_[A-Za-z0-9_-]{4,}`)
+	reUUID  = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
+	// reUser is scheme://user:password@ . reUserAt is scheme://user@,
+	// which is how trojan:// and vless:// carry the secret.
 	reUser   = regexp.MustCompile(`://[^/\s:@]+:[^/\s@]+@`)
 	reUserAt = regexp.MustCompile(`://[^/\s:@]+@`)
 )
@@ -23,8 +25,13 @@ func Redact(s string) string {
 	return s
 }
 
+// redactWriter is the child log sink. Each Write is redacted.
+// The returned count is len(p) so log.Logger does not retry a short write
+// and duplicate the line.
 type redactWriter struct{ w io.Writer }
 
+// Write redacts p and reports len(p). A short count would make log.Logger
+// write the tail again.
 func (r redactWriter) Write(p []byte) (int, error) {
 	s := Redact(string(p))
 	_, err := io.WriteString(r.w, s)

@@ -23,20 +23,20 @@ import (
 
 // Snap is the child's status file. The panel reads it.
 type Snap struct {
-	State   string   `json:"state"`
+	State   string   `json:"state"` // connecting, up, error or off
 	Err     string   `json:"err,omitempty"`
 	Overlay string   `json:"overlay,omitempty"`
-	Gateway string   `json:"gateway,omitempty"`
+	Gateway string   `json:"gateway,omitempty"` // loft only; proxy tuns have no overlay gateway
 	MTU     int      `json:"mtu,omitempty"`
-	Front   string   `json:"front,omitempty"`
-	Node    string   `json:"node,omitempty"`
+	Front   string   `json:"front,omitempty"` // live outbound type
+	Node    string   `json:"node,omitempty"`  // hostname of the live front
 	Reserve int      `json:"reserve,omitempty"`
-	QUIC    string   `json:"quic,omitempty"`
+	QUIC    string   `json:"quic,omitempty"` // agreed congestion control; loft only
 	RX      uint64   `json:"rx"`
 	TX      uint64   `json:"tx"`
-	Hosts   []string `json:"hosts,omitempty"`
+	Hosts   []string `json:"hosts,omitempty"` // IPv4 pins currently installed
 	ISP     string   `json:"isp,omitempty"`
-	Opkg    string   `json:"opkg,omitempty"`
+	Opkg    string   `json:"opkg,omitempty"` // NDM name, OpkgTunN
 }
 
 // DefaultStateDir is where status JSON is written. LOFT_STATE overrides it.
@@ -82,6 +82,8 @@ func RunSession(ctx context.Context, cfgPath, id, stateDir string) error {
 		_ = writeSnap(snapPath(stateDir, id), Snap{State: "error", Err: err.Error(), Opkg: rt.NDM})
 		return err
 	}
+	// Missing ndmc, or text that does not parse, is not a refusal.
+	// TooOld is only a major that was actually read and is below 5.
 	if text, err := ndmcText(ctx, Bin{}, "show version"); err == nil && TooOld(text) {
 		msg := "KeeneticOS 5.0+ required (OpkgTun)"
 		_ = writeSnap(snapPath(stateDir, id), Snap{State: "error", Err: msg, Opkg: rt.NDM})
@@ -99,11 +101,15 @@ func RunSession(ctx context.Context, cfgPath, id, stateDir string) error {
 	}
 	if rt.Loft != nil {
 		lv.tunAddr = rt.Loft.Listen.TunAddr
+		// Reserve is the configured roster minus the live front, not the
+		// peers the session has learned.
 		lv.reserve = len(rt.Loft.Outbounds) - 1
 		if lv.reserve < 0 {
 			lv.reserve = 0
 		}
 	}
+	// write before the ticker starts, and before down is deferred, so the
+	// first snap exists and write does not run against a half-torn session.
 	lv.write()
 	defer lv.down()
 
@@ -128,6 +134,10 @@ func RunSession(ctx context.Context, cfgPath, id, stateDir string) error {
 	}
 }
 
+// live is one child session. mu covers the snap fields and dev.
+// bring and publish run with mu held. write does not take the lock;
+// its callers already hold it, except the first write in RunSession,
+// which happens before any other goroutine exists.
 type live struct {
 	mu      sync.Mutex
 	id      string
@@ -151,6 +161,9 @@ type live struct {
 	dev     *inbound.Device
 }
 
+// runLoft supervises the loft session. Each time an outbound comes up,
+// bring opens the tun on the first call and only re-attaches the dialer
+// after that, so OpkgTun does not flap in the priority list.
 func (lv *live) runLoft(ctx context.Context, rt Runtime) error {
 	h := &transport.Holder{}
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, nil))
@@ -165,6 +178,9 @@ func (lv *live) runLoft(ctx context.Context, rt Runtime) error {
 	})
 }
 
+// runProxy probes until the context ends. The wait grows from 1s to 30s.
+// After Probe succeeds the dialer stays up until ctx is cancelled.
+// A dead process is the parent's problem: Reconcile restarts the child.
 func (lv *live) runProxy(ctx context.Context, rt Runtime) error {
 	delay := time.Second
 	for {
@@ -197,6 +213,8 @@ func (lv *live) runProxy(ctx context.Context, rt Runtime) error {
 	}
 }
 
+// probeProxy builds a vless or trojan client and waits for Probe.
+// Config.Log is func(string). log.Printf does not have that type; logLine does.
 func probeProxy(ctx context.Context, rt Runtime) (transport.Dialer, error) {
 	switch rt.Kind {
 	case "vless":
@@ -224,6 +242,9 @@ func probeProxy(ctx context.Context, rt Runtime) (transport.Dialer, error) {
 	}
 }
 
+// putDialer installs d on the holder. An l3 front that implements IPPump
+// is swapped into the existing L3Net so the tun stack survives the
+// reconnect. Any other dialer is wrapped once as an L3 net.
 func putDialer(h *transport.Holder, d transport.Dialer) {
 	if live, ok := h.Live().(*inbound.L3Net); ok {
 		if p, ok := d.(transport.IPPump); ok {
@@ -274,8 +295,12 @@ func (lv *live) bring(h *transport.Holder) {
 	lv.publish()
 }
 
+// publish asks ndmc to create or update OpkgTunN. Caller holds mu.
+// Front hostnames are resolved here and pinned on the ISP interface
+// before "interface up", so the session's own packets leave via the ISP
+// and do not hairpin into the tun. An ndmc error leaves the tun up and
+// is written on the snap; the next callback tries again.
 func (lv *live) publish() {
-	// mu held
 	if lv.isp == "" {
 		isp, err := DiscoverISP(context.Background(), lv.rci, Bin{})
 		if err != nil {
@@ -308,6 +333,9 @@ func (lv *live) publish() {
 	lv.write()
 }
 
+// down closes the tun and runs DownLines. The NDM object stays, so a
+// priority that names this OpkgTun is kept. DeleteLines is the parent's
+// job, and only when the connection itself is removed.
 func (lv *live) down() {
 	lv.mu.Lock()
 	defer lv.mu.Unlock()
@@ -324,6 +352,7 @@ func (lv *live) down() {
 	lv.write()
 }
 
+// fail records a redacted error on the snap. The tun, if any, stays.
 func (lv *live) fail(err error) {
 	lv.mu.Lock()
 	defer lv.mu.Unlock()
@@ -334,12 +363,16 @@ func (lv *live) fail(err error) {
 	lv.write()
 }
 
+// touch refreshes byte counters and the agreed QUIC mode on the snap.
 func (lv *live) touch() {
 	lv.mu.Lock()
 	defer lv.mu.Unlock()
 	lv.write()
 }
 
+// write stores the snap. QUIC is reported only for loft: CCInUse is the
+// mode the session agreed, and the fixed rates stay in the YAML because
+// the counter does not carry them. Bytes come from sysfs for this opkgtun.
 func (lv *live) write() {
 	rx, tx := tunBytes(lv.tun)
 	q := ""
@@ -358,6 +391,7 @@ func (lv *live) write() {
 	})
 }
 
+// writeSnap replaces the status file via a sibling temp and rename.
 func writeSnap(path string, s Snap) error {
 	if path == "" {
 		return fmt.Errorf("id")
@@ -373,6 +407,7 @@ func writeSnap(path string, s Snap) error {
 	return os.Rename(tmp, path)
 }
 
+// readSnap returns a zero Snap when the file is missing or not JSON.
 func readSnap(path string) Snap {
 	if path == "" {
 		return Snap{}
@@ -388,6 +423,8 @@ func readSnap(path string) Snap {
 	return s
 }
 
+// snapPath joins dir and id.json. id must match idRe, and the result
+// must stay inside dir, so a crafted id cannot write outside the state directory.
 func snapPath(dir, id string) string {
 	if !idRe.MatchString(id) {
 		return ""
@@ -399,6 +436,7 @@ func snapPath(dir, id string) string {
 	return p
 }
 
+// indexOf parses N from opkgtunN. A name that is not that form is 0.
 func indexOf(tun string) int {
 	n, err := strconv.Atoi(strings.TrimPrefix(tun, "opkgtun"))
 	if err != nil {
@@ -407,6 +445,7 @@ func indexOf(tun string) int {
 	return n
 }
 
+// hostOf is the hostname of a front URL, shown as the node name.
 func hostOf(raw string) string {
 	h := hostsOfURL(raw)
 	if len(h) == 0 {
@@ -415,6 +454,10 @@ func hostOf(raw string) string {
 	return h[0]
 }
 
+// resolve4 turns hostnames into IPv4 addresses. Literals pass through.
+// Each lookup waits at most 2s and uses the main table: no default route
+// has been installed yet. A failure is skipped. An empty result still
+// brings the interface up; the pins are simply absent.
 func resolve4(ctx context.Context, hosts []string) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -447,6 +490,8 @@ func resolve4(ctx context.Context, hosts []string) []string {
 	return out
 }
 
+// tunBytes reads rx and tx from sysfs. A name that is not opkgtun plus
+// digits returns zeros, so a crafted name cannot read another interface.
 func tunBytes(name string) (rx, tx uint64) {
 	if !tunOK(name) {
 		return 0, 0
@@ -455,6 +500,7 @@ func tunBytes(name string) (rx, tx uint64) {
 		readUint("/sys/class/net/" + name + "/statistics/tx_bytes")
 }
 
+// tunOK is true when name is "opkgtun" and a decimal index.
 func tunOK(name string) bool {
 	if !strings.HasPrefix(name, "opkgtun") {
 		return false
@@ -463,6 +509,7 @@ func tunOK(name string) bool {
 	return err == nil
 }
 
+// readUint reads one sysfs counter. A missing file is zero.
 func readUint(path string) uint64 {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -472,8 +519,10 @@ func readUint(path string) uint64 {
 	return n
 }
 
+// logLine is the vless and trojan Config.Log hook.
 func logLine(s string) { log.Print(s) }
 
+// sleepCtx waits for d or for ctx. False means the caller should return.
 func sleepCtx(ctx context.Context, d time.Duration) bool {
 	t := time.NewTimer(d)
 	defer t.Stop()

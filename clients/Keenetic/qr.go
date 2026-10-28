@@ -30,6 +30,9 @@ func TextFromImage(b []byte) (string, error) {
 	return s, nil
 }
 
+// looksImage is true for a png, jpeg or gif name, an image/* content
+// type, or PNG/JPEG magic. Import uses it to choose the QR decoder
+// over treating the body as YAML.
 func looksImage(name, ctype string, b []byte) bool {
 	n := strings.ToLower(name)
 	if strings.HasSuffix(n, ".png") || strings.HasSuffix(n, ".jpg") || strings.HasSuffix(n, ".jpeg") || strings.HasSuffix(n, ".gif") {

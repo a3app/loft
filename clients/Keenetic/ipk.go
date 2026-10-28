@@ -53,6 +53,9 @@ func WriteIPK(path string, m IPKMeta) error {
 	return os.WriteFile(path, buf.Bytes(), 0o644)
 }
 
+// controlText is the opkg control file. The description's second line
+// is indented: that is the continuation opkg's RFC 822 parser requires.
+// Maintainer is a name only. The package has no Depends line.
 func controlText(m IPKMeta) string {
 	return fmt.Sprintf(`Package: loft
 Version: %s
@@ -65,6 +68,9 @@ Description: loft client for KeeneticOS
 `, m.Version, m.Arch)
 }
 
+// tarFile is one member of control.tar.gz or data.tar.gz.
+// Directory members have a trailing slash and no body. Paths have no
+// leading slash; opkg extracts them under the filesystem root.
 type tarFile struct {
 	Name string
 	Mode int64
@@ -72,6 +78,8 @@ type tarFile struct {
 	Dir  bool
 }
 
+// tarGzip is a gzip-compressed ustar archive. Directory entries are
+// written before the files that live in them.
 func tarGzip(files []tarFile) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
@@ -98,11 +106,18 @@ func tarGzip(files []tarFile) []byte {
 	return buf.Bytes()
 }
 
+// arFile is one System V ar member. Name is without the trailing slash
+// that writeAR appends to mark a System V name.
 type arFile struct {
 	Name string
 	Body []byte
 }
 
+// writeAR writes a System V archive, magic "!<arch>\n" and a 60-byte header
+// per member. The size field is the unpadded body length. An odd-sized
+// member is followed by a newline that is not part of the member; opkg
+// skips that byte because size%2 == 1. Counting the pad inside the size
+// makes the next gzip reader treat the newline as a second member and fail.
 func writeAR(w io.Writer, files []arFile) error {
 	if _, err := io.WriteString(w, "!<arch>\n"); err != nil {
 		return err
@@ -112,8 +127,6 @@ func writeAR(w io.Writer, files []arFile) error {
 		if len(name) > 16 {
 			return fmt.Errorf("ar name %s", f.Name)
 		}
-		// Size is the member length. An odd member is followed by a pad
-		// newline that is not part of the member; opkg skips that byte.
 		size := len(f.Body)
 		hdr := fmt.Sprintf("%-16s%-12d%-6d%-6d%-8s%-10d`\n", name, 0, 0, 0, "100644", size)
 		if len(hdr) != 60 {

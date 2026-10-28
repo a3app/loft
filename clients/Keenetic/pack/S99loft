@@ -6,10 +6,13 @@ PID=/opt/var/run/loft-keenetic.pid
 LOG=/opt/var/log/loft.log
 BIN=/opt/bin/loft-keenetic
 
+# alive is true when the pid file names a running process.
 alive() {
 	[ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null
 }
 
+# start backgrounds the parent when it is not already running.
+# The parent, not this script, starts one child per enabled connection.
 start() {
 	if alive; then
 		return 0
@@ -19,6 +22,9 @@ start() {
 	echo $! >"$PID"
 }
 
+# stop signals SIGTERM and waits up to 20s so each child can ndmc-down.
+# SIGKILL is only for the parent pid, and only if it is still alive.
+# killall is TERM, not KILL: a surviving child must still run its down script.
 stop() {
 	if alive; then
 		kill "$(cat "$PID")" 2>/dev/null

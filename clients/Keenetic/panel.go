@@ -24,9 +24,11 @@ type Allow func(r *http.Request) (ok bool, login string, err error)
 
 // Panel is the LAN page.
 type Panel struct {
-	Store   *Store
-	Sup     *Sup
-	Allow   Allow
+	Store *Store
+	Sup   *Sup
+	Allow Allow
+	// Check and Install replace the GitHub and opkg calls in tests.
+	// Nil uses LatestRelease and DownloadIPK plus OpkgInstall.
 	Check   func(context.Context) (Update, error)
 	Install func(context.Context, Update) error
 }
@@ -47,6 +49,12 @@ func (p *Panel) Handler() http.Handler {
 	return p.gate(m)
 }
 
+// gate requires header X-Loft: 1 on every non-GET, then a Keenetic staff
+// session. The header is the CSRF check: a foreign page can send the
+// Keenetic cookie, and it cannot set X-Loft. HTML without a session is
+// redirected to the stock login. An API call gets 401 JSON with the login
+// URL. Auth that does not answer is 503, not a redirect loop. Port 79 is
+// never forwarded to the browser.
 func (p *Panel) gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Header.Get("X-Loft") != "1" {
@@ -72,6 +80,8 @@ func (p *Panel) gate(next http.Handler) http.Handler {
 	})
 }
 
+// allow forwards the browser Cookie, and an optional ndw4 query token,
+// to the loopback /auth URL from the YAML. Tests replace this with Panel.Allow.
 func (p *Panel) allow(r *http.Request) (bool, string, error) {
 	if p.Allow != nil {
 		return p.Allow(r)
@@ -90,6 +100,9 @@ func (p *Panel) allow(r *http.Request) (bool, string, error) {
 	return false, LoginURL(r), nil
 }
 
+// home serves the embedded page at /. Any other path is 404.
+// Cache-Control is no-store so the stock admin and this page do not
+// share a cached document.
 func (p *Panel) home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -105,6 +118,7 @@ func (p *Panel) home(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 
+// listItem is one row of GET /api/status. Secrets are not on it.
 type listItem struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -117,6 +131,9 @@ type listItem struct {
 	Meta     string `json:"meta"`
 }
 
+// status lists connections. A disabled connection is reported off even
+// when a snap still says up. The front falls back through the live snap,
+// the configured connect front, the first ticked front, then the kind.
 func (p *Panel) status(w http.ResponseWriter, r *http.Request) {
 	f, err := p.Store.Load()
 	if err != nil {
@@ -148,6 +165,8 @@ func (p *Panel) status(w http.ResponseWriter, r *http.Request) {
 		if state == "" {
 			state = "off"
 		}
+		// Prefer the live front. Connect is what the editor saved; Fronts[0]
+		// covers a connection that has not come up yet.
 		front := snap.Front
 		if front == "" {
 			front = c.Connect
@@ -176,6 +195,10 @@ func (p *Panel) status(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// conn is GET one record including secrets, POST create or replace, or
+// DELETE. POST passes fromEditor, so an imported profile is cleared and
+// the form fields become the source. The store lock is released before
+// changed runs Reconcile.
 func (p *Panel) conn(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -222,6 +245,7 @@ func (p *Panel) conn(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// toggle sets Enabled. Disabling brings OpkgTun down and keeps the NDM object.
 func (p *Panel) toggle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -252,6 +276,9 @@ func (p *Panel) toggle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// imp accepts JSON {"text"} or a multipart file, including a QR image.
+// Each added record is stored with a new id, the next free OpkgTun, and
+// enabled. fromEditor is false, so an imported profile is what the child runs.
 func (p *Panel) imp(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -284,6 +311,8 @@ func (p *Panel) imp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, res)
 }
 
+// importBody reads the paste or the uploaded file, at most 8 MiB.
+// An image is decoded as a QR. Any other body is text.
 func importBody(r *http.Request) (string, error) {
 	ct := r.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "multipart/") {
@@ -313,6 +342,7 @@ func importBody(r *http.Request) (string, error) {
 	return body.Text, nil
 }
 
+// log is the last 80 redacted journal lines, oldest first.
 func (p *Panel) log(w http.ResponseWriter, r *http.Request) {
 	var lines []string
 	if p.Sup != nil && p.Sup.Ring != nil {
@@ -324,6 +354,9 @@ func (p *Panel) log(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, lines)
 }
 
+// check asks GitHub and stores the result. Current is overwritten with
+// this binary's version after the call, so a dev build is not compared
+// as the empty string.
 func (p *Panel) check(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -347,6 +380,7 @@ func (p *Panel) check(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, up)
 }
 
+// auto stores the six-hour check switch. It does not install a package.
 func (p *Panel) auto(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -366,6 +400,10 @@ func (p *Panel) auto(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// install downloads the ipk for this arch, checks the sha256 sidecar,
+// and runs opkg install --force-reinstall. prerm on upgrade stops this
+// process; the new package's postinst starts it again. A release that
+// is not newer is 409.
 func (p *Panel) install(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -410,6 +448,7 @@ func (p *Panel) install(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// changed reconciles after the store lock has been released.
 func (p *Panel) changed() {
 	if p.Sup != nil {
 		p.Sup.Reconcile()
@@ -448,17 +487,18 @@ func (p *Panel) Serve(ctx context.Context) error {
 	return nil
 }
 
+// logErr prints to stdout. S99loft redirects that stream into loft.log.
 func logErr(format string, args ...any) {
-	// panel avoids importing log in the signature noise of tests; the
-	// supervisor logs the same facts. Use the standard logger.
 	fmt.Printf("loft: "+format+"\n", args...)
 }
 
+// writeJSON sets application/json and encodes v with a trailing newline.
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// decodeJSON reads at most n bytes. A larger body fails the decode.
 func decodeJSON(r *http.Request, v any, n int64) error {
 	defer r.Body.Close()
 	return json.NewDecoder(io.LimitReader(r.Body, n)).Decode(v)

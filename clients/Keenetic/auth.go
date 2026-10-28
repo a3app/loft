@@ -108,6 +108,9 @@ func guestRole(body []byte) bool {
 	return user == "guest"
 }
 
+// walkAuth visits every string leaf of an /auth JSON value. Firmware
+// builds put role and user at different depths, so the walk is by key
+// name rather than by a fixed path.
 func walkAuth(v any, fn func(k, val string)) {
 	switch t := v.(type) {
 	case map[string]any:

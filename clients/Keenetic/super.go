@@ -55,6 +55,11 @@ func (r *Ring) Lines() []string {
 	return out
 }
 
+// kid is one session process. hash is the YAML of the whole Conn,
+// secrets included, so an edit restarts the child. delay is how long to
+// wait after a short life before the next start. exited is stored before
+// done is closed. The waiter must not take Sup.mu: stop waits on done
+// while holding that lock.
 type kid struct {
 	cmd    *exec.Cmd
 	pw     io.Closer
@@ -67,6 +72,9 @@ type kid struct {
 	noted  bool
 }
 
+// stop sends SIGTERM and waits four seconds, then SIGKILL.
+// exec.CommandContext is not used: its cancel is a kill, and the child
+// would not get to run ndmc down.
 func (k *kid) stop() {
 	if k == nil {
 		return
@@ -132,6 +140,10 @@ func (s *Sup) Reconcile() {
 		if !k.dead() {
 			continue
 		}
+		// A child that died stays in the map during the wait. Deleting it
+		// here would make the second loop start it again with delay 0.
+		// A life under 30s doubles the wait, capped at 60s. A longer life
+		// resets the wait to 10s.
 		wait := k.delay
 		if wait < 10*time.Second {
 			wait = 10 * time.Second
@@ -168,6 +180,7 @@ func (s *Sup) Reconcile() {
 	}
 }
 
+// dead is a non-blocking receive on done.
 func (k *kid) dead() bool {
 	if k == nil {
 		return true
@@ -180,6 +193,9 @@ func (k *kid) dead() bool {
 	}
 }
 
+// removeLocked stops the child and deletes the NDM interface.
+// The child has already run DownLines on SIGTERM. DeleteLines repeats
+// the down and then "no interface". Caller holds s.mu.
 func (s *Sup) removeLocked(id string, k *kid) {
 	k.stop()
 	delete(s.kids, id)
@@ -194,6 +210,10 @@ func (s *Sup) removeLocked(id string, k *kid) {
 	}
 }
 
+// startLocked execs this binary with -session. Stdout and stderr share
+// one pipe so the journal is a single stream. The waiter records exited
+// and then closes done, and it does not lock Sup.mu. An empty Exe means
+// os.Executable; tests set Exe so "go test" is not re-executed.
 func (s *Sup) startLocked(c Conn, delay time.Duration) {
 	exe := s.Exe
 	if exe == "" {
@@ -263,6 +283,7 @@ func (s *Sup) Loop(ctx context.Context) {
 	}
 }
 
+// wantsCheck is the YAML auto-check switch. A read error skips the check.
 func (s *Sup) wantsCheck() bool {
 	if s.Store == nil {
 		return false
@@ -274,6 +295,7 @@ func (s *Sup) wantsCheck() bool {
 	return f.Keenetic.CheckUpdates
 }
 
+// checkOnce stores the latest release. It does not install.
 func (s *Sup) checkOnce(ctx context.Context) {
 	up, err := LatestRelease(ctx, AssetArch())
 	if err != nil {
@@ -301,6 +323,7 @@ func (s *Sup) Snap(id string) Snap {
 	return readSnap(snapPath(s.stateDir(), id))
 }
 
+// stateDir is Sup.State, or DefaultStateDir when that is empty.
 func (s *Sup) stateDir() string {
 	if s.State != "" {
 		return s.State
@@ -322,6 +345,9 @@ func (s *Sup) LastUpdate() Update {
 	return s.update
 }
 
+// connHash is the YAML of the whole Conn. Reconcile restarts when this
+// changes or when Enabled is false. A marshal error falls back to the id,
+// which never matches a previous YAML hash, so the child is restarted.
 func connHash(c Conn) string {
 	b, err := yaml.Marshal(c)
 	if err != nil {

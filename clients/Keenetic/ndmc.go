@@ -13,10 +13,14 @@ import (
 const OpkgMax = 15
 
 var (
+	// descBad rejects controls and characters that would break out of a
+	// quoted ndmc argument or start a second command.
 	descBad = regexp.MustCompile(`[\x00-\x1f"'\\;|&$` + "`]")
-	ispRe   = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._/-]{0,40}$`)
-	relRe   = regexp.MustCompile(`(?i)release:\s*(\d+)`)
-	verRe   = regexp.MustCompile(`(?i)(?:version|ndms?):\s*(\d+)`)
+	// ispRe is an NDM interface name. A slash is allowed (GigabitEthernet0/0).
+	ispRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._/-]{0,40}$`)
+	// relRe and verRe read the major from "show version". The first match wins.
+	relRe = regexp.MustCompile(`(?i)release:\s*(\d+)`)
+	verRe = regexp.MustCompile(`(?i)(?:version|ndms?):\s*(\d+)`)
 )
 
 // Names is the NDM interface and the Linux device for one index.
@@ -110,6 +114,11 @@ func DeleteLines(u Up) ([]string, error) {
 	return out, nil
 }
 
+// pinLines is "ip route A.B.C.D/32 ISP", or "no ip route" when remove is set.
+// An empty ISP or an empty host list yields no lines: the interface still
+// comes up, the session is just not protected from hairpin. Hosts are IPv4
+// literals. A space or a shell metacharacter is rejected so one line cannot
+// become two commands.
 func pinLines(isp string, hosts []string, remove bool) ([]string, error) {
 	if len(hosts) == 0 {
 		return nil, nil
@@ -141,6 +150,9 @@ func pinLines(isp string, hosts []string, remove bool) ([]string, error) {
 	return lines, nil
 }
 
+// quoteDesc wraps a connection name for "interface … description".
+// Empty becomes "Loft". More than 32 runes, or a character in descBad,
+// is rejected. The quotes stay inside the single ndmc -c argument.
 func quoteDesc(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

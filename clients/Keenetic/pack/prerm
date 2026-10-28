@@ -3,6 +3,8 @@
 # upgrade so connection priorities that name OpkgTunN are not dropped.
 PATH=/opt/sbin:/opt/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+# stop_svc asks the init script to stop. Missing init is not a failure:
+# prerm always exits 0 so an upgrade is not left half-installed.
 stop_svc() {
 	if [ -x /opt/etc/init.d/S99loft ]; then
 		/opt/etc/init.d/S99loft stop

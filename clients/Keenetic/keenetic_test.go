@@ -14,6 +14,9 @@ import (
 	"github.com/a3app/loft/internal/config"
 )
 
+// TestUpLinesOrder locks the ndmc order: host pins before "up", no default
+// route, a quoted description, down before "no ip route", and "no interface"
+// immediately before the final save.
 func TestUpLinesOrder(t *testing.T) {
 	lines, err := UpLines(Up{
 		Index: 0, Desc: "Work", IP: "10.7.0.2", MTU: 1280,
@@ -53,6 +56,8 @@ func TestUpLinesOrder(t *testing.T) {
 	}
 }
 
+// TestApplySkipsPin checks that a failed "ip route" does not stop "interface up",
+// and that a failed "up" does stop the script.
 func TestApplySkipsPin(t *testing.T) {
 	r := &script{fail: "ip route "}
 	lines, err := UpLines(Up{Index: 1, Desc: "A", IP: "10.1.0.2", ISP: "ISP", Hosts: []string{"9.9.9.9"}})
@@ -71,11 +76,13 @@ func TestApplySkipsPin(t *testing.T) {
 	}
 }
 
+// script is a Runner that records lines and fails those with a given prefix.
 type script struct {
 	lines []string
 	fail  string
 }
 
+// Run appends line and returns an error when it has the fail prefix.
 func (s *script) Run(_ context.Context, line string) error {
 	s.lines = append(s.lines, line)
 	if s.fail != "" && strings.HasPrefix(line, s.fail) {
@@ -84,6 +91,7 @@ func (s *script) Run(_ context.Context, line string) error {
 	return nil
 }
 
+// containsLine reports an exact line match.
 func containsLine(lines []string, want string) bool {
 	for _, l := range lines {
 		if l == want {
@@ -93,6 +101,7 @@ func containsLine(lines []string, want string) bool {
 	return false
 }
 
+// TestTooOld refuses a parsed major below 5 and accepts 5.x and unparsed text.
 func TestTooOld(t *testing.T) {
 	if !TooOld("NDMS release: 4.3") || !TooOld("version: 3") {
 		t.Fatal("old firmware accepted")
@@ -102,6 +111,9 @@ func TestTooOld(t *testing.T) {
 	}
 }
 
+// TestStoreRoundTrip checks kind rejection, the next free OpkgTun, secret
+// retention on an empty update, auth defaulting, and a missing enabled
+// flag staying false.
 func TestStoreRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "client.yaml")
@@ -150,6 +162,8 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 }
 
+// TestAuth accepts an admin role and an empty body, rejects guest and a
+// user named guest, forwards the ndw4 token, and refuses a non-loopback URL.
 func TestAuth(t *testing.T) {
 	var got string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -196,6 +210,7 @@ func TestAuth(t *testing.T) {
 	}
 }
 
+// TestISP reads the default-route interface from RCI JSON and from ndmc text.
 func TestISP(t *testing.T) {
 	body := []byte(`{"show":{"ip":{"route":[{"destination":"0.0.0.0/0","interface":"GigabitEthernet0/0"}]}}}`)
 	s, ok := ParseRoutes(body)
@@ -208,6 +223,8 @@ func TestISP(t *testing.T) {
 	}
 }
 
+// TestUpdatePick selects the versioned ipk that has a sha256 sidecar,
+// checks a "hex  name" digest line, and compares dotted versions.
 func TestUpdatePick(t *testing.T) {
 	assets := []ghAsset{
 		{Name: "loft-keenetic-1.0.32-aarch64.ipk", URL: "http://example/b"},
@@ -238,6 +255,8 @@ func TestUpdatePick(t *testing.T) {
 	}
 }
 
+// TestListenAddrs binds loopback plus private LAN for an empty host,
+// adds loopback beside a specific host, and does not duplicate loopback.
 func TestListenAddrs(t *testing.T) {
 	got := ListenAddrs("", []string{"192.168.1.1"})
 	if strings.Join(got, ",") != "127.0.0.1:8090,192.168.1.1:8090" {
@@ -253,6 +272,9 @@ func TestListenAddrs(t *testing.T) {
 	}
 }
 
+// TestImportAndRuntime covers a loft:// link, an SSTP skip, manual front
+// order (get before ws, wss for ws), VLESS vision flow, and distinct
+// 198.18.<index>.1 addresses for two proxy tuns.
 func TestImportAndRuntime(t *testing.T) {
 	res, err := ImportText("loft://lt_abc@edge.example.com:443/static/js?type=get&cdn=cloudflare&fp=chrome#Work")
 	if err != nil || len(res.Added) != 1 {
@@ -314,6 +336,9 @@ func TestImportAndRuntime(t *testing.T) {
 	_ = config.DefaultGETPath
 }
 
+// TestPanel checks the embedded page, the login redirect, the X-Loft
+// requirement, and an import that shows up as OpkgTun0. Sup.Exe is
+// /usr/bin/true so a reconcile cannot re-exec the test binary.
 func TestPanel(t *testing.T) {
 	b, err := page.ReadFile("web/index.html")
 	if err != nil || !strings.Contains(string(b), "OpkgTun") {
@@ -366,6 +391,8 @@ func TestPanel(t *testing.T) {
 	}
 }
 
+// TestIPK writes a package whose binary is an odd number of bytes, so the
+// ar pad newline is outside the member size, and reads the three member names.
 func TestIPK(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "t.ipk")
@@ -393,6 +420,7 @@ func TestIPK(t *testing.T) {
 	}
 }
 
+// TestRedact hides a member key, a UUID, a trojan userinfo secret, and user:password.
 func TestRedact(t *testing.T) {
 	s := Redact("loft://lt_abcdefgh@edge.example.com 550e8400-e29b-41d4-a716-446655440000")
 	if strings.Contains(s, "lt_abcdefgh") || strings.Contains(s, "550e8400") {
@@ -404,6 +432,7 @@ func TestRedact(t *testing.T) {
 	}
 }
 
+// TestSnapPath rejects a path that leaves the state directory and round-trips a snap.
 func TestSnapPath(t *testing.T) {
 	dir := t.TempDir()
 	if snapPath(dir, "../etc/passwd") != "" || snapPath(dir, "ab/cd") != "" {

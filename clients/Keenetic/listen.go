@@ -41,6 +41,8 @@ func ListenAddrs(field string, private []string) []string {
 	return out
 }
 
+// splitListen splits "host:port", ":port", or a bare host.
+// A bare host keeps port 8090. A value SplitHostPort rejects is a host.
 func splitListen(field string) (host, port string) {
 	field = strings.TrimSpace(field)
 	if field == "" {

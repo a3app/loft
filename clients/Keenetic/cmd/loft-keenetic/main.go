@@ -18,6 +18,12 @@ import (
 	"github.com/a3app/loft/internal/version"
 )
 
+// main is the parent, or one child when -session is set.
+// A child returns without Fatal when the context was cancelled, so
+// SIGTERM is a clean ndmc down rather than a logged failure.
+// The parent creates the sample YAML only when the file is missing,
+// mode 0600, then runs the supervisor beside the LAN page. Serve blocks
+// until the signal; StopAll then asks every child to bring its OpkgTun down.
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("loft: ")
@@ -67,6 +73,8 @@ keenetic:
 connections: []
 `
 
+// ensureConfig creates path, mode 0600, when it does not exist.
+// An existing file is left as the operator wrote it.
 func ensureConfig(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil

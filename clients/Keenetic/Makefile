@@ -21,6 +21,9 @@ ipk-all:
 	$(MAKE) one ARCH=mipsel
 
 # ARCH is the release asset name, not the opkg Architecture field.
+# armv7 and mipsel are soft-float. Go 1.21+ defaults GOARM=7 to hard-float,
+# which Entware's armv7-3.2 toolchain does not run. GOMIPS=softfloat matches
+# mipsel-3.4. CGO stays off so the binary does not need the Entware libc.
 one:
 	@set -e; \
 	case "$(ARCH)" in \
