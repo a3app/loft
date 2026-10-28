@@ -24,7 +24,9 @@ public final class LoftTileService extends TileService implements Bus.Listener {
     @Override
     public void onStartListening() {
         Bus.watch(this);
-        paint();
+        // force: the system may have rebuilt the tile while the shade was closed
+        // (for example after SystemUI restarted), so always push our state once here.
+        paint(true);
     }
 
     /** Called when the shade closes: stop listening, nothing to repaint. */
@@ -36,13 +38,15 @@ public final class LoftTileService extends TileService implements Bus.Listener {
     /** Bus callback: VPN state changed, repaint the tile. */
     @Override
     public void onLoft() {
-        paint();
+        paint(false);
     }
 
     /**
      * Tap handler. Stops the tunnel if it is running or connecting; otherwise opens the app
      * when there is no profile, asks for VPN consent when needed, or starts the tunnel.
-     * startActivityAndCollapse needs a PendingIntent on API 34+; a plain Intent is refused there.
+     * startActivityAndCollapse needs a PendingIntent on API 34+; a plain Intent is refused there
+     * (it throws UnsupportedOperationException for apps targeting 34 or newer), so both places
+     * that open a screen go through {@link #open}.
      */
     @Override
     public void onClick() {
@@ -55,21 +59,16 @@ public final class LoftTileService extends TileService implements Bus.Listener {
         //    and collapse the shade so the app is visible.
         if (LoftApp.of(this).profiles().active() == null) {
             Intent i = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if (Build.VERSION.SDK_INT >= 34) {
-                startActivityAndCollapse(android.app.PendingIntent.getActivity(
-                        this, 0, i, android.app.PendingIntent.FLAG_IMMUTABLE));
-            } else {
-                startActivityAndCollapse(i);
-            }
+            open(i, 0);
             return;
         }
         // 3. VpnService.prepare returns an Intent for the system consent dialog the first
         //    time (or after another VPN app took over); null means consent is already given.
-        //    Note: unlike step 2, this always passes a plain Intent, which API 34+ refuses.
+        //    Like step 2 it goes through open(), so API 34+ gets the PendingIntent it requires.
         Intent prep = VpnService.prepare(this);
         if (prep != null) {
             prep.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivityAndCollapse(prep);
+            open(prep, 1);
             return;
         }
         // 4. Everything is in place: ask the service to connect. The tile repaints when
@@ -78,17 +77,44 @@ public final class LoftTileService extends TileService implements Bus.Listener {
     }
 
     /**
-     * Shows the tile as active while connected or connecting, inactive otherwise.
-     * getQsTile() is null when the system has not bound the tile yet. updateTile()
-     * is a call into the system UI process, made on every Bus event while the shade is open.
+     * Opens a screen from the tile and collapses the shade so the screen is visible.
+     * On API 34+ the Intent must be wrapped in a PendingIntent: the plain-Intent
+     * overload throws there. FLAG_IMMUTABLE is required for PendingIntents since API 31
+     * and is right here because nobody needs to fill in the Intent later.
+     * {@code code} is the PendingIntent request code; each caller uses its own so the
+     * system never mixes up the "open app" and "VPN consent" PendingIntents.
      */
-    private void paint() {
+    private void open(Intent i, int code) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            startActivityAndCollapse(android.app.PendingIntent.getActivity(this, code, i,
+                    android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT));
+        } else {
+            startActivityAndCollapse(i);
+        }
+    }
+
+    /**
+     * Shows the tile as active while connected or connecting, inactive otherwise.
+     * getQsTile() is null when the system has not bound the tile yet.
+     *
+     * <p>updateTile() is a call into the system UI process. The Bus fires up to ten
+     * times a second while the VPN is busy, but the tile only has two looks, so it
+     * is pushed only when the label or state really differs from what the tile
+     * already shows (or when {@code force} is set). On slow phones (HyperOS) the
+     * stream of identical updates made the shade itself stutter.
+     */
+    private void paint(boolean force) {
         Tile t = getQsTile();
         if (t == null) {
             return;
         }
-        t.setLabel("loft");
-        t.setState(Live.on() || Live.connecting() ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE);
+        String label = "loft";
+        int state = Live.on() || Live.connecting() ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE;
+        if (!force && t.getState() == state && label.contentEquals(String.valueOf(t.getLabel()))) {
+            return;
+        }
+        t.setLabel(label);
+        t.setState(state);
         t.updateTile();
     }
 }

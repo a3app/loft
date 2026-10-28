@@ -15,6 +15,7 @@ import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.LruCache;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,6 +31,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Settings → Route → Apps. Three modes: all apps follow split rules (split
@@ -48,8 +50,39 @@ public final class AppsActivity extends LoftActivity {
     private final Set<String> except = new HashSet<>();
     /** Package names picked for "only" mode (only these apps use the tunnel). */
     private final Set<String> only = new HashSet<>();
+    /**
+     * Every launchable app (except loft itself), read from the system once per visit to
+     * this screen by load() in the background. Null until that read is done. Searching,
+     * the system-apps switch and mode changes only filter this list in memory.
+     */
+    private List<Row> all;
+    /** True while load() is running, so a second fill() does not start another read. */
+    private boolean loading;
     /** Apps currently shown in the list, after search and system-app filtering; rebuilt by fill(). */
     private final List<Row> rows = new ArrayList<>();
+    /**
+     * Icons already loaded, by package name. Icons are loaded lazily, only for rows that
+     * are on screen, and kept here so scrolling back does not load them again. Bounded
+     * (an icon can hold a sizeable bitmap) so a long scroll through hundreds of apps does
+     * not keep every icon in memory; the oldest unused ones are dropped first.
+     */
+    private final LruCache<String, Drawable> icons = new LruCache<>(80);
+    /** Packages whose icon is being loaded right now, so one package is never loaded twice at once. */
+    private final Set<String> iconBusy = new HashSet<>();
+    /** Packages whose icon failed to load; not retried, the row just shows no icon (as before). */
+    private final Set<String> iconFailed = new HashSet<>();
+    /**
+     * Packages some on-screen row is waiting an icon for. Read by the background icon job
+     * (hence a concurrent set) so it can skip apps whose row scrolled away before the job ran.
+     */
+    private final Set<String> iconWanted = ConcurrentHashMap.newKeySet();
+    /** Every row view built by makeRow (only as many as fit on screen, plus a few). */
+    private final List<Holder> holders = new ArrayList<>();
+    /**
+     * Search debounce: typing schedules one fill() 120 ms after the last keystroke, so
+     * fast typing filters once instead of once per letter.
+     */
+    private final Runnable refill = this::fill;
     /** Adapter of the app list; null in "all" mode, where the list is not built. */
     private BaseAdapter adapter;
     /** Grey hint under the mode switch: a tip in "all" mode, a caveat about bypassing apps otherwise. */
@@ -71,6 +104,13 @@ public final class AppsActivity extends LoftActivity {
         except.addAll(Prefs.appSet(this, "except"));
         only.addAll(Prefs.appSet(this, "only"));
         paint();
+    }
+
+    /** Cancels a pending search refill so it does not run against a closed screen. */
+    @Override
+    protected void onDestroy() {
+        Ui.MAIN.removeCallbacks(refill);
+        super.onDestroy();
     }
 
     /**
@@ -97,6 +137,10 @@ public final class AppsActivity extends LoftActivity {
     private void paint() {
         ViewGroup body = findViewById(R.id.body);
         body.removeAllViews();
+        // The old list's row views are gone with the old screen; forget them so icon
+        // results are not delivered to (and do not keep alive) views nobody sees.
+        holders.clear();
+        iconWanted.clear();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         int p = dp(16);
@@ -231,7 +275,8 @@ public final class AppsActivity extends LoftActivity {
             lv.setSelector(new android.graphics.drawable.ColorDrawable(0));
             extra.addView(lv, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-            // Every edit of the search text re-runs fill() (a full package scan) on the main thread.
+            // Every edit of the search text schedules fill() (an in-memory filter) 120 ms later;
+            // a newer keystroke pushes it back, so a burst of typing filters once.
             search.addTextChangedListener(new android.text.TextWatcher() {
                 @Override
                 public void beforeTextChanged(CharSequence s, int a, int b, int c) {
@@ -243,7 +288,8 @@ public final class AppsActivity extends LoftActivity {
 
                 @Override
                 public void afterTextChanged(android.text.Editable s) {
-                    fill();
+                    Ui.MAIN.removeCallbacks(refill);
+                    Ui.MAIN.postDelayed(refill, 120);
                 }
             });
             fill();
@@ -256,61 +302,35 @@ public final class AppsActivity extends LoftActivity {
      * Refills the app list: every launchable app except loft itself, filtered by the search text,
      * with system apps hidden unless the switch is on or they are already picked. Picked apps
      * come first, then by name.
-     * Runs on the main thread and asks PackageManager (a call into the system server) for the
-     * launcher apps, then for each app's info, label and icon, so it is slow on phones with
-     * many apps.
+     * Runs on the main thread but only filters the in-memory list {@link #all}, which is cheap.
+     * The first call starts load() in the background and shows an empty list until the apps
+     * arrive; load() then calls fill() again. Icons are not touched here (see bindRow).
      */
     private void fill() {
+        Ui.MAIN.removeCallbacks(refill);
+        Set<String> picked = sel();
+        if (cnt != null) {
+            Ui.text(cnt, getString(R.string.apps_cnt, picked.size()));
+        }
+        if (all == null) {
+            load();
+            return;
+        }
         rows.clear();
         String q = search == null ? "" : search.getText().toString().trim().toLowerCase();
-        Set<String> picked = sel();
-        // 1. Ask for every activity that shows in the launcher (MAIN + LAUNCHER). This lists
-        //    apps the user can open, which is what they expect to choose from.
-        PackageManager pm = getPackageManager();
-        android.content.Intent launch = new android.content.Intent(android.content.Intent.ACTION_MAIN)
-                .addCategory(android.content.Intent.CATEGORY_LAUNCHER);
-        List<ResolveInfo> found = pm.queryIntentActivities(launch, 0);
-        // 2. One row per package: an app with several launcher icons appears once; loft itself
-        //    is skipped (it cannot route around its own tunnel).
-        Set<String> seen = new HashSet<>();
-        for (ResolveInfo ri : found) {
-            if (ri.activityInfo == null) {
+        for (Row r : all) {
+            // Hide preinstalled (system) apps unless the switch is on, but never hide one that
+            // is already picked, so the user can always see and undo a choice.
+            if (r.system && !sys && !picked.contains(r.pkg)) {
                 continue;
             }
-            String pkg = ri.activityInfo.packageName;
-            if (!seen.add(pkg) || getPackageName().equals(pkg)) {
+            // Search matches the visible name or the package id, case-insensitively.
+            if (!q.isEmpty() && !r.lname.contains(q) && !r.lpkg.contains(q)) {
                 continue;
-            }
-            ApplicationInfo ai;
-            try {
-                ai = pm.getApplicationInfo(pkg, 0);
-            } catch (PackageManager.NameNotFoundException e) {
-                continue;
-            }
-            // 3. Hide preinstalled (system) apps unless the switch is on, but never hide one that
-            //    is already picked, so the user can always see and undo a choice.
-            boolean system = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
-            if (system && !sys && !picked.contains(pkg)) {
-                continue;
-            }
-            // 4. Search matches the visible name or the package id, case-insensitively.
-            String name = String.valueOf(pm.getApplicationLabel(ai));
-            if (!q.isEmpty() && !name.toLowerCase().contains(q) && !pkg.toLowerCase().contains(q)) {
-                continue;
-            }
-            Row r = new Row();
-            r.pkg = pkg;
-            r.name = name;
-            r.system = system;
-            // Icons are loaded for every matching app up front, not lazily per visible row.
-            // A missing or broken icon just leaves the image empty.
-            try {
-                r.icon = pm.getApplicationIcon(ai);
-            } catch (Exception ignored) {
             }
             rows.add(r);
         }
-        // 5. Picked apps first, then alphabetical by name.
+        // Picked apps first, then alphabetical by name.
         Collections.sort(rows, (a, b) -> {
             boolean ap = picked.contains(a.pkg);
             boolean bp = picked.contains(b.pkg);
@@ -319,17 +339,138 @@ public final class AppsActivity extends LoftActivity {
             }
             return a.name.compareToIgnoreCase(b.name);
         });
-        if (cnt != null) {
-            cnt.setText(getString(R.string.apps_cnt, picked.size()));
-        }
         if (adapter != null) {
             adapter.notifyDataSetChanged();
         }
     }
 
     /**
-     * Creates one empty list row (icon, name, package, switch); views are found later by tag
-     * ("ic", "n", "m", "sw") in bindRow, because the row is built in code without view ids.
+     * Reads the installed launchable apps once, in the background (Ui.bg), then calls fill().
+     * Every step here asks PackageManager, which is a call into the system server, and
+     * reading an app's label loads that app's resources; with the many apps HyperOS ships
+     * this took seconds and froze the screen when it ran on the main thread on every
+     * keystroke. Only package, name and the system flag are read here; icons come later,
+     * per visible row.
+     */
+    private void load() {
+        if (loading) {
+            return;
+        }
+        loading = true;
+        PackageManager pm = getPackageManager();
+        String self = getPackageName();
+        Ui.bg(this, () -> {
+            // 1. Ask for every activity that shows in the launcher (MAIN + LAUNCHER). This lists
+            //    apps the user can open, which is what they expect to choose from.
+            android.content.Intent launch = new android.content.Intent(android.content.Intent.ACTION_MAIN)
+                    .addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+            List<ResolveInfo> found = pm.queryIntentActivities(launch, 0);
+            // 2. One row per package: an app with several launcher icons appears once; loft itself
+            //    is skipped (it cannot route around its own tunnel).
+            List<Row> out = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            for (ResolveInfo ri : found) {
+                if (ri.activityInfo == null) {
+                    continue;
+                }
+                String pkg = ri.activityInfo.packageName;
+                if (!seen.add(pkg) || self.equals(pkg)) {
+                    continue;
+                }
+                // The query result already carries the app's info; ask the system only when
+                // it does not, which saves one system call per app.
+                ApplicationInfo ai = ri.activityInfo.applicationInfo;
+                if (ai == null) {
+                    try {
+                        ai = pm.getApplicationInfo(pkg, 0);
+                    } catch (PackageManager.NameNotFoundException e) {
+                        continue;
+                    }
+                }
+                Row r = new Row();
+                r.pkg = pkg;
+                r.info = ai;
+                r.name = String.valueOf(pm.getApplicationLabel(ai));
+                r.system = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+                // Lower-case copies made once here, so each search keystroke compares directly.
+                r.lname = r.name.toLowerCase();
+                r.lpkg = pkg.toLowerCase();
+                out.add(r);
+            }
+            return out;
+        }, (list, err) -> {
+            loading = false;
+            // A failed read leaves the list empty, which is what an empty system answer showed before.
+            all = list != null ? list : new ArrayList<>();
+            fill();
+        });
+    }
+
+    /**
+     * Shows the icon for {@code r} in a row: from the cache when it is there, otherwise the
+     * image is cleared and the icon is loaded in the background. A row view is reused for
+     * other apps while scrolling, so when the icon arrives it is put only into rows that
+     * still show that app ({@link Holder#want}); a recycled row never gets the wrong icon.
+     */
+    private void showIcon(Holder h, Row r) {
+        if (h.want != null) {
+            iconWanted.remove(h.want);
+        }
+        h.want = r.pkg;
+        Drawable d = icons.get(r.pkg);
+        h.ic.setImageDrawable(d);
+        if (d != null || iconFailed.contains(r.pkg)) {
+            return;
+        }
+        iconWanted.add(r.pkg);
+        loadIcon(r.pkg, r.info);
+    }
+
+    /**
+     * Loads one app's icon in the background, caches it and puts it into every row that
+     * still wants it. Does nothing when the same icon is already being loaded.
+     */
+    private void loadIcon(String pkg, ApplicationInfo ai) {
+        if (!iconBusy.add(pkg)) {
+            return; // already on its way; the result goes to every row that wants it
+        }
+        PackageManager pm = getPackageManager();
+        Ui.bg(this, () -> {
+            // The row may have scrolled away while this job waited its turn; then skip the
+            // (relatively slow) icon load, it will be asked for again if the app comes back.
+            if (!iconWanted.contains(pkg)) {
+                return null;
+            }
+            return pm.getApplicationIcon(ai);
+        }, (icon, err) -> {
+            iconBusy.remove(pkg);
+            if (err != null) {
+                // A missing or broken icon just leaves the image empty, as before.
+                iconFailed.add(pkg);
+                return;
+            }
+            if (icon == null) {
+                // Skipped because no row wanted it when the job ran. A row may have asked
+                // again since then (it found the load "busy" and waited), so start over
+                // if anyone wants it now.
+                if (iconWanted.contains(pkg)) {
+                    loadIcon(pkg, ai);
+                }
+                return;
+            }
+            icons.put(pkg, icon);
+            for (Holder o : holders) {
+                if (pkg.equals(o.want)) {
+                    o.ic.setImageDrawable(icon);
+                }
+            }
+        });
+    }
+
+    /**
+     * Creates one empty list row (icon, name, package, switch). The row is built in code
+     * without view ids, so its parts are kept in a {@link Holder} stored as the row's tag,
+     * which bindRow reads back.
      */
     private View makeRow() {
         LinearLayout row = new LinearLayout(this);
@@ -337,20 +478,17 @@ public final class AppsActivity extends LoftActivity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(0, dp(6), 0, dp(6));
         ImageView ic = new ImageView(this);
-        ic.setTag("ic");
         LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(dp(32), dp(32));
         ilp.rightMargin = dp(10);
         row.addView(ic, ilp);
         LinearLayout grow = new LinearLayout(this);
         grow.setOrientation(LinearLayout.VERTICAL);
         TextView n = new TextView(this);
-        n.setTag("n");
         n.setTextColor(getColor(R.color.snow));
         n.setTextSize(13.5f);
         n.setMaxLines(1);
         n.setEllipsize(TextUtils.TruncateAt.END);
         TextView m = new TextView(this);
-        m.setTag("m");
         m.setTextColor(getColor(R.color.mute));
         m.setTextSize(10.5f);
         m.setTypeface(android.graphics.Typeface.MONOSPACE);
@@ -360,8 +498,14 @@ public final class AppsActivity extends LoftActivity {
         grow.addView(m);
         row.addView(grow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         ToggleView sw = new ToggleView(this);
-        sw.setTag("sw");
         row.addView(sw, new LinearLayout.LayoutParams(dp(42), dp(26)));
+        Holder h = new Holder();
+        h.ic = ic;
+        h.n = n;
+        h.m = m;
+        h.sw = sw;
+        row.setTag(h);
+        holders.add(h);
         return row;
     }
 
@@ -372,15 +516,11 @@ public final class AppsActivity extends LoftActivity {
      * app's listener, which would otherwise fire and change the wrong package.
      */
     private void bindRow(View row, Row r) {
-        ImageView ic = row.findViewWithTag("ic");
-        if (r.icon != null) {
-            ic.setImageDrawable(r.icon);
-        } else {
-            ic.setImageDrawable(null);
-        }
-        ((TextView) row.findViewWithTag("n")).setText(r.name);
-        ((TextView) row.findViewWithTag("m")).setText(r.pkg);
-        ToggleView sw = row.findViewWithTag("sw");
+        Holder h = (Holder) row.getTag();
+        showIcon(h, r);
+        Ui.text(h.n, r.name);
+        Ui.text(h.m, r.pkg);
+        ToggleView sw = h.sw;
         sw.setOnCheckedChangeListener(null);
         sw.setChecked(sel().contains(r.pkg));
         sw.setOnCheckedChangeListener((v, on) -> {
@@ -391,7 +531,7 @@ public final class AppsActivity extends LoftActivity {
             }
             persist();
             if (cnt != null) {
-                cnt.setText(getString(R.string.apps_cnt, sel().size()));
+                Ui.text(cnt, getString(R.string.apps_cnt, sel().size()));
             }
         });
         row.setOnClickListener(v -> sw.toggle());
@@ -410,7 +550,20 @@ public final class AppsActivity extends LoftActivity {
         String name = "";
         /** True for preinstalled system apps (FLAG_SYSTEM). */
         boolean system;
-        /** Launcher icon, or null when it could not be loaded. */
-        Drawable icon;
+        /** The app's info from the system, kept to load the icon later without asking again. */
+        ApplicationInfo info;
+        /** Lower-case name and package, for the search filter. */
+        String lname = "";
+        String lpkg = "";
+    }
+
+    /** The parts of one row view, so binding does not have to search the row for them. */
+    private static final class Holder {
+        ImageView ic;
+        TextView n;
+        TextView m;
+        ToggleView sw;
+        /** Package whose icon this row should show now; null before the first bind. */
+        String want;
     }
 }

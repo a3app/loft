@@ -33,11 +33,18 @@ public final class ShareQrActivity extends LoftActivity {
         Profile p = LoftApp.of(this).profiles().get(getIntent().getStringExtra("id"));
         String uri = p == null ? "" : YamlBuilder.emit(p);
         findViewById(R.id.btn_close).setOnClickListener(v -> finish());
-        // 2. Draw the QR code at 512 px. This runs synchronously on the main thread;
-        //    Qr.encode returns null (empty image) if the link is too long for a QR code.
+        // 2. Draw the QR code at 512 px. Encoding and filling about a quarter of a million
+        //    pixels is too slow for the main thread on slower phones (the screen froze while
+        //    opening), so it runs in the background (Ui.bg) and the picture is set when ready.
+        //    Until then the image stays empty, as it already does when Qr.encode returns null
+        //    (link too long for a QR code). Ui.bg drops the result if the screen was closed.
         ImageView qr = findViewById(R.id.qr);
         if (!uri.isEmpty()) {
-            qr.setImageBitmap(Qr.encode(uri, 512));
+            Ui.bg(this, () -> Qr.encode(uri, 512), (bm, err) -> {
+                if (bm != null) {
+                    qr.setImageBitmap(bm);
+                }
+            });
         }
         ((TextView) findViewById(R.id.line)).setText(uri);
         // 3. Copy puts the link on the clipboard; Share hands it to the system share sheet.

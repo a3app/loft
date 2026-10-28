@@ -38,6 +38,7 @@ import com.google.zxing.common.HybridBinarizer;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -61,11 +62,32 @@ public final class ScanActivity extends LoftActivity {
      */
     private final AtomicBoolean got = new AtomicBoolean(false);
     /**
-     * ZXing decoder, reused for every frame to avoid re-creating it. It is not
-     * thread-safe: it is used from the camera analyser thread and, for gallery
-     * images, from the main thread.
+     * True while a code found by the camera is waiting to reach accept() on the
+     * main thread. The analyser keeps getting frames in the meantime and would
+     * find the same code again in each one; without this flag every frame would
+     * queue another accept() call (and possibly another toast) on the main thread.
      */
-    private final MultiFormatReader reader = new MultiFormatReader();
+    private final AtomicBoolean pending = new AtomicBoolean(false);
+    /**
+     * ZXing decoder for camera frames, reused for every frame to avoid
+     * re-creating it. ZXing readers are not thread-safe, so this one is used
+     * only on the camera analyser thread; gallery images get their own reader
+     * (see readGallery).
+     */
+    private final MultiFormatReader camReader = new MultiFormatReader();
+    /**
+     * The one background thread that analyses camera frames. Created once (the
+     * first startCam) and shut down in onDestroy; creating a new thread on every
+     * startCam used to leak a thread each time.
+     */
+    private ExecutorService camExec;
+    /**
+     * Buffers for camera frames, reused while the frame size stays the same so
+     * that a scan does not allocate (and the garbage collector does not have to
+     * free) a couple of megabytes per frame. Touched only on the analyser thread.
+     */
+    private byte[] yBytes;
+    private int[] yPixels;
 
     /**
      * Wires close, paste, add, file and gallery buttons. Then either opens the file picker at once
@@ -144,6 +166,9 @@ public final class ScanActivity extends LoftActivity {
      * Reads the chosen file as text, or decodes a QR code from the chosen gallery image, and
      * passes the result to accept(). Read errors are shown as a toast. A cancelled picker
      * (no result or no URI) does nothing. An image without a readable code is silently ignored.
+     * Reading and decoding run in the background (Ui.bg): a provider may be slow (cloud
+     * storage) and a photo decode is heavy, and either would freeze the screen on the main
+     * thread. The result comes back on the main thread, or is dropped if the screen closed.
      */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -153,25 +178,81 @@ public final class ScanActivity extends LoftActivity {
         }
         Uri u = data.getData();
         if (requestCode == REQ_FILE) {
-            try (InputStream in = getContentResolver().openInputStream(u)) {
-                if (in != null) {
-                    accept(MainActivity.readAll(in));
+            Ui.bg(this, () -> {
+                try (InputStream in = getContentResolver().openInputStream(u)) {
+                    // null (provider returned no stream) means "nothing to import", as before.
+                    return in == null ? null : MainActivity.readAll(in);
                 }
-            } catch (Exception e) {
-                Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
-            }
+            }, this::afterRead);
             return;
         }
         if (requestCode == REQ_GAL) {
-            try (InputStream in = getContentResolver().openInputStream(u)) {
-                Bitmap bm = BitmapFactory.decodeStream(in);
-                String t = decodeBitmap(bm);
-                if (t != null) {
-                    accept(t);
-                }
-            } catch (Exception e) {
-                Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
+            Ui.bg(this, () -> readGallery(u), this::afterRead);
+        }
+    }
+
+    /**
+     * Main-thread end of a file or gallery read: a read error becomes a toast, found text
+     * goes to accept(), and null (no stream, or no code in the image) does nothing.
+     */
+    private void afterRead(String text, Exception err) {
+        if (err != null) {
+            Toast.makeText(this, err.getMessage(), Toast.LENGTH_SHORT).show();
+        } else if (text != null) {
+            accept(text);
+        }
+    }
+
+    /** Longest side, in pixels, a gallery image is shrunk to before looking for a code. */
+    private static final int GAL_MAX = 1600;
+
+    /**
+     * Background part of the gallery import: decodes the picture at a reduced size and looks
+     * for a code in it. Returns the code text, or null when there is none.
+     *
+     * <p>A phone photo can be 50 megapixels; decoding it at full size takes hundreds of
+     * megabytes and seconds of CPU, and ZXing then has to scan every pixel. A QR code that
+     * fills a fair part of the picture is still easy to read at about 1600 px, so the image
+     * is read twice: first only its size (inJustDecodeBounds, no pixels), then the pixels
+     * with inSampleSize, which makes the decoder skip pixels as it reads (2 = half width and
+     * half height, 4 = a quarter, ...; the decoder only uses powers of two).
+     */
+    private String readGallery(Uri u) throws Exception {
+        // 1. Size only.
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        try (InputStream in = getContentResolver().openInputStream(u)) {
+            BitmapFactory.decodeStream(in, null, o);
+        }
+        // 2. Smallest halving that brings the longest side down to GAL_MAX or less.
+        int side = Math.max(o.outWidth, o.outHeight);
+        int sample = 1;
+        while (side > 0 && side / sample > GAL_MAX) {
+            sample *= 2;
+        }
+        // 3. The pixels, at the reduced size. A stream can be read only once, so open it again.
+        BitmapFactory.Options d = new BitmapFactory.Options();
+        d.inSampleSize = sample;
+        Bitmap bm;
+        try (InputStream in = getContentResolver().openInputStream(u)) {
+            bm = BitmapFactory.decodeStream(in, null, d);
+        }
+        // 4. Its own reader: the camera's reader may be busy on the analyser thread right now.
+        try {
+            return decodeBitmap(bm, new MultiFormatReader());
+        } finally {
+            if (bm != null) {
+                bm.recycle();
             }
+        }
+    }
+
+    /** Stops the frame-analysis thread when the screen goes away (the camera itself stops with the lifecycle). */
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (camExec != null) {
+            camExec.shutdown();
         }
     }
 
@@ -195,7 +276,12 @@ public final class ScanActivity extends LoftActivity {
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build();
                 // Frames are decoded on a separate thread so the preview stays smooth.
-                an.setAnalyzer(Executors.newSingleThreadExecutor(), this::analyze);
+                // One thread for the whole screen: startCam can run more than once
+                // (permission result), and each call used to leak a new thread.
+                if (camExec == null) {
+                    camExec = Executors.newSingleThreadExecutor();
+                }
+                an.setAnalyzer(camExec, this::analyze);
                 // Drop any earlier binding (e.g. from a previous startCam call) first.
                 provider.unbindAll();
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, an);
@@ -206,19 +292,25 @@ public final class ScanActivity extends LoftActivity {
     }
 
     /**
-     * Camera frame callback, run on a background thread. Skips work once a code was accepted,
-     * always closes the frame so the camera can deliver the next one, and hands found text to
-     * accept() on the UI thread.
+     * Camera frame callback, run on a background thread. Skips work once a code was accepted
+     * or while a found code is still on its way to the main thread, always closes the frame
+     * so the camera can deliver the next one, and hands found text to accept() on the UI thread.
+     * The {@link #pending} flag lets exactly one accept() call be queued at a time; it is
+     * cleared just before accept() runs, and by then accept() has set {@link #got} if it took
+     * the code, so scanning only resumes when the code was rejected (the user can retry).
      */
     private void analyze(ImageProxy image) {
-        if (got.get()) {
+        if (got.get() || pending.get()) {
             image.close();
             return;
         }
         try {
             String t = decodeY(image);
-            if (t != null && !t.isEmpty()) {
-                runOnUiThread(() -> accept(t));
+            if (t != null && !t.isEmpty() && pending.compareAndSet(false, true)) {
+                runOnUiThread(() -> {
+                    pending.set(false);
+                    accept(t);
+                });
             }
         } finally {
             image.close();
@@ -228,18 +320,28 @@ public final class ScanActivity extends LoftActivity {
     /**
      * Decodes a QR code from the frame's luminance (Y) plane only, which is all
      * ZXing needs, turned into grey pixels. Row stride may be wider than the
-     * image, so rows are copied one by one.
+     * image, so rows are copied one by one. Runs only on the analyser thread, which is
+     * what makes reusing {@link #yBytes}, {@link #yPixels} and {@link #camReader} safe.
      */
     private String decodeY(ImageProxy image) {
         // Camera frames come as YUV; plane 0 is Y (brightness). Each grey value is
         // expanded into an opaque ARGB pixel with equal red, green and blue.
         ImageProxy.PlaneProxy y = image.getPlanes()[0];
         ByteBuffer buf = y.getBuffer();
-        byte[] data = new byte[buf.remaining()];
-        buf.get(data);
+        // Reuse the buffers from the previous frame when they are big enough (the
+        // frame size normally never changes during a scan); allocate only when not.
+        int n = buf.remaining();
+        if (yBytes == null || yBytes.length < n) {
+            yBytes = new byte[n];
+        }
+        byte[] data = yBytes;
+        buf.get(data, 0, n);
         int w = image.getWidth();
         int h = image.getHeight();
-        int[] pixels = new int[w * h];
+        if (yPixels == null || yPixels.length != w * h) {
+            yPixels = new int[w * h];
+        }
+        int[] pixels = yPixels;
         int row = y.getRowStride();
         for (int j = 0; j < h; j++) {
             for (int i = 0; i < w; i++) {
@@ -247,11 +349,13 @@ public final class ScanActivity extends LoftActivity {
                 pixels[j * w + i] = 0xff000000 | (v << 16) | (v << 8) | v;
             }
         }
-        return decodePixels(pixels, w, h);
+        // RGBLuminanceSource copies the pixels into its own array, so the buffer can be
+        // reused for the next frame as soon as this call returns.
+        return decodePixels(pixels, w, h, camReader);
     }
 
-    /** Decodes a QR code from a still image (gallery) at its full size, or returns null. */
-    private String decodeBitmap(Bitmap bm) {
+    /** Decodes a QR code from a still image (gallery) with the given reader, or returns null. */
+    private static String decodeBitmap(Bitmap bm, MultiFormatReader reader) {
         if (bm == null) {
             return null;
         }
@@ -259,17 +363,19 @@ public final class ScanActivity extends LoftActivity {
         int h = bm.getHeight();
         int[] px = new int[w * h];
         bm.getPixels(px, 0, w, 0, 0, w, h);
-        return decodePixels(px, w, h);
+        return decodePixels(px, w, h, reader);
     }
 
     /**
      * Runs ZXing on ARGB pixels and returns the code text, or null when nothing was found.
-     * The reader is reset after every attempt because it is reused for every frame.
+     * The reader is reset after every attempt because the camera's reader is reused for
+     * every frame. Each caller passes a reader that no other thread is using at the same
+     * time, because ZXing readers keep state and are not thread-safe.
      * ZXing reports "no code here" by throwing, which is the normal case for most
      * frames, so exceptions are ignored. Any barcode format with text is accepted,
      * not only QR codes.
      */
-    private String decodePixels(int[] px, int w, int h) {
+    private static String decodePixels(int[] px, int w, int h, MultiFormatReader reader) {
         try {
             BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(w, h, px)));
             Result r = reader.decode(bitmap);

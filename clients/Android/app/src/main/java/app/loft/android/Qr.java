@@ -25,7 +25,10 @@ final class Qr {
      * Returns null for empty text, a size under 32 px, or an encoding error
      * (for example text too long for a QR code). The work is CPU-bound:
      * encoding plus one pixel per loop step, about a quarter of a million
-     * for 512 px, done on the caller's thread.
+     * for 512 px, done on the caller's thread, so screens should call it from
+     * the background (Ui.bg) and set the bitmap when it is ready. The pixels
+     * go into one int[] that builds the bitmap in a single call, which is far
+     * cheaper than setting pixels on a Bitmap one by one.
      */
     static Bitmap encode(String s, int size) {
         if (s == null || s.isEmpty() || size < 32) {
