@@ -689,36 +689,44 @@
 
         <include layout="@layout/row_channel" />
 
+        <!--
+            The three footer links are spread across the full width instead of
+            bunched in the middle: each button takes an equal third (width 0dp
+            plus weight 1), and its own text is pinned to its side — Reset to
+            the left edge, Log centred, About to the right edge.
+        -->
         <LinearLayout
             android:id="@+id/settings_links"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:gravity="center"
             android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btn_defaults"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:gravity="center"
+                android:layout_weight="1"
+                android:gravity="start|center_vertical"
                 android:text="@string/defaults" />
 
             <Button
                 android:id="@+id/btn_log"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:gravity="center"
                 android:text="@string/log" />
 
             <Button
                 android:id="@+id/btn_about"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:gravity="center"
+                android:layout_weight="1"
+                android:gravity="end|center_vertical"
                 android:text="@string/about" />
         </LinearLayout>
     </LinearLayout>
