@@ -17,11 +17,20 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-/** AES-GCM in AndroidKeyStore. Falls back to plaintext if the store is missing. */
+/**
+ * AES-GCM in AndroidKeyStore. Falls back to plaintext if the store is missing.
+ * AES-GCM both hides the text and detects tampering (the tag check fails).
+ * Some devices ship a broken or missing keystore; the plaintext fallback
+ * keeps the app working there instead of losing the user's connections.
+ * Every call loads the keystore and runs the cipher in the keystore service
+ * (a system process), so these calls are not free: each one is IPC.
+ */
 final class Box {
     /** Keystore name of the app's AES key. */
     private static final String ALIAS = "app.loft.profiles";
+    /** Name of Android's system keystore provider. */
     private static final String KS = "AndroidKeyStore";
+    /** Cipher transformation: AES in GCM mode (GCM needs no padding). */
     private static final String TF = "AES/GCM/NoPadding";
     /** GCM nonce length in bytes. */
     private static final int IV = 12;
@@ -39,6 +48,8 @@ final class Box {
         try {
             SecretKey key = key();
             Cipher c = Cipher.getInstance(TF);
+            // The keystore picks a fresh random IV itself (callers may not
+            // supply one), so it is read back and stored with the ciphertext.
             c.init(Cipher.ENCRYPT_MODE, key);
             byte[] iv = c.getIV();
             byte[] ct = c.doFinal(plain.getBytes("UTF-8"));
@@ -81,8 +92,10 @@ final class Box {
         }
     }
 
-    // The AES-256 key lives in the hardware-backed keystore and never leaves it;
-    // it is created on first use.
+    // The AES-256 key lives in the Android keystore (hardware-backed where the
+    // device supports it) and never leaves it; it is created on first use.
+    // If the key is ever lost (app data cleared, keystore reset), old "v1:"
+    // blobs can no longer be opened and open() returns "".
     private static SecretKey key() throws Exception {
         KeyStore ks = KeyStore.getInstance(KS);
         ks.load(null);

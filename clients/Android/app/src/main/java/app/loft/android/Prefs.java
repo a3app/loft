@@ -1,7 +1,8 @@
 /*
  * Android client, shared code: typed getters (and a few setters) for the
  * app settings. The phone and TV settings screens write most keys directly
- * through p(); LoftVpnService and RoutePlan read them when a session starts.
+ * through p(); LoftVpnService and RoutePlan read them when a session starts
+ * and again on every once-a-second poll.
  */
 package app.loft.android;
 
@@ -21,6 +22,11 @@ import java.util.Set;
  * App settings in SharedPreferences "loft.prefs": UI options, routing
  * switches and the user's custom routes. Profiles live elsewhere
  * (Profiles, encrypted file).
+ *
+ * <p>SharedPreferences keeps the file in memory after the first read, so the
+ * getters are cheap once loaded; only the very first access reads the file
+ * from disk. All writes here use apply(), which saves in the background
+ * instead of blocking like commit().
  */
 final class Prefs {
     // Service that echoes the caller's public IP; used to show the address
@@ -154,7 +160,6 @@ final class Prefs {
         return u == null ? "" : u.trim();
     }
 
-    /** all | except | only */
     /**
      * Which apps use the VPN: "all", "except" (all but the listed apps) or
      * "only" (just the listed apps). Unknown values read as "all".
@@ -164,7 +169,10 @@ final class Prefs {
         return "except".equals(m) || "only".equals(m) ? m : "all";
     }
 
-    /** Package names listed for the given app mode ("except" or "only"), in saved order. */
+    /**
+     * Package names listed for the given app mode ("except" or "only"), in
+     * saved order. Parses the JSON string on every call.
+     */
     static Set<String> appSet(Context c, String mode) {
         Set<String> out = new LinkedHashSet<>();
         String key = "except".equals(mode) ? "app_except" : "app_only";
@@ -205,7 +213,9 @@ final class Prefs {
 
     /** One user route: a prefix and what to do with it. */
     static final class Route {
+        /** The prefix, e.g. "10.1.0.0/16". */
         String cidr = "";
+        /** "through" the tunnel, "bypass" it, or "drop" the traffic. */
         String via = "through"; // through | bypass | drop
     }
 }

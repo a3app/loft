@@ -5,7 +5,11 @@
  */
 package app.loft.android;
 
-/** SHA256SUMS lines: {@code <hex>  name} or {@code <hex> *name}. */
+/**
+ * SHA256SUMS lines: {@code <hex>  name} or {@code <hex> *name}. This is the
+ * format written by the {@code sha256sum} tool; the '*' marks binary mode and
+ * is ignored here. Lines starting with '#' are comments.
+ */
 final class Sums {
     /** Static helpers only; not instantiated. */
     private Sums() {}
@@ -25,6 +29,7 @@ final class Sums {
             if (line.isEmpty() || line.charAt(0) == '#') {
                 continue;
             }
+            // Split at the first space or tab: hash on the left, file name on the right.
             int sp = indexOfWs(line);
             if (sp <= 0) {
                 continue;
@@ -34,6 +39,7 @@ final class Sums {
             if (rest.startsWith("*")) {
                 rest = rest.substring(1);
             }
+            // 64 hex characters = 32 bytes = one SHA-256 digest; anything else is not a usable line.
             if (name.equals(rest) && hex.length() == 64) {
                 return hex.toLowerCase();
             }

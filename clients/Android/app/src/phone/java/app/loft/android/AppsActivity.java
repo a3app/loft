@@ -2,7 +2,10 @@
  * Android client, phone build: the per-app routing screen (Settings, Route,
  * Apps). Lets the user pick which installed apps skip the tunnel or are the
  * only ones using it. The choice is stored in Prefs and applied by
- * LoftVpnService when it builds the TUN.
+ * LoftVpnService when it builds the TUN (the virtual network interface the
+ * VPN reads packets from), through VpnService.Builder's
+ * addDisallowedApplication / addAllowedApplication. While the VPN runs, the
+ * service watches these Prefs keys and rebuilds the TUN after each change.
  */
 package app.loft.android;
 
@@ -29,21 +32,31 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Settings → Route → Apps. Three modes: all apps follow split rules;
+ * Settings → Route → Apps. Three modes: all apps follow split rules (split
+ * tunneling: the zone lists decide per address what goes through the tunnel);
  * except — selected packages skip the tunnel; only — only selected
- * packages use it. Except and only keep separate package sets.
+ * packages use it. Except and only keep separate package sets, so switching
+ * modes does not lose the other mode's picks. The whole screen is built in
+ * code inside the "body" container of activity_apps.xml.
  */
 public final class AppsActivity extends LoftActivity {
     /** Current mode: "all", "except" or "only". */
     private String mode;
     /** Whether system apps are listed. Not saved; system apps already picked are always shown. */
     private boolean sys;
+    /** Package names picked for "except" mode (these apps bypass the tunnel). */
     private final Set<String> except = new HashSet<>();
+    /** Package names picked for "only" mode (only these apps use the tunnel). */
     private final Set<String> only = new HashSet<>();
+    /** Apps currently shown in the list, after search and system-app filtering; rebuilt by fill(). */
     private final List<Row> rows = new ArrayList<>();
+    /** Adapter of the app list; null in "all" mode, where the list is not built. */
     private BaseAdapter adapter;
+    /** Grey hint under the mode switch: a tip in "all" mode, a caveat about bypassing apps otherwise. */
     private TextView hint;
+    /** "N selected" counter above the list; null in "all" mode. */
     private TextView cnt;
+    /** Search field that filters the list by app name or package; null in "all" mode. */
     private EditText search;
     /** Container for search, system-apps switch, counter and app list; hidden in "all" mode. */
     private LinearLayout extra;
@@ -62,6 +75,8 @@ public final class AppsActivity extends LoftActivity {
 
     /**
      * Saves the mode and both package sets to Prefs right away, so the next tunnel start uses them.
+     * Writes use apply() (asynchronous disk write). Each written key that changed also makes a
+     * running LoftVpnService rebuild its TUN, because the service listens to these Prefs keys.
      */
     private void persist() {
         Prefs.p(this).edit().putString("app_mode", mode).apply();
@@ -137,6 +152,7 @@ public final class AppsActivity extends LoftActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         root.addView(extra);
 
+        // "All" needs no app list at all; except/only build the picker below.
         if ("all".equals(mode)) {
             hint.setText(R.string.apps_all_h);
             extra.setVisibility(View.GONE);
@@ -181,6 +197,8 @@ public final class AppsActivity extends LoftActivity {
             cnt.setTextSize(12);
             extra.addView(cnt);
 
+            // Plain BaseAdapter over rows; getView reuses old row views (conv) so scrolling
+            // only rebinds text, icon and switch instead of building new views.
             adapter = new BaseAdapter() {
                 @Override
                 public int getCount() {
@@ -213,6 +231,7 @@ public final class AppsActivity extends LoftActivity {
             lv.setSelector(new android.graphics.drawable.ColorDrawable(0));
             extra.addView(lv, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+            // Every edit of the search text re-runs fill() (a full package scan) on the main thread.
             search.addTextChangedListener(new android.text.TextWatcher() {
                 @Override
                 public void beforeTextChanged(CharSequence s, int a, int b, int c) {
@@ -237,15 +256,22 @@ public final class AppsActivity extends LoftActivity {
      * Refills the app list: every launchable app except loft itself, filtered by the search text,
      * with system apps hidden unless the switch is on or they are already picked. Picked apps
      * come first, then by name.
+     * Runs on the main thread and asks PackageManager (a call into the system server) for the
+     * launcher apps, then for each app's info, label and icon, so it is slow on phones with
+     * many apps.
      */
     private void fill() {
         rows.clear();
         String q = search == null ? "" : search.getText().toString().trim().toLowerCase();
         Set<String> picked = sel();
+        // 1. Ask for every activity that shows in the launcher (MAIN + LAUNCHER). This lists
+        //    apps the user can open, which is what they expect to choose from.
         PackageManager pm = getPackageManager();
         android.content.Intent launch = new android.content.Intent(android.content.Intent.ACTION_MAIN)
                 .addCategory(android.content.Intent.CATEGORY_LAUNCHER);
         List<ResolveInfo> found = pm.queryIntentActivities(launch, 0);
+        // 2. One row per package: an app with several launcher icons appears once; loft itself
+        //    is skipped (it cannot route around its own tunnel).
         Set<String> seen = new HashSet<>();
         for (ResolveInfo ri : found) {
             if (ri.activityInfo == null) {
@@ -261,10 +287,13 @@ public final class AppsActivity extends LoftActivity {
             } catch (PackageManager.NameNotFoundException e) {
                 continue;
             }
+            // 3. Hide preinstalled (system) apps unless the switch is on, but never hide one that
+            //    is already picked, so the user can always see and undo a choice.
             boolean system = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
             if (system && !sys && !picked.contains(pkg)) {
                 continue;
             }
+            // 4. Search matches the visible name or the package id, case-insensitively.
             String name = String.valueOf(pm.getApplicationLabel(ai));
             if (!q.isEmpty() && !name.toLowerCase().contains(q) && !pkg.toLowerCase().contains(q)) {
                 continue;
@@ -273,12 +302,15 @@ public final class AppsActivity extends LoftActivity {
             r.pkg = pkg;
             r.name = name;
             r.system = system;
+            // Icons are loaded for every matching app up front, not lazily per visible row.
+            // A missing or broken icon just leaves the image empty.
             try {
                 r.icon = pm.getApplicationIcon(ai);
             } catch (Exception ignored) {
             }
             rows.add(r);
         }
+        // 5. Picked apps first, then alphabetical by name.
         Collections.sort(rows, (a, b) -> {
             boolean ap = picked.contains(a.pkg);
             boolean bp = picked.contains(b.pkg);
@@ -295,7 +327,10 @@ public final class AppsActivity extends LoftActivity {
         }
     }
 
-    /** Creates one empty list row (icon, name, package, switch); views are found later by tag. */
+    /**
+     * Creates one empty list row (icon, name, package, switch); views are found later by tag
+     * ("ic", "n", "m", "sw") in bindRow, because the row is built in code without view ids.
+     */
     private View makeRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -333,6 +368,8 @@ public final class AppsActivity extends LoftActivity {
     /**
      * Fills a row for one app and makes its switch (or a tap on the row) add or remove the
      * package from the current set, saving immediately.
+     * The listener is cleared before setChecked: a recycled row still carries the previous
+     * app's listener, which would otherwise fire and change the wrong package.
      */
     private void bindRow(View row, Row r) {
         ImageView ic = row.findViewWithTag("ic");
@@ -367,9 +404,13 @@ public final class AppsActivity extends LoftActivity {
 
     /** One installed app as shown in the list. */
     private static final class Row {
+        /** Package name, e.g. com.example.app; this is what Prefs stores. */
         String pkg = "";
+        /** Name shown in the launcher. */
         String name = "";
+        /** True for preinstalled system apps (FLAG_SYSTEM). */
         boolean system;
+        /** Launcher icon, or null when it could not be loaded. */
         Drawable icon;
     }
 }

@@ -11,7 +11,13 @@ import org.json.JSONObject;
 
 import java.util.UUID;
 
-/** One named connection. YAML is what Engine.Start consumes. */
+/**
+ * One named connection: everything needed to reach one server. A plain data
+ * holder with public-in-package fields, so the Edit screen, Importer and
+ * YamlBuilder can read and set them directly. It is not thread-safe on its
+ * own; Profiles guards the shared list with synchronized methods. The YAML
+ * built from it (sessionYaml) is what Engine.Start in the Go engine consumes.
+ */
 final class Profile {
     // A "front" is how the loft connection is wrapped in ordinary HTTPS:
     // GET (long-lived HTTP requests), WebSocket, HTTP/2, QUIC, HTTP/3, or L3.
@@ -19,50 +25,75 @@ final class Profile {
     // MUX_ORDER lists the fronts that carry the mux (many streams in one
     // connection) and so can be combined in one session; L3 cannot.
     // DEF_* are the default URL paths a front uses when none is given.
+
+    /** Every loft front name, lowercase, in the order the UI shows them. */
     static final String[] FRONTS = {"get", "ws", "h2", "quic", "h3", "l3"};
+    /** Display titles for FRONTS, same positions. */
     static final String[] FRONT_TITLES = {"GET", "WS", "H2", "QUIC", "H3", "L3"};
+    /** Fronts that carry the mux and can be combined in one session (all except L3). */
     static final String[] MUX_ORDER = {"get", "ws", "h2", "quic", "h3"};
+    /** Default URL path of the GET front. */
     static final String DEF_GET = "/static/v3/build";
+    /** Default URL path of the WebSocket front. */
     static final String DEF_WS = "/api/v1/sync";
+    /** Default URL path of the HTTP/2 front; also used for HTTP/3. */
     static final String DEF_H2 = "/api/v1/tunnel";
 
-    // Profile fields. kind is a front name or sstp / vless / trojan.
-    // token is the member key (lt_...). cdn is a cover host the GET front is
-    // sent through; edge is a direct node address used for the extra fronts
-    // when the main URL goes through a CDN. maskPub is the node's mask key,
-    // learned after the first handshake. inner is the extra frame encryption
-    // inside TLS. wsPath / h2Path / h3Path / quic turn on extra mux fronts.
-    // listedFronts is the front list sent in Hello (the client's first
-    // message, saying what it can do). fp is the TLS fingerprint to imitate.
-    // yaml is the cached engine config built from these fields.
-    // user / pass / pap are the SSTP login (pap allows PAP/CHAP). sni is the
-    // TLS server name to send. dns / dnsSystem are the Edit screen's DNS
-    // fields. mux turns stream multiplexing on; tlsCheck verifies the
-    // server certificate.
+    /** Stable random id; Profiles finds, replaces and activates profiles by it. */
     String id = UUID.randomUUID().toString();
+    /** Name shown in the list; falls back to the host when empty. */
     String name = "";
+    /** A loft front name (get, ws, h2, quic, h3, l3) or sstp / vless / trojan. */
     String kind = "get";
+    /** Member key (lt_...) for loft, the UUID for VLESS, the password for Trojan. */
     String token = "";
+    /** Server address. For VLESS and Trojan this is the whole original share link. */
     String url = "";
+    /** URL path of the GET front; empty means the node's default. */
     String path = "";
+    /** Cover host (CDN) the GET front is sent through; extra fronts stay off then unless edge is set. */
     String cdn = "";
+    /** Direct node address used for the extra fronts when the main URL goes through a CDN. */
     String edge = "";
+    /** TLS server name to send (SNI), when it differs from the host. */
     String sni = "";
+    /** SSTP login name. */
     String user = "";
+    /** SSTP password (also Trojan's password when imported from YAML). */
     String pass = "";
+    /** DNS server typed on the Edit screen; used when dnsSystem is false. */
     String dns = "";
+    /**
+     * The node's mask public key (hex). Learned after the first handshake
+     * (Profiles.applyLearnedMask) and passed back as mask_pub on later starts.
+     */
     String maskPub = "";
+    /** Name of the extra frame encryption inside TLS ("inner" cipher); empty for none. */
     String inner = "";
+    /** Path of the extra WebSocket front; non-empty turns that front on. */
     String wsPath = "";
+    /** Path of the extra HTTP/2 front; non-empty turns that front on. */
     String h2Path = "";
+    /** Path of the extra HTTP/3 front; non-empty turns that front on. */
     String h3Path = "";
+    /**
+     * Comma list of fronts sent in Hello (the client's first message, saying
+     * what it can do). Empty means "GET only, let the node tell me the rest".
+     */
     String listedFronts = "";
+    /** TLS fingerprint to imitate (which browser's handshake to look like). */
     String fp = "chrome";
+    /** Turns on the extra QUIC front (it has no path). */
     boolean quic;
+    /** Cached engine config built from these fields; Profiles refreshes it on every save. */
     String yaml = "";
+    /** Stream multiplexing (many streams in one connection); always off for L3. */
     boolean mux = true;
+    /** Verify the server's TLS certificate. Off only for self-signed test servers. */
     boolean tlsCheck = true;
+    /** SSTP only: allow the plain PAP login as well as CHAP. */
     boolean pap;
+    /** Use the system DNS instead of the dns field. */
     boolean dnsSystem = true;
 
     /** True for a loft front (get, ws, h2, quic, h3, l3) rather than SSTP / VLESS / Trojan. */
@@ -113,17 +144,22 @@ final class Profile {
 
     /**
      * Hello list from Edit extras: rebuilds listedFronts from the Edit
-     * screen's extra-front fields. With GET only it stays empty: the client then lists no fronts, and the
-     * node answers in Status (its reply to Hello) with the fronts it offers,
-     * which applyLearnedFronts saves.
+     * screen's extra-front fields. With GET only it stays empty: the client
+     * then lists no fronts, and the node answers in Status (its reply to
+     * Hello) with the fronts it offers, which applyLearnedFronts saves.
+     * Called by the Edit screen before saving.
      */
     void syncListedFronts() {
         String k = kind == null ? "get" : kind.toLowerCase();
+        // Non-loft kinds and L3 have no front list at all.
         if (isSSTP() || isVLESS() || isTrojan() || "l3".equals(k)) {
             listedFronts = "";
             return;
         }
         java.util.ArrayList<String> listed = new java.util.ArrayList<>();
+        // GET (and "auto", which is treated the same) is the base front: list it
+        // first, then every extra the user switched on, and normalise the kind
+        // to "get". A pinned single front (ws, h2, ...) lists only itself.
         if (k.isEmpty() || "get".equals(k) || "auto".equals(k)) {
             listed.add("get");
             if (!nz(wsPath).isEmpty()) {
@@ -142,6 +178,7 @@ final class Profile {
         } else if (muxName(k)) {
             listed.add(k);
         }
+        // A single front needs no list: the node assumes it from the request.
         if (listed.size() <= 1) {
             listedFronts = "";
             return;
@@ -167,6 +204,7 @@ final class Profile {
         if (isSSTP() || isVLESS() || isTrojan() || "l3".equals(k)) {
             return new String[]{k};
         }
+        // An explicit list wins: keep known mux names, each once, in list order.
         if (listedFronts != null && !listedFronts.trim().isEmpty()) {
             java.util.ArrayList<String> out = new java.util.ArrayList<>();
             java.util.HashSet<String> seen = new java.util.HashSet<>();
@@ -187,6 +225,7 @@ final class Profile {
         if ("ws".equals(k) || "h2".equals(k) || "quic".equals(k) || "h3".equals(k)) {
             return new String[]{k};
         }
+        // GET with extras: GET first, then the extras in MUX_ORDER order.
         if (hasMuxExtras()) {
             java.util.ArrayList<String> out = new java.util.ArrayList<>();
             out.add("get");
@@ -212,8 +251,10 @@ final class Profile {
 
     /**
      * Applies a "fronts" list from an imported link or YAML (comma list,
-     * optionally in brackets). Each named front is turned on with its default
-     * path when it has none, and the list is kept as listedFronts.
+     * optionally in brackets, e.g. "[get, ws, quic]"). Each named front is
+     * turned on with its default path when it has none, and the list is kept
+     * as listedFronts. Unknown names and L3 are ignored. Note that H3 gets the
+     * H2 default path (DEF_H2); there is no separate H3 default.
      */
     void applyFrontList(String raw) {
         if (raw == null) {
@@ -278,8 +319,11 @@ final class Profile {
 
     /**
      * Saves the fronts the node offered in Status ("get=/path,ws=/path,quic").
-     * Returns true when something changed. Skipped for non-loft kinds, L3 and
-     * CDN profiles, where extra fronts are not used.
+     * Returns true when something changed, so the caller (Profiles) only
+     * rewrites the encrypted file when needed; LoftVpnService calls this on
+     * every poll while connected. Skipped for non-loft kinds, L3 and CDN
+     * profiles, where extra fronts are not used. Fronts the node does not
+     * mention are left as they are.
      */
     boolean applyLearnedFronts(String raw) {
         if (raw == null || isSSTP() || isVLESS() || isTrojan() || isL3() || isCDN()) {
@@ -355,7 +399,11 @@ final class Profile {
         return s == null ? "" : s.trim();
     }
 
-    /** Query value of a vless:// or trojan:// share URL. */
+    /**
+     * Query value of a vless:// or trojan:// share URL (these profiles keep
+     * the whole link in url). Key match ignores case; the value is URL-decoded.
+     * Returns "" when the key is missing. Used for the info rows on screen.
+     */
     String linkQuery(String key) {
         String u = url;
         if (u == null || key == null || key.isEmpty()) {
@@ -383,7 +431,11 @@ final class Profile {
         return "";
     }
 
-    /** Transport from the share URL: TCP, XHTTP, WS, gRPC. */
+    /**
+     * Transport from the share URL's type= parameter, for display: TCP (also
+     * when missing), XHTTP (splithttp is its older name), WS, gRPC, or the
+     * raw value upper-cased.
+     */
     String linkTransport() {
         String t = linkQuery("type").toLowerCase();
         if (t.isEmpty() || "tcp".equals(t)) {
@@ -401,7 +453,10 @@ final class Profile {
         return t.toUpperCase();
     }
 
-    /** Security from the share URL: TLS, REALITY, none. */
+    /**
+     * Security from the share URL, for display: REALITY (also implied by a
+     * pbk= public key or sid= short id), none, XTLS, otherwise TLS.
+     */
     String linkSecurity() {
         String s = linkQuery("security").toLowerCase();
         if ("reality".equals(s) || !linkQuery("pbk").isEmpty() || !linkQuery("sid").isEmpty()) {
@@ -450,11 +505,13 @@ final class Profile {
         if (u == null) {
             return "";
         }
+        // 1. Share links carry "secret@host"; drop the secret part.
         int at = u.indexOf('@');
         if (at >= 0 && (u.startsWith("loft://") || u.startsWith("vless://") || u.startsWith("trojan://")
                 || u.startsWith("sstp://"))) {
             u = u.substring(at + 1);
         }
+        // 2. Drop the scheme, then everything from the path or query on.
         u = u.replaceFirst("^[a-zA-Z][a-zA-Z0-9+.-]*://", "");
         int slash = u.indexOf('/');
         if (slash >= 0) {
@@ -464,6 +521,8 @@ final class Profile {
         if (q >= 0) {
             u = u.substring(0, q);
         }
+        // 3. "[v6addr]:port" -> v6addr. A bare IPv6 address has several
+        //    colons, so a port is only cut when there is exactly one colon.
         if (u.startsWith("[")) {
             int end = u.indexOf(']');
             if (end > 0) {
@@ -483,7 +542,10 @@ final class Profile {
         return YamlBuilder.from(this);
     }
 
-    /** Every field as JSON, the form Profiles saves to storage. */
+    /**
+     * Every field as JSON, the form Profiles saves to storage. A new field
+     * must be added here and in fromJson, or it is lost on the next restart.
+     */
     JSONObject toJson() throws JSONException {
         JSONObject o = new JSONObject();
         o.put("id", id);
@@ -549,7 +611,10 @@ final class Profile {
      * Reads a profile from one engine YAML document (as produced by
      * Mobile.parseShareAll). Fields feed the UI, Edit, and Engine.Start:
      * sessionYaml rebuilds the document via YamlBuilder. Mac VLESS files
-     * write uuid instead of token.
+     * write uuid instead of token. Peek is a small line-based reader for the
+     * flat YAML the engine emits, not a full YAML parser; missing keys read
+     * as "". Never throws: a document with nothing useful gives a mostly
+     * empty Profile, which Importer then filters out.
      */
     static Profile fromYaml(String yaml) {
         Profile p = new Profile();
@@ -720,7 +785,11 @@ final class Profile {
         return base;
     }
 
-    /** Host name of any URL, using the same rules as host(). */
+    /**
+     * Host name of any URL, using the same rules as host(). It borrows a
+     * throwaway Profile to reuse host(); note that this also generates a
+     * random UUID for the unused id on every call.
+     */
     static String hostOf(String url) {
         Profile x = new Profile();
         x.url = url == null ? "" : url;

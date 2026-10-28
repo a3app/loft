@@ -1,4 +1,5 @@
 /*
+ * Android client, shared code (lives in src/main; used by the phone screens).
  * RevealFrame: the swipeable row container used by the connection list
  * (row_conn.xml, MainActivity) and the split-tunnel service lists
  * (row_split.xml, ListsActivity). It holds a front "card" view and a
@@ -18,9 +19,12 @@ import android.view.animation.PathInterpolator;
 import android.widget.FrameLayout;
 
 /**
- * Connection row from the mock: the card slides up to 84dp and parks
- * there, showing Edit on the left and Delete on the right. The row
- * never flies off the list.
+ * Connection row from the design mock-up: the card slides up to 84dp and
+ * parks there, showing Edit on the left and Delete on the right. The row
+ * never flies off the list (unlike the stock swipe-to-dismiss), so a delete
+ * always needs a second, deliberate tap. The layout must contain a child
+ * with id "card" (the sliding front) and may contain "behind", "act_edit",
+ * "act_del", "mini" and "body"; missing ones are simply skipped.
  */
 public final class RevealFrame extends FrameLayout {
     /** How far the card slides when parked open, in dp. */
@@ -39,6 +43,7 @@ public final class RevealFrame extends FrameLayout {
         void onSettled(RevealFrame row, float tx);
     }
 
+    /** Owner callback (the list screen); null when nobody listens. */
     private Listener listener;
     /** Touch position at ACTION_DOWN, used to measure the drag. */
     private float x0;
@@ -68,7 +73,7 @@ public final class RevealFrame extends FrameLayout {
         init(c);
     }
 
-    /** Creates a row inflated from XML with a style; the style is ignored. */
+    /** Creates a row inflated from XML with a style; the style is ignored (super(c, a) is called). */
     public RevealFrame(Context c, AttributeSet a, int defStyle) {
         super(c, a);
         init(c);
@@ -93,6 +98,8 @@ public final class RevealFrame extends FrameLayout {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+        // Done here rather than in init() because children only exist after
+        // inflation, and the outline needs the final size anyway.
         View behind = findViewById(R.id.behind);
         if (behind == null) {
             return;
@@ -150,7 +157,11 @@ public final class RevealFrame extends FrameLayout {
         syncActions();
     }
 
-    /** Animates the card to {@code tx} and reports the final offset to the listener. */
+    /**
+     * Animates the card to {@code tx} and reports the final offset to the
+     * listener. The curve is an ease-out (fast start, gentle stop). The
+     * update listener keeps the Edit/Delete visibility in step on every frame.
+     */
     void snap(float tx) {
         View c = card();
         if (c == null) {
@@ -233,6 +244,8 @@ public final class RevealFrame extends FrameLayout {
     @Override
     public boolean onInterceptTouchEvent(MotionEvent e) {
         int act = e.getActionMasked();
+        // Never intercept on DOWN: children must see the start of a tap.
+        // Only record the start point when the touch begins on the card.
         if (act == MotionEvent.ACTION_DOWN) {
             if (!onCard(e) || onMini(e)) {
                 dragging = false;
@@ -245,6 +258,8 @@ public final class RevealFrame extends FrameLayout {
             dragging = false;
             return false;
         }
+        // Returning true here steals the rest of the gesture from the
+        // children (they get ACTION_CANCEL) and sends it to onTouchEvent.
         if (act == MotionEvent.ACTION_MOVE) {
             if (onMini(e) && !dragging) {
                 return false;
@@ -359,6 +374,7 @@ public final class RevealFrame extends FrameLayout {
         setMeasuredDimension(
                 resolveSize(card.getMeasuredWidth() + getPaddingLeft() + getPaddingRight(),
                         widthMeasureSpec),
+                // Height is the card's own height, ignoring the parent's spec.
                 h + getPaddingTop() + getPaddingBottom());
     }
 

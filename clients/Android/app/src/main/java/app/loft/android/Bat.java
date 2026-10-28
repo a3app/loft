@@ -12,7 +12,12 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Keenetic / loft-routes `.bat` list. */
+/**
+ * Keenetic / loft-routes `.bat` list. Used for split tunneling: deciding
+ * which destination address ranges (prefixes) go through the VPN and which
+ * stay on the normal network. A "zone" is a named group of such services
+ * in SplitStore. Pure string work, no Android APIs, so it is unit-testable.
+ */
 final class Bat {
     /** One parsed line: a prefix, its label, and whether it is an "ignore" exclusion. */
     static final class Row {
@@ -28,16 +33,21 @@ final class Bat {
     // lines, so the same list works on Windows, Keenetic routers and here.
     // "REM ignore cidr" marks a prefix to keep off the tunnel; "REM zone: id"
     // names the zone the file belongs to.
+    /** "route ADD ip [MASK mask]": group 1 is the address, group 2 the optional dotted mask. */
     private static final Pattern ADD = Pattern.compile(
             "(?i)route\\s+ADD\\s+(\\S+)(?:\\s+MASK\\s+(\\S+))?");
+    /** Trailing " rem label" or " :: rem label" comment; group 1 is the label. */
     private static final Pattern REM = Pattern.compile("(?i)\\s(?:[:]+\\s*)?rem\\s+(.*)$");
+    /** "REM ignore cidr" line; group 1 is the prefix. */
     private static final Pattern IGNORE = Pattern.compile("(?i)^\\s*REM\\s+ignore\\s+(\\S+)");
+    /** "REM zone: id" header anywhere in the text (multi-line mode); group 1 is the id. */
     private static final Pattern ZONE = Pattern.compile("(?im)^\\s*REM\\s+zone:\\s*(\\S+)");
 
     /**
      * Parses a route list. Accepts "route ADD" lines (label from the trailing
      * rem), "REM ignore" lines, and bare CIDRs one per line; comments and other
-     * lines are skipped.
+     * lines are skipped. Rows from all zones in the file are returned
+     * together, in file order; zoneHint() reads the zone separately.
      */
     static List<Row> parse(String text) {
         List<Row> out = new ArrayList<>();
@@ -76,7 +86,8 @@ final class Bat {
                 rem = remM.group(1).trim();
                 head = line.substring(0, remM.start()).trim();
             }
-            // 4. A "route ADD ip [MASK mask]" line, or else a bare CIDR.
+            // 4. A "route ADD ip [MASK mask]" line, or else a bare CIDR (the
+            //    whole line is tried, so a CIDR with a trailing comment is skipped).
             Matcher m = ADD.matcher(head);
             if (!m.find()) {
                 Cidr c = Cidr.parse(line);
@@ -102,7 +113,7 @@ final class Bat {
         return out;
     }
 
-    /** The zone id from a "REM zone:" header, lower-cased; "" when absent. */
+    /** The zone id from the first "REM zone:" header, lower-cased; "" when absent. */
     static String zoneHint(String text) {
         if (text == null) {
             return "";
@@ -113,7 +124,9 @@ final class Bat {
 
     /**
      * Writes one zone as a .bat list that parse() reads back. Only IPv4 goes in
-     * route ADD lines because Windows "route ADD ... MASK" is IPv4-only.
+     * route ADD lines because Windows "route ADD ... MASK" is IPv4-only; IPv6
+     * prefixes of normal services are left out of the file. "@echo off"
+     * keeps Windows from printing every line when the file is run.
      */
     static String emit(SplitStore st, String zoneId) {
         StringBuilder b = new StringBuilder();
@@ -157,6 +170,7 @@ final class Bat {
                 if (c == null || c.v6) {
                     continue;
                 }
+                // Gateway 0.0.0.0 is a placeholder; ":: rem" starts the label comment.
                 b.append("route ADD ").append(c.address())
                         .append(" MASK ").append(Cidr.dottedMask(c.bits))
                         .append(" 0.0.0.0 :: rem ").append(s.name).append('\n');

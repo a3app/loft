@@ -14,13 +14,18 @@ import com.google.zxing.qrcode.QRCodeWriter;
 import java.util.HashMap;
 import java.util.Map;
 
-/** QR bitmap for share and TV pairing. Dark mark on snow. */
+/**
+ * QR bitmap for share and TV pairing. Dark mark on snow (the app's ink
+ * 0xFF1A1714 on paper 0xFFF3EDE4, rather than pure black on white).
+ */
 final class Qr {
     /**
      * Encodes {@code s} into a square QR bitmap about {@code size} pixels wide,
      * in the app's dark-ink-on-light colours with a 1-module quiet border.
      * Returns null for empty text, a size under 32 px, or an encoding error
-     * (for example text too long for a QR code).
+     * (for example text too long for a QR code). The work is CPU-bound:
+     * encoding plus one pixel per loop step, about a quarter of a million
+     * for 512 px, done on the caller's thread.
      */
     static Bitmap encode(String s, int size) {
         if (s == null || s.isEmpty() || size < 32) {
@@ -31,6 +36,8 @@ final class Qr {
             h.put(EncodeHintType.MARGIN, 1);
             com.google.zxing.common.BitMatrix m = new QRCodeWriter()
                     .encode(s, BarcodeFormat.QR_CODE, size, size, h);
+            // ZXing returns a matrix at least size × size, scaled up to whole
+            // modules; copy it into an ARGB pixel array and build the bitmap.
             int w = m.getWidth();
             int[] px = new int[w * w];
             for (int y = 0; y < w; y++) {

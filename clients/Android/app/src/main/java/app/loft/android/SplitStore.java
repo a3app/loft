@@ -29,20 +29,35 @@ import java.util.UUID;
  * These are the user's split-routing lists: which address ranges go
  * through the tunnel and which go direct. Stored as JSON in Prefs under
  * "split_store". RoutePlan applies them when split routing is on.
+ *
+ * <p>Split tunneling means only part of the traffic uses the VPN: some
+ * address ranges go through the tunnel, others go straight out on the
+ * real network. A "zone" is a group with one direction (through, around or
+ * block); a "service" is a named set of address prefixes (CIDRs, such as
+ * 10.0.0.0/8) inside a zone.
+ *
+ * <p>An instance is a plain in-memory object and is not thread-safe: load
+ * it, change it, save it, on one thread at a time. Every load() parses the
+ * whole JSON again, and every save() writes the whole JSON again.
  */
 final class SplitStore {
     // Built-in zones: "local" stays off the tunnel, "global" goes through it,
     // "block" drops its traffic.
     // REPO_BASE is the public loft-routes repository with ready-made lists;
     // CATALOG lists the zones offered there, with names in en / ru / zh.
+    /** Id of the built-in zone whose traffic stays off the tunnel (LAN lives here). */
     static final String LOCAL = "local";
+    /** Id of the built-in zone whose traffic goes through the tunnel; also the default zone of a new service. */
     static final String GLOBAL = "global";
+    /** Id of the built-in zone whose traffic is dropped on the device. */
     static final String BLOCK = "block";
+    /** Base URL of the loft-routes repository; a zone's list is REPO_BASE + id + ".bat". */
     static final String REPO_BASE = "https://raw.githubusercontent.com/a3app/loft-routes/main/";
     // Same window as macOS SplitStore.maybePull: skip if pulled less than 20 h ago.
     static final long AUTO_MS = 20L * 60 * 60 * 1000;
     // Largest list file pullZone accepts (2 MiB), so a bad URL cannot fill memory.
     static final int PULL_MAX = 2 * 1024 * 1024;
+    /** Zones offered by the repository: {id, English name, Russian name, Chinese name}. */
     static final String[][] CATALOG = {
             {"global", "World", "Мир", "全球"},
             {"ru", "Russia", "Россия", "俄罗斯"},
@@ -65,13 +80,21 @@ final class SplitStore {
      * successful download, in ms since the epoch (0 = never).
      */
     static final class Zone {
+        /** Stable id; services point at their zone by this id. Built-ins use LOCAL / GLOBAL / BLOCK. */
         String id = "";
+        /** Name shown on the Lists screen. */
         String name = "";
+        /** True for local, global and block: they cannot be deleted. */
         boolean builtin;
+        /** True when the zone's traffic goes through the tunnel (ignored while block is set). */
         boolean through;
+        /** True when the zone's traffic is dropped; wins over through. */
         boolean block;
+        /** URL of the .bat list this zone follows; "" when it follows none. */
         String repo = "";
+        /** Auto-update switch: when on, the list at repo is downloaded again every AUTO_MS. */
         boolean auto = true;
+        /** Time of the last successful download, ms since the epoch; 0 = never. */
         long pulled;
 
         /** True when the zone's traffic goes through the tunnel. */
@@ -103,31 +126,44 @@ final class SplitStore {
      * zone says.
      */
     static final class Svc {
+        /** Unique id, random for new services; kept when the store is copied or saved. */
         String id = UUID.randomUUID().toString();
+        /** Name shown in the list (for repository rows, the label from the .bat file). */
         String name = "";
+        /** Id of the zone this service belongs to. */
         String zone = GLOBAL;
+        /** Where the entry came from. */
         String src = "me"; // me | repo | ignore
+        /** True for an exclusion entry: its prefixes never use the tunnel. */
         boolean ignore;
+        /** Address prefixes as text (e.g. "10.0.0.0/8"); only ones that parse are kept on load. */
         final List<String> cidrs = new ArrayList<>();
+        /** Domain names, lower-case and without duplicates. Stored and searched; routing uses only cidrs. */
         final List<String> domains = new ArrayList<>();
     }
 
     /** Snapshot of zones + services for the 5 s undo snackbar. */
     static final class Snap {
+        /** Copies of the zones at snapshot time. */
         final List<Zone> zones = new ArrayList<>();
+        /** Copies of the services at snapshot time. */
         final List<Svc> services = new ArrayList<>();
     }
 
     /** Result of removing services: count, and whether list nets moved to exclusions. */
     static final class Gone {
+        /** How many services were removed. */
         int n;
+        /** True when at least one removed repository service left its prefixes behind as exclusions. */
         boolean toExcl;
     }
 
     /**
      * Loads the lists from Prefs. On first use seeds the built-in zones and
      * moves the old per-route settings in. A corrupt store, or one missing a
-     * built-in zone, is reseeded.
+     * built-in zone, is reseeded. Parses the whole stored JSON (and checks
+     * every prefix) on the calling thread, which can take a while for big
+     * downloaded lists.
      */
     static SplitStore load(Context c) {
         SplitStore st = new SplitStore();
@@ -138,12 +174,14 @@ final class SplitStore {
             st.save(c);
             return st;
         }
+        // A store that fails to parse is treated as empty and reseeded below.
         try {
             st.readJSON(new JSONObject(raw));
         } catch (Exception ignored) {
             st.zones.clear();
             st.services.clear();
         }
+        // The block zone arrived in a later version, so an older store may lack only it.
         if (st.zone(LOCAL) == null || st.zone(GLOBAL) == null) {
             st.seed();
         } else if (st.zone(BLOCK) == null) {
@@ -152,7 +190,11 @@ final class SplitStore {
         return st;
     }
 
-    /** Writes the lists to Prefs as JSON under "split_store". */
+    /**
+     * Writes the lists to Prefs as JSON under "split_store". apply() writes
+     * the file in the background; LoftVpnService listens for this key and
+     * rebuilds the TUN routes when it changes.
+     */
     void save(Context c) {
         Prefs.p(c).edit().putString("split_store", writeJSON().toString()).apply();
     }
@@ -160,7 +202,8 @@ final class SplitStore {
     /**
      * Operator/link SplitJSON → zones+services. Used for the lists stored
      * with a profile (ProfileStore). Missing builtins are filled; LAN is not
-     * injected. Bad JSON gives just the built-in zones.
+     * injected. Bad JSON gives just the built-in zones. "Operator" lists come
+     * from the node after connecting; "link" lists from a shared routes link.
      */
     static SplitStore fromJSON(String raw) {
         SplitStore st = new SplitStore();
@@ -244,7 +287,10 @@ final class SplitStore {
         }
     }
 
-    /** The JSON form read back by readJSON. Ignore entries are written with src "ignore". */
+    /**
+     * The JSON form read back by readJSON. Ignore entries are written with src
+     * "ignore" and also with the ignore flag set; readJSON accepts either.
+     */
     JSONObject writeJSON() {
         JSONObject o = new JSONObject();
         try {
@@ -288,7 +334,10 @@ final class SplitStore {
         return o;
     }
 
-    /** Adds any missing built-in zone (local, global, block) without touching services. */
+    /**
+     * Adds any missing built-in zone (local, global, block) without touching
+     * services. Local goes first in the list, the others at the end.
+     */
     void ensureBuiltins() {
         if (zone(LOCAL) == null) {
             Zone local = new Zone();
@@ -316,7 +365,8 @@ final class SplitStore {
 
     /**
      * Resets to the built-in zones (local, global, block) and a LAN service
-     * with the private IPv4 ranges in the local zone.
+     * with the private IPv4 ranges in the local zone, so home-network devices
+     * (printers, routers) stay reachable while the VPN is on.
      */
     void seed() {
         zones.clear();
@@ -363,7 +413,8 @@ final class SplitStore {
     /**
      * Moves routes from the older Routes screen (Prefs.routes) into services:
      * "bypass" goes to the local zone, "drop" becomes an ignore entry, and
-     * everything else goes to the global zone.
+     * everything else goes to the global zone. Only called once, from load(),
+     * when no split_store exists yet. Unparsable prefixes are skipped.
      */
     void migrateRoutes(Context c) {
         for (Prefs.Route r : Prefs.routes(c)) {
@@ -401,7 +452,7 @@ final class SplitStore {
         return null;
     }
 
-    /** The service with this id, or null. */
+    /** The service with this id, or null. Linear search over all services. */
     Svc svc(String id) {
         for (Svc s : services) {
             if (s.id.equals(id)) {
@@ -422,7 +473,11 @@ final class SplitStore {
         return n;
     }
 
-    /** Non-ignore services in a zone whose name, prefixes or domains contain the search text. */
+    /**
+     * Non-ignore services in a zone whose name, prefixes or domains contain
+     * the search text (case-insensitive). An empty or null query returns
+     * every non-ignore service of the zone.
+     */
     List<Svc> in(String zoneId, String q) {
         String needle = q == null ? "" : q.trim().toLowerCase(Locale.US);
         List<Svc> out = new ArrayList<>();
@@ -490,13 +545,16 @@ final class SplitStore {
     /**
      * Removes the services with these ids. A removed repository service
      * leaves its prefixes behind as ignore entries, so the next list pull
-     * does not bring them back.
+     * does not bring them back. The caller saves; the returned Gone tells
+     * the undo snackbar what happened.
      */
     Gone removeSvcs(List<String> ids) {
         Gone g = new Gone();
         if (ids == null || ids.isEmpty()) {
             return g;
         }
+        // New exclusions are collected aside and added after the loop, because
+        // the list cannot grow while the iterator walks it.
         List<Svc> extra = new ArrayList<>();
         Iterator<Svc> it = services.iterator();
         while (it.hasNext()) {
@@ -523,7 +581,12 @@ final class SplitStore {
         return g;
     }
 
-    /** how: "me" own services, "all" every service and unlink the list, "excl" exclusions. */
+    /**
+     * Empties part of a zone. how: "me" removes the user's own services,
+     * "all" removes every service and unlinks the zone from its repository
+     * list (repo cleared, auto-update off), "excl" removes the exclusions.
+     * "me" and "all" leave exclusions alone.
+     */
     void clearZone(String id, String how) {
         Iterator<Svc> it = services.iterator();
         while (it.hasNext()) {
@@ -552,7 +615,12 @@ final class SplitStore {
         }
     }
 
-    /** Adds parsed rows that this zone does not already hold. Returns how many were new. */
+    /**
+     * Adds parsed rows (from a .bat file the user imports on the Lists screen) that this zone
+     * does not already hold. Ignore rows join an exclusion entry; other rows
+     * are grouped into services by their label. Returns how many were new.
+     * Each row scans all services, so cost grows with rows x services.
+     */
     int addRows(String zoneId, List<Bat.Row> rows) {
         int n = 0;
         if (rows == null) {
@@ -578,6 +646,8 @@ final class SplitStore {
                 n++;
                 continue;
             }
+            // A row without a label is named after its prefix. findRepo looks for
+            // src "repo", so rows added here (src "me") always start a new service.
             String name = r.name == null || r.name.isEmpty() ? r.cidr : r.name;
             Svc s = findRepo(zoneId, name);
             if (s == null) {
@@ -627,7 +697,9 @@ final class SplitStore {
     /**
      * Replaces a zone's repository services with freshly downloaded rows.
      * Rows with the same label are merged into one service; ignore rows are
-     * added to ignore entries. User-added services are kept.
+     * added to ignore entries. User-added services are kept, and so are
+     * existing exclusions (that is what keeps a removed repository service
+     * from coming back).
      */
     void replaceRepo(String zoneId, List<Bat.Row> rows) {
         Iterator<Svc> it = services.iterator();
@@ -637,7 +709,8 @@ final class SplitStore {
                 it.remove();
             }
         }
-        // group by name
+        // Group by name: one service per label, holding all of its prefixes.
+        // findRepo / findIgnore scan the services list for every row.
         for (Bat.Row r : rows) {
             if (r.ignore) {
                 Svc ign = findIgnore(zoneId, r.cidr);
@@ -850,7 +923,10 @@ final class SplitStore {
 
     /**
      * Downloads the zone's .bat and replaces repository services. User-added
-     * rows stay. Throws on a bad URL or a failed HTTP GET.
+     * rows stay. Throws on a bad URL or a failed HTTP GET. Only http and https
+     * URLs are accepted. Blocking network call: never call it on the main
+     * thread (Android throws NetworkOnMainThreadException there). Returns the
+     * number of rows in the downloaded list; the caller saves.
      */
     int pullZone(Zone z) throws Exception {
         if (z == null || z.repo == null || z.repo.trim().isEmpty()) {
@@ -880,7 +956,8 @@ final class SplitStore {
 
     /**
      * Pulls every due auto zone. Returns true when at least one list changed;
-     * the caller must save.
+     * the caller must save. A failed zone is logged to Journal and skipped, so
+     * one bad URL does not stop the others. Blocking: worker thread only.
      */
     boolean pullDue() {
         boolean changed = false;
@@ -898,7 +975,7 @@ final class SplitStore {
         return changed;
     }
 
-    /** Reads the whole response as UTF-8; fails past PULL_MAX bytes. */
+    /** Reads the whole response as UTF-8; fails past PULL_MAX bytes so a huge or endless reply cannot exhaust memory. */
     private static String read(InputStream in) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buf = new byte[4096];

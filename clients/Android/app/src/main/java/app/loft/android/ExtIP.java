@@ -21,7 +21,11 @@ import java.net.InetAddress;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/** Echo-API lookup through the VPN, same parse as macOS ExtIP. */
+/**
+ * Echo-API lookup through the VPN, same parse as macOS ExtIP. The echo URL
+ * comes from the user's settings (Prefs.extIPURL), so the reply format is
+ * not known in advance and parse() has to be forgiving.
+ */
 final class ExtIP {
     /** JSON field names different echo services use for the caller's address, tried in order. */
     private static final String[] JSON_KEYS = {
@@ -45,8 +49,12 @@ final class ExtIP {
         HttpURLConnection c = null;
         try {
             URL u = new URL(src);
+            // Opening the connection through the VPN Network object pins the
+            // socket to the tunnel even if this app is excluded from it
+            // (split tunneling: the app's own traffic normally bypasses the VPN).
             Network vpn = vpn(ctx);
             c = (HttpURLConnection) (vpn != null ? vpn.openConnection(u) : u.openConnection());
+            // 8 s limits keep a dead tunnel from hanging the caller's thread forever.
             c.setConnectTimeout(8000);
             c.setReadTimeout(8000);
             c.setInstanceFollowRedirects(true);
@@ -105,6 +113,7 @@ final class ExtIP {
             } catch (Exception ignored) {
             }
         }
+        // Last resort: the first dotted-quad anywhere in the text (HTML pages etc.).
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b").matcher(t);
         if (m.find()) {
             ip = asIP(m.group());
@@ -120,7 +129,13 @@ final class ExtIP {
         return parse(body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8));
     }
 
-    /** Returns {@code s} when it is a literal IPv4 or IPv6 address, else null. */
+    /**
+     * Returns {@code s} when it is a literal IPv4 or IPv6 address, else null.
+     * IPv4 is checked by hand; anything with a ':' goes to
+     * InetAddress.getByName, and only a 16-byte (IPv6) result is accepted.
+     * Note that getByName may try a DNS lookup when the text is not a valid
+     * address literal, so this can block; keep it off the main thread.
+     */
     static String asIP(String s) {
         if (s == null) {
             return null;
@@ -169,6 +184,8 @@ final class ExtIP {
     }
 
     // The first network with VPN transport, i.e. our tunnel; null when none is up.
+    // Only one VPN can be active on Android at a time, so the first match is ours
+    // whenever our session is up.
     private static Network vpn(Context ctx) {
         if (ctx == null) {
             return null;

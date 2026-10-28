@@ -1,9 +1,11 @@
 /*
- * RoutePlan: decides which IP ranges LoftVpnService puts into the TUN device
- * (the virtual network interface Android gives a VPN app). It combines the
- * session Snapshot from the Go engine (overlay address, node-pushed routes,
- * front IPs, i.e. the public addresses the app dials to reach the node) with the user's settings (default route, LAN bypass, split
- * lists from SplitStore). Cidr does the prefix arithmetic.
+ * Android client, shared code. RoutePlan: decides which IP ranges
+ * LoftVpnService puts into the TUN device (the virtual network interface
+ * Android gives a VPN app). It combines the session Snapshot from the Go
+ * engine (overlay address, node-pushed routes, front IPs, i.e. the public
+ * addresses the app dials to reach the node) with the user's settings
+ * (default route, LAN bypass, split lists from SplitStore). Cidr does the
+ * prefix arithmetic.
  */
 package app.loft.android;
 
@@ -39,9 +41,16 @@ final class RoutePlan {
      * members (this device's tunnel address plus prefix). Null when absent.
      */
     Cidr overlay4;
+    /** IPv6 overlay subnet; when null the plan routes no IPv6 default (see build step 3). */
     Cidr overlay6;
 
-    /** Builds the route plan for a session from its Snapshot and the user's routing settings. */
+    /**
+     * Builds the route plan for a session from its Snapshot and the user's
+     * routing settings. Reads prefs and, with split on, loads and parses the
+     * whole SplitStore. LoftVpnService calls it from its once-a-second poll,
+     * then compares key() to decide whether the TUN must be rebuilt.
+     * excludeRoute exists only from Android 13 (API 33), hence the version check.
+     */
     static RoutePlan of(Context ctx, Snapshot snap) {
         String ip = "", ip6 = "", routes = "", fronts = "";
         int prefix = 0, prefix6 = 0;
@@ -66,6 +75,8 @@ final class RoutePlan {
     /**
      * Same plan without Android prefs. {@code canExclude} is true on API 33+,
      * where bypass prefixes go to {@code exclude} instead of being subtracted.
+     * Pure function of its inputs, which is what the unit tests call.
+     * Missing prefix lengths default to /24 (IPv4) and /64 (IPv6).
      */
     static RoutePlan build(boolean def, boolean lan, boolean split, SplitStore store,
             boolean canExclude, String ip, int prefix, String ip6, int prefix6,
@@ -104,8 +115,10 @@ final class RoutePlan {
             if (lan && !canExclude) {
                 v4 = Cidr.subtractAll(v4, Cidr.rfc1918());
             }
-            // gVisor inbound is IPv4-only. ::/0 without overlay6 blackholes
-            // Happy Eyeballs in the browser.
+            // gVisor (the user-space TCP/IP stack inside the engine) inbound is
+            // IPv4-only. Routing ::/0 without an IPv6 overlay would swallow
+            // IPv6 traffic with no way out, and browsers using Happy Eyeballs
+            // (try IPv6 and IPv4 in parallel) would stall on the dead IPv6 path.
             if (p.overlay6 != null) {
                 v6.add(Cidr.parse("::/0"));
                 if (lan && !canExclude) {
@@ -161,7 +174,10 @@ final class RoutePlan {
         return p;
     }
 
-    /** Fingerprint of include/exclude/drop; used to skip a TUN rebuild. */
+    /**
+     * Fingerprint of include/exclude/drop; used to skip a TUN rebuild.
+     * A 32-bit hash, so two different plans could in theory collide.
+     */
     String key() {
         int h = 1;
         h = mix(h, include);
@@ -186,7 +202,12 @@ final class RoutePlan {
         return s == null ? "" : s;
     }
 
-    /** True when an IPv4/IPv6 packet's destination falls in a drop prefix. */
+    /**
+     * True when an IPv4/IPv6 packet's destination falls in a drop prefix.
+     * Called by LoftVpnService's TUN reader thread for every outgoing packet,
+     * so it returns at once when there is nothing to drop. The destination
+     * address sits at byte 16 of an IPv4 header and byte 24 of an IPv6 header.
+     */
     boolean destDropped(byte[] pkt) {
         if (pkt == null || pkt.length < 20 || drop.isEmpty()) {
             return false;

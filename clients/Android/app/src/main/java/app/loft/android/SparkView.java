@@ -1,5 +1,6 @@
 /*
- * SparkView: the small live traffic chart on the main screen. It draws the
+ * Android client, shared code (phone and TV builds), used by the phone home
+ * screen. SparkView: the small live traffic chart on the main screen. It draws the
  * download (gold) and upload (grey) rates that LoftVpnService samples into
  * Live, either as smooth lines or as bars, and a pulsing text label while the
  * tunnel is still connecting.
@@ -15,17 +16,33 @@ import android.graphics.Shader;
 import android.util.AttributeSet;
 import android.view.View;
 
-/** Last-minute ↓/↑ chart: smooth lines (default) or fading bars. Handshake while connecting. */
+/**
+ * Recent ↓/↑ traffic chart (the last N = 40 samples, about 40 seconds):
+ * smooth lines (default) or bars. While connecting it shows a pulsing
+ * "handshake" label instead. A plain custom View that draws on the Canvas,
+ * so no chart library is needed. The view keeps its own copy of the samples
+ * (setSamples) instead of reading Live while drawing, so onDraw never sees
+ * the arrays half-updated by the service.
+ */
 public final class SparkView extends View {
-    // Number of samples kept; the service adds one per second.
+    // Number of samples kept; the service adds one per second. Live sizes its
+    // history arrays from this value.
     static final int N = 40;
 
+    // Paints and paths are created once and reused on every frame, because
+    // allocating objects inside onDraw causes garbage collection pauses.
+    /** Download line (gold) and upload line (grey). */
     private final Paint downStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint upStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Gradient area under the download line. */
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Bars in bar mode. */
     private final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Dots marking the newest sample of each line. */
     private final Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** The handshake label. */
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Reused paths: download line, its filled area, upload line. */
     private final Path downPath = new Path();
     private final Path fillPath = new Path();
     private final Path upPath = new Path();
@@ -39,6 +56,7 @@ public final class SparkView extends View {
     private boolean bars;
     /** True while connecting: the label is drawn instead of the chart. */
     private boolean handshake;
+    /** Text of the handshake label (for example "Connecting…"). */
     private String handshakeText = "";
     /** Phase of the label's fade animation, in radians. */
     private float pulse;
@@ -130,7 +148,10 @@ public final class SparkView extends View {
         post(tick);
     }
 
-    /** Advances the fade about 25 times a second; stops itself when the handshake ends. */
+    /**
+     * Advances the fade about 25 times a second (every 40 ms); stops itself
+     * when the handshake ends. Each step redraws the whole view.
+     */
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
@@ -196,7 +217,8 @@ public final class SparkView extends View {
     }
 
     // Download as a filled curve, upload as a thinner line, both scaled to the
-    // common peak, with a dot on the newest sample.
+    // common peak, with a dot on the newest sample. Note: this method allocates
+    // four float arrays and a new LinearGradient on every frame.
     private void drawLines(Canvas c, int w, int h, float max) {
         float[] dx = new float[n];
         float[] dy = new float[n];
@@ -224,7 +246,10 @@ public final class SparkView extends View {
         c.drawCircle(ux[n - 1], uy[n - 1], dp(1.9f), dot);
     }
 
-    // Download bars above the middle, upload bars below; older bars are fainter.
+    // Download bars above the middle, upload bars below. The loop computes a
+    // fading opacity for older bars, but setColor() right after setAlpha()
+    // replaces the alpha with the colour's own (fully opaque), so as written
+    // all bars are drawn at full opacity. Zero samples draw a 1 px floor line.
     private void drawBars(Canvas c, int w, int h) {
         if (n <= 0) {
             return;
@@ -266,6 +291,8 @@ public final class SparkView extends View {
     /**
      * Converts samples to screen points. Points are placed in a fixed N-slot
      * grid aligned right, so the newest sample is always at the right edge.
+     * {@code scale} stretches the values vertically (callers pass 1); y is
+     * clamped to the view with a small top/bottom padding.
      */
     private void pts(float[] v, float max, int w, int h, float[] x, float[] y, float scale) {
         float padX = dp(2);
@@ -280,6 +307,9 @@ public final class SparkView extends View {
     }
 
     // Smooth curve through the points (Catmull-Rom converted to cubic Béziers).
+    // Catmull-Rom passes through every sample; each segment's two control
+    // points come from the neighbouring samples, and the ends repeat the
+    // first / last point.
     private void curve(Path path, float[] x, float[] y) {
         path.reset();
         path.moveTo(x[0], y[0]);
@@ -299,7 +329,7 @@ public final class SparkView extends View {
         }
     }
 
-    /** Converts dp to pixels. */
+    /** Converts dp (density-independent pixels) to screen pixels. */
     private float dp(float v) {
         return v * getResources().getDisplayMetrics().density;
     }

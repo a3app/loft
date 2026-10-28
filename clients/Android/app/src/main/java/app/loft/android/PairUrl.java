@@ -2,7 +2,9 @@
  * Android client, shared code: the small protocol for sending a connection
  * from a phone to a TV on the same network. The TV (TvPair) listens and
  * shows a pairing URL as a QR code; the phone (ScanActivity) scans it and
- * POSTs the profile YAML to it.
+ * POSTs the profile YAML to it. Shared code: the phone uses the sending
+ * side, the TV the checking side. Plain HTTP is used because both devices are
+ * on the same LAN; the random code in the URL is what keeps strangers out.
  */
 package app.loft.android;
 
@@ -19,12 +21,16 @@ import java.security.MessageDigest;
 
 /**
  * LAN pairing: TV listens on http://ip:port/pair?c=CODE, phone POSTs YAML.
+ * Only static helpers; the TV's listening socket lives in TvPair.
  */
 final class PairUrl {
     /** HTTP path of the TV's pairing endpoint. */
     static final String PATH = "/pair";
 
-    /** True when a scanned string is a TV pairing URL (path /pair with a c= code). */
+    /**
+     * True when a scanned string is a TV pairing URL (path /pair with a c=
+     * code), so the scanner sends profiles instead of importing the text.
+     */
     static boolean isPair(String raw) {
         URI u = parse(raw);
         if (u == null) {
@@ -55,10 +61,12 @@ final class PairUrl {
         if (requestLine == null || code == null || code.isEmpty()) {
             return false;
         }
+        // "POST /pair?c=CODE HTTP/1.1" -> method, target, version.
         String[] p = requestLine.trim().split(" ");
         if (p.length < 2 || !"POST".equals(p[0]) || !p[1].startsWith("/")) {
             return false;
         }
+        // Prefix a dummy host so URI can split the target into path and query.
         URI u;
         try {
             u = URI.create("http://tv" + p[1]);
@@ -72,7 +80,14 @@ final class PairUrl {
         return MessageDigest.isEqual(got.getBytes(StandardCharsets.UTF_8), code.getBytes(StandardCharsets.UTF_8));
     }
 
-    /** POST body to the TV listener. Callback on the main thread. */
+    /**
+     * POSTs {@code body} (the profiles as text) to the TV's pairing URL. The
+     * request runs on its own short-lived thread, because network I/O on the
+     * main thread is forbidden on Android and would freeze the screen; connect
+     * and read time out after 4 s each. {@code cb} is posted back to the main
+     * thread so it can update views. Any 2xx answer counts as success.
+     * {@code c} is currently unused.
+     */
     static void send(Context c, String pair, String body, Callback cb) {
         Handler h = new Handler(Looper.getMainLooper());
         new Thread(() -> {
@@ -141,6 +156,7 @@ final class PairUrl {
 
     /** Result of send(): ok, or false with a short error text. */
     interface Callback {
+        /** Called once on the main thread; err is null on success. */
         void done(boolean ok, String err);
     }
 }

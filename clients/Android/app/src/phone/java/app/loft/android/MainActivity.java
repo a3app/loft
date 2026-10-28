@@ -60,13 +60,18 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
 
     /** Container that holds the three tab views; only one is visible at a time. */
     private ViewGroup pane;
+    /** Home tab view (pane_home): connect button, status pill, cards, chart, addresses. Always created. */
     private View home;
+    /** Connections tab view (pane_conns); null until ensureConns() creates it. */
     private View conns;
+    /** Settings tab view (pane_settings); null until ensureSettings() creates it. */
     private View settings;
+    /** Adapter of the Connections list; null until the Connections tab exists. */
     private ConnAdapter adapter;
     /**
      * True once the notification permission was requested in this screen's life, so it is
-     * asked at most once.
+     * asked at most once. (The name is historical: it guards the notification prompt, not
+     * the VPN consent dialog.)
      */
     private boolean askedVpn;
     /** True while a public-IP lookup is running, so taps and redraws do not start a second one. */
@@ -79,6 +84,9 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // The manifest starts this screen with Theme.Loft.Splash (splash picture as the window
+        // background, shown while the process starts). Switch to the normal theme before any
+        // view is inflated so the real screen does not keep the splash background.
         setTheme(R.style.Theme_Loft);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
@@ -109,6 +117,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         home.findViewById(R.id.cards).setOnClickListener(v -> details());
 
         // 3. Import whatever started the app, then onboarding or auto-connect.
+        // Onboarding opens only when there are no profiles AND the user has not finished or
+        // skipped it before ("onboard_done"), so deleting every profile later does not
+        // bring the wizard back. Auto-connect is skipped when a session is already running
+        // (e.g. the screen was recreated while the VPN was up).
         handleIntent(getIntent());
         if (LoftApp.of(this).profiles().all().isEmpty()
                 && !Prefs.p(this).getBoolean("onboard_done", false)) {
@@ -182,7 +194,13 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         super.onPause();
     }
 
-    /** Bus callback: VPN state changed, redraw Home and the connection list. */
+    /**
+     * Bus callback: shared state changed, redraw Home and the connection list.
+     * Runs on the main thread. Bus events carry no data and are not merged, so this
+     * runs for every post(): VPN state changes, network switches and also every new
+     * Journal (log) line. The connection list is fully rebound each time because the
+     * "connected" highlight and button text depend on Live.
+     */
     @Override
     public void onLoft() {
         paintHome();
@@ -392,8 +410,11 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      * Starts the active profile. Asks once for the notification permission
      * (API 33+), so the VPN's ongoing notification is visible, and for VPN
      * consent when the system needs it; the service starts after consent.
+     * The notification prompt does not block connecting: its answer is not
+     * waited for, and refusing it does not stop the VPN.
      */
     private void connect() {
+        // No profile yet: there is nothing to start, so show the Connections tab instead.
         if (LoftApp.of(this).profiles().active() == null) {
             ((BottomNavigationView) findViewById(R.id.nav)).setSelectedItemId(R.id.nav_conns);
             return;
@@ -403,6 +424,8 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             askedVpn = true;
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTE);
         }
+        // prepare() returns an Intent for the system "allow VPN?" dialog when this app is not
+        // yet the approved VPN app, or null when it already is and we may start right away.
         Intent prep = VpnService.prepare(this);
         if (prep != null) {
             startActivityForResult(prep, REQ_VPN);
@@ -411,7 +434,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         LoftVpnService.requestStart(this);
     }
 
-    /** Result of the VPN consent dialog: start the service if the user allowed it. */
+    /** Result of the VPN consent dialog: start the service if the user allowed it. A refusal does nothing. */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -456,7 +479,11 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 .show();
     }
 
-    // Export: this profile as YAML, as a QR, or every profile in one file.
+    /**
+     * Export sheet for one profile: share it as a .loft text (its session YAML), show it as a
+     * QR code (ShareQrActivity), or share every profile joined into one "Family.loft" text
+     * (the same bundle a TV receives when pairing).
+     */
     private void exportSheet(Profile pr) {
         BottomSheetDialog d = Sheets.of(this, R.layout.sheet_export);
         d.findViewById(R.id.ex_this).setOnClickListener(v -> {
@@ -506,7 +533,11 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         d.show();
     }
 
-    /** Imports from the clipboard; with an empty clipboard opens the scanner instead. */
+    /**
+     * Imports from the clipboard; with an empty clipboard opens the scanner instead.
+     * Not called from this screen at the moment: the add sheet's "paste" item opens
+     * ScanActivity with the "paste" extra instead, so the user sees the text first.
+     */
     private void paste() {
         ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         CharSequence t = null;
@@ -520,17 +551,24 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         importRaw(t.toString());
     }
 
-    /** Imports from a loft:// link, text shared to the app, or an opened file. */
+    /**
+     * Imports from a loft:// link, text shared to the app, or an opened file. These are the
+     * three intent filters declared for MainActivity in the phone manifest. A plain launcher
+     * start carries none of them and is ignored.
+     */
     private void handleIntent(Intent intent) {
         if (intent == null) {
             return;
         }
         Uri u = intent.getData();
+        // 1. loft://... link (tapped in a browser or chat). The data is cleared afterwards so
+        // that the same link is not imported again when the activity is recreated.
         if (u != null && "loft".equalsIgnoreCase(u.getScheme())) {
             importRaw(u.toString());
             intent.setData(null);
             return;
         }
+        // 2. Text shared to the app from another app's "Share" menu.
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
             String t = intent.getStringExtra(Intent.EXTRA_TEXT);
             if (t != null) {
@@ -538,6 +576,9 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             }
             return;
         }
+        // 3. A .loft file opened from a file manager or downloads; read through the content
+        // resolver because the app only gets a content:// URI, not a file path. Read errors
+        // are ignored: nothing is imported.
         if (u != null && Intent.ACTION_VIEW.equals(intent.getAction())) {
             try (InputStream in = getContentResolver().openInputStream(u)) {
                 if (in != null) {
@@ -548,7 +589,11 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
     }
 
-    /** Adds every profile found in the text and switches to the Connections tab. */
+    /**
+     * Adds every profile found in the text (links or YAML, parsed by Importer) and switches to
+     * the Connections tab. Importing anything also marks onboarding as done, so the first-run
+     * wizard does not open on top. Text with nothing usable shows a hint toast.
+     */
     void importRaw(String raw) {
         List<Profile> got = Importer.parse(raw);
         if (got.isEmpty()) {
@@ -564,8 +609,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     }
 
     /**
-     * Binds the Settings tab to Prefs. Routing switches rebuild the live TUN.
-     * A language change recreates the screen.
+     * Binds the Settings tab to Prefs. Each control writes its Prefs key as soon as it
+     * changes. Routing settings (default route, split tunneling, local DNS) are not pushed
+     * to the service from here: LoftVpnService listens for changes to those keys and
+     * rebuilds the live TUN (the virtual network interface of the VPN) itself.
+     * "Split tunneling" means only some traffic goes through the VPN, chosen by the
+     * route lists. A language change recreates the screen so every string is reloaded.
      */
     private void wireSettings() {
         // 1. On/off switches, each saved to Prefs the moment it changes.
@@ -584,6 +633,8 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         re.setChecked(Prefs.reconnect(this));
         ext.setChecked(Prefs.showExtIP(this));
         log.setChecked(Prefs.verbose(this));
+        // Crash reports are sent as GitHub issues, so the switch exists only in the GitHub
+        // build; the store build hides its row.
         if (!BuildConfig.GITHUB) {
             View row = settings.findViewById(R.id.row_crash);
             if (row != null) {
@@ -600,6 +651,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         split.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("split", on).apply());
         auto.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("auto", on).apply());
         re.setOnCheckedChangeListener((v, on) -> Prefs.p(this).edit().putBoolean("reconnect", on).apply());
+        // Public IP switch: forget the old value and look it up again at once if connected.
         ext.setOnCheckedChangeListener((v, on) -> {
             Prefs.p(this).edit().putBoolean("ext_ip", on).apply();
             Live.extIP = "";
@@ -633,6 +685,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         lang.setSelection(Lang.index(this));
         lang.setOnItemSelectedListener(new SimplePick(i -> {
             String tag = Lang.TAGS[i];
+            // Same language picked again: skip, otherwise recreate() would loop for nothing.
             if (tag.equals(Prefs.lang(this))) {
                 return;
             }
@@ -647,6 +700,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 startActivity(new Intent(this, LogActivity.class)));
         settings.findViewById(R.id.btn_about).setOnClickListener(v ->
                 startActivity(new Intent(this, AboutActivity.class)));
+        // "Lists" and "Routes" both open the same screen (ListsActivity).
         View.OnClickListener openLists = v ->
                 startActivity(new Intent(this, ListsActivity.class));
         settings.findViewById(R.id.btn_lists).setOnClickListener(openLists);
@@ -664,20 +718,26 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         dnsAddr.setText(Prefs.dnsAddr(this));
         paintDnsRow(dnsIdx, dnsAddr);
         dns.setSelection(dnsIdx);
+        // Spinner position to Prefs value: 0 = "sys", 1 = "ip", 2 = "doh".
         dns.setOnItemSelectedListener(new SimplePick(i -> {
             String m = i == 2 ? "doh" : i == 1 ? "ip" : "sys";
             Prefs.p(this).edit().putString("local_dns", m).apply();
             paintDnsRow(i, dnsAddr);
         }));
+        // The address is saved on every keystroke. Each save is also a "local_dns_addr"
+        // change that the running VPN service reacts to.
         dnsAddr.addTextChangedListener(new android.text.TextWatcher() {
+            /** Not needed; the interface requires it. */
             @Override
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {
             }
 
+            /** Not needed; the interface requires it. */
             @Override
             public void onTextChanged(CharSequence s, int a, int b, int c) {
             }
 
+            /** Saves the trimmed address after every edit. */
             @Override
             public void afterTextChanged(android.text.Editable s) {
                 Prefs.p(MainActivity.this).edit()
@@ -695,7 +755,10 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                         })
                         .setNegativeButton(R.string.cancel, null)
                         .show());
+        // Channel is build-specific: the GitHub build wires its self-update button here,
+        // the store build has its own Channel class (updates come from the store).
         Channel.attach(this, settings);
+        // Lets the footer link buttons wrap onto more lines at a large system font size.
         Fit.buttonRow(settings.findViewById(R.id.settings_links));
     }
 
@@ -711,6 +774,8 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         if (!extFetch.compareAndSet(false, true)) {
             return;
         }
+        // "…" is shown on Home while the lookup runs. The HTTP request must not run on the
+        // main thread (Android forbids network IO there), so it gets its own short-lived thread.
         Live.extIP = "…";
         new Thread(() -> {
             String got = ExtIP.lookup(this, Prefs.extIPURL(this));
@@ -720,6 +785,8 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 Bus.post();
                 return;
             }
+            // Failed: show "—" now and schedule one retry. postDelayed on a view runs the
+            // retry on the main thread, where Live and Prefs are read again before trying.
             Live.extIP = "—";
             extFetch.set(false);
             Bus.post();
@@ -787,13 +854,17 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      * otherwise act as a user choice.
      */
     private static final class SimplePick implements android.widget.AdapterView.OnItemSelectedListener {
+        /** What to do with a real user choice; gets the selected position. */
         private final Seg.Pick pick;
+        /** False until the initial, system-made selection has been swallowed. */
         private boolean primed;
 
+        /** Wraps a position callback (the same Pick interface the segmented controls use). */
         SimplePick(Seg.Pick pick) {
             this.pick = pick;
         }
 
+        /** Ignores the first call, then forwards every selection to {@link #pick}. */
         @Override
         public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
             if (!primed) {
@@ -803,6 +874,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             pick.on(position);
         }
 
+        /** Not used: these spinners always have a selection. */
         @Override
         public void onNothingSelected(android.widget.AdapterView<?> parent) {
         }
@@ -815,8 +887,14 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      * Swipe parks the card at 84dp over Edit / Delete, as in the mock.
      */
     final class ConnAdapter extends RecyclerView.Adapter<ConnAdapter.Hold> {
+        /** Snapshot copy of the saved profiles, in list order; refreshed by reload(). */
         private List<Profile> data = new ArrayList<>();
+        /**
+         * Id of the profile whose card is swiped open, or null. Kept by id, not by row
+         * view, because RecyclerView reuses row views for other profiles while scrolling.
+         */
         private String openId;
+        /** Horizontal offset (px) of that open card, so it is restored after a redraw. */
         private float openTx;
 
         /**
@@ -864,6 +942,8 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
          */
         @Override
         public void onBindViewHolder(@NonNull Hold h, int i) {
+            // Texts and the "active" highlight. thisUp means this card's profile is the one
+            // the VPN is running (or starting), so its button reads Disconnect.
             Profile p = data.get(i);
             boolean active = p.id.equals(LoftApp.of(MainActivity.this).profiles().activeId());
             h.title.setText(p.name.isEmpty() ? p.host() : p.name);
@@ -879,11 +959,17 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             // Restore this card's swipe state and remember where the user leaves it.
             h.swipe.settleNow(p.id.equals(openId) ? openTx : 0);
             h.swipe.setListener(new RevealFrame.Listener() {
+                /** The user started swiping this card: close any other open card. */
                 @Override
                 public void onRevealStart(RevealFrame row) {
                     closeOthers(h);
                 }
 
+                /**
+                 * The card stopped moving at offset {@code tx}. Remember it as the open card,
+                 * or forget it when it snapped back (offset under 1 px). The position is read
+                 * at this moment because the holder may have been rebound since onBind.
+                 */
                 @Override
                 public void onSettled(RevealFrame row, float tx) {
                     int pos = h.getBindingAdapterPosition();
@@ -903,6 +989,8 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 }
             });
             // Card button: make this profile active, then stop it or (re)connect with it.
+            // When another profile is running it is stopped first, then connect() starts
+            // the newly active one.
             h.mini.setOnClickListener(x -> {
                 LoftApp.of(MainActivity.this).profiles().setActive(p.id);
                 if (thisUp) {
@@ -951,17 +1039,28 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
 
         /** Holds the views of one connection card so they are looked up only once. */
         final class Hold extends RecyclerView.ViewHolder {
+            /** Swipeable frame that slides the card aside to reveal Edit / Delete. */
             final RevealFrame swipe;
+            /** Card background; switches to the "live" style for the active profile. */
             final View card;
+            /** Edit button revealed under the swiped card. */
             final View actEdit;
+            /** Delete button revealed under the swiped card. */
             final View actDel;
+            /** Small Connect / Disconnect button on the card. */
             final Button mini;
+            /** Tappable text area of the card (opens the editor). */
             final View body;
+            /** Profile name, or the host when the name is empty. */
             final TextView title;
+            /** Server host line under the title. */
             final TextView sub;
+            /** "Active" badge, visible only on the active profile. */
             final TextView live;
+            /** Protocol label from Profile.side(), e.g. "loft · get" or "vless". */
             final TextView kind;
 
+            /** Looks up every child view of a freshly inflated row_conn card. */
             Hold(View v) {
                 super(v);
                 swipe = v.findViewById(R.id.swipe);

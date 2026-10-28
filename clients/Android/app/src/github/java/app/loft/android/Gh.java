@@ -19,26 +19,40 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.regex.Pattern;
 
-/** GitHub Releases for the github channel. Store builds do not compile this. */
+/**
+ * GitHub Releases for the github channel. Store builds do not compile this.
+ * Every method here blocks on the network, so callers run it on a
+ * background thread.
+ */
 final class Gh {
     // Size caps protect against a hostile or broken server streaming forever.
     // TAG accepts only plain release tags like v1.2.3 or v1.2.3-rc1.
     /** GitHub API URL listing the latest 20 releases of the loft repo. */
     static final String API = "https://api.github.com/repos/a3app/loft/releases?per_page=20";
+    /** Largest release-list JSON accepted (2 MB). */
     static final int MAX_JSON = 2 * 1024 * 1024;
+    /** Largest APK download accepted (128 MB). */
     static final int MAX_APK = 128 * 1024 * 1024;
+    /** Allowed release tag shape: "v" + three numbers, optional "-tag". Anything else is skipped. */
     private static final Pattern TAG = Pattern.compile(
             "^v\\d{1,4}\\.\\d{1,4}\\.\\d{1,6}(-[0-9A-Za-z.]{1,32})?$");
 
+    /** Static helpers only; not instantiated. */
     private Gh() {}
 
     /** One release: its version and the URLs of the matching APK and checksum file (null when missing). */
     static final class Rel {
+        /** Git tag as published, e.g. "v1.2.3". */
         final String tag;
+        /** Version without the leading "v", e.g. "1.2.3"; compared with {@link Ver#cmp}. */
         final String ver;
+        /** File name of the APK asset for this device type, or null. */
         final String apkName;
+        /** Download URL of that APK, or null. */
         final String apkUrl;
+        /** File name of the SHA256SUMS asset, or null. */
         final String sumsName;
+        /** Download URL of the SHA256SUMS file, or null. */
         final String sumsUrl;
 
         /** Holds the fields as given; asset names and URLs may be null. */
@@ -61,6 +75,9 @@ final class Gh {
      * Picks the newest published (not draft, not pre-release) release from the
      * GitHub API list, with the APK for this device type (phone or TV) and the
      * SHA256SUMS file. Both unversioned and versioned asset names are accepted.
+     * A release without these assets can still be returned (then
+     * {@link Rel#hasApk} is false), so the caller can say "no APK yet".
+     * Returns null when no release qualifies.
      */
     static Rel pick(String json, boolean tv) throws Exception {
         JSONArray rels = new JSONArray(json);
@@ -78,6 +95,8 @@ final class Gh {
             JSONArray assets = o.optJSONArray("assets");
             String apkName = null, apkUrl = null, sumsName = null, sumsUrl = null;
             if (assets != null) {
+                // Accept "loft-android.apk" and "loft-1.2.3-android.apk" (and
+                // the -tv variants), and both forms of the checksum file name.
                 String apk1 = tv ? "loft-android-tv.apk" : "loft-android.apk";
                 String apk2 = tv ? "loft-" + ver + "-android-tv.apk" : "loft-" + ver + "-android.apk";
                 String sums1 = "loft-android-SHA256SUMS.txt";
@@ -103,7 +122,7 @@ final class Gh {
         return best;
     }
 
-    /** Downloads a small text body (at most {@code max} bytes). */
+    /** Downloads a small text body (at most {@code max} bytes) as UTF-8; reuses {@link #sha} and ignores the hash. */
     static String get(String url, String ua, int max) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         sha(url, ua, out, max);
@@ -113,7 +132,8 @@ final class Gh {
     /**
      * Streams a URL into {@code out} and returns the SHA-256 hex of what was
      * written, so the APK is hashed while it downloads. Fails above {@code max}
-     * bytes.
+     * bytes. Redirects are followed (GitHub serves release assets from a
+     * different host). Timeouts: 8 s to connect, 60 s between reads.
      */
     static String sha(String url, String ua, OutputStream out, int max) throws IOException {
         MessageDigest md;
@@ -178,6 +198,8 @@ final class Gh {
                 out.write(payload);
             }
             int code = c.getResponseCode();
+            // Read and discard the reply (at most 64 KB) so the connection
+            // finishes cleanly; only the status code matters.
             InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
             if (in != null) {
                 try (InputStream s = in) {

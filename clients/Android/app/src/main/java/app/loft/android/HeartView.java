@@ -11,12 +11,15 @@ import android.util.AttributeSet;
 import android.view.View;
 
 /**
- * A³ colophon heart: 7×6 lamp cells, nearest-neighbour, no AA.
+ * A³ colophon heart: 7×6 lamp-coloured cells, nearest-neighbour, no
+ * anti-aliasing (AA). ("A³" is the name of the heart in the design mock-up;
+ * a colophon is the "made with" line at the end of a page.)
  * The small pixel heart in the About screen's "made with" line. Drawn as
  * whole square cells without anti-aliasing so the edges stay crisp at any
  * size. Each CELLS row is {x, y, width, height} in cells.
  */
 public final class HeartView extends View {
+    /** The heart shape as filled rectangles, {x, y, width, height} in cells. */
     private static final int[][] CELLS = {
         {1, 0, 2, 1}, {4, 0, 2, 1},
         {0, 1, 7, 2},
@@ -28,7 +31,7 @@ public final class HeartView extends View {
     /** Solid fill with smoothing turned off, so cells keep hard edges. */
     private final Paint fill = new Paint(0);
 
-    /** Code constructor. */
+    /** Creates the heart from code. */
     public HeartView(Context c) {
         super(c);
         init();
@@ -46,7 +49,10 @@ public final class HeartView extends View {
         init();
     }
 
-    /** Shared setup: software layer and a non-smoothed paint in the lamp colour. */
+    /**
+     * Shared setup: software layer and a non-smoothed paint in the lamp
+     * colour. setWillNotDraw(false) makes sure onDraw is called.
+     */
     private void init() {
         setWillNotDraw(false);
         setLayerType(LAYER_TYPE_SOFTWARE, null);
@@ -57,8 +63,12 @@ public final class HeartView extends View {
         fill.setColor(getContext().getColor(R.color.lamp));
     }
 
+    /**
+     * Picks the largest whole-pixel cell that fits 7x6 cells, centres the
+     * heart and paints each cell rectangle. Whole pixels keep every cell the
+     * same size, so the heart never looks blurry or uneven.
+     */
     @Override
-    /** Picks the largest whole-pixel cell that fits 7x6 cells, centres the heart and paints each cell rectangle. */
     protected void onDraw(Canvas c) {
         int w = getWidth();
         int h = getHeight();

@@ -8,11 +8,15 @@ package app.loft.android;
 import java.io.BufferedReader;
 import java.io.FileReader;
 
-/** Process RSS from /proc (Go heap included). Empty off Linux. */
+/**
+ * Process RSS from /proc (Go heap included). Empty off Linux (for example in
+ * plain JVM unit tests on a Mac), because /proc does not exist there.
+ */
 final class Rss {
     /**
      * Returns the VmRSS value from /proc/self/status as written there (for
-     * example "41236 kB"), or "" when the file cannot be read.
+     * example "41236 kB"), or "" when the file cannot be read. It reads a
+     * file, so call it off the main thread.
      */
     static String vm() {
         try (BufferedReader r = new BufferedReader(new FileReader("/proc/self/status"))) {

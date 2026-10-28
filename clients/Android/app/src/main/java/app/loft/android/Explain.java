@@ -1,4 +1,5 @@
 /*
+ * Android client, shared code (phone and TV builds).
  * Explain: turns raw error text from the Go engine or the node (the loft
  * server the app connects to) into one short translated line for the Home
  * screen and the notification. The full error stays in the journal
@@ -14,6 +15,8 @@ import android.net.NetworkCapabilities;
 /**
  * Maps engine/node errors the way macOS FrontExplain does. Home and the
  * notification show only these short lines; the journal keeps the raw dump.
+ * Matching is by substrings of the lower-cased error text, so the order of
+ * the checks matters: more specific markers come before generic ones.
  */
 final class Explain {
     /**
@@ -27,7 +30,7 @@ final class Explain {
         return ctx.getString(res(raw, uplink(ctx)));
     }
 
-    /** Resource for tests. Assumes a network is up. */
+    /** String resource id for {@code raw}, for unit tests (no Context needed). Assumes a network is up. */
     static int res(String raw) {
         return res(raw, true);
     }
@@ -209,7 +212,9 @@ final class Explain {
     /**
      * True when the active network claims internet access. Errors and a missing
      * ConnectivityManager count as "up", so the message never wrongly blames
-     * the phone's connection.
+     * the phone's connection. No active network at all counts as "down".
+     * These are calls into the system (binder IPC) and run on the caller's
+     * thread, which for display() is usually the main thread.
      */
     private static boolean uplink(Context ctx) {
         try {

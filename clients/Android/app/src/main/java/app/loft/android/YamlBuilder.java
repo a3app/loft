@@ -6,7 +6,13 @@
  */
 package app.loft.android;
 
-/** Client YAML for Engine.Start. Shape matches clients/mobile marshalClient. */
+/**
+ * Client YAML for Engine.Start. Shape matches clients/mobile marshalClient.
+ * Plain string building, no YAML library: the documents are small and flat,
+ * and quote() covers the values that could be misread. Pure functions with
+ * no Android or I/O, so they are unit-tested (YamlBuilderTest) and safe on
+ * any thread.
+ */
 final class YamlBuilder {
     /**
      * Builds the engine config for a profile: top-level identity (member key
@@ -43,6 +49,7 @@ final class YamlBuilder {
         }
         // 2. loft-only extras: edge, inner cipher, and the list of fronts
         //    (ways of carrying traffic, like GET, WS, H2) when several are used.
+        // "select: auto" lets the engine choose among the outbounds itself.
         b.append("select: auto\n");
         if (p.isLoft() && p.edge != null && !p.edge.isEmpty()) {
             line(b, "edge", p.edge);
@@ -95,6 +102,8 @@ final class YamlBuilder {
         } else if (!p.sni.isEmpty()) {
             b.append("    sni: ").append(quote(p.sni)).append('\n');
         }
+        // SSTP carries tls_check at the top level (above); the others put the
+        // switch on the outbound, and only when checking is off.
         if (!p.isSSTP() && !p.tlsCheck) {
             b.append("    insecure_skip_verify: true\n");
         }
@@ -312,7 +321,11 @@ final class YamlBuilder {
         }
     }
 
-    /** wss://host[:port]/wsPath. GET must never see this URL. */
+    /**
+     * wss://host[:port]/wsPath (ws:// for plain http). The path is wsPath,
+     * else the path of a ws/wss main URL, else DEF_WS. GET must never see this
+     * URL: it speaks plain HTTP(S) and cannot dial a WebSocket address.
+     */
     static String wsURL(Profile p) {
         String origin = originURL(p);
         String wss = origin.replace("https://", "wss://").replace("http://", "ws://");
@@ -332,7 +345,11 @@ final class YamlBuilder {
         return wss + path;
     }
 
-    /** scheme://host[:port] of the main URL, with ws/wss mapped to http/https. */
+    /**
+     * scheme://host[:port] of the main URL, with ws/wss mapped to http/https
+     * and any other scheme forced to https. IPv6 hosts get their brackets back
+     * and the default port is left out.
+     */
     private static String originURL(Profile p) {
         String sch = schemeOf(p.url, p.kind);
         if ("ws".equals(sch) || "wss".equals(sch)) {
@@ -412,7 +429,10 @@ final class YamlBuilder {
         return url.substring(0, i).toLowerCase();
     }
 
-    /** Port from a URL, or the scheme's default (80 for http/ws, 443 otherwise). */
+    /**
+     * Port from a URL, or the scheme's default (80 for http/ws, 443 otherwise).
+     * Handles "[v6addr]:port"; a bad number also falls back to the default.
+     */
     static int portOf(String url, String scheme) {
         int def = ("http".equals(scheme) || "ws".equals(scheme)) ? 80 : 443;
         String hostport = hostPort(url);

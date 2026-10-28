@@ -3,7 +3,8 @@
  * other server the user added) and the active choice. Profile is the single
  * entry, YamlBuilder turns it into the session YAML the Go engine reads, and
  * Box encrypts the file at rest. Not to be confused with ProfileStore, which
- * holds split-tunnel route profiles.
+ * holds split-tunnel route profiles. Shared code: used by the phone and TV
+ * builds and by LoftVpnService.
  */
 package app.loft.android;
 
@@ -23,17 +24,27 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * encrypted with a key from the Android keystore (see Box), because profiles
  * hold member keys and passwords. One instance per process (LoftApp).
  * Every change rebuilds the profile's YAML and saves the whole list.
+ *
+ * <p>Threads: screens call it on the main thread and LoftVpnService calls it
+ * from its poll, so every public method is synchronized on this object. Saving
+ * is synchronous: it encrypts through the Android keystore and rewrites the
+ * file on the caller's thread before returning.
  */
 final class Profiles {
     /** File name under the app's private files dir. */
     private static final String FILE = "profiles.json";
+    /** Application context, used for the files dir and the legacy SessionStore. */
     private final Context app;
     /** Saved connections in list order (the order shown on screen). */
     private final List<Profile> items = new CopyOnWriteArrayList<>();
     /** Id of the selected profile; empty when none has been chosen yet. */
     private String active = "";
 
-    /** Loads the saved list right away; uses the application context so no Activity leaks. */
+    /**
+     * Loads the saved list right away (file read and keystore decrypt on the
+     * calling thread; LoftApp creates it in Application.onCreate). Keeps only
+     * the application context so no Activity leaks.
+     */
     Profiles(Context c) {
         app = c.getApplicationContext();
         load();
@@ -77,7 +88,11 @@ final class Profiles {
         }
     }
 
-    /** Adds or replaces a profile by id. The first profile ever added becomes active. */
+    /**
+     * Adds or replaces a profile by id (the Edit screen saves this way). The
+     * cached YAML is rebuilt first so it always matches the fields. The first
+     * profile ever added becomes active.
+     */
     synchronized void put(Profile p) {
         if (p == null) {
             return;
@@ -116,7 +131,12 @@ final class Profiles {
         save();
     }
 
-    /** Merges Status fronts= into the saved loft profile after handshake. */
+    /**
+     * Merges the node's Status "fronts=" list into the saved loft profile after
+     * the handshake, so the next start can use the extra fronts. Saves only
+     * when Profile.applyLearnedFronts reports a change; LoftVpnService calls
+     * this on every poll while connected.
+     */
     synchronized void applyLearnedFronts(String id, String raw) {
         Profile p = get(id);
         if (p == null || !p.applyLearnedFronts(raw)) {
@@ -126,7 +146,12 @@ final class Profiles {
         save();
     }
 
-    /** Stores the node mask_pub learned after handshake so the next Start passes mask_pub. */
+    /**
+     * Stores the node's mask public key learned after the handshake, so the
+     * next Engine.Start passes it as mask_pub. The key must be 64 hex chars
+     * (32 bytes); anything else is ignored. Saves only when the key changed,
+     * since LoftVpnService calls this on every poll while connected.
+     */
     synchronized void applyLearnedMask(String id, String hex) {
         if (hex == null) {
             return;
@@ -168,7 +193,12 @@ final class Profiles {
         save();
     }
 
-    /** loft:// / YAML docs joined for TV pairing. */
+    /**
+     * Every profile in share form (loft:// / sstp:// link, or the original
+     * link for VLESS/Trojan; session YAML when no link can be built), joined
+     * with "---" lines. This is the body the phone POSTs to a TV during
+     * pairing; Importer on the TV splits it back into profiles.
+     */
     synchronized String shareAll() {
         StringBuilder b = new StringBuilder();
         for (Profile p : items) {
@@ -200,6 +230,8 @@ final class Profiles {
         StringBuilder b = new StringBuilder("connections:\n");
         for (Profile p : items) {
             String y = p.sessionYaml();
+            // Indent the document as one list item: "  - " before its first
+            // non-empty line, four spaces before every following line.
             boolean first = true;
             for (String line : y.split("\n", -1)) {
                 if (first) {
@@ -228,6 +260,7 @@ final class Profiles {
             migrateYaml();
             return;
         }
+        // A broken or undecryptable file leaves an empty list rather than a crash.
         try {
             byte[] raw = read(f);
             String json = Box.open(new String(raw, StandardCharsets.UTF_8));
@@ -246,7 +279,11 @@ final class Profiles {
         }
     }
 
-    /** One-time move of the old single-session YAML (SessionStore) into the profile list. */
+    /**
+     * One-time move of the old single-session YAML (SessionStore, from before
+     * the app kept a list) into the profile list. The old slot is cleared only
+     * after the new file was written.
+     */
     private void migrateYaml() {
         String y = SessionStore.yaml(app);
         if (y == null || y.trim().isEmpty()) {
@@ -264,7 +301,11 @@ final class Profiles {
         }
     }
 
-    /** Encrypts the whole list with Box and rewrites profiles.json. Errors are ignored. */
+    /**
+     * Encrypts the whole list with Box and rewrites profiles.json. Errors are
+     * ignored, so a failed write keeps the old file and the in-memory list.
+     * The file is overwritten in place (no temp file and rename).
+     */
     private void save() {
         try {
             JSONObject o = new JSONObject();
@@ -279,7 +320,7 @@ final class Profiles {
         }
     }
 
-    /** Reads a whole file into memory. */
+    /** Reads a whole file into memory; the profile file is small. */
     private static byte[] read(File f) throws Exception {
         java.io.FileInputStream in = new java.io.FileInputStream(f);
         try {

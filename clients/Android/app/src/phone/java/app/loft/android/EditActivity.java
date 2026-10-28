@@ -31,8 +31,13 @@ public final class EditActivity extends LoftActivity {
      * "auto" is saved as GET; index 6 is L3.
      */
     private static final String[] METHODS = {"auto", "get", "ws", "h2", "quic", "h3", "l3"};
+    /** Request code for ScanActivity started from the scan button; its result fills the form. */
     private static final int REQ_SCAN = 2;
 
+    /**
+     * The profile being edited. For an existing profile this is the stored object itself;
+     * it may be replaced by a freshly parsed one (same id) when a link is saved or scanned.
+     */
     private Profile p;
     /** True when creating a new profile rather than editing a saved one. */
     private boolean fresh;
@@ -52,6 +57,8 @@ public final class EditActivity extends LoftActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_edit);
+        // 1. Which profile: the one named by the "id" extra, or a new empty one when the
+        // extra is missing or the id no longer exists (e.g. deleted elsewhere).
         String id = getIntent().getStringExtra("id");
         if (id != null) {
             p = LoftApp.of(this).profiles().get(id);
@@ -60,6 +67,8 @@ public final class EditActivity extends LoftActivity {
             p = new Profile();
             fresh = true;
         }
+        // 2. Top bar: close without saving, save, delete (asks first; for a new profile it
+        // just closes, since nothing is stored yet).
         findViewById(R.id.btn_close).setOnClickListener(v -> finish());
         findViewById(R.id.btn_save).setOnClickListener(v -> save());
         findViewById(R.id.btn_delete).setOnClickListener(v -> {
@@ -79,8 +88,12 @@ public final class EditActivity extends LoftActivity {
         findViewById(R.id.btn_delete).setVisibility(fresh ? View.GONE : View.VISIBLE);
         findViewById(R.id.btn_more).setVisibility(fresh ? View.GONE : View.VISIBLE);
         findViewById(R.id.btn_scan).setVisibility(fresh ? View.VISIBLE : View.GONE);
+        // 3. Scan opens ScanActivity in "return" mode: it hands back the raw text instead of
+        // saving profiles itself (see onActivityResult).
         findViewById(R.id.btn_scan).setOnClickListener(v ->
                 startActivityForResult(new Intent(this, ScanActivity.class).putExtra("return", true), REQ_SCAN));
+        // 4. "More" menu: share as QR or export as .loft text. The form is saved first so the
+        // shared copy matches what is on screen.
         findViewById(R.id.btn_more).setOnClickListener(v -> {
             PopupMenu m = new PopupMenu(this, v);
             m.getMenu().add(0, 1, 0, R.string.share);
@@ -100,6 +113,9 @@ public final class EditActivity extends LoftActivity {
             });
             m.show();
         });
+        // 5. Fill the form, then bind the segmented controls (family, link/manual entry,
+        // front). Any change re-runs show() to hide fields that do not apply. The family
+        // can only be chosen for a new profile; an existing one shows it as a caption.
         ((TextView) findViewById(R.id.title)).setText(fresh ? R.string.new_conn : R.string.edit_title);
         fill();
         Seg.bind(findViewById(R.id.kind_seg), index(KINDS, p.family()), i -> show());
@@ -116,6 +132,8 @@ public final class EditActivity extends LoftActivity {
         TextView cap = findViewById(R.id.kind_cap);
         cap.setVisibility(fresh ? View.GONE : View.VISIBLE);
         cap.setText(p.family());
+        // 6. "Advanced" folds the extra options in and out; the eye button swaps the link
+        // field between the masked and the full link.
         findViewById(R.id.btn_adv).setOnClickListener(v -> {
             View adv = findViewById(R.id.block_adv);
             adv.setVisibility(adv.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
@@ -129,7 +147,12 @@ public final class EditActivity extends LoftActivity {
         show();
     }
 
-    /** Copies the profile's values into the form, including the masked link. */
+    /**
+     * Copies the profile's values into the form, including the masked link. The port field is
+     * left empty when the URL has no usable port. Mux (several streams in one connection)
+     * is always shown off for an L3 profile, which does not use it. The link is rebuilt from
+     * the profile by YamlBuilder.emit, so it reflects the saved fields.
+     */
     private void fill() {
         set(R.id.name, p.name);
         set(R.id.token, p.token);
@@ -160,6 +183,8 @@ public final class EditActivity extends LoftActivity {
      * and no mux.
      */
     private void show() {
+        // Family: picked on the control for a new profile, fixed for an existing one.
+        // Only loft and VLESS have a manual (field by field) mode; the others are link only.
         String fam = fresh ? KINDS[Seg.selected(findViewById(R.id.kind_seg))] : p.family();
         boolean loft = "loft".equals(fam);
         boolean sstp = "sstp".equals(fam);
@@ -168,6 +193,7 @@ public final class EditActivity extends LoftActivity {
         findViewById(R.id.entry_seg).setVisibility(loft || vless ? View.VISIBLE : View.GONE);
         findViewById(R.id.block_link).setVisibility(linkKinds && !manual ? View.VISIBLE : View.GONE);
         findViewById(R.id.block_loft_man).setVisibility((loft || vless) && manual ? View.VISIBLE : View.GONE);
+        // Loft-only manual fields: front, path and edge; then the extra fronts' paths.
         int manVis = loft && manual ? View.VISIBLE : View.GONE;
         findViewById(R.id.lbl_method).setVisibility(manVis);
         findViewById(R.id.method_row).setVisibility(manVis);
@@ -178,6 +204,9 @@ public final class EditActivity extends LoftActivity {
         findViewById(R.id.h2_path).setVisibility(extraVis);
         findViewById(R.id.h3_path).setVisibility(extraVis);
         findViewById(R.id.row_quic).setVisibility(extraVis);
+        // The secret field is a UUID for VLESS and a member key otherwise. SSTP and Trojan
+        // share one block; user name and PAP only apply to SSTP, the TLS check to the
+        // non-loft families. Label of the link field names the expected link scheme.
         ((TextView) findViewById(R.id.lbl_token)).setText(vless ? R.string.uuid : R.string.key_title);
         findViewById(R.id.block_sstp).setVisibility(sstp || "trojan".equals(fam) ? View.VISIBLE : View.GONE);
         findViewById(R.id.user).setVisibility(sstp ? View.VISIBLE : View.GONE);
@@ -198,7 +227,7 @@ public final class EditActivity extends LoftActivity {
         findViewById(R.id.sni).setVisibility(sstp || "trojan".equals(fam) ? View.VISIBLE : View.GONE);
     }
 
-    /** Saves the form and closes the screen. */
+    /** Save button: saves the form and closes the screen. */
     private void save() {
         saveQuiet();
         finish();
@@ -209,6 +238,7 @@ public final class EditActivity extends LoftActivity {
      * parsed again, so a pasted or edited link wins over the fields; the name
      * and DNS typed here are kept. In manual mode the URL is rebuilt from host
      * and port, and for fronts other than GET the path goes into the URL.
+     * Writes the profile to storage (Profiles.put) every time it is called.
      */
     private void saveQuiet() {
         String fam = fresh ? KINDS[Seg.selected(findViewById(R.id.kind_seg))] : p.family();
@@ -219,12 +249,16 @@ public final class EditActivity extends LoftActivity {
         if ("loft".equals(fam)) {
             // Loft: a parsable link replaces the profile; otherwise build it from the fields.
             if (!manual) {
+                // While masked, the field holds "••••••" instead of the key, so the real link
+                // is taken from linkFull; when the eye is open, what the user typed wins.
                 String raw = shown ? text(R.id.link) : linkFull;
                 if (raw.isEmpty()) {
                     raw = text(R.id.link);
                 }
                 java.util.List<Profile> got = Importer.parse(raw);
                 if (!got.isEmpty()) {
+                    // Keep the id (so this replaces the stored profile instead of adding a
+                    // new one), the typed name if any, and the DNS settings from the form.
                     Profile n = got.get(0);
                     n.id = p.id;
                     n.name = p.name.isEmpty() ? n.name : p.name;
@@ -236,6 +270,7 @@ public final class EditActivity extends LoftActivity {
                     return;
                 }
             }
+            // Manual mode, or a link that did not parse: build the profile from the fields.
             int mi = Seg.selected(findViewById(R.id.method_seg));
             String type = METHODS[mi];
             if ("auto".equals(type)) {
@@ -245,6 +280,8 @@ public final class EditActivity extends LoftActivity {
             p.token = text(R.id.token);
             p.path = text(R.id.path);
             p.edge = text(R.id.edge);
+            // Extra fronts (WS, H2, H3 paths and QUIC) only exist for stream fronts; L3
+            // (raw IP packets) clears them all.
             if (!"l3".equals(type)) {
                 p.wsPath = slash(text(R.id.ws_path));
                 p.h2Path = slash(text(R.id.h2_path));
@@ -259,6 +296,7 @@ public final class EditActivity extends LoftActivity {
                 p.listedFronts = "";
             }
             p.mux = ((Switch) findViewById(R.id.sw_mux)).isChecked() && !"l3".equals(type);
+            // URL: wss:// for the WebSocket front, https:// otherwise; port 443 is left out.
             String host = text(R.id.host);
             int port = num(text(R.id.port), 443);
             String sch = "ws".equals(type) ? "wss" : "https";
@@ -290,6 +328,7 @@ public final class EditActivity extends LoftActivity {
                     LoftApp.of(this).profiles().put(p);
                     return;
                 }
+                // Not parsable: keep it as typed so the user's text is not lost.
                 p.url = raw;
             }
         } else if ("sstp".equals(fam)) {
@@ -297,6 +336,7 @@ public final class EditActivity extends LoftActivity {
             p.kind = "sstp";
             p.user = text(R.id.user);
             p.pass = text(R.id.pass);
+            // The password is also stored as the token, the profile's generic secret field.
             p.token = p.pass;
             p.tlsCheck = ((Switch) findViewById(R.id.sw_tls)).isChecked();
             p.pap = ((Switch) findViewById(R.id.sw_pap)).isChecked();
@@ -319,6 +359,7 @@ public final class EditActivity extends LoftActivity {
             p.token = text(R.id.token);
             p.tlsCheck = ((Switch) findViewById(R.id.sw_tls)).isChecked();
         }
+        // A profile without a name is listed under its host.
         if (p.name.isEmpty()) {
             p.name = p.host();
         }
@@ -326,8 +367,11 @@ public final class EditActivity extends LoftActivity {
         LoftApp.of(this).profiles().put(p);
     }
 
-    // Scanner result for a new profile: fill the form from the scanned link.
-    // Text that does not parse is left in the link field for the user to fix.
+    /**
+     * Scanner result for a new profile: fill the form from the scanned link, keeping this
+     * profile's id and any name already typed. Nothing is saved until the user taps Save.
+     * Text that does not parse is left, unmasked, in the link field for the user to fix.
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -366,8 +410,11 @@ public final class EditActivity extends LoftActivity {
         return ((EditText) findViewById(id)).getText().toString().trim();
     }
 
-    // Hides the secret between "://" and "@" so the key is not shown on screen
-    // until the user taps the eye button.
+    /**
+     * Hides the secret between "://" and "@" so the key is not shown on screen (or in
+     * screenshots) until the user taps the eye button. Text without that shape, such as
+     * YAML, is returned unchanged.
+     */
     private static String mask(String s) {
         if (s == null) {
             return "";
@@ -380,7 +427,7 @@ public final class EditActivity extends LoftActivity {
         return s.substring(0, a + 3) + "••••••" + s.substring(at);
     }
 
-    /** Adds a leading "/" to a non-empty path. */
+    /** Trims a path and adds a leading "/" when it is not empty; null or blank gives "". */
     private static String slash(String s) {
         if (s == null) {
             return "";
@@ -392,7 +439,7 @@ public final class EditActivity extends LoftActivity {
         return s.startsWith("/") ? s : "/" + s;
     }
 
-    /** Host part of a URL, using Profile's own parsing. */
+    /** Host part of a URL, using Profile's own parsing (a throwaway Profile carries the URL). */
     private static String hostOf(String u) {
         Profile x = new Profile();
         x.url = u;
@@ -409,7 +456,10 @@ public final class EditActivity extends LoftActivity {
         }
     }
 
-    /** Position of {@code v} in {@code a} ignoring case, or 0 when absent. */
+    /**
+     * Position of {@code v} in {@code a} ignoring case, or 0 (the first choice) when absent,
+     * so an unknown value selects the default segment instead of crashing.
+     */
     private static int index(String[] a, String v) {
         for (int i = 0; i < a.length; i++) {
             if (a[i].equalsIgnoreCase(v)) {

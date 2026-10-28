@@ -11,7 +11,11 @@ import java.util.List;
 
 import app.loft.engine.mobile.Mobile;
 
-/** Paste / QR / file → profiles. Engine ParseShareAll is the detector. */
+/**
+ * Paste / QR / file → profiles. Engine ParseShareAll is the detector.
+ * Stateless: it only builds Profile objects; the caller decides whether to
+ * add them (Profiles.addAll) or merge them into an edited profile.
+ */
 final class Importer {
     /**
      * Turns pasted text, a scanned QR or a file body into profiles. The engine
@@ -19,7 +23,9 @@ final class Importer {
      * trojan://, sstp:// links and YAML, and returns one YAML document per
      * connection, separated by "---". parseShare is the older single-link
      * parser, kept as a fallback. Documents with no key, password or URL are
-     * skipped because they cannot connect.
+     * skipped because they cannot connect. Never throws; an unknown format
+     * gives an empty list. The engine calls are synchronous calls into Go
+     * (through JNI), made on the caller's thread.
      */
     static List<Profile> parse(String raw) {
         List<Profile> out = new ArrayList<>();
@@ -30,6 +36,8 @@ final class Importer {
         if (s.isEmpty()) {
             return out;
         }
+        // Ask the engine for every connection in the text; if the newer
+        // call fails, try the single-link parser before giving up.
         String all;
         try {
             all = Mobile.parseShareAll(s);

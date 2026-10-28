@@ -3,7 +3,7 @@
  * SplitStore (which services and zones go through the tunnel and which stay
  * local). The phone's Lists screen switches between them; LoftVpnService
  * stores the profile a node operator pushes. Not related to Profiles, which
- * holds connections.
+ * holds connections. Shared code (phone and TV builds, and the VPN service).
  */
 package app.loft.android;
 
@@ -21,6 +21,16 @@ import java.util.UUID;
  * RoutePlan reads. Prefs "route_profiles" holds every profile: mine
  * (migrated from split_store), op (from the node), link (imported).
  * One is active. Operator slot is read-only and overwritten on serial change.
+ *
+ * <p>Split tunneling means only some traffic goes through the VPN; a route
+ * profile is one saved set of those choices. The active profile's settings
+ * live twice: in its catalog entry and as the split_store document, because
+ * RoutePlan and the Lists screen read split_store directly. activate() and
+ * syncActive() keep the two in step.
+ *
+ * <p>Not thread-safe and not cached: callers load() a fresh copy, change it
+ * and save() it. Each load parses the whole catalog JSON, every profile's
+ * full SplitStore included.
  */
 final class ProfileStore {
     /** Fixed id of the user's own profile (created from the original split_store). */
@@ -30,13 +40,16 @@ final class ProfileStore {
 
     /** Id of the active profile. */
     String active = MINE;
+    /** Every route profile, in the order they were added. */
     final List<Prof> profiles = new ArrayList<>();
 
     /** One route profile with its origin and its full split-tunnel settings. */
     static final class Prof {
+        /** MINE, OP, or a random UUID for copies and imported links. */
         String id = "";
         /** Where it came from: "me" (user-made), "op" (pushed by the node operator) or "link" (imported). */
         String src = "me"; // me | op | link
+        /** Display name; may be empty (the user's own "mine" profile is created without one). */
         String name = "";
         /** For the operator profile: name of the connection it arrived over. */
         String conn = "";
@@ -46,6 +59,7 @@ final class ProfileStore {
         long serial;
         /** Last change time, epoch milliseconds. */
         long updated;
+        /** The profile's split-tunnel settings: services, zones and their routing choice. */
         SplitStore store = new SplitStore();
     }
 
@@ -75,7 +89,11 @@ final class ProfileStore {
         return ps;
     }
 
-    /** Writes the catalog (not the active split_store) to prefs. */
+    /**
+     * Writes the catalog (not the active split_store) to prefs. apply() writes
+     * the file in the background, but the whole catalog is serialised to JSON
+     * on the calling thread first.
+     */
     void save(Context c) {
         Prefs.p(c).edit().putString("route_profiles", toJSON()).apply();
     }
@@ -101,6 +119,8 @@ final class ProfileStore {
                     p.dns = j.optString("dns");
                     p.serial = j.optLong("serial");
                     p.updated = j.optLong("updated");
+                    // ensureBuiltins re-adds any missing built-in zone (local,
+                    // global, block), e.g. in a store saved before one existed.
                     JSONObject st = j.optJSONObject("store");
                     if (st != null) {
                         p.store.readJSON(st);
@@ -142,7 +162,7 @@ final class ProfileStore {
         return o.toString();
     }
 
-    /** Profile with this id, or null. */
+    /** Profile with this id, or null. A linear scan; the catalog is short. */
     Prof get(String id) {
         for (Prof p : profiles) {
             if (p.id.equals(id)) {
@@ -169,6 +189,7 @@ final class ProfileStore {
      * Skipped for the operator profile, since the node owns it.
      */
     static void syncActive(Context c, SplitStore store) {
+        // Loads, changes and saves the whole catalog on every call.
         ProfileStore ps = load(c);
         Prof p = ps.current();
         if (p == null || "op".equals(p.src)) {
@@ -259,14 +280,19 @@ final class ProfileStore {
     }
 
     /**
-     * Entry point for LoftVpnService after a connection comes up: stores the
-     * operator profile and, if it is the active one, also refreshes
-     * split_store so the new routes take effect.
+     * Entry point for LoftVpnService: called from its once-a-second poll
+     * (on the main thread) whenever the session is on and the engine reports
+     * an operator profile. Stores the operator profile and, if it is the
+     * active one, also refreshes split_store so the new routes take effect.
+     * Does nothing for an empty JSON.
      */
     static void applyOperator(Context c, String json, String conn) {
         if (json == null || json.isEmpty()) {
             return;
         }
+        // The catalog and (when the operator profile is active) split_store
+        // are saved even when putOperator found the same serial and changed
+        // nothing but the connection name.
         ProfileStore ps = load(c);
         ps.putOperator(json, conn);
         ps.save(c);

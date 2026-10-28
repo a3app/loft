@@ -13,13 +13,22 @@ import android.app.Application;
  * profiles once for the whole process, starts the release channel
  * (the GitHub updater in the github flavor, nothing in the store flavor),
  * and flushes a pending crash report if the last process died.
+ * It is named in AndroidManifest.xml as the application class, so Android
+ * creates it once per process. Screens and the VPN service run in the same
+ * (single) process, so they share this one instance and its Profiles.
  */
 public final class LoftApp extends Application {
-    /** The process-wide connection list, loaded in onCreate(). */
+    /** The process-wide connection list (the saved profiles), loaded in onCreate(). */
     private Profiles profiles;
 
+    /**
+     * Process start, on the main thread, before any activity or service.
+     * Order matters: the crash handler goes first so a crash in the steps
+     * after it is still saved; the language is set before any screen
+     * inflates; Crash.drain runs last and does its work on a background
+     * thread.
+     */
     @Override
-    /** Process start: crash handler, language, profiles, update channel, then queued crash send. */
     public void onCreate() {
         super.onCreate();
         Crash.install(this);
@@ -29,7 +38,10 @@ public final class LoftApp extends Application {
         Crash.drain(this);
     }
 
-    /** The shared connection list; loads it lazily in case onCreate() has not run yet. */
+    /**
+     * The shared connection list; loads it lazily in case onCreate() has not
+     * run yet. Not synchronized: in practice onCreate() always fills it first.
+     */
     public Profiles profiles() {
         if (profiles == null) {
             profiles = new Profiles(this);
@@ -37,7 +49,7 @@ public final class LoftApp extends Application {
         return profiles;
     }
 
-    /** Gets the LoftApp from any context (activity, service, application). */
+    /** Gets the LoftApp from any context (activity, service, application) via its application context. */
     static LoftApp of(android.content.Context c) {
         return (LoftApp) c.getApplicationContext();
     }

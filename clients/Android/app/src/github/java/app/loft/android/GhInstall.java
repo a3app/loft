@@ -2,7 +2,9 @@
  * Android client, "github" build flavor only: trampoline Activity for the
  * PackageInstaller session started by Channel.java. A BroadcastReceiver cannot
  * start the system confirm sheet on MIUI/HyperOS (background-activity rules);
- * an Activity can.
+ * an Activity can. The manifest declares it translucent, not exported and
+ * hidden from recents, so the user never sees it: it opens, forwards the
+ * result and closes at once.
  */
 package app.loft.android;
 
@@ -13,8 +15,11 @@ import android.os.Build;
 import android.os.Bundle;
 
 /**
- * PackageInstaller callback. First session may still raise a confirm sheet
- * (update-ownership). After that USER_ACTION_NOT_REQUIRED is silent.
+ * PackageInstaller callback, started by the PendingIntent that
+ * Channel.commit() passes to the install session. The first session may
+ * still raise a confirm sheet (the system asks once before this app becomes
+ * the "update owner"). After that, sessions marked USER_ACTION_NOT_REQUIRED
+ * install silently.
  */
 public final class GhInstall extends Activity {
     /**
@@ -28,6 +33,10 @@ public final class GhInstall extends Activity {
         Intent in = getIntent();
         int st = in.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
         if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            // The system wants the user to confirm: it put the confirm
+            // screen's intent in EXTRA_INTENT. The typed getter exists only
+            // on Android 13 (API 33) and newer; older versions use the
+            // deprecated untyped one.
             Intent next;
             if (Build.VERSION.SDK_INT >= 33) {
                 next = in.getParcelableExtra(Intent.EXTRA_INTENT, Intent.class);
@@ -48,6 +57,7 @@ public final class GhInstall extends Activity {
             finish();
             return;
         }
+        // Final result (success, aborted, failure): just report it.
         Channel.onInstall(this, st, in.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE));
         finish();
     }

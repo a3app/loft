@@ -1,9 +1,18 @@
 /*
  * Android client, phone build: the editor for split-routing lists and route
- * profiles. A single activity that swaps pages (lists, exclusions, zones,
- * services, repository catalog, import, export, profiles). Edits SplitStore
- * and ProfileStore and saves them through Prefs; LoftVpnService picks up
- * the change through RoutePlan.
+ * profiles. Split routing (split tunneling) means only some address ranges go
+ * through the VPN; the rest go direct or are blocked. A single activity that
+ * swaps pages (lists, exclusions, zones, services, repository catalog,
+ * import, export, profiles). Edits SplitStore and ProfileStore and saves them
+ * through Prefs; a running LoftVpnService notices the Prefs change, rebuilds
+ * its routes through RoutePlan and re-creates the TUN.
+ *
+ * Words used below: a "zone" is a named group with one direction (through the
+ * tunnel, around it, or blocked); a "service" is one entry in a zone (a name
+ * plus prefixes and domains); an "exclusion" is an "ignore" entry whose
+ * prefixes never use the tunnel; a "route profile" is a whole saved set of
+ * zones and services (ProfileStore), and the "operator" profile is the one a
+ * node pushes to the client, which is read-only here.
  */
 package app.loft.android;
 
@@ -47,7 +56,12 @@ import app.loft.engine.mobile.Mobile;
 /**
  * Editor for the split-routing lists (SplitStore). Pages: zone list,
  * exclusions, zones, one zone, one service, repository, catalog,
- * import and export. Back returns to the list page first.
+ * import, export, route profiles and route-profile import. Back returns to
+ * the list page first.
+ *
+ * <p>There is one activity and no fragments: show(name) throws away the
+ * current page body and builds the new one in code. All work here runs on
+ * the main thread except the list download in pull().
  */
 public final class ListsActivity extends LoftActivity {
     /** Request code for the file picker (a .bat list on the import page, a profile on profimp). */
@@ -64,7 +78,9 @@ public final class ListsActivity extends LoftActivity {
     private String editing;
     /** Zone whose list URL the catalog page will set, and the page to return to afterwards. */
     private String catalogZone = SplitStore.GLOBAL;
+    /** Page the catalog returns to: "repo" or "zone". */
     private String catalogBack = "repo";
+    /** Main-thread handler: delivers results of the background pull and runs the snackbar timer. */
     private final Handler main = new Handler(Looper.getMainLooper());
     /** Ids picked in multi-select mode on the list page; null when not selecting. */
     private Set<String> sel;
@@ -77,10 +93,13 @@ public final class ListsActivity extends LoftActivity {
      * {@link #pendingHint} is the zone named inside the file, if any.
      */
     private List<Bat.Row> pendingRows;
+    /** Zone id named inside the imported file ("REM zone: id"), or "" when it names none. */
     private String pendingHint = "";
+    /** Kept as one object so snack() can cancel the previous 5-second timer before starting a new one. */
     private final Runnable hideSnack = this::hideSnack;
     /** Serial of the operator profile last shown. The node bumps it when it pushes new lists. */
     private long opSerial;
+    /** Bus subscription, kept in a field so onStop can unsubscribe the same object. */
     private final Bus.Listener bus = this::onBus;
 
     /**
@@ -91,13 +110,16 @@ public final class ListsActivity extends LoftActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_lists);
+        // Parses the saved lists (JSON in Prefs) on the main thread.
         store = SplitStore.load(this);
+        // Header switch: split routing on/off. Saved at once; the VPN service reacts to the change.
         ToggleView split = findViewById(R.id.sw_split);
         split.setChecked(Prefs.split(this));
         split.setOnCheckedChangeListener((v, on) ->
                 Prefs.p(this).edit().putBoolean("split", on).apply());
         findViewById(R.id.btn_back).setOnClickListener(v -> onBackPressed());
         findViewById(R.id.btn_more).setOnClickListener(this::openMore);
+        // Multi-select bar: cancel, select all (or none, when all are already picked), delete.
         findViewById(R.id.btn_sel_x).setOnClickListener(v -> {
             sel = null;
             show("list");
@@ -122,6 +144,7 @@ public final class ListsActivity extends LoftActivity {
             sel = null;
             gone(ids);
         });
+        // Undo puts back the snapshot taken before the last delete or clear.
         findViewById(R.id.snack_undo).setOnClickListener(v -> {
             if (undo != null) {
                 store.restore(undo);
@@ -151,6 +174,8 @@ public final class ListsActivity extends LoftActivity {
     /**
      * Bus event: if the node pushed a new operator profile (serial changed) while the list or
      * profiles page is open, reload the lists when that profile is active and redraw.
+     * The Bus fires for every journal line and every status update of the VPN service, and
+     * each call here loads and parses the whole ProfileStore to read one serial number.
      */
     private void onBus() {
         if (!"list".equals(page) && !"profiles".equals(page)) {
@@ -197,7 +222,10 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * Saves the lists as the active document and copies them into the active route profile.
-     * The VPN service reads the saved lists when it next builds routes.
+     * The VPN service reads the saved lists when it next builds routes; while it is running it
+     * also listens for the "split_store" key and rebuilds routes right after this save.
+     * Both writes serialize the whole document to JSON on the calling (main) thread; the disk
+     * write itself is asynchronous (apply()). syncActive also loads and parses ProfileStore.
      */
     private void persist() {
         store.save(this);
@@ -206,6 +234,7 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * True when the operator's profile is active: its lists come from the node and are read-only here.
+     * Not cached: each call loads and parses the whole ProfileStore from Prefs.
      */
     private boolean ro() {
         return ProfileStore.load(this).operatorActive();
@@ -238,6 +267,8 @@ public final class ListsActivity extends LoftActivity {
      */
     private void show(String p) {
         page = p;
+        // 1. Header: the multi-select bar replaces the title bar while picking on the list page;
+        //    the split switch and "more" button belong to the list page only.
         boolean list = "list".equals(p);
         boolean selecting = list && sel != null;
         findViewById(R.id.head).setVisibility(selecting ? View.GONE : View.VISIBLE);
@@ -249,6 +280,8 @@ public final class ListsActivity extends LoftActivity {
             ((TextView) findViewById(R.id.sel_title)).setText(getString(R.string.split_sel_n, n));
             findViewById(R.id.btn_sel_del).setEnabled(n > 0);
         }
+        // 2. Build the new body. Any RuntimeException is logged to the Journal and replaced by
+        //    an error line, so a bad entry in the lists cannot crash the screen.
         TextView title = findViewById(R.id.title);
         View content;
         try {
@@ -258,6 +291,7 @@ public final class ListsActivity extends LoftActivity {
                     content = zonesPage();
                     break;
                 case "zone":
+                    // The zone may have been deleted meanwhile; fall back to the zones page.
                     if (store.zone(editing) == null) {
                         page = "zones";
                         title.setText(R.string.zones);
@@ -311,6 +345,7 @@ public final class ListsActivity extends LoftActivity {
             err.addView(subline(getString(R.string.lists_page_fail)));
             content = scroll(err);
         }
+        // 3. Swap the body only now that the new page exists.
         ViewGroup body = findViewById(R.id.body);
         body.removeAllViews();
         body.addView(content, new FrameLayout.LayoutParams(
@@ -326,8 +361,11 @@ public final class ListsActivity extends LoftActivity {
         LinearLayout root = col();
         root.addView(subline(Prefs.split(this)
                 ? getString(R.string.split_sub) : getString(R.string.split_sub_off)));
+        // Read-only when the operator's profile is active: hide every editing control.
         boolean locked = ro();
         findViewById(R.id.btn_more).setVisibility(locked ? View.GONE : View.VISIBLE);
+        // Route-profile row: current profile name, "operator" tag if pushed by a node; tap opens
+        // the profiles page.
         ProfileStore ps = ProfileStore.load(this);
         ProfileStore.Prof cur = ps.current();
         String meta = "";
@@ -353,6 +391,7 @@ public final class ListsActivity extends LoftActivity {
         root.addView(zhead);
         LinearLayout chips = new LinearLayout(this);
         chips.setOrientation(LinearLayout.HORIZONTAL);
+        // store.count walks every service once per zone chip.
         for (SplitStore.Zone z : store.zones) {
             Button b = pill(z.name + " " + store.count(z.id));
             b.setSelected(z.id.equals(zoneId));
@@ -378,6 +417,8 @@ public final class ListsActivity extends LoftActivity {
         search.setHint(getString(R.string.search));
         search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
         root.addView(search);
+        // Rows shown by the ListView; refilled by the paint runnable below. A ListView (not a
+        // plain LinearLayout) so only the visible rows exist as views, even for long lists.
         final List<SplitStore.Svc> rows = new ArrayList<>();
         final BaseAdapter adapter = new BaseAdapter() {
             @Override
@@ -397,6 +438,7 @@ public final class ListsActivity extends LoftActivity {
 
             @Override
             public View getView(int i, View conv, ViewGroup parent) {
+                // Reuse a scrolled-off row (conv) when there is one; inflate only otherwise.
                 if (conv == null) {
                     conv = getLayoutInflater().inflate(R.layout.row_split, parent, false);
                 }
@@ -412,13 +454,16 @@ public final class ListsActivity extends LoftActivity {
         lv.setDividerHeight(dp(6));
         lv.setSelector(new android.graphics.drawable.ColorDrawable(0));
         lv.setNestedScrollingEnabled(true);
-        // Footer under the list: exclusions row and the action buttons.
+        // Footer under the list: exclusions row and the action buttons. It is a ListView footer
+        // (not a view below the list) so it scrolls with the rows. Hidden while selecting;
+        // read-only mode keeps only Export.
         if (sel == null) {
             LinearLayout tail = col(false);
             int nx = store.exclCount(zoneId);
             tail.addView(clickRow(getString(R.string.split_excl), nx + " ›",
                     v -> show("excl")));
             if (!locked) {
+                // "+ Add" saves an empty service right away and opens its editor.
                 tail.addView(ghostSm("+ " + getString(R.string.add), v -> {
                     SplitStore.Svc s = new SplitStore.Svc();
                     s.zone = zoneId;
@@ -452,6 +497,8 @@ public final class ListsActivity extends LoftActivity {
             lv.addFooterView(tail, null, false);
         }
         lv.setAdapter(adapter);
+        // Refills the rows from the store for the current zone and search text. Runs once now
+        // and again after every keystroke in the search field (store.in scans all services).
         Runnable paint = () -> {
             rows.clear();
             rows.addAll(store.in(zoneId, sel != null ? "" : search.getText().toString()));
@@ -468,7 +515,8 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * Exclusions page for the current zone: "ignore" entries whose prefixes never use the tunnel.
-     * Allows adding one and clearing all when editable.
+     * Allows adding one and clearing all when editable. Uses the same row layout and swipe
+     * behaviour as the service list, but the swipe action reads "back" instead of "delete".
      */
     private View exclPage() {
         LinearLayout root = col();
@@ -511,6 +559,7 @@ public final class ListsActivity extends LoftActivity {
                     ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         }
         if (!ro()) {
+            // "+ Add" saves an empty exclusion (ignore entry) and opens it in the service editor.
             root.addView(ghostSm("+ " + getString(R.string.add), v -> {
                 SplitStore.Svc s = new SplitStore.Svc();
                 s.zone = zoneId;
@@ -538,6 +587,7 @@ public final class ListsActivity extends LoftActivity {
      * exclusion, lets the prefix use its zone again.
      */
     private void bindSvcRow(RevealFrame row, SplitStore.Svc s, boolean excl) {
+        // A recycled row may still be swiped open from its previous use; snap it shut.
         row.settleNow(0);
         TextView name = row.findViewById(R.id.name);
         TextView sub = row.findViewById(R.id.sub);
@@ -545,6 +595,7 @@ public final class ListsActivity extends LoftActivity {
         TextView src = row.findViewById(R.id.src);
         TextView ck = row.findViewById(R.id.ck);
         TextView act = row.findViewById(R.id.act_del);
+        // An exclusion's title is all of its prefixes joined into one string.
         name.setText(excl ? SplitStore.join(s.cidrs) : s.name);
         oneLine(name);
         oneLine(sub);
@@ -567,6 +618,8 @@ public final class ListsActivity extends LoftActivity {
                     : getString(R.string.mine));
             act.setText(R.string.delete);
         }
+        // Swipe mode: locked while picking or read-only; otherwise only a left swipe, which
+        // reveals the single action on the right (delete / back).
         boolean picking = sel != null && !excl;
         boolean locked = ro();
         ck.setVisibility(picking ? View.VISIBLE : View.GONE);
@@ -580,6 +633,7 @@ public final class ListsActivity extends LoftActivity {
         } else {
             row.leftOnly();
         }
+        // Keep at most one row swiped open: starting a swipe closes the previous one.
         row.setListener(new RevealFrame.Listener() {
             @Override
             public void onRevealStart(RevealFrame r) {
@@ -593,6 +647,7 @@ public final class ListsActivity extends LoftActivity {
             public void onSettled(RevealFrame r, float tx) {
             }
         });
+        // Tap: toggle the pick (redraws the whole page to update the counter), or open the editor.
         View card = row.findViewById(R.id.card);
         card.setOnClickListener(v -> {
             if (picking) {
@@ -607,6 +662,7 @@ public final class ListsActivity extends LoftActivity {
             editing = s.id;
             show("svc");
         });
+        // Long-press starts multi-select with this row already picked.
         card.setOnLongClickListener(v -> {
             if (excl || sel != null || locked) {
                 return false;
@@ -658,16 +714,19 @@ public final class ListsActivity extends LoftActivity {
      */
     private View svcPage() {
         SplitStore.Svc s = store.svc(editing);
+        // The new entry is added to the store in memory only; it is saved when the user taps Save.
         if (s == null) {
             s = new SplitStore.Svc();
             s.zone = zoneId;
             store.services.add(s);
             editing = s.id;
         }
+        // Effectively-final copy, so the lambdas below can use it.
         SplitStore.Svc svc = s;
         LinearLayout root = col();
         root.addView(subline(svc.ignore
                 ? getString(R.string.split_add_body_ignore) : getString(R.string.split_add_body)));
+        // 1. Kind switch: route (a normal service) or ignore (an exclusion).
         LinearLayout kind = new LinearLayout(this);
         kind.setOrientation(LinearLayout.HORIZONTAL);
         Button route = chip(getString(R.string.kind_route));
@@ -679,6 +738,7 @@ public final class ListsActivity extends LoftActivity {
         kindLp.bottomMargin = dp(8);
         kind.setLayoutParams(kindLp);
         root.addView(kind);
+        // 2. Text fields: prefixes and domains one per line, then the name.
         root.addView(label(getString(R.string.networks)));
         EditText nets = field(SplitStore.join(svc.cidrs).replace(' ', '\n'));
         nets.setMinLines(3);
@@ -695,6 +755,8 @@ public final class ListsActivity extends LoftActivity {
         root.addView(label(getString(R.string.name)));
         EditText name = field(svc.name);
         root.addView(name);
+        // 3. Zone picker: one chip per zone. Picking one moves the entry in memory at once;
+        //    it is saved with the rest on Save.
         root.addView(label(getString(R.string.zone)));
         LinearLayout zseg = new LinearLayout(this);
         zseg.setOrientation(LinearLayout.HORIZONTAL);
@@ -723,6 +785,7 @@ public final class ListsActivity extends LoftActivity {
             kindUi.run();
         });
         kindUi.run();
+        // Read-only (operator profile): show the entry with every control disabled, no buttons.
         if (ro()) {
             nets.setEnabled(false);
             doms.setEnabled(false);
@@ -736,6 +799,8 @@ public final class ListsActivity extends LoftActivity {
             return scroll(root);
         }
         // Save: parse the text fields back into the service.
+        // Prefixes and domains may be separated by spaces, commas or new lines. Invalid prefixes
+        // are dropped silently; valid ones are stored in their canonical form (Cidr.display).
         Button save = go(getString(R.string.save), 14);
         save.setOnClickListener(v -> {
             svc.name = name.getText().toString().trim();
@@ -760,6 +825,7 @@ public final class ListsActivity extends LoftActivity {
         });
         root.addView(save);
         Button del = danger(getString(svc.ignore ? R.string.split_del_excl : R.string.split_del_svc), 8);
+        // Delete goes back to the list first, so gone() redraws the list with the undo snackbar.
         del.setOnClickListener(v -> {
             String id = svc.id;
             show("list");
@@ -771,6 +837,7 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * List of all zones with direction and service count, plus "new zone" (goes through by default).
+     * A new zone gets a random UUID id and is saved immediately, then opened in the zone editor.
      */
     private View zonesPage() {
         LinearLayout root = col();
@@ -836,6 +903,8 @@ public final class ListsActivity extends LoftActivity {
         name.setEnabled(!z.builtin);
         root.addView(label(getString(R.string.zone_name)));
         root.addView(name);
+        // Direction switch: 0 through, 1 around, 2 block. It changes the zone in memory at once
+        // (saved on Save); the block explanation shows only for block.
         root.addView(label(getString(R.string.split_rdef)));
         LinearLayout dir = new LinearLayout(this);
         dir.setOrientation(LinearLayout.HORIZONTAL);
@@ -855,6 +924,7 @@ public final class ListsActivity extends LoftActivity {
         blockD.setVisibility(z.block ? View.VISIBLE : View.GONE);
         root.addView(blockD);
         root.addView(label(getString(R.string.list_url)));
+        // List URL: the typed text is saved before opening the catalog, so it is not lost.
         EditText url = urlField(z.repo);
         root.addView(urlRow(url, v -> {
             z.repo = url.getText().toString().trim();
@@ -862,6 +932,7 @@ public final class ListsActivity extends LoftActivity {
             openCatalog(z.id, "zone");
         }));
         root.addView(autoRow(z));
+        // pulled is the time of the last successful download; 0 means never.
         root.addView(hint(z.pulled == 0 ? getString(R.string.no_list) : getString(R.string.pulled)));
         if (ro()) {
             name.setEnabled(false);
@@ -882,6 +953,7 @@ public final class ListsActivity extends LoftActivity {
         });
         root.addView(save);
         if (!z.builtin) {
+            // Deleting a custom zone: the hint below tells the user where its services go.
             Button del = danger(getString(R.string.delete_zone), 8);
             del.setOnClickListener(v -> {
                 store.deleteZone(z.id);
@@ -896,7 +968,8 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * Repository page for the current zone: list URL (saved as typed), catalog picker,
-     * auto-update and a button that downloads the list now.
+     * auto-update and a button that downloads the list now. "Repository" here means a web
+     * address of a .bat route list, usually one from the public loft-routes catalog.
      */
     private View repoPage() {
         SplitStore.Zone z = store.zone(zoneId);
@@ -906,6 +979,8 @@ public final class ListsActivity extends LoftActivity {
         }
         root.addView(subline(z.name + " · " + getString(R.string.repo_d)));
         root.addView(label(getString(R.string.list_url)));
+        // Saved on every keystroke: each call serializes the lists, re-parses ProfileStore and,
+        // while the VPN runs, makes the service rebuild its routes.
         EditText url = urlField(z.repo);
         url.addTextChangedListener(new SimpleWatch(() -> {
             z.repo = url.getText().toString().trim();
@@ -936,6 +1011,8 @@ public final class ListsActivity extends LoftActivity {
     private View impPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.split_import_body)));
+        // Step 1: nothing read yet, offer the system file picker; the result arrives in
+        // onActivityResult, which fills pendingRows and shows this page again.
         if (pendingRows == null) {
             root.addView(ghostSm(getString(R.string.from_file), v -> {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -945,6 +1022,8 @@ public final class ListsActivity extends LoftActivity {
             }));
             return scroll(root);
         }
+        // Step 2: rows are read. Preselect the zone the file names, if it exists here, else the
+        // zone open on the list page.
         root.addView(hint(getString(R.string.split_import_detect, pendingRows.size())));
         root.addView(label(getString(R.string.zone)));
         LinearLayout zseg = new LinearLayout(this);
@@ -954,6 +1033,7 @@ public final class ListsActivity extends LoftActivity {
         if (store.zone(dest) == null) {
             dest = zoneId;
         }
+        // One-element array: a mutable holder the Seg callback lambda can write to.
         final String[] hold = {dest};
         for (int i = 0; i < store.zones.size(); i++) {
             SplitStore.Zone z = store.zones.get(i);
@@ -978,7 +1058,10 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
-    /** Export page: all zones as one .bat text, shown as a preview and sent via the share sheet. */
+    /**
+     * Export page: all zones as one .bat text, shown as a preview and sent via the share sheet.
+     * The text is built and laid out in full on the main thread, in a single TextView.
+     */
     private View expPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.split_export_body)));
@@ -1031,7 +1114,10 @@ public final class ListsActivity extends LoftActivity {
         return getString(R.string.prof_src_own);
     }
 
-    /** Makes an editable copy of the active (operator) profile and switches to it. */
+    /**
+     * Makes an editable copy of the active (operator) profile and switches to it, then reloads
+     * the lists because activation rewrote the active document (split_store).
+     */
     private void copyActive() {
         ProfileStore ps = ProfileStore.load(this);
         ProfileStore.Prof src = ps.current();
@@ -1048,6 +1134,8 @@ public final class ListsActivity extends LoftActivity {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.prof_sub)));
         ProfileStore ps = ProfileStore.load(this);
+        // One card per profile; the active one is marked with a check. Each tap handler loads a
+        // fresh ProfileStore because ProfileStore objects are not shared or cached.
         for (ProfileStore.Prof pr : ps.profiles) {
             String meta = pr.id.equals(ps.active) ? "✓ " + getString(R.string.prof_active) : "";
             LinearLayout row = clickRow(profName(pr), profSrc(pr) + (meta.isEmpty() ? "" : "  " + meta), v -> {
@@ -1074,7 +1162,10 @@ public final class ListsActivity extends LoftActivity {
         return scroll(root);
     }
 
-    /** Route-profile import page: paste a loft://routes/ link or pick a file. */
+    /**
+     * Route-profile import page: paste a loft://routes/ link or pick a file. A picked file
+     * goes through onActivityResult, which sees page "profimp" and calls importProfile.
+     */
     private View profimpPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.prof_imp_sub)));
@@ -1098,7 +1189,9 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * Parses a route-profile link with the Go engine (Mobile.parseRoutes) and adds it to the
-     * catalog. Any failure shows one "bad link" message.
+     * catalog. Any failure shows one "bad link" message. The engine is the Go core of loft,
+     * compiled into the app as a native library; this call runs synchronously on the main
+     * thread. The new profile is added but not activated.
      */
     private void importProfile(String raw) {
         if (raw == null || raw.trim().isEmpty()) {
@@ -1139,6 +1232,7 @@ public final class ListsActivity extends LoftActivity {
     private View catalogPage() {
         LinearLayout root = col();
         root.addView(subline(getString(R.string.catalog_d)));
+        // Language code (en / ru / zh ...) used to choose each list's display name.
         String lang = Prefs.applyLang(this);
         SplitStore.Zone cur = store.zone(catalogZone);
         String current = cur != null && cur.repo != null ? cur.repo : "";
@@ -1147,6 +1241,7 @@ public final class ListsActivity extends LoftActivity {
             if (row == null || row.length < 1 || row[0] == null || row[0].isEmpty()) {
                 continue;
             }
+            // One broken card is logged and skipped instead of failing the whole page.
             try {
                 root.addView(catalogCard(row[0], lang, current));
                 n++;
@@ -1175,6 +1270,7 @@ public final class ListsActivity extends LoftActivity {
         grow.setOrientation(LinearLayout.VERTICAL);
         TextView name = snow(SplitStore.catalogLabel(id, lang));
         name.setTextSize(13.5f);
+        // A real medium font instead of FakeBoldText (see the note on catalogPage).
         name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         oneLine(name);
         TextView file = new TextView(this);
@@ -1203,6 +1299,10 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * Downloads the zone's list on a background thread, then saves and redraws on the main thread.
+     * Network IO must stay off the main thread (Android throws NetworkOnMainThreadException and
+     * the UI would freeze). The UI must only be touched on the main thread, hence main.post.
+     * The thread writes into the same SplitStore object the screen edits, without locking, and
+     * keeps a reference to this activity until it finishes.
      */
     private void pull(SplitStore.Zone z) {
         if (z.repo == null || z.repo.isEmpty()) {
@@ -1232,6 +1332,7 @@ public final class ListsActivity extends LoftActivity {
         if (ro()) {
             return;
         }
+        // 1. Snapshot first (for undo), then remove and save.
         SplitStore.Snap snap = store.snap();
         SplitStore.Gone g = store.removeSvcs(ids);
         if (g.n == 0) {
@@ -1239,6 +1340,8 @@ public final class ListsActivity extends LoftActivity {
         }
         persist();
         undo = snap;
+        // 2. Snackbar text: the one entry's name (or an exclusion's first prefix), else a count.
+        //    The removed entry is looked up in the snapshot, since it is gone from the store.
         String what;
         if (g.n == 1) {
             what = getString(R.string.split_gone, "1");
@@ -1260,6 +1363,7 @@ public final class ListsActivity extends LoftActivity {
             what = what + " · " + getString(R.string.split_gone_excl);
         }
         snack(what);
+        // 3. Stay on the list or exclusions page; from anywhere else go back to the list.
         show("list".equals(page) || "excl".equals(page) ? page : "list");
     }
 
@@ -1271,6 +1375,7 @@ public final class ListsActivity extends LoftActivity {
     private void openClear(boolean excl) {
         SplitStore.Zone z = store.zone(zoneId);
         String name = z == null ? zoneId : z.name;
+        // Count the user's own entries ("me") versus entries from a list or the operator.
         int mine = 0;
         int total = 0;
         for (SplitStore.Svc s : store.in(zoneId, "")) {
@@ -1318,7 +1423,10 @@ public final class ListsActivity extends LoftActivity {
         show("list");
     }
 
-    /** Shows the undo snackbar for 5 seconds. */
+    /**
+     * Shows the undo snackbar for 5 seconds. A newer snackbar restarts the timer, so the undo
+     * snapshot always belongs to the last action.
+     */
     private void snack(String text) {
         TextView t = findViewById(R.id.snack_t);
         t.setText(text);
@@ -1344,6 +1452,7 @@ public final class ListsActivity extends LoftActivity {
         if (requestCode != REQ_IN || resultCode != RESULT_OK || data == null || data.getData() == null) {
             return;
         }
+        // The file is read and parsed right here on the main thread; any error is shown as a toast.
         try (InputStream in = getContentResolver().openInputStream(data.getData())) {
             if (in == null) {
                 return;
@@ -1361,7 +1470,7 @@ public final class ListsActivity extends LoftActivity {
         }
     }
 
-    /** Reads a whole stream as UTF-8 text. */
+    /** Reads a whole stream as UTF-8 text, with no size limit. */
     private static String read(InputStream in) throws Exception {
         ByteArrayOutputStream o = new ByteArrayOutputStream();
         byte[] b = new byte[4096];
@@ -1414,7 +1523,10 @@ public final class ListsActivity extends LoftActivity {
         return l;
     }
 
-    /** Wraps a page in a ScrollView. Child width is the viewport; height wraps. */
+    /**
+     * Wraps a page in a ScrollView. Child width is the viewport; height wraps. fillViewport
+     * stretches a short page to the full height so its background covers the screen.
+     */
     private ScrollView scroll(View v) {
         ScrollView s = new ScrollView(this);
         s.setFillViewport(true);
@@ -1423,7 +1535,10 @@ public final class ListsActivity extends LoftActivity {
         return s;
     }
 
-    /** Inflates a styled button layout (the styles live in XML). */
+    /**
+     * Inflates a styled button layout (the styles live in XML). The body is passed as parent
+     * only so the XML layout params are read; the button is not attached to it.
+     */
     private Button inflateBtn(int layout) {
         return (Button) getLayoutInflater().inflate(layout, findViewById(R.id.body), false);
     }
@@ -1504,7 +1619,9 @@ public final class ListsActivity extends LoftActivity {
 
     /**
      * One line with an ellipsis. XML {@code maxLines} is ignored on some
-     * shells (MIUI) when the system font is extra-large.
+     * shells (MIUI) when the system font is extra-large. Setting it again in
+     * code, plus horizontal scrolling and simple line breaking without
+     * hyphenation, keeps the text on one line there too.
      */
     private static void oneLine(TextView t) {
         t.setMaxLines(1);
@@ -1570,7 +1687,10 @@ public final class ListsActivity extends LoftActivity {
         return row;
     }
 
-    /** Settings row with the zone's auto-update switch, saved as soon as it changes. */
+    /**
+     * Settings row with the zone's auto-update switch, saved as soon as it changes. With
+     * auto-update on, the list is downloaded again when it is older than SplitStore.AUTO_MS.
+     */
     private LinearLayout autoRow(SplitStore.Zone z) {
         LinearLayout auto = row();
         auto.setPadding(0, dp(12), 0, dp(12));
@@ -1677,10 +1797,16 @@ public final class ListsActivity extends LoftActivity {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
-    /** TextWatcher that runs one action after every text change. */
+    /**
+     * TextWatcher that runs one action after every text change. Android's TextWatcher has three
+     * callbacks; this keeps only afterTextChanged so callers can pass a lambda. There is no
+     * debounce: the action runs on every keystroke.
+     */
     private static final class SimpleWatch implements android.text.TextWatcher {
+        /** The action to run after each change. */
         private final Runnable r;
 
+        /** Wraps {@code r}; it is run on the main thread after each text change. */
         SimpleWatch(Runnable r) {
             this.r = r;
         }

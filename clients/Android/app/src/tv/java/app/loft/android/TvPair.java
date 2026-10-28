@@ -22,12 +22,22 @@ import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.function.Consumer;
 
-/** Short-lived LAN HTTP POST /pair?c=CODE for phone → TV import. */
+/**
+ * Short-lived LAN HTTP server that accepts POST /pair?c=CODE for phone → TV
+ * import. Typing a long profile link on a TV remote is painful, so the TV
+ * listens on the local network while its pairing screen is open and the
+ * phone sends the profiles over. One instance serves one pairing session:
+ * start() when the screen opens, stop() when it closes. The server runs on
+ * its own background thread; only the received body is handed back to the
+ * main thread.
+ */
 final class TvPair {
     // Code alphabet without 0/O and 1/I, which look alike on a TV screen.
     private static final char[] ALPHA = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ".toCharArray();
 
+    /** Listening socket on a random free port; null while stopped. */
     private ServerSocket ss;
+    /** Background thread running loop(); kept only for reference, stop() ends it by closing ss. */
     private Thread th;
     /** Cleared by stop() so the accept loop exits. */
     private volatile boolean run;
@@ -54,6 +64,9 @@ final class TvPair {
             port = ss.getLocalPort();
             url = PairUrl.build(host, port, code);
             run = true;
+            // The accept loop blocks, so it runs on a daemon thread (it never
+            // keeps the process alive); results are posted back through a
+            // main-thread Handler because onBody touches the UI.
             Handler h = new Handler(Looper.getMainLooper());
             th = new Thread(() -> loop(onBody, h), "loft-tv-pair");
             th.setDaemon(true);
@@ -81,10 +94,15 @@ final class TvPair {
         port = 0;
     }
 
-    /** Serves one connection at a time until stop() closes the socket. */
+    /**
+     * Serves one connection at a time until stop() closes the socket. Closing
+     * the socket makes accept() throw; the error is only logged while run is
+     * still true, so a normal stop leaves no noise in the journal.
+     */
     private void loop(Consumer<String> onBody, Handler h) {
         while (run && ss != null && !ss.isClosed()) {
             try (Socket s = ss.accept()) {
+                // A silent or slow client must not block the single serving thread forever.
                 s.setSoTimeout(4000);
                 handle(s, onBody, h);
             } catch (Exception e) {
@@ -198,7 +216,11 @@ final class TvPair {
         return "";
     }
 
-    /** Random 6-character pairing code shown next to the QR. */
+    /**
+     * Random 6-character pairing code shown next to the QR. SecureRandom is
+     * used because the code is the only thing stopping another device on the
+     * same LAN from pushing profiles to the TV.
+     */
     static String newCode() {
         SecureRandom r = new SecureRandom();
         char[] c = new char[6];

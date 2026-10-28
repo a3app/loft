@@ -14,9 +14,18 @@ import android.util.AttributeSet;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.CompoundButton;
 
-/** Mock .toggle: 42×26 lamp pill, 20dp thumb, 3dp inset. */
+/**
+ * The ".toggle" switch from the design mock-up: a 42×26 dp pill track that
+ * turns lamp-gold when on, with a 20 dp round thumb inset 3 dp from the
+ * edges. It extends CompoundButton, so checked state, click-to-toggle,
+ * OnCheckedChangeListener and accessibility come from Android for free; only
+ * the look is custom. Colour names (lamp, slate, ink, paper) are the app's
+ * palette in res/values/colors.xml.
+ */
 public final class ToggleView extends CompoundButton {
+    /** One paint reused for both track and thumb (only the colour changes). */
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Reused track rectangle, so onDraw allocates nothing. */
     private final RectF track = new RectF();
     /** Colours: track off/on (slate/lamp) and thumb off/on (paper/ink). */
     private final int lamp;
@@ -28,7 +37,7 @@ public final class ToggleView extends CompoundButton {
     /** Running slide animation, if any. */
     private ValueAnimator anim;
 
-    /** Code constructor. */
+    /** Creates the switch from code; reads the palette colours once. */
     public ToggleView(Context c) {
         super(c);
         lamp = c.getColor(R.color.lamp);
@@ -71,7 +80,9 @@ public final class ToggleView extends CompoundButton {
         pos = isChecked() ? 1f : 0f;
     }
 
-    // Called when state is restored; snap the thumb without animating.
+    // Android calls this when the view should show its state without animation,
+    // for example when it is attached to a window or its state is restored;
+    // snap the thumb without animating.
     @Override
     public void jumpDrawablesToCurrentState() {
         super.jumpDrawablesToCurrentState();
@@ -83,7 +94,10 @@ public final class ToggleView extends CompoundButton {
         invalidate();
     }
 
-    // Slides the thumb when the state changes on screen; before layout it just jumps.
+    // Slides the thumb when the state changes on screen; before layout it just
+    // jumps, because a view that is not laid out yet has nothing to animate.
+    // Note: CompoundButton's own constructor may call this before the colour
+    // fields are set; that is fine because nothing here reads them.
     @Override
     public void setChecked(boolean checked) {
         boolean change = checked != isChecked();
@@ -109,15 +123,19 @@ public final class ToggleView extends CompoundButton {
         anim.start();
     }
 
-    @Override
     /** Always 42x26 dp, whatever the parent offers. */
+    @Override
     protected void onMeasure(int wSpec, int hSpec) {
         float d = getResources().getDisplayMetrics().density;
         setMeasuredDimension(Math.round(42 * d), Math.round(26 * d));
     }
 
+    /**
+     * Draws the track (colour blends from slate to lamp with pos) and the
+     * thumb (paper to ink) at its current position. The text a
+     * CompoundButton would normally draw is skipped entirely.
+     */
     @Override
-    /** Draws the track (colour blends with pos) and the thumb at its current position. */
     protected void onDraw(Canvas c) {
         float w = getWidth();
         float h = getHeight();
@@ -132,7 +150,8 @@ public final class ToggleView extends CompoundButton {
         c.drawCircle(cx, h / 2f, r, fill);
     }
 
-    // Linear blend of two ARGB colours, channel by channel.
+    // Linear blend of two ARGB colours, channel by channel: t = 0 gives a,
+    // t = 1 gives b.
     private static int mix(int a, int b, float t) {
         t = Math.max(0f, Math.min(1f, t));
         int aa = (a >> 24) & 255, ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;

@@ -20,7 +20,7 @@ final class Seg {
         void on(int index);
     }
 
-    /** Index of the selected child, or 0 when none is selected. */
+    /** Index of the selected child, or 0 (the first option) when none is selected. */
     static int selected(ViewGroup row) {
         for (int i = 0; i < row.getChildCount(); i++) {
             if (row.getChildAt(i).isSelected()) {
@@ -30,7 +30,11 @@ final class Seg {
         return 0;
     }
 
-    /** Selects child {@code selected} and makes every child select itself on tap and report its index. */
+    /**
+     * Selects child {@code selected} and makes every child select itself on
+     * tap and report its index. Replaces any click listeners the children
+     * had. Call again after adding or removing children.
+     */
     static void bind(ViewGroup row, int selected, Pick pick) {
         for (int i = 0; i < row.getChildCount(); i++) {
             View c = row.getChildAt(i);

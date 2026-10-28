@@ -1,9 +1,14 @@
 /*
- * Android client, shared code: crash capture. An uncaught Java exception is
- * written to filesDir/crash/ on the dying thread (no network). Native SIGSEGV /
- * SIGABRT and ANR are picked up from ApplicationExitInfo on the next start.
- * The github flavor then POSTs a GitHub issue; the store flavor compiles the
- * sender out. Keys are stripped the same way as the session journal.
+ * Android client, shared code (phone and TV builds): crash capture. An
+ * uncaught Java exception is written to filesDir/crash/ on the dying thread
+ * (no network: the process is about to be killed). Native crashes (SIGSEGV /
+ * SIGABRT and friends) and ANRs ("Application Not Responding", the system
+ * killing a frozen app) cannot be caught in Java, so they are picked up from
+ * ApplicationExitInfo on the next start. The github flavor then POSTs each
+ * saved report as a GitHub issue; in the store flavor Channel.sendCrash is a
+ * stub and install()/drain() return early, because store builds rely on the
+ * store's own crash dashboard (Play Vitals). Keys and secrets are stripped the
+ * same way as in the session journal before anything is written or sent.
  */
 package app.loft.android;
 
@@ -28,20 +33,40 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Process-local crash files, flushed to GitHub on the next start. */
+/**
+ * Process-local crash files, flushed to GitHub on the next start.
+ *
+ * <p>Life of a report: {@link #install} saves a Java crash to a text file;
+ * {@link #harvest} saves native crashes and ANRs reported by the system; on
+ * the next start {@link #drain} sends every saved file once and deletes it.
+ * Each file starts with a "key: value" header block (title, fingerprint,
+ * version, device...), then a blank line, the stack trace and the last
+ * journal lines. The fingerprint is a short hash of the stack frames, used
+ * to avoid filing the same crash again and again.
+ */
 final class Crash {
+    /** Largest report body in bytes; longer text is cut so a GitHub issue stays readable and small. */
     static final int MAX_BODY = 24 * 1024;
+    /** At most this many report files wait on disk; older ones are deleted first (a crash loop must not fill storage). */
     static final int MAX_PENDING = 3;
+    /** How many of the newest journal lines are attached to a report, for context on what the app was doing. */
     static final int JOURNAL_TAIL = 40;
+    /** The same fingerprint sent less than this long ago (24 hours) is not sent again. */
     private static final long DEDUP_MS = 24L * 60 * 60 * 1000;
+    /** Only system exit records from the last 7 days are harvested; older ones are stale. */
     private static final long HARVEST_MS = 7L * 24 * 60 * 60 * 1000;
+    /** Guards {@link #install} so the handler is chained only once per process. */
     private static final AtomicBoolean installed = new AtomicBoolean();
 
+    /** Static helpers only; not instantiated. */
     private Crash() {}
 
     /**
      * Wraps the default uncaught handler so a Java crash is saved before the
      * process dies. GitHub-channel builds only; store builds use Play Vitals.
+     * The previous handler (the system one, which shows the "app stopped"
+     * dialog and kills the process) is still called afterwards; if there is
+     * none, the process is killed here so it never lingers half-dead.
      */
     static void install(Context c) {
         if (!BuildConfig.GITHUB || !installed.compareAndSet(false, true)) {
@@ -50,6 +75,8 @@ final class Crash {
         final Context app = c.getApplicationContext();
         final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            // Never let our own failure hide the original crash: swallow
+            // everything and always fall through to the previous handler.
             try {
                 if (Prefs.crashReports(app)) {
                     write(app, t, e);
@@ -66,9 +93,10 @@ final class Crash {
     }
 
     /**
-     * Next start: harvest native/ANR traces, then send queued files. Runs off
-     * the main thread. No-op when the user turned reports off or this is a
-     * store build.
+     * Next start: harvest native/ANR traces, then send queued files. Runs on
+     * its own background thread ("loft-crash") because it reads files and
+     * talks to the network. No-op when the user turned reports off or this
+     * is a store build.
      */
     static void drain(Context c) {
         if (!BuildConfig.GITHUB || !Prefs.crashReports(c)) {
@@ -81,7 +109,12 @@ final class Crash {
         }, "loft-crash").start();
     }
 
-    /** Redacts member keys, loft/vless/trojan/sstp userinfo, PATs and UUIDs. */
+    /**
+     * Redacts member keys and the secret part of loft:// links (both via
+     * {@link Journal#redact}), the user part of vless/trojan/sstp links, Bearer tokens, GitHub tokens (ghp_, github_pat_,
+     * gho_) and UUIDs (vless uses a UUID as the password). Reports go to a
+     * public issue tracker, so nothing that could log someone in may leak.
+     */
     static String redact(String s) {
         if (s == null || s.isEmpty()) {
             return "";
@@ -100,7 +133,12 @@ final class Crash {
         return r;
     }
 
-    /** First 8 hex chars of SHA-256 over class/method/line frames, not the message. */
+    /**
+     * First 8 hex chars of SHA-256 over class/method/line frames, not the
+     * message. The message often holds variable data (addresses, ids), so
+     * leaving it out makes the same bug give the same fingerprint. Looks at
+     * up to 5 causes and the top 20 frames of each.
+     */
     static String fingerprint(Throwable e) {
         StringBuilder b = new StringBuilder();
         int n = 0;
@@ -121,11 +159,12 @@ final class Crash {
         return sha8(b.toString());
     }
 
-    /** {@code android crash: MainActivity.onCreate (a1b2c3d4)}. */
+    /** Issue title for a Java crash, e.g. {@code android crash: MainActivity.onCreate (a1b2c3d4)}. */
     static String title(Throwable e) {
         return "android crash: " + firstFrame(e) + " (" + fingerprint(e) + ")";
     }
 
+    /** Cuts {@code s} to {@code max} chars and marks the cut with "…"; null becomes "". */
     static String clip(String s, int max) {
         if (s == null) {
             return "";
@@ -136,7 +175,11 @@ final class Crash {
         return s.substring(0, max) + "\n…\n";
     }
 
-    /** Value of {@code key:} in the header block, or "". */
+    /**
+     * Value of {@code key:} in the header block, or "". The header block is
+     * the "key: value" lines at the top of a report file; the first empty line
+     * ends it, so the stack trace below is never searched.
+     */
     static String field(String text, String key) {
         if (text == null || key == null) {
             return "";
@@ -161,6 +204,12 @@ final class Crash {
         return "";
     }
 
+    /**
+     * Short "Class.method" naming where the crash happened, for the issue
+     * title. Prefers the first frame in our own code (app.loft.*); otherwise
+     * the first frame that is not thread/looper plumbing; otherwise the
+     * exception class name. Walks the cause chain until something is found.
+     */
     static String firstFrame(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             StackTraceElement[] st = t.getStackTrace();
@@ -189,6 +238,7 @@ final class Crash {
         return n.isEmpty() ? "crash" : n;
     }
 
+    /** True for runtime plumbing frames (threads, Looper/Handler, zygote) that say nothing about the bug. */
     private static boolean skipFrame(String c) {
         return c.startsWith("java.lang.Thread")
                 || c.startsWith("java.lang.Daemons")
@@ -198,11 +248,17 @@ final class Crash {
                 || c.startsWith("dalvik.system.");
     }
 
+    /** Class name without its package ("app.loft.android.Foo" becomes "Foo"). */
     private static String shortName(String c) {
         int d = c.lastIndexOf('.');
         return d < 0 ? c : c.substring(d + 1);
     }
 
+    /**
+     * Builds and saves the report for a Java crash: header, full stack trace
+     * and the journal tail of the dying process. Runs inside the uncaught
+     * handler, so it only touches local files.
+     */
     private static void write(Context c, Thread t, Throwable e) {
         String fp = fingerprint(e);
         StringBuilder b = new StringBuilder();
@@ -213,12 +269,19 @@ final class Crash {
         save(c, fp, redact(b.toString()));
     }
 
+    /** The full printStackTrace() text, causes included. */
     private static String stack(Throwable e) {
         StringWriter sw = new StringWriter();
         e.printStackTrace(new PrintWriter(sw));
         return sw.toString();
     }
 
+    /**
+     * The newest {@link #JOURNAL_TAIL} lines of the session journal, one per
+     * line. The journal lives only in memory, so for a native crash or ANR
+     * harvested on the next start this is the new process's journal, not the
+     * one that died.
+     */
     static String journalTail() {
         List<String> all = Journal.all();
         int n = all.size();
@@ -230,6 +293,11 @@ final class Crash {
         return b.toString();
     }
 
+    /**
+     * The "key: value" header block of a report, ending with a blank line.
+     * {@link #field} reads it back when sending. {@code reason} is "uncaught",
+     * "native", "anr", "signal" or "exit-N".
+     */
     private static String header(Context c, String title, String fp, String reason, String thread) {
         StringBuilder b = new StringBuilder();
         b.append("title: ").append(title).append('\n');
@@ -250,10 +318,17 @@ final class Crash {
         return b.toString();
     }
 
+    /** Folder that holds pending reports: filesDir/crash (private to the app). */
     private static File dir(Context c) {
         return new File(c.getFilesDir(), "crash");
     }
 
+    /**
+     * Writes one report file named "{millis}-{fingerprint}.txt", so a plain
+     * name sort is oldest first. Makes room first (see {@link #prune}), clips
+     * the body to {@link #MAX_BODY} and fsyncs, because the process may be
+     * killed right after this returns. A failed write deletes the partial file.
+     */
     private static void save(Context c, String fp, String body) {
         File d = dir(c);
         if (!d.isDirectory() && !d.mkdirs()) {
@@ -270,6 +345,7 @@ final class Crash {
         }
     }
 
+    /** Deletes the oldest files so that, after one more is saved, at most {@link #MAX_PENDING} remain. */
     private static void prune(File d) {
         File[] files = d.listFiles();
         if (files == null || files.length < MAX_PENDING) {
@@ -285,6 +361,10 @@ final class Crash {
     /**
      * Native / ANR / abort from the last week. Java uncaught is already in a
      * pending file from {@link #install}, so REASON_CRASH is skipped.
+     * ApplicationExitInfo exists only on Android 11 (API 30) and newer. The
+     * timestamp of the newest record handled is kept in Prefs
+     * ("crash_exit_at"), so each exit is reported only once. Called from the
+     * background thread started by {@link #drain}.
      */
     private static void harvest(Context c) {
         if (Build.VERSION.SDK_INT < 30) {
@@ -296,6 +376,7 @@ final class Crash {
         }
         List<ApplicationExitInfo> list;
         try {
+            // null package = our own app; 0 = any pid; up to 8 recent exits.
             list = am.getHistoricalProcessExitReasons(null, 0, 8);
         } catch (Exception e) {
             return;
@@ -324,6 +405,11 @@ final class Crash {
         }
     }
 
+    /**
+     * True for exits worth a report: native crash, ANR, or death by a crash
+     * signal (4 SIGILL, 6 SIGABRT, 7 SIGBUS, 8 SIGFPE, 11 SIGSEGV). Normal
+     * exits, low-memory kills and user swipes are ignored.
+     */
     private static boolean interesting(ApplicationExitInfo info) {
         if (Build.VERSION.SDK_INT < 30) {
             return false;
@@ -340,6 +426,11 @@ final class Crash {
         return sig == 4 || sig == 6 || sig == 7 || sig == 8 || sig == 11;
     }
 
+    /**
+     * Saves one system exit record as a report. There is no Java stack here,
+     * so the fingerprint hashes the reason, the system description and the
+     * start of the trace (tombstone or ANR dump, up to 16 KB read).
+     */
     private static void writeExit(Context c, ApplicationExitInfo info) {
         if (Build.VERSION.SDK_INT < 30) {
             return;
@@ -348,6 +439,7 @@ final class Crash {
         String desc = info.getDescription() == null ? "" : info.getDescription();
         String trace = readTrace(info, 16 * 1024);
         String fp = sha8(reason + "\n" + desc + "\n" + clip(trace, 2048));
+        // Title: the one-line description when the system gave one, else the reason.
         String title = "android crash: " + reason;
         if (!desc.isEmpty()) {
             String one = desc.replace('\n', ' ');
@@ -367,6 +459,7 @@ final class Crash {
         save(c, fp, redact(b.toString()));
     }
 
+    /** Short label for an ApplicationExitInfo reason code, used in the header and title. */
     private static String reasonName(int r) {
         if (Build.VERSION.SDK_INT < 30) {
             return "exit";
@@ -383,6 +476,7 @@ final class Crash {
         return "exit-" + r;
     }
 
+    /** Reads up to {@code max} bytes of the system trace for this exit; "" when there is none or it cannot be read. */
     private static String readTrace(ApplicationExitInfo info, int max) {
         if (Build.VERSION.SDK_INT < 30) {
             return "";
@@ -408,6 +502,14 @@ final class Crash {
         }
     }
 
+    /**
+     * Sends saved reports oldest first, on the drain thread. Unreadable files
+     * and duplicates (same fingerprint in this batch, or sent in the last 24
+     * hours) are deleted without sending. The text is redacted again in case
+     * it was written by an older version with weaker rules. On the first
+     * failed send it stops and keeps the rest for the next start (no network,
+     * or no token in this build).
+     */
     private static void sendPending(Context c) {
         File[] files = dir(c).listFiles();
         if (files == null || files.length == 0) {
@@ -445,6 +547,7 @@ final class Crash {
         }
     }
 
+    /** True when this fingerprint was the last one sent and that was under 24 hours ago. Only the last one is remembered. */
     private static boolean recentlySent(Context c, String fp) {
         String last = Prefs.p(c).getString("crash_last_fp", "");
         if (!fp.equals(last)) {
@@ -453,6 +556,7 @@ final class Crash {
         return System.currentTimeMillis() - Prefs.p(c).getLong("crash_last_at", 0) < DEDUP_MS;
     }
 
+    /** Records the fingerprint and time of the report just sent, for {@link #recentlySent}. */
     private static void remember(Context c, String fp) {
         Prefs.p(c).edit()
                 .putString("crash_last_fp", fp)
@@ -460,6 +564,7 @@ final class Crash {
                 .apply();
     }
 
+    /** Reads a report file as UTF-8, stopping a little past {@link #MAX_BODY} in case the file is oversized. */
     private static String readFile(File f) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (FileInputStream in = new FileInputStream(f)) {
@@ -476,6 +581,7 @@ final class Crash {
         return out.toString(StandardCharsets.UTF_8.name());
     }
 
+    /** First 8 hex chars of the SHA-256 of {@code s}: short enough for a title, unique enough to tell crashes apart. */
     static String sha8(String s) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -486,6 +592,7 @@ final class Crash {
         }
     }
 
+    /** Lowercase hex form of a byte array. */
     static String hex(byte[] d) {
         char[] out = new char[d.length * 2];
         for (int i = 0; i < d.length; i++) {

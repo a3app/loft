@@ -53,9 +53,18 @@ public final class ScanActivity extends LoftActivity {
     private static final int REQ_CAM = 3;
     private static final int REQ_FILE = 4;
     private static final int REQ_GAL = 5;
-    // Set once a code is accepted, so the camera's stream of frames does not
-    // import the same code many times. Cleared when the import is cancelled.
+    /**
+     * Set once a code is accepted, so the camera's stream of frames does not
+     * import the same code many times. Cleared when the import is cancelled or
+     * fails, so scanning can go on. Atomic because the camera thread reads it
+     * while the main thread sets it.
+     */
     private final AtomicBoolean got = new AtomicBoolean(false);
+    /**
+     * ZXing decoder, reused for every frame to avoid re-creating it. It is not
+     * thread-safe: it is used from the camera analyser thread and, for gallery
+     * images, from the main thread.
+     */
     private final MultiFormatReader reader = new MultiFormatReader();
 
     /**
@@ -66,9 +75,12 @@ public final class ScanActivity extends LoftActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scan);
+        // Let the button rows wrap at a large system font size instead of clipping.
         Fit.buttonRow(findViewById(R.id.scan_pick));
         Fit.buttonRow(findViewById(R.id.scan_actions));
         findViewById(R.id.btn_close).setOnClickListener(v -> finish());
+        // Paste only copies the clipboard into the text box; Add then imports what the box
+        // holds, so the user can check or edit the text first.
         findViewById(R.id.btn_paste).setOnClickListener(v -> {
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             if (cm != null && cm.getPrimaryClip() != null && cm.getPrimaryClip().getItemCount() > 0) {
@@ -78,6 +90,8 @@ public final class ScanActivity extends LoftActivity {
         });
         findViewById(R.id.btn_add).setOnClickListener(v ->
                 accept(((EditText) findViewById(R.id.paste)).getText().toString()));
+        // File: the system document picker, any type ("*/*") so a .loft file can be picked
+        // whatever type its provider reports. Gallery: any image app, to read a QR from a picture.
         findViewById(R.id.btn_file).setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -89,6 +103,8 @@ public final class ScanActivity extends LoftActivity {
             i.setType("image/*");
             startActivityForResult(i, REQ_GAL);
         });
+        // Opened from the add sheet's "paste" item: pre-fill the box from the clipboard and
+        // focus it, but still wait for the user to tap Add.
         if (getIntent().getBooleanExtra("paste", false)) {
             EditText box = findViewById(R.id.paste);
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
@@ -100,6 +116,7 @@ public final class ScanActivity extends LoftActivity {
             }
             box.requestFocus();
         }
+        // Opened for "file": jump straight to the picker and do not start the camera.
         if (getIntent().getBooleanExtra("file", false)) {
             findViewById(R.id.btn_file).performClick();
         } else if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -125,7 +142,8 @@ public final class ScanActivity extends LoftActivity {
 
     /**
      * Reads the chosen file as text, or decodes a QR code from the chosen gallery image, and
-     * passes the result to accept(). Read errors are shown as a toast.
+     * passes the result to accept(). Read errors are shown as a toast. A cancelled picker
+     * (no result or no URI) does nothing. An image without a readable code is silently ignored.
      */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -159,9 +177,13 @@ public final class ScanActivity extends LoftActivity {
 
     /**
      * Binds the back camera to this screen with a live preview and a frame analyser. Only the
-     * newest frame is kept, so slow decoding never builds a queue.
+     * newest frame is kept, so slow decoding never builds a queue. Binding to this
+     * activity's lifecycle (CameraX) makes the camera stop and start with the screen, so
+     * it is never left open in the background. Errors are written to the Journal (log).
      */
     private void startCam() {
+        // The camera provider is created asynchronously; the listener runs on the main
+        // thread once it is ready, because binding use cases must happen there.
         ListenableFuture<ProcessCameraProvider> f = ProcessCameraProvider.getInstance(this);
         f.addListener(() -> {
             try {
@@ -172,7 +194,9 @@ public final class ScanActivity extends LoftActivity {
                 ImageAnalysis an = new ImageAnalysis.Builder()
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build();
+                // Frames are decoded on a separate thread so the preview stays smooth.
                 an.setAnalyzer(Executors.newSingleThreadExecutor(), this::analyze);
+                // Drop any earlier binding (e.g. from a previous startCam call) first.
                 provider.unbindAll();
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, an);
             } catch (Exception e) {
@@ -207,6 +231,8 @@ public final class ScanActivity extends LoftActivity {
      * image, so rows are copied one by one.
      */
     private String decodeY(ImageProxy image) {
+        // Camera frames come as YUV; plane 0 is Y (brightness). Each grey value is
+        // expanded into an opaque ARGB pixel with equal red, green and blue.
         ImageProxy.PlaneProxy y = image.getPlanes()[0];
         ByteBuffer buf = y.getBuffer();
         byte[] data = new byte[buf.remaining()];
@@ -224,7 +250,7 @@ public final class ScanActivity extends LoftActivity {
         return decodePixels(pixels, w, h);
     }
 
-    /** Decodes a QR code from a still image (gallery), or returns null. */
+    /** Decodes a QR code from a still image (gallery) at its full size, or returns null. */
     private String decodeBitmap(Bitmap bm) {
         if (bm == null) {
             return null;
@@ -239,6 +265,9 @@ public final class ScanActivity extends LoftActivity {
     /**
      * Runs ZXing on ARGB pixels and returns the code text, or null when nothing was found.
      * The reader is reset after every attempt because it is reused for every frame.
+     * ZXing reports "no code here" by throwing, which is the normal case for most
+     * frames, so exceptions are ignored. Any barcode format with text is accepted,
+     * not only QR codes.
      */
     private String decodePixels(int[] px, int w, int h) {
         try {
@@ -257,13 +286,16 @@ public final class ScanActivity extends LoftActivity {
     /**
      * Handles scanned or pasted text. A pairing URL from a TV gets all profiles
      * POSTed to it. Otherwise the text is parsed and, after the user confirms
-     * the list, the profiles are added.
+     * the list, the profiles are added. Runs on the main thread. The compareAndSet on
+     * {@link #got} lets only the first of several quick calls through; every path that
+     * does not close the screen clears it again so the user can retry.
      */
     private void accept(String raw) {
         if (raw == null || raw.trim().isEmpty() || !got.compareAndSet(false, true)) {
             return;
         }
         // 1. A TV pairing QR: send every profile to the TV and close on success.
+        // PairUrl.send does the HTTP POST on its own thread and calls back on the main thread.
         if (PairUrl.isPair(raw)) {
             String body = LoftApp.of(this).profiles().shareAll();
             if (body.isEmpty()) {
@@ -321,6 +353,7 @@ public final class ScanActivity extends LoftActivity {
                 .setOnCancelListener(d -> got.set(false))
                 .create();
         dlg.show();
+        // Must run after show(): the dialog's buttons exist only once it is shown.
         Fit.alertButtons(dlg);
     }
 }

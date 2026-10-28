@@ -29,7 +29,11 @@ final class SessionStore {
         prefs(ctx).edit().putString(YAML, yaml == null ? "" : yaml).apply();
     }
 
-    /** Opens the old private preferences file. */
+    /**
+     * Opens the old private preferences file. Note that this is "loft", not
+     * the "loft.prefs" file the rest of the app uses (Prefs). The first call
+     * in a process reads the file from disk.
+     */
     private static SharedPreferences prefs(Context ctx) {
         return ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
     }

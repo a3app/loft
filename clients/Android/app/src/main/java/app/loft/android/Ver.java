@@ -5,7 +5,11 @@
  */
 package app.loft.android;
 
-/** Semver 1.2.3[-pre], same order as the panel updater. */
+/**
+ * Version strings of the form 1.2.3 or 1.2.3-pre (semantic versioning), in
+ * the same order as the panel updater uses, so the app and the panel agree
+ * on which release is newest.
+ */
 final class Ver {
     /** Static helpers only; not instantiated. */
     private Ver() {}
@@ -13,9 +17,11 @@ final class Ver {
     /**
      * Compares two versions; returns -1, 0 or 1. A release sorts above its own
      * pre-release (1.2.3 &gt; 1.2.3-rc1); two pre-release tags compare as strings.
-     * Missing or non-numeric parts count as 0.
+     * Missing or non-numeric parts count as 0. Only the first three numeric
+     * parts are compared. Both arguments must be non-null.
      */
     static int cmp(String a, String b) {
+        // Split "1.2.3-rc1" into the numeric core "1.2.3" and the tag "rc1".
         String an = a, ap = "";
         String bn = b, bp = "";
         int ai = a.indexOf('-');
@@ -37,6 +43,7 @@ final class Ver {
                 return x < y ? -1 : 1;
             }
         }
+        // Same numbers: no tag beats a tag, otherwise compare the tags as text.
         if (ap.equals(bp)) {
             return 0;
         }

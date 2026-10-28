@@ -55,13 +55,22 @@ import app.loft.engine.mobile.SocketProtector;
  * the node's fronts; protect() keeps those sockets off the VPN so the
  * tunnel's traffic does not loop back into itself. Dual-stack means IPv4
  * and IPv6 overlay addresses, both taken from the engine's Snapshot.
+ *
+ * <p>Threads, in short: Android calls the lifecycle methods (onStartCommand,
+ * onRevoke, onDestroy) on the main thread. Dialing runs on the {@code go}
+ * pool because Engine.start blocks. The once-a-second poll (tickOnce) runs
+ * on the main thread through {@code main}. One "loft-tun" thread reads the
+ * TUN; the engine calls onPacket and protect from its own threads. Network
+ * callbacks arrive on a ConnectivityManager thread.
  */
 public final class LoftVpnService extends VpnService implements PacketSink, SocketProtector {
-    /** Intent actions understood by onStartCommand (see requestStart / requestStop). */
+    /** Intent action that ends the session (sent by requestStop and the notification button). */
     static final String ACTION_STOP = "app.loft.android.STOP";
+    /** Intent action that starts a session (sent by requestStart). Any non-stop intent starts one. */
     static final String ACTION_START = "app.loft.android.START";
-    /** Notification channel id and the id of the one ongoing notification. */
+    /** Notification channel id; the channel is low-importance so it never makes a sound. */
     private static final String CH = "loft.vpn";
+    /** Id of the one ongoing notification; reusing it means each update replaces the old one. */
     private static final int NOTE = 1;
 
     /** Worker threads for blocking work: dialing, stopping the engine, rebuilding the TUN. */
@@ -75,11 +84,19 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     /** Set once the user or system asked to stop; blocks retries and new sessions. */
     private final AtomicBoolean stopping = new AtomicBoolean(false);
 
+    /**
+     * The running Go engine, or null between sessions. Read from several
+     * threads; each reader copies it into a local first so a concurrent
+     * stopEngine (which sets it to null) cannot cause a NullPointerException.
+     */
     private Engine engine;
+    /** The TUN descriptor returned by Builder.establish(); null while there is none. Guarded by io. */
     private ParcelFileDescriptor tun;
+    /** Write side of the TUN: onPacket writes packets for apps here. Guarded by io. */
     private FileOutputStream out;
     /** Route plan the current TUN was built from; the reader uses it to drop blocked packets. */
     private RoutePlan plan;
+    /** Callback registered by watchPath to follow the physical network; null when not watching. */
     private ConnectivityManager.NetworkCallback pathCb;
     /** The physical network (Wi-Fi, LTE, Ethernet) the VPN currently rides on. */
     private Network underlying;
@@ -94,9 +111,14 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     private Thread reader;
     /** Reconnect attempts since the last successful start. */
     private int retries;
+    /** The poll as one Runnable object, so tick() can cancel a pending run before posting the next. */
     private final Runnable ticker = this::tickOnce;
 
-    // True while a session is running, so screens can show the right button state.
+    /**
+     * True while a session is running, so screens (home, TV, quick-settings
+     * tile) can show the right button state even before Live.state turns
+     * "connecting". Static because screens have no reference to the service.
+     */
     static boolean running;
 
     /**
@@ -104,6 +126,9 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
      * kills a service started with startForegroundService otherwise) and then
      * dials on a worker thread, because Engine.start blocks on the network.
      * On API 34+ a VPN must declare the "systemExempted" foreground type.
+     * START_STICKY asks Android to restart the service if it kills the
+     * process for memory. Note that the stop path runs stopSession, and so
+     * Engine.stop, right here on the main thread.
      */
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -125,7 +150,10 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         return START_STICKY;
     }
 
-    /** The user turned the VPN off in system settings or another VPN took over. */
+    /**
+     * The user turned the VPN off in system settings or another VPN took over.
+     * Called on the main thread; the session is torn down at once.
+     */
     @Override
     public void onRevoke() {
         stopping.set(true);
@@ -136,7 +164,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     /**
      * Tears everything down. A fatal error (bad key, revoked, ...) is kept in
      * Live after the reset so the main screen can still explain why the
-     * connection stopped.
+     * connection stopped. shutdownNow interrupts any dial or rebuild still
+     * running on the worker pool.
      */
     @Override
     public void onDestroy() {
@@ -163,6 +192,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
      * engine's current state: addresses, routes, DNS, counters).
      * The instance file keeps the instance_id, a persistent id of this install;
      * the node uses it to recognise the same client after a reconnect.
+     * Runs on a {@code go} worker thread (never the main thread) because
+     * Engine.start blocks until the handshake is done.
      */
     private void startSession() {
         if (stopping.get()) {
@@ -199,6 +230,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         // 4. Start the engine (blocks until the handshake ends), then build
         //    the TUN, start polling and fetch due route lists.
         try {
+            // A fresh Engine per attempt: a failed engine is never reused.
             Engine eng = new Engine();
             eng.setProtector(this);
             eng.setSink(this);
@@ -224,7 +256,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     /**
      * Records an error and, when auto-reconnect is on and the error is not
      * fatal, retries with exponential backoff (400 ms doubling up to 8 s, at most
-     * 8 tries). Otherwise stops the service.
+     * 8 tries). Otherwise stops the service. The delay is posted on the main
+     * handler only as a timer; the retry itself runs on the worker pool.
      */
     private void fail(String msg) {
         Live.state = "error";
@@ -252,6 +285,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
      * RoutePlan; front IPs and split bypass prefixes are excluded so they stay
      * on the real network. The old reader thread is stopped and a new one
      * started on the new descriptor.
+     *
+     * <p>Called from three places: startSession (worker thread), tickOnce
+     * (main thread, every second) and rebuildRoutes (worker thread). The
+     * route plan and key are computed on every call, even when nothing
+     * changed; only the establish() step is skipped then.
      */
     private boolean applyTun(Snapshot snap) throws Exception {
         if (snap == null) {
@@ -275,15 +313,21 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 return true;
             }
             // 3. Describe the new interface: session name, MTU, overlay addresses, DNS.
+            // setBlocking(true): the reader thread sleeps inside read() until a
+            // packet arrives instead of spinning.
             Builder b = new Builder()
                     .setSession(Live.name.isEmpty() ? "loft" : Live.name)
                     .setMtu(snap.getMTU() > 0 ? (int) snap.getMTU() : 1280)
                     .setBlocking(true);
+            // API 29+: by default Android treats a VPN as metered; say it is not,
+            // so apps do not hold back downloads on Wi-Fi.
             if (Build.VERSION.SDK_INT >= 29) {
                 b.setMetered(false);
             }
             if (rp.overlay4 != null) {
                 b.addAddress(rp.overlay4.address(), rp.overlay4.bits);
+                // allowFamily: keep Android from blocking this address family when
+                // no route of that family ends up in the plan.
                 if (Build.VERSION.SDK_INT >= 33) {
                     b.allowFamily(android.system.OsConstants.AF_INET);
                 }
@@ -309,6 +353,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                     }
                 }
             }
+            // excludeRoute only exists on API 33+. On older versions RoutePlan
+            // has already cut the excluded prefixes out of the include list.
             if (Build.VERSION.SDK_INT >= 33) {
                 for (Cidr c : rp.exclude) {
                     try {
@@ -330,6 +376,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             if (underlying != null && Build.VERSION.SDK_INT >= 22) {
                 b.setUnderlyingNetworks(new Network[]{underlying});
             }
+            // establish() is a call into the system VPN service; it can take a
+            // while. It returns null when VPN permission was revoked.
             ParcelFileDescriptor pfd = b.establish();
             if (pfd == null) {
                 return false;
@@ -361,6 +409,10 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
      * shaped like its cover website's; the next start passes the key to the
      * engine as mask_pub) and the list of fronts the node offers, so the next
      * start can use them.
+     *
+     * <p>Runs on whichever thread called it: the main thread from tickOnce
+     * (every second), a worker thread from startSession / rebuildRoutes. It
+     * ends with a notification update and a Bus event.
      */
     private void paint(Snapshot snap) {
         // 1. Copy state, addresses and counters. Empty addresses keep the old value.
@@ -409,6 +461,9 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     /**
      * Starts the thread that reads packets apps write into the TUN and passes
      * them to the engine. Packets to "drop" destinations are discarded here.
+     * The thread is a daemon so it never keeps the process alive. It ends
+     * when the descriptor is closed (read throws) or the service stops;
+     * interrupt() alone does not wake a blocked read.
      */
     private void pumpReads() {
         final ParcelFileDescriptor pfd;
@@ -419,6 +474,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             return;
         }
         reader = new Thread(() -> {
+            // One reusable read buffer; 2048 is larger than any MTU the tunnel uses.
             byte[] buf = new byte[2048];
             try (FileInputStream in = new FileInputStream(pfd.getFileDescriptor())) {
                 int n;
@@ -428,6 +484,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                     if (eng == null) {
                         continue;
                     }
+                    // Copy out of the shared buffer so the engine gets an array of
+                    // exactly n bytes; buf is reused for the next read.
                     byte[] pkt = new byte[n];
                     System.arraycopy(buf, 0, pkt, 0, n);
                     if (rp != null && rp.destDropped(pkt)) {
@@ -445,7 +503,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         reader.start();
     }
 
-    /** Schedules the next once-a-second poll of the engine state. */
+    /**
+     * Schedules the next once-a-second poll of the engine state. Any poll
+     * already pending is cancelled first, so there is only ever one in the
+     * queue. Safe to call from any thread (it only posts to the main handler).
+     */
     private void tick() {
         main.removeCallbacks(ticker);
         main.postDelayed(ticker, 1000);
@@ -454,7 +516,9 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     /**
      * Polls the engine once: rebuilds the TUN if addresses changed, refreshes
      * Live, and restarts the whole session when the engine reports an error
-     * and auto-reconnect is on.
+     * and auto-reconnect is on. Runs on the main thread. The next poll is
+     * scheduled at the end, so a slow poll delays the next one rather than
+     * stacking up.
      */
     private void tickOnce() {
         if (stopping.get() || engine == null) {
@@ -477,6 +541,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         if ("error".equals(st) && !stopping.get()) {
             Journal.add("session " + snap.getErr());
             if (Prefs.reconnect(this)) {
+                // Restart off the main thread; startSession schedules polling
+                // again once the new engine is up, so no tick() here.
                 go.execute(() -> {
                     stopEngine();
                     startSession();
@@ -496,7 +562,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
      * holds the session for a while after a drop) and resume. The overlay IP
      * stays the same. Live.holding shows "hold" in the UI until the next
      * snapshot reports "on". The first onAvailable is the network at start
-     * and is not a switch.
+     * and is not a switch. The callbacks run on a ConnectivityManager
+     * thread, not the main thread.
      */
     private void watchPath() {
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -509,11 +576,14 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             /** A physical network came up: ride on it, and report a switch after the first one. */
             @Override
             public void onAvailable(Network network) {
+                // Never ride on a VPN (our own TUN included): that would loop.
                 if (isVPN(cm, network)) {
                     return;
                 }
                 underlying = network;
                 Live.underlying = label(cm, network);
+                // Tell Android which real network carries the VPN, so the system
+                // reports the right type and metering for it.
                 try {
                     setUnderlyingNetworks(new Network[]{network});
                 } catch (Exception ignored) {
@@ -609,7 +679,12 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         return "";
     }
 
-    /** Engine callback: one packet from the tunnel, written to the TUN for apps to receive. */
+    /**
+     * Engine callback: one packet from the tunnel, written to the TUN for apps
+     * to receive. Called on an engine thread. The io lock keeps the write from
+     * racing with applyTun / stopSession closing the stream; a packet that
+     * arrives while there is no TUN is simply dropped.
+     */
     @Override
     public void onPacket(byte[] pkt) {
         if (pkt == null) {
@@ -629,6 +704,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     /**
      * Engine callback for every socket it opens to the node: exclude it from
      * the VPN so the tunnel's own traffic does not go back into the tunnel.
+     * The Go side passes the descriptor as a long; VpnService.protect takes an int.
      */
     @Override
     public boolean protect(long fd) {
@@ -647,9 +723,12 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     }
 
     /**
-     * Rebuilds TUN routes when split, default route, LAN bypass or the lists
-     * change. apply() callbacks can land on a binder thread; the work runs on
-     * {@code go} so the UI is not blocked on establish().
+     * Rebuilds TUN routes when split, default route, LAN bypass, the lists,
+     * the per-app filter or Local DNS change. Android delivers preference
+     * listeners on the main thread; the work runs on {@code go} so the UI is
+     * not blocked by list downloads or establish(). It is kept in a field
+     * because SharedPreferences holds listeners only weakly: a lambda with no
+     * other reference could be garbage-collected and silently stop firing.
      */
     private final SharedPreferences.OnSharedPreferenceChangeListener routeWatch = (sp, k) -> {
         if (!("split".equals(k) || "default_route".equals(k)
@@ -658,6 +737,8 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
                 || "local_dns".equals(k) || "local_dns_addr".equals(k))) {
             return;
         }
+        // Turning split on may need a list download first (pullRoutes saves
+        // split_store, which brings us back here once more for the rebuild).
         go.execute(() -> {
             if ("split".equals(k) && Prefs.split(this)) {
                 pullRoutes();
@@ -679,6 +760,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     /**
      * Daily auto-pull of zone lists, same 20 h window as macOS. Only when
      * split routing is on; rebuilds the TUN when a list was downloaded.
+     * Does network IO, so it must run on a worker thread.
      */
     private void pullRoutes() {
         if (!Prefs.split(this) || stopping.get()) {
@@ -748,7 +830,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
-    /** Re-runs applyTun on a fresh Snapshot so changed settings reach the TUN. */
+    /** Re-runs applyTun on a fresh Snapshot so changed settings reach the TUN. Called on a worker thread. */
     private void rebuildRoutes() {
         if (stopping.get() || engine == null) {
             return;
@@ -760,7 +842,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
-    /** Stops polling, network watching, the engine and the TUN, and resets Live. */
+    /**
+     * Stops polling, network watching, the engine and the TUN, and resets Live.
+     * Called on the main thread from onStartCommand(stop), onRevoke and
+     * onDestroy, so Engine.stop runs there too.
+     */
     private void stopSession() {
         main.removeCallbacks(ticker);
         unwatchPath();
@@ -775,7 +861,13 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         Bus.post();
     }
 
-    /** Stops the Go engine and the TUN reader thread; the TUN itself stays open. */
+    /**
+     * Stops the Go engine and signals the TUN reader thread; the TUN itself
+     * stays open. On a reconnect (tickOnce) the next applyTun sees the same
+     * key and keeps this TUN. interrupt() does not wake a reader blocked in
+     * read(), so that thread usually keeps running and simply picks up the
+     * new engine from the field.
+     */
     private void stopEngine() {
         Engine eng = engine;
         engine = null;
@@ -810,7 +902,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         tun = null;
     }
 
-    /** Redraws the ongoing notification from the current Live state. */
+    /**
+     * Redraws the ongoing notification from the current Live state. Called
+     * from paint (about once a second) and fail; each call rebuilds the whole
+     * notification and posts it to the system.
+     */
     private void updateNote() {
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm != null) {
@@ -850,7 +946,9 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
 
     /**
      * Builds the ongoing notification: tapping opens the home screen, the
-     * button disconnects. Creates the low-importance channel first on API 26+.
+     * button disconnects. Creates the low-importance channel first on API 26+
+     * (creating an existing channel again is allowed and changes nothing).
+     * FLAG_IMMUTABLE is required for PendingIntents from API 31 on.
      */
     private Notification notice(String text) {
         if (Build.VERSION.SDK_INT >= 26) {
@@ -887,6 +985,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         if (msg == null || msg.isEmpty()) {
             return false;
         }
+        // The engine's error codes (auth_*, net_*) appear inside the message text.
         String s = msg.toLowerCase();
         return s.contains("auth_bad_key") || s.contains("auth_revoked")
                 || s.contains("auth_expired") || s.contains("auth_not_authorized")
@@ -900,7 +999,12 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         return s == null ? "" : s.trim();
     }
 
-    /** Starts the service. VPN permission must already be granted (VpnService.prepare). */
+    /**
+     * Starts the service. VPN permission must already be granted
+     * (VpnService.prepare). API 26+ requires startForegroundService for a
+     * service that will go foreground; onStartCommand then has a few seconds
+     * to call startForeground.
+     */
     static void requestStart(Context c) {
         Intent i = new Intent(c, LoftVpnService.class).setAction(ACTION_START);
         if (Build.VERSION.SDK_INT >= 26) {
@@ -910,7 +1014,10 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
         }
     }
 
-    /** Asks the running service to end the session and stop itself. */
+    /**
+     * Asks the running service to end the session and stop itself. A plain
+     * startService is enough here: the service is already in the foreground.
+     */
     static void requestStop(Context c) {
         c.startService(new Intent(c, LoftVpnService.class).setAction(ACTION_STOP));
     }

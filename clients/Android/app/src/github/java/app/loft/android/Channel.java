@@ -53,23 +53,44 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * honor USER_ACTION_NOT_REQUIRED for sideload and blocks a confirm sheet
  * started from a BroadcastReceiver, so those devices open the system
  * installer on the APK itself.
+ *
+ * <p>Threads: network and file work runs on short-lived "loft-gh" threads;
+ * everything that touches views or the static state below is posted back to
+ * the main thread through {@link #main}.
  */
 public final class Channel {
     // busy: one check or install at a time. awaitingPerm / wantInstall remember
     // that the user was sent to the "install unknown apps" settings screen and
     // what to resume when they come back. pending is the last release found.
     // The UI references are weak so a closed screen is not kept in memory.
+    /** Minimum gap between automatic background checks (6 hours). */
     private static final long CHECK_EVERY_MS = 6L * 60 * 60 * 1000;
+    /** True while a check or install is running; set with compareAndSet so two taps cannot start two. */
     private static final AtomicBoolean busy = new AtomicBoolean();
+    /** Guards {@link #boot} so the lifecycle callbacks are registered once. */
     private static final AtomicBoolean hooked = new AtomicBoolean();
+    /** Main-thread handler: background threads post UI updates through it. */
     private static final Handler main = new Handler(Looper.getMainLooper());
+    /** The user was sent to the "install unknown apps" screen; resume on return. */
     private static volatile boolean awaitingPerm;
+    /** On return from that screen: true = install {@link #pending}, false = run a check. */
     private static volatile boolean wantInstall;
+    /** Newest release found by the last check, or null. Main thread only. */
     private static Gh.Rel pending;
+    /** Last verified APK on disk (cache or staged copy), reused for the system installer fallback. */
     private static File lastApk;
+    /** Update button of the open settings/About screen, if any. */
     private static WeakReference<Button> uiBtn;
+    /** Status line under the update button, if any. */
     private static WeakReference<TextView> uiStatus;
+    /** The activity that owns {@link #uiBtn}; also used to start the installer from a foreground screen. */
     private static WeakReference<Activity> uiAct;
+    /**
+     * Watchdog posted 20 s after a PackageInstaller commit. Some devices never
+     * call back (no sheet, no result); if we are still busy by then, open the
+     * APK in the system installer directly, or give up with an error so the
+     * button does not stay disabled forever.
+     */
     private static final Runnable watch = () -> {
         if (!busy.get()) {
             return;
@@ -94,12 +115,15 @@ public final class Channel {
         }
     };
 
+    /** Static state and hooks only; not instantiated. */
     private Channel() {}
 
     /**
-     * Called from LoftApp. Watches activity resumes (to continue after the
-     * permission screen) and, in release builds that may install packages,
-     * runs the background check.
+     * Called from LoftApp.onCreate on the main thread. Watches activity
+     * resumes (to continue after the permission screen) and, in release
+     * builds that may install packages, runs the background check. Debug
+     * builds never auto-check: they are signed with a different key and could
+     * not install a release anyway.
      */
     public static void boot(Application app) {
         if (!hooked.compareAndSet(false, true)) {
@@ -129,6 +153,9 @@ public final class Channel {
     /**
      * Binds the update button and status line on a settings or About screen,
      * when the layout has them, and adds a "GitHub" mark to the version text.
+     * Called on the main thread each time such a screen is shown; the newest
+     * screen replaces the previous binding. If the user just came back with
+     * the install permission granted, the pending action resumes here.
      */
     public static void attach(Activity a, View root) {
         TextView ver = root.findViewById(R.id.ver);
@@ -158,8 +185,10 @@ public final class Channel {
      * Runs whenever any activity resumes. After the user grants "install
      * unknown apps", continue what they asked for: install the pending
      * release, or check again. Otherwise just refresh the idle status text.
+     * Main thread (ActivityLifecycleCallbacks).
      */
     static void onResume(Activity a) {
+        // The invisible installer trampoline is not a real screen; ignore it.
         if (a instanceof GhInstall) {
             return;
         }
@@ -180,7 +209,10 @@ public final class Channel {
         }
     }
 
-    /** Update button: ask for the install permission, install a known newer release, or check. */
+    /**
+     * Update button: ask for the install permission, install a known newer
+     * release, or check. Ignored while another check or install is running.
+     */
     private static void tap(Activity a) {
         if (!canInstall(a)) {
             askInstall(a);
@@ -239,7 +271,8 @@ public final class Channel {
 
     /**
      * Background check at app start, at most once every 6 hours and only on an
-     * unmetered network, so it never spends mobile data.
+     * unmetered network, so it never spends mobile data. The time of the last
+     * check is kept in Prefs ("gh_checked") so the limit survives restarts.
      */
     private static void auto(Context ctx) {
         long last = Prefs.p(ctx).getLong("gh_checked", 0);
@@ -262,6 +295,7 @@ public final class Channel {
      */
     private static void startCheck(Context ctx, boolean silent) {
         paint(ctx.getString(R.string.channel_checking), false);
+        // The TV build wants the -tv APK; the phone build the plain one.
         final boolean tv = "tv".equals(BuildConfig.FLAVOR_device);
         final String ua = "loft-android/" + current(ctx);
         new Thread(() -> {
@@ -287,7 +321,7 @@ public final class Channel {
     /**
      * Result of a check. A background check installs a newer release right away
      * when it can (release build, permission granted, unmetered, not MIUI);
-     * otherwise the button just offers it.
+     * otherwise the button just offers it. Runs on the main thread.
      */
     private static void onCheck(Context ctx, Gh.Rel rel, boolean silent) {
         pending = rel;
@@ -325,7 +359,9 @@ public final class Channel {
      * against the published sum, checks it is the same package signed with the
      * same certificate, and then hands it to the system installer. Debug builds
      * stop early: they are signed with a different key, so a release APK could
-     * not replace them.
+     * not replace them. Download and checks run on a "loft-gh" thread; the
+     * hand-off to the installer is posted to the main thread. The caller must
+     * already hold {@code busy}.
      */
     private static void startInstall(Context ctx, Gh.Rel rel, boolean silent) {
         if (BuildConfig.DEBUG) {
@@ -376,6 +412,8 @@ public final class Channel {
                 main.post(() -> {
                     paint(ctx.getString(R.string.channel_installing), false);
                     try {
+                        // Xiaomi path: ask from a dialog when a screen is
+                        // open, else try the installer directly.
                         if (oemSheet(ctx)) {
                             Activity a = uiAct != null ? uiAct.get() : null;
                             if (a != null && !a.isFinishing()) {
@@ -387,10 +425,14 @@ public final class Channel {
                             paint(ctx.getString(R.string.channel_confirm), true);
                             return;
                         }
+                        // AOSP path: PackageInstaller session, plus a
+                        // watchdog in case no callback ever arrives.
                         commit(ctx, shown);
                         main.removeCallbacks(watch);
                         main.postDelayed(watch, 20_000);
                     } catch (Exception e) {
+                        // Session failed to start: fall back to opening the
+                        // APK in the system installer.
                         Journal.add("update commit " + e.getMessage());
                         try {
                             Activity a = uiAct != null ? uiAct.get() : null;
@@ -419,6 +461,8 @@ public final class Channel {
     /**
      * PackageInstaller result from {@link GhInstall}. Keep {@code busy} until
      * this arrives so the row does not look idle while the system sheet is up.
+     * Any failure other than "user cancelled" falls back to opening the APK
+     * in the system installer. Main thread.
      */
     static void onInstall(Context ctx, int st, String msg) {
         main.removeCallbacks(watch);
@@ -454,7 +498,8 @@ public final class Channel {
      * Writes the APK into a PackageInstaller session and commits it. Silent
      * install is requested only when this app already owns updates (API 34+);
      * otherwise the system must show a confirm sheet. The result arrives in
-     * {@link GhInstall}.
+     * {@link GhInstall}. Note: it is called from a main.post() block, so the
+     * whole APK copy into the session and the fsync run on the main thread.
      */
     private static void commit(Context ctx, File apk) throws Exception {
         Context app = ctx.getApplicationContext();
@@ -462,6 +507,8 @@ public final class Channel {
         PackageInstaller.SessionParams p =
                 new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
         p.setAppPackageName(app.getPackageName());
+        // Android 14+: ask to become the "update owner", so later updates
+        // from this app may skip the confirm sheet.
         if (Build.VERSION.SDK_INT >= 34) {
             p.setRequestUpdateOwnership(true);
         }
@@ -480,6 +527,11 @@ public final class Channel {
             }
             s.fsync(out);
         }
+        // The result comes back as an Activity start (GhInstall), not a
+        // broadcast: see GhInstall for why. FLAG_MUTABLE (API 31+) lets the
+        // system add the status extras; on API 34+ the background-start
+        // option lets that activity start even though the app is not in
+        // front at that moment.
         Intent i = new Intent(app, GhInstall.class);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= 31) {
@@ -501,7 +553,8 @@ public final class Channel {
     /**
      * MIUI/HyperOS dialog whose positive button is a user gesture, so the
      * system installer is allowed to start. A Handler.post startActivity after
-     * the download is treated as a background start and dropped.
+     * the download is treated as a background start and dropped. If the dialog
+     * cannot be shown, it tries the installer directly.
      */
     private static void promptSheet(Activity a, File apk) {
         Journal.add("update oem " + Build.MANUFACTURER + "/" + Build.BRAND + "/" + Build.MODEL);
@@ -539,7 +592,9 @@ public final class Channel {
 
     /**
      * Copy the APK to app-specific external storage. MIUI's installer often
-     * cannot read a FileProvider URI that points at getCacheDir().
+     * cannot read a FileProvider URI that points at getCacheDir(). Returns
+     * the copy, or the original file if copying fails or sizes differ.
+     * Runs on the download thread.
      */
     private static File stageApk(Context ctx, File apk) {
         File dir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -578,6 +633,11 @@ public final class Channel {
      * Opens the downloaded APK in the system installer. Used on MIUI/HyperOS,
      * where PackageInstaller sessions for sideload often finish with no sheet
      * and no callback, and as a fallback when a session fails.
+     * The URI comes from the FileProvider declared in the github manifest
+     * ("{package}.update"). Read access is granted up front to the known
+     * installer packages and to every app that can open an APK, so whichever
+     * installer ends up handling it can read the file. Throws if no activity
+     * can open it.
      */
     @SuppressWarnings("deprecation")
     private static void openSheet(Context ctx, File apk) {
@@ -589,6 +649,7 @@ public final class Channel {
         i.putExtra("android.intent.extra.INSTALLER_PACKAGE_NAME", ctx.getPackageName());
         i.setClipData(ClipData.newRawUri("", uri));
         i.addFlags(grant);
+        // Starting from a non-activity context (or a closing screen) needs a new task.
         if (!(ctx instanceof Activity) || ((Activity) ctx).isFinishing()) {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         }
@@ -630,7 +691,11 @@ public final class Channel {
                 || b.contains("redmi") || b.contains("poco");
     }
 
-    /** True when this build is MIUI or HyperOS (property present). */
+    /**
+     * True when this build is MIUI or HyperOS (property present). Reads
+     * system properties through reflection, because
+     * android.os.SystemProperties is a hidden API with no public access.
+     */
     private static boolean miui() {
         try {
             Class<?> c = Class.forName("android.os.SystemProperties");
@@ -712,7 +777,11 @@ public final class Channel {
         return MessageDigest.isEqual(a, b);
     }
 
-    /** Package info of an on-disk APK, with sourceDir set so signing reads work. */
+    /**
+     * Package info of an on-disk APK, with sourceDir set so signing reads work.
+     * If the modern signing flag yields no info or no certificate, it
+     * retries with the legacy GET_SIGNATURES flag.
+     */
     @SuppressWarnings("deprecation")
     private static PackageInfo archiveInfo(PackageManager pm, File apk) {
         String path = apk.getAbsolutePath();
@@ -767,7 +836,7 @@ public final class Channel {
         return s != null && s.length > 0 ? s[0].toByteArray() : null;
     }
 
-    /** Installed version name (e.g. "1.2.3"), falling back to the build's own. */
+    /** Installed version name (e.g. "1.2.3"), falling back to the build's own. Asks PackageManager on every call. */
     private static String current(Context c) {
         try {
             return c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
@@ -787,7 +856,10 @@ public final class Channel {
         return c.getString(R.string.channel_update_d);
     }
 
-    /** Updates the bound button label (allow / install / check) and the status text, if the screen is still open. */
+    /**
+     * Updates the bound button label (allow / install / check) and the status
+     * text, if the screen is still open. Main thread only: it touches views.
+     */
     private static void paint(String msg, boolean enable) {
         Activity a = uiAct != null ? uiAct.get() : null;
         Button btn = uiBtn != null ? uiBtn.get() : null;
@@ -819,6 +891,7 @@ public final class Channel {
      * Posts a crash report as a GitHub issue. The token is a Dist secret baked
      * into this flavor ({@code BuildConfig.CRASH_TOKEN}); it must be
      * issues:write only. Empty token returns false so the file stays queued.
+     * Blocks on the network; called from Crash's background thread.
      */
     static boolean sendCrash(Context ctx, String title, String body) {
         String tok = BuildConfig.CRASH_TOKEN;

@@ -1,5 +1,5 @@
 /*
- * Android client, shared code: the About screen (version, protocol table,
+ * Android client, shared code (phone and TV builds): the About screen (version, protocol table,
  * "made with" line with HeartView). On the github build Channel.attach also
  * adds the update button and status here; on the store build it does nothing.
  */
@@ -14,14 +14,20 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-/** About screen: app version and a short table of the supported protocols. */
+/**
+ * About screen: app version and a short table of the supported protocols.
+ * The layout is built in XML; this class fills in text and scales sizes to
+ * the screen. LoftActivity is the app's base activity shared by all screens.
+ */
 public final class AboutActivity extends LoftActivity {
-    @Override
     /** Fills the version and the protocol rows, scales the layout, then lets the update channel attach. */
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_about);
         findViewById(R.id.btn_back).setOnClickListener(v -> finish());
+        // Version name from the installed package (e.g. "1.0.33"). This is a
+        // PackageManager call (IPC to the system) on the main thread.
         String ver = "";
         try {
             ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
@@ -50,6 +56,10 @@ public final class AboutActivity extends LoftActivity {
      * edges; the screen scrolls if the scaled copy no longer fits.
      */
     private void scaleToScreen() {
+        // 1. Work out one scale factor: the screen size against a 360x700 dp
+        //    (portrait) or 640x360 dp (landscape) reference, kept within
+        //    1..1.45, times the user's font scale kept within 0.85..1.3,
+        //    capped at 1.55 overall.
         DisplayMetrics dm = getResources().getDisplayMetrics();
         float d = dm.density;
         float sw = dm.widthPixels / d;
@@ -77,10 +87,12 @@ public final class AboutActivity extends LoftActivity {
             s = 1.55f;
         }
 
-        // Padding follows the window only, so larger type keeps column width.
+        // 2. Padding follows the window only, so larger type keeps column width.
         int side = Math.round(Math.max(24f, Math.min(sw * 0.06f, 28f)) * d);
         findViewById(R.id.about_body).setPadding(side, 0, side, Math.round(8 * d));
 
+        // 3. Logo mark and text sizes (the update channel views exist only
+        //    in the GitHub build, hence the null checks).
         int mark = Math.round((land ? 52f : 96f) * s * d);
         View m = findViewById(R.id.mark);
         ViewGroup.LayoutParams mp = m.getLayoutParams();
@@ -105,6 +117,8 @@ public final class AboutActivity extends LoftActivity {
             chSt.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11f * s);
         }
 
+        // 4. In landscape the version and channel rows are indented so they
+        //    line up under the title next to the mark.
         if (land) {
             int indent = mark + Math.round(10f * s * d);
             setStartMargin(findViewById(R.id.ver), indent);
@@ -113,6 +127,9 @@ public final class AboutActivity extends LoftActivity {
             }
         }
 
+        // 5. Protocol table: measure every name in the left column and give
+        //    them all the widest width (at least 56 dp scaled) so the
+        //    descriptions start on one vertical line.
         int[] rows = {R.id.proto_loft, R.id.proto_sstp, R.id.proto_trojan, R.id.proto_vless};
         int kW = Math.round(56f * s * d);
         for (int id : rows) {
@@ -139,6 +156,7 @@ public final class AboutActivity extends LoftActivity {
             k.setLayoutParams(kp);
         }
 
+        // 6. The pixel heart scales with the text around it.
         View heart = findViewById(R.id.heart);
         ViewGroup.LayoutParams hp = heart.getLayoutParams();
         hp.width = Math.round(16f * s * d);

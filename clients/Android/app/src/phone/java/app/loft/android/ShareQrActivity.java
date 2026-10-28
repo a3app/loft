@@ -1,7 +1,9 @@
 /*
  * Android client, phone build: the "share profile" screen. Turns a saved
- * profile back into a loft:// link (YamlBuilder.emit) and shows it as text
- * and as a QR code (Qr), so another device can import it with ScanActivity.
+ * profile back into a share link (YamlBuilder.emit: loft:// or sstp:// built
+ * from its fields, or the original vless:// / trojan:// link) and shows it as
+ * text and as a QR code (Qr), so another device can import it with
+ * ScanActivity. Opened from MainActivity and EditActivity.
  */
 package app.loft.android;
 
@@ -14,8 +16,9 @@ import android.widget.TextView;
 
 /**
  * Shows one profile as a share link and its QR code, with copy and share.
- * The link contains the member key, so anyone who scans it can connect.
- * Started with the profile id in the "id" extra.
+ * The link contains the member key (the secret that lets a device join the
+ * node), so anyone who scans it can connect. Started with the profile id in
+ * the "id" extra.
  */
 public final class ShareQrActivity extends LoftActivity {
     /**
@@ -26,14 +29,18 @@ public final class ShareQrActivity extends LoftActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_share);
+        // 1. Look the profile up and build its link; "" when the id is unknown.
         Profile p = LoftApp.of(this).profiles().get(getIntent().getStringExtra("id"));
         String uri = p == null ? "" : YamlBuilder.emit(p);
         findViewById(R.id.btn_close).setOnClickListener(v -> finish());
+        // 2. Draw the QR code at 512 px. This runs synchronously on the main thread;
+        //    Qr.encode returns null (empty image) if the link is too long for a QR code.
         ImageView qr = findViewById(R.id.qr);
         if (!uri.isEmpty()) {
             qr.setImageBitmap(Qr.encode(uri, 512));
         }
         ((TextView) findViewById(R.id.line)).setText(uri);
+        // 3. Copy puts the link on the clipboard; Share hands it to the system share sheet.
         findViewById(R.id.btn_copy).setOnClickListener(v -> {
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             if (cm != null) {

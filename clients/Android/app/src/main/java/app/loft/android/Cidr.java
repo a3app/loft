@@ -3,7 +3,7 @@
  * set arithmetic needed to build VpnService route lists. RoutePlan uses it to
  * compute which ranges go into the tunnel; Bat uses it to read and write
  * Windows-style "route add ... MASK ..." lines. It also hosts the shared
- * byte-rate formatter used by the traffic UI.
+ * byte-rate formatter used by the traffic UI. Shared code (phone and TV).
  */
 package app.loft.android;
 
@@ -16,6 +16,11 @@ import java.util.Locale;
 /**
  * IPv4/IPv6 prefixes for VpnService positive routes.
  * LAN bypass is 0.0.0.0/0 minus RFC1918 (overlay CIDR added back).
+ *
+ * <p>A CIDR prefix such as 10.0.0.0/8 names a block of addresses: the first
+ * {@code bits} bits are fixed, the rest vary. Instances are immutable (the
+ * address array is copied in and never changed), so they can be shared
+ * between the VPN service and screens without locking.
  */
 final class Cidr {
     /** Raw address bytes: 4 for IPv4, 16 for IPv6. Host bits may be non-zero (see canonical()). */
@@ -83,12 +88,15 @@ final class Cidr {
         return new Cidr(raw, v6 ? 128 : 32, v6);
     }
 
-    // Prefix length (same as bits).
+    /** Prefix length (same as bits); the name used by the route-file code. */
     int familyPrefix() {
         return bits;
     }
 
-    /** Address part as text, without the prefix length. */
+    /**
+     * Address part as text, without the prefix length. getByAddress only
+     * wraps the bytes and never does a DNS lookup.
+     */
     String address() {
         try {
             return InetAddress.getByAddress(addr).getHostAddress();
@@ -152,7 +160,11 @@ final class Cidr {
         return of("fc00::/7", "fe80::/10", "ff00::/8");
     }
 
-    /** Removes every prefix in {@code cut} from every prefix in {@code set}. */
+    /**
+     * Removes every prefix in {@code cut} from every prefix in {@code set}.
+     * Each cut can split a prefix into many (up to one per bit), so long cut
+     * lists produce long results; the work grows with set size times cut size.
+     */
     static List<Cidr> subtractAll(List<Cidr> set, List<Cidr> cut) {
         List<Cidr> cur = new ArrayList<>(set);
         for (Cidr c : cut) {
@@ -176,6 +188,7 @@ final class Cidr {
         if (a == null) {
             return out;
         }
+        // No overlap: a is unchanged. b covers a: nothing is left.
         if (b == null || a.v6 != b.v6 || !a.overlaps(b)) {
             out.add(a);
             return out;
@@ -187,6 +200,8 @@ final class Cidr {
             out.add(a);
             return out;
         }
+        // Walk down towards b: at each bit keep the sibling half (the one b is
+        // not in) and continue inside the half that holds b.
         byte[] cur = a.addr.clone();
         int max = a.v6 ? 128 : 32;
         for (int bit = a.bits; bit < b.bits && bit < max; bit++) {
@@ -263,6 +278,8 @@ final class Cidr {
             return null;
         }
         try {
+            // IPv6: accept only hex digits, ':' and '.', so getByName gets a
+            // literal it can parse without a DNS lookup.
             if (s.indexOf(':') >= 0) {
                 for (int i = 0; i < s.length(); i++) {
                     char c = s.charAt(i);
@@ -275,6 +292,7 @@ final class Cidr {
                 }
                 return InetAddress.getByName(s);
             }
+            // IPv4: exactly four decimal parts 0..255, built by hand.
             String[] p = s.split("\\.");
             if (p.length != 4) {
                 return null;
@@ -293,7 +311,12 @@ final class Cidr {
         }
     }
 
-    /** Builds a prefix from an address and a dotted mask (255.255.255.0 → /24). */
+    /**
+     * Builds a prefix from an address and a dotted mask (255.255.255.0 → /24),
+     * as found in Windows "route add" lines. The length is the count of set
+     * bits, so a non-contiguous mask is not rejected. A bad mask falls back to
+     * parsing ip alone (a single host).
+     */
     static Cidr fromIpMask(String ip, String mask) {
         InetAddress m = numeric(mask);
         if (m == null) {
@@ -313,7 +336,12 @@ final class Cidr {
         return ((n >>> 24) & 255) + "." + ((n >>> 16) & 255) + "." + ((n >>> 8) & 255) + "." + (n & 255);
     }
 
-    /** Formats a byte rate as B/s or bit/s with 1000-based units and 3 significant digits. */
+    /**
+     * Formats a byte rate as B/s or bit/s with 1000-based units and 3
+     * significant digits ("1.23 MB/s", "45.6 Kbit/s"). Locale.US keeps the
+     * decimal point a dot whatever the phone's language. Called by the phone
+     * and TV home screens on every redraw.
+     */
     static String fmt(long n, boolean bits) {
         if (n < 0) {
             n = 0;

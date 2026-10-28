@@ -14,13 +14,16 @@ import android.widget.TextView;
 
 /**
  * Shows the session journal (Journal) with copy, share and clear. Redraws on
- * every Bus event while visible.
+ * every Bus event while visible. Journal keeps at most 400 lines in memory;
+ * each redraw replaces the whole text. The journal text is already redacted
+ * by Journal before it is stored, so copy and share pass it on as is.
  */
 public final class LogActivity extends LoftActivity implements Bus.Listener {
+    /** The text view holding the whole journal. */
     private TextView body;
 
-    @Override
     /** Inflates the screen and wires back, copy, share and clear (clear asks first). */
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_log);
@@ -47,23 +50,23 @@ public final class LogActivity extends LoftActivity implements Bus.Listener {
         paint();
     }
 
-    @Override
     /** Starts listening for new log lines and shows the current text. */
+    @Override
     protected void onResume() {
         super.onResume();
         Bus.watch(this);
         paint();
     }
 
-    @Override
     /** Stops listening while the screen is hidden. */
+    @Override
     protected void onPause() {
         Bus.drop(this);
         super.onPause();
     }
 
-    @Override
     /** Bus event: the journal (or other state) changed, so redraw. */
+    @Override
     public void onLoft() {
         paint();
     }

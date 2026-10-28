@@ -25,12 +25,21 @@ import java.util.List;
  * for VPN permission and starts the service.
  */
 public final class OnboardActivity extends LoftActivity {
-    // Front choices in the segmented control; "auto" is stored as GET.
+    /**
+     * Front choices in the segmented control, in its order (a front is the way the tunnel
+     * is carried over the web: plain HTTPS GET, WebSocket, HTTP/2, QUIC, HTTP/3 or L3).
+     * "auto" is stored as GET. Same list as in EditActivity.
+     */
     private static final String[] METHODS = {"auto", "get", "ws", "h2", "quic", "h3", "l3"};
+    /** Request code for the system VPN consent dialog. */
     private static final int REQ_VPN = 1;
+    /** Step currently shown (0, 1 or 2). Written by go(); nothing reads it back at the moment. */
     private int step;
 
-    /** Wires the buttons of all three steps and starts on step 0. */
+    /**
+     * Wires the buttons of all three steps and starts on step 0. Step 1's Continue does
+     * nothing until a key is typed. The front control starts on "auto".
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -56,7 +65,11 @@ public final class OnboardActivity extends LoftActivity {
         go(0);
     }
 
-    // Returning from ScanActivity with an imported profile ends onboarding.
+    /**
+     * Returning from ScanActivity with an imported profile ends onboarding. ScanActivity
+     * saves profiles itself and returns no result, so the only way to notice an import is
+     * to check the profile list whenever this screen comes back to the front.
+     */
     @Override
     protected void onResume() {
         super.onResume();
@@ -90,7 +103,11 @@ public final class OnboardActivity extends LoftActivity {
         }
     }
 
-    /** Imports from the clipboard; with an empty clipboard opens the scanner instead. */
+    /**
+     * Imports from the clipboard; with an empty clipboard opens the scanner instead.
+     * A successful import marks onboarding done and goes straight to VPN consent.
+     * Unlike ScanActivity, no confirmation list is shown here.
+     */
     private void paste() {
         ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         CharSequence t = null;
@@ -113,7 +130,9 @@ public final class OnboardActivity extends LoftActivity {
 
     /**
      * Builds a profile from the typed key, host, front, path and edge, saves it as the active
-     * profile and moves on to VPN consent. Does nothing while the host is empty.
+     * profile and moves on to VPN consent. Does nothing while the host is empty. The
+     * profile keeps Profile's defaults for everything not asked here (the wizard only
+     * creates loft profiles), and is named after its host.
      */
     private void connectHand() {
         Profile p = new Profile();
@@ -141,7 +160,11 @@ public final class OnboardActivity extends LoftActivity {
         askVpn();
     }
 
-    /** Shows the system VPN consent dialog when needed, then starts the service. */
+    /**
+     * Shows the system VPN consent dialog when needed, then starts the service and closes
+     * the wizard. VpnService.prepare() returns null when this app is already the approved
+     * VPN app, so the service can start right away.
+     */
     private void askVpn() {
         Intent prep = VpnService.prepare(this);
         if (prep != null) {
