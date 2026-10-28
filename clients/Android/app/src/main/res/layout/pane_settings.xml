@@ -690,42 +690,35 @@
         <include layout="@layout/row_channel" />
 
         <LinearLayout
+            android:id="@+id/settings_links"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:gravity="center"
             android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btn_defaults"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
                 android:gravity="center"
-                android:maxLines="1"
                 android:text="@string/defaults" />
 
             <Button
                 android:id="@+id/btn_log"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
                 android:gravity="center"
-                android:maxLines="1"
                 android:text="@string/log" />
 
             <Button
                 android:id="@+id/btn_about"
                 style="@style/Widget.Loft.LinkBtn"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
                 android:gravity="center"
-                android:maxLines="1"
                 android:text="@string/about" />
         </LinearLayout>
     </LinearLayout>
