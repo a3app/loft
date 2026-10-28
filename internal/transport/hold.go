@@ -42,10 +42,14 @@ var (
 		gen   uint64
 		until time.Time
 	}
-	// visGapMS and visCaps are what the client last saw in Status.
-	visGapMS  atomic.Uint32
-	visCaps   atomic.Uint64
-	gapHoldFn = defaultGapHold
+	// visGapMS, visKeepaliveMS and visCaps are copied from the last Status
+	// the node sent this client. WatchStall reads keepalive_ms from here
+	// so a laptop that slept through the Ping interval can reconnect
+	// without waiting for three dead mux pings.
+	visGapMS       atomic.Uint32
+	visKeepaliveMS atomic.Uint32
+	visCaps        atomic.Uint64
+	gapHoldFn      = defaultGapHold
 )
 
 // defaultGapHold is the park time: the node's gap_hold_ms from Status on a
@@ -62,12 +66,28 @@ func defaultGapHold() time.Duration {
 
 func gapHoldDuration() time.Duration { return gapHoldFn() }
 
-// rememberHold keeps gap_hold_ms and the node caps from Status.
+// rememberHold keeps gap_hold_ms, keepalive_ms and the node caps from Status.
+// Zero values mean "the node omitted the field"; we leave the last known
+// number in place rather than falling back to 0, which would look like
+// "Ping every 0 ms".
 func rememberHold(st wire.Status) {
 	if st.GapHoldMS > 0 {
 		visGapMS.Store(st.GapHoldMS)
 	}
+	if st.KeepaliveMS > 0 {
+		visKeepaliveMS.Store(st.KeepaliveMS)
+	}
 	visCaps.Store(uint64(st.Caps))
+}
+
+// keepaliveMS is how often the live session must Ping, in milliseconds.
+// The node tells the client this in Status. If this process has not seen
+// a Status yet, the protocol default is 15 s (see DefaultSession).
+func keepaliveMS() int64 {
+	if ms := visKeepaliveMS.Load(); ms > 0 {
+		return int64(ms)
+	}
+	return int64(netconf.DefaultSession().KeepaliveMS)
 }
 
 // clientHolds reports whether the node supports hold (unknown counts as yes).

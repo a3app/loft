@@ -90,6 +90,27 @@ func TestDriveMs(t *testing.T) {
 	}
 }
 
+// TestWatchStallSleepGapFires is a lid-closed laptop: the previous tick
+// was 60 s ago on the wall clock, keepalive is 15 s, so two Ping intervals
+// were missed and WatchStall must reconnect on this tick, not after three
+// 2.5 s mux Ping timeouts.
+func TestWatchStallSleepGapFires(t *testing.T) {
+	d := NewDrive(io.Discard)
+	d.tickUnix = time.Now().UnixMilli() - 60_000
+	visKeepaliveMS.Store(15_000)
+	t.Cleanup(func() { visKeepaliveMS.Store(0) })
+	ms := mux.NewClient()
+	h := &Holder{}
+	h.Set(&sessDialer{sess: ms, done: make(chan struct{})})
+	ch := make(chan struct{}, 1)
+	d.tick(context.Background(), h, ch)
+	select {
+	case <-ch:
+	default:
+		t.Fatal("sleep gap did not reconnect")
+	}
+}
+
 func TestWatchStallNilDriveFiresOnClosedMux(t *testing.T) {
 	old := stallTick
 	stallTick = 15 * time.Millisecond

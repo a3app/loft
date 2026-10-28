@@ -15,6 +15,13 @@ package transport
 // front address; "ping" is a mux Ping frame through the live session; HOL is
 // head-of-line blocking, when one stuck request holds up everything behind
 // it in the same connection.
+//
+// Laptop sleep is a separate hole. The 1 s ticker and time.Since both use
+// Darwin's uptime clock, which does not advance while the lid is closed.
+// After wake the last mux Pong still looks one second old, the UI stays
+// "on", and the node has already dropped the session (idle_ms, default
+// 120 s). tickUnix is wall-clock milliseconds of the last tick; a jump
+// larger than two keepalive_ms intervals means those keepalives never ran.
 
 import (
 	"context"
@@ -36,7 +43,8 @@ import (
 
 // Drive writes one-line events to a writer (file + stderr).
 // It also keeps the state WatchStall needs between ticks: the last path,
-// consecutive stall count, time of the last fire, and mux byte counters.
+// consecutive stall count, time of the last fire, mux byte counters, and
+// the wall-clock time of the last tick (laptop sleep).
 type Drive struct {
 	mu       sync.Mutex
 	w        io.Writer
@@ -47,6 +55,12 @@ type Drive struct {
 	ticks    int
 	fired    time.Time
 	seenByte time.Time
+	// tickUnix is Unix milliseconds of the previous WatchStall tick.
+	// Must be wall clock (time.Now().UnixMilli), not a time.Time with a
+	// monotonic reading: the monotonic clock sleeps with the machine, so
+	// time.Since(lastTick) after a nap is still ~1 s. The wall clock jumps
+	// by the real minutes the lid was closed. Zero means no tick yet.
+	tickUnix int64
 	prevUp   uint64
 	prevDn   uint64
 	prime    bool
@@ -232,12 +246,33 @@ func WatchStall(ctx context.Context, h *Holder, d *Drive) <-chan struct{} {
 // tick takes one sample: path, then radio, node and mux ping probes in
 // parallel. It logs a TICK line and decides whether the link is stalled.
 // A closed mux fires at once (subject to cooldown); a stall fires only after
-// stallNeed samples in a row.
+// stallNeed samples in a row. A wall-clock jump larger than two keepalive
+// intervals (the process was frozen in sleep) fires at once and skips the
+// probes: Ping cannot revive a session the node already dropped.
 func (d *Drive) tick(ctx context.Context, h *Holder, fire chan<- struct{}) {
 	p := SamplePath()
 	if p.Key() != d.last.Key() {
 		d.Event("PATH", append(pathKV(p), "was="+d.last.Egress)...)
 		d.last = p
+	}
+	// Sleep / freeze: the ticker did not run, so mux Ping did not run
+	// either. keepalive_ms (Status, else 15 s) is how often the client
+	// must Ping; two intervals with no tick means those Pings are gone.
+	// Fire reconnect now. Do not Ping: that waits muxPingTO (2.5 s) on a
+	// session the node already closed. Do not wait for stallNeed (3)
+	// samples. While the machine is awake the gap is ~1000 ms and this
+	// branch is false.
+	now := time.Now().UnixMilli()
+	prev := d.tickUnix
+	d.tickUnix = now
+	if prev != 0 {
+		if sess := h.Session(); sess != nil && !sess.Closed() {
+			if gap := now - prev; gap > 2*keepaliveMS() {
+				d.Event("STALL", "reason=keepalive", fmt.Sprintf("gap=%dms", gap))
+				d.fireStall(p, fire, "keepalive")
+				return
+			}
+		}
 	}
 	var (
 		radioMs, nodeMs, pingMs    time.Duration
