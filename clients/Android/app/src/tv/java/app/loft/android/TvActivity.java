@@ -9,7 +9,10 @@ package app.loft.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.net.VpnService;
@@ -31,6 +34,7 @@ import android.widget.Toast;
 
 
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -70,6 +74,63 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     private TvPair pair;
     /** True while a public-IP lookup is in flight, so only one runs at a time. */
     private final java.util.concurrent.atomic.AtomicBoolean extFetch = new java.util.concurrent.atomic.AtomicBoolean();
+    /**
+     * Pauses between public-IP retries after a failed lookup: 2.5 s, 5 s,
+     * 10 s, then no more until the connection state changes. The old code
+     * retried every 2.5 s forever, which on a tunnel without internet meant
+     * a network request (with an 8 s timeout) running non-stop.
+     */
+    private static final long[] EXT_RETRY_MS = {2500, 5000, 10000};
+    /** Failed public-IP lookups since the last state change; indexes EXT_RETRY_MS. */
+    private int extFails;
+    /** True while a retry is waiting in the main-thread queue (see extRetry). */
+    private boolean extRetryQueued;
+    /**
+     * Delayed retry of the public-IP lookup. Kept as a field so onPause and
+     * onDestroy can take it back out of the queue: a hidden or closed screen
+     * must not keep making network requests.
+     */
+    private final Runnable extRetry = () -> {
+        extRetryQueued = false;
+        if (Live.on() && Prefs.showExtIP(this) && "—".equals(Live.extIP)) {
+            Live.extIP = "";
+            fetchExt();
+        }
+    };
+    /** Live.state seen by the last paintHome(); a change restarts the public-IP retries. */
+    private String lastState = "";
+
+    /*
+     * Home pane views, looked up once in onCreate. findViewById walks the
+     * view tree, and paintHome() runs on every Bus event (up to 10 times a
+     * second), so the lookups are cached instead of repeated.
+     */
+    private ImageView hLamp;
+    private TextView hStatus;
+    private Button hGo;
+    private TextView hName;
+    private TextView hKind;
+    private TextView hHost;
+    private TextView hIp;
+    private TextView hExt;
+    private TextView hNet;
+    private TextView hRate;
+    private View hSide;
+    /** Image resource now in hLamp, so it is only set when it changes (0 = none yet). */
+    private int lampRes;
+    /**
+     * Last Live.err turned into display text, and that text. Explain.display()
+     * asks the system about the current networks (ConnectivityManager), which
+     * is too slow to repeat on every redraw, so it runs only when the error
+     * itself changes.
+     */
+    private String errRaw;
+    private String errText = "";
+    /**
+     * What the connection cards were last built from (see connsSig()). The
+     * cards are rebuilt only when this changes; "" forces a rebuild.
+     */
+    private String connsSig = "";
 
     /**
      * Builds the rail and Home pane, opens Settings instead when asked by the
@@ -86,6 +147,17 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         pane = findViewById(R.id.pane);
         home = getLayoutInflater().inflate(R.layout.pane_tv_home, pane, false);
         pane.addView(home);
+        hLamp = home.findViewById(R.id.lamp);
+        hStatus = home.findViewById(R.id.status);
+        hGo = home.findViewById(R.id.go);
+        hName = home.findViewById(R.id.side_name);
+        hKind = home.findViewById(R.id.side_kind);
+        hHost = home.findViewById(R.id.side_host);
+        hIp = home.findViewById(R.id.side_ip);
+        hExt = home.findViewById(R.id.side_ext);
+        hNet = home.findViewById(R.id.side_net);
+        hRate = home.findViewById(R.id.side_rate);
+        hSide = home.findViewById(R.id.side);
 
         findViewById(R.id.rail_home).setOnClickListener(v -> show(home));
         findViewById(R.id.rail_conns).setOnClickListener(v -> {
@@ -158,29 +230,56 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     @Override
     protected void onResume() {
         super.onResume();
+        visible = true;
         Bus.watch(this);
+        // A public-IP retry was cancelled by onPause: clear the "—" so
+        // paintHome() below starts the lookup again right away.
+        if (extRetryPaused && "—".equals(Live.extIP)) {
+            Live.extIP = "";
+        }
+        extRetryPaused = false;
         paintHome();
         paintConns();
     }
 
-    /** Stops listening to Bus while the screen is hidden. */
+    /** Set when a public-IP retry was cancelled or skipped while hidden, so onResume can resume it. */
+    private boolean extRetryPaused;
+    /** True between onResume and onPause. */
+    private boolean visible;
+
+    /**
+     * Stops listening to Bus while the screen is hidden, and cancels a waiting
+     * public-IP retry: nobody sees the result, so no network request is made.
+     */
     @Override
     protected void onPause() {
         Bus.drop(this);
+        visible = false;
+        if (extRetryQueued) {
+            Ui.MAIN.removeCallbacks(extRetry);
+            extRetryQueued = false;
+            extRetryPaused = true;
+        }
         super.onPause();
     }
 
-    /** Makes sure the pairing listener does not outlive the screen. */
+    /**
+     * Makes sure the pairing listener and a waiting public-IP retry do not
+     * outlive the screen (the retry would otherwise keep this activity alive).
+     */
     @Override
     protected void onDestroy() {
         stopPair();
+        Ui.MAIN.removeCallbacks(extRetry);
+        extRetryQueued = false;
         super.onDestroy();
     }
 
     /**
      * Bus callback: connection state or stats in Live changed, so redraw.
      * While connected this fires at least once a second (the VPN service's
-     * stats tick) plus once per new journal line.
+     * stats tick) plus once per new journal line. Both paint methods touch
+     * only what really changed, so a tick usually costs almost nothing.
      */
     @Override
     public void onLoft() {
@@ -229,6 +328,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         // nothing to move from.
         if (v == conns) {
             paintConns();
+            focusConns();
         }
         if (v == home) {
             paintHome();
@@ -259,7 +359,9 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
      * Redraws Home from Live: status line, connect button and the side panel
      * with overlay address (this device's address inside the loft network),
      * public IP, underlying network and rates. With no profiles the button is
-     * replaced by three add tiles.
+     * replaced by three add tiles. Runs on every Bus event, so it uses the
+     * cached views and Ui.text / Ui.shown: a value that did not change does
+     * not touch its view (and so does not trigger a new layout pass).
      */
     private void paintHome() {
         // 1. Status line and connect button text from the connection state.
@@ -267,72 +369,80 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         String name = p == null ? "" : p.name;
         boolean on = Live.on();
         boolean conn = Live.connecting();
-        ImageView lamp = home.findViewById(R.id.lamp);
-        lamp.setImageResource(on ? R.drawable.ic_lamp_on : R.drawable.ic_lamp_off);
-        TextView status = home.findViewById(R.id.status);
-        Button go = home.findViewById(R.id.go);
+        int lamp = on ? R.drawable.ic_lamp_on : R.drawable.ic_lamp_off;
+        if (lamp != lampRes) {
+            lampRes = lamp;
+            hLamp.setImageResource(lamp);
+        }
         if (conn) {
-            status.setText(getString(R.string.connecting) + (name.isEmpty() ? "" : " " + name));
-            go.setText(R.string.cancel);
+            Ui.text(hStatus, getString(R.string.connecting) + (name.isEmpty() ? "" : " " + name));
+            Ui.text(hGo, getString(R.string.cancel));
         } else if (on) {
-            status.setText(getString(R.string.connected) + (name.isEmpty() ? "" : " · " + name)
+            Ui.text(hStatus, getString(R.string.connected) + (name.isEmpty() ? "" : " · " + name)
                     + uptime());
-            go.setText(R.string.disconnect);
+            Ui.text(hGo, getString(R.string.disconnect));
         } else if (!Live.err.isEmpty()) {
-            status.setText(Explain.display(this, Live.err));
-            go.setText(R.string.connect);
+            // Explain.display() queries the system; redo it only for a new error.
+            String err = Live.err;
+            if (!err.equals(errRaw)) {
+                errRaw = err;
+                errText = Explain.display(this, err);
+            }
+            Ui.text(hStatus, errText);
+            Ui.text(hGo, getString(R.string.connect));
         } else {
-            status.setText(getString(R.string.pill_off) + (name.isEmpty() ? "" : " · " + name));
-            go.setText(R.string.connect);
+            Ui.text(hStatus, getString(R.string.pill_off) + (name.isEmpty() ? "" : " · " + name));
+            Ui.text(hGo, getString(R.string.connect));
         }
         // 2. Side panel: the active profile, then live addresses and rates.
-        TextView sn = home.findViewById(R.id.side_name);
-        TextView sk = home.findViewById(R.id.side_kind);
-        TextView sh = home.findViewById(R.id.side_host);
-        TextView sip = home.findViewById(R.id.side_ip);
-        TextView se = home.findViewById(R.id.side_ext);
-        TextView snet = home.findViewById(R.id.side_net);
-        TextView sr = home.findViewById(R.id.side_rate);
         if (p == null) {
-            sn.setText(R.string.empty_conns);
-            sk.setText("");
-            sh.setText("");
+            Ui.text(hName, getString(R.string.empty_conns));
+            Ui.text(hKind, "");
+            Ui.text(hHost, "");
         } else {
-            sn.setText(p.name.isEmpty() ? p.host() : p.name);
-            sk.setText(p.side());
-            sh.setText(p.host());
+            Ui.text(hName, p.name.isEmpty() ? p.host() : p.name);
+            Ui.text(hKind, p.side());
+            Ui.text(hHost, p.host());
         }
         String ov = Live.ip.isEmpty() ? "—" : Live.ip;
         if (!Live.ip6.isEmpty()) {
             ov = Live.ip.isEmpty() ? Live.ip6 : Live.ip + "  " + Live.ip6;
         }
-        sip.setText(getString(R.string.overlay_ip) + "  " + ov);
-        se.setText(getString(R.string.ext_ip) + "  " + (Live.extIP.isEmpty() ? "—" : Live.extIP));
+        Ui.text(hIp, getString(R.string.overlay_ip) + "  " + ov);
+        Ui.text(hExt, getString(R.string.ext_ip) + "  " + (Live.extIP.isEmpty() ? "—" : Live.extIP));
         String net = Live.underlying.isEmpty() ? "—" : Live.underlying;
-        snet.setText(net);
+        Ui.text(hNet, net);
         boolean bits = Prefs.rateBits(this);
-        sr.setText("↓ " + Cidr.fmt(Live.rateDown, bits) + "   ↑ " + Cidr.fmt(Live.rateUp, bits));
+        Ui.text(hRate, "↓ " + Cidr.fmt(Live.rateDown, bits) + "   ↑ " + Cidr.fmt(Live.rateUp, bits));
         // 3. Live rows only while connected; fetch the public IP if missing.
-        sip.setVisibility(on ? View.VISIBLE : View.GONE);
+        Ui.shown(hIp, on);
         boolean showExt = Prefs.showExtIP(this);
-        se.setVisibility(on && showExt ? View.VISIBLE : View.GONE);
-        snet.setVisibility(on ? View.VISIBLE : View.GONE);
-        sr.setVisibility(on ? View.VISIBLE : View.GONE);
+        Ui.shown(hExt, on && showExt);
+        Ui.shown(hNet, on);
+        Ui.shown(hRate, on);
+        // A new connection state starts the public-IP retries from scratch
+        // (fetchExt gives up after a few failures; see EXT_RETRY_MS). A "—"
+        // left by an earlier give-up is cleared so the lookup runs again.
+        String st = Live.state;
+        if (!st.equals(lastState)) {
+            lastState = st;
+            extFails = 0;
+            Ui.MAIN.removeCallbacks(extRetry);
+            extRetryQueued = false;
+            if (on && "—".equals(Live.extIP)) {
+                Live.extIP = "";
+            }
+        }
         if (on && showExt && Live.extIP.isEmpty()) {
             fetchExt();
         }
         // 4. Nothing to show at all: hide the panel and offer add tiles.
-        View side = home.findViewById(R.id.side);
-        if (p == null && !on) {
-            side.setVisibility(View.GONE);
-        } else {
-            side.setVisibility(View.VISIBLE);
-        }
+        Ui.shown(hSide, !(p == null && !on));
         if (p == null && !on && !conn) {
-            go.setVisibility(View.GONE);
+            Ui.shown(hGo, false);
             showEmptyAdd();
         } else {
-            go.setVisibility(View.VISIBLE);
+            Ui.shown(hGo, true);
             hideEmptyAdd();
         }
     }
@@ -352,7 +462,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     /** Builds the add tiles (phone QR, USB file, type a link) once, above the button. */
     private void showEmptyAdd() {
         if (emptyAdd != null) {
-            emptyAdd.setVisibility(View.VISIBLE);
+            Ui.shown(emptyAdd, true);
             return;
         }
         LinearLayout box = new LinearLayout(this);
@@ -369,9 +479,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
 
     /** Hides the add tiles once a profile exists or a session is up. */
     private void hideEmptyAdd() {
-        if (emptyAdd != null) {
-            emptyAdd.setVisibility(View.GONE);
-        }
+        Ui.shown(emptyAdd, false);
     }
 
     /**
@@ -396,21 +504,35 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     }
 
     /**
-     * Rebuilds the row of connection cards plus a "+" card, and focuses the
-     * first card (or "+" when there are no profiles). The whole row is thrown
-     * away and created again on every call.
+     * Rebuilds the row of connection cards plus a "+" card, but only when what
+     * the cards show changed (see connsSig()). This runs on every Bus event,
+     * which while connected is at least once a second; rebuilding every time
+     * threw away and recreated all cards, re-laid out the pane and (worse)
+     * moved D-pad focus back to the first card each second. Now a refresh with
+     * nothing new does nothing, and never moves focus by itself: after a real
+     * rebuild, focus goes back to the same profile's card only if focus was in
+     * the row before. Giving the pane a first focus is show()'s job
+     * (focusConns()). A hidden pane is not rebuilt; show() repaints it.
      */
     private void paintConns() {
-        if (conns == null) {
+        if (conns == null || conns.getVisibility() != View.VISIBLE) {
             return;
         }
-        LinearLayout row = conns.findViewById(R.id.row);
-        row.removeAllViews();
         List<Profile> all = LoftApp.of(this).profiles().all();
         String active = LoftApp.of(this).profiles().activeId();
         if (selected.isEmpty() && !active.isEmpty()) {
             selected = active;
         }
+        String sig = connsSig(all, active);
+        if (sig.equals(connsSig)) {
+            return;
+        }
+        connsSig = sig;
+        LinearLayout row = conns.findViewById(R.id.row);
+        // Remember whether the user was moving around the cards, so focus can
+        // be put back on the same card after the rebuild.
+        boolean hadFocus = row.hasFocus();
+        row.removeAllViews();
         for (Profile p : all) {
             row.addView(connCard(p, p.id.equals(active), p.id.equals(selected)));
         }
@@ -423,10 +545,44 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         plus.setMinHeight(dp(120));
         plus.setOnClickListener(v -> addSheet());
         row.addView(plus);
-        plus.requestFocus();
-        if (!all.isEmpty()) {
-            row.getChildAt(0).requestFocus();
+        if (hadFocus) {
+            focusConns();
         }
+    }
+
+    /**
+     * Everything the connection cards are built from, as one string: each
+     * profile's id, name, kind and host, plus the active profile (drawn in
+     * amber). The cards show no live connection data, so traffic ticks do not
+     * change it. Comparing this string is far cheaper than rebuilding views.
+     */
+    private static String connsSig(List<Profile> all, String active) {
+        StringBuilder b = new StringBuilder(active).append('\n');
+        for (Profile p : all) {
+            b.append(p.id).append('\t').append(p.name).append('\t')
+                    .append(p.side()).append('\t').append(p.host()).append('\n');
+        }
+        return b.toString();
+    }
+
+    /**
+     * Moves D-pad focus to the selected profile's card, or the first card, or
+     * the "+" card when there are no profiles. Used when the pane is opened
+     * and to put focus back after a rebuild or a closed overlay.
+     */
+    private void focusConns() {
+        if (conns == null) {
+            return;
+        }
+        LinearLayout row = conns.findViewById(R.id.row);
+        if (row.getChildCount() == 0) {
+            return;
+        }
+        View target = row.findViewWithTag(selected.isEmpty() ? null : selected);
+        if (target == null) {
+            target = row.getChildAt(0);
+        }
+        target.requestFocus();
     }
 
     /**
@@ -445,6 +601,8 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         c.setLayoutParams(lp);
         c.setFocusable(true);
         c.setClickable(true);
+        // The profile id lets focusConns() find this card again.
+        c.setTag(p.id);
         TextView n = tv(20, live ? 0xFFE8B84A : 0xFFF3EDE4);
         n.setText(p.name.isEmpty() ? p.host() : p.name);
         TextView k = tv(16, 0xFFB7A99A);
@@ -467,6 +625,18 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         c.setOnFocusChangeListener((v, has) -> {
             if (has) {
                 selected = p.id;
+                // The selected card is drawn slightly larger. Cards used to be
+                // rebuilt every second, which redrew that; now they are not,
+                // so the size follows the focus here instead.
+                ViewGroup row = (ViewGroup) v.getParent();
+                for (int i = 0; row != null && i < row.getChildCount(); i++) {
+                    View o = row.getChildAt(i);
+                    if (o.getTag() != null) {
+                        float sc = o == v ? 1.06f : 1f;
+                        o.setScaleX(sc);
+                        o.setScaleY(sc);
+                    }
+                }
             }
         });
         c.setOnLongClickListener(v -> {
@@ -525,7 +695,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         box.setPadding(dp(32), dp(24), dp(32), dp(24));
         box.setGravity(Gravity.CENTER_HORIZONTAL);
         ImageView qr = new ImageView(this);
-        qr.setImageBitmap(Qr.encode(pair.url, 512));
+        qrLater(qr, pair.url);
         qr.setAdjustViewBounds(true);
         qr.setMaxHeight(dp(280));
         TextView code = tv(34, 0xFFE8B84A);
@@ -563,7 +733,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         box.setPadding(dp(32), dp(24), dp(32), dp(24));
         box.setGravity(Gravity.CENTER_HORIZONTAL);
         ImageView qr = new ImageView(this);
-        qr.setImageBitmap(Qr.encode(uri, 512));
+        qrLater(qr, uri);
         qr.setAdjustViewBounds(true);
         qr.setMaxHeight(dp(280));
         TextView line = tv(14, 0xFFB7A99A);
@@ -575,6 +745,21 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         box.addView(line);
         box.addView(warn);
         showOverlay(box);
+    }
+
+    /**
+     * Draws the QR code for {@code text} into {@code qr} once it is ready.
+     * Encoding a 512 px QR takes long enough to freeze the remote's response,
+     * so it runs on the background pool (Ui.bg); the picture is set on the
+     * main thread, but only if the image view is still on screen (the
+     * overlay may have been closed meanwhile).
+     */
+    private void qrLater(ImageView qr, String text) {
+        Ui.bg(this, () -> Qr.encode(text, 512), (Bitmap bmp, Exception err) -> {
+            if (bmp != null && qr.isAttachedToWindow()) {
+                qr.setImageBitmap(bmp);
+            }
+        });
     }
 
     /**
@@ -672,6 +857,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
             LoftApp.of(this).profiles().put(ed);
             hideOverlay();
             paintConns();
+            focusConns();
             paintHome();
         });
         box.addView(save);
@@ -691,6 +877,7 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
                     LoftApp.of(this).profiles().delete(p.id);
                     selected = "";
                     paintConns();
+                    focusConns();
                     paintHome();
                 })
                 .setNegativeButton(R.string.cancel, null)
@@ -733,6 +920,12 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         if (overlay != null) {
             ((ViewGroup) overlay.getParent()).removeView(overlay);
             overlay = null;
+            // The overlay held focus; give it back to the cards when closing
+            // over Connections. (The old once-a-second rebuild used to do this
+            // by accident; now nothing else would.)
+            if (conns != null && conns.getVisibility() == View.VISIBLE) {
+                focusConns();
+            }
         }
         stopPair();
     }
@@ -777,11 +970,15 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         LoftVpnService.requestStart(this);
     }
 
+    /** Largest picked file that is read; the rest is ignored. Config files are far smaller. */
+    private static final int MAX_FILE = 256 * 1024;
+
     /**
      * VPN consent granted: start the session. File picked: read up to
-     * 256 KiB of it and import the profiles inside. The file is read with a
-     * single read() call, so only the first chunk the provider returns is
-     * used; config files are small, so in practice that is the whole file.
+     * 256 KiB of it and import the profiles inside. The file may live on a
+     * slow USB stick or a cloud provider, so it is read on the background
+     * pool (Ui.bg), not the main thread; the import runs back on the main
+     * thread, and only if this screen is still open.
      */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -792,17 +989,36 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
         }
         if (requestCode == REQ_FILE && resultCode == RESULT_OK && data != null && data.getData() != null) {
             Uri u = data.getData();
-            try (InputStream in = getContentResolver().openInputStream(u)) {
-                if (in != null) {
-                    byte[] buf = new byte[256 * 1024];
-                    int n = in.read(buf);
-                    if (n > 0) {
-                        importRaw(new String(buf, 0, n, StandardCharsets.UTF_8));
-                    }
+            ContentResolver cr = getContentResolver();
+            Ui.bg(this, () -> readCapped(cr, u), (String text, Exception e) -> {
+                if (e != null) {
+                    Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                } else if (text != null && !text.isEmpty()) {
+                    importRaw(text);
                 }
-            } catch (Exception e) {
-                Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
+            });
+        }
+    }
+
+    /**
+     * Reads the file at {@code u} as UTF-8, at most MAX_FILE bytes. A single
+     * read() may return only part of a file (providers hand data over in
+     * chunks), so this loops until the end of the file or the cap. Runs on a
+     * background thread.
+     */
+    private static String readCapped(ContentResolver cr, Uri u) throws Exception {
+        try (InputStream in = cr.openInputStream(u)) {
+            if (in == null) {
+                return "";
             }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[16 * 1024];
+            int n;
+            while (out.size() < MAX_FILE
+                    && (n = in.read(buf, 0, Math.min(buf.length, MAX_FILE - out.size()))) >= 0) {
+                out.write(buf, 0, n);
+            }
+            return new String(out.toByteArray(), StandardCharsets.UTF_8);
         }
     }
 
@@ -902,11 +1118,19 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
     }
 
     /**
-     * Looks up the public IP through the tunnel on a background thread, one
-     * lookup at a time; retries every 2.5 s while the session is on. While
-     * a lookup runs Live.extIP shows "…", and "—" after a failure. The
-     * network call must stay off the main thread (Android forbids network
-     * IO there and it would freeze the UI).
+     * Looks up the public IP through the tunnel on the background pool, one
+     * lookup at a time. While a lookup runs Live.extIP shows "…", and "—"
+     * after a failure. The network call must stay off the main thread
+     * (Android forbids network IO there and it would freeze the UI).
+     *
+     * <p>A failure is retried after 2.5 s, 5 s and 10 s (EXT_RETRY_MS), then
+     * not again until the connection state changes (paintHome resets the
+     * count). The waiting retry is cancelled in onPause and onDestroy.
+     *
+     * <p>The background part uses only the application context and writes
+     * only Live, so it never holds this activity; if the activity is gone
+     * when it finishes, the result still lands in Live (the next screen shows
+     * it) and only the retry scheduling is skipped.
      */
     private void fetchExt() {
         if (!Prefs.showExtIP(this) || !Live.on()) {
@@ -916,30 +1140,38 @@ public final class TvActivity extends LoftActivity implements Bus.Listener {
             return;
         }
         Live.extIP = "…";
-        new Thread(() -> {
-            String got = ExtIP.lookup(this, Prefs.extIPURL(this));
-            if (!got.isEmpty()) {
-                Live.extIP = got;
-                extFetch.set(false);
-                Bus.post();
+        Context app = getApplicationContext();
+        String url = Prefs.extIPURL(this);
+        Ui.bg(this, () -> {
+            String got = "";
+            try {
+                got = ExtIP.lookup(app, url);
+            } catch (RuntimeException ignored) {
+                // Treated as a failed lookup below, so "…" never sticks.
+            }
+            Live.extIP = got.isEmpty() ? "—" : got;
+            // One Bus event per lookup, so every screen shows the result.
+            Bus.post();
+            return got;
+        }, (String got, Exception err) -> {
+            extFetch.set(false);
+            if (got != null && !got.isEmpty()) {
+                extFails = 0;
                 return;
             }
-            Live.extIP = "—";
-            extFetch.set(false);
-            Bus.post();
-            // Failed: schedule a retry. View.postDelayed is safe to call from
-            // this background thread and runs the retry on the main thread.
-            View v = home;
-            if (v != null) {
-                v.postDelayed(() -> {
-                    if (Live.on() && Prefs.showExtIP(this)
-                            && ("—".equals(Live.extIP) || Live.extIP.isEmpty() || "…".equals(Live.extIP))) {
-                        Live.extIP = "";
-                        fetchExt();
-                    }
-                }, 2500);
+            // Failed: schedule the next retry, unless we already used them all.
+            if (extFails < EXT_RETRY_MS.length && Live.on() && !isFinishing()) {
+                if (!visible) {
+                    // Hidden now: do not queue network work; onResume retries.
+                    extRetryPaused = true;
+                    return;
+                }
+                long wait = EXT_RETRY_MS[extFails++];
+                Ui.MAIN.removeCallbacks(extRetry);
+                Ui.MAIN.postDelayed(extRetry, wait);
+                extRetryQueued = true;
             }
-        }, "loft-extip").start();
+        });
     }
 
     /** Converts dp to pixels for this screen. */

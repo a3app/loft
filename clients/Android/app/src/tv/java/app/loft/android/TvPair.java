@@ -35,8 +35,13 @@ final class TvPair {
     // Code alphabet without 0/O and 1/I, which look alike on a TV screen.
     private static final char[] ALPHA = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ".toCharArray();
 
-    /** Listening socket on a random free port; null while stopped. */
-    private ServerSocket ss;
+    /**
+     * Listening socket on a random free port; null while stopped. Volatile
+     * because stop() clears it on the main thread while the server thread is
+     * using it; both sides read it once into a local variable, so a null
+     * appearing halfway through cannot cause a NullPointerException.
+     */
+    private volatile ServerSocket ss;
     /** Background thread running loop(); kept only for reference, stop() ends it by closing ss. */
     private Thread th;
     /** Cleared by stop() so the accept loop exits. */
@@ -60,15 +65,17 @@ final class TvPair {
             return false;
         }
         try {
-            ss = new ServerSocket(0);
-            port = ss.getLocalPort();
+            // Work on a local copy; the field is only published for stop().
+            ServerSocket server = new ServerSocket(0);
+            ss = server;
+            port = server.getLocalPort();
             url = PairUrl.build(host, port, code);
             run = true;
             // The accept loop blocks, so it runs on a daemon thread (it never
             // keeps the process alive); results are posted back through a
             // main-thread Handler because onBody touches the UI.
             Handler h = new Handler(Looper.getMainLooper());
-            th = new Thread(() -> loop(onBody, h), "loft-tv-pair");
+            th = new Thread(() -> loop(server, onBody, h), "loft-tv-pair");
             th.setDaemon(true);
             th.start();
             return true;
@@ -82,13 +89,16 @@ final class TvPair {
     /** Closes the listener (which ends the accept loop) and clears the URL. Safe to call twice. */
     void stop() {
         run = false;
+        // Take the socket out of the field first, then close our local copy,
+        // so the field is read only once.
+        ServerSocket s = ss;
+        ss = null;
         try {
-            if (ss != null) {
-                ss.close();
+            if (s != null) {
+                s.close();
             }
         } catch (Exception ignored) {
         }
-        ss = null;
         th = null;
         url = "";
         port = 0;
@@ -97,11 +107,13 @@ final class TvPair {
     /**
      * Serves one connection at a time until stop() closes the socket. Closing
      * the socket makes accept() throw; the error is only logged while run is
-     * still true, so a normal stop leaves no noise in the journal.
+     * still true, so a normal stop leaves no noise in the journal. The thread
+     * gets its own socket ({@code server}) instead of reading the field, which
+     * stop() may set to null at any moment from the main thread.
      */
-    private void loop(Consumer<String> onBody, Handler h) {
-        while (run && ss != null && !ss.isClosed()) {
-            try (Socket s = ss.accept()) {
+    private void loop(ServerSocket server, Consumer<String> onBody, Handler h) {
+        while (run && !server.isClosed()) {
+            try (Socket s = server.accept()) {
                 // A silent or slow client must not block the single serving thread forever.
                 s.setSoTimeout(4000);
                 handle(s, onBody, h);
