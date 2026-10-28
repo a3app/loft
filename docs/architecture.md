@@ -27,6 +27,7 @@ internal/
   netconf/            network.conf, leases, ACL, VLAN, DNS, session timers
   transport/          fronts, decoy, mask, relay trunk, overlay, p2p, DNS stub, roster fetch
   config/             client.yaml, server.yaml
+  ifcfg/              Linux TUN address, link and routes over netlink (no `ip` program); LOFT_NETCFG=ip runs `ip` instead
   cdn/                edge profiles (Yandex, Cloudflare); not caps. Operator: docs/yandex-cdn_ru.md
   version/            program name, semver, protocol range
 server/
@@ -193,7 +194,7 @@ Lists are fetched when Status `lists_serial` or `lists_hash` is newer than the c
 | listener | default | notes |
 |----------|---------|-------|
 | SOCKS5 | `127.0.0.1:1080` (GUI / `client.yaml`); `127.0.0.1:18080` (`loft` / `loft-front` when the port is omitted) | RFC 1928. CONNECT and UDP ASSOCIATE when `dgram` is on. |
-| TUN | off; `tun: auto` creates utun | gVisor user stack. UDP via CmdDgram. ICMP echo: self locally; overlay and internet dests as Dgram `:1` (node emits internet echo). Darwin NATs dummy `169.254.8.1` ↔ overlay IP on ICMP. |
+| TUN | off; `tun: auto` creates utun | gVisor user stack. UDP via CmdDgram. ICMP echo: self locally; overlay and internet dests as Dgram `:1` (node emits internet echo). Darwin NATs dummy `169.254.8.1` ↔ overlay IP on ICMP. Linux sets the address and routes over netlink, so no `ip` program is needed (`FROM scratch` images); `LOFT_NETCFG=ip` switches to the `ip` program (iproute2 or busybox). |
 | kill-switch | `listen.kill_switch` | when the last TUN dies, native default stays down until the user restores it |
 
 TUN excludes outbound hosts of the loft session (CDN, node) so the tunnel does not swallow its own path.

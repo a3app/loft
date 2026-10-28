@@ -27,6 +27,7 @@ internal/
   netconf/            network.conf, 租约, ACL, VLAN, DNS, 会话定时器
   transport/          前置, 诱饵, 伪装, 中继干线, 覆盖网, p2p, DNS 桩, 拉名册
   config/             client.yaml, server.yaml
+  ifcfg/              Linux 上 TUN 的地址、链路和路由走 netlink（不需要 `ip` 程序）；LOFT_NETCFG=ip 改用 `ip`
   cdn/                边缘配置（Yandex, Cloudflare）；不是 caps。运营方：docs/yandex-cdn_zh.md
   version/            程序名, semver, 协议范围
 server/
@@ -193,7 +194,7 @@ Status `lists_serial` 或 `lists_hash` 比缓存新时才拉列表。签名和�
 | 监听 | 默认 | 说明 |
 |----------|---------|-------|
 | SOCKS5 | `127.0.0.1:1080`（GUI / `client.yaml`）；`127.0.0.1:18080`（`loft` / `loft-front` 没写端口时） | RFC 1928。`dgram` 开着就有 CONNECT 和 UDP ASSOCIATE。 |
-| TUN | 关；`tun: auto` 建 utun | gVisor 用户态栈。UDP 走 CmdDgram。ICMP echo：自己本地回；覆盖网和互联网目的地走 Dgram `:1`（节点发互联网 echo）。Darwin 在 ICMP 上 NAT 假地址 `169.254.8.1` ↔ 覆盖网 IP。 |
+| TUN | 关；`tun: auto` 建 utun | gVisor 用户态栈。UDP 走 CmdDgram。ICMP echo：自己本地回；覆盖网和互联网目的地走 Dgram `:1`（节点发互联网 echo）。Darwin 在 ICMP 上 NAT 假地址 `169.254.8.1` ↔ 覆盖网 IP。Linux 用 netlink 设置地址和路由，不需要 `ip` 程序（`FROM scratch` 镜像）；`LOFT_NETCFG=ip` 改用 `ip` 程序（iproute2 或 busybox）。 |
 | kill-switch | `listen.kill_switch` | 最后一条 TUN 死了，系统默认路由还是撤着，直到用户自己恢复 |
 
 TUN 排除 loft 会话的出站主机（CDN、节点），免得隧道把自己的路吞了。

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/a3app/loft/internal/ifcfg"
 	"github.com/a3app/loft/internal/transport"
 
 	"github.com/songgao/water"
@@ -385,7 +386,11 @@ func addHostRoute(name, cidr string) error {
 	case "darwin":
 		return run("route", "-n", "add", "-inet", cidr, "-interface", name)
 	case "linux":
-		return run("ip", "route", "add", cidr, "dev", name)
+		_, n, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return err
+		}
+		return ifcfg.Default().RouteAdd(ifcfg.Route{Dst: n, Dev: name})
 	default:
 		return fmt.Errorf("tun: os %s", runtime.GOOS)
 	}
@@ -397,7 +402,9 @@ func delHostRoute(name, cidr string) {
 	case "darwin":
 		_ = run("route", "-n", "delete", "-inet", cidr)
 	case "linux":
-		_ = run("ip", "route", "del", cidr, "dev", name)
+		if _, n, err := net.ParseCIDR(cidr); err == nil {
+			_ = ifcfg.Default().RouteDel(ifcfg.Route{Dst: n, Dev: name})
+		}
 	}
 }
 
@@ -417,10 +424,14 @@ func configureTUN(name string, ip net.IP, n *net.IPNet) error {
 		_ = run("route", "-n", "add", "-inet", netn, "-interface", name)
 		return nil
 	case "linux":
-		if err := run("ip", "addr", "add", ip.String()+"/"+strconv.Itoa(ones), "dev", name); err != nil {
+		// ifcfg talks to the kernel over netlink, so this works even where
+		// the "ip" program is missing (the MikroTik container image is
+		// built FROM scratch). LOFT_NETCFG=ip switches back to "ip".
+		b := ifcfg.Default()
+		if err := b.AddrAdd(name, &net.IPNet{IP: ip, Mask: n.Mask}); err != nil {
 			return err
 		}
-		return run("ip", "link", "set", "dev", name, "up", "mtu", "1280")
+		return b.LinkUp(name, 1280)
 	default:
 		return fmt.Errorf("tun: os %s", runtime.GOOS)
 	}
@@ -452,12 +463,12 @@ func readdressTUN(name string, old, nip net.IP, mask net.IPMask) error {
 		//     together with the primary.
 		// So: let this interface promote a secondary to primary instead of
 		// deleting it, add the new address, then delete the old one.
-		_ = run("sysctl", "-qw", "net.ipv4.conf."+name+".promote_secondaries=1")
-		suffix := "/" + strconv.Itoa(ones)
-		if err := run("ip", "addr", "add", nip.String()+suffix, "dev", name); err != nil {
+		_ = ifcfg.PromoteSecondaries(name)
+		b := ifcfg.Default()
+		if err := b.AddrAdd(name, &net.IPNet{IP: nip, Mask: mask}); err != nil {
 			return err
 		}
-		return run("ip", "addr", "del", old.String()+suffix, "dev", name)
+		return b.AddrDel(name, &net.IPNet{IP: old, Mask: mask})
 	default:
 		return fmt.Errorf("tun: os %s", runtime.GOOS)
 	}

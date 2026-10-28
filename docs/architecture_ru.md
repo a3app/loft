@@ -27,6 +27,7 @@ internal/
   netconf/            network.conf, аренды, ACL, VLAN, DNS, таймеры сессии
   transport/          фронты, decoy, mask, транк relay, оверлей, p2p, заглушка DNS, запрос roster
   config/             client.yaml, server.yaml
+  ifcfg/              адрес, линк и маршруты TUN на Linux через netlink (без программы `ip`); LOFT_NETCFG=ip — через `ip`
   cdn/                профили края (Yandex, Cloudflare); не возможности протокола. Оператор: docs/yandex-cdn_ru.md
   version/            имя программы, semver, диапазон протокола
 server/
@@ -193,7 +194,7 @@ SOCKS сопоставляет hostname из запроса, TUN — IP назн
 | слушатель | по умолчанию | заметки |
 |-----------|--------------|---------|
 | SOCKS5 | `127.0.0.1:1080` (GUI / `client.yaml`); `127.0.0.1:18080` (`loft` / `loft-front`, если порт не задан) | RFC 1928. CONNECT и UDP ASSOCIATE, когда включён `dgram`. |
-| TUN | выкл; `tun: auto` создаёт utun | стек gVisor в пространстве пользователя. UDP через CmdDgram. ICMP echo: на себя — локально; в оверлей и интернет — как Dgram `:1` (нода отправляет настоящий ICMP echo). Darwin для ICMP транслирует фиктивный `169.254.8.1` ↔ IP оверлея. |
+| TUN | выкл; `tun: auto` создаёт utun | стек gVisor в пространстве пользователя. UDP через CmdDgram. ICMP echo: на себя — локально; в оверлей и интернет — как Dgram `:1` (нода отправляет настоящий ICMP echo). Darwin для ICMP транслирует фиктивный `169.254.8.1` ↔ IP оверлея. Linux ставит адрес и маршруты через netlink, программа `ip` не нужна (образы `FROM scratch`); `LOFT_NETCFG=ip` переключает на программу `ip` (iproute2 или busybox). |
 | kill-switch | `listen.kill_switch` | когда последний TUN умирает, системный маршрут по умолчанию остаётся снятым, пока пользователь его не вернёт |
 
 TUN исключает исходящие хосты сессии loft (CDN, нода), чтобы туннель не проглотил собственный путь.
