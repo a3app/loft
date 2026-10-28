@@ -383,6 +383,21 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 	if _, err := c.CCIDs(); err != nil {
 		return nil, err
 	}
+	// At most one standby may auto-promote. Two auto-promote standbys share
+	// the controller seed, so on a controller outage both promote at the same
+	// epoch with the same key; takeover fencing is "newer epoch wins" and
+	// cannot break an equal-epoch tie, leaving two live controllers of the
+	// same generation (split brain). Make the operator pick one; the rest are
+	// manual-takeover standbys (loft-node -promote).
+	auto := 0
+	for _, e := range c.Relays {
+		if e.AutoPromote {
+			auto++
+		}
+	}
+	if auto > 1 {
+		return nil, fmt.Errorf("auto_promote is set on %d relays; at most one may auto-promote, or two standbys would split-brain on a controller outage", auto)
+	}
 	return c, nil
 }
 

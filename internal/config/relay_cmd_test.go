@@ -57,3 +57,20 @@ func TestListsFile(t *testing.T) {
 		t.Fatalf("round-trip %v %v\n%s", got2, err, round)
 	}
 }
+
+// TestAutoPromoteAtMostOne rejects two auto-promote standbys (they would
+// split-brain on a controller outage) and accepts a single one.
+func TestAutoPromoteAtMostOne(t *testing.T) {
+	two := "role controller\nlisten :443\n" +
+		"relay a url https://a.example replica auto_promote\n" +
+		"relay b url https://b.example replica auto_promote\n"
+	if _, err := ParseCommands(two); err == nil {
+		t.Fatal("two auto_promote standbys parsed; want an error")
+	}
+	one := "role controller\nlisten :443\n" +
+		"relay a url https://a.example replica auto_promote\n" +
+		"relay b url https://b.example replica\n"
+	if _, err := ParseCommands(one); err != nil {
+		t.Fatalf("one auto_promote standby: %v", err)
+	}
+}
