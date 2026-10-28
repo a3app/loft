@@ -8,6 +8,35 @@ LOFT_ETC=/etc/loft
 LOFT_TLS=/etc/loft/tls
 SHARE=/usr/share/loft-node
 
+# ping_range_with GID prints a net.ipv4.ping_group_range that also covers
+# group GID, or nothing when the current range already does.
+#
+# Why: members' "ping 8.8.8.8" leaves the node as a real ICMP echo. The node
+# runs as user loft without raw-socket rights, so it uses the kernel's
+# "ping socket", which only groups inside ping_group_range may open. Many
+# servers ship it switched off ("1 0": low above high = nobody). The range
+# is one interval for the whole host, so we never narrow what is there:
+#   - already covered: leave it;
+#   - switched off: allow only our group ("GID GID");
+#   - another interval: stretch it just enough to reach GID.
+ping_range_with() {
+	cur=$(cat /proc/sys/net/ipv4/ping_group_range 2>/dev/null) || return 0
+	# shellcheck disable=SC2086 # split "low<TAB>high" into two words
+	set -- "$1" $cur
+	[ $# -eq 3 ] || return 0
+	gid=$1 lo=$2 hi=$3
+	if [ "$lo" -gt "$hi" ]; then
+		echo "$gid $gid"
+		return 0
+	fi
+	if [ "$gid" -ge "$lo" ] && [ "$gid" -le "$hi" ]; then
+		return 0
+	fi
+	[ "$gid" -lt "$lo" ] && lo=$gid
+	[ "$gid" -gt "$hi" ] && hi=$gid
+	echo "$lo $hi"
+}
+
 case "$1" in
 configure)
 	if ! id "$LOFT_USER" >/dev/null 2>&1; then
@@ -56,6 +85,21 @@ configure)
 
 	if command -v sysctl >/dev/null 2>&1; then
 		sysctl -p /etc/sysctl.d/99-loft.conf >/dev/null 2>&1 || true
+	fi
+
+	# Internet ping for members (see ping_range_with above). Own file, not a
+	# dpkg conffile: it depends on this host's gid and current range.
+	gid=$(getent group "$LOFT_USER" 2>/dev/null | cut -d: -f3)
+	range=""
+	[ -n "$gid" ] && range=$(ping_range_with "$gid")
+	if [ -n "$range" ]; then
+		printf '%s\n%s\nnet.ipv4.ping_group_range = %s\n' \
+			"# loft-node runs as group $LOFT_USER (gid $gid) and sends members' ICMP echo" \
+			"# through the kernel ping socket; this range lets that group open it." \
+			"$range" > /etc/sysctl.d/99-loft-ping.conf
+		if command -v sysctl >/dev/null 2>&1; then
+			sysctl -p /etc/sysctl.d/99-loft-ping.conf >/dev/null 2>&1 || true
+		fi
 	fi
 	if command -v systemctl >/dev/null 2>&1; then
 		systemctl daemon-reload || true

@@ -34,6 +34,7 @@ LOFT_ENV="/etc/loft/loft.env"
 LOFT_YAML="/etc/loft/node.conf"
 LOFT_UNIT="/etc/systemd/system/loft-node.service"
 SYSCTL_D="/etc/sysctl.d/99-loft.conf"
+PING_D="/etc/sysctl.d/99-loft-ping.conf"
 LOG="/var/log/loft-install.log"
 
 DRY=0; UNATTENDED=0; UNINSTALL=0; PURGE=0
@@ -167,6 +168,35 @@ confirm_code() {
 }
 
 # write_file path mode — body on stdin. Skipped in --dry-run.
+# ping_range_with GID prints a net.ipv4.ping_group_range that also covers
+# group GID, or nothing when the current range already does.
+#
+# Why: members' "ping 8.8.8.8" leaves the node as a real ICMP echo. The node
+# runs as user loft without raw-socket rights, so it uses the kernel's
+# "ping socket", which only groups inside ping_group_range may open. Many
+# servers ship it switched off ("1 0": low above high = nobody). The range
+# is one interval for the whole host, so we never narrow what is there:
+#   - already covered: leave it;
+#   - switched off: allow only our group ("GID GID");
+#   - another interval: stretch it just enough to reach GID.
+ping_range_with() {
+	cur=$(cat /proc/sys/net/ipv4/ping_group_range 2>/dev/null) || return 0
+	# shellcheck disable=SC2086 # split "low<TAB>high" into two words
+	set -- "$1" $cur
+	[ $# -eq 3 ] || return 0
+	gid=$1 lo=$2 hi=$3
+	if [ "$lo" -gt "$hi" ]; then
+		echo "$gid $gid"
+		return 0
+	fi
+	if [ "$gid" -ge "$lo" ] && [ "$gid" -le "$hi" ]; then
+		return 0
+	fi
+	[ "$gid" -lt "$lo" ] && lo=$gid
+	[ "$gid" -gt "$hi" ] && hi=$gid
+	echo "$lo $hi"
+}
+
 write_file() {
 	path=$1; mode=$2
 	if [ "$DRY" = 1 ]; then
@@ -306,7 +336,7 @@ if [ "$UNINSTALL" = 1 ]; then
 	fi
 	try rm -f "$LOFT_UNIT"
 	try rm -f "$LOFT_BIN"
-	try rm -f "$SYSCTL_D"
+	try rm -f "$SYSCTL_D" "$PING_D"
 	if have systemctl; then
 		try systemctl daemon-reload
 	fi
@@ -592,6 +622,24 @@ EOF
 		try sysctl -p "$SYSCTL_D" || try sysctl --system
 	fi
 	ok "$SYSCTL_D"
+	# Internet ping for members (see ping_range_with). A separate file, so
+	# that removing loft takes exactly this line away and nothing else.
+	gid=$(getent group "$LOFT_USER" 2>/dev/null | cut -d: -f3)
+	range=""
+	[ -n "$gid" ] && range=$(ping_range_with "$gid")
+	if [ -n "$range" ]; then
+		write_file "$PING_D" 0644 <<EOF
+# loft-node runs as group $LOFT_USER (gid $gid) and sends members' ICMP echo
+# through the kernel ping socket; this range lets that group open it.
+net.ipv4.ping_group_range = $range
+EOF
+		if [ "$DRY" = 0 ]; then
+			try sysctl -p "$PING_D"
+		fi
+		ok "$PING_D ($range)"
+	else
+		ok "ping_group_range already covers group $LOFT_USER"
+	fi
 fi
 
 # ── 12. systemd ──────────────────────────────────────────────────────────

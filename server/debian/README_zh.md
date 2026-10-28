@@ -22,7 +22,8 @@
 | `/var/lib/loft/members.keys` | 明文成员密钥（mode 0600），运营方签发 |
 | `/var/lib/loft/controller.seed` | Ed25519 seed，第一次启动时写入 |
 | `/etc/systemd/system/loft-node.service` | unit |
-| `/etc/sysctl.d/99-loft.conf` | QUIC 用的 UDP 缓冲；internet ICMP 用的 ping_group_range |
+| `/etc/sysctl.d/99-loft.conf` | QUIC 用的 UDP 缓冲 |
+| `/etc/sysctl.d/99-loft-ping.conf` | 仅在需要时：把 `ping_group_range` 扩到刚好包含 loft 组，成员才能经节点 ping 互联网。已有范围不会被缩小 |
 
 进程以用户 `loft` 跑。TCP 和 UDP 443 靠 `CAP_NET_BIND_SERVICE` 绑定。令牌从不出现在命令行。
 

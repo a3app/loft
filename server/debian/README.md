@@ -22,7 +22,8 @@ The Debian layout of the node is collected here: a POSIX installer, a systemd un
 | `/var/lib/loft/members.keys` | plaintext member keys (mode 0600), issued by the operator |
 | `/var/lib/loft/controller.seed` | Ed25519 seed, written on first start |
 | `/etc/systemd/system/loft-node.service` | unit |
-| `/etc/sysctl.d/99-loft.conf` | UDP buffers for QUIC; ping_group_range for internet ICMP |
+| `/etc/sysctl.d/99-loft.conf` | UDP buffers for QUIC |
+| `/etc/sysctl.d/99-loft-ping.conf` | Only when needed: `ping_group_range` widened just enough to cover the loft group, so members can ping the internet through the node. An existing range is never narrowed |
 
 The process runs as user `loft`. It binds TCP and UDP 443 with `CAP_NET_BIND_SERVICE`. The token is never on the command line.
 

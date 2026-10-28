@@ -22,7 +22,8 @@
 | `/var/lib/loft/members.keys` | ключи участников открытым текстом (mode 0600), их выдаёт оператор |
 | `/var/lib/loft/controller.seed` | Ed25519 seed, пишется при первом старте |
 | `/etc/systemd/system/loft-node.service` | unit |
-| `/etc/sysctl.d/99-loft.conf` | UDP-буферы для QUIC; ping_group_range для ICMP в интернет |
+| `/etc/sysctl.d/99-loft.conf` | UDP-буферы для QUIC |
+| `/etc/sysctl.d/99-loft-ping.conf` | Только если нужно: `ping_group_range`, расширенный ровно до группы loft, чтобы участники могли пинговать интернет через ноду. Уже заданный диапазон не сужается |
 
 Процесс работает от пользователя `loft`. TCP и UDP 443 он занимает благодаря `CAP_NET_BIND_SERVICE`. Токен никогда не передаётся в командной строке.
 

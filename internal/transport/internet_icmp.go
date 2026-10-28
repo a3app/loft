@@ -10,6 +10,8 @@ package transport
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -100,32 +102,96 @@ func encapsulateIPv4(src, dst net.IP, proto byte, payload []byte) []byte {
 	return pkt
 }
 
-// pingInternetEcho writes echo on ip4:icmp (or UDP ICMP) and reads one reply.
-// A raw ip4:icmp socket needs root; the udp4 "ping socket" is the
-// unprivileged fallback on Linux.
+// pingInternetEcho sends one echo to dst and waits for its reply.
+//
+// Two kinds of socket can send an ICMP echo without being a full raw-packet
+// program, and the order matters:
+//
+//  1. The Linux "ping socket" (udp4 here, SOCK_DGRAM + IPPROTO_ICMP). Any
+//     user may open it when their group is inside
+//     net.ipv4.ping_group_range; the installer puts the loft group there.
+//     The kernel hands this socket only the replies to its own echoes, so
+//     concurrent pings from many members cannot mix up.
+//  2. A raw ip4:icmp socket. It needs root or CAP_NET_RAW, and it receives
+//     EVERY ICMP packet that reaches the host: other members' replies,
+//     pings from scanners, "unreachable" errors. So it is only the fallback,
+//     and its replies are checked one by one (see readEchoReply).
+//
+// If neither can be opened, the echo is dropped; the node says so once at
+// start (InternetPingReady), not on every ping.
 func pingInternetEcho(dst net.IP, echo []byte) ([]byte, net.IP, error) {
-	c, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	raw := false
+	c, err := icmp.ListenPacket("udp4", "0.0.0.0")
 	if err != nil {
-		c, err = icmp.ListenPacket("udp4", "0.0.0.0")
+		c, err = icmp.ListenPacket("ip4:icmp", "0.0.0.0")
 		if err != nil {
 			return nil, nil, err
 		}
+		raw = true
 	}
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(internetICMPWait))
 	if err := writeICMP(c, echo, dst); err != nil {
 		return nil, nil, err
 	}
+	return readEchoReply(c, dst, echo, raw)
+}
+
+// readEchoReply reads from c until the reply to echo arrives from dst, or
+// the socket deadline passes. Everything else is skipped:
+//   - packets from another address (someone else's ping, a scanner);
+//   - ICMP that is not an echo reply (errors, echo requests to the host);
+//   - replies with another sequence number (an older echo of this member);
+//   - on a raw socket also replies with another identifier: they belong to
+//     another member's ping that went out at the same time. (A ping socket
+//     gets its identifier rewritten by the kernel, and the kernel already
+//     filtered by it, so there only the sequence number is compared.)
+func readEchoReply(c net.PacketConn, dst net.IP, echo []byte, raw bool) ([]byte, net.IP, error) {
+	if len(echo) < 8 {
+		return nil, nil, errShortEcho
+	}
 	buf := make([]byte, 1500)
-	n, peer, err := c.ReadFrom(buf)
-	if err != nil {
-		return nil, nil, err
+	for {
+		n, peer, err := c.ReadFrom(buf)
+		if err != nil {
+			return nil, nil, err // the deadline ends the wait
+		}
+		src := addrIP(peer)
+		if src == nil || !src.Equal(dst) {
+			continue
+		}
+		body := stripIPv4(buf[:n])
+		if len(body) < 8 || body[0] != icmpReply {
+			continue
+		}
+		if body[6] != echo[6] || body[7] != echo[7] {
+			continue // sequence number
+		}
+		if raw && (body[4] != echo[4] || body[5] != echo[5]) {
+			continue // identifier
+		}
+		return append([]byte(nil), buf[:n]...), src, nil
 	}
-	src := addrIP(peer)
-	if src == nil {
-		src = dst
+}
+
+// errShortEcho: an echo shorter than its 8-byte ICMP header.
+var errShortEcho = errors.New("icmp: echo too short")
+
+// InternetPingReady reports why this process cannot send ICMP echoes to the
+// internet, or nil. loft-node logs it at start: without it "ping 8.8.8.8"
+// through the node just times out and nobody can tell why.
+func InternetPingReady() error {
+	c, err := icmp.ListenPacket("udp4", "0.0.0.0")
+	if err == nil {
+		c.Close()
+		return nil
 	}
-	return buf[:n], src, nil
+	c, rawErr := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	if rawErr == nil {
+		c.Close()
+		return nil
+	}
+	return fmt.Errorf("ping socket: %v; raw socket: %v", err, rawErr)
 }
 
 // restoreICMPIdent puts the client's original identifier and sequence

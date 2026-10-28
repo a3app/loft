@@ -4,6 +4,8 @@ set -e
 
 case "$1" in
 remove)
+	# Written by postinst for this host; the live value stays until reboot.
+	rm -f /etc/sysctl.d/99-loft-ping.conf
 	if command -v systemctl >/dev/null 2>&1; then
 		systemctl daemon-reload >/dev/null 2>&1 || true
 	fi

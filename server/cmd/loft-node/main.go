@@ -232,6 +232,12 @@ func main() {
 		}
 		log.Printf("cc allow: %s", strings.Join(names, " "))
 	}
+	// Members' "ping 8.8.8.8" leaves as a real echo from this node. If the
+	// process may open neither a ping socket nor a raw one, every such ping
+	// is dropped silently; say it once here so the cause is in the log.
+	if err := transport.InternetPingReady(); err != nil {
+		log.Printf("icmp: ping to the internet is off (%v): add the loft group to net.ipv4.ping_group_range (the installer does), or give the service CAP_NET_RAW", err)
+	}
 	if len(innerIDs) > 0 {
 		names := make([]string, len(innerIDs))
 		for i, id := range innerIDs {

@@ -188,3 +188,89 @@ func binaryPutZeroChecksum(icmp []byte) {
 	icmp[2] = byte(s >> 8)
 	icmp[3] = byte(s)
 }
+
+// fakeICMPConn plays back a fixed list of received packets, then returns a
+// timeout, like a socket whose deadline passed. Only ReadFrom is used.
+type fakeICMPConn struct {
+	net.PacketConn
+	in []fakeICMPPacket
+}
+
+type fakeICMPPacket struct {
+	from net.IP
+	data []byte
+}
+
+type fakeTimeout struct{}
+
+func (fakeTimeout) Error() string   { return "i/o timeout" }
+func (fakeTimeout) Timeout() bool   { return true }
+func (fakeTimeout) Temporary() bool { return true }
+
+func (f *fakeICMPConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	if len(f.in) == 0 {
+		return 0, nil, fakeTimeout{}
+	}
+	p := f.in[0]
+	f.in = f.in[1:]
+	return copy(b, p.data), &net.IPAddr{IP: p.from}, nil
+}
+
+// icmpMsg builds an 8-byte ICMP header: type, code 0, id, seq.
+func icmpMsg(typ byte, id, seq uint16) []byte {
+	b := make([]byte, 8)
+	b[0] = typ
+	binary.BigEndian.PutUint16(b[4:6], id)
+	binary.BigEndian.PutUint16(b[6:8], seq)
+	return b
+}
+
+// TestReadEchoReplySkipsStrangers: a raw socket sees every ICMP packet of
+// the host. Only the reply from dst with our id and seq may come back;
+// everything before it must be skipped, not returned.
+func TestReadEchoReplySkipsStrangers(t *testing.T) {
+	dst := net.IPv4(1, 1, 1, 1).To4()
+	echo := icmpMsg(icmpEcho, 0x1234, 7)
+	want := icmpMsg(icmpReply, 0x1234, 7)
+	c := &fakeICMPConn{in: []fakeICMPPacket{
+		{net.IPv4(8, 8, 8, 8), icmpMsg(icmpReply, 0x1234, 7)}, // another address
+		{dst, icmpMsg(icmpEcho, 0x9999, 1)},                   // a ping TO us (scanner)
+		{dst, icmpMsg(icmpReply, 0x1234, 6)},                  // older seq
+		{dst, icmpMsg(icmpReply, 0x4321, 7)},                  // another member's id
+		{dst, want},
+	}}
+	got, src, err := readEchoReply(c, dst, echo, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !src.Equal(dst) || string(got) != string(want) {
+		t.Fatalf("got % x from %v, want % x", got, src, want)
+	}
+}
+
+// TestReadEchoReplyPingSocketIgnoresID: the kernel rewrites the identifier
+// on a ping socket, so there only the sequence number may be compared.
+func TestReadEchoReplyPingSocketIgnoresID(t *testing.T) {
+	dst := net.IPv4(1, 1, 1, 1).To4()
+	echo := icmpMsg(icmpEcho, 0x1234, 7)
+	c := &fakeICMPConn{in: []fakeICMPPacket{{dst, icmpMsg(icmpReply, 0x0042, 7)}}}
+	if _, _, err := readEchoReply(c, dst, echo, false); err != nil {
+		t.Fatalf("ping socket reply with kernel id refused: %v", err)
+	}
+	c = &fakeICMPConn{in: []fakeICMPPacket{{dst, icmpMsg(icmpReply, 0x0042, 7)}}}
+	if _, _, err := readEchoReply(c, dst, echo, true); err == nil {
+		t.Fatal("raw socket accepted a reply with another id")
+	}
+}
+
+// TestReadEchoReplyStripsIPv4Header: a raw socket may hand over the reply
+// with its IPv4 header; the checks must look past it.
+func TestReadEchoReplyStripsIPv4Header(t *testing.T) {
+	dst := net.IPv4(1, 1, 1, 1).To4()
+	echo := icmpMsg(icmpEcho, 1, 1)
+	pkt := encapsulateIPv4(dst, net.IPv4(10, 0, 0, 2), ipProtoICMP, icmpMsg(icmpReply, 1, 1))
+	c := &fakeICMPConn{in: []fakeICMPPacket{{dst, pkt}}}
+	if _, _, err := readEchoReply(c, dst, echo, true); err != nil {
+		t.Fatal(err)
+	}
+}
