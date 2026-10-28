@@ -91,12 +91,19 @@
         android:layout_marginTop="4dp"
         android:layout_marginRight="16dp"
         android:background="@drawable/bg_field"
-        android:hint="@string/paste_hint"
-        android:inputType="textUri|textMultiLine"
-        android:minLines="2"
+        android:fontFamily="monospace"
+        android:gravity="top|start"
+        android:hint="@string/paste_ph"
+        android:importantForAutofill="no"
+        android:inputType="textMultiLine|textNoSuggestions"
+        android:minHeight="64dp"
+        android:minLines="3"
         android:padding="12dp"
+        android:scrollHorizontally="false"
+        android:singleLine="false"
         android:textColor="@color/snow"
-        android:textColorHint="@color/mute" />
+        android:textColorHint="@color/mute"
+        android:textSize="12sp" />
 
     <LinearLayout
         android:id="@+id/scan_actions"

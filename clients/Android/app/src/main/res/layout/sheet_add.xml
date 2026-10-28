@@ -2,41 +2,78 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/ink2"
+    android:background="@color/wood"
     android:orientation="vertical"
-    android:paddingLeft="8dp"
-    android:paddingTop="12dp"
-    android:paddingRight="8dp"
-    android:paddingBottom="24dp">
+    android:paddingBottom="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:paddingLeft="16dp"
+        android:paddingTop="16dp"
+        android:paddingRight="16dp"
+        android:paddingBottom="6dp"
+        android:text="@string/new_conn"
+        android:textColor="@color/mute"
+        android:textSize="13sp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/line" />
 
     <Button
         android:id="@+id/add_scan"
-        style="@style/Widget.Loft.Ghost"
+        style="@style/Widget.Loft.SheetRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/scan" />
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/line" />
+
     <Button
         android:id="@+id/add_paste"
-        style="@style/Widget.Loft.Ghost"
+        style="@style/Widget.Loft.SheetRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
         android:text="@string/paste" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/line" />
 
     <Button
         android:id="@+id/add_file"
-        style="@style/Widget.Loft.Ghost"
+        style="@style/Widget.Loft.SheetRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
         android:text="@string/from_file" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/line" />
 
     <Button
         android:id="@+id/add_manual"
+        style="@style/Widget.Loft.SheetRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/manual" />
+
+    <Button
+        android:id="@+id/add_cancel"
         style="@style/Widget.Loft.Ghost"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:text="@string/manual" />
+        android:layout_marginLeft="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginRight="8dp"
+        android:backgroundTint="@color/plate"
+        android:text="@string/cancel" />
 </LinearLayout>

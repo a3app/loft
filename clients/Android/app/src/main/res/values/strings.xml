@@ -116,6 +116,7 @@
     <string name="more">More options</string>
     <string name="confirm_delete">Delete this connection?</string>
     <string name="paste_hint">loft:// or YAML</string>
+    <string name="paste_ph">loft://…, sstp://…, vless://…</string>
     <string name="scan_or_paste">Scan a QR code or paste a link</string>
     <string name="enter_key">Enter the key and address by hand</string>
     <string name="ok_system">Then tap OK on the system sheet.</string>

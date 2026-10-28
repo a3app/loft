@@ -89,6 +89,17 @@ public final class ScanActivity extends LoftActivity {
             i.setType("image/*");
             startActivityForResult(i, REQ_GAL);
         });
+        if (getIntent().getBooleanExtra("paste", false)) {
+            EditText box = findViewById(R.id.paste);
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm != null && cm.getPrimaryClip() != null && cm.getPrimaryClip().getItemCount() > 0) {
+                CharSequence t = cm.getPrimaryClip().getItemAt(0).coerceToText(this);
+                if (t != null && t.length() > 0) {
+                    box.setText(t);
+                }
+            }
+            box.requestFocus();
+        }
         if (getIntent().getBooleanExtra("file", false)) {
             findViewById(R.id.btn_file).performClick();
         } else if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {

@@ -483,7 +483,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         startActivity(Intent.createChooser(i, getString(R.string.export)));
     }
 
-    /** "Add connection" sheet: scan a QR, paste, open a file, or enter by hand. */
+    /** Add-connection sheet: scan, paste into the scanner field, file, or the editor. */
     private void addSheet() {
         BottomSheetDialog d = Sheets.of(this, R.layout.sheet_add);
         d.findViewById(R.id.add_scan).setOnClickListener(v -> {
@@ -492,7 +492,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         });
         d.findViewById(R.id.add_paste).setOnClickListener(v -> {
             d.dismiss();
-            paste();
+            startActivity(new Intent(this, ScanActivity.class).putExtra("paste", true));
         });
         d.findViewById(R.id.add_file).setOnClickListener(v -> {
             d.dismiss();
@@ -502,6 +502,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
             d.dismiss();
             startActivity(new Intent(this, EditActivity.class));
         });
+        d.findViewById(R.id.add_cancel).setOnClickListener(v -> d.dismiss());
         d.show();
     }
 

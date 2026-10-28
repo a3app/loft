@@ -112,6 +112,7 @@
     <string name="more">更多</string>
     <string name="confirm_delete">删除这条连接？</string>
     <string name="paste_hint">loft:// 或 YAML</string>
+    <string name="paste_ph">loft://…、sstp://…、vless://…</string>
     <string name="scan_or_paste">扫二维码或粘贴链接</string>
     <string name="enter_key">手动输入密钥和地址</string>
     <string name="ok_system">然后在系统对话框点确定。</string>

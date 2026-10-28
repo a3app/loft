@@ -112,6 +112,7 @@
     <string name="more">Ещё</string>
     <string name="confirm_delete">Удалить это подключение?</string>
     <string name="paste_hint">loft:// или YAML</string>
+    <string name="paste_ph">loft://…, sstp://…, vless://…</string>
     <string name="scan_or_paste">Сканируйте QR или вставьте ссылку</string>
     <string name="enter_key">Ввести ключ и адрес вручную</string>
     <string name="ok_system">Дальше нажмите OK в системном окне.</string>
