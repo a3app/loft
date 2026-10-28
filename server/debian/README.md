@@ -2,7 +2,7 @@
 
 **English** · [Русский](README_ru.md) · [中文](README_zh.md)
 
-Software 1.0.37. Protocol 1.0. Protocol spec: [docs/protocol.md](../../docs/protocol.md). Operation: [docs/guide.md](../../docs/guide.md).
+Software 1.0.38. Protocol 1.0. Protocol spec: [docs/protocol.md](../../docs/protocol.md). Operation: [docs/guide.md](../../docs/guide.md).
 
 The Debian layout of the node is collected here: a POSIX installer, a systemd unit, sysctl, command config, and a `.deb`.
 
