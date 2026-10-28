@@ -76,6 +76,23 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     private boolean askedVpn;
     /** True while a public-IP lookup is running, so taps and redraws do not start a second one. */
     private final AtomicBoolean extFetch = new AtomicBoolean();
+    /** Failed public-IP lookups in a row; sets the retry delay and stops retrying after a few. */
+    private int extTries;
+    /** The queued public-IP retry, kept so onPause can cancel it. */
+    private final Runnable extRetry = this::retryExt;
+    /** True while extRetry is queued (Handler.hasCallbacks needs API 29). */
+    private boolean extQueued;
+    /** Views on Home, looked up once (see HomeViews). */
+    private HomeViews hv;
+    /**
+     * What Home and the connection list last showed, so a redraw that would
+     * change nothing is skipped (see paintHome and onLoft). -1 / null mean
+     * "not drawn yet". errShown/errText cache the explained error text.
+     */
+    private int goState = -1;
+    private String listSig;
+    private String errShown;
+    private String errText = "";
 
     /**
      * Shows Home first, wires the bottom tabs and the Home buttons, handles a link or file the app
@@ -93,6 +110,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         pane = findViewById(R.id.pane);
         home = getLayoutInflater().inflate(R.layout.pane_home, pane, false);
         pane.addView(home);
+        hv = new HomeViews(home);
         show(home);
 
         // 1. Bottom tabs: the Connections and Settings views are created on first use.
@@ -121,8 +139,14 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         // skipped it before ("onboard_done"), so deleting every profile later does not
         // bring the wizard back. Auto-connect is skipped when a session is already running
         // (e.g. the screen was recreated while the VPN was up).
-        handleIntent(getIntent());
-        if (LoftApp.of(this).profiles().all().isEmpty()
+        // The import runs only on a fresh start: when Android recreates the
+        // screen (rotation, dark mode, language) or restores it after the
+        // process was killed, getIntent() is the same old intent, and
+        // importing it again would add the same profiles a second time. An
+        // import finishes in the background, so while one is on its way the
+        // empty profile list does not mean "first run".
+        boolean importing = savedInstanceState == null && handleIntent(getIntent());
+        if (!importing && LoftApp.of(this).profiles().all().isEmpty()
                 && !Prefs.p(this).getBoolean("onboard_done", false)) {
             startActivity(new Intent(this, OnboardActivity.class));
         }
@@ -191,20 +215,35 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     @Override
     protected void onPause() {
         Bus.drop(this);
+        // A queued public-IP retry would keep this screen alive and use the
+        // network while nobody looks; drop it, and let the next Home redraw
+        // start a fresh lookup.
+        if (extQueued) {
+            extQueued = false;
+            Ui.MAIN.removeCallbacks(extRetry);
+            Live.extIP = "";
+        }
         super.onPause();
     }
 
     /**
      * Bus callback: shared state changed, redraw Home and the connection list.
-     * Runs on the main thread. Bus events carry no data and are not merged, so this
-     * runs for every post(): VPN state changes, network switches and also every new
-     * Journal (log) line. The connection list is fully rebound each time because the
-     * "connected" highlight and button text depend on Live.
+     * Runs on the main thread, at most 10 times a second (Bus merges posts).
+     * The connection list shows only the session state and which profile is
+     * connected, so it is rebound only when one of those changed and the
+     * Connections tab is on screen; speed counters change every second but do
+     * not appear there.
      */
     @Override
     public void onLoft() {
         paintHome();
-        if (adapter != null) {
+        if (adapter == null || conns == null || conns.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        String sig = Live.state + "|" + Live.holding + "|" + Live.name + "|"
+                + LoftVpnService.running + "|" + LoftApp.of(this).profiles().activeId();
+        if (!sig.equals(listSig)) {
+            listSig = sig;
             adapter.notifyDataSetChanged();
         }
     }
@@ -220,9 +259,61 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         }
         if (v == conns && adapter != null) {
             adapter.reload();
+            listSig = null;
         }
         if (v == home) {
             paintHome();
+        }
+    }
+
+    /**
+     * The views on Home, looked up once. findViewById walks the view tree;
+     * paintHome runs up to ten times a second, so it uses these fields.
+     */
+    private static final class HomeViews {
+        final ImageView lamp;
+        final TextView pillT;
+        final View pillDot;
+        final Button go;
+        final View cards;
+        final View sparkRow;
+        final View iprows;
+        final SparkView spark;
+        final TextView rateDn;
+        final TextView rateUp;
+        final View sparkR;
+        final TextView ext;
+        final TextView overlay;
+        final TextView route;
+        final TextView k1;
+        final TextView k2;
+        final TextView k3;
+        final TextView v1;
+        final TextView v2;
+        final TextView v3;
+
+        /** Looks every view up in the inflated Home pane. */
+        HomeViews(View h) {
+            lamp = h.findViewById(R.id.lamp);
+            pillT = h.findViewById(R.id.pill_t);
+            pillDot = h.findViewById(R.id.pill_dot);
+            go = h.findViewById(R.id.go);
+            cards = h.findViewById(R.id.cards);
+            sparkRow = h.findViewById(R.id.spark_row);
+            iprows = h.findViewById(R.id.iprows);
+            spark = h.findViewById(R.id.spark);
+            rateDn = h.findViewById(R.id.rate_dn);
+            rateUp = h.findViewById(R.id.rate_up);
+            sparkR = h.findViewById(R.id.spark_r);
+            ext = h.findViewById(R.id.row_ext);
+            overlay = h.findViewById(R.id.row_overlay);
+            route = h.findViewById(R.id.row_route);
+            k1 = h.findViewById(R.id.card_k1);
+            k2 = h.findViewById(R.id.card_k2);
+            k3 = h.findViewById(R.id.card_k3);
+            v1 = h.findViewById(R.id.card_v1);
+            v2 = h.findViewById(R.id.card_v2);
+            v3 = h.findViewById(R.id.card_v3);
         }
     }
 
@@ -231,140 +322,132 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      * error / off, the info cards, rates and chart, the overlay address
      * (this device's address inside the loft network), the gateway and the
      * public IP seen through the tunnel. "Simple" mode hides the details.
+     *
+     * <p>Every view is touched only when its content changes (Ui.text,
+     * Ui.shown, Ui.bgRes, and the button state below): while connected only
+     * the two speed labels and the chart change each second, so a redraw
+     * costs almost nothing instead of a layout pass of the whole screen.
      */
     private void paintHome() {
-        // 1. Lamp, status pill and big button for the four states.
-        ImageView lamp = home.findViewById(R.id.lamp);
-        TextView pillT = home.findViewById(R.id.pill_t);
-        View pillDot = home.findViewById(R.id.pill_dot);
-        Button go = home.findViewById(R.id.go);
-        View cards = home.findViewById(R.id.cards);
-        View sparkRow = home.findViewById(R.id.spark_row);
-        View iprows = home.findViewById(R.id.iprows);
-        SparkView spark = home.findViewById(R.id.spark);
+        HomeViews h = hv;
         Profile p = LoftApp.of(this).profiles().active();
         String name = p == null ? "Home" : (p.name.isEmpty() ? p.host() : p.name);
         boolean on = Live.on();
         boolean conn = Live.connecting();
         boolean simple = Prefs.simple(this);
-        lamp.setImageResource(on ? R.drawable.ic_lamp_on : R.drawable.ic_lamp_off);
-        if (conn) {
-            pillT.setText(getString(R.string.pill_busy, name));
-            pillDot.setBackgroundResource(R.drawable.bg_dot);
-            go.setText(R.string.cancel);
-            go.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.slate)));
-            go.setTextColor(getColor(R.color.snow));
-        } else if (on) {
+        // 1. Lamp, status pill and big button for the four states: 0 connecting,
+        //    1 on, 2 error, 3 off. The lamp and the button look (text, tint,
+        //    text colour) depend only on the state, so they are set when it
+        //    changes and left alone otherwise.
+        int state = conn ? 0 : on ? 1 : !Live.err.isEmpty() ? 2 : 3;
+        if (state != goState) {
+            goState = state;
+            // A new session gets a fresh set of public-IP retries.
+            if (state == 1) {
+                extTries = 0;
+            }
+            h.lamp.setImageResource(on ? R.drawable.ic_lamp_on : R.drawable.ic_lamp_off);
+            int text = state == 0 ? R.string.cancel : state == 1 ? R.string.disconnect : R.string.connect;
+            int tint = state == 0 ? R.color.slate : state == 1 ? R.color.danger_bg : R.color.lamp;
+            int fg = state == 0 ? R.color.snow : state == 1 ? R.color.danger_fg : R.color.ink;
+            h.go.setText(text);
+            h.go.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(tint)));
+            h.go.setTextColor(getColor(fg));
+        }
+        if (state == 0) {
+            Ui.text(h.pillT, getString(R.string.pill_busy, name));
+            Ui.bgRes(h.pillDot, R.drawable.bg_dot);
+        } else if (state == 1) {
             String t = getString(R.string.pill_on, name);
             if (Live.holding) {
                 t = getString(R.string.hold) + " · " + t;
             }
-            pillT.setText(t);
-            pillDot.setBackgroundResource(R.drawable.bg_dot_on);
-            go.setText(R.string.disconnect);
-            go.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.danger_bg)));
-            go.setTextColor(getColor(R.color.danger_fg));
-        } else if (!Live.err.isEmpty()) {
-            pillT.setText(Explain.display(this, Live.err));
-            pillDot.setBackgroundResource(R.drawable.bg_dot_err);
-            go.setText(R.string.connect);
-            go.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.lamp)));
-            go.setTextColor(getColor(R.color.ink));
+            Ui.text(h.pillT, t);
+            Ui.bgRes(h.pillDot, R.drawable.bg_dot_on);
+        } else if (state == 2) {
+            // Explain.display asks the system about the network; once per new error is enough.
+            String err = Live.err;
+            if (!err.equals(errShown)) {
+                errShown = err;
+                errText = Explain.display(this, err);
+            }
+            Ui.text(h.pillT, errText);
+            Ui.bgRes(h.pillDot, R.drawable.bg_dot_err);
         } else {
-            pillT.setText(getString(R.string.pill_off_home, name));
-            pillDot.setBackgroundResource(R.drawable.bg_dot);
-            go.setText(R.string.connect);
-            go.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.lamp)));
-            go.setTextColor(getColor(R.color.ink));
+            Ui.text(h.pillT, getString(R.string.pill_off_home, name));
+            Ui.bgRes(h.pillDot, R.drawable.bg_dot);
         }
         // 2. Which detail blocks are visible, then the info cards.
-        cards.setVisibility(simple ? View.GONE : View.VISIBLE);
-        sparkRow.setVisibility(simple || (!on && !conn) ? View.GONE : View.VISIBLE);
-        iprows.setVisibility(simple || !on ? View.GONE : View.VISIBLE);
+        Ui.shown(h.cards, !simple);
+        Ui.shown(h.sparkRow, !simple && (on || conn));
+        Ui.shown(h.iprows, !simple && on);
         paintCards(p, on);
         // 3. Current speed and the traffic chart (a handshake animation while connecting).
         boolean bits = Prefs.rateBits(this);
-        TextView rateDn = home.findViewById(R.id.rate_dn);
-        TextView rateUp = home.findViewById(R.id.rate_up);
-        View sparkR = home.findViewById(R.id.spark_r);
         if (on && !conn) {
-            rateDn.setText("↓ " + Cidr.fmt(Live.rateDown, bits));
-            rateUp.setText("↑ " + Cidr.fmt(Live.rateUp, bits));
-            sparkR.setVisibility(View.VISIBLE);
-        } else {
-            sparkR.setVisibility(View.GONE);
+            Ui.text(h.rateDn, "↓ " + Cidr.fmt(Live.rateDown, bits));
+            Ui.text(h.rateUp, "↑ " + Cidr.fmt(Live.rateUp, bits));
         }
-        spark.setBars(Prefs.sparkBars(this));
+        Ui.shown(h.sparkR, on && !conn);
+        h.spark.setBars(Prefs.sparkBars(this));
         if (conn) {
-            spark.setHandshake(true, getString(R.string.handshake));
+            h.spark.setHandshake(true, getString(R.string.handshake));
         } else if (on) {
-            spark.setHandshake(false, "");
-            spark.setSamples(Live.sparkDn, Live.sparkUp, Live.sparkCount);
+            h.spark.setHandshake(false, "");
+            h.spark.setSamples(Live.sparkDn, Live.sparkUp, Live.sparkCount);
         } else {
-            spark.clear();
+            h.spark.clear();
         }
         // 4. Public IP (fetched on demand), overlay address(es) and gateway.
-        View extRow = home.findViewById(R.id.row_ext);
         boolean showExt = Prefs.showExtIP(this);
-        ((View) extRow.getParent()).setVisibility(showExt ? View.VISIBLE : View.GONE);
+        Ui.shown((View) h.ext.getParent(), showExt);
         if (on && showExt && Live.extIP.isEmpty()) {
             fetchExt();
         }
         String ext = Live.extIP;
-        ((TextView) extRow).setText(ext.isEmpty() ? "—" : ext);
+        Ui.text(h.ext, ext.isEmpty() ? "—" : ext);
         String ov = Live.ip;
         if (!Live.ip6.isEmpty()) {
             ov = ov.isEmpty() ? Live.ip6 : ov + "  " + Live.ip6;
         }
-        ((TextView) home.findViewById(R.id.row_overlay)).setText(ov.isEmpty() ? "—" : ov);
-        ((TextView) home.findViewById(R.id.row_route)).setText(Live.gateway.isEmpty() ? "—" : Live.gateway);
+        Ui.text(h.overlay, ov.isEmpty() ? "—" : ov);
+        Ui.text(h.route, Live.gateway.isEmpty() ? "—" : Live.gateway);
     }
 
     /**
      * Fills the three info cards for the protocol family. For loft they show the
      * front in use and the options: mux (many streams in one connection) or IP
      * for L3, "mask" when the node's mask key is known, and "hold" while the
-     * session waits on a network switch.
+     * session waits on a network switch. Change-only updates, like paintHome.
      */
     private void paintCards(Profile p, boolean on) {
+        HomeViews h = hv;
         String fam = p == null ? "loft" : p.family();
-        TextView k1 = home.findViewById(R.id.card_k1);
-        TextView k2 = home.findViewById(R.id.card_k2);
-        TextView k3 = home.findViewById(R.id.card_k3);
-        TextView v1 = home.findViewById(R.id.card_v1);
-        TextView v2 = home.findViewById(R.id.card_v2);
-        TextView v3 = home.findViewById(R.id.card_v3);
-        k1.setText(R.string.proto_k);
+        Ui.text(h.k1, getString(R.string.proto_k));
         if ("sstp".equals(fam)) {
-            k2.setText(R.string.trans_k);
-            k3.setText(R.string.auth_k);
-            v1.setText("SSTP");
-            v2.setText("PPP");
-            v3.setText("CHAP");
-        } else if ("vless".equals(fam)) {
-            k2.setText(R.string.trans_k);
-            k3.setText(R.string.sec_k);
-            v1.setText("VLESS");
-            v2.setText(p == null ? "TCP" : p.linkTransport());
-            v3.setText(p == null ? "TLS" : p.linkSecurity());
-        } else if ("trojan".equals(fam)) {
-            k2.setText(R.string.trans_k);
-            k3.setText(R.string.sec_k);
-            v1.setText("Trojan");
-            v2.setText(p == null ? "TCP" : p.linkTransport());
-            v3.setText(p == null ? "TLS" : p.linkSecurity());
+            Ui.text(h.k2, getString(R.string.trans_k));
+            Ui.text(h.k3, getString(R.string.auth_k));
+            Ui.text(h.v1, "SSTP");
+            Ui.text(h.v2, "PPP");
+            Ui.text(h.v3, "CHAP");
+        } else if ("vless".equals(fam) || "trojan".equals(fam)) {
+            Ui.text(h.k2, getString(R.string.trans_k));
+            Ui.text(h.k3, getString(R.string.sec_k));
+            Ui.text(h.v1, "vless".equals(fam) ? "VLESS" : "Trojan");
+            Ui.text(h.v2, p == null ? "TCP" : p.linkTransport());
+            Ui.text(h.v3, p == null ? "TLS" : p.linkSecurity());
         } else {
-            k2.setText(R.string.front_k);
-            k3.setText(R.string.opt_k);
-            v1.setText("loft/1.0");
+            Ui.text(h.k2, getString(R.string.front_k));
+            Ui.text(h.k3, getString(R.string.opt_k));
+            Ui.text(h.v1, "loft/1.0");
             String front = Live.kind.isEmpty() && p != null ? p.kind : Live.kind;
             if (!on && (front.isEmpty() || "get".equalsIgnoreCase(front))) {
-                v2.setText(R.string.kind_auto_v);
+                Ui.text(h.v2, getString(R.string.kind_auto_v));
             } else {
-                v2.setText(front.isEmpty() ? "—" : front.toUpperCase());
+                Ui.text(h.v2, front.isEmpty() ? "—" : front.toUpperCase());
             }
             if (!on) {
-                v3.setText("—");
+                Ui.text(h.v3, "—");
             } else {
                 String opt = "l3".equalsIgnoreCase(front) ? "IP" : getString(R.string.mux);
                 if (p != null && p.maskPub != null && !p.maskPub.isEmpty()) {
@@ -373,7 +456,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
                 if (Live.holding) {
                     opt = getString(R.string.hold) + " · " + opt;
                 }
-                v3.setText(opt);
+                Ui.text(h.v3, opt);
             }
         }
     }
@@ -554,11 +637,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     /**
      * Imports from a loft:// link, text shared to the app, or an opened file. These are the
      * three intent filters declared for MainActivity in the phone manifest. A plain launcher
-     * start carries none of them and is ignored.
+     * start carries none of them and is ignored. Returns true when an import was started
+     * (it finishes in the background, see importRaw).
      */
-    private void handleIntent(Intent intent) {
+    private boolean handleIntent(Intent intent) {
         if (intent == null) {
-            return;
+            return false;
         }
         Uri u = intent.getData();
         // 1. loft://... link (tapped in a browser or chat). The data is cleared afterwards so
@@ -566,27 +650,38 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         if (u != null && "loft".equalsIgnoreCase(u.getScheme())) {
             importRaw(u.toString());
             intent.setData(null);
-            return;
+            return true;
         }
-        // 2. Text shared to the app from another app's "Share" menu.
+        // 2. Text shared to the app from another app's "Share" menu. The text is removed
+        // from the intent once taken, like the link above.
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
             String t = intent.getStringExtra(Intent.EXTRA_TEXT);
+            intent.removeExtra(Intent.EXTRA_TEXT);
             if (t != null) {
                 importRaw(t);
+                return true;
             }
-            return;
+            return false;
         }
         // 3. A .loft file opened from a file manager or downloads; read through the content
-        // resolver because the app only gets a content:// URI, not a file path. Read errors
-        // are ignored: nothing is imported.
+        // resolver because the app only gets a content:// URI, not a file path. The read
+        // runs in the background: the provider may be slow (a cloud drive, a download still
+        // being written). Files over 1 MB are not profiles and are refused. Read errors are
+        // ignored: nothing is imported.
         if (u != null && Intent.ACTION_VIEW.equals(intent.getAction())) {
-            try (InputStream in = getContentResolver().openInputStream(u)) {
-                if (in != null) {
-                    importRaw(readAll(in));
+            intent.setData(null);
+            Ui.bg(this, () -> {
+                try (InputStream in = getContentResolver().openInputStream(u)) {
+                    return in == null ? null : readAll(in, 1024 * 1024);
                 }
-            } catch (Exception ignored) {
-            }
+            }, (text, err) -> {
+                if (text != null) {
+                    importRaw(text);
+                }
+            });
+            return true;
         }
+        return false;
     }
 
     /**
@@ -595,11 +690,19 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
      * wizard does not open on top. Text with nothing usable shows a hint toast.
      */
     void importRaw(String raw) {
-        List<Profile> got = Importer.parse(raw);
-        if (got.isEmpty()) {
-            Toast.makeText(this, R.string.paste_hint, Toast.LENGTH_SHORT).show();
-            return;
-        }
+        // Importer.parse calls into the Go engine and may parse a large YAML,
+        // so it runs in the background; the result is applied on the main thread.
+        Ui.bg(this, () -> Importer.parse(raw), (got, err) -> {
+            if (got == null || got.isEmpty()) {
+                Toast.makeText(this, R.string.paste_hint, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            addImported(got);
+        });
+    }
+
+    /** Saves parsed profiles, shows them on the Connections tab and marks onboarding done. */
+    private void addImported(List<Profile> got) {
         LoftApp.of(this).profiles().addAll(got);
         ensureConns();
         adapter.reload();
@@ -655,6 +758,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         ext.setOnCheckedChangeListener((v, on) -> {
             Prefs.p(this).edit().putBoolean("ext_ip", on).apply();
             Live.extIP = "";
+            extTries = 0;
             if (on && Live.on()) {
                 fetchExt();
             }
@@ -763,9 +867,12 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
     }
 
     /**
-     * Looks up the public IP through the tunnel on a background thread, one
-     * lookup at a time. On failure it retries every 2.5 s while the session is
-     * on, since the first request may run before the tunnel carries traffic.
+     * Looks up the public IP through the tunnel in the background, one lookup
+     * at a time. A failure is retried after 2.5, 5, 10 and 20 s (the first
+     * request may run before the tunnel carries traffic), then it gives up
+     * and shows "—" until the session or the setting changes. Retries are
+     * cancelled when the screen goes to the background (see onPause), and the
+     * lookup holds only the application context, never this screen.
      */
     private void fetchExt() {
         if (!Prefs.showExtIP(this) || !Live.on()) {
@@ -774,41 +881,56 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
         if (!extFetch.compareAndSet(false, true)) {
             return;
         }
-        // "…" is shown on Home while the lookup runs. The HTTP request must not run on the
-        // main thread (Android forbids network IO there), so it gets its own short-lived thread.
+        // "…" is shown on Home while the lookup runs.
         Live.extIP = "…";
-        new Thread(() -> {
-            String got = ExtIP.lookup(this, Prefs.extIPURL(this));
-            if (!got.isEmpty()) {
-                Live.extIP = got;
+        final android.content.Context app = getApplicationContext();
+        final String url = Prefs.extIPURL(this);
+        Ui.bg(() -> {
+            String got = ExtIP.lookup(app, url);
+            Ui.MAIN.post(() -> {
                 extFetch.set(false);
-                Bus.post();
-                return;
-            }
-            // Failed: show "—" now and schedule one retry. postDelayed on a view runs the
-            // retry on the main thread, where Live and Prefs are read again before trying.
-            Live.extIP = "—";
-            extFetch.set(false);
-            Bus.post();
-            View v = home;
-            if (v != null) {
-                v.postDelayed(() -> {
-                    if (Live.on() && Prefs.showExtIP(this)
-                            && ("—".equals(Live.extIP) || Live.extIP.isEmpty() || "…".equals(Live.extIP))) {
-                        Live.extIP = "";
-                        fetchExt();
+                if (!got.isEmpty()) {
+                    extTries = 0;
+                    Live.extIP = got;
+                } else {
+                    Live.extIP = "—";
+                    if (extTries < 4) {
+                        extQueued = true;
+                        Ui.MAIN.postDelayed(extRetry, 2500L << extTries);
+                        extTries++;
                     }
-                }, 2500);
-            }
-        }, "loft-extip").start();
+                }
+                Bus.post();
+            });
+        });
+    }
+
+    /** A queued public-IP retry: try again if the session is still on and no address is known. */
+    private void retryExt() {
+        extQueued = false;
+        if (Live.on() && Prefs.showExtIP(this)
+                && ("—".equals(Live.extIP) || Live.extIP.isEmpty())) {
+            Live.extIP = "";
+            fetchExt();
+        }
     }
 
     /** Reads a whole stream as UTF-8 text. Also used by ScanActivity for opened files. */
     static String readAll(InputStream in) throws Exception {
+        return readAll(in, Integer.MAX_VALUE);
+    }
+
+    /** Reads a whole stream as UTF-8 text, failing past {@code max} bytes. */
+    static String readAll(InputStream in, int max) throws Exception {
         ByteArrayOutputStream o = new ByteArrayOutputStream();
         byte[] b = new byte[4096];
         int n;
+        int total = 0;
         while ((n = in.read(b)) > 0) {
+            total += n;
+            if (total > max) {
+                throw new java.io.IOException("file too large");
+            }
             o.write(b, 0, n);
         }
         return o.toString(StandardCharsets.UTF_8.name());

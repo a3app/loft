@@ -103,14 +103,23 @@ public final class SparkView extends View {
 
     /** Switches between line chart (false) and bar chart (true). */
     void setBars(boolean on) {
+        // Screens call the setters on every redraw; redraw the chart only when
+        // something it shows actually changed.
+        if (bars == on) {
+            return;
+        }
         bars = on;
         invalidate();
     }
 
     /** While connecting there is no traffic to draw, so the view shows a pulsing label instead. */
     void setHandshake(boolean on, String label) {
+        String l = label == null ? "" : label;
+        if (handshake == on && l.equals(handshakeText) && (!on || pulsing)) {
+            return;
+        }
         handshake = on;
-        handshakeText = label == null ? "" : label;
+        handshakeText = l;
         if (on) {
             startPulse();
         } else {
@@ -121,7 +130,11 @@ public final class SparkView extends View {
 
     /** Copies the latest rate samples (bytes/s) from Live. */
     void setSamples(float[] down, float[] up, int count) {
-        n = Math.max(0, Math.min(N, count));
+        int c = Math.max(0, Math.min(N, count));
+        if (c == n && same(down, dn, c) && same(up, this.up, c)) {
+            return;
+        }
+        n = c;
         if (down != null) {
             System.arraycopy(down, 0, dn, 0, n);
         }
@@ -131,8 +144,24 @@ public final class SparkView extends View {
         invalidate();
     }
 
+    /** True when the first {@code c} values of the two arrays are equal (a null source never is). */
+    private static boolean same(float[] src, float[] mine, int c) {
+        if (src == null) {
+            return false;
+        }
+        for (int i = 0; i < c; i++) {
+            if (src[i] != mine[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** Drops all samples and stops the handshake label, leaving an empty view. */
     void clear() {
+        if (n == 0 && !handshake && !pulsing) {
+            return;
+        }
         n = 0;
         handshake = false;
         pulsing = false;
@@ -216,14 +245,19 @@ public final class SparkView extends View {
         return max;
     }
 
+    // Point buffers for drawLines, sized for the full window and reused every
+    // frame, and the fill gradient, rebuilt only when the view height changes:
+    // allocating them per frame fed the garbage collector for nothing.
+    private final float[] dx = new float[N];
+    private final float[] dy = new float[N];
+    private final float[] ux = new float[N];
+    private final float[] uy = new float[N];
+    private LinearGradient grad;
+    private int gradH = -1;
+
     // Download as a filled curve, upload as a thinner line, both scaled to the
-    // common peak, with a dot on the newest sample. Note: this method allocates
-    // four float arrays and a new LinearGradient on every frame.
+    // common peak, with a dot on the newest sample.
     private void drawLines(Canvas c, int w, int h, float max) {
-        float[] dx = new float[n];
-        float[] dy = new float[n];
-        float[] ux = new float[n];
-        float[] uy = new float[n];
         pts(dn, max, w, h, dx, dy, 1f);
         pts(up, max, w, h, ux, uy, 1f);
         curve(downPath, dx, dy);
@@ -231,8 +265,11 @@ public final class SparkView extends View {
         fillPath.lineTo(dx[n - 1], h);
         fillPath.lineTo(dx[0], h);
         fillPath.close();
-        fill.setShader(new LinearGradient(0, 0, 0, h,
-                0x52E8B84A, 0x00E8B84A, Shader.TileMode.CLAMP));
+        if (grad == null || gradH != h) {
+            grad = new LinearGradient(0, 0, 0, h, 0x52E8B84A, 0x00E8B84A, Shader.TileMode.CLAMP);
+            gradH = h;
+        }
+        fill.setShader(grad);
         c.drawPath(fillPath, fill);
         fill.setShader(null);
         c.drawPath(downPath, downStroke);
