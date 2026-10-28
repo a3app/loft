@@ -104,10 +104,10 @@ android {
 
 dependencies {
     implementation(files("../../mobile/build/engine.aar"))
-    implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
-    implementation("com.google.android.material:material:1.12.0")
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.appcompat:appcompat:1.8.0")
+    implementation("androidx.recyclerview:recyclerview:1.4.0")
+    implementation("com.google.android.material:material:1.14.0")
+    implementation("com.google.zxing:core:3.5.4")
     add("phoneImplementation", "androidx.camera:camera-core:1.4.1")
     add("phoneImplementation", "androidx.camera:camera-camera2:1.4.1")
     add("phoneImplementation", "androidx.camera:camera-lifecycle:1.4.1")
