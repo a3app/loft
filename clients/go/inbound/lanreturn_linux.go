@@ -2,9 +2,9 @@
 
 package inbound
 
-// lanreturn_linux.go is the "route" mode of the LAN gateway (listen.gateway:
-// route), used when loft runs in a router's container and LAN hosts send
-// their traffic through it with their real addresses.
+// lanreturn_linux.go keeps answers to LAN hosts on their way back to the
+// router when loft runs in a router's container as a LAN gateway
+// (listen.gateway: nat or route).
 //
 // The problem it solves: inside the container loft installs the split
 // default (0.0.0.0/1 and 128.0.0.0/1 into the TUN). loft's own stack answers
@@ -28,9 +28,12 @@ package inbound
 // before any rule of ours. loft's own front sockets are pinned to the veth
 // (-if) and would leave that way anyway.
 //
-// In "nat" mode (the default) none of this is needed: the router rewrites
-// LAN sources to its own address, and the container already has a route
-// to that address.
+// In "nat" mode the router rewrites the gateway traffic of LAN hosts to its
+// own address, which the container reaches directly, so the TUN rule is
+// not needed. The second rule still is: hosts that the router does not
+// rewrite (another VLAN, the router's VPN clients, LAN hosts outside the
+// loft-lan list, a port forward) talk to SOCKS and the LAN page with their
+// own addresses, and without the rule those answers vanish into the TUN.
 
 import (
 	"fmt"
@@ -52,7 +55,10 @@ const lanReturnTable = 176
 // Only for a dedicated gateway (a router's container): on a general Linux
 // host with IP forwarding on, the rule would let overlay members route
 // through this machine. That is why it runs only with listen.gateway: route.
-func EnableLANReturn(tun string) (func(), error) {
+//
+// mode is listen.gateway: "route" installs both rules, "nat" only the one
+// for the container's own address.
+func EnableLANReturn(tun, mode string) (func(), error) {
 	gw, dev, err := ifcfg.DefaultGatewayV4()
 	if err != nil {
 		return nil, fmt.Errorf("lan return: %w", err)
@@ -64,12 +70,18 @@ func EnableLANReturn(tun string) (func(), error) {
 		Dev:   dev,
 		Table: lanReturnTable,
 	}
-	rules := []ifcfg.Rule{{IIF: tun, Table: lanReturnTable, Priority: lanReturnTable}}
+	var rules []ifcfg.Rule
+	if mode == "route" {
+		rules = append(rules, ifcfg.Rule{IIF: tun, Table: lanReturnTable, Priority: lanReturnTable})
+	}
 	if own := firstIPv4(dev); own != nil {
 		rules = append(rules, ifcfg.Rule{
 			Src:   &net.IPNet{IP: own, Mask: net.CIDRMask(32, 32)},
 			Table: lanReturnTable, Priority: lanReturnTable + 1,
 		})
+	}
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("lan return: no IPv4 address on %s", dev)
 	}
 	// Replace, not add: after a crash the table may still hold our route.
 	if err := b.RouteReplace(route); err != nil {

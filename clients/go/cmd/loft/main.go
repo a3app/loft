@@ -94,8 +94,10 @@ func main() {
 	var (
 		tunMu  sync.Mutex
 		tunDev *inbound.Device
-		// lanUndo removes the route-mode rule (listen.gateway: route).
+		// lanUndo removes the LAN gateway rules (listen.gateway), lanMode is
+		// the mode they were set up for; both change under tunMu.
 		lanUndo func()
+		lanMode string
 	)
 	defer func() {
 		if lanUndo != nil {
@@ -125,16 +127,17 @@ func main() {
 		}
 		tunDev = c
 		log.Printf("tun up overlay=%s kill_switch=%v", cidr, cfg.Listen.KillSwitch)
-		// LAN gateway in "route" mode: answers to LAN hosts must leave
-		// through the router, not loop back into the TUN (see
-		// inbound/lanreturn_linux.go). "nat" needs nothing here.
-		if cfg.Listen.Gateway == "route" {
-			undo, err := inbound.EnableLANReturn(c.Name())
+		// LAN gateway (a router's container): answers to LAN hosts must
+		// leave through the router, not loop back into the TUN (see
+		// inbound/lanreturn_linux.go). Only when listen.gateway is set, so
+		// a desktop with tun: auto keeps its routing as it was.
+		if g := cfg.Listen.Gateway; g != "" {
+			undo, err := inbound.EnableLANReturn(c.Name(), g)
 			if err != nil {
-				log.Printf("lan gateway route: %v", err)
+				log.Printf("lan gateway %s: %v", g, err)
 			} else {
-				lanUndo = undo
-				log.Printf("lan gateway route: answers to LAN hosts go back via the default route")
+				lanUndo, lanMode = undo, g
+				log.Printf("lan gateway %s: answers to LAN hosts go back via the default route", g)
 			}
 		}
 	}
@@ -144,13 +147,21 @@ func main() {
 	sess := &session{parent: ctx, pathCh: pathCh, h: h, bringTUN: bringTUN, drv: drv}
 	sess.start(cfg)
 
-	// The local SOCKS5 listener is always on.
-	ln, err := inbound.ListenSOCKS5(cfg.Listen.SOCKS5, h)
-	if err != nil {
-		log.Fatal(err)
+	// The local SOCKS5 listener, unless listen.socks5 is "off". On a router
+	// it is a proxy without a password for whoever reaches the container,
+	// so an operator who only needs the LAN gateway can turn it off.
+	socksAddr := ""
+	if cfg.Listen.SOCKS5 != config.SOCKSOff {
+		ln, err := inbound.ListenSOCKS5(cfg.Listen.SOCKS5, h)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ln.Close()
+		socksAddr = cfg.Listen.SOCKS5
+		log.Printf("socks5 %s", socksAddr)
+	} else {
+		log.Printf("socks5 off")
 	}
-	defer ln.Close()
-	log.Printf("socks5 %s", cfg.Listen.SOCKS5)
 
 	// Optional LAN page (MikroTik container): log lines are copied into a ring
 	// buffer so the page can show them.
@@ -161,7 +172,7 @@ func main() {
 			Addr: cfg.Listen.HTTP,
 			Pass: cfg.Listen.HTTPPass,
 			Log:  ring,
-			Live: func() lanui.Status { return liveStatus(*cfgPath, sess, &tunMu, &tunDev, &lanUndo) },
+			Live: func() lanui.Status { return liveStatus(*cfgPath, sess, &tunMu, &tunDev, &lanMode, socksAddr) },
 			Apply: func(p lanui.Patch) error {
 				return applyPatch(*cfgPath, p, sess)
 			},
@@ -246,14 +257,22 @@ func (s *session) start(cfg *config.ClientConfig) {
 // overlay IP (the client's address inside the loft virtual network), the
 // settings read fresh from the config file, the front that is actually up,
 // and whether the TUN device exists.
-func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.Device, lanUndo *func()) lanui.Status {
+//
+// socks is the SOCKS5 address in effect ("" when off), lanMode the LAN
+// gateway rules in place; the config file may already say something else
+// until the container restarts, and the page shows both.
+func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.Device, lanMode *string, socks string) lanui.Status {
 	st := lanui.Status{
 		Version: version.Line("loft"),
 		Bind:    protect.Bound(),
 		Overlay: transport.OverlayIP(),
 	}
+	st.SOCKS = socks
+	if st.SOCKS == "" {
+		st.SOCKS = config.SOCKSOff
+	}
 	if cfg, err := config.LoadClient(path); err == nil {
-		st.SOCKS = cfg.Listen.SOCKS5
+		st.SOCKSSet = cfg.Listen.SOCKS5
 		st.HTTP = cfg.Listen.HTTP
 		st.Uplink = cfg.Listen.Uplink
 		st.GatewaySet = cfg.Listen.Gateway
@@ -278,12 +297,12 @@ func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.
 	sess.mu.Unlock()
 	tunMu.Lock()
 	st.TUN = *tunDev != nil
-	// The mode in effect: route only when its rule is actually in place
-	// (bringTUN sets lanUndo under tunMu), otherwise nat. No TUN, no mode.
+	// The mode in effect: what bringTUN set up (under tunMu); with no
+	// rules in place that is plain nat. No TUN, no mode.
 	if st.TUN {
-		st.Gateway = "nat"
-		if *lanUndo != nil {
-			st.Gateway = "route"
+		st.Gateway = *lanMode
+		if st.Gateway == "" {
+			st.Gateway = "nat"
 		}
 	}
 	tunMu.Unlock()
@@ -319,6 +338,20 @@ func applyPatch(path string, p lanui.Patch, sess *session) error {
 		return err
 	}
 	cfg.Listen.Uplink = p.Uplink
+	// SOCKS5: "off", or a port; the address part stays as it was (0.0.0.0
+	// in the container), or 0.0.0.0 when SOCKS was off. Applies after a
+	// restart, like the gateway mode.
+	switch s := strings.TrimSpace(p.SOCKS); {
+	case s == "":
+	case s == config.SOCKSOff:
+		cfg.Listen.SOCKS5 = config.SOCKSOff
+	default:
+		host := "0.0.0.0"
+		if h, _, err := net.SplitHostPort(cfg.Listen.SOCKS5); err == nil && h != "" {
+			host = h
+		}
+		cfg.Listen.SOCKS5 = net.JoinHostPort(host, s)
+	}
 	// The LAN gateway mode is only written here: the route-mode rule is set
 	// up when the TUN comes up, so a change takes effect after a container
 	// restart (the page says so).
@@ -336,7 +369,7 @@ func applyPatch(path string, p lanui.Patch, sess *session) error {
 		return err
 	}
 	sess.start(cfg)
-	log.Printf("saved uplink=%s gateway=%s", p.Uplink, cfg.Listen.Gateway)
+	log.Printf("saved uplink=%s gateway=%s socks5=%s", p.Uplink, cfg.Listen.Gateway, cfg.Listen.SOCKS5)
 	return nil
 }
 

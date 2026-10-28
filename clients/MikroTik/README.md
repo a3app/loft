@@ -10,7 +10,7 @@ Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/mikroti
 
 | | |
 |--|--|
-| SOCKS5 `172.31.20.2:1080` | Always, once the container is `running` and the log shows `socks5`. Tools and browsers use this today. |
+| SOCKS5 `172.31.20.2:1080` | Once the container is `running` and the log shows `socks5`, with or without TUN. No password: `listen.socks5: off` or the LAN page turns it off, and sets the port. |
 | LAN page `http://172.31.20.2:8090/` | Status, member key, node URL, **RouterOS uplink** (`ether1`, `lte1`, …). Writes YAML and `uplink.rsc`. |
 | LAN gateway | After the log shows `tun up`. Then `policy.rsc` marks a LAN list into table `loft`. |
 | Fronts | Bound on `veth-loft` (`loft -if 172.31.20.1`) so GET/WS/H2/QUIC/H3 do not hairpin into the overlay. |

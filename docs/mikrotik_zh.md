@@ -40,7 +40,7 @@ RouterOS 7.12+，额外包 `container`（arm、arm64、x86 / CHR）。做一次 
 
 ## 3. 先 SOCKS
 
-`listen.socks5: 0.0.0.0:1080` 是总能走的路径。LAN 里的笔记本（或路由器自己）连 `172.31.20.2:1080`。RouterOS 没有自带 SOCKS 客户端；浏览器、curl、SSH `-o ProxyCommand` 有。
+`listen.socks5: 0.0.0.0:1080` 是没有 TUN 也能走的路径。LAN 里的笔记本（或路由器自己）连 `172.31.20.2:1080`。RouterOS 没有自带 SOCKS 客户端；浏览器、curl、SSH `-o ProxyCommand` 有。它没有密码，只要网关时用 `listen.socks5: off`（或 LAN 页）关掉；端口也在那里改。都在重启容器后生效。
 
 不要只靠 SOCKS 就跑 `policy.rsc`。
 
@@ -59,7 +59,7 @@ RouterOS 自身不装新的 default route。没有 TUN 时，0/0 经容器 IP �
 | | `nat`（默认） | `route` |
 |--|--|--|
 | RouterOS | masquerade `loft-lan` → `br-loft`（规则 `loft-lan-nat`） | 不做 masquerade |
-| loft | 不用额外做什么 | 两条策略路由都查表 176（默认经 veth 网关）：从 TUN 出来的包，以及容器从 `172.31.20.2` 发出的包（SOCKS 和 LAN 页的回包） |
+| loft | 一条策略路由查表 176（默认经 veth 网关）：容器从 `172.31.20.2` 发出的包，这样 SOCKS 和 LAN 页也能回 `loft-lan` 以外的主机（别的 VLAN、VPN 客户端、端口转发） | 两条策略路由都查表 176（默认经 veth 网关）：从 TUN 出来的包，以及容器从 `172.31.20.2` 发出的包（SOCKS 和 LAN 页的回包） |
 | 容器看到 | 所有 LAN 主机都是 `172.31.20.1` | 真实 LAN 地址 |
 | 什么时候用 | 不需要真实地址时都用它 | 容器要区分 LAN 主机，或以后从覆盖网访问 LAN |
 

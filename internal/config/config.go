@@ -64,6 +64,9 @@ type ClientConfig struct {
 const (
 	DefaultSOCKS5 = "127.0.0.1:1080"
 	DebugSOCKS5   = "127.0.0.1:18080"
+	// SOCKSOff as listen.socks5 turns the SOCKS5 listener off (loft CLI).
+	// An empty value still means DebugSOCKS5, so old configs keep a proxy.
+	SOCKSOff = "off"
 	// DefaultGETPath is empty node get_path and empty client GET outbound.
 	DefaultGETPath = "/static/v3/build"
 	DefaultWSPath  = "/api/v1/sync"

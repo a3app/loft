@@ -40,7 +40,7 @@ Entrypoint: `loft -c /data/client.yaml -if 172.31.20.1`. `-if` gets the veth gat
 
 ## 3. SOCKS first
 
-`listen.socks5: 0.0.0.0:1080` is the path that always works. A laptop on the LAN (or the router itself) uses `172.31.20.2:1080`. RouterOS has no native SOCKS client; browsers, curl, and SSH `-o ProxyCommand` do.
+`listen.socks5: 0.0.0.0:1080` is the path that works even without TUN. A laptop on the LAN (or the router itself) uses `172.31.20.2:1080`. RouterOS has no native SOCKS client; browsers, curl, and SSH `-o ProxyCommand` do. It has no password, so `listen.socks5: off` (or the LAN page) turns it off when only the gateway is needed; the port is set there too. Both apply after a container restart.
 
 Do not run `policy.rsc` on SOCKS alone.
 
@@ -59,7 +59,7 @@ RouterOS itself does not get a new default route. Without TUN, 0/0 via the conta
 | | `nat` (default) | `route` |
 |--|--|--|
 | RouterOS | masquerade `loft-lan` → `br-loft` (rule `loft-lan-nat`) | no masquerade |
-| loft | nothing extra | two policy rules to table 176 (default via the veth gateway): what leaves the TUN, and what the container sends from `172.31.20.2` (answers of SOCKS and the LAN page) |
+| loft | one policy rule to table 176 (default via the veth gateway): what the container sends from `172.31.20.2`, so SOCKS and the LAN page answer hosts outside `loft-lan` (other VLANs, VPN clients, port forwards) | two policy rules to table 176 (default via the veth gateway): what leaves the TUN, and what the container sends from `172.31.20.2` (answers of SOCKS and the LAN page) |
 | The container sees | every LAN host as `172.31.20.1` | real LAN addresses |
 | Use when | always, unless you need real addresses | the container must tell LAN hosts apart, or later overlay → LAN access |
 
