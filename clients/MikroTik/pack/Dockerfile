@@ -1,6 +1,6 @@
 # loft RouterOS container: static linux loft + CA store. No shell.
 # Build: make -C clients/MikroTik image GOARCH=arm64
-FROM alpine:3.20 AS certs
+FROM alpine:3.24 AS certs
 RUN apk add --no-cache ca-certificates
 
 FROM scratch
