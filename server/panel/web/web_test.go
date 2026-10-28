@@ -151,13 +151,19 @@ func newEnv(t *testing.T) *env {
 // zone or a certificate leaves work running in the background that writes
 // domains.json when it ends; the cleanup registered here runs before the
 // directory is removed (cleanups run last-registered first) and waits for
-// that work, so it never writes into a directory being deleted. RDAP goes
-// to a closed local port: the lookup fails at once instead of going to
-// rdap.org.
+// that work, so it never writes into a directory being deleted. The RDAP
+// client fails every request at once instead of going to rdap.org.
 func (e *env) domainsDir() {
 	e.srv.SetDomainsFile(e.t.TempDir())
-	e.srv.rdapBase = "http://127.0.0.1:1/"
+	e.srv.rdapHTTP = &http.Client{Transport: offlineRT{}}
 	e.t.Cleanup(e.srv.bg.Wait)
+}
+
+// offlineRT is an http.RoundTripper that never touches the network.
+type offlineRT struct{}
+
+func (offlineRT) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("offline in tests")
 }
 
 type resp struct {

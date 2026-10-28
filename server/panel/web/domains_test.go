@@ -371,3 +371,28 @@ func TestReconcileOurs(t *testing.T) {
 		t.Fatal("second pass changed again")
 	}
 }
+
+// rdapRT answers every request with a fixed RDAP document and remembers
+// the URL it was asked for.
+type rdapRT struct{ url string }
+
+func (r *rdapRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.url = req.URL.String()
+	body := `{"events":[{"eventAction":"registration","eventDate":"2020-01-02T00:00:00Z"},` +
+		`{"eventAction":"expiration","eventDate":"2027-03-04T05:06:07Z"}]}`
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+}
+
+// TestRDAPUntil: the lookup goes to rdap.org for the zone and takes the
+// "expiration" event as the end of the registration.
+func TestRDAPUntil(t *testing.T) {
+	rt := &rdapRT{}
+	s := &Server{rdapHTTP: &http.Client{Transport: rt}}
+	got := s.rdapUntil(context.Background(), "example.net")
+	if rt.url != "https://rdap.org/domain/example.net" {
+		t.Fatalf("asked %q", rt.url)
+	}
+	if want := time.Date(2027, 3, 4, 5, 6, 7, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("until %v, want %v", got, want)
+	}
+}

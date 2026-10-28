@@ -97,9 +97,12 @@ type Server struct {
 	// files when it ends, so whoever removes those files first waits for
 	// it; tests do, before their temporary directory is deleted.
 	bg sync.WaitGroup
-	// rdapBase is where rdapUntil asks for registration dates; empty means
-	// rdap.org. Tests point it at a closed port to stay off the internet.
-	rdapBase string
+	// rdapHTTP, when set, is the client rdapUntil uses instead of HTTP.
+	// Tests give it one that fails at once, so they stay off the internet.
+	// (The RDAP address itself stays a constant: a configurable base made
+	// CodeQL report the request as server-side request forgery, since it
+	// could no longer see that the host is fixed.)
+	rdapHTTP *http.Client
 }
 
 // goBG runs fn in the background and counts it in s.bg.

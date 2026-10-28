@@ -890,13 +890,14 @@ func (s *Server) refreshReg(ctx context.Context, zone string) {
 func (s *Server) rdapUntil(ctx context.Context, zone string) time.Time {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	base := s.rdapBase
-	if base == "" {
-		base = "https://rdap.org/domain/"
-	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, base+zone, nil)
+	// zone was checked against zoneRe by every caller, and the host is a
+	// constant, so the zone can only ever change the path on rdap.org.
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://rdap.org/domain/"+zone, nil)
 	req.Header.Set("Accept", "application/rdap+json")
-	c := s.HTTP
+	c := s.rdapHTTP
+	if c == nil {
+		c = s.HTTP
+	}
 	if c == nil {
 		c = http.DefaultClient
 	}
