@@ -485,7 +485,7 @@ public final class MainActivity extends LoftActivity implements Bus.Listener {
 
     /** Add-connection sheet: scan, paste into the scanner field, file, or the editor. */
     private void addSheet() {
-        BottomSheetDialog d = Sheets.of(this, R.layout.sheet_add);
+        BottomSheetDialog d = Sheets.cards(this, R.layout.sheet_add);
         d.findViewById(R.id.add_scan).setOnClickListener(v -> {
             d.dismiss();
             startActivity(new Intent(this, ScanActivity.class));
