@@ -175,7 +175,7 @@ jobs:
           go-version-file: go.mod
       - uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: "8.11.1"
+          gradle-version: "8.14.6"
       # v3 runs `sdkmanager tools`; Google no longer serves that package.
       - uses: android-actions/setup-android@v4
         with:

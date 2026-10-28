@@ -45,7 +45,7 @@ updates:
         patterns: ["*"]
     ignore:
       # A new major Android Gradle Plugin needs a newer Gradle (AGP 9.4
-      # needs Gradle 9.6; we build with 8.11.1 here and in dist.yml) and
+      # needs Gradle 9.6; we build with Gradle 8.x here and in dist.yml) and
       # changes the build scripts. That move is done by hand, all at once;
       # minor and patch releases still come through.
       - dependency-name: com.android.application
