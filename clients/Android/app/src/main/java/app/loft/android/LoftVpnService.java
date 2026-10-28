@@ -457,6 +457,11 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
             return true;
         }
         RoutePlan rp = RoutePlan.of(this, snap);
+        if (rp.coarse) {
+            // The lists were too big for Android's route table message; say so
+            // once per rebuild, since the bypass edges are now approximate.
+            Journal.add("routes " + rp.fitted + " -> " + (rp.include.size() + rp.exclude.size()));
+        }
         // 2. Describe the new interface: session name, MTU, overlay addresses, DNS.
         // setBlocking(false): TunReader waits in poll() instead of read(), so
         // it can be woken and stopped (see TunReader).

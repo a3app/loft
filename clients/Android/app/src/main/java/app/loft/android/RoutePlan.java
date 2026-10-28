@@ -178,8 +178,73 @@ final class RoutePlan {
         }
         p.include.addAll(v4);
         p.include.addAll(v6);
+        p.fitBudget();
         p.compileDrop();
         return p;
+    }
+
+    /**
+     * Most routes (include plus exclude) handed to Android. Android sends the
+     * VPN network's whole route table to every app that watches the network,
+     * in one binder (IPC) message capped at about 1 MB; each route costs
+     * about 140 bytes there, so roughly 7,000 routes fill it. Big split lists
+     * reached that, the system could no longer deliver the table, and apps
+     * that asked for it crashed while loft was connected. 1,200 routes is
+     * about 170 KB, far below the cap even next to other traffic.
+     */
+    static final int MAX_ROUTES = 1200;
+
+    /**
+     * True when fitBudget had to widen prefixes to stay under MAX_ROUTES;
+     * {@code fitted} says how many routes there were before.
+     */
+    boolean coarse;
+    int fitted;
+
+    /** Applies the route budget to a plan built by hand (tests); build() already does it. */
+    static RoutePlan withBudget(RoutePlan p) {
+        p.fitBudget();
+        p.compileDrop();
+        return p;
+    }
+
+    /**
+     * Keeps include + exclude under MAX_ROUTES. Nothing changes when they
+     * already fit. Otherwise the exclude list (the bypass lists, usually the
+     * big one) is squeezed first, then the include list, each with Cidr.fit,
+     * which only ever widens prefixes, so every address keeps its side or
+     * moves next to a neighbour of the same list.
+     *
+     * <p>The default routes 0.0.0.0/0 and ::/0 are kept out of the include
+     * squeeze on purpose: merged together, every narrower include route
+     * would vanish into them, but those narrower routes matter. Android picks
+     * the most specific matching route, so a "through" prefix inside a
+     * bypassed range only works because it is more specific than the bypass.
+     *
+     * <p>Blocked prefixes are unaffected in effect: their packets are still
+     * checked one by one against the exact {@code drop} list.
+     */
+    private void fitBudget() {
+        int before = include.size() + exclude.size();
+        if (before <= MAX_ROUTES) {
+            return;
+        }
+        List<Cidr> defaults = new ArrayList<>();
+        List<Cidr> rest = new ArrayList<>();
+        for (Cidr c : include) {
+            (c.bits == 0 ? defaults : rest).add(c);
+        }
+        int exMax = Math.max(MAX_ROUTES / 2, MAX_ROUTES - include.size());
+        List<Cidr> ex = Cidr.fit(exclude, exMax);
+        int inMax = Math.max(1, MAX_ROUTES - ex.size() - defaults.size());
+        List<Cidr> in = rest.size() > inMax ? Cidr.fit(rest, inMax) : rest;
+        exclude.clear();
+        exclude.addAll(ex);
+        include.clear();
+        include.addAll(defaults);
+        include.addAll(in);
+        coarse = true;
+        fitted = before;
     }
 
     /**

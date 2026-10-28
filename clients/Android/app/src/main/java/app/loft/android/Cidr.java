@@ -176,6 +176,62 @@ final class Cidr {
     }
 
     /**
+     * Shrinks a prefix list to at most {@code max} prefixes while covering at
+     * least every address it covered before. Exact (only merged) when it
+     * already fits; otherwise prefixes are widened to /L blocks, choosing the
+     * longest L (the least widening) that fits. IPv4 and IPv6 share the
+     * budget in proportion to their sizes.
+     *
+     * <p>Why: Android sends the VPN's whole route table to every app that
+     * watches the network, in one IPC message limited to about 1 MB (roughly
+     * 7,000 routes). Past that, the system cannot deliver it, and apps that
+     * ask for it crash. See RoutePlan.MAX_ROUTES.
+     */
+    static List<Cidr> fit(List<Cidr> list, int max) {
+        List<Cidr> v4 = new ArrayList<>();
+        List<Cidr> v6 = new ArrayList<>();
+        for (Cidr c : list) {
+            if (c != null) {
+                (c.v6 ? v6 : v4).add(c);
+            }
+        }
+        int n = v4.size() + v6.size();
+        int max4 = n == 0 ? max : Math.max(1, (int) ((long) max * v4.size() / n));
+        int max6 = Math.max(1, max - max4);
+        List<Cidr> out = new ArrayList<>(fitFamily(v4, false, max4));
+        out.addAll(fitFamily(v6, true, max6));
+        return out;
+    }
+
+    /** fit() for one family: the longest block length L whose widened list fits in {@code max}. */
+    private static List<Cidr> fitFamily(List<Cidr> list, boolean v6, int max) {
+        if (list.isEmpty()) {
+            return list;
+        }
+        Ranges r = Ranges.of(list, v6);
+        List<Cidr> exact = r.toCidrs();
+        if (exact.size() <= max) {
+            return exact;
+        }
+        // Fewer bits means wider blocks and fewer prefixes, so the size only
+        // shrinks as L goes down: a binary search finds the longest L that fits.
+        int lo = 0;
+        int hi = v6 ? 128 : 32;
+        List<Cidr> best = r.coarsen(0).toCidrs();
+        while (lo <= hi) {
+            int mid = (lo + hi) >>> 1;
+            List<Cidr> c = r.coarsen(mid).toCidrs();
+            if (c.size() <= max) {
+                best = c;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return best;
+    }
+
+    /**
      * Returns {@code a} minus {@code b} as a list of prefixes. When b lies inside
      * a, walk the bits from a's length down to b's: at each step the half that
      * does not contain b is kept as its own prefix. The result covers a exactly

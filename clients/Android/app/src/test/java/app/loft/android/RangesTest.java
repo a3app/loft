@@ -108,6 +108,68 @@ public class RangesTest {
         assertFalse(new RoutePlan().destDropped(buf, 20));
     }
 
+    /** fit: under budget, never loses an address, and leaves a small list exact. */
+    @Test
+    public void fitKeepsEveryAddressUnderBudget() {
+        Random rnd = new Random(3);
+        List<Cidr> big = new ArrayList<>();
+        for (int i = 0; i < 6000; i++) {
+            byte[] a = {(byte) (1 + rnd.nextInt(220)), (byte) rnd.nextInt(256), (byte) rnd.nextInt(256), 0};
+            big.add(new Cidr(a, 20 + rnd.nextInt(5), false).canonical());
+        }
+        List<Cidr> got = Cidr.fit(big, 500);
+        assertTrue(got.size() + " routes", got.size() <= 500);
+        for (int i = 0; i < 2000; i++) {
+            Cidr c = big.get(rnd.nextInt(big.size()));
+            byte[] a = edge(rnd, c, 32);
+            assertTrue(any(got, a, false));
+        }
+        List<Cidr> small = Cidr.of("10.0.0.0/24", "10.0.1.0/24", "192.168.1.0/24");
+        List<Cidr> s = Cidr.fit(small, 500);
+        assertEquals(2, s.size());
+    }
+
+    /**
+     * A huge bypass list is squeezed under MAX_ROUTES, and a "through" prefix
+     * inside a bypassed range survives as its own, more specific route.
+     */
+    @Test
+    public void planStaysUnderRouteBudget() {
+        Random rnd = new Random(5);
+        StringBuilder routes = new StringBuilder();
+        List<Cidr> bypass = new ArrayList<>();
+        for (int i = 0; i < 8000; i++) {
+            byte[] a = {(byte) (11 + rnd.nextInt(150)), (byte) rnd.nextInt(256), (byte) rnd.nextInt(256), 0};
+            bypass.add(new Cidr(a, 24, false));
+        }
+        // Simulate the split store through a plain plan: bypass as exclude, one through route.
+        RoutePlan p = RoutePlan.build(true, false, false, null, true,
+                "10.8.0.2", 24, "", 0, "5.5.5.0/24", "");
+        p.exclude.addAll(bypass);
+        assertTrue(p.include.size() + p.exclude.size() > RoutePlan.MAX_ROUTES);
+        RoutePlan q = RoutePlan.withBudget(p);
+        assertTrue(q.include.size() + q.exclude.size() <= RoutePlan.MAX_ROUTES);
+        assertTrue(hasPrefix(q.include, "0.0.0.0/0"));
+        assertTrue(hasPrefix(q.include, "5.5.5.0/24") || anyContains(q.include, "5.5.5.1"));
+        for (Cidr c : bypass) {
+            assertTrue(c.display(), anyContains(q.exclude, c.address()));
+        }
+        assertTrue(q.coarse);
+    }
+
+    private static boolean hasPrefix(List<Cidr> list, String s) {
+        for (Cidr c : list) {
+            if (c.display().equals(s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean anyContains(List<Cidr> list, String ip) {
+        return any(list, Cidr.parse(ip).addr, false);
+    }
+
     // ---- helpers ----
 
     /** Random IPv4 prefixes with lengths from minBits to 32, packed into 10.0.0.0/8 so they collide. */

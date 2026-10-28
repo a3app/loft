@@ -74,7 +74,32 @@ final class Ranges {
             // First address: host bits cleared. Last address: host bits set.
             rs.add(new long[]{hi & ~mHi, lo & ~mLo, hi | mHi, lo | mLo});
         }
-        // 2. Sort by start and merge ranges that overlap or touch.
+        return merged(v6, rs);
+    }
+
+    /**
+     * The same set widened so every range starts and ends on a boundary of a
+     * /{@code bits} block: each range grows to the whole /bits blocks it
+     * touches, and blocks that now touch merge. Fewer, wider ranges; never
+     * fewer addresses. Used to squeeze a huge route list under Android's
+     * size limit (see Cidr.fit).
+     */
+    Ranges coarsen(int bits) {
+        int host = (v6 ? 128 : 32) - bits; // low bits that no longer matter
+        if (host <= 0) {
+            return this;
+        }
+        long mHi = maskHi(host);
+        long mLo = maskLo(host);
+        List<long[]> rs = new ArrayList<>(size());
+        for (int i = 0; i < size(); i++) {
+            rs.add(new long[]{sHi[i] & ~mHi, sLo[i] & ~mLo, eHi[i] | mHi, eLo[i] | mLo});
+        }
+        return merged(v6, rs);
+    }
+
+    /** Sorts {start, end} rows by start and merges rows that overlap or touch. */
+    private static Ranges merged(boolean v6, List<long[]> rs) {
         rs.sort((a, b) -> cmp(a[0], a[1], b[0], b[1]));
         List<long[]> out = new ArrayList<>(rs.size());
         for (long[] r : rs) {
