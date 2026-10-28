@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Test
@@ -87,8 +87,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Node packages, panel and CLI archives
@@ -118,7 +118,7 @@ jobs:
             (cd "$flat" && sha256sum -c "$GITHUB_WORKSPACE/$d/SHA256SUMS")
             rm -rf "$flat"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
           if-no-files-found: error
@@ -138,8 +138,8 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: macOS DMGs arm + intel (ad-hoc, no VERSION bump)
@@ -153,7 +153,7 @@ jobs:
           ls -l dist/clients/macOS/*.dmg
       - name: Drop scratch images
         run: rm -f dist/clients/macOS/*.rw.dmg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           if-no-files-found: error
@@ -165,15 +165,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: "8.11.1"
       # v3 runs `sdkmanager tools`; Google no longer serves that package.
@@ -216,7 +216,7 @@ jobs:
           test -f "dist/clients/Android/loft-android-${ver}-SHA256SUMS.txt"
           unzip -t "dist/clients/Android/loft-${ver}-android.apk" >/dev/null
           unzip -t "dist/clients/Android/loft-${ver}-android-tv.apk" >/dev/null
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: env.skip != '1'
         with:
           name: android
@@ -232,8 +232,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: mingw-w64
@@ -295,7 +295,7 @@ jobs:
             unzip -l "$z" | grep -q 'wintun.dll'
             unzip -l "$z" | grep -q 'loft-front.exe'
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           if-no-files-found: error
@@ -312,10 +312,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Versioned Dist names
