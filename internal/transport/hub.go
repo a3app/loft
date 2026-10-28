@@ -110,7 +110,16 @@ func serveHub(st *mux.Stream, port string) {
 	_ = srv.Serve(ln)
 }
 
-// onceLn is a net.Listener that Accepts the hub stream once, then blocks until Close.
+// onceLn is a net.Listener that Accepts the hub stream once, then blocks the
+// next Accept until that connection closes, so http.Server.Serve returns.
+//
+// Why the wait, and why it matters: http.Server.Serve hands the first conn to
+// its own goroutine, then loops and Accepts again. If that second Accept blocked
+// forever, Serve would park forever too — one leaked goroutine (plus the server
+// and the stream it pins) for every HTTP/1.1 hub or masked connection, growing
+// without bound as WebSocket-front clients reconnect. The wrapper below closes
+// ch when http.Server finishes the connection (its own defer closes the conn),
+// which unblocks the second Accept; Serve then returns and nothing is retained.
 type onceLn struct {
 	c     net.Conn
 	mu    sync.Mutex
@@ -118,7 +127,8 @@ type onceLn struct {
 	ch    chan struct{}
 }
 
-// Accept returns the hub stream on the first call; later calls wait for Close.
+// Accept returns the hub stream (wrapped so its Close unblocks the listener)
+// on the first call; later calls wait for that connection to close.
 func (o *onceLn) Accept() (net.Conn, error) {
 	o.mu.Lock()
 	if o.taken {
@@ -129,17 +139,35 @@ func (o *onceLn) Accept() (net.Conn, error) {
 	o.taken = true
 	c := o.c
 	o.mu.Unlock()
-	return c, nil
+	return &onceConn{Conn: c, ln: o}, nil
 }
 
-// Close unblocks Accept.
+// Close unblocks Accept. Guarded by mu so two Closes cannot both reach the
+// default branch and close ch twice (which would panic).
 func (o *onceLn) Close() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	select {
 	case <-o.ch:
 	default:
 		close(o.ch)
 	}
 	return nil
+}
+
+// onceConn is the single connection onceLn hands out. When http.Server is done
+// with it (connection closed), its Close also closes the listener, so the
+// parked second Accept returns and Serve exits.
+type onceConn struct {
+	net.Conn
+	ln *onceLn
+}
+
+// Close closes the underlying stream, then unblocks the listener.
+func (c *onceConn) Close() error {
+	err := c.Conn.Close()
+	_ = c.ln.Close()
+	return err
 }
 
 // Addr is the hub stream's local address.
