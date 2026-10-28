@@ -3,4 +3,11 @@
 <resources>
     <!-- Ui.bgRes: the background drawable resource last set on a view, so it is not set again. -->
     <item name="ui_bg_res" type="id" />
+    <!--
+        Update-channel row on the About screen. Only the github build has a layout with
+        these views; declaring the ids here gives every build the R.id constants, so
+        AboutActivity (shared code) compiles in the store build too and finds nothing there.
+    -->
+    <item name="btn_channel" type="id" />
+    <item name="channel_status" type="id" />
 </resources>
