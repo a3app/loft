@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -43,9 +44,13 @@ const (
 type Status struct {
 	Version string `json:"version"`
 	SOCKS   string `json:"socks"`
-	HTTP    string `json:"http"`
-	Bind    string `json:"bind"`
-	Uplink  string `json:"uplink"`
+	// SOCKS is the SOCKS5 address in effect ("off" when there is none);
+	// SOCKSSet is listen.socks5 in client.yaml, which applies after a
+	// container restart.
+	SOCKSSet string `json:"socks_set"`
+	HTTP     string `json:"http"`
+	Bind     string `json:"bind"`
+	Uplink   string `json:"uplink"`
 	// Gateway is the LAN gateway mode in effect now: "nat" or "route", or
 	// empty while there is no TUN. GatewaySet is what client.yaml says; the
 	// two differ after a change until the container restarts, because the
@@ -71,6 +76,21 @@ type Patch struct {
 	Uplink string `json:"uplink"`
 	// Gateway is listen.gateway: "nat" or "route"; empty keeps the old one.
 	Gateway string `json:"gateway"`
+	// SOCKS is "off", a port number ("1080"), or empty to keep the old one.
+	SOCKS string `json:"socks"`
+}
+
+// validSOCKSPatch accepts what the page may send for SOCKS5: nothing,
+// "off", or a port 1..65535 (digits only: no host, no spaces).
+func validSOCKSPatch(s string) error {
+	if s == "" || s == config.SOCKSOff {
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 || n > 65535 || strconv.Itoa(n) != s {
+		return fmt.Errorf("SOCKS5 port %q: use 1-65535 or off", s)
+	}
+	return nil
 }
 
 // Live returns the current session snapshot.
@@ -280,6 +300,11 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	}
 	p.Gateway = strings.TrimSpace(p.Gateway)
 	if err := config.ValidGatewayMode(p.Gateway); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	p.SOCKS = strings.TrimSpace(p.SOCKS)
+	if err := validSOCKSPatch(p.SOCKS); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

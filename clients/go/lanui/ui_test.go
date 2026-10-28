@@ -191,3 +191,36 @@ func TestSaveGateway(t *testing.T) {
 		}
 	}
 }
+
+// TestSaveSOCKS: the page may turn SOCKS5 off or give a port; anything
+// else (a host, a range, junk) is refused before Apply.
+func TestSaveSOCKS(t *testing.T) {
+	var got Patch
+	calls := 0
+	s := &Server{
+		Live:  func() Status { return Status{SOCKS: "0.0.0.0:1080", SOCKSSet: "off"} },
+		Apply: func(p Patch) error { got = p; calls++; return nil },
+		Log:   NewRing(8),
+	}
+	h := s.mux()
+	post := func(body string) int {
+		r := httptest.NewRequest(http.MethodPost, "/api/save", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	for _, ok := range []string{"off", "1080", "65535", ""} {
+		if c := post(`{"socks":"` + ok + `"}`); c != 204 || got.SOCKS != ok {
+			t.Fatalf("socks %q: %d %+v", ok, c, got)
+		}
+	}
+	n := calls
+	for _, bad := range []string{"0", "65536", "0.0.0.0:1080", "10 80", "01080", "-1", "on"} {
+		if c := post(`{"socks":"` + bad + `"}`); c != 400 {
+			t.Fatalf("socks %q: want 400, got %d", bad, c)
+		}
+	}
+	if calls != n {
+		t.Fatal("Apply ran for a refused value")
+	}
+}

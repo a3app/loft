@@ -163,6 +163,16 @@
             </select>
           </label>
           <p class="hint" data-i="eGwH">Должно совпадать с :local mode в policy.rsc. После смены запустите policy.rsc заново и перезапустите контейнер.</p>
+          <label class="field">SOCKS5
+            <select id="socksOn" onchange="socksToggle()">
+              <option value="on" data-i="eSocksOn">включён</option>
+              <option value="off" data-i="eSocksOff">выключен</option>
+            </select>
+          </label>
+          <label class="field"><span data-i="eSocksPort">Порт SOCKS5</span>
+            <input id="socksPort" class="mono" inputmode="numeric" placeholder="1080" />
+          </label>
+          <p class="hint" data-i="eSocksH">Прокси для приложений без пароля на 172.31.20.2. После смены перезапустите контейнер.</p>
           <div class="btns">
             <button type="button" class="ghost" onclick="copyRsc()" data-i="eRsc">Скрипт выхода</button>
             <button type="button" class="go" onclick="save()" data-i="eSave">Сохранить</button>
@@ -202,6 +212,8 @@
         eGw: "Шлюз LAN", eGwNat: "nat — RouterOS маскирует LAN", eGwRoute: "route — настоящие адреса LAN",
         eGwH: "Должно совпадать с :local mode в policy.rsc. После смены запустите policy.rsc заново и перезапустите контейнер.",
         gwNext: "после перезапуска",
+        eSocksOn: "включён", eSocksOff: "выключен", eSocksPort: "Порт SOCKS5", socksOff: "выключен",
+        eSocksH: "Прокси для приложений без пароля на 172.31.20.2. После смены перезапустите контейнер.",
         eRsc: "Скрипт выхода", eSave: "Сохранить",
         rTitle: "uplink.rsc", rHint: "После сохранения вставьте в New Terminal или /import disk1/loft/data/uplink.rsc",
         lTitle: "Журнал",
@@ -218,6 +230,8 @@
         eGw: "LAN gateway", eGwNat: "nat — RouterOS masquerades the LAN", eGwRoute: "route — real LAN addresses",
         eGwH: "Must match :local mode in policy.rsc. After a change, run policy.rsc again and restart the container.",
         gwNext: "after restart",
+        eSocksOn: "on", eSocksOff: "off", eSocksPort: "SOCKS5 port", socksOff: "off",
+        eSocksH: "Proxy for apps, no password, on 172.31.20.2. Restart the container after a change.",
         eRsc: "Uplink script", eSave: "Save",
         rTitle: "uplink.rsc", rHint: "After save, paste in New Terminal or /import disk1/loft/data/uplink.rsc",
         lTitle: "Log",
@@ -234,6 +248,8 @@
         eGw: "LAN 网关", eGwNat: "nat — RouterOS 对 LAN 做伪装", eGwRoute: "route — 保留真实 LAN 地址",
         eGwH: "必须和 policy.rsc 里的 :local mode 一致。改了以后重新运行 policy.rsc 并重启容器。",
         gwNext: "重启后",
+        eSocksOn: "开启", eSocksOff: "关闭", eSocksPort: "SOCKS5 端口", socksOff: "关闭",
+        eSocksH: "给应用用的代理，无密码，在 172.31.20.2。改了以后重启容器。",
         eRsc: "出口脚本", eSave: "保存",
         rTitle: "uplink.rsc", rHint: "保存后粘贴到 New Terminal，或 /import disk1/loft/data/uplink.rsc",
         lTitle: "日志",
@@ -244,6 +260,11 @@
     let lang = "ru";
     function t(k) { return (I[lang] && I[lang][k]) || k; }
     let gwFilled = false;
+    let socksFilled = false;
+    // The port field means nothing while SOCKS5 is off.
+    function socksToggle() {
+      document.getElementById("socksPort").disabled = document.getElementById("socksOn").value === "off";
+    }
     function setLang(l) {
       lang = l;
       document.documentElement.lang = l;
@@ -278,7 +299,14 @@
       tag.textContent = up ? t("up") : t("down");
       tag.className = "tag " + (up ? "ok" : "wait");
       document.getElementById("ver").textContent = st.version || "";
-      document.getElementById("stSocks").textContent = st.socks || "—";
+      // SOCKS5 in effect; after a change the saved one only applies once
+      // the container restarts, so show both until then.
+      const sockShow = (v) => (v === "off" ? t("socksOff") : v);
+      let sk = st.socks ? sockShow(st.socks) : "—";
+      if (st.socks && st.socks_set && st.socks_set !== st.socks) {
+        sk = sk + " → " + sockShow(st.socks_set) + " (" + t("gwNext") + ")";
+      }
+      document.getElementById("stSocks").textContent = sk;
       document.getElementById("stOverlay").textContent = st.overlay || "—";
       document.getElementById("stBind").textContent = st.bind || "—";
       document.getElementById("stUplink").textContent = st.uplink || "—";
@@ -301,6 +329,15 @@
         document.getElementById("gateway").value = st.gateway_set;
         gwFilled = true;
       }
+      // Same for SOCKS5: fill from the saved config once.
+      if (st.socks_set && !socksFilled) {
+        const off = st.socks_set === "off";
+        document.getElementById("socksOn").value = off ? "off" : "on";
+        const port = off ? "" : st.socks_set.split(":").pop();
+        if (port) document.getElementById("socksPort").value = port;
+        socksToggle();
+        socksFilled = true;
+      }
       const lr = await fetch("/api/log");
       if (lr.ok) {
         const lines = await lr.json();
@@ -322,7 +359,9 @@
         type: document.getElementById("type").value,
         path: document.getElementById("path").value,
         uplink: document.getElementById("uplink").value.trim(),
-        gateway: document.getElementById("gateway").value
+        gateway: document.getElementById("gateway").value,
+        socks: document.getElementById("socksOn").value === "off"
+          ? "off" : (document.getElementById("socksPort").value.trim() || "1080")
       };
       const r = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const msg = document.getElementById("saveMsg");
