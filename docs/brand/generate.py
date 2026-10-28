@@ -445,10 +445,12 @@ def save(img: Image.Image, path: Path) -> None:
 
 
 def export_android_splash() -> None:
-    """Copy the README-on-dark lockup into the Android splash drawables.
+    """Write the two Android splash drawables.
 
-    Wide PNG is the pre-31 windowBackground. Square PNG is the API 31+
-    splash icon: the system center-crops the animated icon to a square.
+    The wide PNG is the pre-31 windowBackground: the full README lockup,
+    shown uncropped. The square PNG is the API 31+ splash icon, which the
+    system masks to a circle, so it is the mark alone (no wordmark) with
+    margin, not the lockup.
     """
     dest_dir = (
         ROOT.parent.parent
@@ -463,15 +465,19 @@ def export_android_splash() -> None:
     dest_dir.mkdir(parents=True, exist_ok=True)
     src = PNG / "loft-lockup-readme-on-dark.png"
     shutil.copyfile(src, dest_dir / "splash_lockup.png")
-    im = Image.open(src).convert("RGBA")
-    # API 31+ splash icon is clipped to a circle. Scale the lockup to ~80% of
-    # the square so house + word + tagline sit inside the diameter.
-    side = max(im.size)
-    inner_w = int(side * 0.80)
-    inner_h = max(1, int(im.height * inner_w / im.width))
-    inner = im.resize((inner_w, inner_h), Image.Resampling.LANCZOS)
+    # API 31+ splash icon: the system masks the animated icon to a circle, so
+    # only what fits inside the inscribed circle shows. A wide lockup pokes out
+    # on the sides and gets clipped (house and tagline ends cut off). The icon
+    # must therefore be the mark alone, with no wordmark, sized to the inner
+    # safe zone. The mark source is already ~square with a small margin; placing
+    # it at ~58% of the square keeps its content within two-thirds of the
+    # diameter, well inside the mask.
+    mark = Image.open(PNG / "loft-mark-on-dark-1024.png").convert("RGBA")
+    side = 1092
+    inner = int(side * 0.58)
+    m = mark.resize((inner, inner), Image.Resampling.LANCZOS)
     sq = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    sq.paste(inner, ((side - inner_w) // 2, (side - inner_h) // 2), inner)
+    sq.paste(m, ((side - inner) // 2, (side - inner) // 2), m)
     sq.save(dest_dir / "splash_lockup_icon.png")
 
 
