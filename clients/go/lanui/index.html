@@ -122,6 +122,7 @@
           <div class="row"><span class="k" data-i="sIp">Оверлей</span><span class="mono" id="stOverlay">—</span></div>
           <div class="row"><span class="k" data-i="sBind">Бинд</span><span class="mono" id="stBind">—</span></div>
           <div class="row"><span class="k" data-i="sUp">Выход</span><span class="mono" id="stUplink">—</span></div>
+          <div class="row"><span class="k" data-i="sGw">Шлюз LAN</span><span class="mono" id="stGateway">—</span></div>
           <div class="row"><span class="k" data-i="sFront">Фронт</span><span id="stFront">—</span></div>
         </div>
         <div class="foot" id="foot">http://172.31.20.2:8090/</div>
@@ -154,7 +155,14 @@
           <label class="field"><span data-i="eWan">Исходящий интерфейс RouterOS</span>
             <input id="uplink" class="mono" placeholder="ether1 · lte1 · pppoe-out1" />
           </label>
-          <p class="hint" data-i="eWanH">Имя WAN как в Winbox → Interfaces. Пусто — таблица по умолчанию. Контейнер всегда на eth0; сюда пишется выход наружу.</p>
+          <p class="hint" data-i="eWanH">Имя WAN как в Winbox → Interfaces. Пусто — таблица по умолчанию. Контейнер всегда на veth-loft; сюда пишется выход наружу.</p>
+          <label class="field"><span data-i="eGw">Шлюз LAN</span>
+            <select id="gateway">
+              <option value="nat" data-i="eGwNat">nat — RouterOS маскирует LAN</option>
+              <option value="route" data-i="eGwRoute">route — настоящие адреса LAN</option>
+            </select>
+          </label>
+          <p class="hint" data-i="eGwH">Должно совпадать с :local mode в policy.rsc. После смены запустите policy.rsc заново и перезапустите контейнер.</p>
           <div class="btns">
             <button type="button" class="ghost" onclick="copyRsc()" data-i="eRsc">Скрипт выхода</button>
             <button type="button" class="go" onclick="save()" data-i="eSave">Сохранить</button>
@@ -187,10 +195,13 @@
       ru: {
         gateH: "Страница на LAN. Пароль — listen.http_pass в YAML.",
         ePass: "Пароль", eIn: "Войти",
-        sState: "Состояние", sIp: "Оверлей", sBind: "Бинд", sUp: "Выход", sFront: "Фронт",
+        sState: "Состояние", sIp: "Оверлей", sBind: "Бинд", sUp: "Выход", sGw: "Шлюз LAN", sFront: "Фронт",
         eTitle: "Подключение", eKey: "Ключ участника", eType: "Тип", ePath: "Путь",
         eWan: "Исходящий интерфейс RouterOS",
-        eWanH: "Имя WAN как в Winbox → Interfaces. Пусто — таблица по умолчанию. Контейнер всегда на eth0; сюда пишется выход наружу.",
+        eWanH: "Имя WAN как в Winbox → Interfaces. Пусто — таблица по умолчанию. Контейнер всегда на veth-loft; сюда пишется выход наружу.",
+        eGw: "Шлюз LAN", eGwNat: "nat — RouterOS маскирует LAN", eGwRoute: "route — настоящие адреса LAN",
+        eGwH: "Должно совпадать с :local mode в policy.rsc. После смены запустите policy.rsc заново и перезапустите контейнер.",
+        gwNext: "после перезапуска",
         eRsc: "Скрипт выхода", eSave: "Сохранить",
         rTitle: "uplink.rsc", rHint: "После сохранения вставьте в New Terminal или /import disk1/loft/data/uplink.rsc",
         lTitle: "Журнал",
@@ -200,10 +211,13 @@
       en: {
         gateH: "LAN page. Password is listen.http_pass in the YAML.",
         ePass: "Password", eIn: "Sign in",
-        sState: "State", sIp: "Overlay", sBind: "Bind", sUp: "Uplink", sFront: "Front",
+        sState: "State", sIp: "Overlay", sBind: "Bind", sUp: "Uplink", sGw: "LAN gateway", sFront: "Front",
         eTitle: "Connection", eKey: "Member key", eType: "Type", ePath: "Path",
         eWan: "RouterOS uplink interface",
-        eWanH: "WAN name as in Winbox → Interfaces. Empty = default table. The container stays on eth0; this is the path out.",
+        eWanH: "WAN name as in Winbox → Interfaces. Empty = default table. The container stays on veth-loft; this is the path out.",
+        eGw: "LAN gateway", eGwNat: "nat — RouterOS masquerades the LAN", eGwRoute: "route — real LAN addresses",
+        eGwH: "Must match :local mode in policy.rsc. After a change, run policy.rsc again and restart the container.",
+        gwNext: "after restart",
         eRsc: "Uplink script", eSave: "Save",
         rTitle: "uplink.rsc", rHint: "After save, paste in New Terminal or /import disk1/loft/data/uplink.rsc",
         lTitle: "Log",
@@ -213,10 +227,13 @@
       zh: {
         gateH: "LAN 页。密码是 YAML 里的 listen.http_pass。",
         ePass: "密码", eIn: "登录",
-        sState: "状态", sIp: "覆盖网", sBind: "绑定", sUp: "出口", sFront: "前置",
+        sState: "状态", sIp: "覆盖网", sBind: "绑定", sUp: "出口", sGw: "LAN 网关", sFront: "前置",
         eTitle: "连接", eKey: "成员密钥", eType: "类型", ePath: "路径",
         eWan: "RouterOS 出口接口",
-        eWanH: "Winbox → Interfaces 里的 WAN 名。空 = 默认表。容器仍在 eth0；这里是往外走的路。",
+        eWanH: "Winbox → Interfaces 里的 WAN 名。空 = 默认表。容器仍在 veth-loft；这里是往外走的路。",
+        eGw: "LAN 网关", eGwNat: "nat — RouterOS 对 LAN 做伪装", eGwRoute: "route — 保留真实 LAN 地址",
+        eGwH: "必须和 policy.rsc 里的 :local mode 一致。改了以后重新运行 policy.rsc 并重启容器。",
+        gwNext: "重启后",
         eRsc: "出口脚本", eSave: "保存",
         rTitle: "uplink.rsc", rHint: "保存后粘贴到 New Terminal，或 /import disk1/loft/data/uplink.rsc",
         lTitle: "日志",
@@ -226,6 +243,7 @@
     };
     let lang = "ru";
     function t(k) { return (I[lang] && I[lang][k]) || k; }
+    let gwFilled = false;
     function setLang(l) {
       lang = l;
       document.documentElement.lang = l;
@@ -264,12 +282,25 @@
       document.getElementById("stOverlay").textContent = st.overlay || "—";
       document.getElementById("stBind").textContent = st.bind || "—";
       document.getElementById("stUplink").textContent = st.uplink || "—";
+      // The mode in effect now; after a change the saved one only applies
+      // once the container restarts, so show both until then.
+      let gw = st.gateway || "—";
+      if (st.gateway && st.gateway_set && st.gateway_set !== st.gateway) {
+        gw = st.gateway + " → " + st.gateway_set + " (" + t("gwNext") + ")";
+      }
+      document.getElementById("stGateway").textContent = gw;
       document.getElementById("stFront").textContent = [st.front, st.outbound].filter(Boolean).join(" · ") || "—";
       document.getElementById("foot").textContent = listenURL(st);
       if (st.url) document.getElementById("url").value = st.url;
       if (st.path) document.getElementById("path").value = st.path;
       if (st.front) document.getElementById("type").value = st.front;
       if (st.uplink) document.getElementById("uplink").value = st.uplink;
+      // Fill the mode list from the saved config once: refresh runs every
+      // 4 s and would otherwise undo a choice before the user presses Save.
+      if (st.gateway_set && !gwFilled) {
+        document.getElementById("gateway").value = st.gateway_set;
+        gwFilled = true;
+      }
       const lr = await fetch("/api/log");
       if (lr.ok) {
         const lines = await lr.json();
@@ -290,7 +321,8 @@
         url: document.getElementById("url").value,
         type: document.getElementById("type").value,
         path: document.getElementById("path").value,
-        uplink: document.getElementById("uplink").value.trim()
+        uplink: document.getElementById("uplink").value.trim(),
+        gateway: document.getElementById("gateway").value
       };
       const r = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const msg = document.getElementById("saveMsg");

@@ -41,19 +41,25 @@ const (
 
 // Status is GET /api/status.
 type Status struct {
-	Version  string `json:"version"`
-	SOCKS    string `json:"socks"`
-	HTTP     string `json:"http"`
-	Bind     string `json:"bind"`
-	Uplink   string `json:"uplink"`
-	Overlay  string `json:"overlay"`
-	TUN      bool   `json:"tun"`
-	Front    string `json:"front"`
-	Outbound string `json:"outbound"`
-	URL      string `json:"url"`
-	Path     string `json:"path"`
-	TokenSet bool   `json:"token_set"`
-	NeedPass bool   `json:"need_pass"`
+	Version string `json:"version"`
+	SOCKS   string `json:"socks"`
+	HTTP    string `json:"http"`
+	Bind    string `json:"bind"`
+	Uplink  string `json:"uplink"`
+	// Gateway is the LAN gateway mode in effect now: "nat" or "route", or
+	// empty while there is no TUN. GatewaySet is what client.yaml says; the
+	// two differ after a change until the container restarts, because the
+	// route-mode rule is put in place when the TUN comes up.
+	Gateway    string `json:"gateway"`
+	GatewaySet string `json:"gateway_set"`
+	Overlay    string `json:"overlay"`
+	TUN        bool   `json:"tun"`
+	Front      string `json:"front"`
+	Outbound   string `json:"outbound"`
+	URL        string `json:"url"`
+	Path       string `json:"path"`
+	TokenSet   bool   `json:"token_set"`
+	NeedPass   bool   `json:"need_pass"`
 }
 
 // Patch is POST /api/save.
@@ -63,6 +69,8 @@ type Patch struct {
 	Type   string `json:"type"`
 	Path   string `json:"path"`
 	Uplink string `json:"uplink"`
+	// Gateway is listen.gateway: "nat" or "route"; empty keeps the old one.
+	Gateway string `json:"gateway"`
 }
 
 // Live returns the current session snapshot.
@@ -267,6 +275,11 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	}
 	p.Uplink = strings.TrimSpace(p.Uplink)
 	if err := config.ValidIFName(p.Uplink); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	p.Gateway = strings.TrimSpace(p.Gateway)
+	if err := config.ValidGatewayMode(p.Gateway); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

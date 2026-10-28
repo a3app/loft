@@ -158,3 +158,36 @@ func TestLoginCookieSecureOnTLS(t *testing.T) {
 		t.Fatalf("tls cookie %d %+v", w.Code, ck)
 	}
 }
+
+// TestSaveGateway: the LAN gateway mode from the page reaches Apply; a
+// value that is not nat or route is refused with 400 before Apply runs.
+func TestSaveGateway(t *testing.T) {
+	var got Patch
+	calls := 0
+	s := &Server{
+		Live:  func() Status { return Status{Gateway: "nat", GatewaySet: "route"} },
+		Apply: func(p Patch) error { got = p; calls++; return nil },
+		Log:   NewRing(8),
+	}
+	h := s.mux()
+	post := func(body string) int {
+		r := httptest.NewRequest(http.MethodPost, "/api/save", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	if c := post(`{"uplink":"ether1","gateway":"route"}`); c != 204 || got.Gateway != "route" {
+		t.Fatalf("route: %d %+v", c, got)
+	}
+	if c := post(`{"uplink":"ether1","gateway":"masquerade"}`); c != 400 || calls != 1 {
+		t.Fatalf("bad mode: code %d, Apply calls %d", c, calls)
+	}
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	for _, want := range []string{`id="gateway"`, `id="stGateway"`, `value="route"`} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Fatalf("page missing %q", want)
+		}
+	}
+}

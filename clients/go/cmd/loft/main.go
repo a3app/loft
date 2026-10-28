@@ -161,7 +161,7 @@ func main() {
 			Addr: cfg.Listen.HTTP,
 			Pass: cfg.Listen.HTTPPass,
 			Log:  ring,
-			Live: func() lanui.Status { return liveStatus(*cfgPath, sess, &tunMu, &tunDev) },
+			Live: func() lanui.Status { return liveStatus(*cfgPath, sess, &tunMu, &tunDev, &lanUndo) },
 			Apply: func(p lanui.Patch) error {
 				return applyPatch(*cfgPath, p, sess)
 			},
@@ -246,7 +246,7 @@ func (s *session) start(cfg *config.ClientConfig) {
 // overlay IP (the client's address inside the loft virtual network), the
 // settings read fresh from the config file, the front that is actually up,
 // and whether the TUN device exists.
-func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.Device) lanui.Status {
+func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.Device, lanUndo *func()) lanui.Status {
 	st := lanui.Status{
 		Version: version.Line("loft"),
 		Bind:    protect.Bound(),
@@ -256,6 +256,10 @@ func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.
 		st.SOCKS = cfg.Listen.SOCKS5
 		st.HTTP = cfg.Listen.HTTP
 		st.Uplink = cfg.Listen.Uplink
+		st.GatewaySet = cfg.Listen.Gateway
+		if st.GatewaySet == "" {
+			st.GatewaySet = "nat"
+		}
 		st.TokenSet = cfg.Token != ""
 		if len(cfg.Outbounds) > 0 {
 			st.URL = cfg.Outbounds[0].URL
@@ -274,6 +278,14 @@ func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.
 	sess.mu.Unlock()
 	tunMu.Lock()
 	st.TUN = *tunDev != nil
+	// The mode in effect: route only when its rule is actually in place
+	// (bringTUN sets lanUndo under tunMu), otherwise nat. No TUN, no mode.
+	if st.TUN {
+		st.Gateway = "nat"
+		if *lanUndo != nil {
+			st.Gateway = "route"
+		}
+	}
 	tunMu.Unlock()
 	return st
 }
@@ -307,6 +319,15 @@ func applyPatch(path string, p lanui.Patch, sess *session) error {
 		return err
 	}
 	cfg.Listen.Uplink = p.Uplink
+	// The LAN gateway mode is only written here: the route-mode rule is set
+	// up when the TUN comes up, so a change takes effect after a container
+	// restart (the page says so).
+	if p.Gateway != "" {
+		if err := config.ValidGatewayMode(p.Gateway); err != nil {
+			return err
+		}
+		cfg.Listen.Gateway = p.Gateway
+	}
 	if err := config.WriteClient(path, cfg); err != nil {
 		return err
 	}
@@ -315,7 +336,7 @@ func applyPatch(path string, p lanui.Patch, sess *session) error {
 		return err
 	}
 	sess.start(cfg)
-	log.Printf("saved uplink=%s", p.Uplink)
+	log.Printf("saved uplink=%s gateway=%s", p.Uplink, cfg.Listen.Gateway)
 	return nil
 }
 
