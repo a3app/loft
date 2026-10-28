@@ -175,3 +175,49 @@ func makeEchoPkt(src, dst net.IP, payload []byte) []byte {
 	binary.BigEndian.PutUint16(pkt[ihl+2:ihl+4], ipChecksum(pkt[ihl:]))
 	return pkt
 }
+
+// TestDeliverICMPVLANGateway: a member in a VLAN pings the gateway its
+// Status gave it (the segment gateway, not the main one) and gets a reply,
+// over a mux session and over an L3 pump alike.
+func TestDeliverICMPVLANGateway(t *testing.T) {
+	n := &netconf.Network{
+		ID: "n", CIDR: "10.8.0.0/24", Gateway: "10.8.0.1", Peers: netconf.PeersHub, Enabled: true,
+		VLANs: []netconf.VLAN{{
+			ID: 20, CIDR: "10.20.0.0/24", Gateway: "10.20.0.1",
+			PoolFrom: "10.20.0.10", PoolTo: "10.20.0.200",
+		}},
+		Members: []netconf.Member{{ID: "tester", Authorized: true, VLAN: 20, IP: "10.20.0.10", Multi: true, MultiLimit: 4}},
+	}
+	if err := n.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	o := NewOverlay(n)
+	oldKeys := AuthKeys
+	AuthKeys = nil
+	defer func() { AuthKeys = oldKeys }()
+
+	cli := mux.NewClient()
+	st := wire.Status{}
+	o.Bind(&st, wire.Hello{MemberID: "tester"}, cli, nil)
+	if st.Gateway != "10.20.0.1" {
+		t.Fatalf("status %+v", st)
+	}
+	o.DeliverICMP(cli, makeEchoPkt(net.ParseIP(st.IP), net.ParseIP(st.Gateway), []byte("ping")))
+	fs := cli.Pull(64*1024, 200*time.Millisecond)
+	if len(fs) == 0 || fs[0].Cmd != wire.CmdDgram {
+		t.Fatalf("no reply from the VLAN gateway over mux: %+v", fs)
+	}
+
+	sink := &memL3{ch: make(chan []byte, 4)}
+	st = wire.Status{}
+	o.BindL3(&st, wire.Hello{MemberID: "tester", InstanceID: "l3"}, sink, nil)
+	if st.Gateway != "10.20.0.1" {
+		t.Fatalf("l3 status %+v", st)
+	}
+	o.DeliverL3(sink, makeEchoPkt(net.ParseIP(st.IP), net.ParseIP(st.Gateway), []byte("ping")))
+	select {
+	case <-sink.ch:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("no reply from the VLAN gateway over l3")
+	}
+}

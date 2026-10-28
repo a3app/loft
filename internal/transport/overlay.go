@@ -853,7 +853,7 @@ func (o *Overlay) DeliverICMP(from *mux.Session, pkt []byte) {
 	if !o.N().Allow(p) {
 		return
 	}
-	if dst == o.N().Gateway {
+	if o.isGateway(srcP, dst) {
 		reply, ok := icmpEchoSwap(pkt)
 		if !ok {
 			return
@@ -865,6 +865,22 @@ func (o *Overlay) DeliverICMP(from *mux.Session, pkt []byte) {
 		return
 	}
 	_ = dstP.sess.WriteDgram(net.JoinHostPort(dst, overlayICMPPort), pkt)
+}
+
+// isGateway reports whether dst is a gateway address the node itself
+// answers for peer p: the main overlay gateway, or the gateway of p's own
+// VLAN segment. A member in a VLAN gets its segment's gateway in Status (as
+// "gateway" and as DNS), so a ping to it must be answered too; before, only
+// the main gateway was, and "ping <my gateway>" timed out in every VLAN.
+func (o *Overlay) isGateway(p *ovPeer, dst string) bool {
+	n := o.N()
+	if n == nil || dst == "" {
+		return false
+	}
+	if dst == n.Gateway {
+		return true
+	}
+	return p != nil && p.vlan != 0 && dst == n.Seg(p.vlan).Gateway
 }
 
 // parsePeerAnnounce reads loft.peer:<port> from an Open target.

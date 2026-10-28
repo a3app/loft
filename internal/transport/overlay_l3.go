@@ -54,7 +54,7 @@ func (o *Overlay) DeliverL3(from l3Sink, pkt []byte) {
 	proto, dport := l3ProtoPort(pkt, ihl)
 	p := o.packet(srcP, dstIP, dstP, proto, dport, false)
 	if o.Contains(dst) {
-		if dst == o.N().Gateway {
+		if o.isGateway(srcP, dst) {
 			if pkt[9] == ipProtoICMP {
 				reply, ok := icmpEchoSwap(pkt)
 				if ok {
