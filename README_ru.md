@@ -164,7 +164,7 @@ flowchart LR
 | [docs/code-tour_ru.md](docs/code-tour_ru.md) | Путеводитель по коду: с чего начать читать, путь соединения, словарь. |
 | [docs/guide_ru.md](docs/guide_ru.md) | Сборка, настройка, запуск, Debian. |
 | [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN: как подключить. |
-| [docs/keenetic_ru.md](docs/keenetic_ru.md) | Клиент KeeneticOS (Entware, OpkgTun). [clients/Keenetic/](clients/Keenetic/). |
+| [docs/ndms_ru.md](docs/ndms_ru.md) | Клиент KeeneticOS (Entware, OpkgTun). [clients/NDMS/](clients/NDMS/). |
 | [docs/mikrotik_ru.md](docs/mikrotik_ru.md) | Клиент RouterOS 7 (контейнер). Каталог: [clients/MikroTik/](clients/MikroTik/). |
 | [docs/ios_ru.md](docs/ios_ru.md) | Клиент iOS (Packet Tunnel). Каталог: [clients/iOS/](clients/iOS/). |
 | [docs/android_ru.md](docs/android_ru.md) | Клиент Android (VpnService). Каталог: [clients/Android/](clients/Android/). |
@@ -183,7 +183,7 @@ server/panel      веб-панель loft-panel
 clients/go        loft, loft-front, loft-probe, loft-bench
 lab/              публичные отладочные стенды (panel-dev)
 clients/macOS     приложение в строке меню (запускает loft-front)
-clients/Keenetic  Entware / OpkgTun (loft-keenetic)
+clients/NDMS  Entware / OpkgTun (loft-ndms)
 clients/MikroTik  контейнер RouterOS 7 (образ + .rsc)
 clients/iOS       Packet Tunnel (хост + appex)
 clients/Android   VpnService (хост на Java)

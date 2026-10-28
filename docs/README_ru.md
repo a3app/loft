@@ -42,7 +42,7 @@ flowchart LR
 | [code-tour_ru.md](code-tour_ru.md) | Путеводитель по коду: с чего начать читать, путь соединения, словарь. |
 | [guide_ru.md](guide_ru.md) | Сборка, конфиг, decoy, roster, Debian. |
 | [yandex-cdn_ru.md](yandex-cdn_ru.md) | Yandex Cloud CDN: пошаговая настройка. |
-| [keenetic_ru.md](keenetic_ru.md) | KeeneticOS: OpkgTun, приоритеты, вход в панель. |
+| [ndms_ru.md](ndms_ru.md) | KeeneticOS: OpkgTun, приоритеты, вход в панель. |
 | [mikrotik_ru.md](mikrotik_ru.md) | RouterOS 7: контейнер, SOCKS, policy routing. |
 | [ios_ru.md](ios_ru.md) | iOS: Packet Tunnel, Personal VPN. Apple TV позже. |
 | [android_ru.md](android_ru.md) | Android: VpnService. Android TV / Google TV позже. |

@@ -164,7 +164,7 @@ flowchart LR
 | [docs/code-tour.md](docs/code-tour.md) | Code tour: where to start reading, one connection end to end, glossary. |
 | [docs/guide.md](docs/guide.md) | Build, configuration, operation, Debian. |
 | [docs/yandex-cdn_ru.md](docs/yandex-cdn_ru.md) | Yandex Cloud CDN operator guide (RU). |
-| [docs/keenetic.md](docs/keenetic.md) | KeeneticOS Entware client (OpkgTun). [clients/Keenetic/](clients/Keenetic/). |
+| [docs/ndms.md](docs/ndms.md) | KeeneticOS Entware client (OpkgTun). [clients/NDMS/](clients/NDMS/). |
 | [docs/mikrotik.md](docs/mikrotik.md) | RouterOS 7 container client. Catalog: [clients/MikroTik/](clients/MikroTik/). |
 | [docs/ios.md](docs/ios.md) | iOS Packet Tunnel client. Catalog: [clients/iOS/](clients/iOS/). |
 | [docs/android.md](docs/android.md) | Android VpnService client. Catalog: [clients/Android/](clients/Android/). |
@@ -183,7 +183,7 @@ server/panel      loft-panel web admin
 clients/go        loft, loft-front, loft-probe, loft-bench
 lab/              public debug stands (panel-dev)
 clients/macOS     menu-bar app (launches loft-front)
-clients/Keenetic  Entware / OpkgTun (loft-keenetic)
+clients/NDMS  Entware / OpkgTun (loft-ndms)
 clients/MikroTik  RouterOS 7 container (image + .rsc)
 clients/iOS       Packet Tunnel (thin host + appex)
 clients/Android   VpnService (thin Java host)

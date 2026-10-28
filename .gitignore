@@ -27,9 +27,9 @@ clients/MikroTik/pack/loft-amd64
 clients/MikroTik/pack/loft-arm64
 clients/MikroTik/pack/loft-armv7
 clients/MikroTik/pack/*.tar
-clients/Keenetic/pack/loft-keenetic
-clients/Keenetic/pack/*.ipk
-clients/Keenetic/pack/*.sha256
+clients/NDMS/pack/loft-ndms
+clients/NDMS/pack/*.ipk
+clients/NDMS/pack/*.sha256
 docs/brand/__pycache__/
 docs/brand/concepts/
 .DS_Store

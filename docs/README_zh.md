@@ -42,7 +42,7 @@ flowchart LR
 | [code-tour_zh.md](code-tour_zh.md) | 代码导读：从哪里读起、一个连接的完整路径、词汇表。 |
 | [guide_zh.md](guide_zh.md) | 编译、配置、诱饵、名册、Debian。 |
 | [yandex-cdn_zh.md](yandex-cdn_zh.md) | Yandex Cloud CDN：控制台怎么点。 |
-| [keenetic_zh.md](keenetic_zh.md) | KeeneticOS：OpkgTun、优先级、面板登录。 |
+| [ndms_zh.md](ndms_zh.md) | KeeneticOS：OpkgTun、优先级、面板登录。 |
 | [mikrotik_zh.md](mikrotik_zh.md) | RouterOS 7：容器、SOCKS、策略路由。 |
 | [ios_zh.md](ios_zh.md) | iOS：Packet Tunnel，Personal VPN。Apple TV 以后再说。 |
 | [android_zh.md](android_zh.md) | Android：VpnService。Android TV / Google TV 以后再说。 |

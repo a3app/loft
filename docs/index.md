@@ -43,7 +43,7 @@ flowchart LR
 | [code-tour.md](code-tour.md) | Code tour: where to start reading, one connection end to end, glossary. |
 | [guide.md](guide.md) | Build, config, decoy, roster, Debian. |
 | [share.md](share.md) | Import URI: `loft://`, `.loft` (one or several connections), QR. |
-| [keenetic.md](keenetic.md) | KeeneticOS Entware client. |
+| [ndms.md](ndms.md) | KeeneticOS Entware client. |
 | [mikrotik.md](mikrotik.md) | RouterOS 7 container client. |
 | [ios.md](ios.md) | iOS Packet Tunnel. |
 | [android.md](android.md) | Android VpnService. |
