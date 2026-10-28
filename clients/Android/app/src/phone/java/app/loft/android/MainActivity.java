@@ -54,6 +54,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * and redraws from Live on every Bus event.
  */
 public final class MainActivity extends LoftActivity implements Bus.Listener {
+    /** The bottom tab bar pads itself for the navigation bar (see LoftActivity). */
+    @Override
+    protected boolean bottomBarHandlesInsets() {
+        return true;
+    }
+
     /** Request codes for the VPN consent dialog and the notification permission prompt. */
     private static final int REQ_VPN = 1;
     private static final int REQ_NOTE = 2;
