@@ -4,7 +4,7 @@
 
 本文规定 **loft/1.0**：在普通 HTTPS 内承载的多路复用覆盖网。第三方实现若遵循本文，可以与 loft 节点互通。本仓库中的 Go 程序是其中一种实现。许可：[Apache-2.0](../LICENSE)。
 
-协议版本 loft/1.0（`0x0100`）与实现版本字符串（`VERSION`，当前为 1.0.35）相互独立。握手同时携带二者。关键词 **必须**、**不得**、**应该**、**可以** 分别对应 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) 的 MUST、MUST NOT、SHOULD、MAY。接收方必须忽略 Hello 与 Status 尾部未知字段。
+协议版本 loft/1.0（`0x0100`）与实现版本字符串（`VERSION`，当前为 1.0.36）相互独立。握手同时携带二者。关键词 **必须**、**不得**、**应该**、**可以** 分别对应 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) 的 MUST、MUST NOT、SHOULD、MAY。接收方必须忽略 Hello 与 Status 尾部未知字段。
 
 参考节点的运营见 [guide_zh.md](guide_zh.md)。源码布局见 [architecture_zh.md](architecture_zh.md)。
 

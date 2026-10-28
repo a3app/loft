@@ -1,4 +1,4 @@
-# loft 1.0.35
+# loft 1.0.36
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,18 +10,18 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-1.0.35-macos-arm.dmg` | `loft-1.0.35-macos-intel.dmg` |
-| macOS CLI | `loft-1.0.35-darwin-arm64.tar.gz` | `loft-1.0.35-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-1.0.35-linux-arm64.tar.gz` | `loft-1.0.35-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.35-linux-arm64.tar.gz` · `loft-node_1.0.35_arm64.deb` | `loft-node-1.0.35-linux-amd64.tar.gz` · `loft-node_1.0.35_amd64.deb` |
-| Panel | `loft-panel-1.0.35-linux-arm64.tar.gz` · `loft-panel_1.0.35_arm64.deb` | `loft-panel-1.0.35-linux-amd64.tar.gz` · `loft-panel_1.0.35_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-1.0.35-android.apk` · `loft-1.0.35-android-tv.apk` | same fat APKs |
-| Windows portable (GitHub) | `loft-1.0.35-windows-arm64.zip` | `loft-1.0.35-windows-x86-64.zip` · `loft-1.0.35-windows-x86.zip` |
-| MikroTik container | `loft-mikrotik-1.0.35-arm64.tar` · `loft-mikrotik-1.0.35-armv7.tar` | `loft-mikrotik-1.0.35-amd64.tar` |
+| macOS app (10.13+, ad-hoc signed) | `loft-1.0.36-macos-arm.dmg` | `loft-1.0.36-macos-intel.dmg` |
+| macOS CLI | `loft-1.0.36-darwin-arm64.tar.gz` | `loft-1.0.36-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-1.0.36-linux-arm64.tar.gz` | `loft-1.0.36-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.36-linux-arm64.tar.gz` · `loft-node_1.0.36_arm64.deb` | `loft-node-1.0.36-linux-amd64.tar.gz` · `loft-node_1.0.36_amd64.deb` |
+| Panel | `loft-panel-1.0.36-linux-arm64.tar.gz` · `loft-panel_1.0.36_arm64.deb` | `loft-panel-1.0.36-linux-amd64.tar.gz` · `loft-panel_1.0.36_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-1.0.36-android.apk` · `loft-1.0.36-android-tv.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-1.0.36-windows-arm64.zip` | `loft-1.0.36-windows-x86-64.zip` · `loft-1.0.36-windows-x86.zip` |
+| MikroTik container | `loft-mikrotik-1.0.36-arm64.tar` · `loft-mikrotik-1.0.36-armv7.tar` | `loft-mikrotik-1.0.36-amd64.tar` |
 
-Checksums: `loft-clients-1.0.35-SHA256SUMS.txt`, `loft-node-1.0.35-SHA256SUMS.txt`, `loft-panel-1.0.35-SHA256SUMS.txt`, `loft-android-1.0.35-SHA256SUMS.txt`, `loft-windows-1.0.35-SHA256SUMS.txt`, `loft-mikrotik-1.0.35-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.36-SHA256SUMS.txt`, `loft-node-1.0.36-SHA256SUMS.txt`, `loft-panel-1.0.36-SHA256SUMS.txt`, `loft-android-1.0.36-SHA256SUMS.txt`, `loft-windows-1.0.36-SHA256SUMS.txt`, `loft-mikrotik-1.0.36-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.35`.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.36`.
 
 Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 
@@ -42,6 +42,14 @@ Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.36
+
+Protocol stays **loft/1.0**.
+
+Android:
+
+- On Android 15 and later the app is drawn edge to edge. Some screens put their top row — a title, the Route lists button, the back arrow — under the status bar and the camera cutout, where it could not be tapped. Every screen now keeps its content below the system bars and above the navigation bar and the keyboard.
 
 ## 1.0.35
 
@@ -344,6 +352,8 @@ macOS:
 
 В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik. Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic в этот Dist не входят.
 
+1.0.36: Android — на Android 15+ приложение рисуется «от края до края», и у части экранов верхний ряд (заголовок, кнопка «Списки маршрутов», стрелка «назад») уходил под статус-бар и вырез камеры, где его нельзя было нажать; теперь каждый экран держит контент ниже системных панелей и выше навигации и клавиатуры. Протокол loft/1.0.
+
 1.0.35: Android — с включённой раздельной маршрутизацией приложения больше не вылетают: большие списки давали VPN около 7000 маршрутов, и Android не мог передать такую таблицу приложениям; теперь маршрутов не больше 1200, списки, которые помещаются, не меняются, большие объединяются в более широкие блоки по краям; блок-лист по-прежнему проверяется точно. Протокол loft/1.0.
 
 1.0.34: Android — плавность и стабильность (подвисания на Xiaomi HyperOS): сессия VPN на своём потоке, ежесекундный опрос больше не перечитывает списки и не пересохраняет профили на потоке интерфейса; списки и профили маршрутов — в отдельных файлах с атомарной записью в фоне; изменения настроек сливаются в одну пересборку туннеля, экраны перерисовывают только изменившееся; поток чтения TUN не утекает при пересборке и не выделяет память на пакет; сохранённые подключения пишутся атомарно и не теряются при сбое хранилища ключей; плитка на Android 14+, повторный импорт после поворота, стоп во время рукопожатия исправлены; на TV фокус пульта больше не прыгает. Движок не повторяет запрещённые Android 11+ запросы интерфейсов. Протокол loft/1.0.
@@ -367,6 +377,8 @@ macOS:
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
 本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic 不在这次包里。
+
+1.0.36：Android — 在 Android 15 及以上系统应用全屏绘制到边缘，部分界面的顶部（标题、"路由列表"按钮、返回箭头）会被状态栏和摄像头挖孔遮住、无法点击；现在每个界面都把内容保持在系统栏下方、导航栏与键盘上方。协议仍是 loft/1.0。
 
 1.0.35：Android — 开启分流路由时其他应用不再闪退：大型列表让 VPN 有约 7000 条路由，Android 无法把这么大的路由表传给应用；现在路由不超过 1200 条，放得下的列表不变，过大的在边缘合并为更宽的网段；封锁列表仍逐包精确检查。协议仍是 loft/1.0。
 

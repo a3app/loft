@@ -2,7 +2,7 @@
 
 [English](architecture.md) · **Русский** · [中文](architecture_zh.md)
 
-ПО 1.0.35. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Эксплуатация: [guide_ru.md](guide_ru.md). Если вы впервые читаете код: [code-tour_ru.md](code-tour_ru.md).
+ПО 1.0.36. Протокол 1.0 (loft/1.0). Протокол: [protocol_ru.md](protocol_ru.md). Эксплуатация: [guide_ru.md](guide_ru.md). Если вы впервые читаете код: [code-tour_ru.md](code-tour_ru.md).
 
 Документ описывает дерево на Go в этом репозитории. Сторонняя реализация **может** раскладывать код по каталогам иначе и при этом говорить по протоколу.
 
