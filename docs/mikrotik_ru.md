@@ -4,7 +4,7 @@
 
 Как loft работает на плате MikroTik. Каталог: [clients/MikroTik/](../clients/MikroTik/). Макет: [clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
 
-Образ собирается командой `make -C clients/MikroTik image`. В Dist его пока нет. Дополнительные пакеты RouterOS выпускает только сама MikroTik, поэтому loft поставляется как образ контейнера.
+Каждый релиз публикует образ двумя способами: файлами `loft-mikrotik-<ver>-<arch>.tar` (amd64, arm64, armv7) на странице GitHub Release и как `ghcr.io/a3app/loft-mikrotik:<ver>` / `:latest` для amd64, arm64 и arm/v7. Вручную: `make -C clients/MikroTik image GOARCH=…`. Дополнительные пакеты RouterOS выпускает только сама MikroTik, поэтому loft поставляется как образ контейнера.
 
 ---
 

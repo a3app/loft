@@ -4,7 +4,7 @@
 
 loft 在 MikroTik 板上怎么跑。目录：[clients/MikroTik/](../clients/MikroTik/)。模型：[clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。
 
-镜像用 `make -C clients/MikroTik image` 打。暂不进 Dist。RouterOS 额外包只有厂商能发；loft 以容器镜像交付。
+每个发布都带两份镜像：GitHub Release 页上的文件 `loft-mikrotik-<ver>-<arch>.tar`（amd64、arm64、armv7），以及 `ghcr.io/a3app/loft-mikrotik:<ver>` / `:latest`（amd64、arm64、arm/v7）。手动：`make -C clients/MikroTik image GOARCH=…`。RouterOS 额外包只有厂商能发；loft 以容器镜像交付。
 
 ---
 

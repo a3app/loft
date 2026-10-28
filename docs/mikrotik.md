@@ -4,7 +4,7 @@
 
 How loft runs on a MikroTik board. Catalog: [clients/MikroTik/](../clients/MikroTik/). Mock: [clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html). Protocol: [protocol.md](protocol.md).
 
-The image is built with `make -C clients/MikroTik image`. Dist does not ship it yet. MikroTik extra packages are vendor-only; loft ships as a container image.
+Each release ships the image twice: as files `loft-mikrotik-<ver>-<arch>.tar` (amd64, arm64, armv7) on the GitHub Release page, and as `ghcr.io/a3app/loft-mikrotik:<ver>` / `:latest` for amd64, arm64 and arm/v7. By hand: `make -C clients/MikroTik image GOARCH=…`. MikroTik extra packages are vendor-only; loft ships as a container image.
 
 ---
 

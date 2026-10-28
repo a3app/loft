@@ -38,7 +38,7 @@ clients/MikroTik/
 
 ## 安装
 
-电脑上（Docker）：
+从 GitHub Release 取适合你板子的 `loft-mikrotik-<ver>-<arch>.tar`（amd64 = CHR/x86、arm64、armv7），或在电脑上（Docker）自己打：
 
 ```bash
 make -C clients/MikroTik image GOARCH=arm64   # 或 arm | amd64

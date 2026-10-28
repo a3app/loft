@@ -1,4 +1,6 @@
 *
 !Dockerfile
-!loft
+!loft-amd64
+!loft-arm64
+!loft-armv7
 !client.yaml

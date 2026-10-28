@@ -304,8 +304,74 @@ jobs:
             dist/clients/Windows/github/loft-*-windows-*.zip
             dist/clients/Windows/github/loft-windows-*-SHA256SUMS.txt
 
+  # MikroTik RouterOS container (clients/MikroTik). Two outputs:
+  #   - docker-save tarballs for amd64, arm64 and armv7 plus SHA256SUMS, for
+  #     the Release: the operator uploads one to the router by hand;
+  #   - on a tag, one multi-arch image ghcr.io/a3app/loft-mikrotik:<ver>
+  #     and :latest, which RouterOS can pull itself.
+  # No QEMU: the Dockerfile runs nothing for the target architecture.
+  mikrotik:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # The default "docker" builder cannot export several platforms in one
+      # image; a docker-container builder can.
+      - name: Buildx builder
+        run: docker buildx create --use --name loft --driver docker-container
+      - name: Image tarballs
+        run: make -C clients/MikroTik dist
+      - name: Smoke tarballs
+        # Each tarball must hold exactly one plain image manifest (RouterOS
+        # cannot read an index of indexes) of the right architecture, and
+        # SHA256SUMS must check out from a flat folder like a user's.
+        run: |
+          set -eu
+          ver=$(tr -d ' \n' < VERSION)
+          cd dist/mikrotik
+          for a in amd64:amd64 arm64:arm64 armv7:arm; do
+            f="loft-mikrotik-${ver}-${a%%:*}.tar"
+            d=$(mktemp -d)
+            tar -xf "$f" -C "$d"
+            python3 - "$d" "${a#*:}" <<'PY'
+          import json, sys
+          d, want = sys.argv[1], sys.argv[2]
+          idx = json.load(open(d + "/index.json"))["manifests"]
+          assert len(idx) == 1 and idx[0]["mediaType"].endswith("manifest.v1+json"), idx
+          m = json.load(open(d + "/manifest.json"))[0]
+          arch = json.load(open(d + "/" + m["Config"]))["architecture"]
+          assert arch == want, (arch, want)
+          print(d, arch, "ok")
+          PY
+            rm -rf "$d"
+          done
+          sha256sum -c "loft-mikrotik-${ver}-SHA256SUMS.txt"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mikrotik
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/mikrotik/loft-mikrotik-*.tar
+            dist/mikrotik/loft-mikrotik-*-SHA256SUMS.txt
+      - name: Push ghcr.io/a3app/loft-mikrotik
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          make -C clients/MikroTik push
+
   release:
-    needs: [linux, macos, android, windows]
+    needs: [linux, macos, android, windows, mikrotik]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -332,6 +398,8 @@ jobs:
             "loft-panel-${ver}-linux-arm64.tar.gz" "loft-panel-${ver}-linux-amd64.tar.gz" \
             "loft-panel_${ver}_arm64.deb" "loft-panel_${ver}_amd64.deb" \
             "loft-${ver}-windows-x86-64.zip" "loft-${ver}-windows-x86.zip" "loft-${ver}-windows-arm64.zip" \
+            "loft-mikrotik-${ver}-amd64.tar" "loft-mikrotik-${ver}-arm64.tar" "loft-mikrotik-${ver}-armv7.tar" \
+            "loft-mikrotik-${ver}-SHA256SUMS.txt" \
             "loft-windows-${ver}-SHA256SUMS.txt" \
             "loft-clients-${ver}-SHA256SUMS.txt" "loft-node-${ver}-SHA256SUMS.txt" "loft-panel-${ver}-SHA256SUMS.txt"
           do
@@ -342,7 +410,7 @@ jobs:
             found "loft-android-${ver}-SHA256SUMS.txt"
           fi
           find artifacts -type f \( \
-            -name '*.tar.gz' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*SHA256SUMS.txt' \
+            -name '*.tar.gz' -o -name '*.tar' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*SHA256SUMS.txt' \
           \) | sort
       - name: Publish GitHub Release
         shell: bash
@@ -352,7 +420,7 @@ jobs:
           set -eu
           ver=$(tr -d ' \n' < VERSION)
           mapfile -t files < <(find artifacts -type f \( \
-            -name '*.tar.gz' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*SHA256SUMS.txt' \
+            -name '*.tar.gz' -o -name '*.tar' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*SHA256SUMS.txt' \
           \) | grep -E -- "-${ver}-|_${ver}_" | sort)
           [ "${#files[@]}" -gt 0 ]
           notes=GH_RELEASE.md

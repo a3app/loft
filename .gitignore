@@ -23,6 +23,9 @@ clients/Android/local.properties
 clients/Sailfish/bin/
 clients/Sailfish/build/
 clients/MikroTik/pack/loft
+clients/MikroTik/pack/loft-amd64
+clients/MikroTik/pack/loft-arm64
+clients/MikroTik/pack/loft-armv7
 clients/MikroTik/pack/*.tar
 clients/Keenetic/pack/loft-keenetic
 clients/Keenetic/pack/*.ipk
