@@ -512,7 +512,7 @@ func (s *Server) zoneSave(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	go s.refreshReg(context.Background(), in.Name)
+	s.goBG(func() { s.refreshReg(context.Background(), in.Name) })
 	if len(errs) > 0 {
 		fail(w, http.StatusBadGateway, "zone saved, but: "+strings.Join(errs, "; "))
 		return
@@ -890,7 +890,11 @@ func (s *Server) refreshReg(ctx context.Context, zone string) {
 func (s *Server) rdapUntil(ctx context.Context, zone string) time.Time {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://rdap.org/domain/"+zone, nil)
+	base := s.rdapBase
+	if base == "" {
+		base = "https://rdap.org/domain/"
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, base+zone, nil)
 	req.Header.Set("Accept", "application/rdap+json")
 	c := s.HTTP
 	if c == nil {
@@ -1180,7 +1184,8 @@ func (s *Server) certDelete(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	go s.syncMailCerts(context.Background(), userOf(r).Login, nil)
+	login := userOf(r).Login
+	s.goBG(func() { s.syncMailCerts(context.Background(), login, nil) })
 	ok(w, struct{}{})
 }
 

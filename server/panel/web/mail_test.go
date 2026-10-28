@@ -89,7 +89,7 @@ func TestMailNeedWrite(t *testing.T) {
 
 func TestMailDNSCreateReplacesForeignMX(t *testing.T) {
 	e := newEnv(t)
-	e.srv.SetDomainsFile(t.TempDir())
+	e.domainsDir()
 	fd := &fakeDNS{recs: map[string][]Record{"example.net": {
 		{ID: "1", Type: "MX", Name: "@", Value: "eforward.example.com", Priority: 10},
 		{ID: "2", Type: "MX", Name: "@", Value: "eforward2.example.com", Priority: 20},
@@ -200,7 +200,7 @@ func TestMailWebmailAPI(t *testing.T) {
 // since all stay; the mail.<domain> certificate is forgotten.
 func TestMailDomainDeleteDropsOwnDNS(t *testing.T) {
 	e := newEnv(t)
-	e.srv.SetDomainsFile(t.TempDir())
+	e.domainsDir()
 	fd := &fakeDNS{n: 100, recs: map[string][]Record{"example.net": {
 		{ID: "1", Type: "A", Name: "www", Value: "203.0.113.10"},
 		{ID: "2", Type: "TXT", Name: "@", Value: "google-site-verification=abc"},

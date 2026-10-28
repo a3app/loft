@@ -92,6 +92,23 @@ type Server struct {
 	Log   *log.Logger
 	// sleep is the failed-login delay; tests make it instant.
 	sleep func(time.Duration)
+	// bg counts work a request leaves running after it answers (the RDAP
+	// lookup of a new zone, the mail certificate sync). It writes panel
+	// files when it ends, so whoever removes those files first waits for
+	// it; tests do, before their temporary directory is deleted.
+	bg sync.WaitGroup
+	// rdapBase is where rdapUntil asks for registration dates; empty means
+	// rdap.org. Tests point it at a closed port to stay off the internet.
+	rdapBase string
+}
+
+// goBG runs fn in the background and counts it in s.bg.
+func (s *Server) goBG(fn func()) {
+	s.bg.Add(1)
+	go func() {
+		defer s.bg.Done()
+		fn()
+	}()
 }
 
 // cookieName is the browser cookie that carries the session ID.

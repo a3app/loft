@@ -66,7 +66,7 @@ func (f *fakeDNS) Delete(_ context.Context, z, id string) error {
 
 func TestDomainsZonesRecords(t *testing.T) {
 	e := newEnv(t)
-	e.srv.SetDomainsFile(t.TempDir())
+	e.domainsDir()
 	fd := &fakeDNS{recs: map[string][]Record{}}
 	e.srv.dom.provider = func(dnsProv) DNSProvider { return fd }
 	c, csrf := e.owner()
@@ -134,7 +134,7 @@ func TestDomainsZonesRecords(t *testing.T) {
 
 func TestWizardDNSCreatesZoneBeforeNames(t *testing.T) {
 	e := newEnv(t)
-	e.srv.SetDomainsFile(t.TempDir())
+	e.domainsDir()
 	fd := &fakeDNS{recs: map[string][]Record{"example.net": {}}}
 	e.srv.dom.provider = func(dnsProv) DNSProvider { return fd }
 	c, csrf := e.owner()

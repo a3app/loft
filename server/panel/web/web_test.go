@@ -147,6 +147,19 @@ func newEnv(t *testing.T) *env {
 	return e
 }
 
+// domainsDir gives the panel a temporary domains.json directory. Adding a
+// zone or a certificate leaves work running in the background that writes
+// domains.json when it ends; the cleanup registered here runs before the
+// directory is removed (cleanups run last-registered first) and waits for
+// that work, so it never writes into a directory being deleted. RDAP goes
+// to a closed local port: the lookup fails at once instead of going to
+// rdap.org.
+func (e *env) domainsDir() {
+	e.srv.SetDomainsFile(e.t.TempDir())
+	e.srv.rdapBase = "http://127.0.0.1:1/"
+	e.t.Cleanup(e.srv.bg.Wait)
+}
+
 type resp struct {
 	text   string
 	code   int
