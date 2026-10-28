@@ -155,7 +155,7 @@ func rules(t *testing.T) []string {
 			t.Fatal(err)
 		}
 		table := uint32(d[4])
-		var iif string
+		var iif, src string
 		var pref uint32
 		for _, a := range attrs {
 			switch a.typ {
@@ -165,9 +165,11 @@ func rules(t *testing.T) []string {
 				iif = strings.TrimRight(string(a.value), "\x00")
 			case unix.FRA_PRIORITY:
 				pref = nativeEndian.Uint32(a.value)
+			case unix.FRA_SRC:
+				src = fmt.Sprintf("%s/%d", net.IP(a.value), d[2])
 			}
 		}
-		out = append(out, fmt.Sprintf("pref=%d iif=%s table=%d action=%d", pref, iif, table, d[7]))
+		out = append(out, fmt.Sprintf("pref=%d from=%s iif=%s table=%d action=%d", pref, src, iif, table, d[7]))
 	}
 	sort.Strings(out)
 	return out
@@ -263,8 +265,10 @@ func scenario(t *testing.T, b Backend) []string {
 	// rule that sends packets coming from the TUN to that table.
 	tblRoute := Route{Dst: mustCIDR("0.0.0.0/0"), Gw: net.ParseIP("10.77.0.1"), Dev: testDev, Table: testTable}
 	rule := Rule{IIF: testDev, Table: testTable, Priority: testTable}
+	srcRule := Rule{Src: mustCIDR("10.77.0.10/32"), Table: testTable, Priority: testTable + 1}
 	step("table route", b.RouteAdd(tblRoute))
 	step("rule add", b.RuleAdd(rule))
+	step("src rule add", b.RuleAdd(srcRule))
 	if err := b.RuleAdd(rule); err == nil {
 		t.Errorf("%s: duplicate rule add succeeded", b.Name())
 	} else if b.Name() == "netlink" && !errors.Is(err, unix.EEXIST) {
@@ -294,6 +298,7 @@ func scenario(t *testing.T, b Backend) []string {
 
 	// 6. Undo, newest first, the way loft's undo lists run.
 	step("del blackhole", b.RouteDel(bh))
+	step("src rule del", b.RuleDel(srcRule))
 	step("rule del", b.RuleDel(rule))
 	step("del table route", b.RouteDel(Route{Dst: tblRoute.Dst, Table: testTable}))
 	if ipv6On() {

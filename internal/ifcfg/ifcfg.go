@@ -73,9 +73,10 @@ type Route struct {
 // writes into the TUN for LAN hosts must go back to the router, not into
 // the TUN again (which the split default would otherwise choose).
 type Rule struct {
-	IIF      string // incoming interface name, e.g. "tun0"
-	Table    int    // table to look up, must not be 0
-	Priority int    // order among rules; 0 lets the kernel pick
+	IIF      string     // incoming interface name, e.g. "tun0"; empty = any
+	Src      *net.IPNet // source address/prefix ("from"); nil = any
+	Table    int        // table to look up, must not be 0
+	Priority int        // order among rules; 0 lets the kernel pick
 }
 
 // Backend makes the changes. All methods behave like the matching "ip"
@@ -169,6 +170,9 @@ func (ipTool) RuleDel(r Rule) error { return runIP("", ruleArgs("del", r)...) }
 // ruleArgs turns r into "rule <verb> iif NAME lookup TABLE [pref N]".
 func ruleArgs(verb string, r Rule) []string {
 	args := []string{"rule", verb}
+	if r.Src != nil {
+		args = append(args, "from", r.Src.String())
+	}
 	if r.IIF != "" {
 		args = append(args, "iif", r.IIF)
 	}

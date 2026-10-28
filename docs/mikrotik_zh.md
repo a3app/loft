@@ -59,7 +59,7 @@ RouterOS 自身不装新的 default route。没有 TUN 时，0/0 经容器 IP �
 | | `nat`（默认） | `route` |
 |--|--|--|
 | RouterOS | masquerade `loft-lan` → `br-loft`（规则 `loft-lan-nat`） | 不做 masquerade |
-| loft | 不用额外做什么 | 策略路由：从 TUN 出来的包查表 176，表里默认经 veth 网关 |
+| loft | 不用额外做什么 | 两条策略路由都查表 176（默认经 veth 网关）：从 TUN 出来的包，以及容器从 `172.31.20.2` 发出的包（SOCKS 和 LAN 页的回包） |
 | 容器看到 | 所有 LAN 主机都是 `172.31.20.1` | 真实 LAN 地址 |
 | 什么时候用 | 不需要真实地址时都用它 | 容器要区分 LAN 主机，或以后从覆盖网访问 LAN |
 

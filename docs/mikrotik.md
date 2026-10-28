@@ -59,7 +59,7 @@ RouterOS itself does not get a new default route. Without TUN, 0/0 via the conta
 | | `nat` (default) | `route` |
 |--|--|--|
 | RouterOS | masquerade `loft-lan` → `br-loft` (rule `loft-lan-nat`) | no masquerade |
-| loft | nothing extra | policy rule: what leaves the TUN uses table 176, default via the veth gateway |
+| loft | nothing extra | two policy rules to table 176 (default via the veth gateway): what leaves the TUN, and what the container sends from `172.31.20.2` (answers of SOCKS and the LAN page) |
 | The container sees | every LAN host as `172.31.20.1` | real LAN addresses |
 | Use when | always, unless you need real addresses | the container must tell LAN hosts apart, or later overlay → LAN access |
 

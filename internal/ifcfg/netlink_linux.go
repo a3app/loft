@@ -409,10 +409,27 @@ func ruleChange(typ, flags uint16, verb string, r Rule) error {
 	if typ == unix.RTM_NEWRULE {
 		action = unix.FR_ACT_TO_TBL
 	}
+	// A source match: its prefix length sits in the header (src_len, the
+	// third byte), the address in FRA_SRC. IPv4 only, like the rule itself.
+	var srcLen uint8
+	var src []byte
+	if r.Src != nil {
+		ones, bits := r.Src.Mask.Size()
+		v4 := r.Src.IP.To4()
+		if v4 == nil || bits != 32 {
+			return fmt.Errorf("netlink %s: rule source must be IPv4", what)
+		}
+		srcLen, src = uint8(ones), []byte(v4.Mask(r.Src.Mask))
+	}
 	req := newRequest(typ, flags)
-	req.body(rtmsg(unix.AF_INET, 0, table, 0, 0, action))
+	hdr := rtmsg(unix.AF_INET, 0, table, 0, 0, action)
+	hdr[2] = srcLen
+	req.body(hdr)
 	if tableAttr != 0 {
 		req.attrU32(unix.FRA_TABLE, tableAttr)
+	}
+	if src != nil {
+		req.attr(unix.FRA_SRC, src)
 	}
 	if r.IIF != "" {
 		// Interface names travel as C strings: with the closing zero byte.
