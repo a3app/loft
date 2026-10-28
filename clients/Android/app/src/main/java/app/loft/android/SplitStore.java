@@ -1,7 +1,7 @@
 /*
  * Android client, shared by the phone and TV builds: the data model and storage
  * for split routing (zones, services and exclusions that decide which address
- * ranges use the tunnel). Saved as JSON in Prefs, edited on ListsActivity,
+ * ranges use the tunnel). Saved as the JSON document Doc.SPLIT, edited on ListsActivity,
  * turned into TUN routes by RoutePlan, and refreshed from the public
  * loft-routes lists (Keenetic .bat files, parsed by Bat). Same model as the
  * macOS app's lists.
@@ -27,8 +27,9 @@ import java.util.UUID;
 /**
  * Zones + services + exclusions; the same model as the macOS app's lists.
  * These are the user's split-routing lists: which address ranges go
- * through the tunnel and which go direct. Stored as JSON in Prefs under
- * "split_store". RoutePlan applies them when split routing is on.
+ * through the tunnel and which go direct. Stored as the JSON document
+ * Doc.SPLIT ("split_store", files/docs/split_store.json). RoutePlan applies
+ * them when split routing is on.
  *
  * <p>Split tunneling means only part of the traffic uses the VPN: some
  * address ranges go through the tunnel, others go straight out on the
@@ -159,7 +160,7 @@ final class SplitStore {
     }
 
     /**
-     * Loads the lists from Prefs. On first use seeds the built-in zones and
+     * Loads the lists (Doc.SPLIT). On first use seeds the built-in zones and
      * moves the old per-route settings in. A corrupt store, or one missing a
      * built-in zone, is reseeded. Parses the whole stored JSON (and checks
      * every prefix) on the calling thread, which can take a while for big
@@ -167,7 +168,7 @@ final class SplitStore {
      */
     static SplitStore load(Context c) {
         SplitStore st = new SplitStore();
-        String raw = Prefs.p(c).getString("split_store", "");
+        String raw = Doc.get(c, Doc.SPLIT);
         if (raw == null || raw.isEmpty()) {
             st.seed();
             st.migrateRoutes(c);
@@ -191,12 +192,13 @@ final class SplitStore {
     }
 
     /**
-     * Writes the lists to Prefs as JSON under "split_store". apply() writes
-     * the file in the background; LoftVpnService listens for this key and
-     * rebuilds the TUN routes when it changes.
+     * Saves the lists as JSON into Doc.SPLIT. The file is written in the
+     * background and an unchanged document is not written at all;
+     * LoftVpnService listens for this document and rebuilds the TUN routes
+     * when it changes.
      */
     void save(Context c) {
-        Prefs.p(c).edit().putString("split_store", writeJSON().toString()).apply();
+        Doc.put(c, Doc.SPLIT, writeJSON().toString());
     }
 
     /**

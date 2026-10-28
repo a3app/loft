@@ -17,8 +17,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Catalog of route profiles. Prefs "split_store" is the ACTIVE document
- * RoutePlan reads. Prefs "route_profiles" holds every profile: mine
+ * Catalog of route profiles. Doc "split_store" is the ACTIVE document
+ * RoutePlan reads. Doc "route_profiles" holds every profile: mine
  * (migrated from split_store), op (from the node), link (imported).
  * One is active. Operator slot is read-only and overwritten on serial change.
  *
@@ -69,7 +69,7 @@ final class ProfileStore {
      * are kept. Falls back to a valid active id if the saved one is gone.
      */
     static ProfileStore load(Context c) {
-        String raw = Prefs.p(c).getString("route_profiles", "");
+        String raw = Doc.get(c, Doc.PROFILES);
         if (raw == null || raw.isEmpty()) {
             ProfileStore ps = new ProfileStore();
             Prof mine = new Prof();
@@ -90,12 +90,12 @@ final class ProfileStore {
     }
 
     /**
-     * Writes the catalog (not the active split_store) to prefs. apply() writes
-     * the file in the background, but the whole catalog is serialised to JSON
-     * on the calling thread first.
+     * Writes the catalog (not the active split_store) into Doc.PROFILES:
+     * the file is written in the background, and an unchanged catalog is not
+     * written at all.
      */
     void save(Context c) {
-        Prefs.p(c).edit().putString("route_profiles", toJSON()).apply();
+        Doc.put(c, Doc.PROFILES, toJSON());
     }
 
     /**

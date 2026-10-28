@@ -146,7 +146,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
     private final AtomicBoolean stopping = new AtomicBoolean(false);
     /**
      * Bumped on the main thread by every route-related settings change
-     * (routeWatch). It is part of the TUN key, so the next applyTun rebuilds;
+     * (routeSettingChanged). It is part of the TUN key, so the next applyTun rebuilds;
      * this replaces re-reading and re-parsing all lists every second just to
      * find out whether they changed.
      */
@@ -203,7 +203,7 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
 
     /** The poll as one Runnable object, so it can be cancelled and re-posted. */
     private final Runnable ticker = this::tickOnce;
-    /** The debounced rebuild as one Runnable object (see routeWatch). */
+    /** The debounced rebuild as one Runnable object (see routeSettingChanged). */
     private final Runnable rebuild = () -> {
         rebuildQueued.set(false);
         rebuildRoutes();
@@ -954,45 +954,60 @@ public final class LoftVpnService extends VpnService implements PacketSink, Sock
 
     /**
      * Settings that change the TUN: split, default route, LAN bypass, the
-     * lists, the per-app filter and Local DNS. Android calls this on the main
-     * thread, so it only bumps {@link #routeGen} and (re)queues one rebuild on
-     * loft-ctl a moment later; typing a DNS address therefore rebuilds once,
-     * not once per character. It is kept in a field because SharedPreferences
-     * holds listeners only weakly: a lambda with no other reference could be
-     * garbage-collected and silently stop firing.
+     * per-app filter and Local DNS. Android calls this on the main thread.
+     * It is kept in a field because SharedPreferences holds listeners only
+     * weakly: a lambda with no other reference could be garbage-collected and
+     * silently stop firing.
      */
     private final SharedPreferences.OnSharedPreferenceChangeListener routeWatch = (sp, k) -> {
-        if (!("split".equals(k) || "default_route".equals(k)
-                || "lan_bypass".equals(k) || "split_store".equals(k)
+        if ("split".equals(k) || "default_route".equals(k) || "lan_bypass".equals(k)
                 || "app_mode".equals(k) || "app_except".equals(k) || "app_only".equals(k)
-                || "local_dns".equals(k) || "local_dns_addr".equals(k))) {
-            return;
+                || "local_dns".equals(k) || "local_dns_addr".equals(k)) {
+            routeSettingChanged(k);
         }
+    };
+
+    /** The split lists live in Doc, not in the preferences; this hears their changes. */
+    private final Doc.Listener docWatch = name -> {
+        if (Doc.SPLIT.equals(name)) {
+            routeSettingChanged(name);
+        }
+    };
+
+    /**
+     * Something the routes depend on changed. Only bumps {@link #routeGen}
+     * and (re)queues one rebuild on loft-ctl a moment later, so typing a DNS
+     * address or ticking ten apps rebuilds once, not once per change. Safe on
+     * any thread.
+     */
+    private void routeSettingChanged(String k) {
         routeGen.incrementAndGet();
         // Turning split on may need a list download first; pullRoutes saves
-        // split_store, which brings us back here for the rebuild.
+        // the lists, which brings us back here for the rebuild.
         if ("split".equals(k) && Prefs.split(this)) {
             go.execute(this::pullRoutes);
         }
         rebuildQueued.set(true);
         CTL.removeCallbacks(rebuild, this);
         post(rebuild, REBUILD_DEBOUNCE_MS);
-    };
-
-    /** Starts listening for route-related settings changes (see routeWatch). */
-    private void watchRoutePrefs() {
-        Prefs.p(this).registerOnSharedPreferenceChangeListener(routeWatch);
     }
 
-    /** Stops listening for route-related settings changes. */
+    /** Starts listening for route-related settings and list changes. */
+    private void watchRoutePrefs() {
+        Prefs.p(this).registerOnSharedPreferenceChangeListener(routeWatch);
+        Doc.watch(docWatch);
+    }
+
+    /** Stops listening for route-related settings and list changes. */
     private void unwatchRoutePrefs() {
         Prefs.p(this).unregisterOnSharedPreferenceChangeListener(routeWatch);
+        Doc.drop(docWatch);
     }
 
     /**
      * Daily auto-pull of zone lists, same 20 h window as macOS. Only when
      * split routing is on. Runs on the {@code go} pool because it downloads;
-     * saving the lists fires routeWatch, which rebuilds the TUN.
+     * saving the lists fires docWatch, which rebuilds the TUN.
      */
     private void pullRoutes() {
         if (!Prefs.split(this) || stopping.get()) {

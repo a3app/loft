@@ -26,9 +26,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * Every change rebuilds the profile's YAML and saves the whole list.
  *
  * <p>Threads: screens call it on the main thread and LoftVpnService calls it
- * from its poll, so every public method is synchronized on this object. Saving
- * is synchronous: it encrypts through the Android keystore and rewrites the
- * file on the caller's thread before returning.
+ * from loft-ctl, so every public method is synchronized on this object. The
+ * lock is held only for in-memory work: saving hands a JSON snapshot to the
+ * background writer (Disk), which encrypts it and writes the file, so no
+ * caller ever waits on the keystore or the disk.
  */
 final class Profiles {
     /** File name under the app's private files dir. */
@@ -39,6 +40,8 @@ final class Profiles {
     private final List<Profile> items = new CopyOnWriteArrayList<>();
     /** Id of the selected profile; empty when none has been chosen yet. */
     private String active = "";
+    /** True when profiles.json existed but could not be decrypted at load (see load). */
+    private boolean unreadable;
 
     /**
      * Loads the saved list right away (file read and keystore decrypt on the
@@ -251,7 +254,17 @@ final class Profiles {
         return b.toString();
     }
 
-    /** Reads and decrypts profiles.json; on first run migrates the legacy single YAML instead. */
+    /**
+     * Reads and decrypts profiles.json; on first run migrates the legacy
+     * single YAML instead.
+     *
+     * <p>If the file exists but cannot be decrypted (the keystore is busy or
+     * was reset), the list stays empty for this run, a copy of the file is
+     * kept as profiles.json.unreadable, and {@link #unreadable} makes save()
+     * refuse to overwrite it until the user changes something on purpose.
+     * Before, a single keystore hiccup at start could make the next save
+     * replace every saved connection with an empty list.
+     */
     private void load() {
         items.clear();
         active = "";
@@ -260,10 +273,21 @@ final class Profiles {
             migrateYaml();
             return;
         }
-        // A broken or undecryptable file leaves an empty list rather than a crash.
         try {
-            byte[] raw = read(f);
-            String json = Box.open(new String(raw, StandardCharsets.UTF_8));
+            byte[] raw = Disk.read(f);
+            String json = Box.openOrNull(new String(raw, StandardCharsets.UTF_8));
+            if (json == null) {
+                unreadable = true;
+                File keep = new File(app.getFilesDir(), FILE + ".unreadable");
+                if (!keep.exists()) {
+                    Disk.writeNow(keep, raw);
+                }
+                Journal.add("profiles unreadable, kept a copy");
+                return;
+            }
+            if (json.isEmpty()) {
+                return;
+            }
             JSONObject o = new JSONObject(json);
             active = o.optString("active");
             JSONArray a = o.optJSONArray("items");
@@ -272,7 +296,8 @@ final class Profiles {
                     items.add(Profile.fromJson(a.getJSONObject(i)));
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Journal.add("profiles " + e.getMessage());
         }
         if (active.isEmpty() && !items.isEmpty()) {
             active = items.get(0).id;
@@ -295,6 +320,9 @@ final class Profiles {
                 items.addAll(got);
                 active = items.get(0).id;
                 save();
+                // One-time step: wait for the file so the old slot is
+                // cleared only once the new copy is safely on disk.
+                Disk.flush(3000);
                 SessionStore.setYaml(app, "");
             }
         } catch (Exception ignored) {
@@ -302,11 +330,22 @@ final class Profiles {
     }
 
     /**
-     * Encrypts the whole list with Box and rewrites profiles.json. Errors are
-     * ignored, so a failed write keeps the old file and the in-memory list.
-     * The file is overwritten in place (no temp file and rename).
+     * Saves the list. The JSON text is built here, under the lock, so it is a
+     * consistent snapshot; encryption (a keystore call) and the atomic file
+     * write run later on the loft-disk thread (see Disk), never on the
+     * caller's thread. Several saves in a row write only the newest list.
+     *
+     * <p>Two guards against losing data: a list loaded from an unreadable
+     * file is not written back while it is still empty, and when encryption
+     * fails now but the file on disk is encrypted, the write is skipped
+     * rather than downgrading the file to plain text.
      */
     private void save() {
+        if (unreadable && items.isEmpty()) {
+            return;
+        }
+        unreadable = false;
+        final String json;
         try {
             JSONObject o = new JSONObject();
             o.put("active", active);
@@ -315,37 +354,29 @@ final class Profiles {
                 a.put(p.toJson());
             }
             o.put("items", a);
-            write(new File(app.getFilesDir(), FILE), Box.seal(o.toString()).getBytes(StandardCharsets.UTF_8));
-        } catch (Exception ignored) {
+            json = o.toString();
+        } catch (Exception e) {
+            Journal.add("profiles save " + e.getMessage());
+            return;
         }
-    }
-
-    /** Reads a whole file into memory; the profile file is small. */
-    private static byte[] read(File f) throws Exception {
-        java.io.FileInputStream in = new java.io.FileInputStream(f);
-        try {
-            byte[] b = new byte[(int) f.length()];
-            int n = 0;
-            while (n < b.length) {
-                int r = in.read(b, n, b.length - n);
-                if (r < 0) {
-                    break;
-                }
-                n += r;
+        final File f = new File(app.getFilesDir(), FILE);
+        Disk.writeLater(f, () -> {
+            String sealed = Box.seal(json);
+            if (sealed.startsWith("p:") && wasSealed(f)) {
+                Journal.add("profiles not saved: keystore unavailable");
+                return null;
             }
-            return b;
-        } finally {
-            in.close();
-        }
+            return sealed.getBytes(StandardCharsets.UTF_8);
+        });
     }
 
-    /** Replaces the file's content with {@code b}. */
-    private static void write(File f, byte[] b) throws Exception {
-        java.io.FileOutputStream out = new java.io.FileOutputStream(f);
+    /** True when the file on disk holds an encrypted ("v1:") list. */
+    private static boolean wasSealed(File f) {
         try {
-            out.write(b);
-        } finally {
-            out.close();
+            byte[] b = Disk.read(f);
+            return b != null && b.length > 3 && b[0] == 'v' && b[1] == '1' && b[2] == ':';
+        } catch (Exception e) {
+            return false;
         }
     }
 }
