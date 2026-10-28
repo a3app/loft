@@ -339,8 +339,15 @@ func routeChange(typ, flags uint16, verb string, r Route) error {
 		}
 	}
 
+	// The table: 0 means main. The one-byte field in rtmsg only holds
+	// numbers below 256; a bigger one goes into an RTA_TABLE attribute with
+	// the byte left "unspecified", exactly as iproute2 sends it.
+	table, tableAttr := tableFields(r.Table)
 	req := newRequest(typ, flags)
-	req.body(rtmsg(family, uint8(ones), unix.RT_TABLE_MAIN, protocol, scope, rtype))
+	req.body(rtmsg(family, uint8(ones), table, protocol, scope, rtype))
+	if tableAttr != 0 {
+		req.attrU32(unix.RTA_TABLE, tableAttr)
+	}
 	// The default route (prefix length 0) carries no RTA_DST at all.
 	if ones > 0 {
 		req.attr(unix.RTA_DST, dst)
@@ -363,6 +370,126 @@ func routeChange(typ, flags uint16, verb string, r Route) error {
 		return fmt.Errorf("netlink %s: %w", what, err)
 	}
 	return nil
+}
+
+// tableFields splits a table number into the one-byte header field and,
+// for numbers of 256 and up, the 32-bit attribute that carries it instead.
+func tableFields(t int) (byteField uint8, attr uint32) {
+	switch {
+	case t == 0:
+		return unix.RT_TABLE_MAIN, 0
+	case t < 256:
+		return uint8(t), 0
+	default:
+		return unix.RT_TABLE_UNSPEC, uint32(t)
+	}
+}
+
+func (netlinkBackend) RuleAdd(r Rule) error {
+	return ruleChange(unix.RTM_NEWRULE, unix.NLM_F_CREATE|unix.NLM_F_EXCL, "add", r)
+}
+
+func (netlinkBackend) RuleDel(r Rule) error {
+	return ruleChange(unix.RTM_DELRULE, 0, "del", r)
+}
+
+// ruleChange sends one policy-routing rule request (IPv4 only: loft's
+// overlay is IPv4). Its fixed body, struct fib_rule_hdr, has the same
+// 12-byte shape as rtmsg: family, dst_len, src_len, tos, table, two
+// reserved bytes, action, flags.
+func ruleChange(typ, flags uint16, verb string, r Rule) error {
+	what := strings.Join(ruleArgs(verb, r), " ")
+	if r.Table == 0 {
+		return fmt.Errorf("netlink %s: rule needs a table", what)
+	}
+	table, tableAttr := tableFields(r.Table)
+	// An added rule "goes to a table" (FR_ACT_TO_TBL). A delete leaves the
+	// action unspecified, which matches any, like "ip rule del" does.
+	var action uint8
+	if typ == unix.RTM_NEWRULE {
+		action = unix.FR_ACT_TO_TBL
+	}
+	req := newRequest(typ, flags)
+	req.body(rtmsg(unix.AF_INET, 0, table, 0, 0, action))
+	if tableAttr != 0 {
+		req.attrU32(unix.FRA_TABLE, tableAttr)
+	}
+	if r.IIF != "" {
+		// Interface names travel as C strings: with the closing zero byte.
+		req.attr(unix.FRA_IIFNAME, append([]byte(r.IIF), 0))
+	}
+	if r.Priority > 0 {
+		req.attrU32(unix.FRA_PRIORITY, uint32(r.Priority))
+	}
+	if err := do(req); err != nil {
+		return fmt.Errorf("netlink %s: %w", what, err)
+	}
+	return nil
+}
+
+// DefaultGatewayV4 reads the IPv4 default route of the main table and
+// returns its next hop and interface name, e.g. 172.31.20.1 and
+// "veth-loft". Only reads, so it uses netlink whatever LOFT_NETCFG says.
+// With several default routes the one with the lowest metric wins, as it
+// does for the kernel.
+func DefaultGatewayV4() (net.IP, string, error) {
+	req := newRequest(unix.RTM_GETROUTE, unix.NLM_F_DUMP)
+	req.body(rtmsg(unix.AF_INET, 0, 0, 0, 0, 0))
+	msgs, err := dump(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("netlink route dump: %w", err)
+	}
+	var best net.IP
+	var bestDev string
+	bestMetric := ^uint32(0)
+	for _, m := range msgs {
+		if m.typ != unix.RTM_NEWROUTE || len(m.data) < unix.SizeofRtMsg {
+			continue
+		}
+		d := m.data
+		// Only "0.0.0.0/0, normal route": dst_len 0, type unicast.
+		if d[1] != 0 || d[7] != unix.RTN_UNICAST {
+			continue
+		}
+		attrs, err := parseAttrs(d[unix.SizeofRtMsg:])
+		if err != nil {
+			return nil, "", err
+		}
+		table := uint32(d[4])
+		var gw net.IP
+		var oif int
+		var metric uint32
+		for _, a := range attrs {
+			switch a.typ {
+			case unix.RTA_TABLE:
+				if len(a.value) >= 4 {
+					table = nativeEndian.Uint32(a.value)
+				}
+			case unix.RTA_GATEWAY:
+				gw = net.IP(append([]byte(nil), a.value...))
+			case unix.RTA_OIF:
+				if len(a.value) >= 4 {
+					oif = int(nativeEndian.Uint32(a.value))
+				}
+			case unix.RTA_PRIORITY:
+				if len(a.value) >= 4 {
+					metric = nativeEndian.Uint32(a.value)
+				}
+			}
+		}
+		if table != unix.RT_TABLE_MAIN || gw.To4() == nil || metric >= bestMetric {
+			continue
+		}
+		dev := ""
+		if ifi, err := net.InterfaceByIndex(oif); err == nil {
+			dev = ifi.Name
+		}
+		best, bestDev, bestMetric = gw.To4(), dev, metric
+	}
+	if best == nil {
+		return nil, "", errors.New("no IPv4 default route with a gateway")
+	}
+	return best, bestDev, nil
 }
 
 // ifIndex turns an interface name into the kernel's interface number,

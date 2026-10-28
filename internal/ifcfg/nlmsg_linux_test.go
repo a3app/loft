@@ -5,6 +5,8 @@ package ifcfg
 
 import (
 	"bytes"
+	"net"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -155,5 +157,28 @@ func TestParseAttrsRejectsBadLength(t *testing.T) {
 	}
 	if _, err := parseAttrs([]byte{2, 0}); err == nil {
 		t.Error("short attribute accepted")
+	}
+}
+
+// TestRuleLayout: a rule add for "iif lft0 lookup 27750 pref 27750" has the
+// fib_rule_hdr with table "unspecified" (the number does not fit in a byte)
+// and action "to table", then FRA_TABLE, FRA_IIFNAME (zero-terminated) and
+// FRA_PRIORITY. Built by hand the same way ruleChange builds it.
+func TestRuleLayout(t *testing.T) {
+	table, attr := tableFields(27750)
+	if table != unix.RT_TABLE_UNSPEC || attr != 27750 {
+		t.Fatalf("tableFields(27750) = %d, %d", table, attr)
+	}
+	if b, a := tableFields(0); b != unix.RT_TABLE_MAIN || a != 0 {
+		t.Fatalf("tableFields(0) = %d, %d", b, a)
+	}
+	if b, a := tableFields(100); b != 100 || a != 0 {
+		t.Fatalf("tableFields(100) = %d, %d", b, a)
+	}
+	if got := ruleArgs("add", Rule{IIF: "tun0", Table: 27750, Priority: 27750}); strings.Join(got, " ") != "rule add iif tun0 lookup 27750 pref 27750" {
+		t.Fatalf("ruleArgs: %v", got)
+	}
+	if got := routeArgs("add", Route{Dst: &net.IPNet{IP: net.IPv4zero.To4(), Mask: net.CIDRMask(0, 32)}, Gw: net.IPv4(172, 31, 20, 1), Dev: "veth-loft", Table: 27750}); strings.Join(got, " ") != "route add default via 172.31.20.1 dev veth-loft table 27750" {
+		t.Fatalf("routeArgs: %v", got)
 	}
 }

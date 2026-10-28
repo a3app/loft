@@ -35,6 +35,11 @@ import (
 
 const testDev = "lft0"
 
+// testTable is the extra routing table the scenario uses for the policy
+// rule (the number loft itself uses for the LAN gateway "route" mode).
+// Below 256 on purpose: busybox "ip" rejects bigger table numbers.
+const testTable = 176
+
 func needRoot(t *testing.T) {
 	t.Helper()
 	if os.Geteuid() != 0 || os.Getenv("LOFT_IFCFG_ROOT") != "1" {
@@ -116,15 +121,53 @@ func routes(t *testing.T) []string {
 					metric = nativeEndian.Uint32(a.value)
 				}
 			}
-			if table != unix.RT_TABLE_MAIN {
+			if table != unix.RT_TABLE_MAIN && table != testTable {
 				continue
 			}
 			if dst == "" {
 				dst = "default"
 			}
-			out = append(out, fmt.Sprintf("af=%d %s/%d type=%d scope=%d proto=%d oif=%s gw=%s metric=%d",
-				d[0], dst, d[1], d[7], d[6], d[5], oif, gw, metric))
+			out = append(out, fmt.Sprintf("table=%d af=%d %s/%d type=%d scope=%d proto=%d oif=%s gw=%s metric=%d",
+				table, d[0], dst, d[1], d[7], d[6], d[5], oif, gw, metric))
 		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// rules lists the IPv4 policy-routing rules, one line each, sorted.
+func rules(t *testing.T) []string {
+	t.Helper()
+	req := newRequest(unix.RTM_GETRULE, unix.NLM_F_DUMP)
+	req.body(rtmsg(unix.AF_INET, 0, 0, 0, 0, 0))
+	msgs, err := dump(req)
+	if err != nil {
+		t.Fatalf("dump rules: %v", err)
+	}
+	var out []string
+	for _, m := range msgs {
+		if m.typ != unix.RTM_NEWRULE || len(m.data) < unix.SizeofRtMsg {
+			continue
+		}
+		d := m.data
+		attrs, err := parseAttrs(d[unix.SizeofRtMsg:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		table := uint32(d[4])
+		var iif string
+		var pref uint32
+		for _, a := range attrs {
+			switch a.typ {
+			case unix.FRA_TABLE:
+				table = nativeEndian.Uint32(a.value)
+			case unix.FRA_IIFNAME:
+				iif = strings.TrimRight(string(a.value), "\x00")
+			case unix.FRA_PRIORITY:
+				pref = nativeEndian.Uint32(a.value)
+			}
+		}
+		out = append(out, fmt.Sprintf("pref=%d iif=%s table=%d action=%d", pref, iif, table, d[7]))
 	}
 	sort.Strings(out)
 	return out
@@ -178,9 +221,10 @@ func snapshot(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return fmt.Sprintf("up=%v mtu=%d\naddrs:\n  %s\nroutes:\n  %s",
+	return fmt.Sprintf("up=%v mtu=%d\naddrs:\n  %s\nroutes:\n  %s\nrules:\n  %s",
 		ifi.Flags&net.FlagUp != 0, ifi.MTU,
-		strings.Join(addrs(t, testDev), "\n  "), strings.Join(routes(t), "\n  "))
+		strings.Join(addrs(t, testDev), "\n  "), strings.Join(routes(t), "\n  "),
+		strings.Join(rules(t), "\n  "))
 }
 
 // scenario plays loft's changes with backend b and returns the state after
@@ -191,6 +235,7 @@ func scenario(t *testing.T, b Backend) []string {
 	defer ifc.Close()
 
 	before := routes(t)
+	beforeRules := rules(t)
 	var states []string
 	step := func(name string, err error) {
 		t.Helper()
@@ -213,6 +258,17 @@ func scenario(t *testing.T, b Backend) []string {
 	v6 := Route{Dst: mustCIDR("2000::/3"), Type: Unreachable}
 	if ipv6On() {
 		step("v6 unreachable", b.RouteReplace(v6))
+	}
+	// The LAN gateway "route" mode: a default route in its own table and a
+	// rule that sends packets coming from the TUN to that table.
+	tblRoute := Route{Dst: mustCIDR("0.0.0.0/0"), Gw: net.ParseIP("10.77.0.1"), Dev: testDev, Table: testTable}
+	rule := Rule{IIF: testDev, Table: testTable, Priority: testTable}
+	step("table route", b.RouteAdd(tblRoute))
+	step("rule add", b.RuleAdd(rule))
+	if err := b.RuleAdd(rule); err == nil {
+		t.Errorf("%s: duplicate rule add succeeded", b.Name())
+	} else if b.Name() == "netlink" && !errors.Is(err, unix.EEXIST) {
+		t.Errorf("netlink duplicate rule add: %v, want EEXIST", err)
 	}
 
 	// 3. A second add of the same address must fail like "ip" does.
@@ -238,6 +294,8 @@ func scenario(t *testing.T, b Backend) []string {
 
 	// 6. Undo, newest first, the way loft's undo lists run.
 	step("del blackhole", b.RouteDel(bh))
+	step("rule del", b.RuleDel(rule))
+	step("del table route", b.RouteDel(Route{Dst: tblRoute.Dst, Table: testTable}))
 	if ipv6On() {
 		step("del v6", b.RouteDel(v6))
 	}
@@ -254,6 +312,10 @@ func scenario(t *testing.T, b Backend) []string {
 	// Our address's subnet route goes with the TUN; everything else must
 	// be exactly as before.
 	ifc.Close()
+	if after := rules(t); strings.Join(after, "\n") != strings.Join(beforeRules, "\n") {
+		t.Errorf("%s: rules not restored\nbefore:\n%s\nafter:\n%s", b.Name(),
+			strings.Join(beforeRules, "\n"), strings.Join(after, "\n"))
+	}
 	if after := routes(t); strings.Join(after, "\n") != strings.Join(before, "\n") {
 		t.Errorf("%s: routing table not restored\nbefore:\n%s\nafter:\n%s", b.Name(),
 			strings.Join(before, "\n"), strings.Join(after, "\n"))
@@ -284,8 +346,8 @@ func TestReplaceDefaultBlackhole(t *testing.T) {
 	needRoot(t)
 	var orig *Route
 	for _, line := range routes(t) {
-		// af=2 default/0 type=1 ... oif=eth0 gw=172.17.0.1
-		if strings.HasPrefix(line, "af=2 default/0 type=1 ") {
+		// table=254 af=2 default/0 type=1 ... oif=eth0 gw=172.17.0.1
+		if strings.HasPrefix(line, "table=254 af=2 default/0 type=1 ") {
 			f := strings.Fields(line)
 			r := Route{Dst: mustCIDR("0.0.0.0/0")}
 			for _, kv := range f {
@@ -305,7 +367,7 @@ func TestReplaceDefaultBlackhole(t *testing.T) {
 		}
 		found := false
 		for _, line := range routes(t) {
-			if strings.HasPrefix(line, "af=2 default/0 type=6 ") {
+			if strings.HasPrefix(line, "table=254 af=2 default/0 type=6 ") {
 				found = true
 			}
 		}
@@ -337,4 +399,21 @@ func TestBadInput(t *testing.T) {
 			t.Errorf("PromoteSecondaries(%q) accepted", name)
 		}
 	}
+}
+
+// TestDefaultGatewayV4 reads the namespace's default route and compares it
+// with the route dump.
+func TestDefaultGatewayV4(t *testing.T) {
+	needRoot(t)
+	gw, dev, err := DefaultGatewayV4()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("oif=%s gw=%s ", dev, gw)
+	for _, line := range routes(t) {
+		if strings.Contains(line, " default/0 type=1 ") && strings.Contains(line, want) {
+			return
+		}
+	}
+	t.Fatalf("DefaultGatewayV4 = %s dev %s, not in:\n%s", gw, dev, strings.Join(routes(t), "\n"))
 }

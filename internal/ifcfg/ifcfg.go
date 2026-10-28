@@ -59,6 +59,23 @@ type Route struct {
 	Gw net.IP
 	// Type is Unicast unless set.
 	Type RouteType
+	// Table is the routing table number; 0 means the main table, where
+	// every ordinary route lives. Another table is only consulted when a
+	// Rule sends packets there (see Rule).
+	Table int
+}
+
+// Rule is one policy-routing rule: "packets that arrived on interface IIF
+// look up their route in table Table". The kernel walks rules by Priority,
+// lowest first, before the usual main table (priority 32766).
+//
+// loft uses one in the LAN gateway "route" mode: the answers its own stack
+// writes into the TUN for LAN hosts must go back to the router, not into
+// the TUN again (which the split default would otherwise choose).
+type Rule struct {
+	IIF      string // incoming interface name, e.g. "tun0"
+	Table    int    // table to look up, must not be 0
+	Priority int    // order among rules; 0 lets the kernel pick
 }
 
 // Backend makes the changes. All methods behave like the matching "ip"
@@ -82,6 +99,11 @@ type Backend interface {
 	RouteReplace(r Route) error
 	// RouteDel deletes a route ("ip route del").
 	RouteDel(r Route) error
+	// RuleAdd adds a policy-routing rule ("ip rule add"); a second add of
+	// the same rule fails with EEXIST like "ip" does.
+	RuleAdd(r Rule) error
+	// RuleDel deletes it again ("ip rule del").
+	RuleDel(r Rule) error
 	// Name is "netlink" or "ip", for logs.
 	Name() string
 }
@@ -141,6 +163,22 @@ func (ipTool) RouteReplace(r Route) error {
 }
 func (ipTool) RouteDel(r Route) error { return runIP(familyFlag(r.Dst.IP), routeArgs("del", r)...) }
 
+func (ipTool) RuleAdd(r Rule) error { return runIP("", ruleArgs("add", r)...) }
+func (ipTool) RuleDel(r Rule) error { return runIP("", ruleArgs("del", r)...) }
+
+// ruleArgs turns r into "rule <verb> iif NAME lookup TABLE [pref N]".
+func ruleArgs(verb string, r Rule) []string {
+	args := []string{"rule", verb}
+	if r.IIF != "" {
+		args = append(args, "iif", r.IIF)
+	}
+	args = append(args, "lookup", strconv.Itoa(r.Table))
+	if r.Priority > 0 {
+		args = append(args, "pref", strconv.Itoa(r.Priority))
+	}
+	return args
+}
+
 // routeArgs turns r into "route <verb> [type] <dst> [via gw] [dev name]",
 // the order "ip" expects: the type keyword comes before the destination.
 func routeArgs(verb string, r Route) []string {
@@ -157,6 +195,9 @@ func routeArgs(verb string, r Route) []string {
 	}
 	if r.Dev != "" {
 		args = append(args, "dev", r.Dev)
+	}
+	if r.Table != 0 {
+		args = append(args, "table", strconv.Itoa(r.Table))
 	}
 	return args
 }

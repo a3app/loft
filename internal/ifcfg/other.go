@@ -23,6 +23,11 @@ func (noNetlink) LinkUp(string, int) error         { return errNotLinux }
 func (noNetlink) RouteAdd(Route) error             { return errNotLinux }
 func (noNetlink) RouteReplace(Route) error         { return errNotLinux }
 func (noNetlink) RouteDel(Route) error             { return errNotLinux }
+func (noNetlink) RuleAdd(Rule) error               { return errNotLinux }
+func (noNetlink) RuleDel(Rule) error               { return errNotLinux }
+
+// DefaultGatewayV4 is Linux-only, see netlink_linux.go.
+func DefaultGatewayV4() (net.IP, string, error) { return nil, "", errNotLinux }
 
 // PromoteSecondaries is Linux-only, see sysctl_linux.go.
 func PromoteSecondaries(string) error { return errNotLinux }
