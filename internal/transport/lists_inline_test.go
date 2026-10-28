@@ -166,7 +166,7 @@ func TestListsProfileJSON(t *testing.T) {
 	l := signProfileLists(t, priv, 20261027, 0)
 	PinControllerPub(l.Pub)
 	liveBook.Store(nil)
-	liveProfile.Store("")
+	liveProfile.Store(listsProfile{})
 	if err := RememberLists(l); err != nil {
 		t.Fatal(err)
 	}
@@ -176,6 +176,11 @@ func TestListsProfileJSON(t *testing.T) {
 	}
 	if want, _ := l.RouteProfile().SplitJSON(); string(want) != raw {
 		t.Fatalf("%s", raw)
+	}
+	// The tag names this exact document: serial plus a piece of the lists hash.
+	h := l.Hash()
+	if tag, want := ListsProfileTag(), fmt.Sprintf("%d-%x", l.Serial, h[:8]); tag != want {
+		t.Fatalf("tag %q, want %q", tag, want)
 	}
 }
 

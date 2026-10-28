@@ -118,18 +118,36 @@ func RememberLists(l wire.Lists) error {
 	}
 	liveBook.Store(nb)
 	if raw, err := l.RouteProfile().SplitJSON(); err == nil {
-		liveProfile.Store(string(raw))
+		liveProfile.Store(listsProfile{
+			json: string(raw),
+			tag:  fmt.Sprintf("%d-%x", l.Serial, nb.hash[:8]),
+		})
 	}
 	return nil
 }
 
-var liveProfile atomic.Value // string SplitJSON
+// listsProfile is the operator route profile built from the last verified
+// lists, kept together with a short tag so both always change at once.
+type listsProfile struct {
+	json string // SplitJSON document for the Android lists screen
+	tag  string // "<serial>-<first 8 bytes of the lists hash in hex>"
+}
+
+var liveProfile atomic.Value // listsProfile
 
 // ListsProfileJSON is the operator SplitStore document of the last verified
 // lists, or "". gomobile Snapshot carries it for the Android GUI.
 func ListsProfileJSON() string {
-	s, _ := liveProfile.Load().(string)
-	return s
+	p, _ := liveProfile.Load().(listsProfile)
+	return p.json
+}
+
+// ListsProfileTag identifies the document ListsProfileJSON returns, or "".
+// The document can be megabytes; an app that polls once a second compares
+// this short tag and fetches the JSON only when the tag changes.
+func ListsProfileTag() string {
+	p, _ := liveProfile.Load().(listsProfile)
+	return p.tag
 }
 
 var (

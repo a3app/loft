@@ -92,6 +92,34 @@ func TestPacketInjectPull(t *testing.T) {
 	}
 }
 
+// InjectPacketN takes only the first n bytes and copies them, so the caller
+// may overwrite its buffer right after the call (the Android TUN reader does).
+func TestInjectPacketN(t *testing.T) {
+	e := NewEngine()
+	e.pipe = newPacketPipe()
+	defer e.pipe.Close()
+
+	buf := make([]byte, 2048)
+	copy(buf, []byte{0x45, 0, 0, 20})
+	if err := e.InjectPacketN(buf, 4); err != nil {
+		t.Fatal(err)
+	}
+	buf[0] = 0xff // the reader reuses its buffer for the next packet
+	got := make([]byte, 64)
+	n, err := e.pipe.Read(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got[:n]) != string([]byte{0x45, 0, 0, 20}) {
+		t.Fatalf("read %x", got[:n])
+	}
+	for _, bad := range []int{-1, 2049} {
+		if err := e.InjectPacketN(buf, bad); err == nil {
+			t.Fatalf("n=%d accepted", bad)
+		}
+	}
+}
+
 func TestPacketSink(t *testing.T) {
 	e := NewEngine()
 	e.pipe = newPacketPipe()

@@ -62,6 +62,10 @@ type Snapshot struct {
 	Err         string
 	InstanceID  string
 	ProfileJSON string
+	// ProfileTag names the ProfileJSON document ("" when there is none).
+	// ProfileJSON can be megabytes and is copied into Java on every read,
+	// so a poller compares the tag and reads ProfileJSON only when it changes.
+	ProfileTag string
 }
 
 // Engine is one overlay/VPN session for a Packet Tunnel / VpnService.
@@ -264,6 +268,17 @@ func (e *Engine) InjectPacket(pkt []byte) error {
 	return p.inject(pkt)
 }
 
+// InjectPacketN is InjectPacket for the first n bytes of buf. The Android
+// TUN reader reads into one reusable buffer; passing the length lets it hand
+// that buffer over as is, instead of allocating an exact-size copy for every
+// packet only for the engine to copy it once more. The engine never keeps buf.
+func (e *Engine) InjectPacketN(buf []byte, n int) error {
+	if n < 0 || n > len(buf) {
+		return fmt.Errorf("bad packet length %d", n)
+	}
+	return e.InjectPacket(buf[:n])
+}
+
 // PullPacket is one IP packet toward the OS. Nil if the queue is empty.
 func (e *Engine) PullPacket() []byte {
 	e.mu.Lock()
@@ -316,6 +331,7 @@ func (e *Engine) Snapshot() *Snapshot {
 		BytesUp:     e.bytesUp.Load(),
 		BytesDown:   e.bytesDown.Load(),
 		ProfileJSON: transport.ListsProfileJSON(),
+		ProfileTag:  transport.ListsProfileTag(),
 	}
 	h := e.holder
 	vc := e.vless
