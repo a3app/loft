@@ -8,6 +8,10 @@ listen:
   tun: auto
   kill_switch: false
   http: 0.0.0.0:8090
+  # LAN gateway: nat (RouterOS masquerades LAN into the container, default)
+  # or route (real LAN addresses; loft returns answers by a policy rule).
+  # Must match $mode in policy.rsc.
+  gateway: nat
   # http_pass: "change-me"
   # uplink: ether1
 

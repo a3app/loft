@@ -6,6 +6,7 @@
 :do { /container/mounts/remove [find where list="loft-data"] } on-error={}
 :do { /ip/firewall/mangle/remove [find where comment="loft-lan"] } on-error={}
 :do { /ip/firewall/address-list/remove [find where list="loft-lan"] } on-error={}
+:do { /ip/firewall/nat/remove [find where comment="loft-lan-nat"] } on-error={}
 :do { /ip/route/remove [find where routing-table="loft"] } on-error={}
 :do { /routing/table/remove [find where name="loft"] } on-error={}
 :do { /routing/rule/remove [find where comment="loft-wan"] } on-error={}

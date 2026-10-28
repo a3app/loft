@@ -1,6 +1,14 @@
 # loft — LAN through the container as gateway.
 # Run only after the container log shows "tun up". Without TUN this loops.
-# Edit the address-list, then paste.
+# Edit the address-list and $mode, then paste.
+#
+# $mode must match listen.gateway in client.yaml:
+#   nat   (default) RouterOS rewrites LAN sources to 172.31.20.1 (masquerade)
+#         on the way into the container. loft needs nothing extra.
+#   route LAN addresses stay as they are; loft (listen.gateway: route) sends
+#         its answers back here by a policy rule. Use it when the container
+#         should see real LAN addresses.
+:local mode "nat"
 
 :if ([:len [/routing/table/find where name="loft"]] = 0) do={
   /routing/table/add fib name=loft
@@ -26,5 +34,20 @@
 # WebFig, Winbox) stay on the router. Table loft has only a default route,
 # so without this they would be sent into the container and lost.
 
+# Why nat at all: inside the container loft routes 0/1 and 128/1 into its
+# TUN. An answer to a LAN address would follow those routes back into the
+# TUN instead of returning here. Answers to 172.31.20.1 do not: that subnet
+# is directly on the container's veth. Running this script again with the
+# other mode switches it.
+:if ($mode = "nat") do={
+  :if ([:len [/ip/firewall/nat/find where comment="loft-lan-nat"]] = 0) do={
+    /ip/firewall/nat/add chain=srcnat src-address-list=loft-lan out-interface=br-loft \
+      action=masquerade comment=loft-lan-nat
+  }
+} else={
+  :do { /ip/firewall/nat/remove [find where comment="loft-lan-nat"] } on-error={}
+}
+
 :put "hosts in address-list loft-lan now use table loft → 172.31.20.2"
+:put ("LAN gateway mode: " . $mode . " — client.yaml listen.gateway must say the same")
 :put "fronts stay on veth-loft inside the container (-if 172.31.20.1); they do not hairpin"

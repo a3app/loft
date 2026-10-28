@@ -54,6 +54,17 @@ Do not run `policy.rsc` on SOCKS alone.
 
 RouterOS itself does not get a new default route. Without TUN, 0/0 via the container IP loops (container default is the ROS veth gateway).
 
+**Mode: `nat` or `route`.** Inside the container loft sends 0/1 and 128/1 into its TUN, so an answer to a LAN address would loop back into the TUN instead of returning to RouterOS. Two ways out; `listen.gateway` in `client.yaml` and `:local mode` in `policy.rsc` must say the same:
+
+| | `nat` (default) | `route` |
+|--|--|--|
+| RouterOS | masquerade `loft-lan` → `br-loft` (rule `loft-lan-nat`) | no masquerade |
+| loft | nothing extra | policy rule: what leaves the TUN uses table 176, default via the veth gateway |
+| The container sees | every LAN host as `172.31.20.1` | real LAN addresses |
+| Use when | always, unless you need real addresses | the container must tell LAN hosts apart, or later overlay → LAN access |
+
+The same choice is called "NAT for clients" on a Keenetic VPN server. `route` is only for a dedicated gateway: on an ordinary Linux host with IP forwarding on, that rule would let overlay members route through the machine. Mismatched modes (loft `nat`, RouterOS `route`) leave the LAN without internet; SOCKS keeps working.
+
 ## 5. LAN page and uplink
 
 `listen.http: 0.0.0.0:8090` serves a small operator page (status, key, URL, front, uplink). Optional `listen.http_pass`. Winbox cookie is not shared.

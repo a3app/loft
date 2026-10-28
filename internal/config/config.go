@@ -80,6 +80,21 @@ type ListenConfig struct {
 	HTTPPass   string `yaml:"http_pass,omitempty"` // empty = open on the bind
 	Bind       string `yaml:"bind,omitempty"`      // same as -if; CLI -if wins
 	Uplink     string `yaml:"uplink,omitempty"`    // RouterOS WAN name for container egress
+	// Gateway is how a router in front of loft hands LAN traffic to the TUN
+	// (the MikroTik container): "nat" (or empty) means the router rewrites
+	// LAN sources to its own address (masquerade), so loft needs nothing
+	// extra; "route" keeps the real LAN addresses, and loft then sends its
+	// answers back to the router by a policy rule. See docs/mikrotik.md.
+	Gateway string `yaml:"gateway,omitempty"`
+}
+
+// ValidGatewayMode accepts the listen.gateway values: empty, nat, route.
+func ValidGatewayMode(s string) error {
+	switch s {
+	case "", "nat", "route":
+		return nil
+	}
+	return fmt.Errorf("listen.gateway %q: use nat or route", s)
 }
 
 var ifNameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._-]{0,62}$`)
@@ -104,6 +119,9 @@ func WriteClient(path string, cfg *ClientConfig) error {
 		return err
 	}
 	if err := ValidIFName(cfg.Listen.Uplink); err != nil {
+		return err
+	}
+	if err := ValidGatewayMode(cfg.Listen.Gateway); err != nil {
 		return err
 	}
 	b, err := yaml.Marshal(cfg)
@@ -273,6 +291,9 @@ func LoadClient(path string) (*ClientConfig, error) {
 		return nil, err
 	}
 	if err := ValidIFName(c.Listen.Uplink); err != nil {
+		return nil, err
+	}
+	if err := ValidGatewayMode(c.Listen.Gateway); err != nil {
 		return nil, err
 	}
 	for i := range c.Outbounds {

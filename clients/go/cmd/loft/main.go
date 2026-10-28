@@ -94,8 +94,15 @@ func main() {
 	var (
 		tunMu  sync.Mutex
 		tunDev *inbound.Device
+		// lanUndo removes the route-mode rule (listen.gateway: route).
+		lanUndo func()
 	)
-	defer func() { _ = tunDev.Close() }()
+	defer func() {
+		if lanUndo != nil {
+			lanUndo()
+		}
+		_ = tunDev.Close()
+	}()
 	bringTUN := func() {
 		if cfg.Listen.TUN == "" {
 			return
@@ -118,6 +125,18 @@ func main() {
 		}
 		tunDev = c
 		log.Printf("tun up overlay=%s kill_switch=%v", cidr, cfg.Listen.KillSwitch)
+		// LAN gateway in "route" mode: answers to LAN hosts must leave
+		// through the router, not loop back into the TUN (see
+		// inbound/lanreturn_linux.go). "nat" needs nothing here.
+		if cfg.Listen.Gateway == "route" {
+			undo, err := inbound.EnableLANReturn(c.Name())
+			if err != nil {
+				log.Printf("lan gateway route: %v", err)
+			} else {
+				lanUndo = undo
+				log.Printf("lan gateway route: answers to LAN hosts go back via the default route")
+			}
+		}
 	}
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
 

@@ -383,3 +383,18 @@ func TestCCCommand(t *testing.T) {
 		t.Fatal("empty ask")
 	}
 }
+
+// TestValidGatewayMode: listen.gateway takes nat, route or nothing; a typo
+// is refused instead of silently acting as nat.
+func TestValidGatewayMode(t *testing.T) {
+	for _, ok := range []string{"", "nat", "route"} {
+		if err := ValidGatewayMode(ok); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"NAT", "routed", "masquerade"} {
+		if ValidGatewayMode(bad) == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

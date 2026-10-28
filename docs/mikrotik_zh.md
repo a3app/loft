@@ -54,6 +54,17 @@ RouterOS 容器里的 `/dev/net/tun` 不保证有。日志出现 `tun up` 时：
 
 RouterOS 自身不装新的 default route。没有 TUN 时，0/0 经容器 IP 会打环（容器默认网关就是 ROS 的 veth）。
 
+**模式：`nat` 或 `route`。** 容器里 loft 把 0/1 和 128/1 指进自己的 TUN，所以发给 LAN 地址的回包会绕回 TUN，而不是回到 RouterOS。有两种解法；`client.yaml` 的 `listen.gateway` 和 `policy.rsc` 的 `:local mode` 必须一致：
+
+| | `nat`（默认） | `route` |
+|--|--|--|
+| RouterOS | masquerade `loft-lan` → `br-loft`（规则 `loft-lan-nat`） | 不做 masquerade |
+| loft | 不用额外做什么 | 策略路由：从 TUN 出来的包查表 176，表里默认经 veth 网关 |
+| 容器看到 | 所有 LAN 主机都是 `172.31.20.1` | 真实 LAN 地址 |
+| 什么时候用 | 不需要真实地址时都用它 | 容器要区分 LAN 主机，或以后从覆盖网访问 LAN |
+
+Keenetic 的 VPN 服务器里同样的选择叫 "NAT for clients"。`route` 只用于专门的网关：在开了 IP 转发的普通 Linux 上，这条规则会让覆盖网成员经这台机器路由。模式不一致（loft `nat`、RouterOS `route`）时 LAN 上不了网；SOCKS 照常。
+
 ## 5. LAN 页和出口
 
 `listen.http: 0.0.0.0:8090` 是小运营页（状态、密钥、URL、前置、出口）。可选 `listen.http_pass`。Winbox 的 cookie 到不了。
