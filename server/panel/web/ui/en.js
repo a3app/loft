@@ -1913,6 +1913,7 @@ window.LOFT_EN = {
   "маршрут": "route",
   "маршруты офиса": "office routes",
   "менять": "change",
+  "меньше минуты": "under a minute",
   "мин": "min",
   "мин назад": "min ago",
   "мин → $": "min → $",

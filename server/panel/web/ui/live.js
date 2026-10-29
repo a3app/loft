@@ -2327,6 +2327,34 @@
   }
   L.loadPresence = loadPresence;
 
+  /* The member window's Connections tab. connsOf() in the page calls this to
+     get the real devices attached now, built from /api/presence. Each entry
+     fills one card: identity (just the instance id and overlay address — the
+     node does not report the client program or version), front, path (direct
+     or through a relay), address, time online, and traffic. */
+  const connBytes = n => { n = n || 0; if (n < 1024) return n + ' Б'; const u = ['КБ', 'МБ', 'ГБ', 'ТБ']; let i = -1; do { n /= 1024; i++; } while (n >= 1024 && i < 3); return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i]; };
+  const connSince = v => { if (!v || String(v).startsWith('0001')) return '—'; const s = (Date.now() - new Date(v)) / 1000; return s < 90 ? 'меньше минуты' : s < 3600 ? Math.round(s / 60) + ' мин' : s < 86400 ? Math.round(s / 3600) + ' ч' : Math.round(s / 86400) + ' дн.'; };
+  const shortInst = v => { v = String(v || ''); return v.length > 12 ? v.slice(0, 4) + '…' + v.slice(-4) : v; };
+  const relayIdFor = (from, relays) => {
+    if (!from || !relays || !relays.length) return '';
+    const host = String(from).replace(/^\[/, '').split(']')[0].split(':')[0];
+    if (!host) return '';
+    const hit = relays.find(r => { try { return new URL(r.url).hostname === host; } catch (e) { return false; } });
+    return hit ? hit.id : '';
+  };
+  window.liveConns = id => {
+    const m = L.pres && L.pres.members && L.pres.members[id];
+    if (!m || !m.conns || !m.conns.length) return [];
+    const relays = (L.pres.relays || []);
+    return m.conns.map(c => ({
+      prog: '', ver: '',
+      inst: shortInst(c.inst), ov: c.ip || '—',
+      front: c.front || '', relay: relayIdFor(c.from, relays),
+      addr: c.from || '—', since: connSince(c.since), seen: 'сейчас',
+      rx: connBytes(c.rx), tx: connBytes(c.tx),
+    }));
+  };
+
   /* ── Mail: domains, boxes, aliases, DNS; the helper writes the daemons' files ── */
   // /api/mail is the whole mail state; writes answer with it again. L.mlDom is
   // the mail domain on screen. /api/mail/dns checks that domain's records

@@ -1346,13 +1346,15 @@ const CONNS={
  'bob':[{prog:'loft',ver:'1.0.38',inst:'5e20…9ad1',ov:'10.20.0.21',front:'h2',relay:'de-1',addr:'198.51.100.31',since:'12 мин',seen:'5 мин назад',rx:'443 МБ',tx:'209 МБ'}],
  'nas':[{prog:'loft',ver:'1.0.37',inst:'b7c4…1f08',ov:'10.10.0.5',front:'get',relay:'',addr:'198.51.100.5',since:'3 дн',seen:'сейчас',rx:'356 МБ',tx:'2.6 ГБ'}]};
 const FRONTLABEL={get:'GET',ws:'WebSocket',h2:'HTTP/2',quic:'QUIC',h3:'HTTP/3',l3:'L3'};
-const connsOf=id=>CONNS[id]||[];
+// The live layer sets window.liveConns to read real connections from the node;
+// without it (the plain mock) this falls back to the sample data above.
+function connsOf(id){return (window.liveConns?window.liveConns(id):CONNS[id])||[];}
 /* one device card: honest identity (prog·version · instance_id), then front,
    path, address and time, traffic. All device-facing text is kept Cyrillic
    so i18n can translate it; ids, addresses and versions stay as data. */
 function connCard(c){
  return `<div class="conn">
-  <div class="conn-h"><span class="dot live" aria-hidden="true"></span><b>${esc(c.prog)} ${esc(c.ver)}</b><span class="mono">instance ${esc(c.inst)} · ${esc(c.ov)}</span></div>
+  <div class="conn-h"><span class="dot live" aria-hidden="true"></span>${(c.prog||c.ver)?`<b>${esc(c.prog)} ${esc(c.ver)}</b>`:''}<span class="mono">instance ${esc(c.inst)} · ${esc(c.ov)}</span></div>
   <div class="meta"><span>${FRONTLABEL[c.front]||esc(c.front)}</span><span>·</span><span>${c.relay?'через ретранслятор <b>'+esc(c.relay)+'</b>':'напрямую'}</span></div>
   <div class="meta"><span>адрес <span class="mono">${esc(c.addr)}</span></span><span>·</span><span>в сети <span class="mono">${esc(c.since)}</span></span><span>·</span><span>активность <span class="mono">${esc(c.seen)}</span></span></div>
   <div class="meta"><span>↓ <span class="mono">${esc(c.rx)}</span></span><span>↑ <span class="mono">${esc(c.tx)}</span></span></div>

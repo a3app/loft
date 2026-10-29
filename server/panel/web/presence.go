@@ -56,19 +56,34 @@ type presence struct {
 	path string
 }
 
+// memberConn is one live device of a member: the node reports it right now.
+// The member window's Connections tab draws a card per entry.
+type memberConn struct {
+	Inst  string    `json:"inst"`            // device id the client sent (or the node minted)
+	IP    string    `json:"ip,omitempty"`    // the device's address inside the overlay
+	From  string    `json:"from,omitempty"`  // where the device connects from
+	Front string    `json:"front,omitempty"` // how it carries loft over HTTPS
+	Since time.Time `json:"since,omitzero"`  // when this device attached
+	Rx    uint64    `json:"rx,omitempty"`
+	Tx    uint64    `json:"tx,omitempty"`
+	Key   string    `json:"key,omitempty"` // "current" or "old" controller key
+}
+
 // memberPresence is one member's line in the UI: how many devices are online
 // now, how many were ever seen, when one was last seen, and the address,
-// front and traffic of the live connection.
+// front and traffic of the live connection. Conns lists the devices attached
+// right now, one per card on the Connections tab.
 type memberPresence struct {
-	Online  int       `json:"online"`
-	Devices int       `json:"devices"`
-	Last    time.Time `json:"last,omitzero"`
-	IP      string    `json:"ip,omitempty"`
-	From    string    `json:"from,omitempty"`
-	Front   string    `json:"front,omitempty"` // live bulk mux front from the node
-	Rx      uint64    `json:"rx,omitempty"`
-	Tx      uint64    `json:"tx,omitempty"`
-	Key     string    `json:"key,omitempty"` // "current" or "old"; "old" wins if any device still pins the previous key
+	Online  int          `json:"online"`
+	Devices int          `json:"devices"`
+	Last    time.Time    `json:"last,omitzero"`
+	IP      string       `json:"ip,omitempty"`
+	From    string       `json:"from,omitempty"`
+	Front   string       `json:"front,omitempty"` // live bulk mux front from the node
+	Rx      uint64       `json:"rx,omitempty"`
+	Tx      uint64       `json:"tx,omitempty"`
+	Key     string       `json:"key,omitempty"` // "current" or "old"; "old" wins if any device still pins the previous key
+	Conns   []memberConn `json:"conns,omitempty"`
 }
 
 // readPresence fetches node-status.json through the helper.
@@ -122,6 +137,10 @@ func (s *Server) track(st nodeStatus) map[string]memberPresence {
 			} else if x.Key == "" {
 				x.Key = m.Key
 			}
+			x.Conns = append(x.Conns, memberConn{
+				Inst: m.Inst, IP: m.IP, From: m.From, Front: m.Front,
+				Since: m.Since, Rx: m.Rx, Tx: m.Tx, Key: m.Key,
+			})
 			out[m.Member] = x
 		}
 	}
