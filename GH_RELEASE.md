@@ -1,4 +1,4 @@
-# loft 1.0.38
+# loft 1.0.39
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,18 +10,18 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-1.0.38-macos-arm.dmg` | `loft-1.0.38-macos-intel.dmg` |
-| macOS CLI | `loft-1.0.38-darwin-arm64.tar.gz` | `loft-1.0.38-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-1.0.38-linux-arm64.tar.gz` | `loft-1.0.38-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.38-linux-arm64.tar.gz` · `loft-node_1.0.38_arm64.deb` | `loft-node-1.0.38-linux-amd64.tar.gz` · `loft-node_1.0.38_amd64.deb` |
-| Panel | `loft-panel-1.0.38-linux-arm64.tar.gz` · `loft-panel_1.0.38_arm64.deb` | `loft-panel-1.0.38-linux-amd64.tar.gz` · `loft-panel_1.0.38_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-1.0.38-android.apk` · `loft-1.0.38-android-tv.apk` | same fat APKs |
-| Windows portable (GitHub) | `loft-1.0.38-windows-arm64.zip` | `loft-1.0.38-windows-x86-64.zip` · `loft-1.0.38-windows-x86.zip` |
-| MikroTik container | `loft-mikrotik-1.0.38-arm64.tar` · `loft-mikrotik-1.0.38-armv7.tar` | `loft-mikrotik-1.0.38-amd64.tar` |
+| macOS app (10.13+, ad-hoc signed) | `loft-1.0.39-macos-arm.dmg` | `loft-1.0.39-macos-intel.dmg` |
+| macOS CLI | `loft-1.0.39-darwin-arm64.tar.gz` | `loft-1.0.39-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-1.0.39-linux-arm64.tar.gz` | `loft-1.0.39-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.39-linux-arm64.tar.gz` · `loft-node_1.0.39_arm64.deb` | `loft-node-1.0.39-linux-amd64.tar.gz` · `loft-node_1.0.39_amd64.deb` |
+| Panel | `loft-panel-1.0.39-linux-arm64.tar.gz` · `loft-panel_1.0.39_arm64.deb` | `loft-panel-1.0.39-linux-amd64.tar.gz` · `loft-panel_1.0.39_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-1.0.39-android.apk` · `loft-1.0.39-android-tv.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-1.0.39-windows-arm64.zip` | `loft-1.0.39-windows-x86-64.zip` · `loft-1.0.39-windows-x86.zip` |
+| MikroTik container | `loft-mikrotik-1.0.39-arm64.tar` · `loft-mikrotik-1.0.39-armv7.tar` | `loft-mikrotik-1.0.39-amd64.tar` |
 
-Checksums: `loft-clients-1.0.38-SHA256SUMS.txt`, `loft-node-1.0.38-SHA256SUMS.txt`, `loft-panel-1.0.38-SHA256SUMS.txt`, `loft-android-1.0.38-SHA256SUMS.txt`, `loft-windows-1.0.38-SHA256SUMS.txt`, `loft-mikrotik-1.0.38-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.39-SHA256SUMS.txt`, `loft-node-1.0.39-SHA256SUMS.txt`, `loft-panel-1.0.39-SHA256SUMS.txt`, `loft-android-1.0.39-SHA256SUMS.txt`, `loft-windows-1.0.39-SHA256SUMS.txt`, `loft-mikrotik-1.0.39-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.38`.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.39`.
 
 Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 
@@ -42,6 +42,15 @@ Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.39
+
+Protocol stays **loft/1.0**.
+
+Node:
+
+- A controller or relay no longer leaks a goroutine on every HTTP/1.1 hub or masked connection. The one-shot listener that hands the connection to the HTTP server never woke its second Accept, so the server parked forever and held the connection; it now returns when the connection closes. The leak grew without bound as WebSocket-front clients reconnected.
+- The config now rejects more than one standby relay with `auto_promote` set. Two standbys of the same generation would both promote on a controller outage and split-brain, which the fencing rule (newer generation wins) cannot resolve.
 
 ## 1.0.38
 
@@ -368,6 +377,8 @@ macOS:
 
 В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik. Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic в этот Dist не входят.
 
+1.0.39: нода — контроллер или релей больше не теряет горутину на каждом HTTP/1.1 hub- или замаскированном соединении: одноразовый listener, который отдаёт соединение HTTP-серверу, не будил второй Accept, сервер парковался навсегда и держал соединение; теперь он возвращается при закрытии соединения (утечка росла без предела при переподключениях ws-клиентов). Конфиг — отклоняется больше одного резервного релея с `auto_promote`: два резерва одного поколения при простое контроллера оба повысились бы и дали split-brain, который fencing («новее поколение — побеждает») не разрешает. Протокол loft/1.0.
+
 1.0.38: Android — заставка при запуске больше не обрезается. На Android 12+ система обрезает иконку splash по кругу, а там был полный lockup — края знака и надписи срезало; теперь на splash только знак, вписанный в круг. Протокол loft/1.0.
 
 1.0.37: Android — ссылки в подвале «Настроек» больше не жмутся к центру: «Сброс» слева, «Журнал» по центру, «О приложении» справа, каждая занимает треть ширины. Протокол loft/1.0.
@@ -397,6 +408,8 @@ macOS:
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
 本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic 不在这次包里。
+
+1.0.39：节点 — 控制器或中继不再在每条 HTTP/1.1 hub 连接或伪装连接上泄漏一个 goroutine：把连接交给 HTTP 服务器的一次性 listener 不会唤醒第二次 Accept，服务器永远停驻并占住连接；现在连接关闭时它会返回（随着 WebSocket 前置客户端重连，泄漏无上限增长）。配置 — 拒绝多于一个带 `auto_promote` 的备用中继：同一世代的两个备用在控制器故障时会同时提升而脑裂，fencing（“更新世代胜出”）无法解决。协议仍是 loft/1.0。
 
 1.0.38：Android — 启动闪屏不再被裁剪。Android 12+ 会把闪屏图标裁成圆形，而那里放的是完整标志组合，标记与文字的边缘被切掉；现在闪屏只用标记本身，正好落在圆内。协议仍是 loft/1.0。
 
