@@ -118,8 +118,9 @@ Table: package, state, version, ports / disk, actions (settings, update to, inst
 
 | Gap | Blocks |
 |-----|--------|
-| Status API (leases, sessions, relays, traffic) | online LEDs, last seen, counters |
+| Status API (leases, sessions, relays, traffic) | online LEDs, last seen, counters, the port Connections tab |
 | Several networks per node | second network in Segments |
 | Egress via a chosen interface | per-member egress rules |
 | Routes and tags used | routes pushed to members |
 | Proxy dialer in loft and SSTP clients | **Connect via** for those channels |
+| Node-minted device identity (the node mints and pins instance_id, ignoring the client's) + device-scoped ACL | showing a device as a stable label and a per-device access rule; the physical MAC is never on the L3 overlay, so instance_id is the only device handle |
