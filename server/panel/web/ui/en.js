@@ -2,6 +2,18 @@
    page's own strings (whole or the pieces a template is built from); the
    panel test fails when a Russian string has no entry here. */
 window.LOFT_EN = {
+  "Соединения": "Connections",
+  "Закрыть соединение": "Close connection",
+  "Соединение закрыто — устройство переподключится само": "Connection closed — the device will reconnect by itself",
+  "через ретранслятор": "via relay",
+  "адрес": "address",
+  "Нет активных соединений": "No active connections",
+  "Когда устройство участника подключится, оно появится здесь: фронт, путь — через ретранслятор или напрямую, адрес и трафик.": "When the member's device connects, it shows up here: front, path — via a relay or direct, address and traffic.",
+  "«В сети», адрес, время и трафик нода отдаёт через статус-API (пока в разработке — см. план доработок). Устройство опознаётся по instance_id: нода не видит физический MAC устройства.": "“Online”, address, time and traffic come from the node's status API (in progress — see the roadmap). A device is identified by its instance_id: the node does not see the device's physical MAC.",
+  "2 ч": "2 h",
+  "6 дн": "6 d",
+  "12 мин": "12 min",
+  "3 дн": "3 d",
   "Повышать автоматически": "Promote automatically",
   "Только для резервного: он сам станет основным, если 5 минут не видит эту ноду и большинство ретрансляторов (не меньше двух) её тоже не видят.": "Standby only: it becomes the controller by itself when it has not reached this node for 5 minutes and most relays (at least two) cannot reach it either.",
   "копия": "state copy",

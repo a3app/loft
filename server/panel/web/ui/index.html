@@ -242,6 +242,18 @@ tr.off td{color:var(--mute)}
 .dlg-body{flex:1 1 auto;overflow-y:auto;padding:12px 32px 24px;display:flex;flex-direction:column;gap:18px}
 .dlg-foot{display:flex;align-items:center;gap:16px;padding:16px 32px;border-top:1px solid var(--line)}
 .dlg-sec{font-weight:600;font-size:15px;margin-top:6px}
+/* tabs inside the member dialog, and the per-device connection cards */
+.mtabs{margin:-4px 0 2px}
+.mpane{display:flex;flex-direction:column;gap:18px}
+.conns{display:flex;flex-direction:column;gap:12px}
+.conn{border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.conn-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.conn-h b{font-weight:600}
+.conn-h .mono{font-size:12px;color:var(--mute)}
+.conn .meta{font-size:13px;line-height:20px;color:var(--text-2);display:flex;flex-wrap:wrap;gap:2px 10px}
+.conn .meta .mono{color:var(--text)}
+.conn-foot{margin-top:2px}
+.dot.live{background:var(--ok-fg);margin-right:0}
 .qr svg{width:168px;height:168px}
 .qr{width:200px;height:200px;align-self:center;background:#fff;border:1px solid var(--line);border-radius:4px;display:flex;align-items:center;justify-content:center}
 .uri{background:var(--bg);border-radius:4px;padding:10px 12px;font:12px/1.5 var(--mono);overflow-wrap:anywhere;position:relative}
@@ -1322,6 +1334,38 @@ const NETS=[
 /* что знает только панель (протоколы, профиль); «в сети» и «последний вход» нода пока не отдаёт */
 const EXTRA={'alice-phone':['loft, VLESS','1 / 2','2 мин назад',2],'alice-laptop':['loft','0 / 1','вчера',0],'office-kn':['loft','1 / 1','сейчас',1],'bob':['loft, VLESS','1 / 3','5 мин назад',2],
  'guest-01':['VLESS','0 / 1','3 дня назад',0],'nas':['loft','1 / 1','сейчас',1],'printer':['loft','0 / 1','2 мес. назад',0],'test-old':['loft','0 / 1','2 мес. назад',0]};
+/* Active connections per device. The node's status API (leases, sessions,
+   fronts, traffic) is not built yet — see DESIGN §9 — so this is the target
+   view with sample data. A device is one running client install, named by
+   its instance_id; the node never sees the device's physical MAC. Fields:
+   prog/software, short instance_id, overlay IP, front, path (direct or a
+   relay name), client address, since, last activity, received / sent. */
+const CONNS={
+ 'alice-phone':[{prog:'loft',ver:'1.0.38',inst:'7f3a…c21e',ov:'10.10.0.14',front:'get',relay:'de-1',addr:'203.0.113.24',since:'2 ч',seen:'сейчас',rx:'1.2 ГБ',tx:'0.3 ГБ'}],
+ 'office-kn':[{prog:'loft-ndms',ver:'1.0.38',inst:'a19c…04bb',ov:'10.20.0.2',front:'ws',relay:'',addr:'198.51.100.7',since:'6 дн',seen:'сейчас',rx:'10 ГБ',tx:'9.1 ГБ'}],
+ 'bob':[{prog:'loft',ver:'1.0.38',inst:'5e20…9ad1',ov:'10.20.0.21',front:'h2',relay:'de-1',addr:'198.51.100.31',since:'12 мин',seen:'5 мин назад',rx:'443 МБ',tx:'209 МБ'}],
+ 'nas':[{prog:'loft',ver:'1.0.37',inst:'b7c4…1f08',ov:'10.10.0.5',front:'get',relay:'',addr:'198.51.100.5',since:'3 дн',seen:'сейчас',rx:'356 МБ',tx:'2.6 ГБ'}]};
+const FRONTLABEL={get:'GET',ws:'WebSocket',h2:'HTTP/2',quic:'QUIC',h3:'HTTP/3',l3:'L3'};
+const connsOf=id=>CONNS[id]||[];
+/* one device card: honest identity (prog·version · instance_id), then front,
+   path, address and time, traffic. All device-facing text is kept Cyrillic
+   so i18n can translate it; ids, addresses and versions stay as data. */
+function connCard(c){
+ return `<div class="conn">
+  <div class="conn-h"><span class="dot live" aria-hidden="true"></span><b>${esc(c.prog)} ${esc(c.ver)}</b><span class="mono">instance ${esc(c.inst)} · ${esc(c.ov)}</span></div>
+  <div class="meta"><span>${FRONTLABEL[c.front]||esc(c.front)}</span><span>·</span><span>${c.relay?'через ретранслятор <b>'+esc(c.relay)+'</b>':'напрямую'}</span></div>
+  <div class="meta"><span>адрес <span class="mono">${esc(c.addr)}</span></span><span>·</span><span>в сети <span class="mono">${esc(c.since)}</span></span><span>·</span><span>активность <span class="mono">${esc(c.seen)}</span></span></div>
+  <div class="meta"><span>↓ <span class="mono">${esc(c.rx)}</span></span><span>↑ <span class="mono">${esc(c.tx)}</span></span></div>
+  <div class="conn-foot"><button class="btn sm" type="button" onclick="toast('Соединение закрыто — устройство переподключится само')">Закрыть соединение</button></div>
+ </div>`;
+}
+/* switch the two tabs inside the member dialog without redrawing it, so the
+   values typed on the settings tab are kept. */
+function memTab(which){
+ const r=$('#dlgRoot');if(!r)return;
+ r.querySelectorAll('.mtab').forEach(b=>{const on=b.dataset.mtab===which;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+ r.querySelectorAll('.mpane').forEach(p=>{p.hidden=p.dataset.mpane!==which});
+}
 const VCOL=['#C67B3A','#E8B84A','#7E9A6A','#6F8FA6','#B0605A','#9C86B0','#B7A99A'];
 const vcol=(n,v)=>{if(!v)return 'var(--menu-line-strong)';const i=n.vlans.findIndex(x=>x.id===v);return VCOL[(i<0?6:i)%VCOL.length]};
 const netById=id=>NETS.find(x=>x.id===id);
@@ -1871,7 +1915,8 @@ function openMember(id){
  const opts=NETS.flatMap(N=>[[N.id,0,`${N.id} · без VLAN`]].concat(N.vlans.map(v=>[N.id,v.id,`${N.id} · ${v.id} ${v.name}`])));
  const curv=nw?(n.vlans[0]||{id:0}).id:m.vlan;
  const idx=m?portsOf(n).findIndex(x=>x.id===m.id)+1:portsOf(n).length+1;
- dialog(nw?'Новый порт · участник сети':`Порт ${idx} · ${esc(m.id)}`,nw?'Ключ хранится на ноде — его можно будет показать снова.':'',`
+ const conns=nw?[]:connsOf(m.id);
+ const setFields=`
   <div class="fld"><label for="m1">Имя</label><input id="m1" value="${m?esc(m.name):''}"></div>
   <div class="fld"><label for="m2">Идентификатор</label><input id="m2" class="mono" value="${m?esc(m.id):''}" ${nw?'':'readonly'}></div>
   <label class="chk"><input id="m0" type="checkbox" ${!m||m.authorized?'checked':''}>Порт включён — участник может подключаться</label>
@@ -1885,7 +1930,19 @@ function openMember(id){
    <label class="chk"><input type="checkbox" ${x[0].includes('VLESS')?'checked':''}>VLESS</label></div></div>
   ${nw?'':`<div class="dlg-sec">Профиль</div>
   <p class="hint" style="margin:0">Ключ хранится на ноде — его можно показать снова.</p>
-  <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="showStoredKey('${esc(m.id)}')">Показать ключ</button><button class="btn sm" type="button" onclick="reissueKey('${esc(m.id)}')">Перевыпустить ключ</button></div>`}`,
+  <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="showStoredKey('${esc(m.id)}')">Показать ключ</button><button class="btn sm" type="button" onclick="reissueKey('${esc(m.id)}')">Перевыпустить ключ</button></div>`}`;
+ const conPane=conns.length
+  ? `<div class="conns">${conns.map(connCard).join('')}</div>
+     <p class="hint">«В сети», адрес, время и трафик нода отдаёт через статус-API (пока в разработке — см. план доработок). Устройство опознаётся по instance_id: нода не видит физический MAC устройства.</p>`
+  : `<div class="empty"><b>Нет активных соединений</b><p>Когда устройство участника подключится, оно появится здесь: фронт, путь — через ретранслятор или напрямую, адрес и трафик.</p></div>`;
+ const body=nw?setFields:`
+  <div class="tabs mtabs" role="tablist">
+   <button class="tab mtab on" role="tab" aria-selected="true" data-mtab="set" type="button" onclick="memTab('set')">Настройки</button>
+   <button class="tab mtab" role="tab" aria-selected="false" data-mtab="con" type="button" onclick="memTab('con')">Соединения <span class="mono" data-i18n="no">· ${conns.length}</span></button>
+  </div>
+  <div class="mpane" data-mpane="set">${setFields}</div>
+  <div class="mpane" data-mpane="con" hidden>${conPane}</div>`;
+ dialog(nw?'Новый порт · участник сети':`Порт ${idx} · ${esc(m.id)}`,nw?'Ключ хранится на ноде — его можно будет показать снова.':'',body,
   `<button class="btn pri" type="button" onclick="saveMember(${nw?"null":`'${m.id}'`})">${nw?'Создать и выдать профиль':'Сохранить'}</button><button class="btn" type="button" onclick="closeDlg()">Отмена</button>${nw?'':`<button class="icb del" type="button" aria-label="Удалить порт" style="margin-left:auto" onclick="delMember('${m.id}')">${ic('i-trash')}</button>`}`);
 }
 function showStoredKey(id){dialog('Ключ участника '+id,'Ключ хранится на ноде — его можно показать снова.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
