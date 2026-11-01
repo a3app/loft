@@ -4,7 +4,7 @@
 
 Web administration of one loft server is provided: the node, its networks and members, IP addresses and upstream channels, domains with DNS records and certificates, mail, packages, and panel users. The aim is that a loft server may be installed and configured without files being edited by hand.
 
-UX spec: [design/DESIGN.md](design/DESIGN.md). Interactive mock: [design/index.html](design/index.html).
+UX spec: [design/DESIGN.md](design/DESIGN.md). Interactive mock: [design/index.html](design/index.html). HTTP `/api/`: [docs/panel-api.yaml](../../docs/panel-api.yaml) (OpenAPI 3.1, Bearer `lpt_`).
 
 ## Status
 

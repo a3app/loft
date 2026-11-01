@@ -36,7 +36,7 @@ server/
   origin/             掩护页, GET, WebSocket, HTTP/2 CONNECT, 公开名册/列表
   configs/            server.yaml, relay.yaml
   debian/             安装脚本, systemd unit, .deb
-  panel/              loft-panel 网页面板（规划与原型：panel/design）
+  panel/              loft-panel 网页面板（规划与原型：panel/design）；HTTP /api：docs/panel-api.yaml
 clients/
   go/cmd/loft         CLI：SOCKS5, TUN, kill-switch
   go/cmd/loft-front   会话助手（macOS bundle；Sailfish RPM libexec）

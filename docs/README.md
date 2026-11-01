@@ -10,6 +10,7 @@ loft/1.0. Software version is `../VERSION`. Apache License 2.0.
 | [architecture.md](architecture.md) | This tree: controller, relay, client, overlay. |
 | [code-tour.md](code-tour.md) | Code tour: where to start reading, one connection end to end, glossary. |
 | [guide.md](guide.md) | Build, config, decoy, roster, Debian. |
+| [panel-api.yaml](panel-api.yaml) | loft-panel HTTP `/api/` (OpenAPI 3.1). Bearer `lpt_`. |
 | [yandex-cdn_ru.md](yandex-cdn_ru.md) | Yandex Cloud CDN: где что завести (RU). |
 | [ndms.md](ndms.md) | KeeneticOS: OpkgTun, priorities, panel auth. |
 | [mikrotik.md](mikrotik.md) | RouterOS 7: container, SOCKS, policy routing. |

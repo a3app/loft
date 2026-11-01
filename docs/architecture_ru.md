@@ -36,7 +36,7 @@ server/
   origin/             страница прикрытия, GET, WebSocket, HTTP/2 CONNECT, публичный roster/списки
   configs/            server.yaml, relay.yaml
   debian/             установщик, unit systemd, .deb
-  panel/              веб-панель loft-panel (план и макет: panel/design)
+  panel/              веб-панель loft-panel (план и макет: panel/design); HTTP /api: docs/panel-api.yaml
 clients/
   go/cmd/loft         CLI: SOCKS5, TUN, kill-switch
   go/cmd/loft-front   помощник сессии (бандл macOS; RPM Sailfish, libexec)

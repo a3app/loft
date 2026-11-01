@@ -1,0 +1,4004 @@
+# loft-panel HTTP API. Source of the route table: server/panel/web/web.go Handler().
+# Unknown JSON fields are 400 (encoding/json DisallowUnknownFields).
+# This file describes the existing JSON; it does not add routes.
+
+openapi: 3.1.0
+info:
+  title: loft-panel HTTP API
+  version: "1.0"
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  description: |
+    JSON under `/api/` of **loft-panel**. Privileged work goes through
+    **loft-panel-adm** over a Unix socket. The UI is the same routes.
+
+    Typical listen is `127.0.0.1:8091` behind nginx on the node.
+
+    **Scripts use Bearer.** Users → token, or `POST /api/me/token`. Prefix
+    `lpt_`. Header `Authorization: Bearer lpt_…`. Bearer POST does not send
+    CSRF.
+
+    **Browser session.** Cookie `loft_panel` (HttpOnly, SameSite=Strict).
+    POST/PUT/PATCH/DELETE with a cookie also send `X-CSRF-Token` equal to
+    `me.csrf` from `GET /api/state` (or the login reply). GET/HEAD do not.
+
+    **Roles.** Areas: `main`, `node`, `members`, `segments`, `network`,
+    `domains`, `mail`, `packages`, `users`, `system`, `settings`. Levels:
+    0 none, 1 view, 2 change. Owner passes every route. `x-loft-perm` on
+    each operation is `area:view` / `area:change`, `anyone` (signed in),
+    `owner`, or empty (public).
+
+    **Jobs.** A node restart drops the caller's HTTP path, so those POSTs
+    answer **202** `{"job":"<id>"}`. Poll `GET /api/jobs/{id}` until
+    `state` is `done` or `error`. Panel jobs live in memory (gone after
+    panel restart). Package/update/backup helper jobs live in
+    loft-panel-adm; poll `GET /api/packages/job`.
+
+    **Errors.** `{"error":"<text>"}`. 400 bad JSON / validation; 401 sign-in
+    or bad token; 403 role or CSRF; 404; 409 conflict; 421 unknown Host;
+    422 panel-adm error; 429 login limiter; 503 loft-panel-adm not running.
+
+    ```
+    curl -sS -H "Authorization: Bearer lpt_…" http://127.0.0.1:8091/api/network
+    ```
+
+servers:
+  - url: /
+    description: loft-panel origin (often http://127.0.0.1:8091)
+
+tags:
+  - name: auth
+    description: Setup, login, own profile, invitations, API tokens
+  - name: overlay
+    description: network.conf, member keys, presence
+  - name: node
+    description: loft-node service, node.conf, relays
+  - name: jobs
+    description: In-memory panel jobs
+  - name: wizard
+    description: First-run owner wizard
+  - name: packages
+    description: Catalog packages, MTProto, Dist updates
+  - name: hostnet
+    description: Host IP/routes and overlay exit channels
+  - name: main
+    description: Overview
+  - name: users
+    description: Panel users, roles, sessions, audit
+  - name: domains
+    description: DNS providers, zones, certificates
+  - name: mail
+    description: Postfix/Dovecot mail
+  - name: system
+    description: Host users, login guard, backups
+  - name: settings
+    description: Panel session limits, language, SMTP notify
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: lpt_
+      description: Panel API token. Prefix lpt_. No CSRF.
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: loft_panel
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Required on cookie POST. Value is me.csrf.
+
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+    Empty:
+      type: object
+      additionalProperties: false
+    Object:
+      type: object
+      additionalProperties: true
+      description: JSON object; unknown fields are 400.
+    JobAccepted:
+      type: object
+      additionalProperties: false
+      required: [job]
+      properties:
+        job:
+          type: string
+          description: Hex id for GET /api/jobs/{id}
+    Job:
+      type: object
+      additionalProperties: false
+      required: [id, state]
+      properties:
+        id: {type: string}
+        state:
+          type: string
+          enum: [running, done, error]
+        error: {type: string}
+        result:
+          description: Handler result once state is done
+    Me:
+      type: object
+      additionalProperties: false
+      required: [login, role, role_name, perms, csrf]
+      properties:
+        login: {type: string}
+        name: {type: string}
+        role: {type: string}
+        role_name: {type: string}
+        perms:
+          type: object
+          additionalProperties: {type: integer}
+          description: area → 0 none, 1 view, 2 change
+        csrf:
+          type: string
+          description: Empty on Bearer /api/me; set after cookie login
+    Creds:
+      type: object
+      additionalProperties: false
+      required: [login, password]
+      properties:
+        login: {type: string}
+        password: {type: string}
+        code:
+          type: string
+          description: Setup code; POST /api/setup only
+        remember:
+          type: boolean
+          description: Cookie Max-Age = session max
+    InviteAccept:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token: {type: string}
+        password: {type: string, minLength: 12}
+    Network:
+      type: object
+      additionalProperties: false
+      required: [text, sha256]
+      properties:
+        text:
+          type: string
+          description: network.conf commands
+        sha256: {type: string}
+        legacy:
+          type: boolean
+          description: Read from network.yaml
+    NetworkText:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text: {type: string}
+    NetworkApply:
+      type: object
+      additionalProperties: false
+      required: [text, expect]
+      properties:
+        text: {type: string}
+        expect:
+          type: string
+          description: sha256 from GET /api/network; empty = file must not exist
+    Check:
+      type: object
+      additionalProperties: false
+      required: [ok]
+      properties:
+        ok: {type: boolean}
+        error: {type: string}
+    MemberID:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string}
+    IssuedKey:
+      type: object
+      additionalProperties: false
+      required: [id, key, key_sha256]
+      properties:
+        id: {type: string}
+        key:
+          type: string
+          description: Plaintext lt_ secret
+        key_sha256: {type: string}
+        link: {type: string}
+        file: {type: string}
+        qr:
+          type: string
+          description: SVG
+    MemberProtoIn:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string}
+        proto:
+          type: array
+          items:
+            type: string
+            enum: [loft, vless, trojan, ss]
+        delete: {type: boolean}
+    QRText:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text: {type: string, minLength: 1, maxLength: 2048}
+    NodeStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        active: {type: string}
+        since: {type: string}
+        version: {type: string}
+    NodeConfig:
+      type: object
+      additionalProperties: true
+      description: node.conf fields the panel edits (role, listen, advertise, fronts, inner, decoy, mask, paths, relays, cdn_peers, …) plus shown-only mask_pub, controller_pub, lists, node.
+    NodeLists:
+      type: object
+      additionalProperties: false
+      required: [lists]
+      properties:
+        lists:
+          type: object
+          additionalProperties:
+            type: array
+            items: {type: string}
+    CtlRoll:
+      type: object
+      additionalProperties: false
+      required: [days]
+      properties:
+        days: {type: integer}
+    RelayID:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string}
+    Name:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string}
+    DomainSet:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string}
+        panel: {type: string}
+    WizardMember:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string}
+        name: {type: string}
+    PackagePlan:
+      type: object
+      additionalProperties: false
+      properties:
+        install:
+          type: array
+          items: {type: string}
+        remove:
+          type: array
+          items: {type: string}
+        upgrade:
+          type: array
+          items: {type: string}
+        purge: {type: boolean}
+    PackageUnit:
+      type: object
+      additionalProperties: false
+      required: [key, on]
+      properties:
+        key: {type: string}
+        on: {type: boolean}
+    MTProtoSet:
+      type: object
+      additionalProperties: false
+      properties:
+        port: {type: integer}
+        domain: {type: string}
+        rotate_secret: {type: boolean}
+    UpdateApply:
+      type: object
+      additionalProperties: false
+      required: [tag]
+      properties:
+        tag: {type: string, description: "vX.Y.Z"}
+    UpdateSettings:
+      type: object
+      additionalProperties: true
+    NetChange:
+      type: object
+      additionalProperties: false
+      required: [op, dev]
+      properties:
+        op: {type: string}
+        addr: {type: string}
+        dst: {type: string}
+        via: {type: string}
+        dev: {type: string}
+    NetID:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string}
+    ChannelName:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        id: {type: string}
+    MePassword:
+      type: object
+      additionalProperties: false
+      required: [current, password]
+      properties:
+        current: {type: string}
+        password: {type: string, minLength: 12}
+    TokenRevoke:
+      type: object
+      additionalProperties: false
+      properties:
+        revoke: {type: boolean}
+    MeSessionsEnd:
+      type: object
+      additionalProperties: false
+      properties:
+        key: {type: string}
+        others: {type: boolean}
+    UserSave:
+      type: object
+      additionalProperties: false
+      required: [login, role]
+      properties:
+        login: {type: string}
+        name: {type: string}
+        role: {type: string}
+        password: {type: string}
+        disabled: {type: boolean}
+        new: {type: boolean}
+        invite: {type: boolean}
+    Login:
+      type: object
+      additionalProperties: false
+      required: [login]
+      properties:
+        login: {type: string}
+    UserToken:
+      type: object
+      additionalProperties: false
+      required: [login]
+      properties:
+        login: {type: string}
+        revoke: {type: boolean}
+    Role:
+      type: object
+      additionalProperties: false
+      properties:
+        id: {type: string}
+        name: {type: string}
+        perms:
+          type: object
+          additionalProperties: {type: integer}
+        builtin: {type: boolean}
+    ID:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string}
+    SessionKey:
+      type: object
+      additionalProperties: false
+      required: [key]
+      properties:
+        key: {type: string}
+    ProviderSave:
+      type: object
+      additionalProperties: false
+      properties:
+        id: {type: string}
+        kind: {type: string}
+        token: {type: string}
+        user: {type: string}
+        delete: {type: boolean}
+        check_only: {type: boolean}
+    ZoneSave:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        provider: {type: string}
+        delete: {type: boolean}
+        create:
+          type: array
+          items: {type: string}
+        hosts:
+          type: array
+          items: {type: string}
+    RecordSave:
+      type: object
+      additionalProperties: false
+      properties:
+        zone: {type: string}
+        record: {type: object, additionalProperties: true}
+        auto: {type: boolean}
+        delete: {type: boolean}
+    CertIssue:
+      type: object
+      additionalProperties: false
+      properties:
+        names:
+          type: array
+          items: {type: string}
+        method: {type: string}
+        use: {type: string}
+        id: {type: string}
+    CertUpload:
+      type: object
+      additionalProperties: false
+      properties:
+        fullchain: {type: string}
+        key: {type: string}
+        use: {type: string}
+    MailDomainName:
+      type: object
+      additionalProperties: false
+      properties:
+        domain: {type: string}
+        name: {type: string}
+    BackupSettings:
+      type: object
+      additionalProperties: false
+      properties:
+        schedule: {type: string}
+        keep: {type: integer}
+        store: {type: string}
+        mail: {type: boolean}
+    BackupFetch:
+      type: object
+      additionalProperties: false
+      properties:
+        store: {type: string}
+        name: {type: string}
+    BackupRestore:
+      type: object
+      additionalProperties: false
+      properties:
+        file: {type: string}
+        parts:
+          type: array
+          items: {type: string}
+        phrase: {type: string}
+
+  responses:
+    Error:
+      description: {"error": text}
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    AdmDown:
+      description: loft-panel-adm is not running
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+paths:
+  /api/state:
+    get:
+      operationId: state
+      tags: [auth]
+      summary: "First UI call. No sign-in. setup, wizard, lang, port_activity; me+version when the loft_panel cookie is valid."
+      x-loft-perm: "public"
+      security: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/setup:
+    post:
+      operationId: setup
+      tags: [auth]
+      summary: "Create the first owner. Needs the setup code from the host. Signs in."
+      x-loft-perm: "public"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Creds"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "400":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: "Password sign-in. Sets cookie loft_panel. Failed attempts are slowed and may 429."
+      x-loft-perm: "public"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Creds"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "400":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: "End this session and clear the cookie."
+      x-loft-perm: "anyone"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/invite/{token}:
+    get:
+      operationId: inviteGet
+      tags: [auth]
+      summary: "Invitation landing: login and name. 404 if used or expired."
+      x-loft-perm: "public"
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: {type: string}
+          description: invitation token
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/invite:
+    post:
+      operationId: inviteAccept
+      tags: [auth]
+      summary: "Set password from an invitation and sign in."
+      x-loft-perm: "public"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteAccept"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/network:
+    get:
+      operationId: networkGet
+      tags: [overlay]
+      summary: "network.conf as text plus sha256. Next apply must quote sha256 as expect."
+      x-loft-perm: "members,segments:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Network"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/network/check:
+    post:
+      operationId: networkCheck
+      tags: [overlay]
+      summary: "Parse network.conf text without writing. Audit skipped."
+      x-loft-perm: "members,segments:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetworkText"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Check"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/network/apply:
+    post:
+      operationId: networkApply
+      tags: [overlay]
+      summary: "Write network.conf and restart the node. expect is the sha256 from GET."
+      x-loft-perm: "members,segments:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetworkApply"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/members/key:
+    get:
+      operationId: memberKeyGet
+      tags: [overlay]
+      summary: "Show a stored member key again. 404 if the node did not keep it."
+      x-loft-perm: "members:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: {type: string}
+          description: member id
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedKey"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    post:
+      operationId: memberKeyIssue
+      tags: [overlay]
+      summary: "Issue a new lt_ key into members.keys. Put key_sha256 into network.conf and apply."
+      x-loft-perm: "members:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberID"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedKey"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/members/proto:
+    get:
+      operationId: memberProtoGet
+      tags: [overlay]
+      summary: "Extra protocols per member (loft, vless, trojan, ss). Lives in panel settings.json, not network.conf."
+      x-loft-perm: "members,segments:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    post:
+      operationId: memberProtoSet
+      tags: [overlay]
+      summary: "Set or delete extra protocols for one member id."
+      x-loft-perm: "members:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberProtoIn"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/qr:
+    post:
+      operationId: qr
+      tags: [overlay]
+      summary: "QR SVG of a profile link the caller already holds. Text is not logged. Audit skipped."
+      x-loft-perm: "members:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QRText"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/presence:
+    get:
+      operationId: presenceGet
+      tags: [overlay]
+      summary: "Online devices from node-status.json plus last-seen. keys counts current vs old controller key."
+      x-loft-perm: "members,segments,main:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/node:
+    get:
+      operationId: nodeStatus
+      tags: [node]
+      summary: "systemd view of loft-node: active, since, version."
+      x-loft-perm: "anyone"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeStatus"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/node/restart:
+    post:
+      operationId: nodeRestart
+      tags: [node]
+      summary: "Restart loft-node."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/nodecfg:
+    get:
+      operationId: nodeCfgGet
+      tags: [node]
+      summary: "node.conf as the panel edits it. Mask/token fields blanked unless the role may change node."
+      x-loft-perm: "node:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeConfig"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    post:
+      operationId: nodeCfgSave
+      tags: [node]
+      summary: "Write node.conf. Node restarts (relays reload)."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeConfig"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/nodecfg/lists:
+    post:
+      operationId: nodeLists
+      tags: [node]
+      summary: "Replace lists.conf."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeLists"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/nodecfg/log:
+    get:
+      operationId: nodeLog
+      tags: [node]
+      summary: "Tail of the node service log."
+      x-loft-perm: "node:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/nodecfg/token:
+    post:
+      operationId: nodeToken
+      tags: [node]
+      summary: "Mint a new LOFT_TOKEN. Mask keys derived from it change. Node restarts."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/nodecfg/cdn:
+    post:
+      operationId: cdnRanges
+      tags: [node]
+      summary: "Fetch Cloudflare published IPv4/IPv6 ranges for cdn_peers. Audit skipped."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/nodecfg/ctlroll:
+    post:
+      operationId: ctlRoll
+      tags: [node]
+      summary: "Replace the controller signing key. Old-key clients follow the hand-over for days days."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CtlRoll"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/relays/key:
+    post:
+      operationId: relayKeyIssue
+      tags: [node]
+      summary: "Issue a new relay key (old one stops) and return the install command."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelayID"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    get:
+      operationId: relayKeyShow
+      tags: [node]
+      summary: "Install blob for a relay with the key already stored."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: {type: string}
+          description: relay id
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/relays/bundle:
+    get:
+      operationId: relayBundle
+      tags: [node]
+      summary: "Offline install tar for a relay."
+      x-loft-perm: "node:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: {type: string}
+          description: relay id
+        - name: arch
+          in: query
+          required: false
+          schema: {type: string}
+          description: amd64 or arm64
+      responses:
+        "200":
+          description: Binary download
+          content:
+            application/gzip:
+              schema: {type: string, format: binary}
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/jobs/{id}:
+    get:
+      operationId: jobGet
+      tags: [jobs]
+      summary: "Poll a panel job started by this user. Other ids are 404. In-memory; a panel restart forgets them."
+      x-loft-perm: "anyone"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+          description: id
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/wizard:
+    get:
+      operationId: wizardGet
+      tags: [wizard]
+      summary: "First-run wizard state."
+      x-loft-perm: "owner"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domain/check:
+    post:
+      operationId: domainCheck
+      tags: [wizard]
+      summary: "Check a domain name before setting it."
+      x-loft-perm: "owner"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Name"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domain/now:
+    post:
+      operationId: dnsNow
+      tags: [wizard]
+      summary: "Push DNS records for the wizard domain now."
+      x-loft-perm: "owner"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domain:
+    post:
+      operationId: domainSet
+      tags: [wizard]
+      summary: "Set node (and optional panel) DNS name."
+      x-loft-perm: "owner"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DomainSet"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/cert/issue:
+    post:
+      operationId: certIssue
+      tags: [wizard]
+      summary: "Issue the ACME certificate for the wizard domain."
+      x-loft-perm: "owner"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/wizard/member:
+    post:
+      operationId: wizardMember
+      tags: [wizard]
+      summary: "Create the first overlay member during the wizard."
+      x-loft-perm: "members:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WizardMember"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/wizard/done:
+    post:
+      operationId: wizardDone
+      tags: [wizard]
+      summary: "Mark the wizard finished."
+      x-loft-perm: "owner"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/packages:
+    get:
+      operationId: packagesGet
+      tags: [packages]
+      summary: "Catalog packages and the helper job, if any. Helper jobs outlive a panel restart; poll /api/packages/job."
+      x-loft-perm: "packages:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/packages/job:
+    get:
+      operationId: packagesJob
+      tags: [packages]
+      summary: "Current or last loft-panel-adm job (packages/update/backup)."
+      x-loft-perm: "packages:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/packages/apply:
+    post:
+      operationId: packagesApply
+      tags: [packages]
+      summary: "Start an install/remove/upgrade/purge plan as a helper job."
+      x-loft-perm: "packages:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PackagePlan"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/packages/unit:
+    post:
+      operationId: packageUnit
+      tags: [packages]
+      summary: "Enable or disable a package unit (enable --now / disable)."
+      x-loft-perm: "packages:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PackageUnit"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/packages/mtproto:
+    get:
+      operationId: mtprotoGet
+      tags: [packages]
+      summary: "Telegram MTProto proxy settings and share links."
+      x-loft-perm: "packages:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    post:
+      operationId: mtprotoSet
+      tags: [packages]
+      summary: "Change MTProto port/domain or rotate the secret (old share links die)."
+      x-loft-perm: "packages:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MTProtoSet"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/update:
+    get:
+      operationId: updateGet
+      tags: [packages]
+      summary: "GitHub release list and current node/panel versions."
+      x-loft-perm: "packages:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/update/settings:
+    post:
+      operationId: updateSettings
+      tags: [packages]
+      summary: "Auto-update settings."
+      x-loft-perm: "packages:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettings"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/update/check:
+    post:
+      operationId: updateCheck
+      tags: [packages]
+      summary: "Refresh the GitHub release list now."
+      x-loft-perm: "packages:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/update/apply:
+    post:
+      operationId: updateApply
+      tags: [packages]
+      summary: "Install release tag of node and panel from GitHub."
+      x-loft-perm: "packages:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApply"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/net:
+    get:
+      operationId: netState
+      tags: [hostnet]
+      summary: "Host addresses, routes, and any held change. PTR looked up in the panel."
+      x-loft-perm: "network:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/net/change:
+    post:
+      operationId: netChange
+      tags: [hostnet]
+      summary: "Add or remove an address or route. Held ~2 min until confirm, else auto-reverts."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetChange"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/net/confirm:
+    post:
+      operationId: netConfirm
+      tags: [hostnet]
+      summary: "Keep a held host-network change."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetID"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/net/revert:
+    post:
+      operationId: netRevert
+      tags: [hostnet]
+      summary: "Undo a held host-network change now."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetID"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels:
+    get:
+      operationId: channelsGet
+      tags: [hostnet]
+      summary: "egress.conf channels and rules (exit paths for overlay members)."
+      x-loft-perm: "network:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/save:
+    post:
+      operationId: channelSave
+      tags: [hostnet]
+      summary: "Create or update one exit channel."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/delete:
+    post:
+      operationId: channelDelete
+      tags: [hostnet]
+      summary: "Delete a channel by name."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChannelName"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/switch:
+    post:
+      operationId: channelSwitch
+      tags: [hostnet]
+      summary: "Turn a channel on or off."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/rules:
+    post:
+      operationId: channelRules
+      tags: [hostnet]
+      summary: "Replace exit rules."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/prio:
+    post:
+      operationId: channelPrio
+      tags: [hostnet]
+      summary: "Set a named priority list."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/prio/delete:
+    post:
+      operationId: channelPrioDelete
+      tags: [hostnet]
+      summary: "Delete a named priority list."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChannelName"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/direct-check:
+    post:
+      operationId: directCheck
+      tags: [hostnet]
+      summary: "Probe of the host default route (same kinds as channel check)."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/wgkey:
+    post:
+      operationId: wgKey
+      tags: [hostnet]
+      summary: "Mint a WireGuard keypair for a channel."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/channels/xray:
+    post:
+      operationId: xrayParse
+      tags: [hostnet]
+      summary: "Parse an Xray/VLESS share URI into channel fields."
+      x-loft-perm: "network:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/overview:
+    get:
+      operationId: overview
+      tags: [main]
+      summary: "Dashboard: node, presence counts, mail/certs summaries."
+      x-loft-perm: "main:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/me:
+    get:
+      operationId: meGet
+      tags: [auth]
+      summary: "Own profile, sessions, last seen, API token tail (never the token again)."
+      x-loft-perm: "anyone"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/me/password:
+    post:
+      operationId: mePassword
+      tags: [auth]
+      summary: "Change own password (needs current). Ends other sessions."
+      x-loft-perm: "anyone"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MePassword"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/me/token:
+    post:
+      operationId: meToken
+      tags: [auth]
+      summary: "Issue, reissue, or revoke own API token (lpt_). Shown once."
+      x-loft-perm: "anyone"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenRevoke"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/me/sessions/end:
+    post:
+      operationId: meSessionsEnd
+      tags: [auth]
+      summary: "End one of own sessions by key, or all others."
+      x-loft-perm: "anyone"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeSessionsEnd"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/users:
+    get:
+      operationId: usersList
+      tags: [users]
+      summary: "Users, roles, and area names the role editor offers."
+      x-loft-perm: "users:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/users/save:
+    post:
+      operationId: usersSave
+      tags: [users]
+      summary: "Create or update a user. invite=true mints a 24 h link."
+      x-loft-perm: "users:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSave"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/users/delete:
+    post:
+      operationId: usersDelete
+      tags: [users]
+      summary: "Delete a user (not self). Ends their sessions."
+      x-loft-perm: "users:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Login"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/users/token:
+    post:
+      operationId: usersToken
+      tags: [users]
+      summary: "Issue or revoke another user's API token. Token shown once."
+      x-loft-perm: "users:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserToken"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/roles/save:
+    post:
+      operationId: rolesSave
+      tags: [users]
+      summary: "Create or change a role (owner role cannot be changed)."
+      x-loft-perm: "users:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Role"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/roles/delete:
+    post:
+      operationId: rolesDelete
+      tags: [users]
+      summary: "Delete a custom role."
+      x-loft-perm: "users:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ID"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/sessions:
+    get:
+      operationId: sessionsList
+      tags: [users]
+      summary: "Every open session and every user who has an API token."
+      x-loft-perm: "users:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/sessions/end:
+    post:
+      operationId: sessionsEnd
+      tags: [users]
+      summary: "End any session by its key (hash of the cookie, not the cookie)."
+      x-loft-perm: "users:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionKey"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/audit:
+    get:
+      operationId: auditList
+      tags: [users]
+      summary: "Up to 500 audit entries, optionally filtered."
+      x-loft-perm: "users:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: user
+          in: query
+          required: false
+          schema: {type: string}
+          description: login
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains:
+    get:
+      operationId: domainsGet
+      tags: [domains]
+      summary: "DNS providers, zones, and certificates the panel manages."
+      x-loft-perm: "domains:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains/records:
+    get:
+      operationId: zoneRecords
+      tags: [domains]
+      summary: "Records of one zone."
+      x-loft-perm: "domains:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: zone
+          in: query
+          required: true
+          schema: {type: string}
+          description: zone name
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains/provider-zones:
+    get:
+      operationId: providerZones
+      tags: [domains]
+      summary: "Zones the provider account already has."
+      x-loft-perm: "domains:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: {type: string}
+          description: provider id
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains/provider:
+    post:
+      operationId: providerSave
+      tags: [domains]
+      summary: "Add, update, check, or delete a DNS provider token."
+      x-loft-perm: "domains:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderSave"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains/zone:
+    post:
+      operationId: zoneSave
+      tags: [domains]
+      summary: "Attach or delete a zone; optionally create A/AAAA and CAA."
+      x-loft-perm: "domains:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ZoneSave"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains/record:
+    post:
+      operationId: recordSave
+      tags: [domains]
+      summary: "Create, update, or delete one DNS record."
+      x-loft-perm: "domains:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordSave"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains/cert:
+    post:
+      operationId: certIssueAny
+      tags: [domains]
+      summary: "ACME issue for named hosts."
+      x-loft-perm: "domains:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertIssue"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains/cert/upload:
+    post:
+      operationId: certUpload
+      tags: [domains]
+      summary: "Install a PEM fullchain+key."
+      x-loft-perm: "domains:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertUpload"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/domains/cert/delete:
+    post:
+      operationId: certDelete
+      tags: [domains]
+      summary: "Forget a stored certificate."
+      x-loft-perm: "domains:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ID"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail:
+    get:
+      operationId: mailGet
+      tags: [mail]
+      summary: "Mail domains, boxes, aliases."
+      x-loft-perm: "mail:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/stats:
+    get:
+      operationId: mailStats
+      tags: [mail]
+      summary: "Queue and disk stats."
+      x-loft-perm: "mail:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/dns:
+    get:
+      operationId: mailDNSGet
+      tags: [mail]
+      summary: "DNS records mail needs for a domain."
+      x-loft-perm: "mail:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: domain
+          in: query
+          required: true
+          schema: {type: string}
+          description: mail domain
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    post:
+      operationId: mailDNSCreate
+      tags: [mail]
+      summary: "Create the mail DNS records at the provider."
+      x-loft-perm: "mail:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MailDomainName"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/domain:
+    post:
+      operationId: mailDomain
+      tags: [mail]
+      summary: "Add, update, or delete a mail domain."
+      x-loft-perm: "mail:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/box:
+    post:
+      operationId: mailBox
+      tags: [mail]
+      summary: "Add, update, or delete a mailbox."
+      x-loft-perm: "mail:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/alias:
+    post:
+      operationId: mailAlias
+      tags: [mail]
+      summary: "Add or delete an alias."
+      x-loft-perm: "mail:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/helo:
+    post:
+      operationId: mailHelo
+      tags: [mail]
+      summary: "Set the SMTP HELO name."
+      x-loft-perm: "mail:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/webmail:
+    post:
+      operationId: mailWebmail
+      tags: [mail]
+      summary: "Set the webmail admin address."
+      x-loft-perm: "mail:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/apply:
+    post:
+      operationId: mailApply
+      tags: [mail]
+      summary: "Write Postfix/Dovecot/OpenDKIM from mail.json."
+      x-loft-perm: "mail:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/mail/cert:
+    post:
+      operationId: mailCert
+      tags: [mail]
+      summary: "Issue or attach a certificate for mail.<domain>."
+      x-loft-perm: "mail:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/users:
+    get:
+      operationId: sysUsers
+      tags: [system]
+      summary: "Host Unix users the panel may manage."
+      x-loft-perm: "system:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/user:
+    post:
+      operationId: sysUserSave
+      tags: [system]
+      summary: "Create or update a host user."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/user/delete:
+    post:
+      operationId: sysUserDelete
+      tags: [system]
+      summary: "Delete a host user."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/guard:
+    get:
+      operationId: guardGet
+      tags: [system]
+      summary: "fail2ban-style login guard: bans and settings."
+      x-loft-perm: "system:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    post:
+      operationId: guardSet
+      tags: [system]
+      summary: "Change guard thresholds."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/guard/ban:
+    post:
+      operationId: guardBan
+      tags: [system]
+      summary: "Ban an address now."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/guard/unban:
+    post:
+      operationId: guardUnban
+      tags: [system]
+      summary: "Lift a ban."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup:
+    get:
+      operationId: backupGet
+      tags: [system]
+      summary: "Backup schedule, stores, and copies on disk."
+      x-loft-perm: "system:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup/job:
+    get:
+      operationId: backupJob
+      tags: [system]
+      summary: "Helper job for backup/restore."
+      x-loft-perm: "system:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup/settings:
+    post:
+      operationId: backupSettings
+      tags: [system]
+      summary: "Schedule, keep, destination store, mail-on-fail."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupSettings"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup/phrase:
+    post:
+      operationId: backupPhrase
+      tags: [system]
+      summary: "Set or rotate the backup encryption phrase."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup/store:
+    post:
+      operationId: backupStoreSave
+      tags: [system]
+      summary: "Add, test, or delete a remote store (S3/SFTP)."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup/run:
+    post:
+      operationId: backupRunNow
+      tags: [system]
+      summary: "Run a backup now."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup/fetch:
+    post:
+      operationId: backupFetch
+      tags: [system]
+      summary: "Download a named copy from a store."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupFetch"
+      responses:
+        "202":
+          description: Job started; poll GET /api/jobs/{id}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup/upload:
+    post:
+      operationId: backupUpload
+      tags: [system]
+      summary: "Upload a .lpbak copy from the browser. Raw body, magic prefix, not JSON."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary}
+        description: Raw loft backup (.lpbak); first bytes are the magic.
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/system/backup/restore:
+    post:
+      operationId: backupRestore
+      tags: [system]
+      summary: "Restore from a local copy. Needs the phrase."
+      x-loft-perm: "system:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackupRestore"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/settings:
+    get:
+      operationId: settingsGet
+      tags: [settings]
+      summary: "Session limits, language, notify (password never returned), node/panel names."
+      x-loft-perm: "settings:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/settings/panel:
+    post:
+      operationId: settingsPanel
+      tags: [settings]
+      summary: "Session idle/max, lang (en|ru|zh), port_activity, .loft name template."
+      x-loft-perm: "settings:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/settings/timezone:
+    get:
+      operationId: timezoneGet
+      tags: [settings]
+      summary: "Host timezone."
+      x-loft-perm: "settings:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    post:
+      operationId: timezoneSet
+      tags: [settings]
+      summary: "Set host timezone through panel-adm."
+      x-loft-perm: "settings:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/settings/notify:
+    post:
+      operationId: settingsNotify
+      tags: [settings]
+      summary: "SMTP event letters. Empty password keeps the stored one."
+      x-loft-perm: "settings:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Object"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/settings/notify/test:
+    post:
+      operationId: settingsNotifyTest
+      tags: [settings]
+      summary: "Send a test letter with the stored SMTP settings."
+      x-loft-perm: "settings:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"

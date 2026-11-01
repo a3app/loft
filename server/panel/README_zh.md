@@ -4,7 +4,7 @@
 
 单台 loft 服务器的网页管理面板：节点、其网络与成员、IP 地址与上游通道、域名（DNS 记录与证书）、邮件、软件包、面板用户。目标：不手改文件即可安装并配置 loft 服务器。
 
-交互规范：[design/DESIGN_zh.md](design/DESIGN_zh.md)。交互原型：[design/index.html](design/index.html)。
+交互规范：[design/DESIGN_zh.md](design/DESIGN_zh.md)。交互原型：[design/index.html](design/index.html)。HTTP `/api/`：[docs/panel-api.yaml](../../docs/panel-api.yaml)（OpenAPI 3.1，Bearer `lpt_`）。
 
 ## 状态
 

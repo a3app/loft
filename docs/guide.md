@@ -410,7 +410,19 @@ The installer creates user `loft`, `/etc/loft/loft.env` (token), a self-signed c
 
 ---
 
-## 11. Tests
+## 11. Panel HTTP API
+
+loft-panel JSON under `/api/`. Machine description: [panel-api.yaml](panel-api.yaml) (OpenAPI 3.1). Route table is `server/panel/web/web.go` `Handler()`.
+
+Scripts use `Authorization: Bearer lpt_…` (Users → token, or `POST /api/me/token`). Bearer POST does not send CSRF. The browser session is cookie `loft_panel`; POST then needs `X-CSRF-Token` equal to `me.csrf` from `GET /api/state`. Unknown JSON fields are 400. A node restart answers 202 `{"job": id}` — poll `GET /api/jobs/{id}`.
+
+```bash
+curl -sS -H "Authorization: Bearer lpt_…" http://127.0.0.1:8091/api/network
+```
+
+---
+
+## 12. Tests
 
 ```bash
 make test
@@ -421,7 +433,7 @@ Wire tests cover frames, Hello/Status, roster tamper, lists, fleet. Transport te
 
 ---
 
-## 12. GitHub Actions
+## 13. GitHub Actions
 
 Push and pull request on `main` run `make test`.
 

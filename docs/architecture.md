@@ -36,7 +36,7 @@ server/
   origin/             cover page, GET, WebSocket, HTTP/2 CONNECT, public roster/lists
   configs/            server.yaml, relay.yaml
   debian/             installer, systemd unit, .deb
-  panel/              loft-panel web admin (plan and mock: panel/design)
+  panel/              loft-panel web admin (plan and mock: panel/design); HTTP /api: docs/panel-api.yaml
 clients/
   go/cmd/loft         CLI: SOCKS5, TUN, kill-switch
   go/cmd/loft-front   session helper (macOS bundle; Sailfish RPM libexec)

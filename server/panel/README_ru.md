@@ -4,7 +4,7 @@
 
 Веб-панель для одного сервера loft: нода, её сети и участники, IP-адреса и внешние каналы, домены с DNS-записями и сертификатами, почта, пакеты, пользователи панели. Цель — поставить и настроить сервер loft без ручной правки файлов.
 
-UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Интерактивный макет: [design/index.html](design/index.html).
+UX: [design/DESIGN_ru.md](design/DESIGN_ru.md). Интерактивный макет: [design/index.html](design/index.html). HTTP `/api/`: [docs/panel-api.yaml](../../docs/panel-api.yaml) (OpenAPI 3.1, Bearer `lpt_`).
 
 ## Состояние
 

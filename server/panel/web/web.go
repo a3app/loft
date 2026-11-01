@@ -10,7 +10,8 @@
 // that is the Adm interface, reached through Server.Adm.
 //
 // Routes: Server.Handler in web.go lists every /api/ route in one place,
-// each wrapped in need, which checks who is calling. A caller signs in with
+// each wrapped in need, which checks who is calling. Machine description
+// of the same table: docs/panel-api.yaml (OpenAPI 3.1). A caller signs in with
 // a session cookie (state-changing requests then also send the session's
 // CSRF token) or uses an API token in "Authorization: Bearer". Each route
 // names the panel areas (members, network, mail, ...) and the level

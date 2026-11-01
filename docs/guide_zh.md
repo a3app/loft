@@ -398,7 +398,19 @@ Debian 包：`make dist-node`，然后 `dpkg -i dist/node/linux-amd64/loft-node_
 
 ---
 
-## 11. 测试
+## 11. 面板 HTTP API
+
+loft-panel 的 JSON 在 `/api/`。机器可读描述：[panel-api.yaml](panel-api.yaml)（OpenAPI 3.1）。路由表是 `server/panel/web/web.go` 的 `Handler()`。
+
+脚本用 `Authorization: Bearer lpt_…`（Users → token，或 `POST /api/me/token`）。Bearer 的 POST 不发 CSRF。浏览器会话是 cookie `loft_panel`；POST 还要 `X-CSRF-Token`，值等于 `GET /api/state` 里的 `me.csrf`。未知 JSON 字段返回 400。节点重启返回 202 `{"job": id}`，轮询 `GET /api/jobs/{id}`。
+
+```bash
+curl -sS -H "Authorization: Bearer lpt_…" http://127.0.0.1:8091/api/network
+```
+
+---
+
+## 12. 测试
 
 ```bash
 make test
@@ -409,7 +421,7 @@ go test ./internal/wire ./internal/crypto ./internal/mux ./internal/netconf ./in
 
 ---
 
-## 12. GitHub Actions
+## 13. GitHub Actions
 
 在 `main` 上 push 和 pull request 跑 `make test`。
 

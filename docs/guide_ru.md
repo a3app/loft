@@ -398,7 +398,19 @@ sudo ./install.sh --role=relay --id=ru1 \
 
 ---
 
-## 11. Тесты
+## 11. HTTP API панели
+
+JSON loft-panel под `/api/`. Машинное описание: [panel-api.yaml](panel-api.yaml) (OpenAPI 3.1). Таблица маршрутов — `Handler()` в `server/panel/web/web.go`.
+
+Скрипты ходят с `Authorization: Bearer lpt_…` (Users → token или `POST /api/me/token`). Bearer POST не шлёт CSRF. Браузерная сессия — cookie `loft_panel`; POST тогда нужен `X-CSRF-Token` равный `me.csrf` из `GET /api/state`. Неизвестные поля JSON — 400. Перезапуск ноды отвечает 202 `{"job": id}` — опрос `GET /api/jobs/{id}`.
+
+```bash
+curl -sS -H "Authorization: Bearer lpt_…" http://127.0.0.1:8091/api/network
+```
+
+---
+
+## 12. Тесты
 
 ```bash
 make test
@@ -409,7 +421,7 @@ go test ./internal/wire ./internal/crypto ./internal/mux ./internal/netconf ./in
 
 ---
 
-## 12. GitHub Actions
+## 13. GitHub Actions
 
 Push и pull request в `main` запускают `make test`.
 
