@@ -93,9 +93,10 @@ Binaries are published in the [latest GitHub Release](https://github.com/a3app/l
 | <img src="docs/brand/platforms/android2.svg" width="20" height="20" align="absmiddle" alt=""> Android | [phone APK](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android.apk) · [TV APK](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android-tv.apk) | same fat APKs |
 | <img src="docs/brand/platforms/windows.svg" width="20" height="20" align="absmiddle" alt=""> Windows | [arm64 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-arm64.zip) | [x86-64 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-x86-64.zip) · [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-x86.zip) |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/mikrotik-on-dark.svg"><img src="docs/brand/platforms/mikrotik.svg" width="20" height="20" align="absmiddle" alt=""></picture> MikroTik | [arm64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-arm64.tar) · [armv7 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-armv7.tar) | [amd64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-amd64.tar) |
+| Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-mipsel.ipk) |
 | iOS | source only ([clients/iOS/](clients/iOS/)); in .dev | no Dist binary |
 
-Checksums: [clients](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt). The macOS DMG is the menu-bar application (ad-hoc signed). CLI archives contain `loft`, `loft-front`, `loft-probe`, and `loft-bench`. GitHub Android is sideload and self-updates from Dist; Play builds compile the updater out. Windows portable: x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik is also `ghcr.io/a3app/loft-mikrotik:1.0.42`.
+Checksums: [clients](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt) · [Keenetic](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-SHA256SUMS.txt). The macOS DMG is the menu-bar application (ad-hoc signed). CLI archives contain `loft`, `loft-front`, `loft-probe`, and `loft-bench`. GitHub Android is sideload and self-updates from Dist; Play builds compile the updater out. Windows portable: x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik is also `ghcr.io/a3app/loft-mikrotik:1.0.42`. Keenetic is an Entware ipk (aarch64-3.10, armv7 soft-float, mipsel soft-float); each ipk has a `.sha256` sidecar.
 
 ### Node
 
@@ -103,15 +104,11 @@ Checksums: [clients](https://github.com/a3app/loft/releases/download/v1.0.42/lof
 |--|--|--|
 | <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node_1.0.42_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node_1.0.42_amd64.deb) |
 
-Checksums: [node](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-SHA256SUMS.txt).
-
 ### Panel
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
 | <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel_1.0.42_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel_1.0.42_amd64.deb) |
-
-Checksums: [panel](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-SHA256SUMS.txt).
 
 ## App
 
@@ -209,7 +206,7 @@ make windows    # dist/clients/Windows/x64 and x86
 make dist       # node tarballs/.deb + CLI archives
 ```
 
-A tag `vX.Y.Z` matching `VERSION` runs GitHub Actions: tests, `make dist`, macOS DMGs (arm and intel, ad-hoc), Windows portable zips (x86-64 and x86 on Win7 SP1+, arm64 on Windows 10/11 ARM), a Release, and a pkg.go.dev ping. The same Dist workflow may be started by hand from Actions.
+A tag `vX.Y.Z` matching `VERSION` runs GitHub Actions: tests, `make dist`, macOS DMGs (arm and intel, ad-hoc), Windows portable zips (x86-64 and x86 on Win7 SP1+, arm64 on Windows 10/11 ARM), Keenetic Entware ipk (aarch64, armv7, mipsel), a Release, and a pkg.go.dev ping. The same Dist workflow may be started by hand from Actions.
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'
@@ -238,6 +235,6 @@ ETH and USDT ERC-20 are received at the same Ethereum address. TRX and USDT TRC2
 
 ## License
 
-[Apache License 2.0](LICENSE). loft/1.0 may be implemented from [docs/protocol.md](docs/protocol.md) without a fee.
+[Apache License 2.0](LICENSE). Third-party implementations of loft/1.0 are permitted from the specification [docs/protocol.md](docs/protocol.md).
 
 macOS, iOS, App Store, Android, Google TV, Windows, Linux, MikroTik, Keenetic and Sailfish are trademarks of their owners. Linux® is the registered trademark of Linus Torvalds in the U.S. and other countries. loft is not affiliated with them.

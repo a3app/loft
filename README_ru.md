@@ -93,9 +93,10 @@ loft рассчитан на сети, где обычные VPN-протоко�
 | <img src="docs/brand/platforms/android2.svg" width="20" height="20" align="absmiddle" alt=""> Android | [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android-tv.apk) | те же fat APK |
 | <img src="docs/brand/platforms/windows.svg" width="20" height="20" align="absmiddle" alt=""> Windows | [arm64 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-arm64.zip) | [x86-64 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-x86-64.zip) · [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-x86.zip) |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/mikrotik-on-dark.svg"><img src="docs/brand/platforms/mikrotik.svg" width="20" height="20" align="absmiddle" alt=""></picture> MikroTik | [arm64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-arm64.tar) · [armv7 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-armv7.tar) | [amd64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-amd64.tar) |
+| Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-mipsel.ipk) |
 | iOS | только исходники ([clients/iOS/](clients/iOS/)); in .dev | в Dist нет |
 
-Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления. Windows portable: x86-64 и x86 — Win7 SP1+; arm64 — Win10/11 ARM. MikroTik также `ghcr.io/a3app/loft-mikrotik:1.0.42`.
+Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt) · [Keenetic](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления. Windows portable: x86-64 и x86 — Win7 SP1+; arm64 — Win10/11 ARM. MikroTik также `ghcr.io/a3app/loft-mikrotik:1.0.42`. Keenetic — пакет Entware (aarch64-3.10, armv7 soft-float, mipsel soft-float); у каждого ipk есть sidecar `.sha256`.
 
 ### Нода
 
@@ -103,15 +104,11 @@ loft рассчитан на сети, где обычные VPN-протоко�
 |--|--|--|
 | <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node_1.0.42_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node_1.0.42_amd64.deb) |
 
-Контрольные суммы: [нода](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-SHA256SUMS.txt).
-
 ### Панель
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
 | <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel_1.0.42_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel_1.0.42_amd64.deb) |
-
-Контрольные суммы: [панель](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-SHA256SUMS.txt).
 
 ## Приложение
 
@@ -209,7 +206,7 @@ make windows    # dist/clients/Windows/x64 и x86
 make dist       # tarball/.deb ноды + архивы CLI
 ```
 
-Тег `vX.Y.Z` (как в `VERSION`) запускает GitHub Actions: тесты, `make dist`, DMG arm и intel (подпись ad-hoc), Windows portable zip (x86-64 и x86 на Win7 SP1+, arm64 на Windows 10/11 ARM), Release и пинг pkg.go.dev. Вручную: Actions → Dist.
+Тег `vX.Y.Z` (как в `VERSION`) запускает GitHub Actions: тесты, `make dist`, DMG arm и intel (подпись ad-hoc), Windows portable zip (x86-64 и x86 на Win7 SP1+, arm64 на Windows 10/11 ARM), пакет Entware Keenetic (aarch64, armv7, mipsel), Release и пинг pkg.go.dev. Вручную: Actions → Dist.
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'
@@ -238,6 +235,6 @@ ETH и USDT ERC-20 — один адрес Ethereum. TRX и USDT TRC20 — од�
 
 ## Лицензия
 
-[Apache License 2.0](LICENSE). Протокол loft/1.0 можно реализовать по [docs/protocol_ru.md](docs/protocol_ru.md), платить не нужно.
+[Apache License 2.0](LICENSE). Сторонние реализации протокола loft/1.0 допускаются по спецификации [docs/protocol_ru.md](docs/protocol_ru.md).
 
 macOS, iOS, App Store, Android, Google TV, Windows, Linux, MikroTik, Keenetic и Sailfish — товарные знаки их владельцев. Linux® — зарегистрированный товарный знак Линуса Торвальдса в США и других странах. loft с ними не связан.

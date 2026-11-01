@@ -93,9 +93,10 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 | <img src="docs/brand/platforms/android2.svg" width="20" height="20" align="absmiddle" alt=""> Android | [手机 APK](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android.apk) · [电视 APK](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android-tv.apk) | 同一套 fat APK |
 | <img src="docs/brand/platforms/windows.svg" width="20" height="20" align="absmiddle" alt=""> Windows | [arm64 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-arm64.zip) | [x86-64 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-x86-64.zip) · [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-x86.zip) |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/mikrotik-on-dark.svg"><img src="docs/brand/platforms/mikrotik.svg" width="20" height="20" align="absmiddle" alt=""></picture> MikroTik | [arm64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-arm64.tar) · [armv7 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-armv7.tar) | [amd64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-amd64.tar) |
+| Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-mipsel.ipk) |
 | iOS | 只有源码（[clients/iOS/](clients/iOS/)）；in .dev | Dist 没有包 |
 
-校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。Windows portable：x86-64 和 x86 为 Win7 SP1+；arm64 为 Win10/11 ARM。MikroTik 另有 `ghcr.io/a3app/loft-mikrotik:1.0.42`。
+校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt) · [Keenetic](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。Windows portable：x86-64 和 x86 为 Win7 SP1+；arm64 为 Win10/11 ARM。MikroTik 另有 `ghcr.io/a3app/loft-mikrotik:1.0.42`。Keenetic 是 Entware ipk（aarch64-3.10、armv7 soft-float、mipsel soft-float）；每个 ipk 带同名 `.sha256`。
 
 ### 节点
 
@@ -103,15 +104,11 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 |--|--|--|
 | <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node_1.0.42_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node_1.0.42_amd64.deb) |
 
-校验和：[节点](https://github.com/a3app/loft/releases/download/v1.0.42/loft-node-1.0.42-SHA256SUMS.txt)。
-
 ### 面板
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
 | <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel_1.0.42_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel_1.0.42_amd64.deb) |
-
-校验和：[面板](https://github.com/a3app/loft/releases/download/v1.0.42/loft-panel-1.0.42-SHA256SUMS.txt)。
 
 ## 应用
 
@@ -209,7 +206,7 @@ make windows    # dist/clients/Windows/x64 和 x86
 make dist       # 节点 tar/.deb + CLI 归档
 ```
 
-打标签 `vX.Y.Z`（必须和 `VERSION` 一致）会跑 GitHub Actions：测试、`make dist`、macOS DMG（arm 和 intel，ad-hoc）、Windows portable zip（x86-64 和 x86 适用于 Win7 SP1+，arm64 适用于 Windows 10/11 ARM）、发 Release、ping 一下 pkg.go.dev。手动：Actions → Dist。
+打标签 `vX.Y.Z`（必须和 `VERSION` 一致）会跑 GitHub Actions：测试、`make dist`、macOS DMG（arm 和 intel，ad-hoc）、Windows portable zip（x86-64 和 x86 适用于 Win7 SP1+，arm64 适用于 Windows 10/11 ARM）、Keenetic Entware ipk（aarch64、armv7、mipsel）、发 Release、ping 一下 pkg.go.dev。手动：Actions → Dist。
 
 ```bash
 export LOFT_TOKEN='change-me-long-random'
@@ -238,6 +235,6 @@ ETH 和 USDT ERC-20 共用 Ethereum 地址。TRX 和 USDT TRC20 共用 TRON 地�
 
 ## 许可
 
-[Apache License 2.0](LICENSE)。按 [docs/protocol_zh.md](docs/protocol_zh.md) 实现 loft/1.0 不收费。
+[Apache License 2.0](LICENSE)。允许按规范 [docs/protocol_zh.md](docs/protocol_zh.md) 做 loft/1.0 的第三方实现。
 
 macOS、iOS、App Store、Android、Google TV、Windows、Linux、MikroTik、Keenetic 和 Sailfish 是其所有者的商标。Linux® 是 Linus Torvalds 在美国及其他国家的注册商标。loft 与上述各方无关。

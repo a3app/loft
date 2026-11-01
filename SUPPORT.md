@@ -4,7 +4,7 @@
 
 Work on an open internet is not free. Sponsorship is accepted so that the protocol, the node, and the clients may be kept independent.
 
-Loft is licensed Apache License 2.0. loft/1.0 may be implemented from the specification without a fee. The reference node, the macOS application, the CLI, and the remainder of this tree are built without a company budget.
+Loft is licensed Apache License 2.0. Third-party implementations of loft/1.0 are permitted from the specification. The reference node, the macOS application, the CLI, and the remainder of this tree are built without a company budget.
 
 ## Wallets
 
