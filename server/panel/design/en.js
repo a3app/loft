@@ -1547,7 +1547,6 @@ window.LOFT_EN = {
   "Всегда. Выключить нельзя.": "Always on. Cannot be turned off.",
   "Прямые фронты. GET не подтверждает.": "Direct fronts. GET does not confirm it.",
   "Прямые фронты. GET не подтверждает. Клиентам iOS, Android и macOS нужна сборка с -tags hiae.": "Direct fronts. GET does not confirm it. iOS, Android and macOS clients need a build with -tags hiae.",
-  "Прямые фронты. GET не подтверждает. Клиентам iOS, Android и macOS нужна сборка с -tags reel256.": "Direct fronts. GET does not confirm it. iOS, Android and macOS clients need a build with -tags reel256.",
   "Без внутреннего AEAD": "No inner AEAD",
   "Только TLS фронта. GET не подтверждает. К такой сессии нельзя присоединять GET.": "Only the front's TLS. GET does not confirm it. That session cannot attach GET.",
   "Нужен хотя бы один фронт": "At least one front is required",

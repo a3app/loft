@@ -38,12 +38,8 @@ func cachedAEAD(m *sync.Map, key []byte, newFn func([]byte) (cipher.AEAD, error)
 // iOS, Android and macOS loft-front need -tags hiae; linux/windows have it.
 func HiAEEnabled() bool { return hiaeBuilt }
 
-// ReelEnabled is true when this binary compiled the Reel-256 inner cipher.
-// Every OS needs -tags reel256; Dist omits it.
-func ReelEnabled() bool { return reelBuilt }
-
 // aeadNonce16 maps loft's 12-byte record nonce to a 16-byte Init nonce:
-// four zero bytes then n12. HiAE and Reel-256 both Init this way.
+// four zero bytes then n12. HiAE Init uses this.
 func aeadNonce16(n12 []byte) []byte {
 	n := make([]byte, 16)
 	copy(n[4:], n12)
@@ -51,22 +47,20 @@ func aeadNonce16(n12 []byte) []byte {
 }
 
 // InnerOK is whether Seal/Open can bind id. ChaCha, AES and clear always;
-// HiAE when HiAEEnabled; Reel-256 when compiled with -tags reel256.
+// HiAE when HiAEEnabled.
 func InnerOK(id byte) bool {
 	switch id {
 	case wire.InnerClear, wire.InnerChaCha, wire.InnerAES:
 		return true
 	case wire.InnerHiAE:
 		return hiaeBuilt
-	case wire.InnerReel:
-		return reelBuilt
 	default:
 		return false
 	}
 }
 
 // BindInner selects the data cipher used by later Seal/Open on key.
-// InnerClear, InnerAES, InnerHiAE and InnerReel (when built) are stored.
+// InnerClear, InnerAES and InnerHiAE (when built) are stored.
 // Any other id, including ChaCha, clears the entry so Seal stays on ChaCha20-Poly1305.
 func BindInner(key []byte, id byte) {
 	if len(key) == 0 {
@@ -78,8 +72,6 @@ func BindInner(key []byte, id byte) {
 		innerModes.Store(string(key), id)
 	case wire.InnerHiAE:
 		bindHiAE(key)
-	case wire.InnerReel:
-		bindReel(key)
 	default:
 		innerModes.Delete(string(key))
 	}

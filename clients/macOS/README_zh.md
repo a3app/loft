@@ -7,7 +7,6 @@
 ```
 make app          # ../../dist/clients/macOS/loft.app  （版本 patch +1）
 make app HIAE=1      # 同上，loft-front 带 HiAE（`-tags hiae`）
-make app REEL256=1   # 同上，loft-front 带 Reel-256（`-tags reel256`）
 make dmg          # ../../dist/clients/macOS/loft-*-macos-<arch>.dmg
 make dmg BUMP=0   # 同一份 DMG，VERSION 不动（CI）
 make dmg ARCH=x86_64 BUMP=0   # Intel 构建（从 Apple Silicon 交叉）

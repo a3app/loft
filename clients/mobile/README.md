@@ -45,7 +45,6 @@ Front / SSTP / VLESS server IPs are in `Snapshot.FrontIPs` (comma-separated) so 
 make ios        # build/Mobile.xcframework   (Xcode, iOS 15)
 make android    # build/engine.aar           (NDK, API 24, 16 KiB pages)
 make ios HIAE=1     # same, with HiAE inner cipher (`-tags hiae`)
-make ios REEL256=1  # same, with Reel-256 (`-tags reel256`)
 ```
 
 From the repo root: `make mobile-ios` / `make mobile-android`.

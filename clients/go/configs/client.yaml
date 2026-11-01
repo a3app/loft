@@ -15,7 +15,6 @@ select: auto
 # inner: data-cipher ask. Empty or chacha omits the Hello byte.
 # Node confirms only if its inner list includes that extra. GET stays ChaCha.
 # hiae needs a client built with -tags hiae (iOS/Android/macOS: HIAE=1).
-# reel needs -tags reel256 (iOS/Android/macOS: REEL256=1).
 # inner: aes
 
 # signed roster of this network (no member key in the file)

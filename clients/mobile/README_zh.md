@@ -45,7 +45,6 @@ ParseShareAll(s) (yaml, error) // 同样，每条连接用 --- 拼接
 make ios        # build/Mobile.xcframework   (Xcode, iOS 15)
 make android    # build/engine.aar           (NDK, API 24, 16 KiB 页)
 make ios HIAE=1     # 同上，带 HiAE 内部密码（`-tags hiae`）
-make ios REEL256=1  # 同上，带 Reel-256（`-tags reel256`）
 ```
 
 从仓库根目录：`make mobile-ios` / `make mobile-android`。

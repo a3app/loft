@@ -7,7 +7,6 @@ Menu-bar agent. Minimum OS: **macOS 10.13**. UX: [`design/DESIGN.md`](design/DES
 ```
 make app          # ../../dist/clients/macOS/loft.app  (version patch +1)
 make app HIAE=1      # same, loft-front with HiAE (`-tags hiae`)
-make app REEL256=1   # same, loft-front with Reel-256 (`-tags reel256`)
 make dmg          # ../../dist/clients/macOS/loft-*-macos-<arch>.dmg
 make dmg BUMP=0   # same DMG, leave VERSION as-is (CI)
 make dmg ARCH=x86_64 BUMP=0   # Intel slice (cross from Apple Silicon)

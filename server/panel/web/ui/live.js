@@ -2015,7 +2015,7 @@
   // token, so a new token means new links.
   L.nd = null; L.ndDraft = null; L.pres = null;
   const FR = [['get', 'HTTP GET', 'Публичный путь по умолчанию. Обычный HTTPS GET, в том числе через CDN.'], ['ws', 'WebSocket', 'Опция. Один WebSocket на путь API. Прямой origin, не CDN.'], ['h2', 'HTTP/2 CONNECT', 'Опция. HTTP/2 CONNECT на прямом origin. Больше объёма, чем GET.'], ['quic', 'QUIC', 'Опция. Своё QUIC по UDP/443.'], ['h3', 'HTTP/3', 'Опция. HTTP/3 CONNECT поверх QUIC.'], ['l3', 'L3', 'Опция. HTTP/2 CONNECT на прямом origin, внутри — IP-пакеты без mux.']];
-  const IN = [['chacha', 'ChaCha20-Poly1305', 'Всегда. Выключить нельзя.', 1], ['aes', 'AES-256-GCM', 'Прямые фронты. GET не подтверждает.', 0], ['hiae', 'HiAE', 'Прямые фронты. GET не подтверждает. Клиентам iOS, Android и macOS нужна сборка с -tags hiae.', 0], ['reel', 'Reel-256', 'Прямые фронты. GET не подтверждает. Клиентам iOS, Android и macOS нужна сборка с -tags reel256.', 0], ['clear', 'Без внутреннего AEAD', 'Только TLS фронта. GET не подтверждает. К такой сессии нельзя присоединять GET.', 0]];
+  const IN = [['chacha', 'ChaCha20-Poly1305', 'Всегда. Выключить нельзя.', 1], ['aes', 'AES-256-GCM', 'Прямые фронты. GET не подтверждает.', 0], ['hiae', 'HiAE', 'Прямые фронты. GET не подтверждает. Клиентам iOS, Android и macOS нужна сборка с -tags hiae.', 0], ['clear', 'Без внутреннего AEAD', 'Только TLS фронта. GET не подтверждает. К такой сессии нельзя присоединять GET.', 0]];
   async function loadNode() {
     const [c, p] = await Promise.allSettled([api('GET', '/api/nodecfg'), api('GET', '/api/presence')]);
     if (c.status === 'fulfilled') {

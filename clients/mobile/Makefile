@@ -11,16 +11,10 @@ ANDROID_API := 24
 GOBIN := $(shell go env GOPATH)/bin
 export PATH := $(GOBIN):$(PATH)
 # HiAE (inner id 5) is off on iOS/Android unless HIAE=1 → gomobile -tags hiae.
-# Reel-256 (inner id 8) is off unless REEL256=1 → -tags reel256.
 HIAE ?= 0
-REEL256 ?= 0
 GOTAGS :=
-ifeq ($(HIAE)$(REEL256),11)
-GOTAGS := -tags hiae,reel256
-else ifeq ($(HIAE),1)
+ifeq ($(HIAE),1)
 GOTAGS := -tags hiae
-else ifeq ($(REEL256),1)
-GOTAGS := -tags reel256
 endif
 
 .PHONY: tools ios android clean

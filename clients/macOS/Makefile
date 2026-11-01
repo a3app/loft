@@ -4,16 +4,11 @@
 # Go 1.26 still stamps LC_BUILD_VERSION 12.0; missing Security symbols were the abort.
 export MACOSX_DEPLOYMENT_TARGET := 10.13
 MIN := 10.13
-# loft-front HiAE/Reel-256 are off unless HIAE=1 / REEL256=1. Linux/Windows fronts compile them in.
+# loft-front HiAE is off unless HIAE=1. Linux/Windows fronts compile it in.
 HIAE ?= 0
-REEL256 ?= 0
 GOTAGS :=
-ifeq ($(HIAE)$(REEL256),11)
-GOTAGS := -tags hiae,reel256
-else ifeq ($(HIAE),1)
+ifeq ($(HIAE),1)
 GOTAGS := -tags hiae
-else ifeq ($(REEL256),1)
-GOTAGS := -tags reel256
 endif
 HOSTARCH := $(shell uname -m)
 ARCH ?= $(HOSTARCH)

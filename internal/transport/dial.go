@@ -245,9 +245,6 @@ func SuperviseOn(ctx context.Context, cfg *config.ClientConfig, path <-chan stru
 		if id == wire.InnerHiAE && !ecrypto.HiAEEnabled() {
 			return fmt.Errorf("inner hiae: compile with -tags hiae")
 		}
-		if id == wire.InnerReel && !ecrypto.ReelEnabled() {
-			return fmt.Errorf("inner reel: compile with -tags reel256")
-		}
 		setClientInner(set, id)
 		cc, up, down, err := cfg.CCAsk()
 		if err != nil {

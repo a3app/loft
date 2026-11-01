@@ -3,7 +3,7 @@ package transport
 // Inner cipher choice. Every mux frame is sealed with the session key even
 // inside TLS. ChaCha20-Poly1305 is the default and always allowed. On a
 // direct front (TLS ends at the node) a client may ask for AES-256-GCM, HiAE,
-// Reel-256, or "clear" (no second layer; TLS still protects the bytes). The
+// or "clear" (no second layer; TLS still protects the bytes). The
 // client asks in Hello, the node confirms in Status, and both sides then bind
 // that cipher to the session key. GET never leaves ChaCha: its TLS ends at a
 // CDN, which would otherwise see the frames.
@@ -16,7 +16,7 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
-// innerAllow is the node's extra data-cipher list (clear, aes, hiae, reel). Empty
+// innerAllow is the node's extra data-cipher list (clear, aes, hiae). Empty
 // means ChaCha only. Set from node.conf at start. A running session keeps
 // the id it already agreed.
 var innerAllow atomic.Value // []byte
@@ -91,7 +91,7 @@ func takeInner(front string, key []byte, st wire.Status) {
 		return
 	}
 	switch st.Inner {
-	case wire.InnerClear, wire.InnerAES, wire.InnerHiAE, wire.InnerReel:
+	case wire.InnerClear, wire.InnerAES, wire.InnerHiAE:
 		ecrypto.BindInner(key, st.Inner)
 		log.Printf("inner %s", wire.InnerName(st.Inner))
 	}

@@ -1,7 +1,7 @@
 package crypto
 
 // AESL = MixColumns(ShiftRows(SubBytes)). One AES round, no AddRoundKey.
-// Shared by HiAE and Reel-256.
+// HiAE AESL = MC·SR·SB.
 // amd64 uses AESENC(x, 0) when AES-NI is present; arm64 uses AESMC(AESE(x, 0)).
 // Otherwise aeslSoft (table S-box).
 
@@ -15,7 +15,7 @@ func xorBlk(a, b blk) blk {
 	return c
 }
 
-// First 256 bits of the hexadecimal expansion of π. HiAE C0/C1 and Reel-256 C0/C1.
+// First 256 bits of the hexadecimal expansion of π. HiAE C0/C1.
 var (
 	piC0 = blk{0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34}
 	piC1 = blk{0x4a, 0x40, 0x93, 0x82, 0x22, 0x99, 0xf3, 0x1d, 0x00, 0x82, 0xef, 0xa9, 0x8e, 0xc4, 0xe6, 0xc8}

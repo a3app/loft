@@ -76,7 +76,7 @@
 | **地址列表（lists）** | 签名的域名和子网集合。客户端据此决定哪些走 loft、哪些直连。 | `lists.go` |
 | **egress** | 节点访问互联网的规则：直连、另一块网卡、SOCKS5、HTTP 或 SSTP。 | `internal/egress`、`transport/egress.go` |
 | **canary** | 检查中间设备是否改写了 TLS 握手。改写了，会话就建立不起来。 | `tls.go`、`node.go` |
-| **inner** | TLS 内部对帧的额外加密：ChaCha20-Poly1305、AES-256-GCM、HiAE、Reel-256，直连前置上也可以不加。 | `crypto/inner.go`、`crypto/hiae.go`、`crypto/reel256.go`、`transport/inner.go` |
+| **inner** | TLS 内部对帧的额外加密：ChaCha20-Poly1305、AES-256-GCM、HiAE，直连前置上也可以不加。 | `crypto/inner.go`、`crypto/hiae.go`、`transport/inner.go` |
 | **ctl:1、hub:1** | relay 与 controller 之间 mux 内的服务地址：控制和流量转发。 | `fleet.go`、`relay_ctl.go`、`hub.go` |
 
 ---

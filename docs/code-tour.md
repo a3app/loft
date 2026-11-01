@@ -76,7 +76,7 @@ Example: the `loft` client runs on a laptop and a browser opens `https://example
 | **lists** | Signed sets of domains and subnets. The client uses them to decide what goes through loft and what goes direct. | `lists.go` |
 | **egress** | The node's rules for reaching the internet: direct, another interface, SOCKS5, HTTP, or SSTP. | `internal/egress`, `transport/egress.go` |
 | **canary** | A check that no middlebox rewrote the TLS handshake. If one did, the session does not come up. | `tls.go`, `node.go` |
-| **inner** | Extra frame encryption inside TLS: ChaCha20-Poly1305, AES-256-GCM, HiAE, Reel-256, or none on direct fronts. | `crypto/inner.go`, `crypto/hiae.go`, `crypto/reel256.go`, `transport/inner.go` |
+| **inner** | Extra frame encryption inside TLS: ChaCha20-Poly1305, AES-256-GCM, HiAE, or none on direct fronts. | `crypto/inner.go`, `crypto/hiae.go`, `transport/inner.go` |
 | **ctl:1, hub:1** | Service addresses inside the mux between a relay and the controller: control and traffic forwarding. | `fleet.go`, `relay_ctl.go`, `hub.go` |
 
 ---

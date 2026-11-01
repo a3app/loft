@@ -221,7 +221,7 @@ Protocol stays **loft/1.0**.
 
 Inner data cipher:
 
-- A direct front may confirm 0 (clear), 1 (ChaCha20-Poly1305), 2 (AES-256-GCM), 5 (HiAE), or 8 (Reel-256) after Status. A missing byte is ChaCha. GET stays ChaCha. Node `inner` lists extra ids. ChaCha cannot be turned off. iOS/Android/macOS need `-tags hiae` / `-tags reel256`.
+- A direct front may confirm 0 (clear), 1 (ChaCha20-Poly1305), 2 (AES-256-GCM), or 5 (HiAE) after Status. A missing byte is ChaCha. GET stays ChaCha. Node `inner` lists extra ids. ChaCha cannot be turned off. iOS/Android/macOS need `-tags hiae`. Id 8 is reserved for an experimental data cipher.
 
 Spec:
 

@@ -161,7 +161,7 @@ export LOFT_TOKEN='long-secret'
 | `get_path` `ws_path` `h2_path` `h3_path` | 前置路径 |
 | `get_h2` | GET 的 HTTP/2 连接数，1–4（默认 1）。inflight 总数共用。 |
 | `fronts` | 空 = `get`。要 `ws`、`h2`、`quic`、`h3` 就列入。`connect` 是 mux-off 的 HTTP CONNECT 拼接；未列入则关。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报；未列入则关 |
-| `inner` | 节点可以确认的额外数据密码：`clear`、`aes`、`hiae`、`reel`。空 = 仅 ChaCha20-Poly1305。ChaCha20-Poly1305 始终允许，不能关掉。`get` 不确认 `clear`、`aes`、`hiae` 或 `reel`。重启后生效。SIGHUP 不重读 `node.conf`。面板「节点」页是同一组勾选。 |
+| `inner` | 节点可以确认的额外数据密码：`clear`、`aes`、`hiae`。空 = 仅 ChaCha20-Poly1305。ChaCha20-Poly1305 始终允许，不能关掉。`get` 不确认 `clear`、`aes` 或 `hiae`。重启后生效。SIGHUP 不重读 `node.conf`。面板「节点」页是同一组勾选。 |
 | `cc` | 允许客户端请求的拥塞控制：`bbr`、`fixed`（`off` 或空 = 所有会话保持系统默认）。是否请求由各客户端决定；节点只负责允许。只有基于 QUIC 的会话会切换（`quic`、`h3`，或经 HTTP/3 的 `l3`）；TCP 前置保持内核默认。不经中继，不用于 `get`。重启后生效。 |
 | `cc_max UP DOWN` | `fixed` 的上限，Mbit/s：客户端可发送多快、节点向它发送多快。`0` = 不设上限。 |
 | `edge` | GET 预设 `plain` 或 `tight`（Status 字节 0 或 1）。`tight`：Cookie 预算 16 KiB，inflight 16，单次 6 秒。用于 origin 位于会丢掉过胖并发 HEADERS 突发的 CDN 或反向代理之后。默认 `plain`。 |
@@ -267,7 +267,7 @@ make probe
 | `instance_id` | 覆盖网实例。空：YAML 旁边的 `{config}.instance`，第一次跑时创建 |
 | `select` | `auto` 或一条出站的名字 |
 | `fronts` | 额外过滤。空 = 出站类型（默认 GET） |
-| `inner` | 数据密码请求：`clear`、`aes`、`hiae` 或 `reel`。空或 `chacha` 不写 Hello 字节（ChaCha20-Poly1305）。节点确认该标识，否则会话留在 ChaCha20-Poly1305。`get` 保持 ChaCha20-Poly1305。`loft-front -inner` 是同一字段。iOS、Android 与 macOS 客户端仅在以 `-tags hiae`（`HIAE=1`）编译时包含 HiAE，Reel-256 需 `-tags reel256`（`REEL256=1`）。 |
+| `inner` | 数据密码请求：`clear`、`aes` 或 `hiae`。空或 `chacha` 不写 Hello 字节（ChaCha20-Poly1305）。节点确认该标识，否则会话留在 ChaCha20-Poly1305。`get` 保持 ChaCha20-Poly1305。`loft-front -inner` 是同一字段。iOS、Android 与 macOS 客户端仅在以 `-tags hiae`（`HIAE=1`）编译时包含 HiAE。 |
 | `cc` | 拥塞控制请求：`off`（默认）、`bbr`、`fixed`。只在 `quic` 与 `h3` 上生效；TCP 前置保持默认。在会挑出异常流量的网络上请保持关闭。节点答复双方使用的方式；不允许的节点保持默认。 |
 | `cc_up_mbps`、`cc_down_mbps` | 用于 `fixed`：本客户端发送多快、能接收多快，Mbit/s。请设为线路实际速度：固定速率在丢包时不会降速。`0` 使该方向保持默认。 |
 | `bootstrap` | 名册清单的 HTTPS URL，认证之前 |

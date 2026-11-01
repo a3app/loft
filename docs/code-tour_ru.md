@@ -76,7 +76,7 @@
 | **списки адресов (lists)** | Подписанные наборы доменов и подсетей. Клиент решает по ним, что пускать через loft, что напрямую. | `lists.go` |
 | **egress** | Правила выхода ноды в интернет: напрямую, через другой интерфейс, SOCKS5, HTTP или SSTP. | `internal/egress`, `transport/egress.go` |
 | **canary** | Проверка, что посредник не переписал TLS-рукопожатие. Если переписал, сессия не поднимается. | `tls.go`, `node.go` |
-| **inner** | Дополнительное шифрование кадров внутри TLS: ChaCha20-Poly1305, AES-256-GCM, HiAE, Reel-256 или без него на прямых фронтах. | `crypto/inner.go`, `crypto/hiae.go`, `crypto/reel256.go`, `transport/inner.go` |
+| **inner** | Дополнительное шифрование кадров внутри TLS: ChaCha20-Poly1305, AES-256-GCM, HiAE или без него на прямых фронтах. | `crypto/inner.go`, `crypto/hiae.go`, `transport/inner.go` |
 | **ctl:1, hub:1** | Служебные адреса внутри mux между relay и controller: управление и пересылка трафика. | `fleet.go`, `relay_ctl.go`, `hub.go` |
 
 ---

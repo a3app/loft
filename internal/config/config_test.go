@@ -181,18 +181,25 @@ func TestInnerCommand(t *testing.T) {
 	if err != nil || !set || id != wire.InnerHiAE {
 		t.Fatalf("hiae ask %v %d %v", set, id, err)
 	}
-	ask.Inner = "reel256"
-	set, id, err = ask.InnerAsk()
-	if err != nil || !set || id != wire.InnerReel {
-		t.Fatalf("reel ask %v %d %v", set, id, err)
+	ask.Inner = "reel"
+	if _, _, err := ask.InnerAsk(); err == nil {
+		t.Fatal("reel ask")
 	}
-	with, err := ParseCommands("listen :443\ninner clear aes hiae reel\n")
+	legacy, err := ParseCommands("listen :443\ninner clear aes hiae reel\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err = legacy.InnerIDs()
+	if err != nil || len(ids) != 3 || ids[2] != wire.InnerHiAE {
+		t.Fatalf("legacy reel ignored %v %v", ids, err)
+	}
+	with, err := ParseCommands("listen :443\ninner clear aes hiae\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids, err = with.InnerIDs()
-	if err != nil || len(ids) != 4 || ids[2] != wire.InnerHiAE || ids[3] != wire.InnerReel {
-		t.Fatalf("hiae/reel ids %v %v", ids, err)
+	if err != nil || len(ids) != 3 || ids[2] != wire.InnerHiAE {
+		t.Fatalf("hiae ids %v %v", ids, err)
 	}
 }
 

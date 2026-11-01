@@ -83,7 +83,7 @@ client.Holder
 
 拉名册要 `controller_pub`。`tofu: true` 钉住第一个有效签名者，写到 `{instanceDir}/controller.pub`。公钥空着又没这个标志，名册就不用；静态出站照样拨。
 
-里面 AEAD 的 nonce 对每个会话密钥唯一（32 位前缀 + 64 位计数器）。用同一把密钥 park，计数器接着走。新的 `0x02` 从 X25519 派生新密钥；HKDF 的 ikm 是 DH 密钥。Status 之后，直连前置可以不用内部 AEAD、用 AES-256-GCM、HiAE 或 Reel-256（节点 `inner` 列出该标识时）；`get` 仍是 ChaCha20-Poly1305。握手的 Seal(Status) 始终是 ChaCha20-Poly1305。iOS、Android 与 macOS 客户端仅在 `-tags hiae` 时编译 HiAE，Reel-256 需 `-tags reel256`。
+里面 AEAD 的 nonce 对每个会话密钥唯一（32 位前缀 + 64 位计数器）。用同一把密钥 park，计数器接着走。新的 `0x02` 从 X25519 派生新密钥；HKDF 的 ikm 是 DH 密钥。Status 之后，直连前置可以不用内部 AEAD、用 AES-256-GCM 或 HiAE（节点 `inner` 列出该标识时）；`get` 仍是 ChaCha20-Poly1305。握手的 Seal(Status) 始终是 ChaCha20-Poly1305。iOS、Android 与 macOS 客户端仅在 `-tags hiae` 时编译 HiAE。id 8 保留给实验性数据密码（分支 `experimental`）。
 
 客户端不选诱饵 SNI。Status、名册或探测证书给。CDN 出站保持 CDN 主机名。
 

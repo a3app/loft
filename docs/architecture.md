@@ -83,7 +83,7 @@ When there is no GET session to attach to, `Supervise` tries configured outbound
 
 Roster fetch needs `controller_pub`. `tofu: true` pins the first valid signer and writes `{instanceDir}/controller.pub`. Empty pub without that flag leaves the roster unused; static outbounds still dial.
 
-Inner AEAD nonce is unique per session key (32-bit prefix + 64-bit counter). Park with the same key continues the counter. A new `0x02` derives a new key from X25519; HKDF ikm is the DH secret. After Status a direct front may use no inner AEAD, AES-256-GCM, HiAE, or Reel-256 when node `inner` lists that id; `get` stays ChaCha20-Poly1305. Handshake Seal of Status is always ChaCha20-Poly1305. iOS, Android, and macOS clients compile HiAE only with `-tags hiae` and Reel-256 only with `-tags reel256`.
+Inner AEAD nonce is unique per session key (32-bit prefix + 64-bit counter). Park with the same key continues the counter. A new `0x02` derives a new key from X25519; HKDF ikm is the DH secret. After Status a direct front may use no inner AEAD, AES-256-GCM, or HiAE when node `inner` lists that id; `get` stays ChaCha20-Poly1305. Handshake Seal of Status is always ChaCha20-Poly1305. iOS, Android, and macOS clients compile HiAE only with `-tags hiae`. Id 8 is reserved for an experimental data cipher (branch `experimental`).
 
 The client does not choose decoy SNI. Status, roster, or a probe certificate supplies it. A CDN outbound keeps the CDN hostname.
 

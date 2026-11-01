@@ -21,7 +21,7 @@ fronts: [get]
 # on and cannot be disabled. GET never confirms extras. Direct fronts
 # (ws, h2, quic, h3, l3) may, when the client asked. Same boxes on the panel
 # Node screen. Empty = ChaCha only.
-# inner: [clear, aes, hiae, reel]
+# inner: [clear, aes, hiae]
 
 # decoy: this node's identity. Unauthorized TCP (any SNI, including the
 # advertise hostname) and UDP/443 are spliced here — an active probe sees

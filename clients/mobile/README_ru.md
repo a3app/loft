@@ -45,7 +45,6 @@ IP фронтов и серверов SSTP / VLESS перечислены в `Sn
 make ios        # build/Mobile.xcframework   (Xcode, iOS 15)
 make android    # build/engine.aar           (NDK, API 24, страницы 16 КиБ)
 make ios HIAE=1     # то же, с внутренним шифром HiAE (`-tags hiae`)
-make ios REEL256=1  # то же, с Reel-256 (`-tags reel256`)
 ```
 
 Из корня репозитория: `make mobile-ios` / `make mobile-android`.

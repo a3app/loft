@@ -96,7 +96,7 @@ func applyNode(c *ServerConfig, tok []string) error {
 		c.Fronts = append([]string(nil), tok[1:]...)
 	case "inner":
 		if len(tok) < 2 {
-			return fmt.Errorf("inner wants clear, chacha, aes, hiae, reel")
+			return fmt.Errorf("inner wants clear, chacha, aes, hiae")
 		}
 		c.Inner = append([]string(nil), tok[1:]...)
 	case "cc":

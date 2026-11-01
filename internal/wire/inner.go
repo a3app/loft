@@ -17,14 +17,14 @@ const (
 	InnerChaCha byte = 1
 	InnerAES    byte = 2 // AES-256-GCM, same 12-byte nonce and 16-byte tag as ChaCha
 	InnerHiAE   byte = 5 // draft-pham-cfrg-hiae-06; wire nonce[12]||ct||tag[16]
-	InnerReel   byte = 8 // andhash/reel256 draft-00; wire nonce[12]||ct||tag[16]
 )
 
 // InnerReserved are ids kept for more data ciphers. Until one is defined
 // it is an unknown id: asked for, it leaves the session on ChaCha.
-var InnerReserved = []byte{3, 4, 7}
+// 8 is reserved for an experimental data cipher (not in this tree).
+var InnerReserved = []byte{3, 4, 7, 8}
 
-// ParseInnerName reads clear, chacha, aes, hiae, or reel. Aliases none/off, aes-gcm, reel256.
+// ParseInnerName reads clear, chacha, aes, or hiae. Aliases none/off, aes-gcm.
 func ParseInnerName(s string) (byte, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "clear", "none", "off":
@@ -35,10 +35,8 @@ func ParseInnerName(s string) (byte, error) {
 		return InnerAES, nil
 	case "hiae":
 		return InnerHiAE, nil
-	case "reel", "reel256":
-		return InnerReel, nil
 	default:
-		return 0, fmt.Errorf("inner %q: clear, chacha, aes, hiae, or reel", s)
+		return 0, fmt.Errorf("inner %q: clear, chacha, aes, or hiae", s)
 	}
 }
 
@@ -51,8 +49,6 @@ func InnerName(id byte) string {
 		return "aes"
 	case InnerHiAE:
 		return "hiae"
-	case InnerReel:
-		return "reel"
 	default:
 		return "chacha"
 	}
@@ -61,13 +57,13 @@ func InnerName(id byte) string {
 // AgreeInner is the node's answer to a Hello ask.
 // GET, an absent ask, an unknown id, and an id the policy does not list
 // stay on ChaCha and omit the Status byte. The session still comes up.
-// ChaCha is always allowed. allow lists only the extra ids (clear, aes, hiae, reel).
+// ChaCha is always allowed. allow lists only the extra ids (clear, aes, hiae).
 func AgreeInner(front string, askSet bool, ask byte, allow []byte) (set bool, id byte) {
 	if front == "" || front == FrontGET || !askSet {
 		return false, InnerChaCha
 	}
 	switch ask {
-	case InnerClear, InnerAES, InnerHiAE, InnerReel:
+	case InnerClear, InnerAES, InnerHiAE:
 		if !allowsInner(allow, ask) {
 			return false, InnerChaCha
 		}

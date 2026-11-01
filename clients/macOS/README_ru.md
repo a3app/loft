@@ -7,7 +7,6 @@
 ```
 make app          # ../../dist/clients/macOS/loft.app  (patch версии +1)
 make app HIAE=1      # то же, loft-front с HiAE (`-tags hiae`)
-make app REEL256=1   # то же, loft-front с Reel-256 (`-tags reel256`)
 make dmg          # ../../dist/clients/macOS/loft-*-macos-<arch>.dmg
 make dmg BUMP=0   # тот же DMG, VERSION не трогать (CI)
 make dmg ARCH=x86_64 BUMP=0   # срез Intel (кросс с Apple Silicon)

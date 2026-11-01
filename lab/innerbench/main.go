@@ -29,7 +29,7 @@ func main() {
 	fmt.Printf("go %s %s/%s GOMAXPROCS=1 AES=%v AVX2=%v PCLMUL=%v\n",
 		runtime.Version(), runtime.GOOS, runtime.GOARCH,
 		cpu.X86.HasAES, cpu.X86.HasAVX2, cpu.X86.HasPCLMULQDQ)
-	fmt.Printf("hiae=%v reel=%v\n", ecrypto.HiAEEnabled(), ecrypto.ReelEnabled())
+	fmt.Printf("hiae=%v\n", ecrypto.HiAEEnabled())
 
 	ciphers := []spec{
 		{"chacha", wire.InnerChaCha},
@@ -37,9 +37,6 @@ func main() {
 	}
 	if ecrypto.HiAEEnabled() {
 		ciphers = append(ciphers, spec{"hiae", wire.InnerHiAE})
-	}
-	if ecrypto.ReelEnabled() {
-		ciphers = append(ciphers, spec{"reel", wire.InnerReel})
 	}
 
 	sizes := []int{12 << 10, 1 << 20}
