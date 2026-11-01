@@ -204,6 +204,72 @@ func decoyHost(d string) string {
 	return host
 }
 
+// AdvertiseHost is the hostname of advertise (https://hello.loft.cx → hello.loft.cx).
+func AdvertiseHost(advertise string) string {
+	s := strings.TrimSpace(advertise)
+	if s == "" {
+		return ""
+	}
+	if !strings.Contains(s, "://") {
+		s = "https://" + s
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+
+// PublicDecoyHost is a decoy hostname that is safe to send to clients.
+// Loopback, unspecified, private and link-local splice origins stay local.
+func PublicDecoyHost(d string) string {
+	h := decoyHost(strings.TrimSpace(d))
+	if h == "" {
+		return ""
+	}
+	ip := net.ParseIP(h)
+	if ip == nil {
+		return h
+	}
+	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+		return ""
+	}
+	return h
+}
+
+// PublicDecoy is Status.Decoy / roster decoy: public origins, else advertise:443.
+// Splice still uses the configured loopback origin (127.0.0.1:8443).
+func PublicDecoy(origins []string, advertise string) []string {
+	var out []string
+	for _, d := range origins {
+		if PublicDecoyHost(d) != "" {
+			out = append(out, d)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	if h := AdvertiseHost(advertise); h != "" {
+		return []string{h + ":443"}
+	}
+	return nil
+}
+
+// MaskIdentity is the hostname NewMask uses as the mask certificate SNI.
+// A loopback splice origin would mint a 127.0.0.1 identity; advertise wins then.
+func MaskIdentity(origins []string, advertise string) string {
+	if len(origins) > 0 && PublicDecoyHost(origins[0]) != "" {
+		return origins[0]
+	}
+	if h := AdvertiseHost(advertise); h != "" {
+		return h
+	}
+	if len(origins) > 0 {
+		return origins[0]
+	}
+	return ""
+}
+
 // Addr returns the inner listener address.
 func (d *decoyListener) Addr() net.Addr { return d.ln.Addr() }
 

@@ -152,7 +152,7 @@ func advertisedH2(getH2 int, edge byte) byte {
 func nodeInfo(cfg *config.ServerConfig) transport.NodeInfo {
 	var mask *transport.Mask
 	if cfg.Mask && len(cfg.Decoy) > 0 {
-		mask = transport.NewMask([]byte(cfg.Token), cfg.Decoy[0])
+		mask = transport.NewMask([]byte(cfg.Token), transport.MaskIdentity(cfg.Decoy, cfg.Advertise))
 	}
 	var pub []byte
 	if mask != nil {
@@ -161,6 +161,7 @@ func nodeInfo(cfg *config.ServerConfig) transport.NodeInfo {
 	return transport.NodeInfo{
 		Token:       []byte(cfg.Token),
 		Decoy:       append([]string(nil), cfg.Decoy...),
+		Advertise:   cfg.Advertise,
 		Caps:        transport.ServerCaps(cfg, mask != nil),
 		MaskPub:     pub,
 		Replicas:    append([]string(nil), cfg.Replicas...),
@@ -204,7 +205,7 @@ func Listen(cfg *config.ServerConfig, h http.Handler) error {
 	ln = transport.TuneListener(ln)
 	var mask *transport.Mask
 	if cfg.Mask && len(cfg.Decoy) > 0 {
-		mask = transport.NewMask([]byte(cfg.Token), cfg.Decoy[0])
+		mask = transport.NewMask([]byte(cfg.Token), transport.MaskIdentity(cfg.Decoy, cfg.Advertise))
 	}
 	ln = transport.WrapDecoyMask(ln, []byte(cfg.Token), cfg.Decoy, mask, h,
 		transport.PublicSNIs(cfg.Advertise, cfg.CertFile)...)

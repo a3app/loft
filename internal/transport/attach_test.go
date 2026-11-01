@@ -107,6 +107,29 @@ func TestNodeInfoStatusFronts(t *testing.T) {
 	if st.Fronts[3].Name != wire.FrontQUIC || st.Fronts[3].Path != "" {
 		t.Fatalf("quic %+v", st.Fronts[3])
 	}
+
+	n.Caps |= wire.CapL3
+	st = n.Status("")
+	if len(st.Fronts) != 5 {
+		t.Fatalf("with l3 fronts %d %+v", len(st.Fronts), st.Fronts)
+	}
+	last := st.Fronts[len(st.Fronts)-1]
+	if last.Name != wire.FrontL3 || last.Path != "/portal/tunnel" {
+		t.Fatalf("l3 %+v", last)
+	}
+}
+
+func TestNodeInfoStatusDecoyAdvertise(t *testing.T) {
+	n := NodeInfo{Decoy: []string{"127.0.0.1:8443"}, Advertise: "https://hello.loft.cx"}
+	st := n.Status("")
+	if len(st.Decoy) != 1 || st.Decoy[0] != "hello.loft.cx:443" {
+		t.Fatalf("decoy %+v", st.Decoy)
+	}
+	n.Decoy = []string{"origin.example:443"}
+	st = n.Status("")
+	if len(st.Decoy) != 1 || st.Decoy[0] != "origin.example:443" {
+		t.Fatalf("public %+v", st.Decoy)
+	}
 }
 
 func TestAttachOutboundUsesStatusPath(t *testing.T) {

@@ -169,7 +169,9 @@ func SessionLine(rawURL string) string {
 			pbk = hex.EncodeToString(pub)
 		}
 		if origins, ok := CachedDecoy(addr); ok && len(origins) > 0 {
-			decoy = decoyHost(origins[0])
+			if h := PublicDecoyHost(origins[0]); h != "" {
+				decoy = h
+			}
 		}
 	}
 	kex := LastKEX()

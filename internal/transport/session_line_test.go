@@ -27,3 +27,15 @@ func TestSessionLineAfterMaskPub(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionLineSkipsLoopbackDecoy(t *testing.T) {
+	const addr = "203.0.113.52:443"
+	RememberDecoy(addr, []string{"127.0.0.1:8443"})
+	line := SessionLine("https://203.0.113.52/static/v3/build")
+	if !strings.Contains(line, "decoy=-") {
+		t.Fatalf("loopback decoy leaked: %s", line)
+	}
+	if strings.Contains(line, "127.0.0.1") {
+		t.Fatalf("loopback in line: %s", line)
+	}
+}

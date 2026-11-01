@@ -101,7 +101,7 @@ func RunRelay(ctx context.Context, cfg *config.ServerConfig) error {
 	}
 	var mask *Mask
 	if cfg.Mask && len(cfg.Decoy) > 0 {
-		mask = NewMask([]byte(cfg.Token), cfg.Decoy[0])
+		mask = NewMask([]byte(cfg.Token), MaskIdentity(cfg.Decoy, cfg.Advertise))
 	}
 	// Non-loft ClientHellos go to the decoy site. A loft one (recognised by
 	// the sid mark) on a mask relay finishes the mask TLS handshake inside

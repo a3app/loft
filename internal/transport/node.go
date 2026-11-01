@@ -18,11 +18,14 @@ import (
 // NodeInfo is what every front stamps into Status.
 type NodeInfo struct {
 	Token []byte
-	// Decoy is the real website(s) behind the node. Non-loft traffic is
-	// handed to it, so a scanner sees an ordinary site. The first entry is
-	// the identity the client uses as SNI.
+	// Decoy is the splice origin(s). May be loopback (127.0.0.1:8443) when
+	// nginx sits on the same host. Status.Decoy is PublicDecoy of this list
+	// plus Advertise — clients never see the splice address.
 	Decoy []string
-	Caps  wire.Cap
+	// Advertise is the node's public URL. Status.Decoy falls back to its
+	// host:443 when every Decoy entry is loopback/private.
+	Advertise string
+	Caps      wire.Cap
 	// MaskPub is the node's X25519 public key for mask mode (a certificate
 	// shaped like the decoy's). Empty means mask is off.
 	MaskPub []byte
@@ -62,7 +65,7 @@ type NodeInfo struct {
 func (n NodeInfo) Status(sid string) wire.Status {
 	st := netconf.DefaultSession().Status(wire.OK, "", "", "", 1280, 0)
 	st.Caps = n.Caps
-	st.Decoy = append([]string(nil), n.Decoy...)
+	st.Decoy = PublicDecoy(n.Decoy, n.Advertise)
 	st.MaskPub = append([]byte(nil), n.MaskPub...)
 	st.Replicas = append([]string(nil), n.Replicas...)
 	st.CanaryFlags = n.CanaryFlags
@@ -88,13 +91,14 @@ func (n NodeInfo) Status(sid string) wire.Status {
 	return st
 }
 
-// frontEPs lists mux fronts this node accepts, with HTTP paths. connect/l3 stay off this map:
-// they do not carry a mux (connect splices one TCP connection, l3 carries
-// raw IP packets), so they are not mux fronts. An empty path falls back to the config default; h3 reuses the h2 path.
+// frontEPs lists fronts this node accepts, with HTTP paths. connect stays off
+// this map (one TCP splice, no mux). l3 is HTTP/2 CONNECT carrying IP, so it
+// is advertised with the h2 path; attachNames still skips it as a mux lane.
+// An empty path falls back to the config default; h3 reuses the h2 path.
 func (n NodeInfo) frontEPs() []wire.FrontEP {
 	var out []wire.FrontEP
 	for _, f := range n.Caps.Fronts() {
-		if f == wire.FrontConnect || f == wire.FrontL3 {
+		if f == wire.FrontConnect {
 			continue
 		}
 		ep := wire.FrontEP{Name: f}
@@ -109,7 +113,7 @@ func (n NodeInfo) frontEPs() []wire.FrontEP {
 			if ep.Path == "" {
 				ep.Path = config.DefaultWSPath
 			}
-		case wire.FrontH2:
+		case wire.FrontH2, wire.FrontL3:
 			ep.Path = n.H2Path
 			if ep.Path == "" {
 				ep.Path = config.DefaultH2Path
@@ -139,8 +143,8 @@ func applyNode(st wire.Status, n NodeInfo) wire.Status {
 	if n.Caps != 0 {
 		st.Caps = n.Caps
 	}
-	if len(n.Decoy) > 0 {
-		st.Decoy = append([]string(nil), n.Decoy...)
+	if len(n.Decoy) > 0 || n.Advertise != "" {
+		st.Decoy = PublicDecoy(n.Decoy, n.Advertise)
 	}
 	if len(n.MaskPub) > 0 {
 		st.MaskPub = append([]byte(nil), n.MaskPub...)

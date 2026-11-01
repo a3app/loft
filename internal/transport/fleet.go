@@ -460,8 +460,8 @@ func (f *Fleet) resign() {
 	r := wire.Roster{Serial: f.serial}
 	if f.cfg != nil && f.cfg.Advertise != "" {
 		self := wire.RelayInfo{ID: "self", URL: f.cfg.Advertise, Fronts: f.cfg.EnabledFronts(), Weight: 100, Path: f.cfg.WSPath}
-		if len(f.cfg.Decoy) > 0 {
-			self.Decoy = f.cfg.Decoy[0]
+		if d := PublicDecoy(f.cfg.Decoy, f.cfg.Advertise); len(d) > 0 {
+			self.Decoy = d[0]
 		}
 		if f.cfg.Mask {
 			self.MaskPub = NodeMaskPub([]byte(f.cfg.Token))

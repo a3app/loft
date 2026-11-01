@@ -79,6 +79,23 @@ func TestPublicSNIsFromAdvertise(t *testing.T) {
 	}
 }
 
+func TestPublicDecoyHidesLoopback(t *testing.T) {
+	got := PublicDecoy([]string{"127.0.0.1:8443"}, "https://hello.loft.cx")
+	if len(got) != 1 || got[0] != "hello.loft.cx:443" {
+		t.Fatalf("%v", got)
+	}
+	got = PublicDecoy([]string{"origin.example:443", "10.0.0.1:443"}, "")
+	if len(got) != 1 || got[0] != "origin.example:443" {
+		t.Fatalf("public %v", got)
+	}
+	if PublicDecoyHost("127.0.0.1:8443") != "" || PublicDecoyHost("::1") != "" {
+		t.Fatal("loopback host")
+	}
+	if MaskIdentity([]string{"127.0.0.1:8443"}, "https://hello.loft.cx") != "hello.loft.cx" {
+		t.Fatalf("mask %q", MaskIdentity([]string{"127.0.0.1:8443"}, "https://hello.loft.cx"))
+	}
+}
+
 func TestOwnSNIProbeSplices(t *testing.T) {
 	dest, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
