@@ -67,6 +67,7 @@ func main() {
 const sampleYAML = `listen:
   http: ":8090"
 keenetic:
+  # Host stays loopback. KeeneticOS 5 checks /auth on the private interface.
   auth: http://127.0.0.1/auth
   rci: http://127.0.0.1:79/rci/show/ip/route
   check_updates: true

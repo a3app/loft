@@ -67,6 +67,10 @@ func (f *File) norm() {
 	if f.Listen.HTTP == "" {
 		f.Listen.HTTP = ":8090"
 	}
+	// The host stays loopback. KeeneticOS 5 does not send the cookie here:
+	// SessionURL moves /auth onto the private-interface address. A YAML
+	// host that is not loopback is refused, so this field cannot point
+	// the check at an arbitrary machine.
 	if f.Keenetic.Auth == "" {
 		f.Keenetic.Auth = "http://127.0.0.1/auth"
 	}

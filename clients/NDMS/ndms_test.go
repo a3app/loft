@@ -116,6 +116,79 @@ func TestTooOld(t *testing.T) {
 	}
 }
 
+// TestOSAuth locks the session-check host to the KeeneticOS major.
+// 5.x uses the private-interface address. Below 5, and unparsed text,
+// keep the loopback URL. A public or non-local host is refused.
+func TestOSAuth(t *testing.T) {
+	live := ParseOS("{\n  \"release\": \"5.01.C.8.0-2\",\n  \"title\": \"5.1.8\"\n}\n")
+	if !live.Known || live.Major != 5 || live.Minor != 1 || live.Release != "5.01.C.8.0-2" || live.Title != "5.1.8" {
+		t.Fatalf("%+v", live)
+	}
+	if !LANAuth(live) || LANAuth(ParseOS("NDMS release: 4.3")) || LANAuth(ParseOS("KeeneticOS")) {
+		t.Fatal("lan auth branch")
+	}
+	u, err := SessionURL(live, "http://127.0.0.1/auth", "192.168.1.1")
+	if err != nil || u != "http://192.168.1.1/auth" {
+		t.Fatalf("os5 %q %v", u, err)
+	}
+	u, err = SessionURL(ParseOS("release: 5.01.C.8.0-2\ntitle: 5.1.8\n"), "http://127.0.0.1/auth", "192.168.1.1")
+	if err != nil || u != "http://192.168.1.1/auth" {
+		t.Fatalf("text %q %v", u, err)
+	}
+	u, err = SessionURL(ParseOS("NDMS release: 4.3"), "http://127.0.0.1/auth", "192.168.1.1")
+	if err != nil || u != "http://127.0.0.1/auth" {
+		t.Fatalf("os4 %q %v", u, err)
+	}
+	if _, err := SessionURL(ParseOS("KeeneticOS"), "http://evil.example/auth", "192.168.1.1"); err == nil {
+		t.Fatal("unparsed yaml host")
+	}
+	if _, err := SessionURL(live, "http://127.0.0.1/auth", "8.8.8.8"); err == nil {
+		t.Fatal("public auth address")
+	}
+	if _, err := SessionURL(live, "http://127.0.0.1/auth", ""); err == nil {
+		t.Fatal("missing auth address")
+	}
+	body := []byte(`{
+		"GigabitEthernet1": {"id":"GigabitEthernet1","address":"10.0.2.15","security-level":"public","ipv6":{"address":"fe80::1"}},
+		"Bridge0": {"id":"Bridge0","address":"192.168.1.1","security-level":"private","ipv6":{"address":"fe80::2"}},
+		"Guest": {"id":"Guest","address":"10.1.30.1","security-level":"protected"},
+		"Home2": {"security-level":"private","ip":{"address":"192.168.88.1"}}
+	}`)
+	ips := PrivateAuthIPs(body)
+	if len(ips) != 2 || ips[0] != "192.168.1.1" || ips[1] != "192.168.88.1" {
+		t.Fatalf("%v", ips)
+	}
+	if err := LocalAuth("http://192.168.1.1/auth", []string{"192.168.1.1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := LocalAuth("http://192.168.1.1/auth", nil); err == nil {
+		t.Fatal("non-local private")
+	}
+	if err := LocalAuth("http://example.com/auth", []string{"192.168.1.1"}); err == nil {
+		t.Fatal("name")
+	}
+	if _, err := Check(context.Background(), "http://203.0.113.1/auth", "", ""); err == nil {
+		t.Fatal("public check")
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rci/show/version" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"release":"5.00.C.12.0-0","title":"5.0.12"}`))
+	}))
+	defer srv.Close()
+	o := ReadOS(context.Background(), srv.URL+"/rci/show/ip/route")
+	if !o.Known || o.Major != 5 || o.Minor != 0 || o.Release != "5.00.C.12.0-0" {
+		t.Fatalf("rci %+v", o)
+	}
+}
+
 // TestStoreRoundTrip checks kind rejection, the next free OpkgTun, secret
 // retention on an empty update, auth defaulting, and a missing enabled
 // flag staying false.
