@@ -12,14 +12,34 @@ import (
 // encryption inside TLS). Handshake Seal of Status
 // happens before BindInner, so that blob stays ChaCha20-Poly1305.
 // LOFT_STAND_INNER=clear still forces clear for every key.
-var innerModes sync.Map // string(key) -> byte
+//
+// chachaAEADs / aesAEADs keep one stdlib AEAD per session key. Seal and Open
+// on those objects are concurrent-safe. Swept with sealers.
+var (
+	innerModes  sync.Map // string(key) -> byte
+	chachaAEADs sync.Map // string(key) -> cipher.AEAD
+	aesAEADs    sync.Map // string(key) -> cipher.AEAD
+)
+
+func cachedAEAD(m *sync.Map, key []byte, newFn func([]byte) (cipher.AEAD, error)) (cipher.AEAD, error) {
+	k := string(key)
+	if v, ok := m.Load(k); ok {
+		return v.(cipher.AEAD), nil
+	}
+	a, err := newFn(key)
+	if err != nil {
+		return nil, err
+	}
+	actual, _ := m.LoadOrStore(k, a)
+	return actual.(cipher.AEAD), nil
+}
 
 // HiAEEnabled is true when this binary compiled the HiAE inner cipher.
 // iOS, Android and macOS loft-front need -tags hiae; linux/windows have it.
 func HiAEEnabled() bool { return hiaeBuilt }
 
 // ReelEnabled is true when this binary compiled the Reel-256 inner cipher.
-// iOS, Android and macOS loft-front need -tags reel256; linux/windows have it.
+// Every OS needs -tags reel256; Dist omits it.
 func ReelEnabled() bool { return reelBuilt }
 
 // aeadNonce16 maps loft's 12-byte record nonce to a 16-byte Init nonce:
@@ -31,7 +51,7 @@ func aeadNonce16(n12 []byte) []byte {
 }
 
 // InnerOK is whether Seal/Open can bind id. ChaCha, AES and clear always;
-// HiAE when HiAEEnabled; Reel-256 when ReelEnabled.
+// HiAE when HiAEEnabled; Reel-256 when compiled with -tags reel256.
 func InnerOK(id byte) bool {
 	switch id {
 	case wire.InnerClear, wire.InnerChaCha, wire.InnerAES:
@@ -82,9 +102,11 @@ func dataInner(key []byte) byte {
 }
 
 func newAESGCM(key []byte) (cipher.AEAD, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	return cipher.NewGCM(block)
+	return cachedAEAD(&aesAEADs, key, func(k []byte) (cipher.AEAD, error) {
+		block, err := aes.NewCipher(k)
+		if err != nil {
+			return nil, err
+		}
+		return cipher.NewGCM(block)
+	})
 }

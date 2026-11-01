@@ -184,6 +184,8 @@ func sweepIdleKeys(now int64) {
 		if now-v.(*sealState).used.Load() > idle {
 			sealers.Delete(k)
 			innerModes.Delete(k)
+			chachaAEADs.Delete(k)
+			aesAEADs.Delete(k)
 		}
 		return true
 	})

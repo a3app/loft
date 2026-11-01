@@ -14,6 +14,9 @@ func TestIdleKeysForgotten(t *testing.T) {
 	stale := bytes.Repeat([]byte{0x51}, 32)
 	live := bytes.Repeat([]byte{0x52}, 32)
 	BindInner(stale, wire.InnerAES)
+	if _, err := Seal(stale, []byte("s"), nil); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Seal(live, []byte("x"), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -30,8 +33,17 @@ func TestIdleKeysForgotten(t *testing.T) {
 	if _, ok := innerModes.Load(string(stale)); ok {
 		t.Fatal("idle key kept in innerModes")
 	}
+	if _, ok := aesAEADs.Load(string(stale)); ok {
+		t.Fatal("idle key kept in aesAEADs")
+	}
+	if _, ok := chachaAEADs.Load(string(stale)); ok {
+		t.Fatal("idle key kept in chachaAEADs")
+	}
 	if _, ok := sealers.Load(string(live)); !ok {
 		t.Fatal("live key forgotten")
+	}
+	if _, ok := chachaAEADs.Load(string(live)); !ok {
+		t.Fatal("live ChaCha AEAD forgotten")
 	}
 }
 

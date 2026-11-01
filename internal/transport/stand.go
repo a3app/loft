@@ -32,7 +32,7 @@ import (
 // LOFT_STAND_TCPBUF and LOFT_STAND_LOWAT override the socket limits; unset is
 // kernel autotune and a 16 KiB unsent cap.
 //
-//	LOFT_STAND_INNER     seal | cache | clear     (crypto package reads this)
+//	LOFT_STAND_INNER     clear skips inner AEAD (both peers). unset/cache = production cache
 //	LOFT_STAND_FAN       affinity | rr | stripe | off
 //	LOFT_STAND_DISPATCH  sync | prefetch | queue
 //

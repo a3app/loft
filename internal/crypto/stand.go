@@ -3,38 +3,19 @@ package crypto
 import (
 	"crypto/cipher"
 	"os"
-	"sync"
 
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-// Stand measurement switches. Unset is the production Seal path.
-// LOFT_STAND_INNER=cache keeps one ChaCha AEAD per key.
-// LOFT_STAND_INNER=clear skips the inner AEAD. Both peers must set clear.
-// Do not set these on the live :444 node.
-// A "stand" is the test bench used to measure throughput; these switches
-// let it compare the cost of the inner AEAD against no encryption.
-
-var standAEADCache sync.Map
+// Stand measurement switches. Production always caches one ChaCha/AES AEAD
+// per session key. LOFT_STAND_INNER=clear skips the inner AEAD (both peers).
+// "cache" is accepted and is the same as unset. Do not set clear on :444.
 
 func standInner() string { return os.Getenv("LOFT_STAND_INNER") }
 
 func standClear() bool { return standInner() == "clear" }
 
-// standAEAD is the ChaCha20-Poly1305 constructor used by Seal and Open. In
-// production it builds a new AEAD per call; with "cache" it reuses one.
+// standAEAD is the ChaCha20-Poly1305 constructor used by Seal and Open.
 func standAEAD(key []byte) (cipher.AEAD, error) {
-	if standInner() != "cache" {
-		return chacha20poly1305.New(key)
-	}
-	k := string(key)
-	if v, ok := standAEADCache.Load(k); ok {
-		return v.(cipher.AEAD), nil
-	}
-	a, err := chacha20poly1305.New(key)
-	if err != nil {
-		return nil, err
-	}
-	actual, _ := standAEADCache.LoadOrStore(k, a)
-	return actual.(cipher.AEAD), nil
+	return cachedAEAD(&chachaAEADs, key, chacha20poly1305.New)
 }
