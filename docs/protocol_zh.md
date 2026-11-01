@@ -281,9 +281,9 @@ HKDF-SHA256(ikm=ss, salt=nonce, info="loft-v1", L=32)
 
 *说明，非规范。* 一种实现取 32 位随机前缀加 64 位计数器，使停着的 GET 会话继续同一个计数器。握手的 Seal 取该计数器的一个值。其后该密钥上的 AES-256-GCM、AEGIS-128L 与 HiAE 记录接着计数。接收方接受任何唯一 nonce，不要求这种布局。
 
-Status 之后的数据密码是 Hello 与 Status 上的一个字节（§5.1、§5.2）。没有该字节就是 ChaCha20-Poly1305。`0` 表示没有内部 AEAD，只剩该前置的 TLS。`1` 是 ChaCha20-Poly1305，与没有该字节相同。`2` 是 AES-256-GCM：32 字节 HKDF 密钥、12 字节 nonce、16 字节标签，成帧与 ChaCha 相同，为 `nonce[12] || ciphertext`（[RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)）。`3` 是 AEGIS-128L（[RFC 10032](https://www.rfc-editor.org/rfc/rfc10032)）：16 字节数据密钥 `HKDF-SHA256(ikm=session, salt 空, info="loft-v1-aegis128l", L=16)`、16 字节标签，loft 记录仍为 `nonce[12] || ciphertext || tag[16]`。AEGIS-128L Init 使用 16 字节 nonce：四个零字节后接 loft 的 12 字节 nonce。`5` 是 HiAE（[draft-pham-cfrg-hiae-06](https://datatracker.ietf.org/doc/draft-pham-cfrg-hiae/)）：32 字节 HKDF 密钥、16 字节标签，同一 loft 记录。HiAE Init 使用与 AEGIS-128L 相同的 16 字节 nonce 填充。`4` 与 `7` 保留给额外的数据密码；在本规范定义某个 id 之前，它是未知 id。`8` 保留给实验性数据密码；在某实现定义它之前，它是未知 id。`6` 与 `9`–`255` 未分配。一把会话密钥只有一种数据密码。
+Status 之后的数据密码是 Hello 与 Status 上的一个字节（§5.1、§5.2）。没有该字节就是 ChaCha20-Poly1305。`0` 表示没有内部 AEAD，只剩该前置的 TLS。`1` 是 ChaCha20-Poly1305，与没有该字节相同。`2` 是 AES-256-GCM：32 字节 HKDF 密钥、12 字节 nonce、16 字节标签，成帧与 ChaCha 相同，为 `nonce[12] || ciphertext`（[RFC 5116](https://www.rfc-editor.org/rfc/rfc5116)）。`3` 是 AEGIS-128L（[RFC 10032](https://www.rfc-editor.org/rfc/rfc10032)）：16 字节数据密钥 `HKDF-SHA256(ikm=session, salt 空, info="loft-v1-aegis128l", L=16)`、16 字节标签，loft 记录仍为 `nonce[12] || ciphertext || tag[16]`。AEGIS-128L Init 使用 16 字节 nonce：四个零字节后接 loft 的 12 字节 nonce。`5` 是 HiAE（[draft-pham-cfrg-hiae-06](https://datatracker.ietf.org/doc/draft-pham-cfrg-hiae/)）：32 字节 HKDF 密钥、16 字节标签，同一 loft 记录。HiAE Init 使用与 AEGIS-128L 相同的 16 字节 nonce 填充。`4`、`7`、`8` 保留。在本规范分配它们之前，它们是未知 id。`6` 与 `9`–`255` 未分配。一把会话密钥只有一种数据密码。
 
-客户端在 Hello 里请求。节点在 Status 里确认恰好一个标识，或者不写该字节。ChaCha20-Poly1305 始终可以，不能关掉。未知标识、策略里没有的标识，或其他不一致，会话留在 ChaCha20-Poly1305。会话仍然建立。前置 `get` 不得确认 `0`、`2`、`3`、`5` 或 `8`：CDN 可以终结 TLS，内部 AEAD 就是对这个 CDN 隐藏 mux 的东西。前置 `ws`、`h2`、`quic`、`h3`、`l3` 可以在客户端请求了该标识且节点策略列出它时确认 `0`、`2`、`3` 或 `5`。`connect` 是拼接，没有数据密码。选定 `0` 的会话不得 attach 前置 `get`（§4.4）。AES-256-GCM、AEGIS-128L 与 HiAE 可以 attach `get`：CDN 看到的仍是密文。旧对端不写该字节，留在 ChaCha20-Poly1305。双方都省略该字节时可以互通。这个选择不改变协议版本 `0x0100`。
+客户端在 Hello 里请求。节点在 Status 里确认恰好一个标识，或者不写该字节。ChaCha20-Poly1305 始终可以，不能关掉。未知标识、策略里没有的标识，或其他不一致，会话留在 ChaCha20-Poly1305。会话仍然建立。前置 `get` 不得确认 `0`、`2`、`3` 或 `5`：CDN 可以终结 TLS，内部 AEAD 就是对这个 CDN 隐藏 mux 的东西。前置 `ws`、`h2`、`quic`、`h3`、`l3` 可以在客户端请求了该标识且节点策略列出它时确认 `0`、`2`、`3` 或 `5`。`connect` 是拼接，没有数据密码。选定 `0` 的会话不得 attach 前置 `get`（§4.4）。AES-256-GCM、AEGIS-128L 与 HiAE 可以 attach `get`：CDN 看到的仍是密文。旧对端不写该字节，留在 ChaCha20-Poly1305。双方都省略该字节时可以互通。这个选择不改变协议版本 `0x0100`。
 
 *说明，非规范。* 运营方如何写下节点策略和客户端请求见 [guide_zh.md](guide_zh.md)。文件名和标志不是交换格式的一部分。
 
@@ -331,7 +331,7 @@ u8    cc || u32be cc_up || u32be cc_down   可选，位于 controller_pin 之后
 
 `instance_id` 在客户端持久保存。空则节点在 Status 中签发一个；客户端必须存储它。字符串 ≤ 64 字节。协议版本为 `major<<8|minor`（`0x0100` = 1.0）。能力 `relay` 标记中继干线。能力 `p2p` 标记将宣告监听端口的客户端。
 
-没有 proto/caps 的旧块仍可解码。尾部未知字节必须忽略。`software` 之后若还剩一个字节，那是数据密码请求（§4.3）：`0` 为 clear，`2` 为 AES-256-GCM，`3` 为 AEGIS-128L，`5` 为 HiAE。`8` 保留给实验性数据密码。没有该字节不是 `0`。`controller_pin` 是客户端当前信任的 controller 公钥 SHA-256 的前 8 字节（§10.4）；发送它但不请求密码的客户端将 `inner` 写为 `1`。节点仅用它统计密钥轮换期间已切换到新密钥的设备，它不授予任何权限。`cc` 是拥塞控制请求（§5.4）；发送它的客户端先写 `inner` 和 `pin_len`（未固定密钥时为 0）。再往后的字节必须忽略。旧解码器忽略该请求，留在 ChaCha20-Poly1305。
+没有 proto/caps 的旧块仍可解码。尾部未知字节必须忽略。`software` 之后若还剩一个字节，那是数据密码请求（§4.3）：`0` 为 clear，`2` 为 AES-256-GCM，`3` 为 AEGIS-128L，`5` 为 HiAE。`4`、`7`、`8` 保留。没有该字节不是 `0`。`controller_pin` 是客户端当前信任的 controller 公钥 SHA-256 的前 8 字节（§10.4）；发送它但不请求密码的客户端将 `inner` 写为 `1`。节点仅用它统计密钥轮换期间已切换到新密钥的设备，它不授予任何权限。`cc` 是拥塞控制请求（§5.4）；发送它的客户端先写 `inner` 和 `pin_len`（未固定密钥时为 0）。再往后的字节必须忽略。旧解码器忽略该请求，留在 ChaCha20-Poly1305。
 
 ### 5.2 Status
 
@@ -373,7 +373,7 @@ u8    cc || u32be cc_up || u32be cc_down   可选，位于 controller_pin 之后
 | rate_bps | session_ttl_ms 之后可选：u32be 本会话双向批量 `CmdData`/`CmdDgram` 上限，字节每秒。0 = 关。控制与小帧（Open、Ping、ACK ≤ 4 KiB、DNS/ICMP Dgram ≤ 512 B）不整形。由节点执行。有本字段而无 `session_ttl_ms` 时，编码器先写 ttl 0。旧客户端忽略多余字节。 |
 | fronts | rate_bps 之后可选：u8 n ≤ 8，然后 n ×（name、path、url），各为 u8 len \|\| bytes。本节点接受的 mux 前置（`get` `ws` `h2` `h3` `quic`）。空 url 为完成 `0x02` 的前置的 host:port。`quic` 路径为空。空列表 = 客户端保留 URI/默认。有本字段而无 `rate_bps` 时，编码器先写 rate 0。旧客户端忽略多余字节。成功 Status 后节点地图为权威；客户端应写入已保存的配置。 |
 | edge | fronts 之后可选：u8，GET 配置档（§3.4）。`0` 为 plain，`inner` 也不存在时省略。`1` 为 tight。出现 `inner` 时，即使该字节为 `0` 也必须写出，并写出 `fronts`（n 可以为 0），以免下一字节被读成 `edge`。旧客户端忽略多余字节。 |
-| inner | edge 之后可选：u8，此 Status 之后记录的数据密码。仅当 Hello 请求过、策略允许该标识、且完成 `0x02` 的前置不是 `get` 时，节点才写它。`0` 无内部 AEAD。`1` 为 ChaCha20-Poly1305，与省略该字节相同；节点可以不写 `1`。`2` 为 AES-256-GCM。`3` 为 AEGIS-128L。`5` 为 HiAE。`8` 保留给实验性数据密码。没有该字节、未知标识或拒绝，都是 ChaCha20-Poly1305，会话仍然建立。此 Status 的握手 Seal 无论哪种都是 ChaCha20-Poly1305。旧客户端忽略多余字节。 |
+| inner | edge 之后可选：u8，此 Status 之后记录的数据密码。仅当 Hello 请求过、策略允许该标识、且完成 `0x02` 的前置不是 `get` 时，节点才写它。`0` 无内部 AEAD。`1` 为 ChaCha20-Poly1305，与省略该字节相同；节点可以不写 `1`。`2` 为 AES-256-GCM。`3` 为 AEGIS-128L。`5` 为 HiAE。`4`、`7`、`8` 保留。没有该字节、未知标识或拒绝，都是 ChaCha20-Poly1305，会话仍然建立。此 Status 的握手 Seal 无论哪种都是 ChaCha20-Poly1305。旧客户端忽略多余字节。 |
 | key_roll | inner 之后可选：u16be len \|\| bytes，控制器签名密钥更换期间的 KeyRoll（§10.4）。出现该字段而未协商数据密码时，`inner` 为 `1`（ChaCha20-Poly1305），不改变任何东西。 |
 | cc, cc_up, cc_down | key_roll 之后可选：u8、u32be、u32be。双方使用的拥塞控制（§5.4），以及 `2` 时的两个速率（kbit/s）。仅当 `cc` 不为 `0` 时出现；此时若无 `key_roll`，则以长度 0 写出。旧客户端忽略多余字节。 |
 

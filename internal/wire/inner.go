@@ -20,9 +20,8 @@ const (
 	InnerHiAE   byte = 5 // draft-pham-cfrg-hiae-06; wire nonce[12]||ct||tag[16]
 )
 
-// InnerReserved are ids kept for more data ciphers. Until one is defined
-// it is an unknown id: asked for, it leaves the session on ChaCha.
-// 8 is reserved for an experimental data cipher (not in this tree).
+// InnerReserved are unassigned inner ids. Asked for, they leave the
+// session on ChaCha. This specification has not given them a cipher.
 var InnerReserved = []byte{4, 7, 8}
 
 // ParseInnerName reads clear, chacha, aes, aegis, or hiae. Aliases none/off, aes-gcm, aegis128l.

@@ -501,7 +501,7 @@ func (c *ServerConfig) InnerIDs() ([]byte, error) {
 			}
 			id, err := wire.ParseInnerName(part)
 			if err != nil {
-				// id 8 lived here as "reel"; that cipher is on branch experimental.
+				// leftover node.conf name; ignore so ParseCommands still loads.
 				switch strings.ToLower(part) {
 				case "reel", "reel256":
 					continue
