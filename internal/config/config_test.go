@@ -176,6 +176,11 @@ func TestInnerCommand(t *testing.T) {
 	if _, _, err := ask.InnerAsk(); err == nil {
 		t.Fatal("bad ask")
 	}
+	ask.Inner = "aegis"
+	set, id, err = ask.InnerAsk()
+	if err != nil || !set || id != wire.InnerAEGIS {
+		t.Fatalf("aegis ask %v %d %v", set, id, err)
+	}
 	ask.Inner = "hiae"
 	set, id, err = ask.InnerAsk()
 	if err != nil || !set || id != wire.InnerHiAE {
@@ -200,6 +205,14 @@ func TestInnerCommand(t *testing.T) {
 	ids, err = with.InnerIDs()
 	if err != nil || len(ids) != 3 || ids[2] != wire.InnerHiAE {
 		t.Fatalf("hiae ids %v %v", ids, err)
+	}
+	aegis, err := ParseCommands("listen :443\ninner aes aegis hiae\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err = aegis.InnerIDs()
+	if err != nil || len(ids) != 3 || ids[1] != wire.InnerAEGIS {
+		t.Fatalf("aegis ids %v %v", ids, err)
 	}
 }
 

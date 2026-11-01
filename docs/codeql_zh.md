@@ -8,7 +8,7 @@ GitHub CodeQL 在 `main` 上跑默认 Go 套件。一部分命中是 loft 按规
 
 ## SSTP MS-CHAPv2（MD4、DES）
 
-`internal/sstp/mschapv2.go`。Windows SSTP 用 MS-CHAPv2 认证（[RFC 2759](https://www.rfc-editor.org/rfc/rfc2759)）。NT 哈希是密码 UTF-16LE 的 MD4。挑战响应是 DES。换哈希或算法就连不上 Windows。loft 覆盖网数据在 Status 之后是 ChaCha20-Poly1305 或 AES-256-GCM。
+`internal/sstp/mschapv2.go`。Windows SSTP 用 MS-CHAPv2 认证（[RFC 2759](https://www.rfc-editor.org/rfc/rfc2759)）。NT 哈希是密码 UTF-16LE 的 MD4。挑战响应是 DES。换哈希或算法就连不上 Windows。loft 覆盖网数据在 Status 之后是 ChaCha20-Poly1305、AES-256-GCM 或 AEGIS-128L。
 
 ## SSTP CHAP-MD5
 

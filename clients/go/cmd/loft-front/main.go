@@ -65,7 +65,7 @@ func main() {
 	sni := flag.String("sni", "", "SSTP/VLESS/Trojan TLS ServerName")
 	socks := flag.String("socks", config.DebugSOCKS5, "SOCKS5 listen; empty/off to disable")
 	cdnName := flag.String("cdn", "", "edge profile: yandex | cloudflare")
-	innerName := flag.String("inner", "", "data cipher ask: clear | chacha | aes | hiae; empty = chacha")
+	innerName := flag.String("inner", "", "data cipher ask: clear | chacha | aes | aegis | hiae; empty = chacha")
 	ccName := flag.String("cc", "", "congestion control ask: off | bbr | fixed; empty = off")
 	ccUp := flag.Uint("cc-up", 0, "fixed: upload rate, Mbit/s")
 	ccDown := flag.Uint("cc-down", 0, "fixed: download rate, Mbit/s")

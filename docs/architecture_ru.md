@@ -21,7 +21,7 @@ docs/                 протокол, архитектура, гайд
   brand/              знак и иконки
 internal/
   wire/               кадры, Hello, Status, roster, списки, флот, возможности, коды
-  crypto/             HKDF, ChaCha20-Poly1305, после Status по желанию AES-256-GCM / HiAE / clear, auth 0x02 + X25519, Ed25519 seed
+  crypto/             HKDF, ChaCha20-Poly1305, после Status по желанию AES-256-GCM / AEGIS-128L / HiAE / clear, auth 0x02 + X25519, Ed25519 seed
   identity/           ключ участника lt_ + 48 hex; SHA-256 в network.conf; открытый текст в members.keys
   mux/                потоки, обратное давление, CmdDgram, CmdLeave
   netconf/            network.conf, аренды, ACL, VLAN, DNS, таймеры сессии
@@ -83,7 +83,7 @@ client.Holder
 
 Для запроса roster нужен `controller_pub`. `tofu: true` закрепляет первого действительного подписанта и записывает `{instanceDir}/controller.pub`. С пустым ключом и без этого флага roster не принимается, но статические исходящие всё равно подключаются.
 
-Nonce внутреннего AEAD уникален в пределах ключа сессии (32-битный префикс + 64-битный счётчик). Park с тем же ключом продолжает счётчик. Новый `0x02` выводит новый ключ из X25519; ikm для HKDF — общий секрет DH. После Status прямой фронт может работать без внутреннего AEAD, на AES-256-GCM или HiAE, если `inner` ноды это разрешает; `get` остаётся на ChaCha20-Poly1305. Seal(Status) при рукопожатии всегда идёт на ChaCha20-Poly1305. Клиенты iOS, Android и macOS собирают HiAE только с `-tags hiae`. Id 8 зарезервирован под экспериментальный шифр (ветка `experimental`).
+Nonce внутреннего AEAD уникален в пределах ключа сессии (32-битный префикс + 64-битный счётчик). Park с тем же ключом продолжает счётчик. Новый `0x02` выводит новый ключ из X25519; ikm для HKDF — общий секрет DH. После Status прямой фронт может работать без внутреннего AEAD, на AES-256-GCM, AEGIS-128L или HiAE, если `inner` ноды это разрешает; `get` остаётся на ChaCha20-Poly1305. Seal(Status) при рукопожатии всегда идёт на ChaCha20-Poly1305. AEGIS-128L есть в каждой сборке. Клиенты iOS, Android и macOS собирают HiAE только с `-tags hiae`. Id 8 зарезервирован под экспериментальный шифр (ветка `experimental`).
 
 Клиент не выбирает decoy SNI сам: его сообщает Status, roster или сертификат, полученный зондом. Исходящий через CDN сохраняет hostname CDN.
 

@@ -60,9 +60,12 @@ func TestStatusInnerByte(t *testing.T) {
 }
 
 func TestAgreeInner(t *testing.T) {
-	allow := []byte{InnerClear, InnerAES, InnerHiAE}
+	allow := []byte{InnerClear, InnerAES, InnerAEGIS, InnerHiAE}
 	if set, id := AgreeInner(FrontGET, true, InnerClear, allow); set || id != InnerChaCha {
 		t.Fatalf("get %v %d", set, id)
+	}
+	if set, id := AgreeInner(FrontGET, true, InnerAEGIS, allow); set || id != InnerChaCha {
+		t.Fatalf("get aegis %v %d", set, id)
 	}
 	if set, id := AgreeInner(FrontGET, true, InnerHiAE, allow); set || id != InnerChaCha {
 		t.Fatalf("get hiae %v %d", set, id)
@@ -85,6 +88,9 @@ func TestAgreeInner(t *testing.T) {
 	if set, id := AgreeInner(FrontH2, true, InnerAES, allow); !set || id != InnerAES {
 		t.Fatalf("aes %v %d", set, id)
 	}
+	if set, id := AgreeInner(FrontWS, true, InnerAEGIS, allow); !set || id != InnerAEGIS {
+		t.Fatalf("aegis %v %d", set, id)
+	}
 	if set, id := AgreeInner(FrontWS, true, InnerHiAE, allow); !set || id != InnerHiAE {
 		t.Fatalf("hiae %v %d", set, id)
 	}
@@ -97,7 +103,14 @@ func TestAgreeInner(t *testing.T) {
 	if _, err := ParseInnerName("reel"); err == nil {
 		t.Fatal("reel name")
 	}
-	id, err := ParseInnerName("hiae")
+	id, err := ParseInnerName("aegis")
+	if err != nil || id != InnerAEGIS || InnerName(InnerAEGIS) != "aegis" {
+		t.Fatalf("name aegis %d %v", id, err)
+	}
+	if id, err = ParseInnerName("aegis-128l"); err != nil || id != InnerAEGIS {
+		t.Fatalf("alias aegis-128l %d %v", id, err)
+	}
+	id, err = ParseInnerName("hiae")
 	if err != nil || id != InnerHiAE || InnerName(InnerHiAE) != "hiae" {
 		t.Fatalf("name hiae %d %v", id, err)
 	}

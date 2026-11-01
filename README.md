@@ -153,7 +153,7 @@ flowchart LR
 ```
 
 1. Applications speak to a local SOCKS5 or TUN listener. That listener is held by `Holder` while the front is rotated.
-2. Streams share one mux. Inside TLS they may be sealed again (ChaCha20-Poly1305 or AES-256-GCM); on `get` that is always on.
+2. Streams share one mux. Inside TLS they may be sealed again (ChaCha20-Poly1305, AES-256-GCM, or AEGIS-128L); on `get` that is always on.
 3. On the public path the session is ordinary HTTPS, so that a CDN or reverse proxy may sit in front of the node.
 4. A short disconnect causes the mux to be parked for `gap_hold_ms` (8 s by default). Resume is performed with a fresh `0x02` and the same `instance_id`; inner TCP is left standing.
 

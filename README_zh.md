@@ -153,7 +153,7 @@ flowchart LR
 ```
 
 1. 应用走本机 SOCKS5 或 TUN。`Holder` 盯着这个监听口，前置怎么轮换都不撤。
-2. 流共用一条 mux。在 TLS 里还可以再加一层加密（ChaCha20-Poly1305 或 AES-256-GCM）；`get` 上始终开启。
+2. 流共用一条 mux。在 TLS 里还可以再加一层加密（ChaCha20-Poly1305、AES-256-GCM 或 AEGIS-128L）；`get` 上始终开启。
 3. 公网路径上这就是普通 HTTPS，所以节点前面可以挂 CDN 或反向代理。
 4. 短断会把 mux 停在 `gap_hold_ms`（默认 8 秒）。续上用新的 `0x02` 和同一个 `instance_id`；里面的 TCP 不断。
 

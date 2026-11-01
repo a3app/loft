@@ -47,7 +47,7 @@ type ClientConfig struct {
 	P2P           *bool             `yaml:"p2p"`                    // nil/true: try direct; false: only hub
 	Pause         string            `yaml:"pause,omitempty"`        // empty | starlink — client draft pause, not on the wire
 	EdgeURL       string            `yaml:"edge,omitempty"`         // optional CDN URL; GET only. Not the node preset plain|tight
-	Inner         string            `yaml:"inner,omitempty"`        // clear | chacha | aes | hiae. Empty omits the Hello byte (ChaCha)
+	Inner         string            `yaml:"inner,omitempty"`        // clear | chacha | aes | aegis | hiae. Empty omits the Hello byte (ChaCha)
 	CC            string            `yaml:"cc,omitempty"`           // congestion control ask: off | bbr | fixed. Empty = off
 	CCUpMbps      uint32            `yaml:"cc_up_mbps,omitempty"`   // fixed: how fast this client may send, Mbit/s
 	CCDownMbps    uint32            `yaml:"cc_down_mbps,omitempty"` // fixed: how fast this client can receive, Mbit/s
@@ -203,7 +203,7 @@ type ServerConfig struct {
 	ListsPath     string              `yaml:"lists_path"`
 	Lists         map[string][]string `yaml:"lists"`
 	Trace         string              `yaml:"trace"`                      // session event log path; empty = off
-	Inner         []string            `yaml:"inner,omitempty"`            // extra data ciphers: clear, aes, hiae. Empty = ChaCha only
+	Inner         []string            `yaml:"inner,omitempty"`            // extra data ciphers: clear, aes, aegis, hiae. Empty = ChaCha only
 	CC            []string            `yaml:"cc,omitempty"`               // congestion control clients may ask for: bbr, fixed. Empty = off
 	CCMaxUpMbps   uint32              `yaml:"cc_max_up_mbps,omitempty"`   // fixed: cap on a client's sending rate; 0 = none
 	CCMaxDownMbps uint32              `yaml:"cc_max_down_mbps,omitempty"` // fixed: cap on the node's sending rate; 0 = none
@@ -461,7 +461,7 @@ func (c *ServerConfig) CCIDs() ([]byte, error) {
 	return out, nil
 }
 
-// InnerIDs is the node's extra allow-list (clear, aes, hiae). ChaCha is always
+// InnerIDs is the node's extra allow-list (clear, aes, aegis, hiae). ChaCha is always
 // allowed and is not returned. Empty means ChaCha only.
 func (c *ServerConfig) InnerIDs() ([]byte, error) {
 	if c == nil || len(c.Inner) == 0 {

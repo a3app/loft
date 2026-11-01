@@ -14,6 +14,7 @@ select: auto
 
 # inner: data-cipher ask. Empty or chacha omits the Hello byte.
 # Node confirms only if its inner list includes that extra. GET stays ChaCha.
+# aegis is AEGIS-128L (RFC 10032), in every build.
 # hiae needs a client built with -tags hiae (iOS/Android/macOS: HIAE=1).
 # inner: aes
 

@@ -15,10 +15,12 @@ import (
 //
 // chachaAEADs / aesAEADs keep one stdlib AEAD per session key. Seal and Open
 // on those objects are concurrent-safe. Swept with sealers.
+// aegisKeys keeps the 16-byte HKDF data key for AEGIS-128L.
 var (
 	innerModes  sync.Map // string(key) -> byte
 	chachaAEADs sync.Map // string(key) -> cipher.AEAD
 	aesAEADs    sync.Map // string(key) -> cipher.AEAD
+	aegisKeys   sync.Map // string(key) -> []byte (16)
 )
 
 func cachedAEAD(m *sync.Map, key []byte, newFn func([]byte) (cipher.AEAD, error)) (cipher.AEAD, error) {
@@ -39,18 +41,18 @@ func cachedAEAD(m *sync.Map, key []byte, newFn func([]byte) (cipher.AEAD, error)
 func HiAEEnabled() bool { return hiaeBuilt }
 
 // aeadNonce16 maps loft's 12-byte record nonce to a 16-byte Init nonce:
-// four zero bytes then n12. HiAE Init uses this.
+// four zero bytes then n12. HiAE and AEGIS-128L Init use this.
 func aeadNonce16(n12 []byte) []byte {
 	n := make([]byte, 16)
 	copy(n[4:], n12)
 	return n
 }
 
-// InnerOK is whether Seal/Open can bind id. ChaCha, AES and clear always;
-// HiAE when HiAEEnabled.
+// InnerOK is whether Seal/Open can bind id. ChaCha, AES, AEGIS-128L and clear
+// always; HiAE when HiAEEnabled.
 func InnerOK(id byte) bool {
 	switch id {
-	case wire.InnerClear, wire.InnerChaCha, wire.InnerAES:
+	case wire.InnerClear, wire.InnerChaCha, wire.InnerAES, wire.InnerAEGIS:
 		return true
 	case wire.InnerHiAE:
 		return hiaeBuilt
@@ -60,7 +62,7 @@ func InnerOK(id byte) bool {
 }
 
 // BindInner selects the data cipher used by later Seal/Open on key.
-// InnerClear, InnerAES and InnerHiAE (when built) are stored.
+// InnerClear, InnerAES, InnerAEGIS and InnerHiAE (when built) are stored.
 // Any other id, including ChaCha, clears the entry so Seal stays on ChaCha20-Poly1305.
 func BindInner(key []byte, id byte) {
 	if len(key) == 0 {
@@ -70,6 +72,8 @@ func BindInner(key []byte, id byte) {
 	switch id {
 	case wire.InnerClear, wire.InnerAES:
 		innerModes.Store(string(key), id)
+	case wire.InnerAEGIS:
+		bindAEGIS(key)
 	case wire.InnerHiAE:
 		bindHiAE(key)
 	default:

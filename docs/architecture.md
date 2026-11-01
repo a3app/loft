@@ -21,7 +21,7 @@ docs/                 protocol, architecture, guide
   brand/              mark and icons
 internal/
   wire/               frames, Hello, Status, roster, lists, fleet, caps, codes
-  crypto/             HKDF, ChaCha20-Poly1305, optional AES-256-GCM / HiAE / clear after Status, auth 0x02 + X25519, Ed25519 seed
+  crypto/             HKDF, ChaCha20-Poly1305, optional AES-256-GCM / AEGIS-128L / HiAE / clear after Status, auth 0x02 + X25519, Ed25519 seed
   identity/           member key lt_ + 48 hex; SHA-256 in network.conf; plaintext in members.keys
   mux/                streams, backpressure, CmdDgram, CmdLeave
   netconf/            network.conf, leases, ACL, VLAN, DNS, session timers
@@ -83,7 +83,7 @@ When there is no GET session to attach to, `Supervise` tries configured outbound
 
 Roster fetch needs `controller_pub`. `tofu: true` pins the first valid signer and writes `{instanceDir}/controller.pub`. Empty pub without that flag leaves the roster unused; static outbounds still dial.
 
-Inner AEAD nonce is unique per session key (32-bit prefix + 64-bit counter). Park with the same key continues the counter. A new `0x02` derives a new key from X25519; HKDF ikm is the DH secret. After Status a direct front may use no inner AEAD, AES-256-GCM, or HiAE when node `inner` lists that id; `get` stays ChaCha20-Poly1305. Handshake Seal of Status is always ChaCha20-Poly1305. iOS, Android, and macOS clients compile HiAE only with `-tags hiae`. Id 8 is reserved for an experimental data cipher (branch `experimental`).
+Inner AEAD nonce is unique per session key (32-bit prefix + 64-bit counter). Park with the same key continues the counter. A new `0x02` derives a new key from X25519; HKDF ikm is the DH secret. After Status a direct front may use no inner AEAD, AES-256-GCM, AEGIS-128L, or HiAE when node `inner` lists that id; `get` stays ChaCha20-Poly1305. Handshake Seal of Status is always ChaCha20-Poly1305. AEGIS-128L is in every build. iOS, Android, and macOS clients compile HiAE only with `-tags hiae`. Id 8 is reserved for an experimental data cipher (branch `experimental`).
 
 The client does not choose decoy SNI. Status, roster, or a probe certificate supplies it. A CDN outbound keeps the CDN hostname.
 

@@ -8,7 +8,7 @@ Do not add a suppression without a protocol or trust reason. Do not turn a query
 
 ## SSTP MS-CHAPv2 (MD4, DES)
 
-`internal/sstp/mschapv2.go`. Windows SSTP authenticates with MS-CHAPv2 ([RFC 2759](https://www.rfc-editor.org/rfc/rfc2759)). The NT hash is MD4 of the UTF-16LE password. The challenge response is DES. A different hash or cipher would not talk to Windows. loft overlay data is ChaCha20-Poly1305 or AES-256-GCM after Status.
+`internal/sstp/mschapv2.go`. Windows SSTP authenticates with MS-CHAPv2 ([RFC 2759](https://www.rfc-editor.org/rfc/rfc2759)). The NT hash is MD4 of the UTF-16LE password. The challenge response is DES. A different hash or cipher would not talk to Windows. loft overlay data is ChaCha20-Poly1305, AES-256-GCM, or AEGIS-128L after Status.
 
 ## SSTP CHAP-MD5
 

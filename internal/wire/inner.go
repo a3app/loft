@@ -16,15 +16,16 @@ const (
 	InnerClear  byte = 0
 	InnerChaCha byte = 1
 	InnerAES    byte = 2 // AES-256-GCM, same 12-byte nonce and 16-byte tag as ChaCha
+	InnerAEGIS  byte = 3 // AEGIS-128L RFC 10032; 16-byte HKDF key; wire nonce[12]||ct||tag[16]
 	InnerHiAE   byte = 5 // draft-pham-cfrg-hiae-06; wire nonce[12]||ct||tag[16]
 )
 
 // InnerReserved are ids kept for more data ciphers. Until one is defined
 // it is an unknown id: asked for, it leaves the session on ChaCha.
 // 8 is reserved for an experimental data cipher (not in this tree).
-var InnerReserved = []byte{3, 4, 7, 8}
+var InnerReserved = []byte{4, 7, 8}
 
-// ParseInnerName reads clear, chacha, aes, or hiae. Aliases none/off, aes-gcm.
+// ParseInnerName reads clear, chacha, aes, aegis, or hiae. Aliases none/off, aes-gcm, aegis128l.
 func ParseInnerName(s string) (byte, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "clear", "none", "off":
@@ -33,10 +34,12 @@ func ParseInnerName(s string) (byte, error) {
 		return InnerChaCha, nil
 	case "aes", "aes-gcm", "aes256-gcm", "aes-256-gcm":
 		return InnerAES, nil
+	case "aegis", "aegis128l", "aegis-128l", "aegis128-l":
+		return InnerAEGIS, nil
 	case "hiae":
 		return InnerHiAE, nil
 	default:
-		return 0, fmt.Errorf("inner %q: clear, chacha, aes, or hiae", s)
+		return 0, fmt.Errorf("inner %q: clear, chacha, aes, aegis, or hiae", s)
 	}
 }
 
@@ -47,6 +50,8 @@ func InnerName(id byte) string {
 		return "clear"
 	case InnerAES:
 		return "aes"
+	case InnerAEGIS:
+		return "aegis"
 	case InnerHiAE:
 		return "hiae"
 	default:
@@ -57,13 +62,13 @@ func InnerName(id byte) string {
 // AgreeInner is the node's answer to a Hello ask.
 // GET, an absent ask, an unknown id, and an id the policy does not list
 // stay on ChaCha and omit the Status byte. The session still comes up.
-// ChaCha is always allowed. allow lists only the extra ids (clear, aes, hiae).
+// ChaCha is always allowed. allow lists only the extra ids (clear, aes, aegis, hiae).
 func AgreeInner(front string, askSet bool, ask byte, allow []byte) (set bool, id byte) {
 	if front == "" || front == FrontGET || !askSet {
 		return false, InnerChaCha
 	}
 	switch ask {
-	case InnerClear, InnerAES, InnerHiAE:
+	case InnerClear, InnerAES, InnerAEGIS, InnerHiAE:
 		if !allowsInner(allow, ask) {
 			return false, InnerChaCha
 		}

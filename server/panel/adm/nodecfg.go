@@ -133,7 +133,7 @@ var knownFronts = []string{"get", "ws", "h2", "quic", "h3", "l3"}
 
 // knownInner are extra data ciphers the Node screen may enable. ChaCha is
 // always on and is not stored.
-var knownInner = []string{"clear", "aes", "hiae"}
+var knownInner = []string{"clear", "aes", "aegis", "hiae"}
 
 func extraInner(names []string) []string {
 	seen := map[string]bool{}

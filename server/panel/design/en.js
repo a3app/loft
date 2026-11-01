@@ -1546,6 +1546,7 @@ window.LOFT_EN = {
   "Второй слой внутри TLS. ChaCha20-Poly1305 всегда. Остальные нода подтверждает на прямых фронтах, если клиент просил и галка включена. GET остаётся на ChaCha.": "Second layer inside TLS. ChaCha20-Poly1305 is always on. The node confirms the others on direct fronts when the client asked and the box is checked. GET stays on ChaCha.",
   "Всегда. Выключить нельзя.": "Always on. Cannot be turned off.",
   "Прямые фронты. GET не подтверждает.": "Direct fronts. GET does not confirm it.",
+  "Прямые фронты. GET не подтверждает. RFC 10032.": "Direct fronts. GET does not confirm it. RFC 10032.",
   "Прямые фронты. GET не подтверждает. Клиентам iOS, Android и macOS нужна сборка с -tags hiae.": "Direct fronts. GET does not confirm it. iOS, Android and macOS clients need a build with -tags hiae.",
   "Без внутреннего AEAD": "No inner AEAD",
   "Только TLS фронта. GET не подтверждает. К такой сессии нельзя присоединять GET.": "Only the front's TLS. GET does not confirm it. That session cannot attach GET.",

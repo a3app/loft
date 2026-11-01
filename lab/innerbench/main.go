@@ -34,6 +34,7 @@ func main() {
 	ciphers := []spec{
 		{"chacha", wire.InnerChaCha},
 		{"aes", wire.InnerAES},
+		{"aegis", wire.InnerAEGIS},
 	}
 	if ecrypto.HiAEEnabled() {
 		ciphers = append(ciphers, spec{"hiae", wire.InnerHiAE})

@@ -127,3 +127,52 @@ func TestDirectFrontAgreesHiAE(t *testing.T) {
 		t.Fatalf("open %v %q", err, back)
 	}
 }
+
+func TestDirectFrontAgreesAEGIS(t *testing.T) {
+	SetInnerAllow([]byte{wire.InnerAEGIS})
+	setClientInner(true, wire.InnerAEGIS)
+	key := bytes.Repeat([]byte{3}, ecrypto.KeySize)
+	t.Cleanup(func() {
+		SetInnerAllow(nil)
+		setClientInner(false, wire.InnerChaCha)
+		ecrypto.BindInner(key, wire.InnerChaCha)
+	})
+	hello := newClientHello(wire.MemberCaps &^ wire.CapL3).Encode()
+	st := wire.Status{
+		Code: wire.OK, IP: "10.8.0.2", Gateway: "10.8.0.1", InstanceID: "b", MTU: 1280,
+	}
+	applyInner(&st, wire.FrontGET, hello)
+	if st.InnerSet {
+		t.Fatal("get confirmed aegis")
+	}
+	applyInner(&st, wire.FrontH2, hello)
+	if !st.InnerSet || st.Inner != wire.InnerAEGIS {
+		t.Fatalf("confirm %v %d", st.InnerSet, st.Inner)
+	}
+	body := st.Encode()
+	sealed, err := ecrypto.Seal(key, body, nil)
+	if err != nil || bytes.Equal(sealed, body) {
+		t.Fatal("handshake status must stay chacha")
+	}
+	plain, err := ecrypto.Open(key, sealed, nil)
+	if err != nil || !bytes.Equal(plain, body) {
+		t.Fatalf("open status %v", err)
+	}
+	got, err := wire.DecodeStatus(plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	takeInner(wire.FrontH2, key, got)
+	if ecrypto.InnerOf(key) != wire.InnerAEGIS {
+		t.Fatalf("mode %d", ecrypto.InnerOf(key))
+	}
+	pt := []byte("aegis-batch")
+	data, err := ecrypto.Seal(key, pt, nil)
+	if err != nil || len(data) != ecrypto.NonceSize+len(pt)+16 || bytes.Equal(data, pt) {
+		t.Fatalf("data %d %v", len(data), err)
+	}
+	back, err := ecrypto.Open(key, data, nil)
+	if err != nil || !bytes.Equal(back, pt) {
+		t.Fatalf("open %v %q", err, back)
+	}
+}

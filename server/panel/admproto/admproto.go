@@ -596,7 +596,7 @@ type NodeConfig struct {
 	Listen     string   `json:"listen"`
 	Advertise  string   `json:"advertise"`
 	Fronts     []string `json:"fronts"`
-	Inner      []string `json:"inner"` // extra data ciphers: clear, aes, hiae. Empty = ChaCha only
+	Inner      []string `json:"inner"` // extra data ciphers: clear, aes, aegis, hiae. Empty = ChaCha only
 	GetH2      int      `json:"get_h2"`
 	Decoy      []string `json:"decoy"`
 	Mask       bool     `json:"mask"`

@@ -1,7 +1,7 @@
 // Package crypto seals mux, proves membership with clockless HMAC (0x02)
 // bound to a client X25519 pub, and derives the session key from the DH
 // secret (HKDF info "loft-v1"). Data default is ChaCha20-Poly1305.
-// BindInner may select clear, AES-256-GCM or HiAE after the handshake Status.
+// BindInner may select clear, AES-256-GCM, AEGIS-128L or HiAE after the handshake Status.
 //
 // The handshake in plain words:
 //   - Every member has a long-term secret key ("lt_..." token). The node
@@ -186,6 +186,7 @@ func sweepIdleKeys(now int64) {
 			innerModes.Delete(k)
 			chachaAEADs.Delete(k)
 			aesAEADs.Delete(k)
+			aegisKeys.Delete(k)
 		}
 		return true
 	})
@@ -205,8 +206,8 @@ func nextNonce(key []byte) ([]byte, error) {
 }
 
 // Seal is nonce[12] || AEAD(key, nonce, plaintext, aad).
-// The default AEAD is ChaCha20-Poly1305. BindInner selects clear, AES-256-GCM
-// or HiAE for data frames; call it only after the handshake Status has been sealed.
+// The default AEAD is ChaCha20-Poly1305. BindInner selects clear, AES-256-GCM,
+// AEGIS-128L or HiAE for data frames; call it only after the handshake Status has been sealed.
 // Nonce is unique per key (prefix+counter), not a fresh 96-bit random.
 // LOFT_STAND_INNER=clear returns the plaintext for every key.
 func Seal(key, plaintext, aad []byte) ([]byte, error) {
@@ -215,6 +216,8 @@ func Seal(key, plaintext, aad []byte) ([]byte, error) {
 		return append([]byte(nil), plaintext...), nil
 	case wire.InnerAES:
 		return sealWith(key, plaintext, aad, newAESGCM)
+	case wire.InnerAEGIS:
+		return sealAEGIS(key, plaintext, aad)
 	case wire.InnerHiAE:
 		return sealHiAE(key, plaintext, aad)
 	default:
@@ -248,6 +251,8 @@ func Open(key, blob, aad []byte) ([]byte, error) {
 		return append([]byte(nil), blob...), nil
 	case wire.InnerAES:
 		return openWith(key, blob, aad, newAESGCM)
+	case wire.InnerAEGIS:
+		return openAEGIS(key, blob, aad)
 	case wire.InnerHiAE:
 		return openHiAE(key, blob, aad)
 	default:

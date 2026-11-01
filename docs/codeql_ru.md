@@ -8,7 +8,7 @@ GitHub CodeQL гоняет стандартный набор Go на `main`. Ч�
 
 ## SSTP MS-CHAPv2 (MD4, DES)
 
-`internal/sstp/mschapv2.go`. Windows SSTP логинится через MS-CHAPv2 ([RFC 2759](https://www.rfc-editor.org/rfc/rfc2759)). NT-хеш — MD4 от пароля в UTF-16LE. Ответ на challenge — DES. Другой хеш или шифр с Windows не сойдётся. Данные оверлея loft — ChaCha20-Poly1305 или AES-256-GCM после Status.
+`internal/sstp/mschapv2.go`. Windows SSTP логинится через MS-CHAPv2 ([RFC 2759](https://www.rfc-editor.org/rfc/rfc2759)). NT-хеш — MD4 от пароля в UTF-16LE. Ответ на challenge — DES. Другой хеш или шифр с Windows не сойдётся. Данные оверлея loft — ChaCha20-Poly1305, AES-256-GCM или AEGIS-128L после Status.
 
 ## SSTP CHAP-MD5
 

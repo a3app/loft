@@ -25,7 +25,7 @@ type Hello struct {
 	Program    string // client binary name, e.g. loft
 	Software   string // client release, e.g. 1.0.22 — not the protocol
 	InnerSet   bool   // one trailing byte is present; false means the client did not ask
-	Inner      byte   // 0 clear, 1 ChaCha20-Poly1305, 2 AES-256-GCM. Meaningful when InnerSet
+	Inner      byte   // 0 clear, 1 ChaCha, 2 AES-256-GCM, 3 AEGIS-128L, 5 HiAE. Meaningful when InnerSet
 	// ControllerPin is PinOf the controller key the client trusts now, so the
 	// node can tell who has moved to a new key during a key roll. Empty when
 	// the client pins none.
@@ -115,7 +115,7 @@ type Status struct {
 	Fronts       []FrontEP // mux fronts this node accepts; empty = client keeps URI/defaults
 	Edge         byte      // 0 plain, 1 tight; 0 = client keeps its opening GET limits
 	InnerSet     bool      // inner byte is present. Absent means ChaCha20-Poly1305
-	Inner        byte      // 0 clear, 1 ChaCha20-Poly1305, 2 AES-256-GCM
+	Inner        byte      // 0 clear, 1 ChaCha, 2 AES-256-GCM, 3 AEGIS-128L, 5 HiAE
 	KeyRoll      []byte    // encoded KeyRoll while the controller key changes; empty otherwise
 	CC           byte      // congestion control both sides use; 0 = system default
 	CCUp         uint32    // fixed: client sending rate, kbit/s; 0 = that direction stays default
