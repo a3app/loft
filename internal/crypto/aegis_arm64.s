@@ -1,0 +1,116 @@
+//go:build arm64 && !purego
+
+#include "textflag.h"
+
+// AESL(v) ^= k  using AESE+AESMC with zero round key in V31.
+#define AESL_XOR(v, k) \
+	AESE V31.B16, v.B16 \
+	AESMC v.B16, v.B16 \
+	VEOR k.B16, v.B16, v.B16
+
+// S0–S7 live in V0–V7. n is 32-byte units.
+// z0 = S1⊕S6⊕(S2∧S3); z1 = S2⊕S5⊕(S6∧S7)
+// enc: C = P⊕z; Update(P0,P1)
+// dec: P = C⊕z; Update(P0,P1)
+
+#define AEGIS_UPDATE \
+	VEOR V8.B16, V0.B16, V16.B16 \
+	VEOR V9.B16, V4.B16, V17.B16 \
+	VMOV V7.B16, V18.B16 \
+	AESL_XOR(V18, V16) \
+	VMOV V0.B16, V19.B16 \
+	AESL_XOR(V19, V1) \
+	VMOV V1.B16, V20.B16 \
+	AESL_XOR(V20, V2) \
+	VMOV V2.B16, V21.B16 \
+	AESL_XOR(V21, V3) \
+	VMOV V3.B16, V22.B16 \
+	AESL_XOR(V22, V17) \
+	VMOV V4.B16, V23.B16 \
+	AESL_XOR(V23, V5) \
+	VMOV V5.B16, V24.B16 \
+	AESL_XOR(V24, V6) \
+	VMOV V6.B16, V25.B16 \
+	AESL_XOR(V25, V7) \
+	VMOV V18.B16, V0.B16 \
+	VMOV V19.B16, V1.B16 \
+	VMOV V20.B16, V2.B16 \
+	VMOV V21.B16, V3.B16 \
+	VMOV V22.B16, V4.B16 \
+	VMOV V23.B16, V5.B16 \
+	VMOV V24.B16, V6.B16 \
+	VMOV V25.B16, V7.B16
+
+#define AEGIS_Z \
+	VAND V3.B16, V2.B16, V10.B16 \
+	VEOR V1.B16, V10.B16, V10.B16 \
+	VEOR V6.B16, V10.B16, V10.B16 \
+	VAND V7.B16, V6.B16, V11.B16 \
+	VEOR V2.B16, V11.B16, V11.B16 \
+	VEOR V5.B16, V11.B16, V11.B16
+
+// func aegisEncNI(s *blk, in, out *byte, n uint64)
+TEXT ·aegisEncNI(SB), NOSPLIT, $0-32
+	MOVD s+0(FP), R8
+	MOVD in+8(FP), R12
+	MOVD out+16(FP), R13
+	MOVD n+24(FP), R11
+	VEOR V31.B16, V31.B16, V31.B16
+	CBZ R11, encDone
+
+	VLD1 (R8), [V0.B16, V1.B16, V2.B16, V3.B16]
+	ADD $64, R8
+	VLD1 (R8), [V4.B16, V5.B16, V6.B16, V7.B16]
+	SUB $64, R8
+
+encLoop:
+	VLD1 (R12), [V8.B16, V9.B16]
+	AEGIS_Z
+	VEOR V10.B16, V8.B16, V12.B16
+	VEOR V11.B16, V9.B16, V13.B16
+	VST1 [V12.B16, V13.B16], (R13)
+	AEGIS_UPDATE
+	ADD $32, R12
+	ADD $32, R13
+	SUB $1, R11
+	CBNZ R11, encLoop
+
+	VST1 [V0.B16, V1.B16, V2.B16, V3.B16], (R8)
+	ADD $64, R8
+	VST1 [V4.B16, V5.B16, V6.B16, V7.B16], (R8)
+
+encDone:
+	RET
+
+// func aegisDecNI(s *blk, in, out *byte, n uint64)
+TEXT ·aegisDecNI(SB), NOSPLIT, $0-32
+	MOVD s+0(FP), R8
+	MOVD in+8(FP), R12
+	MOVD out+16(FP), R13
+	MOVD n+24(FP), R11
+	VEOR V31.B16, V31.B16, V31.B16
+	CBZ R11, decDone
+
+	VLD1 (R8), [V0.B16, V1.B16, V2.B16, V3.B16]
+	ADD $64, R8
+	VLD1 (R8), [V4.B16, V5.B16, V6.B16, V7.B16]
+	SUB $64, R8
+
+decLoop:
+	VLD1 (R12), [V8.B16, V9.B16]
+	AEGIS_Z
+	VEOR V10.B16, V8.B16, V8.B16
+	VEOR V11.B16, V9.B16, V9.B16
+	VST1 [V8.B16, V9.B16], (R13)
+	AEGIS_UPDATE
+	ADD $32, R12
+	ADD $32, R13
+	SUB $1, R11
+	CBNZ R11, decLoop
+
+	VST1 [V0.B16, V1.B16, V2.B16, V3.B16], (R8)
+	ADD $64, R8
+	VST1 [V4.B16, V5.B16, V6.B16, V7.B16], (R8)
+
+decDone:
+	RET

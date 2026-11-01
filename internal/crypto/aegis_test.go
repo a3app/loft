@@ -118,3 +118,74 @@ func TestBindInnerAEGIS(t *testing.T) {
 		t.Fatal(InnerOf(key))
 	}
 }
+
+func TestAEGISSealIntoMatchesSeal(t *testing.T) {
+	key := bytes.Repeat([]byte{3}, KeySize)
+	BindInner(key, wire.InnerAEGIS)
+	pt := []byte("aegis-into")
+	dst := make([]byte, 0, 4+NonceSize+len(pt)+AuthSize)
+	dst = dst[:4]
+	got, err := SealInto(dst, key, pt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cap(got) != cap(dst) {
+		t.Fatalf("realloc cap=%d", cap(got))
+	}
+	plain, err := Open(key, got[4:], nil)
+	if err != nil || !bytes.Equal(plain, pt) {
+		t.Fatalf("open %q %v", plain, err)
+	}
+}
+
+func TestAEGISAsmMatchesGo(t *testing.T) {
+	if aegisEncBlocksAsm == nil {
+		t.Skip("no AES-NI/AESE AEGIS loop")
+	}
+	enc, dec := aegisEncBlocksAsm, aegisDecBlocksAsm
+	defer func() { aegisEncBlocksAsm, aegisDecBlocksAsm = enc, dec }()
+	key := bytes.Repeat([]byte{0x11}, 16)
+	nonce := bytes.Repeat([]byte{0x22}, 16)
+	ad := bytes.Repeat([]byte{0x33}, 40)
+	for _, n := range []int{0, 1, 15, 16, 17, 31, 32, 33, 63, 64, 1024, 4096} {
+		msg := make([]byte, n)
+		for i := range msg {
+			msg[i] = byte(i)
+		}
+		aegisEncBlocksAsm, aegisDecBlocksAsm = nil, nil
+		want := aegis128lEncrypt(key, nonce, msg, ad)
+		aegisEncBlocksAsm, aegisDecBlocksAsm = enc, dec
+		got := aegis128lEncrypt(key, nonce, msg, ad)
+		if !bytes.Equal(got, want) {
+			t.Fatalf("enc n=%d", n)
+		}
+		plain, err := aegis128lDecrypt(key, nonce, got, ad)
+		if err != nil || !bytes.Equal(plain, msg) {
+			t.Fatalf("dec n=%d %v", n, err)
+		}
+	}
+}
+
+func BenchmarkAEGIS128L(b *testing.B) {
+	benchAEGIS128L(b, true)
+}
+
+func BenchmarkAEGIS128LGo(b *testing.B) {
+	benchAEGIS128L(b, false)
+}
+
+func benchAEGIS128L(b *testing.B, useAsm bool) {
+	enc, dec := aegisEncBlocksAsm, aegisDecBlocksAsm
+	if !useAsm {
+		aegisEncBlocksAsm, aegisDecBlocksAsm = nil, nil
+		defer func() { aegisEncBlocksAsm, aegisDecBlocksAsm = enc, dec }()
+	}
+	key := bytes.Repeat([]byte{0x11}, 16)
+	nonce := bytes.Repeat([]byte{0x22}, 16)
+	msg := bytes.Repeat([]byte{0x5a}, 12<<10)
+	b.SetBytes(int64(len(msg)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = aegis128lEncrypt(key, nonce, msg, nil)
+	}
+}

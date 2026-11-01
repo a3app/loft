@@ -158,6 +158,49 @@ func TestStolenAuthBlobNeedsEphSecret(t *testing.T) {
 	}
 }
 
+// TestSealIntoReuse writes nonce||ct into dst cap and matches Seal/Open.
+func TestSealIntoReuse(t *testing.T) {
+	key := bytes.Repeat([]byte{0x11}, 32)
+	pt := []byte("payload")
+	dst := make([]byte, 0, 4+NonceSize+len(pt)+AuthSize)
+	dst = dst[:4]
+	got, err := SealInto(dst, key, pt, []byte("aad"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cap(got) != cap(dst) {
+		t.Fatalf("realloc cap=%d", cap(got))
+	}
+	if len(got) != 4+NonceSize+len(pt)+AuthSize {
+		t.Fatalf("len %d", len(got))
+	}
+	plain, err := Open(key, got[4:], []byte("aad"))
+	if err != nil || !bytes.Equal(plain, pt) {
+		t.Fatalf("open %q %v", plain, err)
+	}
+}
+
+func TestSealIntoMatchesSeal(t *testing.T) {
+	key := bytes.Repeat([]byte{0x22}, 32)
+	pt := []byte("same")
+	a, err := Seal(key, pt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := SealInto(nil, key, pt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pa, err := Open(key, a, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pb, err := Open(key, b, nil)
+	if err != nil || !bytes.Equal(pa, pb) || !bytes.Equal(pa, pt) {
+		t.Fatalf("a=%q b=%q", pa, pb)
+	}
+}
+
 // TestSealNonceUnique keeps a 12-byte nonce that Open accepts, distinct per seal.
 func TestSealNonceUnique(t *testing.T) {
 	key := bytes.Repeat([]byte{0x11}, 32)

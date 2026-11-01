@@ -50,6 +50,9 @@ const (
 	AuthSize  = 16
 	EphSize   = 32
 	ProofLen  = 1 + 16 + EphSize + AuthSize // tag + nonce + eph_c + mac
+	// SealOverhead is nonce||tag on every data AEAD (ChaCha, AES-GCM,
+	// AEGIS-128L, HiAE). InnerClear writes plaintext with 0 extra bytes.
+	SealOverhead = NonceSize + AuthSize
 )
 
 const tagAuth byte = 0x02 // nonce + eph_c + HMAC(key, "lft-a2"||nonce||eph_c)
@@ -192,54 +195,89 @@ func sweepIdleKeys(now int64) {
 	})
 }
 
-// nextNonce is 4-byte prefix || 8-byte big-endian counter, unique per key.
-func nextNonce(key []byte) ([]byte, error) {
+// putNonce writes prefix||counter into dst[:12]. dst must be ≥ NonceSize.
+func putNonce(key, dst []byte) error {
 	st, err := keyState(key)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	n := st.n.Add(1)
-	nonce := make([]byte, NonceSize)
-	binary.BigEndian.PutUint32(nonce[:4], st.prefix)
-	binary.BigEndian.PutUint64(nonce[4:], n)
-	return nonce, nil
+	binary.BigEndian.PutUint32(dst[:4], st.prefix)
+	binary.BigEndian.PutUint64(dst[4:12], n)
+	return nil
 }
 
-// Seal is nonce[12] || AEAD(key, nonce, plaintext, aad).
+// nextNonce is 4-byte prefix || 8-byte big-endian counter, unique per key.
+func nextNonce(key []byte) ([]byte, error) {
+	n := make([]byte, NonceSize)
+	if err := putNonce(key, n); err != nil {
+		return nil, err
+	}
+	return n, nil
+}
+
+// growSlice is b[:n], reallocating when cap is short. Prefix of b is kept.
+func growSlice(b []byte, n int) []byte {
+	if cap(b) >= n {
+		return b[:n]
+	}
+	nb := make([]byte, n)
+	copy(nb, b)
+	return nb
+}
+
+// Seal is SealInto(nil, ...): nonce[12] || AEAD(key, nonce, plaintext, aad).
 // The default AEAD is ChaCha20-Poly1305. BindInner selects clear, AES-256-GCM,
 // AEGIS-128L or HiAE for data frames; call it only after the handshake Status has been sealed.
 // Nonce is unique per key (prefix+counter), not a fresh 96-bit random.
 // LOFT_STAND_INNER=clear returns the plaintext for every key.
 func Seal(key, plaintext, aad []byte) ([]byte, error) {
+	return SealInto(nil, key, plaintext, aad)
+}
+
+// SealInto appends nonce[12]||ct||tag[16] to dst (InnerClear: plaintext).
+//
+// dst and plaintext must not overlap: stdlib AEAD.Seal forbids it, and the
+// mux pump keeps EncodeBatch plaintext in recScratch.plain, ciphertext in
+// recScratch.rec. nonce is taken on the stack so it does not alias dst.
+// cap(dst) is kept; a mux pump reuses one rec across Pulls.
+func SealInto(dst, key, plaintext, aad []byte) ([]byte, error) {
 	switch dataInner(key) {
 	case wire.InnerClear:
-		return append([]byte(nil), plaintext...), nil
+		return append(dst, plaintext...), nil
 	case wire.InnerAES:
-		return sealWith(key, plaintext, aad, newAESGCM)
+		return sealInto(dst, key, plaintext, aad, newAESGCM)
 	case wire.InnerAEGIS:
-		return sealAEGIS(key, plaintext, aad)
+		return sealAEGISInto(dst, key, plaintext, aad)
 	case wire.InnerHiAE:
-		return sealHiAE(key, plaintext, aad)
+		return sealHiAEInto(dst, key, plaintext, aad)
 	default:
-		return sealWith(key, plaintext, aad, standAEAD)
+		return sealInto(dst, key, plaintext, aad, standAEAD)
 	}
 }
 
-// sealWith seals with the given AEAD constructor and prepends the nonce.
-func sealWith(key, plaintext, aad []byte, newAEAD func([]byte) (cipher.AEAD, error)) ([]byte, error) {
+// sealInto is SealInto for stdlib AEAD (ChaCha20-Poly1305, AES-256-GCM).
+// Layout written at dst[len(dst):]: nonce[12] then Seal(nonce, plaintext).
+func sealInto(dst, key, plaintext, aad []byte, newAEAD func([]byte) (cipher.AEAD, error)) ([]byte, error) {
 	aead, err := newAEAD(key)
 	if err != nil {
 		return nil, err
 	}
-	nonce, err := nextNonce(key)
-	if err != nil {
+	var n12 [NonceSize]byte
+	if err := putNonce(key, n12[:]); err != nil {
 		return nil, err
 	}
-	ct := aead.Seal(nil, nonce, plaintext, aad)
-	out := make([]byte, 0, NonceSize+len(ct))
-	out = append(out, nonce...)
-	out = append(out, ct...)
-	return out, nil
+	off := len(dst)
+	need := off + NonceSize + len(plaintext) + aead.Overhead()
+	dst = growSlice(dst, need)
+	copy(dst[off:off+NonceSize], n12[:])
+	// Seal dst is the nonce prefix; ciphertext is appended in place.
+	return aead.Seal(dst[:off+NonceSize], n12[:], plaintext, aad), nil
+}
+
+// sealWith is SealInto(nil) for tests that pass an AEAD constructor.
+func sealWith(key, plaintext, aad []byte, newAEAD func([]byte) (cipher.AEAD, error)) ([]byte, error) {
+	return sealInto(nil, key, plaintext, aad, newAEAD)
 }
 
 // Open decrypts a Seal blob. GET uses AAD = session id; other fronts use empty AAD.

@@ -144,20 +144,25 @@ func (r *hiaeRing) tag(adLen, msgLen int) blk {
 }
 
 func hiaeEncrypt(key, nonce, msg, ad []byte) []byte {
+	ct := make([]byte, len(msg)+16)
+	hiaeEncryptTo(ct, key, nonce, msg, ad)
+	return ct
+}
+
+// hiaeEncryptTo writes ct||tag[16] into out. len(out) is len(msg)+16.
+func hiaeEncryptTo(out, key, nonce, msg, ad []byte) {
 	var r hiaeRing
 	r.init(key, nonce)
 	r.absorb(ad)
-	ct := make([]byte, len(msg)+16)
-	i := r.encBlocks(msg, ct)
+	i := r.encBlocks(msg, out)
 	if rest := len(msg) - i; rest > 0 {
 		var x blk
 		copy(x[:], msg[i:])
 		c := r.update(x)
-		copy(ct[i:i+rest], c[:rest])
+		copy(out[i:i+rest], c[:rest])
 	}
 	tag := r.tag(len(ad), len(msg))
-	copy(ct[len(msg):], tag[:])
-	return ct
+	copy(out[len(msg):], tag[:])
 }
 
 func hiaeDecrypt(key, nonce, blob, ad []byte) ([]byte, error) {
@@ -186,22 +191,30 @@ func hiaeDecrypt(key, nonce, blob, ad []byte) ([]byte, error) {
 }
 
 func sealHiAE(key, plaintext, aad []byte) ([]byte, error) {
-	n12, err := nextNonce(key)
-	if err != nil {
+	return sealHiAEInto(nil, key, plaintext, aad)
+}
+
+// sealHiAEInto appends loft nonce[12]||HiAE(ct||tag) to dst.
+func sealHiAEInto(dst, key, plaintext, aad []byte) ([]byte, error) {
+	var n12 [NonceSize]byte
+	if err := putNonce(key, n12[:]); err != nil {
 		return nil, err
 	}
-	body := hiaeEncrypt(key, aeadNonce16(n12), plaintext, aad)
-	out := make([]byte, 0, NonceSize+len(body))
-	out = append(out, n12...)
-	out = append(out, body...)
-	return out, nil
+	off := len(dst)
+	need := off + NonceSize + len(plaintext) + AuthSize
+	dst = growSlice(dst, need)
+	copy(dst[off:off+NonceSize], n12[:])
+	n16 := nonce16(n12[:])
+	hiaeEncryptTo(dst[off+NonceSize:need], key, n16[:], plaintext, aad)
+	return dst[:need], nil
 }
 
 func openHiAE(key, blob, aad []byte) ([]byte, error) {
 	if len(blob) < NonceSize+16 {
 		return nil, ErrAuth
 	}
-	return hiaeDecrypt(key, aeadNonce16(blob[:NonceSize]), blob[NonceSize:], aad)
+	n16 := nonce16(blob[:NonceSize])
+	return hiaeDecrypt(key, n16[:], blob[NonceSize:], aad)
 }
 
 func bindHiAE(key []byte) {

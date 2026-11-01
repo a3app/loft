@@ -1,0 +1,139 @@
+//go:build amd64 && !purego
+
+#include "textflag.h"
+
+// S0–S7 live in X0–X7. n is 32-byte units.
+// z0 = S1⊕S6⊕(S2∧S3); z1 = S2⊕S5⊕(S6∧S7)
+// enc: C = P⊕z; Update(P0,P1)
+// dec: P = C⊕z; Update(P0,P1)
+// aesRound(in, rk) = AESENC(in, rk)
+
+#define AEGIS_UPDATE \
+	MOVUPS X0, X10 \
+	PXOR X8, X10 \
+	MOVUPS X4, X11 \
+	PXOR X9, X11 \
+	MOVUPS X7, X8 \
+	AESENC X10, X8 \
+	MOVUPS X0, X9 \
+	AESENC X1, X9 \
+	MOVUPS X1, X10 \
+	AESENC X2, X10 \
+	MOVUPS X2, X12 \
+	AESENC X3, X12 \
+	MOVUPS X3, X13 \
+	AESENC X11, X13 \
+	MOVUPS X4, X14 \
+	AESENC X5, X14 \
+	MOVUPS X5, X15 \
+	AESENC X6, X15 \
+	MOVUPS X6, X11 \
+	AESENC X7, X11 \
+	MOVUPS X8, X0 \
+	MOVUPS X9, X1 \
+	MOVUPS X10, X2 \
+	MOVUPS X12, X3 \
+	MOVUPS X13, X4 \
+	MOVUPS X14, X5 \
+	MOVUPS X15, X6 \
+	MOVUPS X11, X7
+
+#define AEGIS_Z \
+	MOVUPS X2, X10 \
+	PAND X3, X10 \
+	PXOR X1, X10 \
+	PXOR X6, X10 \
+	MOVUPS X6, X11 \
+	PAND X7, X11 \
+	PXOR X2, X11 \
+	PXOR X5, X11
+
+// func aegisEncNI(s *blk, in, out *byte, n uint64)
+TEXT ·aegisEncNI(SB), NOSPLIT, $0-32
+	MOVQ s+0(FP), R8
+	MOVQ in+8(FP), SI
+	MOVQ out+16(FP), DI
+	MOVQ n+24(FP), R11
+	TESTQ R11, R11
+	JZ encDone
+
+	MOVUPS 0(R8), X0
+	MOVUPS 16(R8), X1
+	MOVUPS 32(R8), X2
+	MOVUPS 48(R8), X3
+	MOVUPS 64(R8), X4
+	MOVUPS 80(R8), X5
+	MOVUPS 96(R8), X6
+	MOVUPS 112(R8), X7
+
+encLoop:
+	MOVUPS (SI), X8
+	MOVUPS 16(SI), X9
+	AEGIS_Z
+	MOVUPS X8, X12
+	PXOR X10, X12
+	MOVUPS X9, X13
+	PXOR X11, X13
+	MOVUPS X12, (DI)
+	MOVUPS X13, 16(DI)
+	AEGIS_UPDATE
+	ADDQ $32, SI
+	ADDQ $32, DI
+	SUBQ $1, R11
+	JNZ encLoop
+
+	MOVUPS X0, 0(R8)
+	MOVUPS X1, 16(R8)
+	MOVUPS X2, 32(R8)
+	MOVUPS X3, 48(R8)
+	MOVUPS X4, 64(R8)
+	MOVUPS X5, 80(R8)
+	MOVUPS X6, 96(R8)
+	MOVUPS X7, 112(R8)
+
+encDone:
+	RET
+
+// func aegisDecNI(s *blk, in, out *byte, n uint64)
+TEXT ·aegisDecNI(SB), NOSPLIT, $0-32
+	MOVQ s+0(FP), R8
+	MOVQ in+8(FP), SI
+	MOVQ out+16(FP), DI
+	MOVQ n+24(FP), R11
+	TESTQ R11, R11
+	JZ decDone
+
+	MOVUPS 0(R8), X0
+	MOVUPS 16(R8), X1
+	MOVUPS 32(R8), X2
+	MOVUPS 48(R8), X3
+	MOVUPS 64(R8), X4
+	MOVUPS 80(R8), X5
+	MOVUPS 96(R8), X6
+	MOVUPS 112(R8), X7
+
+decLoop:
+	MOVUPS (SI), X8
+	MOVUPS 16(SI), X9
+	AEGIS_Z
+	PXOR X10, X8
+	PXOR X11, X9
+	MOVUPS X8, (DI)
+	MOVUPS X9, 16(DI)
+	AEGIS_UPDATE
+	ADDQ $32, SI
+	ADDQ $32, DI
+	SUBQ $1, R11
+	JNZ decLoop
+
+	MOVUPS X0, 0(R8)
+	MOVUPS X1, 16(R8)
+	MOVUPS X2, 32(R8)
+	MOVUPS X3, 48(R8)
+	MOVUPS X4, 64(R8)
+	MOVUPS X5, 80(R8)
+	MOVUPS X6, 96(R8)
+	MOVUPS X7, 112(R8)
+
+decDone:
+	RET

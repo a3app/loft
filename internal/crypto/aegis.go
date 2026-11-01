@@ -41,6 +41,13 @@ type aegis128L struct {
 	s [8]blk
 }
 
+// aegisEncBlocksAsm / aegisDecBlocksAsm are the AES-NI / AESE 32-byte loops.
+// n is 32-byte units. nil means the Go enc32/dec32 path (no AES, or purego).
+var (
+	aegisEncBlocksAsm func(s *blk, in, out *byte, n uint64)
+	aegisDecBlocksAsm func(s *blk, in, out *byte, n uint64)
+)
+
 func (a *aegis128L) update(m0, m1 blk) {
 	s0, s1, s2, s3, s4, s5, s6, s7 := a.s[0], a.s[1], a.s[2], a.s[3], a.s[4], a.s[5], a.s[6], a.s[7]
 	a.s[0] = aesRound(s7, xorBlk(s0, m0))
@@ -104,10 +111,19 @@ func (a *aegis128L) dec32(ci, out []byte) {
 }
 
 func (a *aegis128L) enc(msg, out []byte) {
+	n := len(msg) / 32
+	if n > len(out)/32 {
+		n = len(out) / 32
+	}
 	i := 0
-	for len(msg)-i >= 32 {
-		a.enc32(msg[i:i+32], out[i:i+32])
-		i += 32
+	if n > 0 && aegisEncBlocksAsm != nil {
+		aegisEncBlocksAsm(&a.s[0], &msg[0], &out[0], uint64(n))
+		i = n * 32
+	} else {
+		for len(msg)-i >= 32 {
+			a.enc32(msg[i:i+32], out[i:i+32])
+			i += 32
+		}
 	}
 	if rest := len(msg) - i; rest > 0 {
 		var pad [32]byte
@@ -119,10 +135,19 @@ func (a *aegis128L) enc(msg, out []byte) {
 }
 
 func (a *aegis128L) dec(ct, out []byte) {
+	n := len(ct) / 32
+	if n > len(out)/32 {
+		n = len(out) / 32
+	}
 	i := 0
-	for len(ct)-i >= 32 {
-		a.dec32(ct[i:i+32], out[i:i+32])
-		i += 32
+	if n > 0 && aegisDecBlocksAsm != nil {
+		aegisDecBlocksAsm(&a.s[0], &ct[0], &out[0], uint64(n))
+		i = n * 32
+	} else {
+		for len(ct)-i >= 32 {
+			a.dec32(ct[i:i+32], out[i:i+32])
+			i += 32
+		}
 	}
 	if rest := len(ct) - i; rest > 0 {
 		var pad [32]byte
@@ -155,14 +180,19 @@ func (a *aegis128L) tag128(adLen, msgLen int) blk {
 }
 
 func aegis128lEncrypt(key, nonce, msg, ad []byte) []byte {
+	out := make([]byte, len(msg)+16)
+	aegis128lEncryptTo(out, key, nonce, msg, ad)
+	return out
+}
+
+// aegis128lEncryptTo writes ct||tag[16] into out. len(out) is len(msg)+16.
+func aegis128lEncryptTo(out, key, nonce, msg, ad []byte) {
 	var a aegis128L
 	a.init(key, nonce)
 	a.absorb(ad)
-	out := make([]byte, len(msg)+16)
 	a.enc(msg, out)
 	tag := a.tag128(len(ad), len(msg))
 	copy(out[len(msg):], tag[:])
-	return out
 }
 
 func aegis128lDecrypt(key, nonce, blob, ad []byte) ([]byte, error) {
@@ -200,19 +230,26 @@ func deriveAEGIS128L(session []byte) []byte {
 }
 
 func sealAEGIS(key, plaintext, aad []byte) ([]byte, error) {
-	n12, err := nextNonce(key)
-	if err != nil {
-		return nil, err
-	}
+	return sealAEGISInto(nil, key, plaintext, aad)
+}
+
+// sealAEGISInto appends loft nonce[12]||AEGIS-128L(ct||tag) to dst.
+func sealAEGISInto(dst, key, plaintext, aad []byte) ([]byte, error) {
 	k16 := deriveAEGIS128L(key)
 	if len(k16) != 16 {
 		return nil, ErrAuth
 	}
-	body := aegis128lEncrypt(k16, aeadNonce16(n12), plaintext, aad)
-	out := make([]byte, 0, NonceSize+len(body))
-	out = append(out, n12...)
-	out = append(out, body...)
-	return out, nil
+	var n12 [NonceSize]byte
+	if err := putNonce(key, n12[:]); err != nil {
+		return nil, err
+	}
+	off := len(dst)
+	need := off + NonceSize + len(plaintext) + AuthSize
+	dst = growSlice(dst, need)
+	copy(dst[off:off+NonceSize], n12[:])
+	n16 := nonce16(n12[:])
+	aegis128lEncryptTo(dst[off+NonceSize:need], k16, n16[:], plaintext, aad)
+	return dst[:need], nil
 }
 
 func openAEGIS(key, blob, aad []byte) ([]byte, error) {
@@ -223,7 +260,8 @@ func openAEGIS(key, blob, aad []byte) ([]byte, error) {
 	if len(k16) != 16 {
 		return nil, ErrAuth
 	}
-	return aegis128lDecrypt(k16, aeadNonce16(blob[:NonceSize]), blob[NonceSize:], aad)
+	n16 := nonce16(blob[:NonceSize])
+	return aegis128lDecrypt(k16, n16[:], blob[NonceSize:], aad)
 }
 
 func bindAEGIS(key []byte) {
