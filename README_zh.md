@@ -180,7 +180,7 @@ server/panel      loft-panel 网页面板
 clients/go        loft, loft-front, loft-probe, loft-bench
 lab/              公开调试台（panel-dev）
 clients/macOS     菜单栏应用（拉起 loft-front）
-clients/NDMS  Entware / OpkgTun（loft-ndms）
+clients/NDMS      Entware / OpkgTun（loft-ndms）
 clients/MikroTik  RouterOS 7 容器（镜像 + .rsc）
 clients/iOS       Packet Tunnel（薄宿主 + appex）
 clients/Android   VpnService（薄 Java 宿主）
