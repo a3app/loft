@@ -188,17 +188,28 @@ sequenceDiagram
 
 **Subsequent GET.** Cookie `session=` carries base64url or Z85 of AEAD(mux batch), AAD = session identifier, body AEAD(mux batch). The node SHOULD prepend CmdReport (`applied` = last contiguous ingested GET sequence) to that body. A client that receives it MUST stop retrying uplink sequences ≤ `applied`. The handshake Cookie verifies as `0x02`; later GETs are AEAD. Failed authentication MUST be HTTP 404 with an HTML body.
 
-**Budget and encoding.** Uplink MUST fit in one header. Status `header_budget` is encoded Cookie bytes; if omitted, 16 KiB of HTTP header. Status `uplink_enc` 1 is `~` plus Z85 of `u16be length || AEAD` (ZeroMQ Z85); 0 and omitted are base64url. The handshake Cookie remains base64url. A node MUST accept both. Status `h2_conns` (1–4) is the number of HTTP/2 connections to this front; 0 keeps one. Inflight is the total of outstanding GETs across those connections. Concurrent outstanding GETs are 2–8 (protocol default 4; Status `inflight` is a ceiling).
+**Budget and encoding.** Uplink MUST fit in one header. Status `uplink_enc` 1 is `~` plus Z85 of `u16be length || AEAD` (ZeroMQ Z85); 0 and omitted are base64url. The handshake Cookie remains base64url. A node MUST accept both. Status `h2_conns` (1–4) is the number of HTTP/2 connections to this front; 0 keeps one. Inflight is the total of outstanding GETs across those connections.
 
-**Edge preset.** The handshake GET is one request. Status `edge` follows it, before the client opens the inflight pump. `0` or omitted is `plain`: the client keeps the limits of that first GET. `1` is `tight`: Cookie budget 16 KiB, 16 outstanding GETs, and a 6 s trip on each later GET. Preset `1` is for an origin behind a CDN or reverse proxy that drops a fat concurrent HEADERS burst. `header_budget` and `inflight`, when non-zero, are a ceiling below that preset. *Informative, not normative.* The node configuration spells preset `1` as `edge: tight`. See [guide.md](guide.md). A vendor name is not a Status field.
+**GET profiles.** Status `edge` selects the numeric contract for later GETs. The handshake GET is one request and MUST complete before the inflight pump. Inflight MUST be in 1–16. A vendor name is not a Status field. CmdTune (`header_budget`, `inflight`, `h2_conns`) is a live ceiling inside the active profile: it MUST NOT raise a field above that profile, and it MAY lower it. Status `header_budget` and `inflight`, when non-zero, are the same kind of ceiling, applied once after the handshake, before the pump. 0 in either field means the client keeps the profile default.
+
+| | `plain` (`edge` 0 or omitted) | `tight` (`edge` 1) |
+|--|--|--|
+| Cookie budget | 16 KiB encoded | 16 KiB encoded |
+| inflight | 8 | 16 |
+| handshake GET trip | 20 s | 20 s |
+| data GET trip | 15 s | 6 s |
+| node mux hold | MUST NOT exceed 1 s | MUST NOT exceed 1 s |
+| non-Puller wait | 5 s | 1 s |
+
+`tight` is for an origin behind a CDN or reverse proxy that drops a fat concurrent HEADERS burst. A client that opened the first GET with other limits MUST adopt the `tight` row when Status `edge` is `1`, then apply any non-zero Status ceiling. *Informative, not normative.* Node configuration spells `1` as `edge: tight`. See [guide.md](guide.md).
 
 **GET did not complete.** A client that enabled other mux fronts MUST try those fronts when the GET handshake does not produce a session. The try order is the enabled subset of GET, WebSocket, HTTP/2, QUIC, HTTP/3. A separate edge URL, when the client has one, is that first GET. The next GET and the other fronts use the node host. The node MUST NOT seal an authentication failure: GET answers HTTP 404 exactly as for any other miss, and `ws`, `h2`, `quic`, and `h3` close the transfer without a reply. A sealed Status would open for a prober that chose `eph_c` and so confirm a loft node. HTTP 404 on the GET handshake is `auth_bad_key` for GET alone; it does not by itself forbid the next front. A client reads a clean close right after `0x02` on `ws`, `h2`, `quic`, `h3`, or `l3` the same way: a WebSocket close, the end of the stream, RST_STREAM `CANCEL` or `NO_ERROR`, or a QUIC application close with code 0. A timeout or a connection reset is a network error. The client reports `auth_bad_key` and stops retrying only when every tried front refused. With `mask_pub` the TLS layer has already authenticated the node, so that refusal is unambiguous.
 
 **Socket change without session change.** A client MAY replace an HTTP/2 connection after a local max-age (omitted or 0: keep until error). Mux and the GET session identifier do not change. A client MAY also replace the HTTP/2 pool after a local egress change: mux, GET session identifier, sequence, and AEAD key remain; there is no new `0x02`. The node keys the session on the GET sid, not on the client address. CONNECT splices on the old pool end with those sockets.
 
-**HTTP errors.** 413: halve the budget, floor 1024, and split. 405: this front is not GET. A client that receives HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST back off on the same session and MAY send CmdTune event 1 on the next GET that already carries mux. The node MAY lower `header_budget` / `inflight` for that front and echo CmdTune event 0 in that GET body.
+**HTTP errors.** HTTP 413: the client MUST halve the Cookie budget, floor 1024, and split the uplink. HTTP 405: this front is not GET. A client that receives HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST back off on the same session and MAY send CmdTune event 1 on the next GET that already carries mux. The node MAY lower `header_budget` / `inflight` for that front and echo CmdTune event 0 in that GET body.
 
-**Idle and hold of a GET.** Empty idle uplink: wait at least `keepalive_ms / 2` and not less than 1 s. A GET that already carries mux Data, Open, Dgram, or Leave is not idle. The node SHOULD wait up to 250 ms for downlink and MUST NOT hold a GET longer than 1 s. When the uplink already contains CmdData, the node MAY return as soon as downlink Data is queued. When that uplink has ≥ 2 KiB CmdData, the node SHOULD cap that GET body at 96 KiB so the next Cookie recycles; download-only GETs keep 256 KiB (192 KiB with several streams).
+**Idle and hold of a GET.** Empty idle uplink: the client MUST wait at least `keepalive_ms / 2` and not less than 1 s. A GET that already carries mux Data, Open, Dgram, or Leave is not idle. The node MUST return an idle pad without waiting for mux. The node MUST NOT hold a GET with mux Data, Open, or Dgram longer than 1 s. A non-Puller HTTP/2 GET waiting its turn MUST give up that wait by the profile's non-Puller wait. When the uplink already contains CmdData, the node MAY return as soon as downlink Data is queued. When that uplink has ≥ 2 KiB CmdData, the node MUST cap that GET body at 96 KiB so the next Cookie recycles; download-only GETs keep 256 KiB (192 KiB with several streams).
 
 Dropping HTTP/2 without Leave does not end the session. Before process exit the client MUST send one last GET whose uplink batch contains CmdLeave. The node then closes the mux session, forgets the GET session identifier, drops the overlay peer, and frees the lease. `lease_hold` still keeps the overlay IP for `ok_resumed`. *Informative, not normative.* One implementation names the drop Detach and the free Release.
 
@@ -355,7 +366,7 @@ Fields in order:
 | peer hints | u8 n ≤ 16, then n × (ip, host, port u16be, vlan u16be) |
 | dns | u8 n ≤ 8, then n × (u8 len \|\| bytes) — resolver IPv4/IPv6 for the client TUN. Empty: the client MUST leave OS DNS unchanged. |
 | ip6, gateway6 | optional tail: each u8 len \|\| bytes. Omitted entirely when both are empty (IPv4-only). A decoder that does not read them MUST ignore the trailing bytes. |
-| header_budget, inflight | optional after ip6/gateway6: u16be encoded GET Cookie budget, u8 inflight. Present when either is non-zero (ip6/gateway6 are then empty strings on IPv4). Handshake values are a ceiling; live CmdTune is authoritative. 0 = client keeps its own. |
+| header_budget, inflight | optional after ip6/gateway6: u16be encoded GET Cookie budget, u8 inflight. Present when either is non-zero (ip6/gateway6 are then empty strings on IPv4). Handshake values are a ceiling inside the active GET profile (§3.4); live CmdTune is authoritative. 0 = profile default. inflight 1–16. |
 | h2_conns, uplink_enc | optional after inflight: u8 HTTP/2 connections (1–4; 0 = client keeps one), u8 uplink encoding (0 base64url, 1 Cookie Z85). Present when either is non-zero. Old clients ignore the extra bytes. |
 | gap_hold_ms | optional after uplink_enc: u32be. How long the node keeps mux streams after a front drop without Leave. 0 = client default (8 s). Old clients ignore the extra bytes. |
 | routes | optional after gap_hold_ms: u8 n ≤ 16, then n × (dst, via) as u8 len \|\| bytes. Managed CIDRs: a laboratory LAN behind a member (`via` is that member’s overlay IP, resolved from `ip route` VIA / `member ID` / `tag NAME`). The node splices Open `host:port` onto that member. A client MUST NOT install a route whose `via` is its own overlay IP. Old clients ignore the extra bytes. |
@@ -363,7 +374,7 @@ Fields in order:
 | session_ttl_ms | optional after policy: u32be live-session maximum. 0 = off. Distinct from `lease_sec` (IP hold after disconnect). When this field is present without a policy, the encoder writes an empty policy first. Old clients ignore the extra bytes. |
 | rate_bps | optional after session_ttl_ms: u32be bulk `CmdData`/`CmdDgram` cap for this session, both directions, bytes per second. 0 = off. Control and small frames (Open, Ping, ACK ≤ 4 KiB, DNS/ICMP Dgram ≤ 512 B) are unshaped. The node enforces. When this field is present without `session_ttl_ms`, the encoder writes ttl 0 first. Old clients ignore the extra bytes. |
 | fronts | optional after rate_bps: u8 n ≤ 8, then n × (name, path, url) as u8 len \|\| bytes. Mux fronts this node accepts (`get` `ws` `h2` `h3` `quic`). Empty url is the host:port of the front that did `0x02`. `quic` has an empty path. Empty list = the client keeps URI/defaults. When this field is present without `rate_bps`, the encoder writes rate 0 first. Old clients ignore the extra bytes. After a successful Status the node map is source of truth; the client SHOULD persist it into the saved profile. |
-| edge | optional after fronts: u8 GET preset. `0` plain, omitted when `inner` is also absent. `1` tight. A present `inner` forces this byte even when it is `0`, and forces `fronts` (n MAY be 0) so the next byte is not read as `edge`. Old clients ignore the extra byte. |
+| edge | optional after fronts: u8 GET profile (§3.4). `0` plain, omitted when `inner` is also absent. `1` tight. A present `inner` forces this byte even when it is `0`, and forces `fronts` (n MAY be 0) so the next byte is not read as `edge`. Old clients ignore the extra byte. |
 | inner | optional after edge: u8 data cipher for records after this Status. The node writes it only when Hello asked, the policy allows that id, and the front that completed `0x02` is not `get`. `0` no inner AEAD. `1` ChaCha20-Poly1305, the same as omitting the byte; a node MAY omit `1`. `2` AES-256-GCM. `3` AEGIS-128L. `5` HiAE. `8` reserved experimental. Absence, an unknown id, or a refused ask is ChaCha20-Poly1305, and the session still comes up. Handshake Seal of this Status is ChaCha20-Poly1305 either way. Old clients ignore the extra byte. |
 | key_roll | optional after inner: u16be len \|\| bytes, a KeyRoll (§10.4) while the controller signing key changes. When it is present and no data cipher was negotiated, `inner` is `1` (ChaCha20-Poly1305), which changes nothing. |
 | cc, cc_up, cc_down | optional after key_roll: u8, u32be, u32be. The congestion control both sides use (§5.4) and, for `2`, the two rates in kbit/s. Present only when `cc` is not `0`; `key_roll` is then written with length 0 when there is none. Old clients ignore the extra bytes. |
@@ -454,7 +465,7 @@ Client stream identifiers are odd, starting at 1. Node identifiers are even, sta
 - **Resin** is held until a Report covers its GET sequence, then retransmitted on that same sequence: Open, Ping, Pong, Leave, Tune, Report, Front, Lists from the client, Close, Reset, and Dgram to port 53.
 - **Draft** is sent once: Data, Pad, Lists from the node, other Dgram. Inner TCP or UDP produces a new frame if the application still needs the bytes. A client missing a piece of Lists asks again from the offset of the first missing byte.
 
-One mux Pull becomes up to three GET sequences: control resin, draft Data, then Close/Reset. Close MUST NOT share a Cookie with Data for the same stream. After an HTTP error the client retries the same sequence with resin only (or Pad if the Cookie was draft-only) so the sequence hole fills and draft is not replayed. A first-attempt HTTP 404 on several inflight GETs is edge noise; three **retry** 404s on the same sid mean the origin lost the session. A duplicate Open for a live stream_id MUST be ignored.
+One mux Pull becomes up to three GET sequences: control resin, draft Data, then Close/Reset. Close MUST NOT share a Cookie with Data for the same stream. After an HTTP error the client MUST retry the same sequence with resin only (or Pad if the Cookie was draft-only) so the sequence hole fills and draft is not replayed. A first-attempt HTTP 404 on several inflight GETs is CDN or reverse-proxy noise: the client MUST retry those sequences and MUST NOT drop the session. Three **retry** 404s of the same GET sequence mean the origin lost that sid: the client MUST forget the sid and MUST NOT keep retrying it. A duplicate Open for a live stream_id MUST be ignored.
 
 Open target: `u16be host_len || host || u16be port`. Dgram payload is that prefix plus the datagram.
 
@@ -775,7 +786,13 @@ Numbers already assigned do not move. A later revision adds a name in a reserved
 | mux payload | ≤ 16384 |
 | Hello/Status strings | ≤ 64 |
 | roster URL | ≤ 255 |
-| inflight GET | ≤ 8 |
+| inflight GET | 1–16; `plain` default 8; `tight` 16 |
+| GET Cookie budget | 16 KiB encoded (`plain` and `tight`); HTTP 413 floor 1024 |
+| GET handshake trip | 20 s |
+| GET data trip | `plain` 15 s; `tight` 6 s |
+| GET node mux hold | MUST NOT exceed 1 s |
+| GET non-Puller wait | `plain` 5 s; `tight` 1 s |
+| GET body | 256 KiB download-only; 192 KiB with several streams; 96 KiB when uplink has ≥ 2 KiB CmdData |
 | streams per session | SHOULD ≤ 256 |
 | AEAD batch | ≤ 48 KiB (`ws`), ≤ header budget (`get`) |
 | GET padding plaintext | about 400 bytes before AEAD |

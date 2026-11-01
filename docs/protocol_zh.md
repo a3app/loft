@@ -188,17 +188,28 @@ sequenceDiagram
 
 **后续 GET。** Cookie `session=` 携带 AEAD(mux 批次) 的 base64url 或 Z85，AAD = 会话标识，体为 AEAD(mux 批次)。节点应该在该体前附加 CmdReport（`applied` = 最后一段连续收下的 GET 序号）。收到它的客户端必须停止重试上行序号 ≤ `applied`。握手 Cookie 按 `0x02` 校验；其后 GET 为 AEAD。认证失败必须为带 HTML 体的 HTTP 404。
 
-**预算与编码。** 上行必须装进一个头。Status `header_budget` 为编码后 Cookie 字节；省略时为 16 KiB HTTP 头。Status `uplink_enc` 为 1 时是 `~` 加 `u16be length || AEAD` 的 Z85（ZeroMQ Z85）；0 与省略为 base64url。握手 Cookie 仍为 base64url。节点必须两种都收。Status `h2_conns`（1–4）为到该前置的 HTTP/2 连接数；0 保持一条。Inflight 为这些连接上未完成 GET 的总数。并发未完成 GET 为 2–8（协议默认 4；Status `inflight` 为上限）。
+**预算与编码。** 上行必须装进一个头。Status `uplink_enc` 为 1 时是 `~` 加 `u16be length || AEAD` 的 Z85（ZeroMQ Z85）；0 与省略为 base64url。握手 Cookie 仍为 base64url。节点必须两种都收。Status `h2_conns`（1–4）为到该前置的 HTTP/2 连接数；0 保持一条。Inflight 为这些连接上未完成 GET 的总数。
 
-**GET 预设。** 握手 GET 是一次请求。Status `edge` 随其后，在客户端打开 inflight 泵之前。`0` 或省略为 `plain`：客户端保留那次首个 GET 的限额。`1` 为 `tight`：Cookie 预算 16 KiB、16 条未完成 GET、其后每条 GET 6 秒超时。预设 `1` 用于 origin 位于 CDN 或反向代理之后，而该代理会丢掉过胖的并发 HEADERS 突发。`header_budget` 与 `inflight` 非零时为该预设之下的上限。厂商名不是 Status 字段。*说明，非规范。* 节点配置把预设 `1` 写成 `edge: tight`。见 [guide_zh.md](guide_zh.md)。
+**GET 配置档。** Status `edge` 为后续 GET 选定数值合同。握手 GET 是一次请求，必须在 inflight 泵之前完成。Inflight 必须在 1–16。厂商名不是 Status 字段。CmdTune（`header_budget`、`inflight`、`h2_conns`）是现行配置档内的存活上限：不得把字段抬到该配置档之上，可以下调。Status `header_budget` 与 `inflight` 非零时是同一种上限，在握手之后、泵之前应用一次。任一字段为 0 表示沿用配置档默认。
+
+| | `plain`（`edge` 为 0 或省略） | `tight`（`edge` 为 1） |
+|--|--|--|
+| Cookie 预算 | 编码后 16 KiB | 编码后 16 KiB |
+| inflight | 8 | 16 |
+| 握手 GET 超时 | 20 s | 20 s |
+| 数据 GET 超时 | 15 s | 6 s |
+| 节点 mux 保持 | 不得超过 1 s | 不得超过 1 s |
+| 非 Puller 等待 | 5 s | 1 s |
+
+`tight` 用于 origin 位于会丢掉过胖并发 HEADERS 突发的 CDN 或反向代理之后。以其他限额打开首次 GET 的客户端，在 Status `edge` 为 `1` 时必须改用 `tight` 行，再应用非零的 Status 上限。*说明，非规范。* 节点配置把 `1` 写成 `edge: tight`。见 [guide_zh.md](guide_zh.md)。
 
 **GET 未完成。** 已启用其他 mux 前置的客户端，在 GET 握手未能产生会话时必须尝试那些前置。尝试顺序为已启用的 GET、WebSocket、HTTP/2、QUIC、HTTP/3 子集。若客户端另有边缘 URL，第一次 GET 使用它。下一次 GET 与其余前置使用节点主机。节点不得密封认证失败：GET 与任何其他未命中一样返回 HTTP 404，`ws`、`h2`、`quic`、`h3` 不作回复直接关闭传输。密封的 Status 可被自选 `eph_c` 的探测者打开，从而确认 loft 节点。GET 握手上的 HTTP 404 仅对 GET 表示 `auth_bad_key`；其本身不禁止下一个前置。客户端以同样方式解读 `ws`、`h2`、`quic`、`h3` 或 `l3` 上紧随 `0x02` 的干净关闭：WebSocket 关闭帧、流结束、RST_STREAM `CANCEL` 或 `NO_ERROR`、错误码为 0 的 QUIC 应用层关闭。超时或连接重置属于网络错误。仅当所有已试前置都拒绝时，客户端才报告 `auth_bad_key` 并停止重试。有 `mask_pub` 时 TLS 层已认证节点，因此该拒绝是明确的。
 
 **更换套接字而不更换会话。** 客户端可以在本地 max-age 之后更换一条 HTTP/2 连接（省略或 0：保留到出错）。Mux 与 GET 会话标识不变。客户端也可以在本机出口变更后更换 HTTP/2 池：mux、GET 会话标识、序号与 AEAD 密钥留下，不再发新的 `0x02`。节点按 GET sid 识别会话，不按客户端地址。旧池上的 CONNECT 拼接随这些套接字结束。
 
-**HTTP 错误。** 413：预算减半，下限 1024，再拆分。405：该前置不是 GET。收到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` 的客户端必须在同一会话上退避，可以在下一条已经携带 mux 的 GET 上发送 CmdTune event 1。节点可以降低该前置的 `header_budget` / `inflight`，并在该 GET 体中回显 CmdTune event 0。
+**HTTP 错误。** HTTP 413：客户端必须把 Cookie 预算减半，下限 1024，再拆分上行。HTTP 405：该前置不是 GET。收到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` 的客户端必须在同一会话上退避，可以在下一条已经携带 mux 的 GET 上发送 CmdTune event 1。节点可以降低该前置的 `header_budget` / `inflight`，并在该 GET 体中回显 CmdTune event 0。
 
-**GET 的空闲与保持。** 空闲上行：至少等待 `keepalive_ms / 2`，且不少于 1 秒。已经携带 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点应该为下行等待至多 250 ms，不得将 GET 保持超过 1 秒。上行已含 CmdData 时，节点可以在下行 Data 入队后立即返回。该上行有 ≥ 2 KiB CmdData 时，节点应该将该 GET 体封顶 96 KiB，以便下一条 Cookie 周转；仅下载的 GET 仍为 256 KiB（多条流时 192 KiB）。
+**GET 的空闲与保持。** 空闲上行：客户端必须至少等待 `keepalive_ms / 2`，且不少于 1 秒。已经携带 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点必须对空闲 Pad 立即返回，不等 mux。带有 mux Data、Open 或 Dgram 的 GET，节点不得保持超过 1 秒。尚未成为 Puller、正在排队的 HTTP/2 GET，必须在配置档的非 Puller 等待之内放弃该等待。上行已含 CmdData 时，节点可以在下行 Data 入队后立即返回。该上行有 ≥ 2 KiB CmdData 时，节点必须将该 GET 体封顶 96 KiB，以便下一条 Cookie 周转；仅下载的 GET 仍为 256 KiB（多条流时 192 KiB）。
 
 HTTP/2 断开但没有 Leave，会话不结束。进程退出前，客户端必须再发一个 GET，上行批次含 CmdLeave。节点于是关闭 mux 会话，忘记 GET 会话标识，卸下覆盖网对端，并释放租约。`lease_hold` 仍为 `ok_resumed` 保留覆盖网 IP。*说明，非规范。* 一种实现把卸下叫做 Detach，把释放租约叫做 Release。
 
@@ -353,7 +364,7 @@ u8    cc || u32be cc_up || u32be cc_down   可选，位于 controller_pin 之后
 | peer hints | u8 n ≤ 16，然后 n × (ip, host, port u16be, vlan u16be) |
 | dns | u8 n ≤ 8，然后 n × (u8 len \|\| bytes) — 客户端 TUN 的解析器 IPv4/IPv6。空：客户端必须保持操作系统 DNS 不变。 |
 | ip6, gateway6 | 可选尾部：各 u8 len \|\| bytes。二者皆空时整段省略（仅 IPv4）。不读它们的解码器必须忽略尾部字节。 |
-| header_budget, inflight | ip6/gateway6 之后可选：u16be 编码后 GET Cookie 预算，u8 inflight。任一非零即出现（IPv4 时 ip6/gateway6 为空串）。握手值为上限；存活 CmdTune 为准。0 = 客户端保留自己的。 |
+| header_budget, inflight | ip6/gateway6 之后可选：u16be 编码后 GET Cookie 预算，u8 inflight。任一非零即出现（IPv4 时 ip6/gateway6 为空串）。握手值是现行 GET 配置档（§3.4）内的上限；存活 CmdTune 为准。0 = 配置档默认。inflight 1–16。 |
 | h2_conns, uplink_enc | inflight 之后可选：u8 HTTP/2 连接数（1–4；0 = 客户端保持一条），u8 上行编码（0 base64url，1 Cookie Z85）。任一非零即出现。旧客户端忽略多余字节。 |
 | gap_hold_ms | uplink_enc 之后可选：u32be。前置丢失且无 Leave 后，节点保留 mux 流的时长。0 = 客户端默认（8 s）。旧客户端忽略多余字节。 |
 | routes | gap_hold_ms 之后可选：u8 n ≤ 16，然后 n × (dst, via)，各为 u8 len \|\| bytes。受管 CIDR：成员背后的实验室局域网（`via` 为该成员的覆盖网 IP，由 `ip route` VIA / `member ID` / `tag NAME` 解析）。节点把 Open `host:port` 拼到该成员。客户端不得安装 `via` 为自己覆盖网 IP 的路由。旧客户端忽略多余字节。 |
@@ -361,7 +372,7 @@ u8    cc || u32be cc_up || u32be cc_down   可选，位于 controller_pin 之后
 | session_ttl_ms | policy 之后可选：u32be 存活会话上限。0 = 关。有别于 `lease_sec`（断开后的 IP 保留）。有本字段而无 policy 时，编码器先写空 policy。旧客户端忽略多余字节。 |
 | rate_bps | session_ttl_ms 之后可选：u32be 本会话双向批量 `CmdData`/`CmdDgram` 上限，字节每秒。0 = 关。控制与小帧（Open、Ping、ACK ≤ 4 KiB、DNS/ICMP Dgram ≤ 512 B）不整形。由节点执行。有本字段而无 `session_ttl_ms` 时，编码器先写 ttl 0。旧客户端忽略多余字节。 |
 | fronts | rate_bps 之后可选：u8 n ≤ 8，然后 n ×（name、path、url），各为 u8 len \|\| bytes。本节点接受的 mux 前置（`get` `ws` `h2` `h3` `quic`）。空 url 为完成 `0x02` 的前置的 host:port。`quic` 路径为空。空列表 = 客户端保留 URI/默认。有本字段而无 `rate_bps` 时，编码器先写 rate 0。旧客户端忽略多余字节。成功 Status 后节点地图为权威；客户端应写入已保存的配置。 |
-| edge | fronts 之后可选：u8，GET 预设。`0` 为 plain，`inner` 也不存在时省略。`1` 为 tight。出现 `inner` 时，即使该字节为 `0` 也必须写出，并写出 `fronts`（n 可以为 0），以免下一字节被读成 `edge`。旧客户端忽略多余字节。 |
+| edge | fronts 之后可选：u8，GET 配置档（§3.4）。`0` 为 plain，`inner` 也不存在时省略。`1` 为 tight。出现 `inner` 时，即使该字节为 `0` 也必须写出，并写出 `fronts`（n 可以为 0），以免下一字节被读成 `edge`。旧客户端忽略多余字节。 |
 | inner | edge 之后可选：u8，此 Status 之后记录的数据密码。仅当 Hello 请求过、策略允许该标识、且完成 `0x02` 的前置不是 `get` 时，节点才写它。`0` 无内部 AEAD。`1` 为 ChaCha20-Poly1305，与省略该字节相同；节点可以不写 `1`。`2` 为 AES-256-GCM。`3` 为 AEGIS-128L。`5` 为 HiAE。`8` 保留给实验性数据密码。没有该字节、未知标识或拒绝，都是 ChaCha20-Poly1305，会话仍然建立。此 Status 的握手 Seal 无论哪种都是 ChaCha20-Poly1305。旧客户端忽略多余字节。 |
 | key_roll | inner 之后可选：u16be len \|\| bytes，控制器签名密钥更换期间的 KeyRoll（§10.4）。出现该字段而未协商数据密码时，`inner` 为 `1`（ChaCha20-Poly1305），不改变任何东西。 |
 | cc, cc_up, cc_down | key_roll 之后可选：u8、u32be、u32be。双方使用的拥塞控制（§5.4），以及 `2` 时的两个速率（kbit/s）。仅当 `cc` 不为 `0` 时出现；此时若无 `key_roll`，则以长度 0 写出。旧客户端忽略多余字节。 |
@@ -452,7 +463,7 @@ bytes payload
 - **Resin** 持有至 Report 覆盖其 GET 序号，再在同一序号上重传：Open、Ping、Pong、Leave、Tune、Report、Front、客户端发的 Lists、Close、Reset，以及发往端口 53 的 Dgram。
 - **Draft** 只发送一次：Data、Pad、节点发的 Lists、其他 Dgram。内部 TCP 或 UDP 在应用仍需要这些字节时产生新帧。缺少 Lists 某一段的客户端从第一个缺失字节的偏移重新请求。
 
-一次 mux Pull 最多变成三个 GET 序号：控制 resin、draft Data，然后 Close/Reset。Close 不得与同一流的 Data 共享 Cookie。HTTP 错误之后，客户端以仅 resin（若 Cookie 原为仅 draft 则以 Pad）重试同一序号，以填补序号空洞且不重放 draft。若干 inflight GET 上的首次 HTTP 404 为边缘噪声；同一 sid 上三次 **重试** 404 表示源站已丢失会话。对存活 stream_id 的重复 Open 必须忽略。
+一次 mux Pull 最多变成三个 GET 序号：控制 resin、draft Data，然后 Close/Reset。Close 不得与同一流的 Data 共享 Cookie。HTTP 错误之后，客户端必须以仅 resin（若 Cookie 原为仅 draft 则以 Pad）重试同一序号，以填补序号空洞且不重放 draft。若干 inflight GET 上的首次 HTTP 404 是 CDN 或反向代理噪声：客户端必须重试这些序号，不得丢弃会话。同一 GET 序号上三次 **重试** 404 表示源站已丢失该 sid：客户端必须忘记该 sid，不得继续重试。对存活 stream_id 的重复 Open 必须忽略。
 
 Open 目标：`u16be host_len || host || u16be port`。Dgram 载荷为该前缀加数据报。
 
@@ -773,7 +784,13 @@ loft 不是 mixnet。路径看得到一条 TLS 1.3 会话。控制器看得到�
 | mux 载荷 | ≤ 16384 |
 | Hello/Status 字符串 | ≤ 64 |
 | 名册 URL | ≤ 255 |
-| inflight GET | ≤ 8 |
+| inflight GET | 1–16；`plain` 默认 8；`tight` 为 16 |
+| GET Cookie 预算 | 编码后 16 KiB（`plain` 与 `tight`）；HTTP 413 下限 1024 |
+| GET 握手超时 | 20 s |
+| GET 数据超时 | `plain` 15 s；`tight` 6 s |
+| GET 节点 mux 保持 | 不得超过 1 s |
+| GET 非 Puller 等待 | `plain` 5 s；`tight` 1 s |
+| GET 体 | 仅下载 256 KiB；多流 192 KiB；上行 ≥ 2 KiB CmdData 时 96 KiB |
 | 每会话流数 | 应该 ≤ 256 |
 | AEAD 批次 | ≤ 48 KiB（`ws`），≤ 头预算（`get`） |
 | GET 填充明文 | AEAD 前约 400 字节 |

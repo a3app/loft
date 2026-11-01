@@ -227,7 +227,7 @@ Mux `Pull` 先抽 Open/Ping/Pong/Dgram/Leave 和小 Data（≤ 4 KiB），再抽
 
 每个成员实例一条 mux 会话。流是带有界接收缓冲的 goroutine。mux 载荷 ≤ 16384；`Stream.Write` 和 `EncodeBatch` 切开 CmdData，免得 32 KiB 的 `io.Copy` 把帧丢掉。
 
-GET 前置有有界 inflight 窗口（协议 2–8，默认 4；这棵树默认 8）。客户端泵是唯一的上行 Puller，按 Pull 顺序发 GET `seq`。节点按 seq 应用上行；只有按序的 GET 才 Pull mux 下行，免得丢掉的 HTTP 响应把已经从 mux 拿走的帧弄丢（YouTube/Speedtest TLS）。空闲 GET 节奏是 `keepalive_ms / 2`（下限 1 秒），抖动 ±⅓。Open/很小的 Data 等 15 ms，数据报等 80 ms，好让 ICMP 搭同一条 body。这棵树通用 GET `header_budget` 是 16 KiB HTTP 头（base64url+AEAD 之后解码 mux 大约 12 KiB，Cookie Z85 之后大约 13 KiB）；Yandex 配置钉死 16 KiB encoded。Status `h2_conns`（节点 `get_h2`，1–4）是额外的 HTTP/2 连接，当第二个 header-budget 信封；inflight 还是总数。可选客户端 `h2_max_age_ms`（0 = 留到出错）会换这条 TCP；mux 和 GET sid 不变。本机出口变更同样换 HTTP/2 池（不再做一次 `0x02`）。上行已经有 ≥ 2 KiB CmdData 的 GET 把 body 限制在 96 KiB，好让 Cookie 槽回收；只下载还是 256 KiB。
+GET 前置有有界 inflight 窗口（1–16；`plain` 默认 8；`tight` 16）。客户端泵是唯一的上行 Puller，按 Pull 顺序发 GET `seq`。节点按 seq 应用上行；只有按序的 GET 才 Pull mux 下行，免得丢掉的 HTTP 响应把已经从 mux 拿走的帧弄丢（YouTube/Speedtest TLS）。空闲 GET 节奏是 `keepalive_ms / 2`（下限 1 秒），抖动 ±⅓。Open/很小的 Data 等 15 ms，数据报等 80 ms，好让 ICMP 搭同一条 body。这棵树通用 GET `header_budget` 是 16 KiB HTTP 头（base64url+AEAD 之后解码 mux 大约 12 KiB，Cookie Z85 之后大约 13 KiB）；Yandex 配置钉死 16 KiB encoded。Status `h2_conns`（节点 `get_h2`，1–4）是额外的 HTTP/2 连接，当第二个 header-budget 信封；inflight 还是总数。可选客户端 `h2_max_age_ms`（0 = 留到出错）会换这条 TCP；mux 和 GET sid 不变。本机出口变更同样换 HTTP/2 池（不再做一次 `0x02`）。上行已经有 ≥ 2 KiB CmdData 的 GET 把 body 限制在 96 KiB，好让 Cookie 槽回收；只下载还是 256 KiB。
 
 中继干线：每个中继进程一条 mux 会话，很多 `hub:*` 流。
 

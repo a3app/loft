@@ -164,7 +164,7 @@ export LOFT_TOKEN='long-secret'
 | `inner` | 节点可以确认的额外数据密码：`clear`、`aes`、`aegis`、`hiae`。空 = 仅 ChaCha20-Poly1305。ChaCha20-Poly1305 始终允许，不能关掉。`get` 不确认 `clear`、`aes`、`aegis` 或 `hiae`。重启后生效。SIGHUP 不重读 `node.conf`。面板「节点」页是同一组勾选。 |
 | `cc` | 允许客户端请求的拥塞控制：`bbr`、`fixed`（`off` 或空 = 所有会话保持系统默认）。是否请求由各客户端决定；节点只负责允许。只有基于 QUIC 的会话会切换（`quic`、`h3`，或经 HTTP/3 的 `l3`）；TCP 前置保持内核默认。不经中继，不用于 `get`。重启后生效。 |
 | `cc_max UP DOWN` | `fixed` 的上限，Mbit/s：客户端可发送多快、节点向它发送多快。`0` = 不设上限。 |
-| `edge` | GET 预设 `plain` 或 `tight`（Status 字节 0 或 1）。`tight`：Cookie 预算 16 KiB，inflight 16，单次 6 秒。用于 origin 位于会丢掉过胖并发 HEADERS 突发的 CDN 或反向代理之后。默认 `plain`。 |
+| `edge` | GET 配置档 `plain` 或 `tight`（Status 字节 0 或 1）。`tight`：Cookie 预算 16 KiB，inflight 16，单次 6 秒。用于 origin 位于会丢掉过胖并发 HEADERS 突发的 CDN 或反向代理之后。默认 `plain`。 |
 | `decoy` | `host:port` 列表。第一条是节点身份。空 = 关 |
 | `decoy_proxy` | `enable`：每个 TCP 拼接先发一行带客户端地址的 PROXY v1。只用于自己的网页服务器（nginx `listen … proxy_protocol`）；公共网站会出错。默认关。不影响 UDP |
 | `mask` | 给 loft 客户端 dest 形状的 ECDSA 握手；探测照样拼接 |
@@ -291,7 +291,7 @@ make probe
 
 `fingerprint` `chrome` 是这个客户端用 uTLS 构造的 Chrome ClientHello。`firefox` 是另一种浏览器形态。`go` 是 Go 自带密码套件列表；JA3/JA4 过滤器已经把它标成非浏览器。协议在有这类过滤器的路径上要求浏览器形态。它不要求 uTLS。
 
-没写 `header_budget` 就是 16 KiB HTTP 头（Yandex CDN 配置也钉在 16 KiB）。没写 `inflight` 在这棵树是 8（协议范围 2–8，规范默认 4）。没写 `h2_max_age_ms` 就是 0：GET 的 HTTP/2 一直留到出错。大于 0（下限 15 秒，上限 1 小时）会换这条 TCP；mux 和 GET 会话 id 不变。GET 上行是 Cookie `session=`；第一次 GET 是标签 `0x02`，会话 id 已经在路径里。覆盖网 ICMP 是打到 `dst:1` 的 CmdDgram；节点答网关，并发互联网 echo。
+没写 `header_budget` 就是 16 KiB HTTP 头（Yandex CDN 配置也钉在 16 KiB）。没写 `inflight` 就是 8（`plain`；协议范围 1–16；`tight` 为 16）。没写 `h2_max_age_ms` 就是 0：GET 的 HTTP/2 一直留到出错。大于 0（下限 15 秒，上限 1 小时）会换这条 TCP；mux 和 GET 会话 id 不变。GET 上行是 Cookie `session=`；第一次 GET 是标签 `0x02`，会话 id 已经在路径里。覆盖网 ICMP 是打到 `dst:1` 的 CmdDgram；节点答网关，并发互联网 echo。
 
 客户端不选诱饵 SNI。节点宣告。CDN 前置保持 CDN 主机名。
 
@@ -367,7 +367,7 @@ use:
 | SOCKS 通，TUN 没声 | `tun: auto`、权限、排除的出站主机 |
 | TUN 死后系统默认路由没了 | `kill_switch`；恢复路由或重连 |
 | GET 上 ping 大约 1 秒 | 空闲 GET 节奏是 `keepalive/2`（下限 1 秒）；重连让客户端在 Dgram 之后能追上 |
-| 上传卡住 / TLS bad record | 没写 GET `inflight` 以前默认 1；这棵树现在默认 8 |
+| 上传卡住 / TLS bad record | 没写 GET `inflight` 以前默认 1；现在省略为 8（`plain`） |
 
 ---
 

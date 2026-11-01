@@ -164,7 +164,7 @@ export LOFT_TOKEN='long-secret'
 | `inner` | Extra data ciphers the node may confirm: `clear`, `aes`, `aegis`, `hiae`. Empty = ChaCha20-Poly1305 only. ChaCha20-Poly1305 stays allowed and cannot be disabled. `get` never confirms `clear`, `aes`, `aegis`, or `hiae`. A restart applies it. SIGHUP does not re-read `node.conf`. The panel Node screen lists the same boxes. |
 | `cc` | Congestion control clients may ask for: `bbr`, `fixed` (`off` or empty = every session stays on the system default). Each client decides whether to ask; the node only allows. Only sessions over QUIC switch (`quic`, `h3`, or `l3` over HTTP/3); TCP fronts keep the kernel's default. Not through a relay, not on `get`. A restart applies it. |
 | `cc_max UP DOWN` | `fixed` caps in Mbit/s: how fast a client may send and how fast the node sends to it. `0` = no cap. |
-| `edge` | GET preset `plain` or `tight` (Status byte 0 or 1). `tight`: Cookie budget 16 KiB, 16 inflight, 6 s trip. For an origin behind a CDN or reverse proxy that drops a fat concurrent HEADERS burst. Default `plain`. |
+| `edge` | GET profile `plain` or `tight` (Status byte 0 or 1). `tight`: Cookie budget 16 KiB, 16 inflight, 6 s trip. For an origin behind a CDN or reverse proxy that drops a fat concurrent HEADERS burst. Default `plain`. |
 | `decoy` | `host:port` list. First entry is the node identity. Empty = off |
 | `decoy_proxy` | `enable`: each TCP splice starts with a PROXY v1 line carrying the client address. Only for your own web server (nginx `listen … proxy_protocol`); a public site would break. Default off. UDP is not affected |
 | `mask` | Dest-shaped ECDSA handshake for loft clients; probes still splice |
@@ -303,7 +303,7 @@ Outbound fields: `name`, `type` (`get` \| `ws` \| `h2` \| `quic` \| `h3`), `url`
 
 `fingerprint` `chrome` is a uTLS Chrome ClientHello. `firefox` is the other browser shape. `go` is the stock Go cipher list; JA3/JA4 filters already mark it as a non-browser. The protocol requires the browser shape on a path that filters browsers. It does not require uTLS.
 
-Omitted `header_budget` is 16 KiB of HTTP header (the Yandex CDN profile pins the same 16 KiB). Omitted `inflight` is 8 in this tree (protocol range 2–8, spec default 4). Omitted `h2_max_age_ms` is 0: keep the GET HTTP/2 connection until error. A positive value (floor 15 s, cap 1 h) replaces that TCP; mux and GET session id stay. GET uplink is Cookie `session=`; the first GET is tag `0x02` with the session id already in the path. Overlay ICMP is CmdDgram to `dst:1`; the node answers the gateway and emits internet echo.
+Omitted `header_budget` is 16 KiB of HTTP header (the Yandex CDN profile pins the same 16 KiB). Omitted `inflight` is 8 (`plain`; protocol range 1–16; `tight` is 16). Omitted `h2_max_age_ms` is 0: keep the GET HTTP/2 connection until error. A positive value (floor 15 s, cap 1 h) replaces that TCP; mux and GET session id stay. GET uplink is Cookie `session=`; the first GET is tag `0x02` with the session id already in the path. Overlay ICMP is CmdDgram to `dst:1`; the node answers the gateway and emits internet echo.
 
 The client does not choose decoy SNI. The node advertises it. A CDN front keeps the CDN hostname.
 
@@ -379,7 +379,7 @@ A typical deployment:
 | SOCKS works, TUN silent | `tun: auto`, privileges, excluded outbound hosts |
 | Native default gone after TUN death | `kill_switch`; restore routes or reconnect |
 | Ping ~1 s on GET | idle GET pace is `keepalive/2` (floor 1 s); reconnect so the client has catching-down after Dgram |
-| Upload stalls / TLS bad record | GET `inflight` omitted used to default to 1; this tree now defaults to 8 |
+| Upload stalls / TLS bad record | GET `inflight` omitted used to default to 1; omitted is now 8 (`plain`) |
 
 ---
 

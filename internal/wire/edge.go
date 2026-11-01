@@ -2,9 +2,9 @@ package wire
 
 import "time"
 
-// Edge is the GET preset a node advertises in Status after the handshake.
+// Edge is the GET profile a node advertises in Status after the handshake.
 // 0 is plain: the client keeps the limits it opened the first GET with.
-// Vendor names are not on the wire.
+// Vendor names are not on the wire. Numbers are protocol §3.4.
 //
 // The "edge" is the CDN or reverse proxy in front of the node. Some edges
 // drop the connection when the client sends many large-header GETs at once,
@@ -14,7 +14,7 @@ const (
 	EdgeTight byte = 1 // GET edge that drops a fat concurrent Cookie burst
 )
 
-// Tight GET preset. The handshake itself stays one GET under 16 KiB.
+// Tight GET profile. Handshake stays one GET under 16 KiB.
 // The pump applies these numbers before the first burst.
 const (
 	EdgeTightBudget   uint16 = 16 << 10
