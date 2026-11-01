@@ -24,9 +24,34 @@ x86_64) TAG=intel ;;
 	exit 1
 	;;
 esac
+# Local DMGs keep volume name "loft". Dist macos-dmgs builds arm then intel
+# on one runner; unique CI names so leftover /Volumes/loft cannot EBUSY the
+# next slice (hdiutil 16).
 VOL=loft
+if [ "${CI:-}" = "true" ]; then
+	VOL=loft-$TAG
+fi
 DMG="$OUTDIR/loft-${VER}-macos-${TAG}.dmg"
 RW="$OUTDIR/loft-${VER}-macos-${TAG}.rw.dmg"
+
+# hdiutil 16 = EBUSY (mds, diskimages-helper, leftover attach).
+# No-op if the path is already gone, so leftover cleanup does not sleep.
+detach_vol() {
+	_m=$1
+	[ -z "$_m" ] && return 0
+	if [ ! -e "$_m" ]; then
+		return 0
+	fi
+	i=0
+	while [ "$i" -lt 8 ]; do
+		if hdiutil detach "$_m" >/dev/null 2>&1; then
+			return 0
+		fi
+		sleep 1
+		i=$((i + 1))
+	done
+	hdiutil detach "$_m" -force
+}
 
 # shellcheck disable=SC1091
 . "$PACK/identity.sh"
@@ -43,8 +68,11 @@ STAGE=$(mktemp -d "${TMPDIR:-/tmp}/loft-dmg.XXXXXX")
 # cleanup: on any exit, unmount a still-attached image and delete the stage
 # dir and the writable intermediate image.
 cleanup() {
-	if [ -n "${MOUNT:-}" ] && [ -d "$MOUNT" ]; then
-		hdiutil detach "$MOUNT" -quiet 2>/dev/null || true
+	if [ -n "${DEV:-}" ]; then
+		detach_vol "$DEV" || true
+	fi
+	if [ -n "${MOUNT:-}" ]; then
+		detach_vol "$MOUNT" || true
 	fi
 	rm -rf "$STAGE"
 	rm -f "$RW"
@@ -62,13 +90,15 @@ fi
 rm -f "$DMG" "$RW"
 hdiutil create -ov -volname "$VOL" -fs HFS+ -srcfolder "$STAGE" -format UDRW "$RW" >/dev/null
 
-hdiutil detach "/Volumes/$VOL" -quiet 2>/dev/null || true
+detach_vol "/Volumes/$VOL" || true
+detach_vol "/Volumes/loft" || true
 # CI has no Finder session; osascript would hang the runner.
 if [ "${CI:-}" = "true" ]; then
 	ATTACH=$(hdiutil attach -readwrite -noverify -noautoopen -nobrowse "$RW")
 else
 	ATTACH=$(hdiutil attach -readwrite -noverify -noautoopen "$RW")
 fi
+DEV=$(printf '%s\n' "$ATTACH" | awk '/\/Volumes\// {print $1; exit}')
 MOUNT=$(printf '%s\n' "$ATTACH" | grep -o '/Volumes/.*' | tail -1)
 if [ -z "$MOUNT" ] || [ ! -d "$MOUNT" ]; then
 	echo "dmg: failed to mount $RW" >&2
@@ -112,8 +142,13 @@ fi
 
 # 4. Unmount and convert to the compressed read-only image that ships.
 sync
-hdiutil detach "$MOUNT" -quiet
+if [ -n "${DEV:-}" ]; then
+	detach_vol "$DEV" || detach_vol "$MOUNT"
+else
+	detach_vol "$MOUNT"
+fi
 MOUNT=""
+DEV=""
 hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
 rm -f "$RW"
 
