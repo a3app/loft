@@ -1,7 +1,7 @@
 // Package metrics is a Prometheus text exposition for loft-node.
 //
-// The scrape listener is loopback by default (127.0.0.1:9101) and is not
-// mounted on the public origin. No prometheus/client_golang.
+// The scrape listener is off until node.conf sets metrics HOST:PORT.
+// It is not mounted on the public origin. No prometheus/client_golang.
 package metrics
 
 import (
@@ -14,7 +14,7 @@ import (
 	"github.com/a3app/loft/internal/version"
 )
 
-// DefaultAddr is the scrape listen when node.conf omits metrics.
+// DefaultAddr is the usual loopback scrape listen when metrics is enabled.
 const DefaultAddr = "127.0.0.1:9101"
 
 var (

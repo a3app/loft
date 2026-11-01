@@ -10,7 +10,7 @@
 
 ## 1. 简要
 
-参考节点是一个二进制 `loft-node`，两个角色：控制器和中继。参考客户端是 `loft`（CLI：SOCKS5 和可选 TUN）。`loft-front` 是同一条会话，没有改系统路由的 CLI 标志；macOS 菜单栏应用把它当助手拉起。`loft-probe` 经会话查 ICMP/TCP/UDP/DNS/HTTP。`loft-node` 在 loopback 上提供 Prometheus 文本 `/metrics`（默认 `127.0.0.1:9101`，`metrics off` 关闭）。共用代码在 `internal/`。
+参考节点是一个二进制 `loft-node`，两个角色：控制器和中继。参考客户端是 `loft`（CLI：SOCKS5 和可选 TUN）。`loft-front` 是同一条会话，没有改系统路由的 CLI 标志；macOS 菜单栏应用把它当助手拉起。`loft-probe` 经会话查 ICMP/TCP/UDP/DNS/HTTP。`loft-node` 在设置 `metrics HOST:PORT` 时可提供 Prometheus 文本 `/metrics`（通常 `127.0.0.1:9101`）；默认关。共用代码在 `internal/`。
 
 ---
 

@@ -19,7 +19,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/a3app/loft/internal/metrics"
 	"github.com/a3app/loft/internal/startup"
 	"github.com/a3app/loft/internal/wire"
 )
@@ -171,7 +170,7 @@ func (o Outbound) UseMux() bool {
 // a valid key).
 type ServerConfig struct {
 	Listen        string              `yaml:"listen"`
-	Metrics       string              `yaml:"metrics"` // scrape listen; empty = 127.0.0.1:9101; "off" disables
+	Metrics       string              `yaml:"metrics"` // scrape listen host:port; empty or "off" = disabled
 	CertFile      string              `yaml:"cert"`
 	KeyFile       string              `yaml:"key"`
 	Token         string              `yaml:"token"`
@@ -409,20 +408,16 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 	return c, nil
 }
 
-// MetricsAddr is the Prometheus scrape listen. Empty config uses
-// 127.0.0.1:9101. "off" disables the listener.
+// MetricsAddr is the Prometheus scrape listen. Empty and "off" disable it.
 func (c *ServerConfig) MetricsAddr() string {
 	if c == nil {
-		return metrics.DefaultAddr
-	}
-	switch strings.TrimSpace(c.Metrics) {
-	case "off":
 		return ""
-	case "":
-		return metrics.DefaultAddr
-	default:
-		return c.Metrics
 	}
+	s := strings.TrimSpace(c.Metrics)
+	if s == "" || s == "off" {
+		return ""
+	}
+	return s
 }
 
 // InnerAsk is the Hello data-cipher byte. Empty and chacha omit the byte.

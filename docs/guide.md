@@ -156,7 +156,7 @@ export LOFT_TOKEN='long-secret'
 | Field | Meaning |
 |-------|---------|
 | `listen` | `:443` |
-| `metrics` | Prometheus scrape listen. Default `127.0.0.1:9101`, path `/metrics`. `off` disables. Not on the public origin. |
+| `metrics` | Prometheus scrape listen. Off unless set. Example `127.0.0.1:9101`, path `/metrics`. `off` or omit disables. Not on the public origin. |
 | `cert` `key` | Node certificate. With decoy+mask a loft client is shown a dest-shaped leaf. |
 | `token` | Node secret (`LOFT_TOKEN`): mask. Member keys are `members.keys`. |
 | `get_path` `ws_path` `h2_path` `h3_path` | Front paths |

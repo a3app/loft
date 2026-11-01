@@ -113,7 +113,7 @@ func TestMetricsCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Metrics != "" || c.MetricsAddr() != "127.0.0.1:9101" {
+	if c.Metrics != "" || c.MetricsAddr() != "" {
 		t.Fatalf("default %q addr %q", c.Metrics, c.MetricsAddr())
 	}
 	if _, err := ParseCommands("listen :443\nmetrics 9101\n"); err == nil {

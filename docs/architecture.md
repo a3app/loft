@@ -10,7 +10,7 @@ The Go tree in this repository is described. A third-party implementation MAY di
 
 ## 1. Abstract
 
-The reference node is a single binary, `loft-node`, in two roles: controller and relay. The reference client is `loft` (CLI: SOCKS5 and optional TUN). `loft-front` is the same session without CLI flags for system routes; it is launched as a helper by the macOS menu-bar application. ICMP, TCP, UDP, DNS, and HTTP through a session are checked by `loft-probe`. `loft-node` also serves Prometheus text at `/metrics` on loopback (`127.0.0.1:9101` unless `metrics off`). Shared code is kept in `internal/`.
+The reference node is a single binary, `loft-node`, in two roles: controller and relay. The reference client is `loft` (CLI: SOCKS5 and optional TUN). `loft-front` is the same session without CLI flags for system routes; it is launched as a helper by the macOS menu-bar application. ICMP, TCP, UDP, DNS, and HTTP through a session are checked by `loft-probe`. `loft-node` may serve Prometheus text at `/metrics` when `metrics HOST:PORT` is set (usual listen `127.0.0.1:9101`); it is off by default. Shared code is kept in `internal/`.
 
 ---
 
