@@ -61,3 +61,26 @@
 ## 6. 文案
 
 见 [DESIGN.md](DESIGN.md) 的表格。字段名取自桌面客户端（`clients/macOS/lang`）。
+
+## 7. 电脑上的安装器
+
+模型：[`install.html`](install.html)。这是操作者电脑上的程序。不是 `:8090` 页面，也不是 Keenetic 组件。
+
+它在局域网找到 Keenetic，用网页管理密码登录，按这台路由器的架构安装 Entware `.ipk`（`aarch64-3.10`、`armv7-3.2` soft-float、`mipsel-3.4` soft-float），文件来自 `a3app/loft` 最新发布，并核对 `.sha256`。
+
+它不下载 Keenetic 固件组件。OPKG 或 TUN/TAP 没开时，界面要求先在组件集里打开再回来。还没有 Entware 时，操作者选择 NAND，或 Keenetic 已经分好区的 EXT4 磁盘。安装器不分区，也不写连接优先级。升级留下 OpkgTun0…OpkgTun15。
+
+| 界面 | 内容 |
+|------|------|
+| 开始 | loft 1.0.42。KeeneticOS 5.0+、OPKG、TUN/TAP、同一局域网。 |
+| 路由器 | 型号、LAN 地址、KeeneticOS、架构。4.x 一行被拒绝。可手填地址。 |
+| 密码 | 网页管理密码。访客不行。loft 没有第二套密码。 |
+| 检查 | 系统、OPKG、TUN/TAP、Entware、ipk 文件名。 |
+| Entware 位置 | 仅当 OPKG 组件已开、还没有 Entware 目录。NAND 或 USB EXT4。 |
+| 安装 | 下载 ipk 和 `.sha256`，核对摘要，`opkg install`，`S99loft`。 |
+| 完成 | 打开 `http://<lan>:8090/`。优先级留在 Keenetic。 |
+| 局域网没有 | 同一网络，或手填地址。 |
+| 密码被拒 | 管理员，不是访客。 |
+| 缺少组件 | OPKG 或 TUN/TAP 没开。 |
+| KeeneticOS 4 | 策略里的 OpkgTun 从 5.0 才有。 |
+| 已经装过 | 1.0.35 → 1.0.42，接口保留。 |

@@ -4,7 +4,7 @@
 
 Entware client: one **OpkgTun** interface per connection, which KeeneticOS uses in connection priorities and policy routing. Settings live on a LAN port; login is the Keenetic web-admin session.
 
-Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/ndms.md](../../docs/ndms.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html).
+Protocol: [docs/protocol.md](../../docs/protocol.md). Integration: [docs/ndms.md](../../docs/ndms.md). Plan: [PLAN.md](PLAN.md). UX: [design/DESIGN.md](design/DESIGN.md). Mock: [design/index.html](design/index.html). Installer mock: [design/install.html](design/install.html).
 
 The binary is `loft-ndms`. It serves the LAN page and starts one child of the same binary (`-session`) per enabled connection. `clients/go/lanui` stays the MikroTik page.
 
@@ -26,13 +26,14 @@ KeeneticOS **5.0+** (OpkgTun in policies). Components: OPKG, TUN/TAP. Entware on
 make -C clients/NDMS test
 make -C clients/NDMS ipk       # aarch64: Giga, Peak, Hopper
 make -C clients/NDMS ipk-all   # aarch64, armv7 soft-float, mipsel soft-float
+make -C clients/NDMS dist      # the three ipk and .sha256 under dist/ndms/
 ```
 
 On the router: `opkg install loft-ndms-<version>-<arch>.ipk`. The page is `http://<lan>:8090/`. The sample config is `/opt/etc/loft/client.yaml` (`check_updates: true`). A missing `enabled` field means off.
 
 `prerm` deletes OpkgTun0…OpkgTun15 only when the package is removed. An upgrade stops the process and leaves the interfaces, so priorities that name them stay.
 
-The panel installs a newer `.ipk` from the latest `a3app/loft` release when that asset and its `.sha256` are published. The Makefile is the build. Dist is unchanged.
+Dist publishes `loft-ndms-<version>-{aarch64,armv7,mipsel}.ipk` and a `.sha256` sidecar for each. The panel installs a newer `.ipk` from the latest `a3app/loft` release when both files are there.
 
 ## Layout
 

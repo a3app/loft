@@ -4,7 +4,7 @@
 
 Как loft работает на роутере Keenetic. Клиент: [clients/NDMS/](../clients/NDMS/). План: [clients/NDMS/PLAN.md](../clients/NDMS/PLAN.md). Макет: [clients/NDMS/design/index.html](../clients/NDMS/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
 
-Сборка: `make -C clients/NDMS ipk` (aarch64) или `make -C clients/NDMS ipk-all`. Ставится через `opkg`. Страница: `http://<lan>:8090/`. KeeneticOS 5.0+, компоненты OPKG и TUN/TAP, Entware в NAND или на USB EXT4.
+Сборка: `make -C clients/NDMS ipk` (aarch64) или `make -C clients/NDMS ipk-all`. Dist кладёт `loft-ndms-<version>-{aarch64,armv7,mipsel}.ipk` и sidecar `.sha256`. Ставится через `opkg`. Страница: `http://<lan>:8090/`. KeeneticOS 5.0+, компоненты OPKG и TUN/TAP, Entware в NAND или на USB EXT4.
 
 ---
 

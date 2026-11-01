@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — установщик Keenetic</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --stone: #B7A99A;
+      --lamp: #E8B84A;
+      --snow: #F3EDE4;
+      --mute: #8A7E72;
+      --line: rgba(243,237,228,.12);
+      --ok: #7dba6a;
+      --err: #E24B4B;
+      --ui: "Avenir Next", Avenir, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: var(--ui);
+      background: #0e0c0b;
+      color: var(--snow);
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      min-height: 100%;
+    }
+    nav {
+      border-right: 1px solid #2a2420;
+      padding: 16px 12px;
+      background: #14110f;
+    }
+    nav .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 14px;
+      font-weight: 600; letter-spacing: -0.04em; font-size: 1.15rem;
+    }
+    nav .brand svg { width: 28px; height: 28px; }
+    nav p { margin: 0 8px 16px; color: var(--mute); font-size: 0.75rem; line-height: 1.4; }
+    nav button, nav a {
+      display: block; width: 100%;
+      text-align: left; background: none; border: 0; color: var(--stone);
+      font: 500 13px var(--ui); padding: 6px 10px; border-radius: 8px;
+      cursor: pointer; text-decoration: none;
+    }
+    nav button:hover, nav a:hover { background: #1e1a17; color: var(--snow); }
+    nav button.on, nav a.on { background: #2a2420; color: var(--snow); }
+    nav h4 {
+      margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--mute); font-weight: 600;
+    }
+    .lang { display: flex; gap: 4px; margin: 4px 8px 10px; }
+    .lang button { flex: 1; text-align: center; padding: 6px 0; font-weight: 600; font-size: 12px; }
+    .lang button.on { background: var(--lamp); color: var(--ink); }
+
+    .stage {
+      padding: 28px 24px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px;
+    }
+    .stage > p { margin: 0; max-width: 520px; color: var(--mute); font-size: 12px; line-height: 1.45; text-align: center; }
+
+    .win {
+      width: 520px; min-height: 520px;
+      background: #181512; border: 1px solid #2e2824; border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.45);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .chrome {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px; border-bottom: 1px solid var(--line);
+    }
+    .dots { display: flex; gap: 6px; }
+    .dots i { width: 10px; height: 10px; border-radius: 50%; background: #3a332e; display: block; }
+    .dots i:nth-child(1) { background: #c45c4a; }
+    .dots i:nth-child(2) { background: #d4a24c; }
+    .dots i:nth-child(3) { background: #6a9a5a; }
+    .chrome .ct { font-weight: 600; letter-spacing: -0.03em; margin-left: 6px; }
+    .chrome .cv { margin-left: auto; color: var(--mute); font: 12px var(--mono); }
+
+    .steps {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: 6px; margin: 0; padding: 14px 16px 0;
+    }
+    .steps li {
+      list-style: none; text-align: center; color: var(--mute); font-size: 10px;
+    }
+    .steps a, .steps a:visited {
+      display: block; color: inherit; text-decoration: none;
+    }
+    .steps li b {
+      display: block; height: 3px; border-radius: 2px; background: #2a2420; margin-bottom: 6px;
+    }
+    .steps li.on { color: var(--snow); }
+    .steps li.on b, .steps li.done b { background: var(--lamp); }
+    .steps li.bad b { background: var(--err); }
+    .steps li.bad { color: var(--err); }
+
+    .pane { padding: 18px 22px 20px; flex: 1; display: flex; flex-direction: column; }
+    .screen { display: none; flex: 1; flex-direction: column; }
+    .screen.on { display: flex; }
+    h2 {
+      margin: 0 0 6px; font-size: 22px; font-weight: 600; letter-spacing: -0.03em;
+    }
+    .lead { margin: 0 0 16px; color: var(--stone); font-size: 13.5px; line-height: 1.45; }
+    .hero { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+    .hero svg { width: 56px; height: 56px; flex: none; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    .hint { color: var(--mute); font-size: 12px; line-height: 1.45; margin: 10px 0 0; }
+    .tag {
+      display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: #2a2420; color: var(--stone); white-space: nowrap;
+    }
+    .tag.ok { background: rgba(125,186,106,.15); color: var(--ok); }
+    .tag.wait { background: rgba(232,184,74,.12); color: var(--lamp); }
+    .tag.bad { background: rgba(226,75,75,.14); color: var(--err); }
+
+    .dev {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+      width: 100%; text-align: left; cursor: pointer;
+      padding: 10px 12px; margin: 0 0 8px;
+      background: #1d1916; border: 1px solid #2e2824; border-radius: 10px;
+      color: inherit; font: inherit;
+    }
+    .dev.on { border-color: var(--lamp); }
+    .dev:disabled { opacity: .55; cursor: default; }
+    .dev > span:nth-child(2) { min-width: 0; }
+    .dev .n { display: block; font-weight: 600; font-size: 13px; }
+    .dev .m { display: block; color: var(--mute); font-size: 11.5px; font-family: var(--mono); margin-top: 2px; }
+    .lamp {
+      width: 10px; height: 10px; border-radius: 3px; background: var(--mute); flex: none;
+    }
+    .lamp.on { background: var(--lamp); box-shadow: 0 0 10px rgba(232,184,74,.55); }
+    .lamp.bad { background: var(--err); }
+
+    label.field { display: block; margin: 8px 0 0; font-size: 12px; color: var(--mute); }
+    label.field input {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 8px; padding: 8px 10px; font: 400 13px var(--ui);
+    }
+    label.field input.mono { font-family: var(--mono); font-size: 12px; }
+
+    .checks { margin: 0; }
+    .checks div {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+    }
+    .checks .k { color: var(--mute); }
+    .checks .v { text-align: right; }
+
+    .place {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;
+    }
+    .place button {
+      text-align: left; cursor: pointer;
+      background: #1d1916; border: 1px solid #2e2824; color: inherit;
+      border-radius: 10px; padding: 12px; font: inherit;
+    }
+    .place button.on { border-color: var(--lamp); }
+    .place button:disabled { opacity: .45; cursor: default; }
+    .place .n { font-weight: 600; font-size: 13px; display: block; margin-bottom: 4px; }
+    .place .m { color: var(--mute); font-size: 12px; line-height: 1.4; }
+
+    .job { margin: 4px 0 0; padding: 0; }
+    .job li {
+      list-style: none; display: flex; gap: 10px; align-items: center;
+      padding: 8px 0; color: var(--mute); font-size: 13px;
+    }
+    .job li.on { color: var(--snow); }
+    .job li.done { color: var(--ok); }
+    .tick {
+      width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid #3a332e; flex: none;
+    }
+    .job li.done .tick { background: var(--ok); border-color: var(--ok); }
+    .job li.on .tick {
+      border-color: var(--lamp); border-top-color: transparent;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .btns { display: flex; gap: 8px; margin-top: auto; padding-top: 16px; }
+    .btns button, .btns a {
+      flex: 1; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      font: 600 13px var(--ui); text-align: center; text-decoration: none;
+    }
+    .btns a.go, .btns a.go:visited { color: var(--ink); }
+    .btns a.ghost, .btns a.ghost:visited { color: var(--snow); }
+    .go { background: var(--lamp); color: var(--ink); }
+    .ghost { background: #2a2420; color: var(--snow); }
+    .btns button:disabled { opacity: .4; cursor: default; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+        <path fill="#F3EDE4" d="M37.764 6.719 A0.96 0.96 0 0 1 39.007 6.744 L57.6 29.52 V63.76 A4.4 4.4 0 0 0 62 68.16 H84.8 A3.2 3.2 0 0 1 88 71.36 V86.16 A3.84 3.84 0 0 1 84.16 90 H21.44 A3.84 3.84 0 0 1 17.6 86.16 V29.52 Z"/>
+        <path fill="#E8B84A" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+      </svg>
+      loft
+    </div>
+    <p data-i="navCap">Макет установщика. Программа на компьютере оператора ставит пакет Entware.</p>
+    <div class="lang">
+      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
+      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
+      <button type="button" id="lang-zh" onclick="setLang('zh')">中文</button>
+    </div>
+    <h4 data-i="hPath">Ход</h4>
+    <a href="#welcome" data-i="nWelcome">Старт</a>
+    <a href="#router" data-i="nRouter">Роутер</a>
+    <a href="#password" data-i="nPassword">Пароль</a>
+    <a href="#check" data-i="nCheck">Проверка</a>
+    <a href="#where" data-i="nWhere">Куда Entware</a>
+    <a href="#progress" data-i="nProgress">Установка</a>
+    <a href="#done" data-i="nDone">Готово</a>
+    <h4 data-i="hStop">Не ставим</h4>
+    <a href="#none" data-i="nNone">Нет в сети</a>
+    <a href="#badpw" data-i="nBad">Пароль не принят</a>
+    <a href="#component" data-i="nComp">Нет компонента</a>
+    <a href="#oldos" data-i="nOld">KeeneticOS 4</a>
+    <a href="#have" data-i="nHave">Уже стоит</a>
+    <h4 data-i="hPanel">Панель</h4>
+    <a href="index.html" data-i="nPanel">Страница :8090</a>
+  </nav>
+
+  <div class="stage">
+    <div class="win">
+      <div class="chrome">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="ct">loft</span>
+        <span class="cv">1.0.42</span>
+      </div>
+      <ol class="steps" id="steps">
+        <li data-s="1"><a href="#router"><b></b><span data-i="s1">Найти</span></a></li>
+        <li data-s="2"><a href="#password"><b></b><span data-i="s2">Вход</span></a></li>
+        <li data-s="3"><a href="#check"><b></b><span data-i="s3">Проверка</span></a></li>
+        <li data-s="4"><a href="#progress"><b></b><span data-i="s4">Пакет</span></a></li>
+        <li data-s="5"><a href="#done"><b></b><span data-i="s5">Страница</span></a></li>
+      </ol>
+      <div class="pane">
+
+        <section class="screen on" data-screen="welcome">
+          <div class="hero">
+            <svg viewBox="0 0 96 96" fill="none" aria-hidden="true">
+              <path fill="#F3EDE4" d="M37.764 6.719 A0.96 0.96 0 0 1 39.007 6.744 L57.6 29.52 V63.76 A4.4 4.4 0 0 0 62 68.16 H84.8 A3.2 3.2 0 0 1 88 71.36 V86.16 A3.84 3.84 0 0 1 84.16 90 H21.44 A3.84 3.84 0 0 1 17.6 86.16 V29.52 Z"/>
+              <path fill="#E8B84A" d="M31.36 36.24 H43.84 A2.56 2.56 0 0 1 46.4 38.8 V55.52 A2.56 2.56 0 0 1 43.84 58.08 H31.36 A2.56 2.56 0 0 1 28.8 55.52 V38.8 A2.56 2.56 0 0 1 31.36 36.24 Z"/>
+            </svg>
+            <h2 data-i="wTitle">Поставить loft на Keenetic</h2>
+          </div>
+          <p class="lead" data-i="wLead">Пакет Entware 1.0.42. Приоритеты подключений и политики остаются в Keenetic.</p>
+          <p class="hint" data-i="wNeed">Нужны KeeneticOS 5.0 или новее и компоненты OPKG и TUN/TAP. Роутер и этот компьютер — в одной сети.</p>
+          <div class="btns">
+            <button type="button" class="ghost" disabled data-i="back">Назад</button>
+            <a class="go" href="#router" data-i="next">Далее</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="router">
+          <h2 data-i="rTitle">Keenetic в сети</h2>
+          <p class="lead" data-i="rLead">Выберите роутер. Пакет подберём под него.</p>
+          <button type="button" class="dev on">
+            <span class="lamp on"></span>
+            <span><span class="n">Keenetic Giga</span><span class="m">192.168.1.1 · KeeneticOS 5.0.7 · aarch64</span></span>
+            <span class="tag ok" data-i="rPick">этот</span>
+          </button>
+          <button type="button" class="dev">
+            <span class="lamp"></span>
+            <span><span class="n">Keenetic Peak</span><span class="m">192.168.8.1 · KeeneticOS 5.1.1 · aarch64</span></span>
+            <span class="tag" data-i="rAlt">другой</span>
+          </button>
+          <button type="button" class="dev" disabled>
+            <span class="lamp bad"></span>
+            <span><span class="n">Keenetic</span><span class="m">192.168.10.1 · KeeneticOS 4.2 · mipsel</span></span>
+            <span class="tag bad" data-i="rOld">нужна 5.0</span>
+          </button>
+          <label class="field"><span data-i="rManual">Адрес, если в списке его нет</span>
+            <input class="mono" value="192.168.1.1" spellcheck="false" />
+          </label>
+          <div class="btns">
+            <a class="ghost" href="#welcome" data-i="back">Назад</a>
+            <a class="go" href="#password" data-i="next">Далее</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="password">
+          <h2 data-i="pTitle">Пароль веб-админки</h2>
+          <p class="lead" data-i="pLead">Тот же пароль, что на http://192.168.1.1/. Второго пароля у loft нет. Гостевой вход не подходит.</p>
+          <label class="field"><span data-i="pAdmin">Администратор Keenetic</span>
+            <input type="password" value="••••••••" autocomplete="off" />
+          </label>
+          <p class="hint mono">Keenetic Giga · 192.168.1.1</p>
+          <div class="btns">
+            <a class="ghost" href="#router" data-i="back">Назад</a>
+            <a class="go" href="#check" data-i="pEnter">Войти</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="check">
+          <h2 data-i="cTitle">Можно ставить</h2>
+          <p class="lead" data-i="cLead">Giga отвечает. Пакет возьмём из последнего релиза a3app/loft и сверим SHA256.</p>
+          <div class="checks">
+            <div><span class="k" data-i="cOs">KeeneticOS</span><span class="v">5.0.7</span></div>
+            <div><span class="k">OPKG</span><span class="v tag ok" data-i="yes">есть</span></div>
+            <div><span class="k">TUN/TAP</span><span class="v tag ok" data-i="yes">есть</span></div>
+            <div><span class="k">Entware</span><span class="v mono">aarch64-3.10 · NAND</span></div>
+            <div><span class="k" data-i="cPkg">Пакет</span><span class="v mono">loft-ndms-1.0.42-aarch64.ipk</span></div>
+          </div>
+          <div class="btns">
+            <a class="ghost" href="#password" data-i="back">Назад</a>
+            <a class="go" href="#progress" data-i="cGo">Установить</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="where">
+          <h2 data-i="eTitle">Куда поставить Entware</h2>
+          <p class="lead" data-i="eLead">Компонент OPKG уже включён, каталога Entware ещё нет. loft ставится туда, не в прошивку. Разметку диска делает Keenetic.</p>
+          <div class="place">
+            <button type="button" class="on">
+              <span class="n" data-i="eNand">NAND</span>
+              <span class="m" data-i="eNandD">Встроенная память. Свободно 48 МиБ.</span>
+            </button>
+            <button type="button" disabled>
+              <span class="n">USB</span>
+              <span class="m" data-i="eUsbD">Нет диска EXT4. Раздел готовится в Keenetic.</span>
+            </button>
+          </div>
+          <div class="btns">
+            <a class="ghost" href="#check" data-i="back">Назад</a>
+            <a class="go" href="#progress" data-i="next">Далее</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="progress">
+          <h2 data-i="iTitle">Ставим 1.0.42</h2>
+          <p class="lead mono">loft-ndms-1.0.42-aarch64.ipk</p>
+          <ul class="job">
+            <li class="done"><span class="tick"></span><span data-i="iGet">Релиз a3app/loft: ipk и .sha256</span></li>
+            <li class="on"><span class="tick"></span><span data-i="iSum">SHA256 сходится</span></li>
+            <li><span class="tick"></span><span>opkg install</span></li>
+            <li><span class="tick"></span><span data-i="iInit">/opt/etc/init.d/S99loft</span></li>
+          </ul>
+          <p class="hint" data-i="iHint">Сессии поднимутся после init. Интерфейсы OpkgTun при обновлении не снимаются.</p>
+          <div class="btns">
+            <button type="button" class="ghost" disabled data-i="iWait">Идёт установка</button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="done">
+          <div class="hero">
+            <span class="lamp on" style="width:18px;height:18px;border-radius:5px"></span>
+            <h2 data-i="dTitle">loft стоит на Giga</h2>
+          </div>
+          <p class="lead" data-i="dLead">Страница открывается в браузере. Сессия Keenetic подойдёт и туда.</p>
+          <div class="checks">
+            <div><span class="k" data-i="dPage">Страница</span><span class="v mono">http://192.168.1.1:8090/</span></div>
+            <div><span class="k" data-i="dVer">Версия</span><span class="v mono">1.0.42 · aarch64-3.10</span></div>
+          </div>
+          <p class="hint" data-i="dHint">Подключение добавляется на этой странице. Приоритеты — в Keenetic, установщик их не пишет.</p>
+          <div class="btns">
+            <button type="button" class="ghost" data-i="dClose">Закрыть</button>
+            <button type="button" class="go" data-i="dOpen">Открыть страницу</button>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="none">
+          <h2 data-i="zTitle">Keenetic не отвечает</h2>
+          <p class="lead" data-i="zLead">В этом LAN его не видно. Компьютер и роутер должны быть в одной сети. Адрес можно вписать вручную.</p>
+          <label class="field"><span data-i="rManual">Адрес, если в списке его нет</span>
+            <input class="mono" placeholder="192.168.1.1" spellcheck="false" />
+          </label>
+          <div class="btns">
+            <a class="ghost" href="#welcome" data-i="back">Назад</a>
+            <a class="go" href="#router" data-i="zAgain">Искать снова</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="badpw">
+          <h2 data-i="bTitle">Пароль не принят</h2>
+          <p class="lead" data-i="bLead">Keenetic ждёт администратора веб-админки, не гостя. Пароль loft не заводит.</p>
+          <label class="field"><span data-i="pAdmin">Администратор Keenetic</span>
+            <input type="password" autocomplete="off" />
+          </label>
+          <div class="btns">
+            <a class="ghost" href="#router" data-i="back">Назад</a>
+            <a class="go" href="#check" data-i="pEnter">Войти</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="component">
+          <h2 data-i="mTitle">Нет компонента прошивки</h2>
+          <p class="lead" data-i="mLead">Без OPKG пакет Entware поставить некуда. Без TUN/TAP не будет OpkgTun. Установщик компоненты Keenetic не качает.</p>
+          <div class="checks">
+            <div><span class="k">OPKG</span><span class="v tag bad" data-i="no">нет</span></div>
+            <div><span class="k">TUN/TAP</span><span class="v tag ok" data-i="yes">есть</span></div>
+          </div>
+          <p class="hint" data-i="mHint">Включите оба в наборе компонентов KeeneticOS и откройте установщик снова.</p>
+          <div class="btns">
+            <a class="go" href="#check" data-i="mOk">Понятно</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="oldos">
+          <h2 data-i="oTitle">KeeneticOS 4.2</h2>
+          <p class="lead" data-i="oLead">OpkgTun в политиках появляется с KeeneticOS 5.0. Этот роутер установщик пропускает.</p>
+          <p class="hint mono">192.168.10.1 · mipsel</p>
+          <div class="btns">
+            <a class="go" href="#router" data-i="oBack">Выбрать другой</a>
+          </div>
+        </section>
+
+        <section class="screen" data-screen="have">
+          <h2 data-i="hTitle">Уже стоит loft 1.0.35</h2>
+          <p class="lead" data-i="hLead">Обновление ставит 1.0.42 поверх. OpkgTun0…OpkgTun15 при обновлении остаются, приоритеты на них не сбрасываются.</p>
+          <div class="checks">
+            <div><span class="k" data-i="hNow">Сейчас</span><span class="v mono">1.0.35 · aarch64-3.10</span></div>
+            <div><span class="k" data-i="hNew">Релиз</span><span class="v mono">1.0.42</span></div>
+          </div>
+          <div class="btns">
+            <a class="ghost" href="#done" data-i="hKeep">Оставить</a>
+            <a class="go" href="#progress" data-i="hUp">Обновить до 1.0.42</a>
+          </div>
+        </section>
+
+      </div>
+    </div>
+    <p data-i="stageCap">Это не страница :8090 и не компонент Keenetic. После установки страница слушает только LAN.</p>
+  </div>
+
+  <script>
+    const STEP = {
+      welcome: 1, router: 1, none: 1, oldos: 1,
+      password: 2, badpw: 2,
+      check: 3, where: 3, component: 3, have: 3,
+      progress: 4,
+      done: 5
+    };
+    const BAD = { none: 1, badpw: 1, component: 1, oldos: 1 };
+
+    const I = {
+      ru: {
+        navCap: "Макет установщика. Программа на компьютере оператора ставит пакет Entware.",
+        hPath: "Ход", nWelcome: "Старт", nRouter: "Роутер", nPassword: "Пароль",
+        nCheck: "Проверка", nWhere: "Куда Entware", nProgress: "Установка", nDone: "Готово",
+        hStop: "Не ставим", nNone: "Нет в сети", nBad: "Пароль не принят",
+        nComp: "Нет компонента", nOld: "KeeneticOS 4", nHave: "Уже стоит",
+        hPanel: "Панель", nPanel: "Страница :8090",
+        s1: "Найти", s2: "Вход", s3: "Проверка", s4: "Пакет", s5: "Страница",
+        back: "Назад", next: "Далее",
+        wTitle: "Поставить loft на Keenetic",
+        wLead: "Пакет Entware 1.0.42. Приоритеты подключений и политики остаются в Keenetic.",
+        wNeed: "Нужны KeeneticOS 5.0 или новее и компоненты OPKG и TUN/TAP. Роутер и этот компьютер — в одной сети.",
+        rTitle: "Keenetic в сети",
+        rLead: "Выберите роутер. Пакет подберём под него.",
+        rPick: "этот", rAlt: "другой", rOld: "нужна 5.0",
+        rManual: "Адрес, если в списке его нет",
+        pTitle: "Пароль веб-админки",
+        pLead: "Тот же пароль, что на http://192.168.1.1/. Второго пароля у loft нет. Гостевой вход не подходит.",
+        pAdmin: "Администратор Keenetic", pEnter: "Войти",
+        cTitle: "Можно ставить",
+        cLead: "Giga отвечает. Пакет возьмём из последнего релиза a3app/loft и сверим SHA256.",
+        cOs: "KeeneticOS", yes: "есть", no: "нет", cPkg: "Пакет", cGo: "Установить",
+        eTitle: "Куда поставить Entware",
+        eLead: "Компонент OPKG уже включён, каталога Entware ещё нет. loft ставится туда, не в прошивку. Разметку диска делает Keenetic.",
+        eNand: "NAND", eNandD: "Встроенная память. Свободно 48 МиБ.",
+        eUsbD: "Нет диска EXT4. Раздел готовится в Keenetic.",
+        iTitle: "Ставим 1.0.42",
+        iGet: "Релиз a3app/loft: ipk и .sha256", iSum: "SHA256 сходится",
+        iInit: "/opt/etc/init.d/S99loft",
+        iHint: "Сессии поднимутся после init. Интерфейсы OpkgTun при обновлении не снимаются.",
+        iWait: "Идёт установка",
+        dTitle: "loft стоит на Giga",
+        dLead: "Страница открывается в браузере. Сессия Keenetic подойдёт и туда.",
+        dPage: "Страница", dVer: "Версия",
+        dHint: "Подключение добавляется на этой странице. Приоритеты — в Keenetic, установщик их не пишет.",
+        dClose: "Закрыть", dOpen: "Открыть страницу",
+        zTitle: "Keenetic не отвечает",
+        zLead: "В этом LAN его не видно. Компьютер и роутер должны быть в одной сети. Адрес можно вписать вручную.",
+        zAgain: "Искать снова",
+        bTitle: "Пароль не принят",
+        bLead: "Keenetic ждёт администратора веб-админки, не гостя. Пароль loft не заводит.",
+        mTitle: "Нет компонента прошивки",
+        mLead: "Без OPKG пакет Entware поставить некуда. Без TUN/TAP не будет OpkgTun. Установщик компоненты Keenetic не качает.",
+        mHint: "Включите оба в наборе компонентов KeeneticOS и откройте установщик снова.",
+        mOk: "Понятно",
+        oTitle: "KeeneticOS 4.2",
+        oLead: "OpkgTun в политиках появляется с KeeneticOS 5.0. Этот роутер установщик пропускает.",
+        oBack: "Выбрать другой",
+        hTitle: "Уже стоит loft 1.0.35",
+        hLead: "Обновление ставит 1.0.42 поверх. OpkgTun0…OpkgTun15 при обновлении остаются, приоритеты на них не сбрасываются.",
+        hNow: "Сейчас", hNew: "Релиз", hKeep: "Оставить", hUp: "Обновить до 1.0.42",
+        stageCap: "Это не страница :8090 и не компонент Keenetic. После установки страница слушает только LAN."
+      },
+      en: {
+        navCap: "Installer mock. A program on the operator's computer installs the Entware package.",
+        hPath: "Path", nWelcome: "Start", nRouter: "Router", nPassword: "Password",
+        nCheck: "Check", nWhere: "Where Entware", nProgress: "Install", nDone: "Done",
+        hStop: "Refuse", nNone: "Not on the LAN", nBad: "Password refused",
+        nComp: "Component missing", nOld: "KeeneticOS 4", nHave: "Already installed",
+        hPanel: "Panel", nPanel: "Page :8090",
+        s1: "Find", s2: "Sign in", s3: "Check", s4: "Package", s5: "Page",
+        back: "Back", next: "Next",
+        wTitle: "Install loft on Keenetic",
+        wLead: "Entware package 1.0.42. Connection priorities and policies stay in Keenetic.",
+        wNeed: "KeeneticOS 5.0 or newer, and the OPKG and TUN/TAP components. The router and this computer are on one LAN.",
+        rTitle: "Keenetic on the LAN",
+        rLead: "Pick a router. The package is matched to it.",
+        rPick: "this", rAlt: "other", rOld: "needs 5.0",
+        rManual: "Address, if it is not in the list",
+        pTitle: "Web-admin password",
+        pLead: "The same password as on http://192.168.1.1/. loft has no second password. A guest login is refused.",
+        pAdmin: "Keenetic administrator", pEnter: "Sign in",
+        cTitle: "Ready to install",
+        cLead: "Giga answered. The package comes from the latest a3app/loft release, then the SHA256 is checked.",
+        cOs: "KeeneticOS", yes: "on", no: "off", cPkg: "Package", cGo: "Install",
+        eTitle: "Where to put Entware",
+        eLead: "The OPKG component is on, and there is no Entware tree yet. loft is installed there, not into the firmware. Keenetic partitions the disk.",
+        eNand: "NAND", eNandD: "Internal storage. 48 MiB free.",
+        eUsbD: "No EXT4 disk. The partition is prepared in Keenetic.",
+        iTitle: "Installing 1.0.42",
+        iGet: "a3app/loft release: ipk and .sha256", iSum: "SHA256 matches",
+        iInit: "/opt/etc/init.d/S99loft",
+        iHint: "Sessions come up after init. An upgrade leaves OpkgTun interfaces in place.",
+        iWait: "Installing",
+        dTitle: "loft is on Giga",
+        dLead: "The page opens in the browser. The Keenetic session is accepted there too.",
+        dPage: "Page", dVer: "Version",
+        dHint: "A connection is added on that page. Priorities stay in Keenetic. The installer does not write them.",
+        dClose: "Close", dOpen: "Open page",
+        zTitle: "Keenetic does not answer",
+        zLead: "Nothing on this LAN answered. The computer and the router must be on one network. The address can be typed.",
+        zAgain: "Search again",
+        bTitle: "Password refused",
+        bLead: "Keenetic wants the web-admin administrator, not a guest. loft does not set its own password.",
+        mTitle: "Firmware component is off",
+        mLead: "Without OPKG there is nowhere to put the Entware package. Without TUN/TAP there is no OpkgTun. The installer does not download Keenetic components.",
+        mHint: "Turn both on in the KeeneticOS component set, then open the installer again.",
+        mOk: "OK",
+        oTitle: "KeeneticOS 4.2",
+        oLead: "OpkgTun in policies starts with KeeneticOS 5.0. The installer skips this router.",
+        oBack: "Pick another",
+        hTitle: "loft 1.0.35 is already installed",
+        hLead: "The upgrade installs 1.0.42 over it. OpkgTun0…OpkgTun15 stay, and priorities that name them are kept.",
+        hNow: "Now", hNew: "Release", hKeep: "Leave", hUp: "Update to 1.0.42",
+        stageCap: "Not the :8090 page and not a Keenetic component. After install the page listens on the LAN only."
+      },
+      zh: {
+        navCap: "安装器模型。操作者电脑上的程序安装 Entware 包。",
+        hPath: "步骤", nWelcome: "开始", nRouter: "路由器", nPassword: "密码",
+        nCheck: "检查", nWhere: "Entware 位置", nProgress: "安装", nDone: "完成",
+        hStop: "不安装", nNone: "局域网没有", nBad: "密码被拒",
+        nComp: "缺少组件", nOld: "KeeneticOS 4", nHave: "已经装过",
+        hPanel: "面板", nPanel: "页面 :8090",
+        s1: "查找", s2: "登录", s3: "检查", s4: "软件包", s5: "页面",
+        back: "返回", next: "继续",
+        wTitle: "把 loft 装到 Keenetic",
+        wLead: "Entware 包 1.0.42。连接优先级和策略仍在 Keenetic。",
+        wNeed: "需要 KeeneticOS 5.0 或更高，以及 OPKG 和 TUN/TAP 组件。路由器和这台电脑在同一局域网。",
+        rTitle: "局域网里的 Keenetic",
+        rLead: "选一台路由器。软件包按这台来配。",
+        rPick: "这台", rAlt: "另一台", rOld: "需要 5.0",
+        rManual: "地址，如果列表里没有",
+        pTitle: "网页管理密码",
+        pLead: "和 http://192.168.1.1/ 上的密码相同。loft 没有第二套密码。访客登录会被拒绝。",
+        pAdmin: "Keenetic 管理员", pEnter: "登录",
+        cTitle: "可以安装",
+        cLead: "Giga 有响应。软件包取自 a3app/loft 最新发布，然后核对 SHA256。",
+        cOs: "KeeneticOS", yes: "有", no: "无", cPkg: "软件包", cGo: "安装",
+        eTitle: "Entware 装到哪里",
+        eLead: "OPKG 组件已开，还没有 Entware 目录。loft 装在那里，不进固件。磁盘分区由 Keenetic 做。",
+        eNand: "NAND", eNandD: "内置存储。空闲 48 MiB。",
+        eUsbD: "没有 EXT4 磁盘。分区在 Keenetic 里准备。",
+        iTitle: "正在安装 1.0.42",
+        iGet: "a3app/loft 发布：ipk 和 .sha256", iSum: "SHA256 一致",
+        iInit: "/opt/etc/init.d/S99loft",
+        iHint: "init 之后会话才起来。升级会留下 OpkgTun 接口。",
+        iWait: "正在安装",
+        dTitle: "loft 已装在 Giga 上",
+        dLead: "页面在浏览器里打开。Keenetic 的会话在那里同样有效。",
+        dPage: "页面", dVer: "版本",
+        dHint: "连接在这个页面上添加。优先级留在 Keenetic，安装器不写它们。",
+        dClose: "关闭", dOpen: "打开页面",
+        zTitle: "Keenetic 没有响应",
+        zLead: "这个局域网里看不到它。电脑和路由器必须在同一网络。地址可以手填。",
+        zAgain: "再找一次",
+        bTitle: "密码被拒绝",
+        bLead: "Keenetic 要的是网页管理的管理员，不是访客。loft 不另设密码。",
+        mTitle: "固件组件没开",
+        mLead: "没有 OPKG，Entware 包没有地方可装。没有 TUN/TAP 就没有 OpkgTun。安装器不下载 Keenetic 组件。",
+        mHint: "在 KeeneticOS 组件集里打开这两项，然后重新打开安装器。",
+        mOk: "知道了",
+        oTitle: "KeeneticOS 4.2",
+        oLead: "策略里的 OpkgTun 从 KeeneticOS 5.0 才有。安装器跳过这台路由器。",
+        oBack: "选另一台",
+        hTitle: "已经装着 loft 1.0.35",
+        hLead: "升级在其上安装 1.0.42。OpkgTun0…OpkgTun15 还在，指向它们的优先级保留。",
+        hNow: "现在", hNew: "发布", hKeep: "留下", hUp: "更新到 1.0.42",
+        stageCap: "这不是 :8090 页面，也不是 Keenetic 组件。装完之后页面只听局域网。"
+      }
+    };
+
+    function setLang(lang) {
+      document.documentElement.lang = lang === "zh" ? "zh-Hans" : lang;
+      document.title = lang === "en" ? "loft — Keenetic installer"
+        : lang === "zh" ? "loft — Keenetic 安装器"
+        : "loft — установщик Keenetic";
+      for (const id of ["en", "ru", "zh"]) {
+        document.getElementById("lang-" + id).classList.toggle("on", id === lang);
+      }
+      const t = I[lang];
+      document.querySelectorAll("[data-i]").forEach((el) => {
+        const k = el.getAttribute("data-i");
+        if (t[k] != null) el.textContent = t[k];
+      });
+    }
+
+    function show(id) {
+      document.querySelectorAll("[data-screen]").forEach((el) => {
+        el.classList.toggle("on", el.getAttribute("data-screen") === id);
+      });
+      document.querySelectorAll("nav a[href^='#']").forEach((a) => {
+        a.classList.toggle("on", a.getAttribute("href") === "#" + id);
+      });
+      const step = STEP[id] || 1;
+      const bad = BAD[id] === 1;
+      document.querySelectorAll("#steps li").forEach((li) => {
+        const n = Number(li.getAttribute("data-s"));
+        li.classList.toggle("on", n === step && !bad);
+        li.classList.toggle("done", n < step);
+        li.classList.toggle("bad", bad && n === step);
+      });
+    }
+
+    function applyHash() {
+      const id = location.hash.replace(/^#/, "");
+      const known = /^[a-z]+$/.test(id) && document.querySelector('[data-screen="' + id + '"]');
+      if (!known) {
+        if (location.hash !== "#welcome") location.replace("#welcome");
+        show("welcome");
+        return;
+      }
+      show(id);
+    }
+
+    window.addEventListener("hashchange", applyHash);
+    applyHash();
+    document.querySelectorAll(".dev:not(:disabled), .place button:not(:disabled)").forEach((b) => {
+      b.addEventListener("click", () => {
+        b.parentElement.querySelectorAll("button").forEach((d) => d.classList.remove("on"));
+        b.classList.add("on");
+      });
+    });
+  </script>
+</body>
+</html>

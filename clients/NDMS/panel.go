@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a3app/loft/internal/version"
@@ -31,6 +32,12 @@ type Panel struct {
 	// Nil uses LatestRelease and DownloadIPK plus OpkgInstall.
 	Check   func(context.Context) (Update, error)
 	Install func(context.Context, Update) error
+
+	authMu    sync.Mutex
+	authOS    OS
+	authOSOK  bool
+	authIP    string
+	authNoted string
 }
 
 // Handler is the page and the JSON API. Mutations need header X-Loft: 1
@@ -81,7 +88,9 @@ func (p *Panel) gate(next http.Handler) http.Handler {
 }
 
 // allow forwards the browser Cookie, and an optional ndw4 query token,
-// to the loopback /auth URL from the YAML. Tests replace this with Panel.Allow.
+// to the /auth URL for this KeeneticOS. KeeneticOS 5 checks the private
+// interface address. Older, or unparsed, firmware keeps the loopback URL
+// from the YAML. Tests replace this with Panel.Allow.
 func (p *Panel) allow(r *http.Request) (bool, string, error) {
 	if p.Allow != nil {
 		return p.Allow(r)
@@ -90,7 +99,17 @@ func (p *Panel) allow(r *http.Request) (bool, string, error) {
 	if err != nil {
 		return false, "", err
 	}
-	ok, err := Check(r.Context(), f.Keenetic.Auth, r.Header.Get("Cookie"), r.URL.Query().Get("ndw4"))
+	o := p.osRelease(r.Context(), f.Keenetic.RCI)
+	ip := ""
+	if LANAuth(o) {
+		ip = p.authIPv4(r.Context(), f.Keenetic.RCI)
+	}
+	authURL, err := SessionURL(o, f.Keenetic.Auth, ip)
+	if err != nil {
+		return false, "", err
+	}
+	p.noteAuth(o, authURL)
+	ok, err := Check(r.Context(), authURL, r.Header.Get("Cookie"), r.URL.Query().Get("ndw4"))
 	if err != nil {
 		return false, "", err
 	}
@@ -98,6 +117,69 @@ func (p *Panel) allow(r *http.Request) (bool, string, error) {
 		return true, "", nil
 	}
 	return false, LoginURL(r), nil
+}
+
+// osRelease caches a parsed show/version. A miss is not cached: ndm may
+// not be answering yet, and the next request tries again.
+func (p *Panel) osRelease(ctx context.Context, rci string) OS {
+	p.authMu.Lock()
+	if p.authOSOK {
+		o := p.authOS
+		p.authMu.Unlock()
+		return o
+	}
+	p.authMu.Unlock()
+	o := ReadOS(ctx, rci)
+	if !o.Known {
+		return o
+	}
+	p.authMu.Lock()
+	p.authOS = o
+	p.authOSOK = true
+	p.authMu.Unlock()
+	return o
+}
+
+// authIPv4 caches the private-interface address. An empty read is not
+// cached: the bridge may not have an address yet. The listen sockets are
+// also fixed for the process, so a later LAN renumber needs a restart.
+func (p *Panel) authIPv4(ctx context.Context, rci string) string {
+	p.authMu.Lock()
+	if p.authIP != "" {
+		ip := p.authIP
+		p.authMu.Unlock()
+		return ip
+	}
+	p.authMu.Unlock()
+	ip := AuthIPv4(ctx, rci)
+	if ip == "" {
+		return ""
+	}
+	p.authMu.Lock()
+	if p.authIP == "" {
+		p.authIP = ip
+	}
+	ip = p.authIP
+	p.authMu.Unlock()
+	return ip
+}
+
+// noteAuth logs the release and the /auth URL once per distinct URL.
+func (p *Panel) noteAuth(o OS, authURL string) {
+	p.authMu.Lock()
+	defer p.authMu.Unlock()
+	if p.authNoted == authURL {
+		return
+	}
+	p.authNoted = authURL
+	rel := o.Release
+	if rel == "" {
+		rel = o.Title
+	}
+	if rel == "" {
+		rel = "unknown"
+	}
+	logErr("ndms %s auth %s", rel, authURL)
 }
 
 // home serves the embedded page at /. Any other path is 404.

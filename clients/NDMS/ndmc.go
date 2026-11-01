@@ -18,9 +18,6 @@ var (
 	descBad = regexp.MustCompile(`[\x00-\x1f"'\\;|&$` + "`]")
 	// ispRe is an NDM interface name. A slash is allowed (GigabitEthernet0/0).
 	ispRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._/-]{0,40}$`)
-	// relRe and verRe read the major from "show version". The first match wins.
-	relRe = regexp.MustCompile(`(?i)release:\s*(\d+)`)
-	verRe = regexp.MustCompile(`(?i)(?:version|ndms?):\s*(\d+)`)
 )
 
 // Names is the NDM interface and the Linux device for one index.
@@ -167,18 +164,8 @@ func quoteDesc(s string) (string, error) {
 // TooOld reports a KeeneticOS / NDMS major below 5. Unparsed text is not
 // old: a firmware we cannot read is left for the OpkgTun commands to refuse.
 func TooOld(text string) bool {
-	m := relRe.FindStringSubmatch(text)
-	if m == nil {
-		m = verRe.FindStringSubmatch(text)
-	}
-	if m == nil {
-		return false
-	}
-	n, err := strconv.Atoi(m[1])
-	if err != nil {
-		return false
-	}
-	return n > 0 && n < 5
+	o := ParseOS(text)
+	return o.Known && o.Major > 0 && o.Major < 5
 }
 
 // Runner executes one ndmc command line (the argument of ndmc -c).

@@ -370,8 +370,111 @@ jobs:
           echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           make -C clients/MikroTik push
 
+  # KeeneticOS Entware (clients/NDMS). Three ipk, a .sha256 sidecar for
+  # each (the panel matches the ipk name plus ".sha256"), and one
+  # SHA256SUMS. An ipk is an ar of debian-binary, control.tar.gz and
+  # data.tar.gz, not a tar.
+  ndms:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Entware packages
+        run: make -C clients/NDMS dist
+      - name: Smoke ipk
+        run: |
+          set -eu
+          ver=$(tr -d ' \n' < VERSION)
+          cd dist/ndms
+          python3 - "$ver" <<'PY'
+          import glob, io, struct, subprocess, sys, tarfile
+          ver = sys.argv[1]
+          want = {
+              "aarch64": (2, 183, "aarch64-3.10"),  # ELFCLASS64, EM_AARCH64
+              "armv7": (1, 40, "armv7-3.2"),        # ELFCLASS32, EM_ARM
+              "mipsel": (1, 8, "mipsel-3.4"),       # ELFCLASS32, EM_MIPS
+          }
+          # Go does not set EF_ARM_ABI_FLOAT_SOFT. Reject the hard-float
+          # bit, and require the buildinfo line the Makefile asks for.
+          FLOAT_HARD = 0x400
+          buildinfo = {
+              "aarch64": b"\nbuild\tGOARCH=arm64\n",
+              "armv7": b"\nbuild\tGOARM=7,softfloat\n",
+              "mipsel": b"\nbuild\tGOMIPS=softfloat\n",
+          }
+
+          def ar_members(path):
+              # Size is the body only. An odd member's pad newline sits
+              # after that length and is not a second archive member.
+              data = open(path, "rb").read()
+              if not data.startswith(b"!<arch>\n"):
+                  raise SystemExit(path + " is not an ar")
+              off, out = 8, {}
+              while off + 60 <= len(data):
+                  hdr = data[off:off + 60]
+                  name = hdr[:16].split(b"\x00", 1)[0].decode().strip().rstrip("/")
+                  size = int(hdr[48:58])
+                  body = data[off + 60:off + 60 + size]
+                  if len(body) != size or not name:
+                      raise SystemExit(f"{path} bad member {name!r} at {off}")
+                  out[name] = body
+                  off += 60 + size + (size & 1)
+              if off != len(data):
+                  raise SystemExit(f"{path} trailing {len(data) - off} bytes")
+              return out
+
+          for name, (cls, mach, ent) in want.items():
+              f = f"loft-ndms-{ver}-{name}.ipk"
+              members = ar_members(f)
+              for need in ("debian-binary", "control.tar.gz", "data.tar.gz"):
+                  if need not in members:
+                      raise SystemExit(f"{f} missing {need}: {sorted(members)}")
+              if members["debian-binary"] != b"2.0\n":
+                  raise SystemExit(f"{f} debian-binary {members['debian-binary']!r}")
+              ctrl = tarfile.open(fileobj=io.BytesIO(members["control.tar.gz"]), mode="r:gz")
+              text = ctrl.extractfile("control").read().decode()
+              for line in (f"Package: loft", f"Architecture: {ent}", f"Version: {ver}"):
+                  if line not in text.splitlines():
+                      raise SystemExit(f"{f} control missing {line!r}\n{text}")
+              data = tarfile.open(fileobj=io.BytesIO(members["data.tar.gz"]), mode="r:gz")
+              names = set(data.getnames())
+              for path in ("opt/bin/loft-ndms", "opt/etc/init.d/S99loft", "opt/etc/loft/client.yaml.sample"):
+                  if path not in names:
+                      raise SystemExit(f"{f} missing {path}")
+              blob = data.extractfile("opt/bin/loft-ndms").read()
+              b = blob[:64]
+              if b[:4] != b"\x7fELF" or b[5] != 1:
+                  raise SystemExit(f"{f} not little-endian ELF")
+              got = (b[4], struct.unpack_from("<H", b, 18)[0])
+              flags = struct.unpack_from("<I", b, 36)[0]
+              if got != (cls, mach):
+                  raise SystemExit(f"{f} elf {got} want {(cls, mach)}")
+              if name == "armv7" and (flags & FLOAT_HARD):
+                  raise SystemExit(f"{f} arm flags {flags:#x}")
+              if buildinfo[name] not in blob or ver.encode() not in blob:
+                  raise SystemExit(f"{f} buildinfo missing {buildinfo[name]!r}")
+              print(f, "ok", hex(flags))
+          sums = f"loft-ndms-{ver}-SHA256SUMS.txt"
+          subprocess.check_call(["sha256sum", "-c", sums])
+          for f in sorted(glob.glob(f"loft-ndms-{ver}-*.ipk")):
+              subprocess.check_call(["sha256sum", "-c", f + ".sha256"])
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ndms
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/ndms/loft-ndms-*.ipk
+            dist/ndms/loft-ndms-*.ipk.sha256
+            dist/ndms/loft-ndms-*-SHA256SUMS.txt
+
   release:
-    needs: [linux, macos, android, windows, mikrotik]
+    needs: [linux, macos, android, windows, mikrotik, ndms]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -400,6 +503,9 @@ jobs:
             "loft-${ver}-windows-x86-64.zip" "loft-${ver}-windows-x86.zip" "loft-${ver}-windows-arm64.zip" \
             "loft-mikrotik-${ver}-amd64.tar" "loft-mikrotik-${ver}-arm64.tar" "loft-mikrotik-${ver}-armv7.tar" \
             "loft-mikrotik-${ver}-SHA256SUMS.txt" \
+            "loft-ndms-${ver}-aarch64.ipk" "loft-ndms-${ver}-armv7.ipk" "loft-ndms-${ver}-mipsel.ipk" \
+            "loft-ndms-${ver}-aarch64.ipk.sha256" "loft-ndms-${ver}-armv7.ipk.sha256" "loft-ndms-${ver}-mipsel.ipk.sha256" \
+            "loft-ndms-${ver}-SHA256SUMS.txt" \
             "loft-windows-${ver}-SHA256SUMS.txt" \
             "loft-clients-${ver}-SHA256SUMS.txt" "loft-node-${ver}-SHA256SUMS.txt" "loft-panel-${ver}-SHA256SUMS.txt"
           do
@@ -410,7 +516,7 @@ jobs:
             found "loft-android-${ver}-SHA256SUMS.txt"
           fi
           find artifacts -type f \( \
-            -name '*.tar.gz' -o -name '*.tar' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*SHA256SUMS.txt' \
+            -name '*.tar.gz' -o -name '*.tar' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*.ipk' -o -name '*.sha256' -o -name '*SHA256SUMS.txt' \
           \) | sort
       - name: Publish GitHub Release
         shell: bash
@@ -420,7 +526,7 @@ jobs:
           set -eu
           ver=$(tr -d ' \n' < VERSION)
           mapfile -t files < <(find artifacts -type f \( \
-            -name '*.tar.gz' -o -name '*.tar' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*SHA256SUMS.txt' \
+            -name '*.tar.gz' -o -name '*.tar' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*.ipk' -o -name '*.sha256' -o -name '*SHA256SUMS.txt' \
           \) | grep -E -- "-${ver}-|_${ver}_" | sort)
           [ "${#files[@]}" -gt 0 ]
           notes=GH_RELEASE.md

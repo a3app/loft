@@ -47,7 +47,7 @@ clients/
   macOS/pack          DMG (Applications symlink), sign, entitlements
   macOS/design        UX spec and mock
   macOS/tests         RFC 8439 AEAD vector (make -C clients/macOS test-crypto)
-  NDMS/               Entware OpkgTun client (loft-ndms, LAN :8090)
+  NDMS/               Entware OpkgTun client (loft-ndms, LAN :8090; Dist ipk)
   MikroTik/           RouterOS 7 container (image + .rsc; SOCKS first; not Dist)
   iOS/                Packet Tunnel (thin host + appex; gomobile xcframework; Apple TV in PLAN phase 6)
   Android/            VpnService (thin Java host; gomobile AAR; phone + TV flavors)

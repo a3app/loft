@@ -18,12 +18,13 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 | Android (sideload, GitHub channel) | `loft-1.0.42-android.apk` · `loft-1.0.42-android-tv.apk` | same fat APKs |
 | Windows portable (GitHub) | `loft-1.0.42-windows-arm64.zip` | `loft-1.0.42-windows-x86-64.zip` · `loft-1.0.42-windows-x86.zip` |
 | MikroTik container | `loft-mikrotik-1.0.42-arm64.tar` · `loft-mikrotik-1.0.42-armv7.tar` | `loft-mikrotik-1.0.42-amd64.tar` |
+| Keenetic Entware | `loft-ndms-1.0.42-aarch64.ipk` · `loft-ndms-1.0.42-armv7.ipk` | `loft-ndms-1.0.42-mipsel.ipk` |
 
-Checksums: `loft-clients-1.0.42-SHA256SUMS.txt`, `loft-node-1.0.42-SHA256SUMS.txt`, `loft-panel-1.0.42-SHA256SUMS.txt`, `loft-android-1.0.42-SHA256SUMS.txt`, `loft-windows-1.0.42-SHA256SUMS.txt`, `loft-mikrotik-1.0.42-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.42-SHA256SUMS.txt`, `loft-node-1.0.42-SHA256SUMS.txt`, `loft-panel-1.0.42-SHA256SUMS.txt`, `loft-android-1.0.42-SHA256SUMS.txt`, `loft-windows-1.0.42-SHA256SUMS.txt`, `loft-mikrotik-1.0.42-SHA256SUMS.txt`, `loft-ndms-1.0.42-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.42`.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.42`. Keenetic ipk arches are Entware aarch64-3.10, armv7-3.2 soft-float, and mipsel-3.4 soft-float. Each ipk has a `.sha256` sidecar of the same name.
 
-Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
+Not in Dist: iOS / Sailfish clients (catalog and mocks).
 
 ## What it does
 
@@ -31,6 +32,7 @@ Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 - **Android** — phone `VpnService` and Leanback TV. Named connections, `loft://` / `.loft` import, overlay as one system VPN. GitHub APKs self-update from Dist; Play builds compile the updater out.
 - **Windows** — tray client. x86-64 and x86: Windows 7 SP1 and later. arm64: Windows 10/11 ARM. Unzip and run. The GitHub build replaces its own directory from the next release zip. The Store layout is not in this Dist.
 - **MikroTik** — RouterOS container. Upload a docker-save tarball, or pull `ghcr.io/a3app/loft-mikrotik`.
+- **Keenetic** — Entware package. `opkg install` the ipk for aarch64-3.10, armv7-3.2 (soft-float), or mipsel-3.4 (soft-float). The LAN page is `http://<lan>:8090/`.
 
 | Home | Connections |
 |:--:|:--:|
@@ -62,6 +64,10 @@ Inner:
 macOS:
 
 - Dist DMG packing retries `hdiutil detach` when the volume is busy (hdiutil 16).
+
+Keenetic:
+
+- Entware packages `loft-ndms-1.0.42-{aarch64,armv7,mipsel}.ipk`, each with a `.sha256` sidecar. The panel installs a newer ipk from the latest release when both files are there.
 
 ## 1.0.41
 
@@ -422,9 +428,9 @@ macOS:
 
 Оверлей внутри TLS 1.3. Приложения ходят в локальные SOCKS5 или TUN. Потоки в одном mux, ChaCha20-Poly1305, снаружи обычный HTTPS: GET, WebSocket, HTTP/2, QUIC или HTTP/3. Перед нодой может стоять CDN. Протокол **loft/1.0**. Ссылка `loft://`.
 
-В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik. Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic в этот Dist не входят.
+В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik, пакет Entware Keenetic (`loft-ndms` aarch64, armv7, mipsel, у каждого `.sha256`). Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS и Sailfish в этот Dist не входят.
 
-1.0.42: нода — Prometheus `/metrics` выкл, пока не задано `metrics HOST:PORT` (обычно 127.0.0.1:9101). Панель — OpenAPI 3.1 существующего `/api/` в docs/panel-api.yaml, Bearer `lpt_`. Внутренние id 4, 7 и 8 зарезервированы без назначенного шифра; GET не подтверждает 0, 2, 3, 5. Dist macOS — повтор `hdiutil detach` при EBUSY. Протокол loft/1.0.
+1.0.42: нода — Prometheus `/metrics` выкл, пока не задано `metrics HOST:PORT` (обычно 127.0.0.1:9101). Панель — OpenAPI 3.1 существующего `/api/` в docs/panel-api.yaml, Bearer `lpt_`. Внутренние id 4, 7 и 8 зарезервированы без назначенного шифра; GET не подтверждает 0, 2, 3, 5. Dist macOS — повтор `hdiutil detach` при EBUSY. Keenetic — Entware ipk `loft-ndms-1.0.42-{aarch64,armv7,mipsel}.ipk` и sidecar `.sha256`; панель ставит более новый ipk из latest, когда оба файла на месте. Протокол loft/1.0.
 
 1.0.41: внутренний AEGIS-128L (RFC 10032) — id 3, прямые фронты могут подтвердить после Status; GET не подтверждает 0, 2, 3, 5 и 8. Reel-256 убран с main, id 8 зарезервирован под экспериментальный шифр. AEAD ChaCha20-Poly1305 и AES-256-GCM кэшируются на ключ сессии. Спека GET `plain`/`tight` совпадает с нодой: inflight 8/16, Cookie 16 КиБ, handshake 20 с, data 15/6 с, hold mux не больше 1 с; HTTP 413 делит бюджет Cookie пополам (пол 1024); idle pad отвечает сразу; три повторных 404 одной GET-последовательности забывают sid. Нода отдаёт Prometheus text 0.0.4 на 127.0.0.1:9101/metrics (`metrics off` выключает). Протокол loft/1.0.
 
@@ -460,9 +466,9 @@ macOS:
 
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
-本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic 不在这次包里。
+本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器、Keenetic Entware 包（`loft-ndms` aarch64、armv7、mipsel，各带 `.sha256`）。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish 不在这次包里。
 
-1.0.42：节点 — Prometheus `/metrics` 默认关，仅当设置 `metrics HOST:PORT`（通常 127.0.0.1:9101）。面板 — 现有 `/api/` 的 OpenAPI 3.1 见 docs/panel-api.yaml，Bearer `lpt_`。内部 id 4、7、8 保留，未指定密码；GET 不确认 0、2、3、5。Dist macOS — `hdiutil detach` 在 EBUSY 时重试。协议仍是 loft/1.0。
+1.0.42：节点 — Prometheus `/metrics` 默认关，仅当设置 `metrics HOST:PORT`（通常 127.0.0.1:9101）。面板 — 现有 `/api/` 的 OpenAPI 3.1 见 docs/panel-api.yaml，Bearer `lpt_`。内部 id 4、7、8 保留，未指定密码；GET 不确认 0、2、3、5。Dist macOS — `hdiutil detach` 在 EBUSY 时重试。Keenetic — Entware ipk `loft-ndms-1.0.42-{aarch64,armv7,mipsel}.ipk` 及 `.sha256`；两个文件都在最新发布里时，面板安装更新的 ipk。协议仍是 loft/1.0。
 
 1.0.41：数据面 AEGIS-128L（RFC 10032）为 id 3，直连前置可在 Status 后确认；GET 不确认 0、2、3、5、8。Reel-256 已离开 main，id 8 仍留给实验密码。ChaCha20-Poly1305 与 AES-256-GCM 的 AEAD 按会话密钥缓存。GET `plain`/`tight` 规格与节点一致：inflight 8/16，Cookie 16 KiB，握手 20 秒，数据 15/6 秒，节点 mux hold 最多 1 秒；HTTP 413 把 Cookie 预算减半（下限 1024）；空闲 pad 立刻返回；同一 GET 序号三次重试 404 则丢弃 sid。节点在 127.0.0.1:9101/metrics 提供 Prometheus text 0.0.4（`metrics off` 关闭）。协议仍是 loft/1.0。
 

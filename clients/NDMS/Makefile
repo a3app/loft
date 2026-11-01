@@ -2,12 +2,17 @@
 # make test     host tests (no TUN, no ndmc)
 # make ipk      aarch64 ipk (Giga / Peak / Hopper)
 # make ipk-all  aarch64, armv7 soft-float, mipsel soft-float
+# make dist     those three ipk, a .sha256 sidecar each, and
+#               dist/ndms/loft-ndms-<ver>-SHA256SUMS.txt
 VERSION ?= $(shell cat ../../VERSION)
 LDFLAGS := -s -w -X github.com/a3app/loft/internal/version.Version=$(VERSION)
 ROOT := $(abspath ../..)
 PACK := $(ROOT)/clients/NDMS/pack
+DIST := $(ROOT)/dist/ndms
+# sha256sum on Ubuntu CI; shasum on macOS. Both print "hex  name".
+SHA256 := $(shell command -v sha256sum >/dev/null 2>&1 && echo sha256sum || echo shasum -a 256)
 
-.PHONY: test ipk ipk-all clean one
+.PHONY: test ipk ipk-all dist clean one
 
 test:
 	cd $(ROOT) && go test ./clients/NDMS/ ./clients/go/inbound/ -count=1
@@ -44,8 +49,23 @@ one:
 	  -prerm clients/NDMS/pack/prerm \
 	  -postinst clients/NDMS/pack/postinst \
 	  -sample clients/NDMS/pack/client.yaml.sample; \
-	cd $(PACK) && shasum -a 256 loft-ndms-$(VERSION)-$(ARCH).ipk | sed 's#  #  #' > loft-ndms-$(VERSION)-$(ARCH).ipk.sha256; \
+	cd $(PACK) && $(SHA256) loft-ndms-$(VERSION)-$(ARCH).ipk > loft-ndms-$(VERSION)-$(ARCH).ipk.sha256; \
 	echo $(PACK)/loft-ndms-$(VERSION)-$(ARCH).ipk
+
+# dist is what the Release uploads. The panel matches each ipk to the
+# sidecar named "<ipk>.sha256". SHA256SUMS is the same digests in one
+# file, with bare names, so sha256sum -c works in a flat folder.
+dist: ipk-all
+	mkdir -p $(DIST)
+	cp $(PACK)/loft-ndms-$(VERSION)-aarch64.ipk \
+	   $(PACK)/loft-ndms-$(VERSION)-aarch64.ipk.sha256 \
+	   $(PACK)/loft-ndms-$(VERSION)-armv7.ipk \
+	   $(PACK)/loft-ndms-$(VERSION)-armv7.ipk.sha256 \
+	   $(PACK)/loft-ndms-$(VERSION)-mipsel.ipk \
+	   $(PACK)/loft-ndms-$(VERSION)-mipsel.ipk.sha256 \
+	   $(DIST)/
+	cd $(DIST) && $(SHA256) loft-ndms-$(VERSION)-*.ipk > loft-ndms-$(VERSION)-SHA256SUMS.txt
+	@ls -l $(DIST)
 
 clean:
 	rm -f $(PACK)/loft-ndms $(PACK)/*.ipk $(PACK)/*.sha256

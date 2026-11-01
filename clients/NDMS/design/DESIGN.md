@@ -74,3 +74,26 @@ Field names come from the desktop clients (`clients/macOS/lang`).
 | Every enabled connection keeps its session up. Keenetic priorities pick which one carries traffic. | Включённые подключения держат сессию все сразу. Какое из них использовать, решают приоритеты Keenetic. |
 | Split routing and fallback live in Keenetic | Раздельная маршрутизация и запасной канал — в Keenetic |
 | SSTP is the stock Keenetic client | SSTP — штатный клиент Keenetic |
+
+## 7. Desktop installer
+
+Mock: [`install.html`](install.html). A program on the operator's computer. Not the `:8090` page and not a Keenetic component.
+
+It finds a Keenetic on the LAN, signs in with the web-admin password, and installs the Entware `.ipk` for that router's arch (`aarch64-3.10`, `armv7-3.2` soft-float, `mipsel-3.4` soft-float) from the latest `a3app/loft` release after the `.sha256` check.
+
+It does not download Keenetic firmware components. If OPKG or TUN/TAP is off, the screen says to turn them on in the component set and come back. If Entware is missing, the operator picks NAND or an EXT4 disk Keenetic has already prepared. The installer does not partition disks and does not write connection priorities. An upgrade leaves OpkgTun0…OpkgTun15 in place.
+
+| Screen | What |
+|--------|------|
+| Start | loft 1.0.42. KeeneticOS 5.0+, OPKG, TUN/TAP, one LAN. |
+| Router | Model, LAN address, KeeneticOS, arch. A 4.x row is refused. Manual address. |
+| Password | Web-admin password. Guest is refused. No second loft password. |
+| Check | OS, OPKG, TUN/TAP, Entware, ipk name. |
+| Where Entware | Only when the OPKG component is on and Entware is absent. NAND or USB EXT4. |
+| Install | Fetch the ipk and `.sha256`, check the digest, `opkg install`, `S99loft`. |
+| Done | Open `http://<lan>:8090/`. Priorities stay in Keenetic. |
+| Not on the LAN | Same network, or type the address. |
+| Password refused | Administrator, not a guest. |
+| Component missing | OPKG or TUN/TAP off. |
+| KeeneticOS 4 | OpkgTun in policies needs 5.0. |
+| Already installed | 1.0.35 → 1.0.42, interfaces kept. |

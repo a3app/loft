@@ -47,7 +47,7 @@ clients/
   macOS/pack          DMG (симлинк Applications), подпись, entitlements
   macOS/design        спецификация UX и макет
   macOS/tests         вектор RFC 8439 AEAD (make -C clients/macOS test-crypto)
-  NDMS/               клиент Entware OpkgTun (loft-ndms, LAN :8090)
+  NDMS/               клиент Entware OpkgTun (loft-ndms, LAN :8090; Dist ipk)
   MikroTik/           контейнер RouterOS 7 (образ + .rsc; сначала SOCKS; не в Dist)
   iOS/                Packet Tunnel (тонкий хост + appex; gomobile xcframework; Apple TV в плане, фаза 6)
   Android/            VpnService (тонкий хост Java; gomobile AAR; flavor телефона и TV)

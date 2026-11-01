@@ -13,12 +13,14 @@ import (
 )
 
 // Check asks the Keenetic web admin whether cookie is a signed-in
-// administrator. authURL must be loopback (/auth on :80). A 200 with no
-// role is accepted: the account name is not the role. Guest, viewer and
-// readonly are refused. KeeneticOS 5.2's one-shot token, when the browser
-// was bounced back with ?ndw4=, is sent as x-ndw4-authenticate.
+// administrator. authURL is loopback, or a private IPv4 that is on this
+// host (KeeneticOS 5 serves /auth there; 127.0.0.1:80 is the stub).
+// A 200 with no role is accepted: the account name is not the role.
+// Guest, viewer and readonly are refused. KeeneticOS 5.2's one-shot
+// token, when the browser was bounced back with ?ndw4=, is sent as
+// x-ndw4-authenticate.
 func Check(ctx context.Context, authURL, cookie, ndw4 string) (bool, error) {
-	if err := Loopback(authURL); err != nil {
+	if err := LocalAuth(authURL, PrivateIPv4()); err != nil {
 		return false, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -33,7 +35,7 @@ func Check(ctx context.Context, authURL, cookie, ndw4 string) (bool, error) {
 	if ndw4 != "" {
 		req.Header.Set("x-ndw4-authenticate", ndw4)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := routerHTTP.Do(req)
 	if err != nil {
 		return false, err
 	}

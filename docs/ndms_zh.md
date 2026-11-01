@@ -4,7 +4,7 @@
 
 loft 在 Keenetic 路由器上怎么跑。客户端：[clients/NDMS/](../clients/NDMS/)。计划：[clients/NDMS/PLAN.md](../clients/NDMS/PLAN.md)。模型：[clients/NDMS/design/index.html](../clients/NDMS/design/index.html)。协议：[protocol_zh.md](protocol_zh.md)。
 
-构建：`make -C clients/NDMS ipk`（aarch64）或 `make -C clients/NDMS ipk-all`。用 `opkg` 安装。页面是 `http://<lan>:8090/`。KeeneticOS 5.0+，组件 OPKG 和 TUN/TAP，Entware 在 NAND 或 USB EXT4。
+构建：`make -C clients/NDMS ipk`（aarch64）或 `make -C clients/NDMS ipk-all`。Dist 发布 `loft-ndms-<version>-{aarch64,armv7,mipsel}.ipk` 和 `.sha256`。用 `opkg` 安装。页面是 `http://<lan>:8090/`。KeeneticOS 5.0+，组件 OPKG 和 TUN/TAP，Entware 在 NAND 或 USB EXT4。
 
 ---
 

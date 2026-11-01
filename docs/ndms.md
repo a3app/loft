@@ -4,7 +4,7 @@
 
 How loft runs on a Keenetic router. Client: [clients/NDMS/](../clients/NDMS/). Plan: [clients/NDMS/PLAN.md](../clients/NDMS/PLAN.md). Mock: [clients/NDMS/design/index.html](../clients/NDMS/design/index.html). Protocol: [protocol.md](protocol.md).
 
-Build `make -C clients/NDMS ipk` (aarch64) or `make -C clients/NDMS ipk-all`. Install with `opkg`. The page is `http://<lan>:8090/`. KeeneticOS 5.0+, components OPKG and TUN/TAP, Entware on NAND or USB EXT4.
+Build `make -C clients/NDMS ipk` (aarch64) or `make -C clients/NDMS ipk-all`. Dist ships `loft-ndms-<version>-{aarch64,armv7,mipsel}.ipk` with a `.sha256` sidecar. Install with `opkg`. The page is `http://<lan>:8090/`. KeeneticOS 5.0+, components OPKG and TUN/TAP, Entware on NAND or USB EXT4.
 
 ---
 

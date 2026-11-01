@@ -4,7 +4,7 @@
 
 Entware 客户端：每个连接一个 **OpkgTun** 接口，KeeneticOS 拿它们进连接优先级和策略路由。设置在 LAN 口上；登录是 Keenetic 网页管理会话。
 
-协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/ndms_zh.md](../../docs/ndms_zh.md)。计划：[PLAN.md](PLAN.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。
+协议：[docs/protocol_zh.md](../../docs/protocol_zh.md)。对接：[docs/ndms_zh.md](../../docs/ndms_zh.md)。计划：[PLAN.md](PLAN.md)。UX：[design/DESIGN_zh.md](design/DESIGN_zh.md)。模型：[design/index.html](design/index.html)。安装器模型：[design/install.html](design/install.html)。
 
 二进制是 `loft-ndms`。它提供 LAN 页面，并为每个已启用的连接再启动自己（`-session`）。`clients/go/lanui` 仍是 MikroTik 的页面。
 
@@ -26,13 +26,14 @@ KeeneticOS **5.0+**（策略里有 OpkgTun）。组件：OPKG 和 TUN/TAP。Entw
 make -C clients/NDMS test
 make -C clients/NDMS ipk       # aarch64：Giga、Peak、Hopper
 make -C clients/NDMS ipk-all   # aarch64、armv7 soft-float、mipsel soft-float
+make -C clients/NDMS dist      # 三个 ipk 和 .sha256，在 dist/ndms/
 ```
 
 在路由器上：`opkg install loft-ndms-<version>-<arch>.ipk`。页面是 `http://<lan>:8090/`。样例配置是 `/opt/etc/loft/client.yaml`（`check_updates: true`）。YAML 里没有 `enabled` 就是关闭。
 
 `prerm` 只在卸载时删除 OpkgTun0…OpkgTun15。升级会停进程并留下接口，优先级还在。
 
-面板从 `a3app/loft` 最新发布安装更新的 `.ipk`，前提是发布里有这个文件和它的 `.sha256`。用 Makefile 构建。Dist 的内容不变。
+Dist 发布 `loft-ndms-<version>-{aarch64,armv7,mipsel}.ipk`，每个带 `.sha256`。两个文件都在 `a3app/loft` 最新发布里时，面板安装更新的 `.ipk`。
 
 ## 布局
 

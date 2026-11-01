@@ -58,6 +58,11 @@
     }
     nav button:hover { background: #1e1a17; color: var(--snow); }
     nav button.on { background: #2a2420; color: var(--snow); }
+    nav a {
+      display: block; text-align: left; color: var(--stone); text-decoration: none;
+      font: 500 13px var(--ui); padding: 6px 10px; border-radius: 8px;
+    }
+    nav a:hover { background: #1e1a17; color: var(--snow); }
     nav h4 {
       margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
       text-transform: uppercase; color: var(--mute); font-weight: 600;
@@ -252,6 +257,8 @@
     <button type="button" data-go="import" data-i="nImport">Импорт</button>
     <button type="button" data-go="journal" data-i="nJournal">Журнал</button>
     <button type="button" data-go="pkg" data-i="nPkg">Пакет</button>
+    <h4 data-i="hInst">Установщик</h4>
+    <a href="install.html" data-i="nInst">С компьютера</a>
   </nav>
 
   <div class="stage-wrap">
@@ -698,6 +705,7 @@
       ru: {
         navCap: "Макет панели на Keenetic. Маршруты и приоритеты — у Keenetic, сессии — у нас.",
         hKeen: "Keenetic", nOther: "Другие подключения", nPrio: "Приоритеты", hPanel: "Панель :8090",
+        hInst: "Установщик", nInst: "С компьютера",
         nGate: "Сессия", nList: "Подключения", nStatus: "Статус", nEdit: "Подключение · loft",
         nEditVless: "Подключение · VLESS", nImport: "Импорт", nJournal: "Журнал",
         kNet: "Интернет", kOther: "Другие подключения", kRules: "Сетевые правила", kPrio: "Приоритеты",
@@ -741,6 +749,7 @@
       en: {
         navCap: "Keenetic panel mock. Routes and priorities stay in Keenetic; sessions are ours.",
         hKeen: "Keenetic", nOther: "Other connections", nPrio: "Priorities", hPanel: "Panel :8090",
+        hInst: "Installer", nInst: "From this computer",
         nGate: "Session", nList: "Connections", nStatus: "Status", nEdit: "Connection · loft",
         nEditVless: "Connection · VLESS", nImport: "Import", nJournal: "Journal",
         kNet: "Internet", kOther: "Other connections", kRules: "Network rules", kPrio: "Priorities",
