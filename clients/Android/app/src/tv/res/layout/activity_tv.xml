@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ink"
+    android:orientation="horizontal"
+    android:padding="48dp">
+
+    <LinearLayout
+        android:id="@+id/rail"
+        android:layout_width="88dp"
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingTop="8dp">
+
+        <ImageButton
+            android:id="@+id/rail_home"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:background="@drawable/tv_focus"
+            android:contentDescription="@string/home"
+            android:nextFocusDown="@id/rail_conns"
+            android:nextFocusRight="@id/pane"
+            android:padding="16dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_home" />
+
+        <ImageButton
+            android:id="@+id/rail_conns"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/tv_focus"
+            android:contentDescription="@string/conns"
+            android:nextFocusDown="@id/rail_settings"
+            android:nextFocusUp="@id/rail_home"
+            android:nextFocusRight="@id/pane"
+            android:padding="16dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_list" />
+
+        <ImageButton
+            android:id="@+id/rail_settings"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/tv_focus"
+            android:contentDescription="@string/settings"
+            android:nextFocusUp="@id/rail_conns"
+            android:nextFocusRight="@id/pane"
+            android:padding="16dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_gear" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/pane"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="24dp"
+        android:layout_weight="1" />
+</LinearLayout>

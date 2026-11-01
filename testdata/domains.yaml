@@ -1,0 +1,8 @@
+# Hostnames for Go tests that ship in the public tree (RFC 2606).
+# Copy to domains.local.yaml (gitignored) to point the same tests at a live stand.
+# decoy / decoy2 must be a different registrable domain than front (peerName foreign).
+front: loft.example.com
+front_port: "444"
+cdn: cdn.example.com
+decoy: www.example.net
+decoy2: origin.example.org

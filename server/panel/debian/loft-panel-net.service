@@ -1,0 +1,14 @@
+[Unit]
+Description=loft server panel, addresses and routes added in the panel
+Documentation=file:///usr/share/doc/loft-panel/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Root, on the host network: ip addr / ip route for /etc/loft-panel/net.json.
+ExecStart=/usr/bin/loft-panel-adm net-boot
+
+[Install]
+WantedBy=multi-user.target

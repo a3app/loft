@@ -1,0 +1,9 @@
+name: loft
+
+# Full default suite. Do not exclude a rule here: a new DES/MD4/skip-verify in
+# overlay code must still fire. Protocol and trust exceptions are listed in
+# docs/codeql.md. Each site has a `codeql[<rule-id>]` comment on the line above
+# the sink; GitHub alerts are dismissed with that same human reason.
+packs:
+  go:
+    - codeql/go-queries:AlertSuppression.ql

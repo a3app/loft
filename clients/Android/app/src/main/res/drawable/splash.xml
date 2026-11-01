@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="@color/ink" />
+    </item>
+    <!-- README lockup 1092×512. 280dp keeps the same ratio on a phone. -->
+    <item
+        android:width="280dp"
+        android:height="131dp"
+        android:gravity="center">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/splash_lockup" />
+    </item>
+</layer-list>

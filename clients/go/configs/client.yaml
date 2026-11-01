@@ -1,0 +1,64 @@
+listen:
+  socks5: 127.0.0.1:1080
+  tun: auto
+  # Mask only: the address on the TUN is the overlay IP from Status.
+  tun_addr: 10.8.0.0/24
+  kill_switch: true
+
+# member_id: alice
+# instance_id is stored in client.instance next to this file.
+token: "change-me-long-random"
+
+# auto tries in list order
+select: auto
+
+# inner: data-cipher ask. Empty or chacha omits the Hello byte.
+# Node confirms only if its inner list includes that extra. GET stays ChaCha.
+# hiae needs a client built with -tags hiae (iOS/Android/macOS: HIAE=1).
+# reel needs -tags reel256 (iOS/Android/macOS: REEL256=1).
+# inner: aes
+
+# signed roster of this network (no member key in the file)
+# bootstrap: https://cdn.example.com/static/v3/manifest.json
+# controller_pub: # 64 hex chars of controller Ed25519 pub (required to fetch roster)
+# tofu: false      # true = pin the first valid signer when controller_pub is empty
+# lists_url: https://cdn.example.com/static/v3/lists.json
+# p2p: false   # hub splice only; skip a direct (encrypted) TCP attempt to another member
+# pause: starlink  # skip mux Data around LEO handover seconds; local, not on the wire
+# default: via
+# use:
+#   yandex: direct
+#   youtube: via
+#   drop: drop
+#   direct: direct
+
+# decoy SNI is not set here: the node advertises it in Status (and the
+# client may read the certificate a probe would see). CDN fronts keep
+# the CDN hostname.
+#
+# fronts: extra filter. Empty = outbound types below (stock is GET).
+# List names to refuse anything else the node offers.
+# fronts: [get]
+
+outbounds:
+  - name: cdn-get
+    type: get
+    cdn: yandex
+    url: https://cdn.example.com
+    path: /static/v3/build
+    fingerprint: chrome
+    header_budget: 12288
+    inflight: 4
+    # h2_max_age_ms: 0   # 0 = keep HTTP/2 until the edge drops it
+    insecure_skip_verify: false
+
+  # Direct-origin fronts. Off on the node until listed in fronts.
+  # - name: origin-ws
+  #   type: ws
+  #   url: wss://app.example.com/api/v1/sync
+  #   fingerprint: chrome
+  # - name: origin-h2
+  #   type: h2
+  #   url: https://app.example.com
+  #   path: /api/v1/tunnel
+  #   fingerprint: chrome

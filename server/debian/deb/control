@@ -1,0 +1,12 @@
+Package: loft-node
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: @ARCH@
+Maintainer: loft
+Depends: adduser, openssl, ca-certificates, systemd
+Recommends: curl, iproute2
+Description: loft overlay node (controller or relay)
+ loft occupies the same place as ordinary HTTPS: TLS 1.3 on port 443.
+ This package is the node binary, a systemd unit, and Debian layout
+ under /etc/loft and /var/lib/loft.

@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loft — brand</title>
+  <style>
+    :root {
+      --ink: #1A1714;
+      --slate: #3A332E;
+      --copper: #C67B3A;
+      --lamp: #E8B84A;
+      --snow: #F3EDE4;
+      --paper: #E8DFD2;
+      --mute: #8A7E72;
+      --line: #d9cfc2;
+      --bg: #f6f0e8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+      padding: 36px 22px 80px;
+    }
+    h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.04em; margin: 0 0 4px; }
+    .sub { color: var(--mute); max-width: 40rem; margin-bottom: 28px; }
+    h2 {
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--mute); margin: 40px 0 14px; font-weight: 600;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .card.dark { background: var(--ink); color: var(--snow); border-color: #2a2420; }
+    .card header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .card h3 { margin: 0; font-size: 0.95rem; font-weight: 600; letter-spacing: -0.02em; }
+    .tag { font-size: 0.7rem; color: var(--mute); }
+    .stage {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 140px; border-radius: 10px; background: var(--snow);
+    }
+    .card.dark .stage { background: #120f0d; }
+    .stage img, .stage object, .stage svg { max-width: 72%; max-height: 110px; }
+    .stage.bleed { padding: 0; background: transparent; }
+    .stage.bleed img { max-width: 100%; max-height: none; width: 100%; border-radius: 10px; }
+    .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+    .sw { width: 72px; }
+    .chip { height: 40px; border-radius: 8px; border: 1px solid var(--line); }
+    .sw code { font-size: 0.68rem; color: var(--mute); }
+    .bar {
+      display: flex; align-items: center; gap: 10px;
+      height: 36px; padding: 0 12px; border-radius: 8px; font-size: 0.78rem;
+    }
+    .bar.win { background: #1c1c1c; color: #ddd; }
+    .bar.mac { background: #e8e8ea; color: #222; }
+    .bar.mac-dark { background: #2c2c2e; color: #f2f2f7; }
+    .bar img { width: 18px; height: 18px; image-rendering: pixelated; }
+    .bar .clock { margin-left: auto; opacity: 0.7; }
+    .sizes { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+    .sizes figure { margin: 0; text-align: center; }
+    .sizes img { image-rendering: pixelated; display: block; margin: 0 auto 6px; }
+    .sizes figcaption { font-size: 0.68rem; color: var(--mute); }
+    p { margin: 0; }
+    .type-hero {
+      grid-column: 1 / -1;
+    }
+    .type-hero .specimen {
+      font-size: clamp(2.8rem, 8vw, 5.2rem);
+      font-weight: 600;
+      letter-spacing: -0.05em;
+      line-height: 0.95;
+      margin: 8px 0 6px;
+    }
+    .type-hero .meta {
+      color: var(--mute);
+      font-size: 0.88rem;
+      max-width: 40rem;
+    }
+    .type-hero .stage {
+      min-height: 0;
+      display: block;
+      padding: 22px 24px 20px;
+      background: var(--snow);
+    }
+    .weights {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+      width: 100%;
+    }
+    .w {
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--snow);
+    }
+    .w .name { font-size: 0.68rem; color: var(--mute); margin-bottom: 4px; }
+    .w .sample { font-size: 1.45rem; letter-spacing: -0.03em; line-height: 1.2; }
+    .alpha {
+      font-size: 1.12rem;
+      letter-spacing: 0.04em;
+      line-height: 1.75;
+      word-break: break-word;
+    }
+    .alpha + .alpha { margin-top: 8px; }
+    .rules { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .rules th, .rules td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .rules th { color: var(--mute); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .rules code { font-size: 0.8em; }
+    .stack { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; color: var(--mute); }
+    .heart { display: block; image-rendering: pixelated; }
+    .made {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      min-height: 140px; font-size: 1.12rem; font-weight: 500;
+      color: var(--mute); letter-spacing: -0.01em;
+    }
+    .made .heart { width: 21px; height: 18px; flex: none; }
+    .made sup, .page-foot sup {
+      font-size: 0.62em;
+      font-weight: 600;
+      position: relative;
+      top: -0.42em;
+      margin-left: 0.02em;
+      line-height: 0;
+    }
+    .card.dark .made { color: #8A7E72; }
+    .heart-sizes { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+    .heart-sizes figure { margin: 0; text-align: center; }
+    .heart-sizes img { display: block; margin: 0 auto 6px; image-rendering: pixelated; }
+    .heart-sizes figcaption { font-size: 0.68rem; color: var(--mute); }
+    .page-foot {
+      margin: 56px auto 0; max-width: 40rem;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      font-size: 0.92rem; font-weight: 500; color: var(--mute); letter-spacing: -0.01em;
+    }
+    .page-foot .heart { width: 14px; height: 12px; }
+  </style>
+</head>
+<body>
+  <h1>loft</h1>
+  <p class="sub">The mark is an L-roof with a lamp: the letter L, and a window that is lit when the tunnel is up.</p>
+
+  <h2>Protocol mark</h2>
+  <div class="grid">
+    <div class="card">
+      <header><h3>Mark</h3><span class="tag">svg/loft-mark.svg</span></header>
+      <div class="stage"><img src="svg/loft-mark.svg" alt="loft mark" /></div>
+    </div>
+    <div class="card dark">
+      <header><h3>On dark</h3><span class="tag">loft-mark-on-dark.svg</span></header>
+      <div class="stage"><img src="svg/loft-mark-on-dark.svg" alt="loft mark dark" /></div>
+    </div>
+    <div class="card">
+      <header><h3>Lockup</h3><span class="tag">loft-lockup.svg</span></header>
+      <div class="stage"><img src="svg/loft-lockup.svg" alt="loft lockup" style="max-width:90%" /></div>
+    </div>
+    <div class="card dark">
+      <header><h3>Lockup on dark</h3><span class="tag">loft-lockup-on-dark.svg</span></header>
+      <div class="stage"><img src="svg/loft-lockup-on-dark.svg" alt="loft lockup dark" style="max-width:90%" /></div>
+    </div>
+    <div class="card">
+      <header><h3>README lockup</h3><span class="tag">loft-lockup-readme.svg</span></header>
+      <div class="stage"><img src="svg/loft-lockup-readme.svg" alt="loft — Loft Overlay For TLS" style="max-width:92%" /></div>
+    </div>
+    <div class="card dark">
+      <header><h3>README on dark</h3><span class="tag">loft-lockup-readme-on-dark.svg</span></header>
+      <div class="stage"><img src="svg/loft-lockup-readme-on-dark.svg" alt="loft — Loft Overlay For TLS" style="max-width:92%" /></div>
+    </div>
+    <div class="card dark" style="grid-column:1/-1">
+      <header><h3>GitHub social preview</h3><span class="tag">svg/loft-og.svg · png/github-social-preview.png</span></header>
+      <div class="stage bleed"><img src="png/github-social-preview.png" alt="loft — Loft Overlay For TLS" /></div>
+    </div>
+    <div class="card">
+      <header><h3>Mono / hole</h3><span class="tag">loft-mark-mono.svg</span></header>
+      <div class="stage"><img src="svg/loft-mark-mono.svg" alt="mono" /></div>
+    </div>
+    <div class="card">
+      <header><h3>Wordmark</h3><span class="tag">Avenir Next Demi</span></header>
+      <div class="stage"><img src="svg/loft-wordmark.svg" alt="loft" style="max-width:70%" /></div>
+    </div>
+  </div>
+
+  <h2>Type</h2>
+  <p class="sub" style="margin-top:-8px">The face is <strong>Avenir Next</strong>. Geometric humanist sans: the round “o” rhymes with the lamp window; even weight rhymes with the L-roof.</p>
+  <div class="grid">
+    <div class="card type-hero">
+      <header><h3>Avenir Next</h3><span class="tag">Linotype · Frutiger / Kobayashi · 2004</span></header>
+      <div class="stage">
+        <div class="specimen">Avenir Next</div>
+        <p class="meta">A reworking of Avenir (1988). Geometric humanist sans: loft architecture. On macOS it is a system font. Cyrillic is complete.</p>
+      </div>
+    </div>
+    <div class="card">
+      <header><h3>Cuts</h3><span class="tag">four working</span></header>
+      <div class="weights">
+        <div class="w"><div class="name">Regular 400 · body</div><div class="sample" style="font-weight:400">loft overlay</div></div>
+        <div class="w"><div class="name">Medium 500 · UI, captions</div><div class="sample" style="font-weight:500">loft overlay</div></div>
+        <div class="w"><div class="name">Demi 600 · wordmark, h1</div><div class="sample" style="font-weight:600">loft overlay</div></div>
+        <div class="w"><div class="name">Bold 700 · emphasis</div><div class="sample" style="font-weight:700">loft overlay</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <header><h3>Wordmark</h3><span class="tag">Demi only</span></header>
+      <div class="stage" style="min-height:0;display:block;padding:20px 18px">
+        <div style="font-size:3rem;font-weight:600;letter-spacing:-0.04em;line-height:1">loft</div>
+        <p class="meta" style="margin-top:10px">lowercase, tracking −0.04em, Demi Bold. No caps, italic, Heavy, or Ultra Light. Lockup is live text; pixel-identical Windows rendering uses SVG outlines or an installed font file.</p>
+      </div>
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <header><h3>Alphabet</h3><span class="tag">Latin · Cyrillic · figures</span></header>
+      <div class="stage" style="min-height:0;display:block;padding:18px 20px;text-align:left">
+        <div class="alpha" style="font-weight:600">A B C D E F G H I J K L M N O P Q R S T U V W X Y Z</div>
+        <div class="alpha" style="font-weight:400">a b c d e f g h i j k l m n o p q r s t u v w x y z</div>
+        <div class="alpha" style="font-weight:600">А Б В Г Д Е Ё Ж З И Й К Л М Н О П Р С Т У Ф Х Ц Ч Ш Щ Ъ Ы Ь Э Ю Я</div>
+        <div class="alpha" style="font-weight:400">а б в г д е ё ж з и й к л м н о п р с т у ф х ц ч ш щ ъ ы ь э ю я</div>
+        <div class="alpha" style="font-weight:500">0 1 2 3 4 5 6 7 8 9  ·  lt_  ·  wss  ·  yandex</div>
+      </div>
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <header><h3>Roles and rules</h3><span class="tag">CSS stack below</span></header>
+      <table class="rules">
+        <tr><th>Where</th><th>Cut</th><th>Rule</th></tr>
+        <tr><td>Wordmark / lockup</td><td>Demi 600</td><td><code>loft</code> lowercase only, tracking −0.04em</td></tr>
+        <tr><td>Tagline</td><td>Regular 400</td><td><em>Loft Overlay For TLS</em> (recursive LOFT), title case, tracking −0.02em</td></tr>
+        <tr><td>UI headings</td><td>Demi 600</td><td>sentence case, tracking −0.02em</td></tr>
+        <tr><td>Buttons, tabs, navigation</td><td>Medium 500</td><td>no all-caps except short statuses (ON / OFF)</td></tr>
+        <tr><td>Body, README, docs</td><td>Regular 400</td><td>line-height 1.45, measure about 66 characters</td></tr>
+        <tr><td>Code, keys <code>lt_…</code>, YAML</td><td>SF Mono / Menlo / Consolas</td><td>never Avenir</td></tr>
+        <tr><td>Omit</td><td>Ultra Light, Heavy, italic in the lockup</td><td>Ultra Light vanishes on screen; Heavy breaks the mark’s geometry</td></tr>
+      </table>
+      <p class="stack" style="padding:12px 10px 4px">font-family: "Avenir Next", Avenir, "Helvetica Neue", "Segoe UI", ui-sans-serif, system-ui, sans-serif;</p>
+    </div>
+  </div>
+
+  <h2>Application icon</h2>
+  <div class="grid">
+    <div class="card">
+      <header><h3>App icon</h3><span class="tag">svg/loft-icon.svg · icns/ico</span></header>
+      <div class="stage bleed"><img src="svg/loft-icon.svg" alt="app icon" /></div>
+    </div>
+    <div class="card dark">
+      <header><h3>Light icon</h3><span class="tag">loft-icon-light.svg</span></header>
+      <div class="stage bleed"><img src="svg/loft-icon-light.svg" alt="app icon light" /></div>
+    </div>
+  </div>
+
+  <h2>Windows tray</h2>
+  <div class="grid">
+    <div class="card">
+      <header><h3>Connected 16px</h3><span class="tag">copper + lamp</span></header>
+      <div class="stage"><img src="tray/loft-tray-16.png" width="64" height="64" alt="tray 16" /></div>
+      <div class="bar win"><img src="tray/loft-tray-16.png" alt="" /> loft · connected <span class="clock">21:14</span></div>
+    </div>
+    <div class="card">
+      <header><h3>Disconnected 16px</h3><span class="tag">lamp off</span></header>
+      <div class="stage"><img src="tray/loft-tray-off-16.png" width="64" height="64" alt="tray off" /></div>
+      <div class="bar win"><img src="tray/loft-tray-off-16.png" alt="" /> loft · off <span class="clock">21:14</span></div>
+    </div>
+    <div class="card">
+      <header><h3>Sizes</h3><span class="tag">16 / 20 / 24 / 32</span></header>
+      <div class="stage">
+        <div class="sizes">
+          <figure><img src="tray/loft-tray-16.png" width="16" height="16" /><figcaption>16</figcaption></figure>
+          <figure><img src="tray/loft-tray-20.png" width="20" height="20" /><figcaption>20</figcaption></figure>
+          <figure><img src="tray/loft-tray-24.png" width="24" height="24" /><figcaption>24</figcaption></figure>
+          <figure><img src="tray/loft-tray-32.png" width="32" height="32" /><figcaption>32</figcaption></figure>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2>macOS menu bar</h2>
+  <p class="sub" style="margin-top:-8px">Template image: black plus alpha. The system tints it for a light or dark bar. The window is a cut-out; its “light” is the menu-bar colour.</p>
+  <div class="grid">
+    <div class="card">
+      <header><h3>Light menu bar</h3><span class="tag">loftTemplate.png</span></header>
+      <div class="bar mac">Loft <img src="menubar/loftTemplate-22.png" alt="" style="filter:none; image-rendering:auto" /> Wi-Fi 🔋 <span class="clock">Thu 21:14</span></div>
+      <div class="bar mac">off <img src="menubar/loftTemplate-off-22.png" alt="" style="image-rendering:auto" /> Wi-Fi 🔋 <span class="clock">Thu 21:14</span></div>
+    </div>
+    <div class="card dark">
+      <header><h3>Dark menu bar</h3><span class="tag">template inverted</span></header>
+      <div class="bar mac-dark">Loft <img src="menubar/loftTemplate-22.png" alt="" style="filter:invert(1); image-rendering:auto" /> Wi-Fi 🔋 <span class="clock">Thu 21:14</span></div>
+      <div class="bar mac-dark">off <img src="menubar/loftTemplate-off-22.png" alt="" style="filter:invert(1); image-rendering:auto" /> Wi-Fi 🔋 <span class="clock">Thu 21:14</span></div>
+    </div>
+  </div>
+
+  <h2>Palette</h2>
+  <div class="swatches">
+    <div class="sw"><div class="chip" style="background:#1A1714"></div><code>Ink #1A1714</code></div>
+    <div class="sw"><div class="chip" style="background:#3A332E"></div><code>Slate #3A332E</code></div>
+    <div class="sw"><div class="chip" style="background:#C67B3A"></div><code>Copper #C67B3A</code></div>
+    <div class="sw"><div class="chip" style="background:#E8B84A"></div><code>Lamp #E8B84A</code></div>
+    <div class="sw"><div class="chip" style="background:#F3EDE4;border-color:#cfc4b6"></div><code>Snow #F3EDE4</code></div>
+  </div>
+
+  <h2>Colophon · A³</h2>
+  <p class="sub" style="margin-top:-8px">Maker mark. English only. Pixel heart on a 7×6 grid (loft lamp). About line is the lockup; the square A³ is the GitHub avatar.</p>
+  <div class="grid">
+    <div class="card dark">
+      <header><h3>A³</h3><span class="tag">png/a3-github-avatar.png</span></header>
+      <div class="stage bleed"><img src="png/a3-github-avatar.png" alt="A³" /></div>
+    </div>
+    <div class="card dark">
+      <header><h3>A³ type</h3><span class="tag">svg/a3-mark.svg · Avenir Next Demi</span></header>
+      <div class="stage bleed"><img src="svg/a3-mark.svg" alt="A³ live type" /></div>
+    </div>
+    <div class="card">
+      <header><h3>Heart</h3><span class="tag">svg/a3-heart.svg · 7×6</span></header>
+      <div class="stage">
+        <img class="heart" src="svg/a3-heart.svg" alt="heart" width="84" height="72" />
+      </div>
+    </div>
+    <div class="card dark">
+      <header><h3>Heart on ink</h3><span class="tag">lamp on ink</span></header>
+      <div class="stage">
+        <img class="heart" src="svg/a3-heart.svg" alt="heart dark" width="84" height="72" />
+      </div>
+    </div>
+    <div class="card">
+      <header><h3>Heart sizes</h3><span class="tag">1× / 2× / 3× / 4×</span></header>
+      <div class="stage">
+        <div class="heart-sizes">
+          <figure><img class="heart" src="svg/a3-heart.svg" width="7" height="6" alt="" /><figcaption>7×6</figcaption></figure>
+          <figure><img class="heart" src="svg/a3-heart.svg" width="14" height="12" alt="" /><figcaption>14×12</figcaption></figure>
+          <figure><img class="heart" src="svg/a3-heart.svg" width="21" height="18" alt="" /><figcaption>21×18</figcaption></figure>
+          <figure><img class="heart" src="svg/a3-heart.svg" width="28" height="24" alt="" /><figcaption>28×24</figcaption></figure>
+        </div>
+      </div>
+    </div>
+    <div class="card dark" style="grid-column:1/-1">
+      <header><h3>Made with love</h3><span class="tag">svg/a3-colophon.svg · About</span></header>
+      <div class="stage" style="min-height:160px">
+        <p class="made"><span>Made with love</span>
+          <svg class="heart" viewBox="0 0 7 6" width="21" height="18" shape-rendering="crispEdges" aria-hidden="true">
+            <g fill="#E8B84A">
+              <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>
+              <rect x="0" y="1" width="7" height="2"/><rect x="1" y="3" width="5" height="1"/>
+              <rect x="2" y="4" width="3" height="1"/><rect x="3" y="5" width="1" height="1"/>
+            </g>
+          </svg>
+          <span>by A<sup>3</sup></span></p>
+      </div>
+    </div>
+    <div class="card dark">
+      <header><h3>Concept</h3><span class="tag">png/a3-colophon.png</span></header>
+      <div class="stage bleed"><img src="png/a3-colophon.png" alt="Made with love by A³" /></div>
+    </div>
+    <div class="card">
+      <header><h3>On paper</h3><span class="tag">same line, snow ground</span></header>
+      <div class="stage">
+        <p class="made" style="color:var(--mute)"><span>Made with love</span>
+          <svg class="heart" viewBox="0 0 7 6" width="21" height="18" shape-rendering="crispEdges" aria-hidden="true">
+            <g fill="#E8B84A">
+              <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>
+              <rect x="0" y="1" width="7" height="2"/><rect x="1" y="3" width="5" height="1"/>
+              <rect x="2" y="4" width="3" height="1"/><rect x="3" y="5" width="1" height="1"/>
+            </g>
+          </svg>
+          <span>by A<sup>3</sup></span></p>
+      </div>
+    </div>
+  </div>
+
+  <p class="page-foot"><span>Made with love</span>
+    <svg class="heart" viewBox="0 0 7 6" width="14" height="12" shape-rendering="crispEdges" aria-hidden="true">
+      <g fill="#E8B84A">
+        <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>
+        <rect x="0" y="1" width="7" height="2"/><rect x="1" y="3" width="5" height="1"/>
+        <rect x="2" y="4" width="3" height="1"/><rect x="3" y="5" width="1" height="1"/>
+      </g>
+    </svg>
+    <span>by A<sup>3</sup></span></p>
+</body>
+</html>

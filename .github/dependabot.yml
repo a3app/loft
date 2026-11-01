@@ -1,0 +1,59 @@
+# Dependabot opens pull requests when a dependency has a new version.
+# Every pull request runs the Test workflow, so a breaking update shows up
+# as a red check before anyone merges it.
+version: 2
+updates:
+  # Go modules of the main module (node, panel, clients, mobile engine).
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    groups:
+      # The golang.org/x modules move together; one pull request for all.
+      golang-x:
+        patterns: ["golang.org/x/*"]
+    # uTLS is left out of every group on purpose: a new release brings
+    # fresh browser fingerprints, and it deserves its own review.
+    ignore:
+      # We build with our fork (replace in go.mod); upstream releases
+      # would not change the build. The fork is updated by hand.
+      - dependency-name: github.com/quic-go/quic-go
+      # gVisor has only dated snapshots, and its API changes between them.
+      # Updated by hand, on purpose.
+      - dependency-name: gvisor.dev/gvisor
+
+  # Actions used by the workflows in .github/workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Android client (Gradle).
+  - package-ecosystem: gradle
+    directory: /clients/Android
+    schedule:
+      interval: monthly
+    labels: [dependencies]
+    groups:
+      android:
+        patterns: ["*"]
+    ignore:
+      # A new major Android Gradle Plugin needs a newer Gradle (AGP 9.4
+      # needs Gradle 9.6; we build with Gradle 8.x here and in dist.yml) and
+      # changes the build scripts. That move is done by hand, all at once;
+      # minor and patch releases still come through.
+      - dependency-name: com.android.application
+        update-types: ["version-update:semver-major"]
+
+  # Image the MikroTik package is built in.
+  - package-ecosystem: docker
+    directory: /clients/MikroTik/pack
+    schedule:
+      interval: monthly
+    labels: [dependencies]

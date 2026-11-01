@@ -1,0 +1,398 @@
+package web
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/a3app/loft/server/panel/store"
+)
+
+// fakeDNS is a provider in memory.
+type fakeDNS struct {
+	mu   sync.Mutex
+	recs map[string][]Record
+	n    int
+}
+
+func (f *fakeDNS) Check(context.Context) error             { return nil }
+func (f *fakeDNS) Zones(context.Context) ([]string, error) { return []string{"example.net"}, nil }
+func (f *fakeDNS) Records(_ context.Context, z string) ([]Record, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if z != "example.net" {
+		return nil, io.EOF
+	}
+	return append([]Record(nil), f.recs[z]...), nil
+}
+func (f *fakeDNS) Create(_ context.Context, z string, r Record) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.n++
+	r.ID = strconv.Itoa(f.n)
+	f.recs[z] = append(f.recs[z], r)
+	return r.ID, nil
+}
+func (f *fakeDNS) Update(_ context.Context, z string, r Record) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.recs[z] {
+		if f.recs[z][i].ID == r.ID {
+			f.recs[z][i] = r
+		}
+	}
+	return nil
+}
+func (f *fakeDNS) Delete(_ context.Context, z, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var keep []Record
+	for _, r := range f.recs[z] {
+		if r.ID != id {
+			keep = append(keep, r)
+		}
+	}
+	f.recs[z] = keep
+	return nil
+}
+
+func TestDomainsZonesRecords(t *testing.T) {
+	e := newEnv(t)
+	e.domainsDir()
+	fd := &fakeDNS{recs: map[string][]Record{}}
+	e.srv.dom.provider = func(dnsProv) DNSProvider { return fd }
+	c, csrf := e.owner()
+	e.srv.Settings.Update(func(st *store.Settings) { st.Domain = "vpn.example.net" })
+	// the page filters it as a list, so even no addresses is []
+	if v := e.do("GET", "/api/domains", nil, c, ""); v.code != 200 {
+		t.Fatalf("domains %d", v.code)
+	} else if _, ok := v.body["server_ips"].([]any); !ok {
+		t.Fatalf("server_ips is %T, want a list", v.body["server_ips"])
+	}
+	p := e.do("POST", "/api/domains/provider", map[string]string{"kind": "cloudflare", "token": "tok-1234567890"}, c, csrf)
+	if p.code != 200 {
+		t.Fatalf("provider %d %v", p.code, p.body)
+	}
+	pid := p.body["id"].(string)
+	if r := e.do("POST", "/api/domains/zone", map[string]any{"name": "nowhere.org", "provider": pid}, c, csrf); r.code != 400 {
+		t.Fatalf("unknown zone at provider: %d", r.code)
+	}
+	if r := e.do("POST", "/api/domains/zone", map[string]any{"name": "example.net", "provider": pid, "create": []string{"addr", "caa"}}, c, csrf); r.code != 200 {
+		t.Fatalf("zone %d %v", r.code, r.body)
+	}
+	rr := e.do("GET", "/api/domains/records?zone=example.net", nil, c, "")
+	recs := rr.body["records"].([]any)
+	var caa map[string]any
+	for _, x := range recs {
+		if m := x.(map[string]any); m["type"] == "CAA" {
+			caa = m
+		}
+	}
+	if caa == nil || caa["ours"] != true {
+		t.Fatalf("records %v", recs)
+	}
+	if r := e.do("POST", "/api/domains/record", map[string]any{"zone": "example.net", "record": map[string]any{"type": "A", "name": "www", "value": "not-ip"}}, c, csrf); r.code != 400 {
+		t.Fatalf("bad A accepted: %d", r.code)
+	}
+	if r := e.do("POST", "/api/domains/record", map[string]any{"zone": "example.net", "record": map[string]any{"type": "MX", "name": "@", "value": "mail.example.net", "priority": 10}}, c, csrf); r.code != 200 {
+		t.Fatalf("MX %d %v", r.code, r.body)
+	}
+	if r := e.do("POST", "/api/domains/record", map[string]any{"zone": "example.net", "record": map[string]any{"id": caa["id"]}, "delete": true}, c, csrf); r.code != 200 {
+		t.Fatalf("delete %d", r.code)
+	}
+	if n := len(fd.recs["example.net"]); n < 1 {
+		t.Fatal("no records")
+	}
+	if r := e.do("POST", "/api/domains/provider", map[string]any{"id": pid, "delete": true}, c, csrf); r.code != 409 {
+		t.Fatalf("provider in use deleted: %d", r.code)
+	}
+	// A manual zone keeps its list and checks it in DNS.
+	if r := e.do("POST", "/api/domains/zone", map[string]any{"name": "example.org", "provider": "manual"}, c, csrf); r.code != 200 {
+		t.Fatalf("manual %d", r.code)
+	}
+	e.do("POST", "/api/domains/record", map[string]any{"zone": "example.org", "record": map[string]any{"type": "TXT", "name": "@", "value": "v=spf1 -all"}}, c, csrf)
+	if r := e.do("GET", "/api/domains/records?zone=example.org", nil, c, ""); len(r.body["records"].([]any)) != 1 {
+		t.Fatalf("manual records %v", r.body)
+	}
+	v := e.do("GET", "/api/domains", nil, c, "")
+	if len(v.body["zones"].([]any)) != 2 || !strings.Contains(v.raw(), "tok-…7890") || strings.Contains(v.raw(), "tok-1234567890") {
+		t.Fatalf("view %s", v.raw())
+	}
+	// A node certificate must cover the node's name.
+	if err := e.srv.useCert(context.Background(), "admin", []string{"other.example.net"}, "upload", "node", "", "x", "y", time.Now()); err == nil {
+		t.Fatal("node cert without the node name accepted")
+	}
+}
+
+func TestWizardDNSCreatesZoneBeforeNames(t *testing.T) {
+	e := newEnv(t)
+	e.domainsDir()
+	fd := &fakeDNS{recs: map[string][]Record{"example.net": {}}}
+	e.srv.dom.provider = func(dnsProv) DNSProvider { return fd }
+	c, csrf := e.owner()
+	if r := e.do("POST", "/api/domains/provider", map[string]any{"kind": "cloudflare", "token": "tok-1234567890", "check_only": true}, c, csrf); r.code != 200 {
+		t.Fatalf("check_only %d %v", r.code, r.body)
+	}
+	if r := e.do("GET", "/api/domains", nil, c, ""); len(r.body["providers"].([]any)) != 0 {
+		t.Fatalf("check_only stored a provider: %v", r.body)
+	}
+	p := e.do("POST", "/api/domains/provider", map[string]string{"kind": "cloudflare", "token": "tok-1234567890"}, c, csrf)
+	if p.code != 200 {
+		t.Fatalf("provider %d %v", p.code, p.body)
+	}
+	pid := p.body["id"].(string)
+	again := e.do("POST", "/api/domains/provider", map[string]string{"kind": "cloudflare", "token": "tok-1234567890"}, c, csrf)
+	if again.code != 200 || again.body["id"] != pid {
+		t.Fatalf("same token must reuse the provider: %d %v", again.code, again.body)
+	}
+	// Names are not in settings yet (wizard step 2 creates records first).
+	if r := e.do("POST", "/api/domains/zone", map[string]any{
+		"name": "example.net", "provider": pid, "create": []string{"addr", "caa"},
+		"hosts": []string{"vpn.example.net", "panel.example.net"},
+	}, c, csrf); r.code != 200 {
+		t.Fatalf("zone %d %v", r.code, r.body)
+	}
+	rr := e.do("GET", "/api/domains/records?zone=example.net", nil, c, "")
+	recs := rr.body["records"].([]any)
+	var caa, vpn bool
+	for _, x := range recs {
+		m := x.(map[string]any)
+		if m["type"] == "CAA" {
+			caa = true
+		}
+		if m["type"] == "A" && m["name"] == "vpn" {
+			vpn = true
+		}
+	}
+	if !caa {
+		t.Fatalf("CAA missing: %v", recs)
+	}
+	if n := len(fd.recs["example.net"]); n < 1 {
+		t.Fatalf("provider got no records: %d", n)
+	}
+	_ = vpn // A records only exist when ServerIPs() sees a public address
+}
+
+func TestCloudflareAndDigitalOcean(t *testing.T) {
+	var cfSeen []string
+	cf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfSeen = append(cfSeen, r.Method+" "+r.URL.Path)
+		if r.Header.Get("Authorization") != "Bearer t" {
+			w.WriteHeader(403)
+			return
+		}
+		switch {
+		case r.URL.Path == "/zones":
+			io.WriteString(w, `{"result":[{"id":"z1","name":"example.net"}]}`)
+		case r.URL.Path == "/zones/z1/dns_records" && r.Method == "GET":
+			io.WriteString(w, `{"result":[{"id":"r1","type":"CAA","name":"example.net","ttl":1,"data":{"flags":0,"tag":"issue","value":"letsencrypt.org"}},{"id":"r2","type":"A","name":"vpn.example.net","content":"203.0.113.10","ttl":300}]}`)
+		case r.URL.Path == "/zones/z1/dns_records" && r.Method == "POST":
+			var x map[string]any
+			json.NewDecoder(r.Body).Decode(&x)
+			if x["name"] != "www.example.net" {
+				w.WriteHeader(400)
+				return
+			}
+			io.WriteString(w, `{"result":{"id":"r3"}}`)
+		default:
+			io.WriteString(w, `{}`)
+		}
+	}))
+	defer cf.Close()
+	c := &Cloudflare{Token: "t", Base: cf.URL}
+	ctx := context.Background()
+	recs, err := c.Records(ctx, "example.net")
+	if err != nil || len(recs) != 2 || recs[0].Value != `0 issue "letsencrypt.org"` || recs[0].Name != "@" || recs[1].Name != "vpn" || recs[0].TTL != 0 {
+		t.Fatalf("%+v %v", recs, err)
+	}
+	if id, err := c.Create(ctx, "example.net", Record{Type: "A", Name: "www", Value: "203.0.113.11"}); err != nil || id != "r3" {
+		t.Fatalf("%s %v", id, err)
+	}
+	if err := (&Cloudflare{Token: "bad", Base: cf.URL}).Check(ctx); err == nil {
+		t.Fatal("bad token passed")
+	}
+	do := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/records") && r.Method == "GET":
+			io.WriteString(w, `{"domain_records":[{"id":7,"type":"MX","name":"@","data":"mail.example.net","priority":10,"ttl":1800}]}`)
+		case strings.HasSuffix(r.URL.Path, "/records"):
+			io.WriteString(w, `{"domain_record":{"id":8}}`)
+		}
+	}))
+	defer do.Close()
+	d := &DigitalOcean{Token: "t", Base: do.URL}
+	if recs, err := d.Records(ctx, "example.net"); err != nil || recs[0].Priority != 10 || recs[0].ID != "7" {
+		t.Fatalf("%+v %v", recs, err)
+	}
+	if id, _ := d.Create(ctx, "example.net", Record{Type: "TXT", Name: "@", Value: "x"}); id != "8" {
+		t.Fatalf("do id %s", id)
+	}
+}
+
+func TestNamecheapRefusalNamesTheCause(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		if r.Form.Get("ClientIp") != "203.0.113.10" || r.Form.Get("ApiUser") != "acct" {
+			t.Errorf("form %v", r.Form)
+		}
+		io.WriteString(w, `<?xml version="1.0"?><ApiResponse Status="ERROR"><Errors><Error Number="1011102">API Key is invalid or API access has not been enabled</Error></Errors></ApiResponse>`)
+	}))
+	defer ts.Close()
+	n := &Namecheap{User: "acct", Key: "k", ClientIP: "203.0.113.10", Base: ts.URL}
+	err := n.Check(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "account name, not the e-mail") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+// fakeNamecheap is a Namecheap XML API for one zone that keeps HostIds the
+// way the real one does: a record written back unchanged by setHosts keeps
+// its HostId, a new record gets a fresh one.
+type fakeNamecheap struct {
+	mu    sync.Mutex
+	hosts []Record // ID is the HostId
+	next  int
+	sets  int
+}
+
+func (f *fakeNamecheap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch r.Form.Get("Command") {
+	case "namecheap.domains.dns.getHosts":
+		var b strings.Builder
+		b.WriteString(`<?xml version="1.0"?><ApiResponse Status="OK"><CommandResponse><DomainDNSGetHostsResult>`)
+		for _, h := range f.hosts {
+			fmt.Fprintf(&b, `<host HostId=%q Name=%q Type=%q Address=%q MXPref="%d" TTL="1799" />`, h.ID, h.Name, h.Type, h.Value, h.Priority)
+		}
+		b.WriteString(`</DomainDNSGetHostsResult></CommandResponse></ApiResponse>`)
+		io.WriteString(w, b.String())
+	case "namecheap.domains.dns.setHosts":
+		f.sets++
+		old := f.hosts
+		used := map[string]bool{}
+		var out []Record
+		for i := 1; r.Form.Get("HostName"+strconv.Itoa(i)) != ""; i++ {
+			k := strconv.Itoa(i)
+			h := Record{Name: r.Form.Get("HostName" + k), Type: r.Form.Get("RecordType" + k), Value: r.Form.Get("Address" + k)}
+			for _, o := range old {
+				if !used[o.ID] && o.Name == h.Name && o.Type == h.Type && o.Value == h.Value {
+					h.ID = o.ID
+					used[o.ID] = true
+					break
+				}
+			}
+			if h.ID == "" {
+				f.next++
+				h.ID = strconv.Itoa(900000 + f.next)
+			}
+			out = append(out, h)
+		}
+		f.hosts = out
+		io.WriteString(w, `<?xml version="1.0"?><ApiResponse Status="OK"></ApiResponse>`)
+	}
+}
+
+// TestNamecheapHostIDs: ids are HostIds, so deleting one record leaves the
+// ids of the others valid. With positions as ids (the old way), deleting
+// the first record made the third one's saved id point at the fourth.
+func TestNamecheapHostIDs(t *testing.T) {
+	fn := &fakeNamecheap{hosts: []Record{
+		{ID: "11", Type: "A", Name: "www", Value: "203.0.113.1"},
+		{ID: "12", Type: "A", Name: "a", Value: "203.0.113.2"},
+		{ID: "13", Type: "TXT", Name: "@", Value: "keep-me"},
+		{ID: "14", Type: "A", Name: "b", Value: "203.0.113.4"},
+	}}
+	ts := httptest.NewServer(fn)
+	defer ts.Close()
+	n := &Namecheap{User: "acct", Key: "k", ClientIP: "203.0.113.10", Base: ts.URL}
+	ctx := context.Background()
+	id, err := n.Create(ctx, "example.net", Record{Type: "TXT", Name: "_acme-challenge", Value: "token", TTL: 60})
+	if err != nil || id == "" || id == "11" {
+		t.Fatalf("create id %q err %v", id, err)
+	}
+	if err := n.Delete(ctx, "example.net", "11"); err != nil {
+		t.Fatal(err)
+	}
+	// The challenge created before that delete is still found by its id.
+	if err := n.Delete(ctx, "example.net", id); err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	if err := n.Update(ctx, "example.net", Record{ID: "14", Type: "A", Name: "b", Value: "203.0.113.40"}); err != nil {
+		t.Fatal(err)
+	}
+	recs, _ := n.Records(ctx, "example.net")
+	var got []string
+	for _, r := range recs {
+		got = append(got, r.Name+"="+r.Value)
+	}
+	if strings.Join(got, ",") != "a=203.0.113.2,@=keep-me,b=203.0.113.40" {
+		t.Fatalf("zone now %v", got)
+	}
+	if err := n.Delete(ctx, "example.net", "11"); err == nil {
+		t.Fatal("deleting a gone record must fail, not hit another one")
+	}
+}
+
+// TestReconcileOurs repairs saved ids that name no record: by type and
+// name when exactly one record matches, else the id is cleared.
+func TestReconcileOurs(t *testing.T) {
+	have := []Record{
+		{ID: "501", Type: "A", Name: "mail", Value: "203.0.113.1"},
+		{ID: "502", Type: "TXT", Name: "@", Value: "v=spf1 mx -all"},
+		{ID: "503", Type: "TXT", Name: "@", Value: "other"},
+		{ID: "504", Type: "MX", Name: "@", Value: "mail.example.net"},
+	}
+	z := &zoneRec{Ours: []ourRec{
+		{Type: "A", Name: "mail", ID: "3"}, // old position id
+		{Type: "TXT", Name: "@", ID: "4"},  // two TXT at @: cannot tell
+		{Type: "MX", Name: "@", ID: "504"}, // already right
+		{Type: "CAA", Name: "@", ID: "7"},  // gone
+	}}
+	if !z.reconcileOurs(have) {
+		t.Fatal("nothing changed")
+	}
+	want := []string{"501", "", "504", ""}
+	for i, o := range z.Ours {
+		if o.ID != want[i] {
+			t.Fatalf("ours %v", z.Ours)
+		}
+	}
+	if z.reconcileOurs(have) {
+		t.Fatal("second pass changed again")
+	}
+}
+
+// rdapRT answers every request with a fixed RDAP document and remembers
+// the URL it was asked for.
+type rdapRT struct{ url string }
+
+func (r *rdapRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.url = req.URL.String()
+	body := `{"events":[{"eventAction":"registration","eventDate":"2020-01-02T00:00:00Z"},` +
+		`{"eventAction":"expiration","eventDate":"2027-03-04T05:06:07Z"}]}`
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+}
+
+// TestRDAPUntil: the lookup goes to rdap.org for the zone and takes the
+// "expiration" event as the end of the registration.
+func TestRDAPUntil(t *testing.T) {
+	rt := &rdapRT{}
+	s := &Server{rdapHTTP: &http.Client{Transport: rt}}
+	got := s.rdapUntil(context.Background(), "example.net")
+	if rt.url != "https://rdap.org/domain/example.net" {
+		t.Fatalf("asked %q", rt.url)
+	}
+	if want := time.Date(2027, 3, 4, 5, 6, 7, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("until %v, want %v", got, want)
+	}
+}

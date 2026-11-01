@@ -1,0 +1,65 @@
+# Root `go build` dumps. Dist CLI is make {client,front,probe,bench} → dist/clients/go/.
+/loft
+/loft-node
+/loft-front
+/loft-probe
+/loft-bench
+/loft-bench.exe
+/loft-panel
+/loft-panel-adm
+/loft-attach-check
+/*.exe
+/bin/
+dist/
+*.o
+clients/macOS/build/
+clients/go/cmd/loft-front/rsrc_windows_*.syso
+clients/macOS/design/shots/
+clients/mobile/build/
+clients/Android/.gradle/
+clients/Android/app/build/
+clients/Android/build/
+clients/Android/local.properties
+clients/Sailfish/bin/
+clients/Sailfish/build/
+clients/MikroTik/pack/loft
+clients/MikroTik/pack/loft-amd64
+clients/MikroTik/pack/loft-arm64
+clients/MikroTik/pack/loft-armv7
+clients/MikroTik/pack/*.tar
+clients/NDMS/pack/loft-ndms
+clients/NDMS/pack/*.ipk
+clients/NDMS/pack/*.sha256
+docs/brand/__pycache__/
+docs/brand/concepts/
+.DS_Store
+
+# keys, certs, env
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.pass
+.env
+*.env
+!.env.example
+
+# local / operator secrets
+secrets/
+private/
+*.local.yaml
+*.local.yml
+*.instance
+
+# Local research lives in ../loft-research, outside this repo. Never commit copies.
+research_notes/
+reports/
+stands/
+
+# GitHub deploy key — local only, never commit
+github-deploy
+github-deploy.pub

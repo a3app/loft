@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Loft
+Comment=loft overlay
+Icon=app.loft.aurora
+Exec=app.loft.aurora %u
+Categories=Network;
+X-Nemo-Application-Type=silica-qt5
+MimeType=x-scheme-handler/loft;

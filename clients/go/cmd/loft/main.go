@@ -1,0 +1,398 @@
+// Command loft is the CLI client: config-driven GET/WS/QUIC outbound,
+// SOCKS5, and optional TUN with kill-switch.
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/url"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+
+	"github.com/a3app/loft/clients/go/inbound"
+	"github.com/a3app/loft/clients/go/lanui"
+	"github.com/a3app/loft/internal/config"
+	"github.com/a3app/loft/internal/protect"
+	"github.com/a3app/loft/internal/transport"
+	"github.com/a3app/loft/internal/version"
+)
+
+// main loads the client profile, supervises the outbound, and serves SOCKS5/TUN.
+func main() {
+	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
+	log.SetPrefix("loft: ")
+	version.ExitIfAsked("loft", os.Args[1:])
+	fs := flag.NewFlagSet("loft", flag.ExitOnError)
+	cfgPath := fs.String("c", "clients/go/configs/client.yaml", "config file")
+	ifName := fs.String("if", "", "outbound interface or local IP")
+	driveOn := fs.Bool("drive", false, "drive-debug log (handoff, stall, handshake)")
+	traceFile := fs.String("trace", "", "drive log file; implies -drive")
+	showVer := fs.Bool("version", false, "print program and protocol versions")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		os.Exit(2)
+	}
+	if *showVer {
+		version.Print("loft")
+		return
+	}
+	cfg, err := config.LoadClient(*cfgPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *ifName == "" {
+		*ifName = cfg.Listen.Bind
+	}
+	if err := protect.BindUplink(*ifName); err != nil {
+		log.Fatalf("-if: %v", err)
+	}
+	if s := protect.Bound(); s != "" {
+		log.Printf("if %s", s)
+	}
+	if *traceFile != "" {
+		*driveOn = true
+	}
+	base := strings.TrimSuffix(*cfgPath, filepath.Ext(*cfgPath))
+	transport.SetInstanceFile(base + ".instance")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// h is the Holder that SOCKS5 and TUN dial through; Supervise puts each
+	// new connection into it. The optional drive log records reconnects and
+	// stalls for debugging.
+	h := &transport.Holder{}
+	var drv *transport.Drive
+	if *driveOn {
+		logPath := *traceFile
+		if logPath == "" {
+			logPath = transport.DefaultDriveLog()
+		}
+		var err error
+		drv, err = transport.OpenDriveLog(logPath)
+		if err != nil {
+			log.Fatalf("-trace: %v", err)
+		}
+		defer func() {
+			drv.Event("STOP")
+			_ = drv.Close()
+		}()
+		transport.SetDrive(drv)
+		if len(cfg.Outbounds) > 0 {
+			drv.SetFront(cfg.Outbounds[0].URL)
+		}
+		log.Printf("drive log %s", logPath)
+		drv.Event("START", "if="+protect.Bound(), "cfg="+*cfgPath)
+	}
+	exclude := outboundHosts(cfg)
+	var (
+		tunMu  sync.Mutex
+		tunDev *inbound.Device
+		// lanUndo removes the LAN gateway rules (listen.gateway), lanMode is
+		// the mode they were set up for; both change under tunMu.
+		lanUndo func()
+		lanMode string
+	)
+	defer func() {
+		if lanUndo != nil {
+			lanUndo()
+		}
+		_ = tunDev.Close()
+	}()
+	bringTUN := func() {
+		if cfg.Listen.TUN == "" {
+			return
+		}
+		ip := transport.OverlayIP()
+		if ip == "" {
+			return
+		}
+		cidr := inbound.OverlayCIDR(ip, cfg.Listen.TunAddr)
+		tunMu.Lock()
+		defer tunMu.Unlock()
+		if tunDev != nil {
+			tunDev.Attach(h)
+			return
+		}
+		c, err := inbound.StartTUN(cfg.Listen.TUN, cidr, cfg.Listen.KillSwitch, h, exclude)
+		if err != nil {
+			log.Printf("tun: %v", err)
+			return
+		}
+		tunDev = c
+		log.Printf("tun up overlay=%s kill_switch=%v", cidr, cfg.Listen.KillSwitch)
+		// LAN gateway (a router's container): answers to LAN hosts must
+		// leave through the router, not loop back into the TUN (see
+		// inbound/lanreturn_linux.go). Only when listen.gateway is set, so
+		// a desktop with tun: auto keeps its routing as it was.
+		if g := cfg.Listen.Gateway; g != "" {
+			undo, err := inbound.EnableLANReturn(c.Name(), g)
+			if err != nil {
+				log.Printf("lan gateway %s: %v", g, err)
+			} else {
+				lanUndo, lanMode = undo, g
+				log.Printf("lan gateway %s: answers to LAN hosts go back via the default route", g)
+			}
+		}
+	}
+	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, drv))
+
+	// Start the outbound: Supervise keeps a front connected in the background.
+	sess := &session{parent: ctx, pathCh: pathCh, h: h, bringTUN: bringTUN, drv: drv}
+	sess.start(cfg)
+
+	// The local SOCKS5 listener, unless listen.socks5 is "off". On a router
+	// it is a proxy without a password for whoever reaches the container,
+	// so an operator who only needs the LAN gateway can turn it off.
+	socksAddr := ""
+	if cfg.Listen.SOCKS5 != config.SOCKSOff {
+		ln, err := inbound.ListenSOCKS5(cfg.Listen.SOCKS5, h)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ln.Close()
+		socksAddr = cfg.Listen.SOCKS5
+		log.Printf("socks5 %s", socksAddr)
+	} else {
+		log.Printf("socks5 off")
+	}
+
+	// Optional LAN page (MikroTik container): log lines are copied into a ring
+	// buffer so the page can show them.
+	if cfg.Listen.HTTP != "" {
+		ring := lanui.NewRing(80)
+		log.SetOutput(io.MultiWriter(os.Stderr, ring))
+		ui := &lanui.Server{
+			Addr: cfg.Listen.HTTP,
+			Pass: cfg.Listen.HTTPPass,
+			Log:  ring,
+			Live: func() lanui.Status { return liveStatus(*cfgPath, sess, &tunMu, &tunDev, &lanMode, socksAddr) },
+			Apply: func(p lanui.Patch) error {
+				return applyPatch(*cfgPath, p, sess)
+			},
+		}
+		go func() {
+			log.Printf("http %s", cfg.Listen.HTTP)
+			if err := ui.Listen(); err != nil {
+				log.Printf("http: %v", err)
+			}
+		}()
+	}
+
+	// Run until Ctrl-C or SIGTERM; deferred calls close TUN and SOCKS5.
+	<-ctx.Done()
+}
+
+// session restarts the connection to the server (the "outbound") when the LAN
+// page saves new settings. It keeps the cancel function of the running
+// Supervise loop, so start can stop the old loop before starting a new one,
+// and remembers the name and type of the front that is up now for the page.
+//
+// h is the Holder that SOCKS5 and TUN read from: the live connection can be
+// replaced under it without closing the local listeners.
+type session struct {
+	mu       sync.Mutex
+	cancel   context.CancelFunc
+	parent   context.Context
+	pathCh   <-chan struct{}
+	h        *transport.Holder
+	bringTUN func()
+	drv      *transport.Drive
+	front    string
+	name     string
+}
+
+// start cancels any previous Supervise loop and starts a new one for cfg.
+// Supervise keeps one front connected and reconnects on failure; each time
+// a front comes up the callback puts it into the Holder. If the front carries
+// raw IP packets (an IPPump, the l3 front), it is wrapped in L3Net so SOCKS
+// connections ride the same IP tunnel; an existing L3Net just gets the new
+// pump swapped in. Then the TUN device is brought up or re-attached.
+func (s *session) start(cfg *config.ClientConfig) {
+	s.mu.Lock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	ctx, cancel := context.WithCancel(s.parent)
+	s.cancel = cancel
+	s.mu.Unlock()
+	go func() {
+		err := transport.SuperviseOn(ctx, cfg, s.pathCh, func(d transport.Dialer, o config.Outbound) {
+			if live, ok := s.h.Live().(*inbound.L3Net); ok {
+				if p, ok := d.(transport.IPPump); ok {
+					live.Swap(d, p)
+				} else {
+					s.h.Set(d)
+				}
+			} else {
+				if w, err := inbound.WrapL3(d); err != nil {
+					log.Printf("l3 net: %v", err)
+				} else {
+					d = w
+				}
+				s.h.Set(d)
+			}
+			s.mu.Lock()
+			s.front, s.name = o.Type, o.Name
+			s.mu.Unlock()
+			log.Printf("%s outbound %s (%s) up overlay=%s", version.Line("loft"), o.Name, o.Type, transport.OverlayIP())
+			if s.drv != nil {
+				s.drv.Event("LIVE", "type="+o.Type, "name="+o.Name, "overlay="+transport.OverlayIP())
+			}
+			s.bringTUN()
+		})
+		if err != nil && ctx.Err() == nil {
+			log.Printf("front: %v", err)
+		}
+	}()
+}
+
+// liveStatus builds the LAN page's status: version, bound interface and
+// overlay IP (the client's address inside the loft virtual network), the
+// settings read fresh from the config file, the front that is actually up,
+// and whether the TUN device exists.
+//
+// socks is the SOCKS5 address in effect ("" when off), lanMode the LAN
+// gateway rules in place; the config file may already say something else
+// until the container restarts, and the page shows both.
+func liveStatus(path string, sess *session, tunMu *sync.Mutex, tunDev **inbound.Device, lanMode *string, socks string) lanui.Status {
+	st := lanui.Status{
+		Version: version.Line("loft"),
+		Bind:    protect.Bound(),
+		Overlay: transport.OverlayIP(),
+	}
+	st.SOCKS = socks
+	if st.SOCKS == "" {
+		st.SOCKS = config.SOCKSOff
+	}
+	if cfg, err := config.LoadClient(path); err == nil {
+		st.SOCKSSet = cfg.Listen.SOCKS5
+		st.HTTP = cfg.Listen.HTTP
+		st.Uplink = cfg.Listen.Uplink
+		st.GatewaySet = cfg.Listen.Gateway
+		if st.GatewaySet == "" {
+			st.GatewaySet = "nat"
+		}
+		st.TokenSet = cfg.Token != ""
+		if len(cfg.Outbounds) > 0 {
+			st.URL = cfg.Outbounds[0].URL
+			st.Path = cfg.Outbounds[0].Path
+			st.Front = cfg.Outbounds[0].Type
+			st.Outbound = cfg.Outbounds[0].Name
+		}
+	}
+	sess.mu.Lock()
+	if sess.front != "" {
+		st.Front = sess.front
+	}
+	if sess.name != "" {
+		st.Outbound = sess.name
+	}
+	sess.mu.Unlock()
+	tunMu.Lock()
+	st.TUN = *tunDev != nil
+	// The mode in effect: what bringTUN set up (under tunMu); with no
+	// rules in place that is plain nat. No TUN, no mode.
+	if st.TUN {
+		st.Gateway = *lanMode
+		if st.Gateway == "" {
+			st.Gateway = "nat"
+		}
+	}
+	tunMu.Unlock()
+	return st
+}
+
+// applyPatch saves the LAN page's changes: it updates the token and the first
+// outbound in the config file, writes uplink.rsc next to it, and restarts the
+// session so the new settings take effect at once. Empty fields keep their
+// old values; the uplink is always taken from the patch (empty clears it).
+func applyPatch(path string, p lanui.Patch, sess *session) error {
+	cfg, err := config.LoadClient(path)
+	if err != nil {
+		return err
+	}
+	if t := strings.TrimSpace(p.Token); t != "" {
+		cfg.Token = t
+	}
+	if len(cfg.Outbounds) == 0 {
+		return fmt.Errorf("no outbound")
+	}
+	o := &cfg.Outbounds[0]
+	if p.URL != "" {
+		o.URL = p.URL
+	}
+	if p.Type != "" {
+		o.Type = p.Type
+	}
+	if p.Path != "" {
+		o.Path = p.Path
+	}
+	if err := config.ValidIFName(p.Uplink); err != nil {
+		return err
+	}
+	cfg.Listen.Uplink = p.Uplink
+	// SOCKS5: "off", or a port; the address part stays as it was (0.0.0.0
+	// in the container), or 0.0.0.0 when SOCKS was off. Applies after a
+	// restart, like the gateway mode.
+	switch s := strings.TrimSpace(p.SOCKS); {
+	case s == "":
+	case s == config.SOCKSOff:
+		cfg.Listen.SOCKS5 = config.SOCKSOff
+	default:
+		host := "0.0.0.0"
+		if h, _, err := net.SplitHostPort(cfg.Listen.SOCKS5); err == nil && h != "" {
+			host = h
+		}
+		cfg.Listen.SOCKS5 = net.JoinHostPort(host, s)
+	}
+	// The LAN gateway mode is only written here: the route-mode rule is set
+	// up when the TUN comes up, so a change takes effect after a container
+	// restart (the page says so).
+	if p.Gateway != "" {
+		if err := config.ValidGatewayMode(p.Gateway); err != nil {
+			return err
+		}
+		cfg.Listen.Gateway = p.Gateway
+	}
+	if err := config.WriteClient(path, cfg); err != nil {
+		return err
+	}
+	rsc := filepath.Join(filepath.Dir(path), "uplink.rsc")
+	if err := lanui.WriteUplinkRSC(rsc, p.Uplink, "172.31.20.0/24"); err != nil {
+		return err
+	}
+	sess.start(cfg)
+	log.Printf("saved uplink=%s gateway=%s socks5=%s", p.Uplink, cfg.Listen.Gateway, cfg.Listen.SOCKS5)
+	return nil
+}
+
+// outboundHosts resolves front hostnames to IPs excluded from TUN split routes.
+func outboundHosts(cfg *config.ClientConfig) []string {
+	var out []string
+	for _, o := range cfg.Outbounds {
+		u, err := url.Parse(o.URL)
+		if err != nil {
+			continue
+		}
+		host := u.Hostname()
+		if ip := net.ParseIP(host); ip != nil {
+			out = append(out, host)
+			continue
+		}
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			continue
+		}
+		for _, ip := range ips {
+			out = append(out, ip.String())
+		}
+	}
+	return out
+}

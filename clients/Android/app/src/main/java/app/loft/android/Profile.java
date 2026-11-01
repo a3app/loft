@@ -1,0 +1,821 @@
+/*
+ * Android client, shared by the phone and TV builds: one saved connection
+ * (Profile) and the rules for which fronts it uses. Profiles holds the list,
+ * Importer and fromYaml fill a Profile from a link or engine YAML, YamlBuilder
+ * turns it back into the YAML that LoftVpnService hands to the Go engine.
+ */
+package app.loft.android;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.UUID;
+
+/**
+ * One named connection: everything needed to reach one server. A plain data
+ * holder with public-in-package fields, so the Edit screen, Importer and
+ * YamlBuilder can read and set them directly. It is not thread-safe on its
+ * own; Profiles guards the shared list with synchronized methods. The YAML
+ * built from it (sessionYaml) is what Engine.Start in the Go engine consumes.
+ */
+final class Profile {
+    // A "front" is how the loft connection is wrapped in ordinary HTTPS:
+    // GET (long-lived HTTP requests), WebSocket, HTTP/2, QUIC, HTTP/3, or L3.
+    // The protocol inside is the same; only the packaging differs.
+    // MUX_ORDER lists the fronts that carry the mux (many streams in one
+    // connection) and so can be combined in one session; L3 cannot.
+    // DEF_* are the default URL paths a front uses when none is given.
+
+    /** Every loft front name, lowercase, in the order the UI shows them. */
+    static final String[] FRONTS = {"get", "ws", "h2", "quic", "h3", "l3"};
+    /** Display titles for FRONTS, same positions. */
+    static final String[] FRONT_TITLES = {"GET", "WS", "H2", "QUIC", "H3", "L3"};
+    /** Fronts that carry the mux and can be combined in one session (all except L3). */
+    static final String[] MUX_ORDER = {"get", "ws", "h2", "quic", "h3"};
+    /** Default URL path of the GET front. */
+    static final String DEF_GET = "/static/v3/build";
+    /** Default URL path of the WebSocket front. */
+    static final String DEF_WS = "/api/v1/sync";
+    /** Default URL path of the HTTP/2 front; also used for HTTP/3. */
+    static final String DEF_H2 = "/api/v1/tunnel";
+
+    /** Stable random id; Profiles finds, replaces and activates profiles by it. */
+    String id = UUID.randomUUID().toString();
+    /** Name shown in the list; falls back to the host when empty. */
+    String name = "";
+    /** A loft front name (get, ws, h2, quic, h3, l3) or sstp / vless / trojan. */
+    String kind = "get";
+    /** Member key (lt_...) for loft, the UUID for VLESS, the password for Trojan. */
+    String token = "";
+    /** Server address. For VLESS and Trojan this is the whole original share link. */
+    String url = "";
+    /** URL path of the GET front; empty means the node's default. */
+    String path = "";
+    /** Cover host (CDN) the GET front is sent through; extra fronts stay off then unless edge is set. */
+    String cdn = "";
+    /** Direct node address used for the extra fronts when the main URL goes through a CDN. */
+    String edge = "";
+    /** TLS server name to send (SNI), when it differs from the host. */
+    String sni = "";
+    /** SSTP login name. */
+    String user = "";
+    /** SSTP password (also Trojan's password when imported from YAML). */
+    String pass = "";
+    /** DNS server typed on the Edit screen; used when dnsSystem is false. */
+    String dns = "";
+    /**
+     * The node's mask public key (hex). Learned after the first handshake
+     * (Profiles.applyLearnedMask) and passed back as mask_pub on later starts.
+     */
+    String maskPub = "";
+    /** Name of the extra frame encryption inside TLS ("inner" cipher); empty for none. */
+    String inner = "";
+    /** Path of the extra WebSocket front; non-empty turns that front on. */
+    String wsPath = "";
+    /** Path of the extra HTTP/2 front; non-empty turns that front on. */
+    String h2Path = "";
+    /** Path of the extra HTTP/3 front; non-empty turns that front on. */
+    String h3Path = "";
+    /**
+     * Comma list of fronts sent in Hello (the client's first message, saying
+     * what it can do). Empty means "GET only, let the node tell me the rest".
+     */
+    String listedFronts = "";
+    /** TLS fingerprint to imitate (which browser's handshake to look like). */
+    String fp = "chrome";
+    /** Turns on the extra QUIC front (it has no path). */
+    boolean quic;
+    /** Cached engine config built from these fields; Profiles refreshes it on every save. */
+    String yaml = "";
+    /** Stream multiplexing (many streams in one connection); always off for L3. */
+    boolean mux = true;
+    /** Verify the server's TLS certificate. Off only for self-signed test servers. */
+    boolean tlsCheck = true;
+    /** SSTP only: allow the plain PAP login as well as CHAP. */
+    boolean pap;
+    /** Use the system DNS instead of the dns field. */
+    boolean dnsSystem = true;
+
+    /** True for a loft front (get, ws, h2, quic, h3, l3) rather than SSTP / VLESS / Trojan. */
+    boolean isLoft() {
+        return indexOf(kind) >= 0;
+    }
+
+    /** True for the L3 front, which carries raw IP packets and has no mux. */
+    boolean isL3() {
+        return "l3".equalsIgnoreCase(kind);
+    }
+
+    /** True for an SSTP (Microsoft VPN over HTTPS) profile. */
+    boolean isSSTP() {
+        return "sstp".equalsIgnoreCase(kind);
+    }
+
+    /** True for a VLESS (Xray-style) profile. */
+    boolean isVLESS() {
+        return "vless".equalsIgnoreCase(kind);
+    }
+
+    /** True for a Trojan profile. */
+    boolean isTrojan() {
+        return "trojan".equalsIgnoreCase(kind);
+    }
+
+    /**
+     * Cover host without a separate edge: extra mux fronts stay off. True
+     * when a cdn host is set or the URL host contains "cdn.", and no edge
+     * (direct node address) is given.
+     */
+    boolean isCDN() {
+        if (edge != null && !edge.trim().isEmpty()) {
+            return false;
+        }
+        if (cdn != null && !cdn.trim().isEmpty()) {
+            return true;
+        }
+        String h = host().toLowerCase();
+        return h.contains("cdn.");
+    }
+
+    /** True when any extra front besides GET is configured. */
+    boolean hasMuxExtras() {
+        return !nz(wsPath).isEmpty() || !nz(h2Path).isEmpty() || !nz(h3Path).isEmpty() || quic;
+    }
+
+    /**
+     * Hello list from Edit extras: rebuilds listedFronts from the Edit
+     * screen's extra-front fields. With GET only it stays empty: the client
+     * then lists no fronts, and the node answers in Status (its reply to
+     * Hello) with the fronts it offers, which applyLearnedFronts saves.
+     * Called by the Edit screen before saving.
+     */
+    void syncListedFronts() {
+        String k = kind == null ? "get" : kind.toLowerCase();
+        // Non-loft kinds and L3 have no front list at all.
+        if (isSSTP() || isVLESS() || isTrojan() || "l3".equals(k)) {
+            listedFronts = "";
+            return;
+        }
+        java.util.ArrayList<String> listed = new java.util.ArrayList<>();
+        // GET (and "auto", which is treated the same) is the base front: list it
+        // first, then every extra the user switched on, and normalise the kind
+        // to "get". A pinned single front (ws, h2, ...) lists only itself.
+        if (k.isEmpty() || "get".equals(k) || "auto".equals(k)) {
+            listed.add("get");
+            if (!nz(wsPath).isEmpty()) {
+                listed.add("ws");
+            }
+            if (!nz(h2Path).isEmpty()) {
+                listed.add("h2");
+            }
+            if (quic) {
+                listed.add("quic");
+            }
+            if (!nz(h3Path).isEmpty()) {
+                listed.add("h3");
+            }
+            kind = "get";
+        } else if (muxName(k)) {
+            listed.add(k);
+        }
+        // A single front needs no list: the node assumes it from the request.
+        if (listed.size() <= 1) {
+            listedFronts = "";
+            return;
+        }
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < listed.size(); i++) {
+            if (i > 0) {
+                b.append(',');
+            }
+            b.append(listed.get(i));
+        }
+        listedFronts = b.toString();
+    }
+
+    /**
+     * The fronts this profile will use, in order. Non-loft kinds and L3 use
+     * only themselves. Otherwise: the listed fronts if any; GET only when the
+     * connection goes through a CDN (extra fronts need a direct path to the
+     * node); else GET plus the configured extras.
+     */
+    String[] muxFronts() {
+        String k = kind == null ? "get" : kind.toLowerCase();
+        if (isSSTP() || isVLESS() || isTrojan() || "l3".equals(k)) {
+            return new String[]{k};
+        }
+        // An explicit list wins: keep known mux names, each once, in list order.
+        if (listedFronts != null && !listedFronts.trim().isEmpty()) {
+            java.util.ArrayList<String> out = new java.util.ArrayList<>();
+            java.util.HashSet<String> seen = new java.util.HashSet<>();
+            for (String f : listedFronts.split(",")) {
+                String t = f.trim().toLowerCase();
+                if (muxName(t) && seen.add(t)) {
+                    out.add(t);
+                }
+            }
+            if (!out.isEmpty()) {
+                return out.toArray(new String[0]);
+            }
+        }
+        if (isCDN()) {
+            return new String[]{"get"};
+        }
+        // A pinned front (WS, H2, …) is the session. Auto/GET then adds extras.
+        if ("ws".equals(k) || "h2".equals(k) || "quic".equals(k) || "h3".equals(k)) {
+            return new String[]{k};
+        }
+        // GET with extras: GET first, then the extras in MUX_ORDER order.
+        if (hasMuxExtras()) {
+            java.util.ArrayList<String> out = new java.util.ArrayList<>();
+            out.add("get");
+            if (!nz(wsPath).isEmpty()) {
+                out.add("ws");
+            }
+            if (!nz(h2Path).isEmpty()) {
+                out.add("h2");
+            }
+            if (quic) {
+                out.add("quic");
+            }
+            if (!nz(h3Path).isEmpty()) {
+                out.add("h3");
+            }
+            return out.toArray(new String[0]);
+        }
+        if (k.isEmpty() || "get".equals(k)) {
+            return new String[]{"get"};
+        }
+        return new String[]{k};
+    }
+
+    /**
+     * Applies a "fronts" list from an imported link or YAML (comma list,
+     * optionally in brackets, e.g. "[get, ws, quic]"). Each named front is
+     * turned on with its default path when it has none, and the list is kept
+     * as listedFronts. Unknown names and L3 are ignored. Note that H3 gets the
+     * H2 default path (DEF_H2); there is no separate H3 default.
+     */
+    void applyFrontList(String raw) {
+        if (raw == null) {
+            return;
+        }
+        // 1. Strip brackets and quotes, keep known mux fronts once each, and
+        //    switch each one on (GET also becomes the profile's kind).
+        java.util.ArrayList<String> listed = new java.util.ArrayList<>();
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        String s = raw.trim();
+        if (s.startsWith("[") && s.endsWith("]")) {
+            s = s.substring(1, s.length() - 1);
+        }
+        for (String part : s.split(",")) {
+            String t = part.trim().replace("\"", "").replace("'", "").toLowerCase();
+            if (!muxName(t) || !seen.add(t)) {
+                continue;
+            }
+            listed.add(t);
+            switch (t) {
+                case "get":
+                    if (!"get".equalsIgnoreCase(kind)) {
+                        kind = "get";
+                    }
+                    break;
+                case "ws":
+                    if (nz(wsPath).isEmpty()) {
+                        wsPath = DEF_WS;
+                    }
+                    break;
+                case "h2":
+                    if (nz(h2Path).isEmpty()) {
+                        h2Path = DEF_H2;
+                    }
+                    break;
+                case "h3":
+                    if (nz(h3Path).isEmpty()) {
+                        h3Path = DEF_H2;
+                    }
+                    break;
+                case "quic":
+                    quic = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+        // 2. Store the cleaned list as a comma string.
+        if (listed.isEmpty()) {
+            listedFronts = "";
+        } else {
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < listed.size(); i++) {
+                if (i > 0) {
+                    b.append(',');
+                }
+                b.append(listed.get(i));
+            }
+            listedFronts = b.toString();
+        }
+    }
+
+    /**
+     * Saves the fronts the node offered in Status ("get=/path,ws=/path,quic").
+     * Returns true when something changed, so the caller (Profiles) only
+     * rewrites the encrypted file when needed; LoftVpnService calls this on
+     * every poll while connected. Skipped for non-loft kinds, L3 and CDN
+     * profiles, where extra fronts are not used. Fronts the node does not
+     * mention are left as they are.
+     */
+    boolean applyLearnedFronts(String raw) {
+        if (raw == null || isSSTP() || isVLESS() || isTrojan() || isL3() || isCDN()) {
+            return false;
+        }
+        boolean changed = false;
+        for (String part : raw.split(",")) {
+            String s = part.trim();
+            if (s.isEmpty()) {
+                continue;
+            }
+            // Each item is "name=/path" or a bare name (QUIC has no path).
+            String name;
+            String path;
+            int eq = s.indexOf('=');
+            if (eq >= 0) {
+                name = s.substring(0, eq);
+                path = s.substring(eq + 1);
+            } else {
+                name = s;
+                path = "";
+            }
+            switch (name) {
+                case "get":
+                    if (!path.isEmpty() && !path.equals(this.path)) {
+                        this.path = path;
+                        changed = true;
+                    }
+                    break;
+                case "ws":
+                    if (!path.equals(nz(wsPath))) {
+                        wsPath = path;
+                        changed = true;
+                    }
+                    break;
+                case "h2":
+                    if (!path.equals(nz(h2Path))) {
+                        h2Path = path;
+                        changed = true;
+                    }
+                    break;
+                case "h3":
+                    if (!path.equals(nz(h3Path))) {
+                        h3Path = path;
+                        changed = true;
+                    }
+                    break;
+                case "quic":
+                    if (!quic) {
+                        quic = true;
+                        changed = true;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        return changed;
+    }
+
+    /** True when t is one of the mux fronts in MUX_ORDER (L3 is not). */
+    private static boolean muxName(String t) {
+        for (String x : MUX_ORDER) {
+            if (x.equals(t)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Null-safe trim: null becomes "". */
+    static String nz(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    /**
+     * Query value of a vless:// or trojan:// share URL (these profiles keep
+     * the whole link in url). Key match ignores case; the value is URL-decoded.
+     * Returns "" when the key is missing. Used for the info rows on screen.
+     */
+    String linkQuery(String key) {
+        String u = url;
+        if (u == null || key == null || key.isEmpty()) {
+            return "";
+        }
+        int q = u.indexOf('?');
+        if (q < 0) {
+            return "";
+        }
+        int hash = u.indexOf('#', q);
+        String qs = hash < 0 ? u.substring(q + 1) : u.substring(q + 1, hash);
+        for (String part : qs.split("&")) {
+            int eq = part.indexOf('=');
+            String k = eq < 0 ? part : part.substring(0, eq);
+            if (!key.equalsIgnoreCase(k)) {
+                continue;
+            }
+            String v = eq < 0 ? "" : part.substring(eq + 1);
+            try {
+                return java.net.URLDecoder.decode(v, "UTF-8");
+            } catch (Exception e) {
+                return v;
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Transport from the share URL's type= parameter, for display: TCP (also
+     * when missing), XHTTP (splithttp is its older name), WS, gRPC, or the
+     * raw value upper-cased.
+     */
+    String linkTransport() {
+        String t = linkQuery("type").toLowerCase();
+        if (t.isEmpty() || "tcp".equals(t)) {
+            return "TCP";
+        }
+        if ("xhttp".equals(t) || "splithttp".equals(t)) {
+            return "XHTTP";
+        }
+        if ("ws".equals(t)) {
+            return "WS";
+        }
+        if ("grpc".equals(t)) {
+            return "gRPC";
+        }
+        return t.toUpperCase();
+    }
+
+    /**
+     * Security from the share URL, for display: REALITY (also implied by a
+     * pbk= public key or sid= short id), none, XTLS, otherwise TLS.
+     */
+    String linkSecurity() {
+        String s = linkQuery("security").toLowerCase();
+        if ("reality".equals(s) || !linkQuery("pbk").isEmpty() || !linkQuery("sid").isEmpty()) {
+            return "REALITY";
+        }
+        if ("none".equals(s)) {
+            return "none";
+        }
+        if ("xtls".equals(s)) {
+            return "XTLS";
+        }
+        return "TLS";
+    }
+
+    /** Protocol family: loft, sstp, vless or trojan. */
+    String family() {
+        if (isSSTP()) {
+            return "sstp";
+        }
+        if (isVLESS()) {
+            return "vless";
+        }
+        if (isTrojan()) {
+            return "trojan";
+        }
+        return "loft";
+    }
+
+    /** Display title of the kind ("GET", "WS", ...), or the kind upper-cased if it is not a front. */
+    String frontTitle() {
+        int i = indexOf(kind);
+        return i >= 0 ? FRONT_TITLES[i] : kind.toUpperCase();
+    }
+
+    /** Short label for logs and the UI, e.g. "loft · get", or the family name. */
+    String side() {
+        if (isLoft()) {
+            return "loft · " + kind.toLowerCase();
+        }
+        return family();
+    }
+
+    /** The host name from the URL, without user info, scheme, port, path or IPv6 brackets. */
+    String host() {
+        String u = url;
+        if (u == null) {
+            return "";
+        }
+        // 1. Share links carry "secret@host"; drop the secret part.
+        int at = u.indexOf('@');
+        if (at >= 0 && (u.startsWith("loft://") || u.startsWith("vless://") || u.startsWith("trojan://")
+                || u.startsWith("sstp://"))) {
+            u = u.substring(at + 1);
+        }
+        // 2. Drop the scheme, then everything from the path or query on.
+        u = u.replaceFirst("^[a-zA-Z][a-zA-Z0-9+.-]*://", "");
+        int slash = u.indexOf('/');
+        if (slash >= 0) {
+            u = u.substring(0, slash);
+        }
+        int q = u.indexOf('?');
+        if (q >= 0) {
+            u = u.substring(0, q);
+        }
+        // 3. "[v6addr]:port" -> v6addr. A bare IPv6 address has several
+        //    colons, so a port is only cut when there is exactly one colon.
+        if (u.startsWith("[")) {
+            int end = u.indexOf(']');
+            if (end > 0) {
+                return u.substring(1, end);
+            }
+        }
+        int colon = u.lastIndexOf(':');
+        if (colon > 0 && u.indexOf(':') == colon) {
+            return u.substring(0, colon);
+        }
+        return u;
+    }
+
+    /** YAML for Engine.start. Always rebuilt from fields so a stale cache
+     * cannot leave GET pointing at a wss:// URL. */
+    String sessionYaml() {
+        return YamlBuilder.from(this);
+    }
+
+    /**
+     * Every field as JSON, the form Profiles saves to storage. A new field
+     * must be added here and in fromJson, or it is lost on the next restart.
+     */
+    JSONObject toJson() throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("id", id);
+        o.put("name", name);
+        o.put("kind", kind);
+        o.put("token", token);
+        o.put("url", url);
+        o.put("path", path);
+        o.put("cdn", cdn);
+        o.put("edge", edge);
+        o.put("sni", sni);
+        o.put("user", user);
+        o.put("pass", pass);
+        o.put("dns", dns);
+        o.put("maskPub", maskPub);
+        o.put("inner", inner);
+        o.put("wsPath", wsPath);
+        o.put("h2Path", h2Path);
+        o.put("h3Path", h3Path);
+        o.put("listedFronts", listedFronts);
+        o.put("fp", fp);
+        o.put("yaml", yaml);
+        o.put("mux", mux);
+        o.put("quic", quic);
+        o.put("tlsCheck", tlsCheck);
+        o.put("pap", pap);
+        o.put("dnsSystem", dnsSystem);
+        return o;
+    }
+
+    /** Reads a profile saved by toJson; missing keys get the field defaults. */
+    static Profile fromJson(JSONObject o) {
+        Profile p = new Profile();
+        p.id = o.optString("id", p.id);
+        p.name = o.optString("name");
+        p.kind = o.optString("kind", "get");
+        p.token = o.optString("token");
+        p.url = o.optString("url");
+        p.path = o.optString("path");
+        p.cdn = o.optString("cdn");
+        p.edge = o.optString("edge");
+        p.sni = o.optString("sni");
+        p.user = o.optString("user");
+        p.pass = o.optString("pass");
+        p.dns = o.optString("dns");
+        p.maskPub = o.optString("maskPub");
+        p.inner = o.optString("inner");
+        p.wsPath = o.optString("wsPath");
+        p.h2Path = o.optString("h2Path");
+        p.h3Path = o.optString("h3Path");
+        p.listedFronts = o.optString("listedFronts");
+        p.fp = o.optString("fp", "chrome");
+        p.yaml = o.optString("yaml");
+        p.mux = o.optBoolean("mux", true);
+        p.quic = o.optBoolean("quic", false);
+        p.tlsCheck = o.optBoolean("tlsCheck", true);
+        p.pap = o.optBoolean("pap", false);
+        p.dnsSystem = o.optBoolean("dnsSystem", true);
+        return p;
+    }
+
+    /**
+     * Reads a profile from one engine YAML document (as produced by
+     * Mobile.parseShareAll). Fields feed the UI, Edit, and Engine.Start:
+     * sessionYaml rebuilds the document via YamlBuilder. Mac VLESS files
+     * write uuid instead of token. Peek is a small line-based reader for the
+     * flat YAML the engine emits, not a full YAML parser; missing keys read
+     * as "". Never throws: a document with nothing useful gives a mostly
+     * empty Profile, which Importer then filters out.
+     */
+    static Profile fromYaml(String yaml) {
+        Profile p = new Profile();
+        p.yaml = yaml == null ? "" : yaml;
+        // 1. Kind: the first outbound's type, else the top-level family.
+        String fam = Peek.get(yaml, "kind");
+        if (fam.isEmpty()) {
+            fam = "loft";
+        }
+        p.kind = Peek.outbound(yaml, "type");
+        if (p.kind.isEmpty()) {
+            p.kind = fam.equals("loft") ? "get" : fam;
+        }
+        // 2. Identity: name, member key (token, uuid or password), login.
+        p.name = Peek.get(yaml, "name");
+        if (p.name.isEmpty()) {
+            p.name = Peek.outbound(yaml, "name");
+        }
+        p.token = Peek.get(yaml, "token");
+        if (p.token.isEmpty()) {
+            p.token = Peek.get(yaml, "uuid");
+        }
+        if (p.token.isEmpty()) {
+            p.token = Peek.get(yaml, "password");
+        }
+        p.user = Peek.get(yaml, "username");
+        p.pass = Peek.get(yaml, "password");
+        // 3. Address and transport: URL and path, extra fronts from the other
+        //    outbounds, cover host, SNI, mask key, inner cipher, fingerprint.
+        p.edge = Peek.get(yaml, "edge");
+        p.url = Peek.outbound(yaml, "url");
+        p.path = Peek.outbound(yaml, "path");
+        mergeOutbounds(p, yaml);
+        p.cdn = Peek.outbound(yaml, "cdn");
+        p.sni = Peek.outbound(yaml, "sni");
+        if (p.sni.isEmpty()) {
+            p.sni = Peek.get(yaml, "sni");
+        }
+        p.maskPub = Peek.outbound(yaml, "mask_pub");
+        p.inner = Peek.get(yaml, "inner");
+        p.fp = Peek.outbound(yaml, "fingerprint");
+        if (p.fp.isEmpty()) {
+            p.fp = "chrome";
+        }
+        // 4. Switches: mux (never for L3), TLS check, PAP/CHAP.
+        p.mux = Peek.outboundBool(yaml, "mux", !p.isL3());
+        if (p.isL3()) {
+            p.mux = false;
+        }
+        String tls = Peek.get(yaml, "tls_check");
+        if (!tls.isEmpty()) {
+            p.tlsCheck = tls.equals("true") || tls.equals("yes");
+        }
+        String pap = Peek.get(yaml, "pap_chap");
+        p.pap = pap.equals("true") || pap.equals("yes") || pap.equals("1");
+        // 5. Fallback name from the host, then the explicit "fronts" list.
+        if (p.name.isEmpty()) {
+            p.name = p.host();
+        }
+        String listed = Peek.get(yaml, "fronts");
+        if (!listed.isEmpty()) {
+            p.applyFrontList(listed);
+        }
+        return p;
+    }
+
+    /**
+     * One loft connection may list get/ws/h2/h3/quic outbounds. Merge them
+     * into one profile: GET sets the main URL and path, the others switch on
+     * their extra front and supply the base URL if none is set yet. Outbounds
+     * that point at the edge host are skipped (the edge is stored separately).
+     * Mask key, cover host and fingerprint are taken from the first outbound
+     * that has them.
+     */
+    private static void mergeOutbounds(Profile p, String yaml) {
+        String eh = hostOf(p.edge).toLowerCase();
+        for (Peek.Ob o : Peek.outbounds(yaml)) {
+            String t = o.type == null ? "" : o.type.toLowerCase();
+            if (!eh.isEmpty() && hostOf(o.url).toLowerCase().equals(eh)) {
+                continue;
+            }
+            // Shared settings: first non-empty value wins.
+            if (p.maskPub.isEmpty() && o.maskPub != null && !o.maskPub.isEmpty()) {
+                p.maskPub = o.maskPub;
+            }
+            if (p.cdn.isEmpty() && o.cdn != null && !o.cdn.isEmpty()) {
+                p.cdn = o.cdn;
+            }
+            if ((p.fp == null || p.fp.isEmpty() || "chrome".equals(p.fp)) && o.fp != null && !o.fp.isEmpty()) {
+                p.fp = o.fp;
+            }
+            // Per-front settings.
+            switch (t) {
+                case "get":
+                    p.kind = "get";
+                    if (!o.url.isEmpty()) {
+                        p.url = o.url;
+                    }
+                    if (!o.path.isEmpty()) {
+                        p.path = o.path;
+                    }
+                    break;
+                case "ws":
+                    if (nz(p.wsPath).isEmpty()) {
+                        String up = YamlBuilder.pathOf(o.url);
+                        p.wsPath = o.path.isEmpty() ? ("/".equals(up) || up.isEmpty() ? DEF_WS : up) : o.path;
+                    }
+                    if (p.url.isEmpty()) {
+                        p.url = stripPath(o.url);
+                    }
+                    break;
+                case "h2":
+                    if (nz(p.h2Path).isEmpty()) {
+                        p.h2Path = o.path.isEmpty() ? DEF_H2 : o.path;
+                    }
+                    if (p.url.isEmpty()) {
+                        p.url = stripPath(o.url);
+                    }
+                    break;
+                case "h3":
+                    if (nz(p.h3Path).isEmpty()) {
+                        p.h3Path = o.path.isEmpty() ? DEF_H2 : o.path;
+                    }
+                    if (p.url.isEmpty()) {
+                        p.url = stripPath(o.url);
+                    }
+                    break;
+                case "quic":
+                    p.quic = true;
+                    if (p.url.isEmpty()) {
+                        p.url = stripPath(o.url);
+                    }
+                    break;
+                default:
+                    if (p.url.isEmpty() && !o.url.isEmpty()) {
+                        p.url = o.url;
+                    }
+                    if (p.path.isEmpty() && !o.path.isEmpty()) {
+                        p.path = o.path;
+                    }
+                    break;
+            }
+        }
+    }
+
+    /**
+     * The URL without its path, so several fronts can share one base URL.
+     * ws/wss become http/https: GET cannot dial a WebSocket URL.
+     */
+    private static String stripPath(String url) {
+        if (url == null || url.isEmpty()) {
+            return "";
+        }
+        String pth = YamlBuilder.pathOf(url);
+        String base = url;
+        if (!pth.isEmpty()) {
+            int i = url.indexOf(pth);
+            if (i > 0) {
+                base = url.substring(0, i);
+            }
+        }
+        if (base.startsWith("wss://")) {
+            return "https://" + base.substring(6);
+        }
+        if (base.startsWith("ws://")) {
+            return "http://" + base.substring(5);
+        }
+        return base;
+    }
+
+    /**
+     * Host name of any URL, using the same rules as host(). It borrows a
+     * throwaway Profile to reuse host(); note that this also generates a
+     * random UUID for the unused id on every call.
+     */
+    static String hostOf(String url) {
+        Profile x = new Profile();
+        x.url = url == null ? "" : url;
+        return x.host();
+    }
+
+    /** Position of a kind in FRONTS (case-insensitive), or -1 when it is not a loft front. */
+    static int indexOf(String kind) {
+        if (kind == null) {
+            return -1;
+        }
+        String k = kind.toLowerCase();
+        for (int i = 0; i < FRONTS.length; i++) {
+            if (FRONTS[i].equals(k)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** True for every kind the app can run: loft fronts, SSTP, VLESS, Trojan. */
+    static boolean known(String kind) {
+        if (kind == null) {
+            return false;
+        }
+        String k = kind.toLowerCase();
+        return indexOf(k) >= 0 || k.equals("sstp") || k.equals("vless") || k.equals("trojan");
+    }
+}

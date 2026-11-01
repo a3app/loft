@@ -1,0 +1,171 @@
+package vless
+
+// VLESS request/response framing (Xray proxy/vless). TCP, REALITY, Vision, XHTTP.
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"net"
+	"strconv"
+)
+
+const (
+	version         = 0
+	cmdTCP     byte = 1
+	atypIPv4        = 1
+	atypDomain      = 2
+	atypIPv6        = 3
+	flowVision      = "xtls-rprx-vision"
+)
+
+// TunIP is the synthetic IPv4 the GUI and utun use. VLESS has no overlay lease.
+// It is in 198.18.0.0/15, a range reserved for benchmarking, so it does not
+// clash with real networks.
+const TunIP = "198.18.0.1"
+
+// parseUUID accepts 8-4-4-4-12 or 32 hex digits.
+func parseUUID(s string) ([16]byte, error) {
+	var out [16]byte
+	hexes := make([]byte, 0, 32)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '-' {
+			continue
+		}
+		if !isHex(c) {
+			return out, fmt.Errorf("vless uuid")
+		}
+		hexes = append(hexes, c)
+	}
+	if len(hexes) != 32 {
+		return out, fmt.Errorf("vless uuid")
+	}
+	n, err := hex.Decode(out[:], hexes)
+	if err != nil || n != 16 {
+		return out, fmt.Errorf("vless uuid")
+	}
+	return out, nil
+}
+
+func isHex(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
+}
+
+// writeRequest writes a VLESS TCP header for host:port onto w: version 0,
+// the 16-byte UUID, the add-ons (length-prefixed; carries the Vision flow),
+// command 1 (TCP), the port, then the address type and address.
+func writeRequest(w io.Writer, uuid [16]byte, target string, vision bool) error {
+	host, portStr, err := net.SplitHostPort(target)
+	if err != nil {
+		return err
+	}
+	port64, err := strconv.ParseUint(portStr, 10, 16)
+	if err != nil {
+		return err
+	}
+	port := uint16(port64)
+	var addr []byte
+	if ip := net.ParseIP(host); ip != nil {
+		if v4 := ip.To4(); v4 != nil {
+			addr = append([]byte{atypIPv4}, v4...)
+		} else {
+			v6 := ip.To16()
+			if v6 == nil {
+				return fmt.Errorf("vless: bad ip")
+			}
+			addr = append([]byte{atypIPv6}, v6...)
+		}
+	} else {
+		if len(host) == 0 || len(host) > 255 {
+			return fmt.Errorf("vless: bad host")
+		}
+		addr = append([]byte{atypDomain, byte(len(host))}, []byte(host)...)
+	}
+	addon := visionAddon(vision)
+	buf := make([]byte, 0, 18+len(addon)+2+len(addr))
+	buf = append(buf, version)
+	buf = append(buf, uuid[:]...)
+	buf = append(buf, byte(len(addon)))
+	buf = append(buf, addon...)
+	buf = append(buf, cmdTCP)
+	var pb [2]byte
+	binary.BigEndian.PutUint16(pb[:], port)
+	buf = append(buf, pb[:]...)
+	buf = append(buf, addr...)
+	_, err = w.Write(buf)
+	return err
+}
+
+// readResponse consumes the VLESS response header: version 0 and an
+// add-ons length, whose bytes are skipped. An empty addon plus an
+// already-buffered HTTP/2 SETTINGS/PING/WINDOW_UPDATE on stream 0 is a
+// decoy (nginx after a loft-node splice): those frames start 00 00, which
+// is also a legal VLESS header.
+func readResponse(r io.Reader) error {
+	var hdr [2]byte
+	if _, err := io.ReadFull(r, hdr[:]); err != nil {
+		return err
+	}
+	if hdr[0] != version {
+		return fmt.Errorf("vless: version %d", hdr[0])
+	}
+	if hdr[1] > 0 {
+		if _, err := io.CopyN(io.Discard, r, int64(hdr[1])); err != nil {
+			return err
+		}
+		return nil
+	}
+	br, ok := r.(*bufio.Reader)
+	if !ok || br.Buffered() < 7 {
+		return nil
+	}
+	tail, err := br.Peek(7)
+	if err != nil {
+		return nil
+	}
+	var frame [9]byte
+	copy(frame[:], hdr[:])
+	copy(frame[2:], tail)
+	return checkNotWeb(frame[:])
+}
+
+// checkNotWeb rejects a downlink that is HTTP/1 or HTTP/2 instead of VLESS.
+func checkNotWeb(p []byte) error {
+	if bytes.HasPrefix(p, []byte("HTTP/")) {
+		return fmt.Errorf("vless: http")
+	}
+	if isHTTP2Frame(p) {
+		return fmt.Errorf("vless: http2")
+	}
+	return nil
+}
+
+// isHTTP2Frame reports a client preface or a SETTINGS/PING/WINDOW_UPDATE
+// frame on stream 0 (what nginx writes first on h2).
+func isHTTP2Frame(p []byte) bool {
+	if bytes.HasPrefix(p, []byte("PRI * HTTP/2.0")) {
+		return true
+	}
+	if len(p) < 9 {
+		return false
+	}
+	typ := p[3]
+	stream := binary.BigEndian.Uint32(p[5:9]) & 0x7fffffff
+	return stream == 0 && (typ == 0x04 || typ == 0x06 || typ == 0x08)
+}
+
+// visionAddon is the protobuf Addons{Flow: xtls-rprx-vision} blob, or nil.
+// It is written by hand: field 1 (tag 0x0A), a length, the flow string.
+func visionAddon(on bool) []byte {
+	if !on {
+		return nil
+	}
+	flow := flowVision
+	b := make([]byte, 0, 2+len(flow))
+	b = append(b, 0x0A, byte(len(flow)))
+	return append(b, flow...)
+}

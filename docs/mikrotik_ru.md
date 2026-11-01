@@ -1,0 +1,95 @@
+# loft на RouterOS
+
+[English](mikrotik.md) · **Русский** · [中文](mikrotik_zh.md)
+
+Как loft работает на плате MikroTik. Каталог: [clients/MikroTik/](../clients/MikroTik/). Макет: [clients/MikroTik/design/index.html](../clients/MikroTik/design/index.html). Протокол: [protocol_ru.md](protocol_ru.md).
+
+Каждый релиз публикует образ двумя способами: файлами `loft-mikrotik-<ver>-<arch>.tar` (amd64, arm64, armv7) на странице GitHub Release и как `ghcr.io/a3app/loft-mikrotik:<ver>` / `:latest` для amd64, arm64 и arm/v7. Вручную: `make -C clients/MikroTik image GOARCH=…`. Дополнительные пакеты RouterOS выпускает только сама MikroTik, поэтому loft поставляется как образ контейнера.
+
+---
+
+## 1. Две плоскости
+
+RouterOS решает, **куда** идут пакеты (mangle, таблицы маршрутизации, address-list). loft решает, **как** сессия выглядит снаружи (фронты loft).
+
+```
+хост LAN
+  → SOCKS 172.31.20.2:1080            (сразу после socks5)
+  → [tun up] mangle список loft-lan
+      → таблица loft → 172.31.20.2
+          → TUN loft
+              → loft  get|ws|h2|quic|h3  с veth-loft
+                  → TLS 1.3 → CDN или нода
+```
+
+SSTP, WireGuard, IPsec и L2TP остаются штатными клиентами RouterOS. В списке VPN в Winbox loft не появляется.
+
+## 2. Контейнер, не NPK
+
+Нужны RouterOS 7.12+ и дополнительный пакет `container` (arm, arm64, x86 / CHR). Один раз выполнить `device-mode container=yes`, затем Reset (на CHR — выключить и снова включить питание). Диск под `root-dir` и `tmpdir` — обычно `disk1`, но никогда не NAND.
+
+```
+/interface/veth        veth-loft  172.31.20.2/24  gw 172.31.20.1
+/interface/bridge      br-loft
+/ip/address            172.31.20.1/24 на br-loft
+/ip/firewall/nat       masquerade src 172.31.20.0/24
+/container             name=loft  mount /data  file=loft.tar
+```
+
+Точка входа: `loft -c /data/client.yaml -if 172.31.20.1`. `-if` получает адрес шлюза veth, а не имя интерфейса: внутри контейнера RouterOS интерфейс называется как veth (`veth-loft`), `eth0` там нет, и loft привязывается к интерфейсу, в подсети которого лежит этот адрес. YAML — файл оператора, его записывает LAN-страница `http://172.31.20.2:8090/`. Образ: scratch + хранилище CA + статический linux-бинарник `loft`.
+
+## 3. Сначала SOCKS
+
+`listen.socks5: 0.0.0.0:1080` — путь, который работает и без TUN. Ноутбук в LAN (или сам роутер) подключается к `172.31.20.2:1080`. У RouterOS нет собственного SOCKS-клиента, а у браузера, curl и SSH `-o ProxyCommand` он есть. Пароля у него нет, поэтому `listen.socks5: off` (или LAN-страница) выключает его, когда нужен только шлюз; там же меняется порт. И то и другое — после перезапуска контейнера.
+
+Не запускайте `policy.rsc`, если работает только SOCKS.
+
+## 4. Шлюз после tun up
+
+Наличие `/dev/net/tun` внутри контейнера RouterOS не гарантировано. Если в логе есть `tun up`:
+
+- таблица `loft`, default через `172.31.20.2`
+- address-list `loft-lan` (префикс правит оператор)
+- mangle prerouting: src список, dst `!172.31.20.0/24`, `dst-address-type=!local`, mark-routing `loft`. Без `!local` LAN теряет сам роутер: его DNS, WebFig и Winbox уходят в туннель
+
+Сам RouterOS нового маршрута по умолчанию не получает. Без TUN маршрут 0/0 через IP контейнера зацикливается (маршрут по умолчанию у контейнера — шлюз veth на ROS).
+
+**Режим: `nat` или `route`.** Внутри контейнера loft отправляет 0/1 и 128/1 в свой TUN, поэтому ответ на адрес из LAN вернулся бы в TUN, а не в RouterOS. Выхода два; `listen.gateway` в `client.yaml` и `:local mode` в `policy.rsc` должны совпадать:
+
+| | `nat` (по умолчанию) | `route` |
+|--|--|--|
+| RouterOS | masquerade `loft-lan` → `br-loft` (правило `loft-lan-nat`) | без masquerade |
+| loft | одно правило в таблицу 176 (там default через шлюз veth): всё, что контейнер отправляет с `172.31.20.2`, чтобы SOCKS и LAN-страница отвечали хостам вне `loft-lan` (другие VLAN, VPN-клиенты, проброс порта) | два правила в таблицу 176 (там default через шлюз veth): всё, что выходит из TUN, и всё, что контейнер отправляет с `172.31.20.2` (ответы SOCKS и LAN-страницы) |
+| Контейнер видит | все хосты LAN как `172.31.20.1` | настоящие адреса LAN |
+| Когда | всегда, если не нужны настоящие адреса | контейнеру надо различать хосты LAN, или в будущем доступ из overlay в LAN |
+
+У Keenetic тот же выбор называется «NAT для клиентов» в настройках VPN-сервера. `route` — только для выделенного шлюза: на обычном Linux с включённой пересылкой это правило пустило бы участников overlay через машину. Если режимы не совпадают (в loft `nat`, в RouterOS `route`), LAN остаётся без интернета; SOCKS работает.
+
+## 5. LAN-страница и выход
+
+`listen.http: 0.0.0.0:8090` отдаёт небольшую страницу оператора (статус, ключ, URL, фронт, выход). Пароль можно задать в `listen.http_pass`. Cookie Winbox на эту страницу не распространяется.
+
+**Выход** — имя WAN-интерфейса в RouterOS (`ether1`, `lte1`, `pppoe-out1`). Контейнер всегда привязывает фронты к `veth-loft`. При сохранении записывается `/data/uplink.rsc`. Импортируйте его:
+
+```
+/import disk1/loft/data/uplink.rsc
+```
+
+Это направляет `172.31.20.0/24` в таблицу `loft-wan` → указанный интерфейс. Если выход пустой, правило снимается и используется основная таблица.
+
+## 6. Петля
+
+Политика, которая отправляет LAN `0/0` в контейнер, захватит и GET/WS-соединения с нодой. loft привязывает фронты к `veth-loft` (`-if 172.31.20.1`). Mangle пропускает `172.31.20.0/24`. В YAML стоит `kill_switch: false`; внутри netns loft всё равно ставит раздельные маршруты по умолчанию (split default), и именно благодаря этому контейнер становится шлюзом.
+
+## 7. Платы
+
+| | |
+|--|--|
+| Работает | arm, arm64, x86, x86_64 — RB5009, hAP ax²/ax³, CCR2004+, CHR |
+| Не работает | mipsbe / mmips / smips — hEX, hAP lite и большинство дешёвых плат |
+
+`architecture-name` из `/system/resource` должен совпадать с тарболом (`arm` / `arm64` / `amd64` для x86 и x86_64).
+
+## 8. Чем этот файл не является
+
+Это не `.npk` от вендора, не новый тип VPN в Winbox, не loft-node на той же плате и не патч WebFig.

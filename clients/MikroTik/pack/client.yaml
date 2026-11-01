@@ -1,0 +1,31 @@
+# loft on RouterOS. Mount this file at /data/client.yaml.
+# SOCKS works even without TUN (socks5: off turns it off; it has no
+# password). TUN becomes a LAN gateway
+# when the container has /dev/net/tun (entrypoint still binds fronts on veth-loft).
+# LAN page: http://172.31.20.2:8090  — uplink is the RouterOS WAN name.
+
+listen:
+  socks5: 0.0.0.0:1080
+  tun: auto
+  kill_switch: false
+  http: 0.0.0.0:8090
+  # LAN gateway: nat (RouterOS masquerades LAN into the container, default)
+  # or route (real LAN addresses; loft returns answers by a policy rule).
+  # Must match $mode in policy.rsc.
+  gateway: nat
+  # http_pass: "change-me"
+  # uplink: ether1
+
+token: "change-me-long-random"
+
+select: auto
+
+# fronts: [get]
+
+outbounds:
+  - name: node
+    type: get
+    url: https://vpn.example.net
+    path: /static/v3/build
+    fingerprint: chrome
+    insecure_skip_verify: false

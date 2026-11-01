@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160" width="640" height="160">
+  <!-- About line: Made with love [pixel heart] by A³. English only. -->
+  <rect width="640" height="160" fill="#1A1714"/>
+  <text x="86" y="90"
+        font-family="Avenir Next, Avenir, Helvetica Neue, sans-serif"
+        font-size="28" font-weight="500" fill="#8A7E72">Made with love</text>
+  <g transform="translate(292 71)" fill="#E8B84A" shape-rendering="crispEdges">
+    <rect x="3" y="0" width="6" height="3"/>
+    <rect x="12" y="0" width="6" height="3"/>
+    <rect x="0" y="3" width="21" height="6"/>
+    <rect x="3" y="9" width="15" height="3"/>
+    <rect x="6" y="12" width="9" height="3"/>
+    <rect x="9" y="15" width="3" height="3"/>
+  </g>
+  <text x="328" y="90"
+        font-family="Avenir Next, Avenir, Helvetica Neue, sans-serif"
+        font-size="28" font-weight="500" fill="#8A7E72">by A<tspan dx="1" dy="-10" font-size="16" font-weight="600">3</tspan></text>
+</svg>

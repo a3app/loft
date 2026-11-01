@@ -1,0 +1,64 @@
+#!/bin/sh
+# loft-panel .deb postinst: user, dirs, env, wire the node's decoy, start.
+set -e
+
+PANEL_USER=loft-panel
+PANEL_HOME=/var/lib/loft-panel
+PANEL_ETC=/etc/loft-panel
+NODE_CONF=/etc/loft/node.conf
+
+case "$1" in
+configure)
+	if ! id "$PANEL_USER" >/dev/null 2>&1; then
+		adduser --system --group --home "$PANEL_HOME" --no-create-home \
+			--shell /usr/sbin/nologin "$PANEL_USER"
+	fi
+	mkdir -p "$PANEL_HOME" "$PANEL_ETC"
+	chown "$PANEL_USER":"$PANEL_USER" "$PANEL_HOME"
+	chmod 0700 "$PANEL_HOME"
+	chown root:"$PANEL_USER" "$PANEL_ETC"
+	chmod 0750 "$PANEL_ETC"
+	if [ ! -f "$PANEL_ETC/panel.env" ]; then
+		host=$(awk '$1=="advertise"{print $2; exit}' "$NODE_CONF" 2>/dev/null | sed -e 's|^[a-zA-Z][a-zA-Z0-9+.-]*://||' -e 's|/.*||' -e 's|:.*||')
+		[ -n "$host" ] || host=$(hostname -f 2>/dev/null || hostname)
+		printf '# loft-panel environment (systemd EnvironmentFile).\nPANEL_LISTEN=127.0.0.1:8091\nPANEL_HOSTS=%s\n' "$host" > "$PANEL_ETC/panel.env"
+		chown root:"$PANEL_USER" "$PANEL_ETC/panel.env"
+		chmod 0640 "$PANEL_ETC/panel.env"
+	fi
+
+
+	restart_node=0
+	if [ -f "$NODE_CONF" ]; then
+		set +e
+		note=$(/usr/bin/loft-panel-adm wire-node -conf "$NODE_CONF" -decoy 127.0.0.1:8443 2>&1)
+		rc=$?
+		set -e
+		echo "loft-panel: $NODE_CONF: $note"
+		[ "$rc" = 10 ] && restart_node=1
+	fi
+
+	# nginx site from the helper's template, once node.conf has its decoy.
+	if [ -d /etc/nginx/sites-available ] && [ -f "$NODE_CONF" ]; then
+		if /usr/bin/loft-panel-adm nginx-site >/dev/null 2>&1; then
+			systemctl reload-or-restart nginx >/dev/null 2>&1 || true
+		else
+			echo "loft-panel: the nginx site did not pass nginx -t; it was left out"
+		fi
+	fi
+
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl daemon-reload || true
+		systemctl enable loft-panel-adm loft-panel loft-panel-net >/dev/null 2>&1 || true
+		systemctl restart loft-panel-adm loft-panel || true
+		if [ "$restart_node" = 1 ] && systemctl is-enabled --quiet loft-node 2>/dev/null; then
+			systemctl restart loft-node || true
+		fi
+	fi
+	sleep 1
+	if [ -f "$PANEL_HOME/setup.code" ]; then
+		echo "loft-panel: open https://$(awk -F= '$1=="PANEL_HOSTS"{split($2,a,","); print a[1]}' "$PANEL_ETC/panel.env")/ — setup code $(tr -d ' \n' < "$PANEL_HOME/setup.code")"
+	fi
+	;;
+esac
+
+exit 0

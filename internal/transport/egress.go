@@ -1,0 +1,140 @@
+package transport
+
+// Egress is the node's road to the internet: the exit rules choose, per
+// member, whether a connection goes out directly, through another interface,
+// or through an upstream proxy (SOCKS5, HTTP, SSTP). This file also answers
+// "who is behind this session" for those rules and for the status file.
+
+import (
+	"context"
+	"net"
+	"sync/atomic"
+	"time"
+
+	"github.com/a3app/loft/internal/egress"
+	"github.com/a3app/loft/internal/mux"
+	"github.com/a3app/loft/internal/wire"
+)
+
+// Egress is the node's exit rules (egress.conf); nil sends everything out
+// directly. Swapped on reload.
+var Egress atomic.Pointer[egress.Router]
+
+// whoOf is the member behind a session, for the exit rules.
+func whoOf(sess *mux.Session) egress.Who {
+	o := NetSwitch()
+	if o == nil || sess == nil {
+		return egress.Who{}
+	}
+	return o.Who(sess)
+}
+
+// dialOut opens a member's TCP connection to the internet.
+// Loopback, link-local, and metadata names are refused, same as CONNECT.
+func dialOut(who egress.Who, target string) (net.Conn, error) {
+	host, _, err := net.SplitHostPort(target)
+	if err != nil || spliceDenied(host) {
+		return nil, errDenied
+	}
+	if r := Egress.Load(); r != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		c, _, err := r.DialTCP(ctx, who, target)
+		return c, err
+	}
+	return (&net.Dialer{Timeout: 10 * time.Second, Control: dialGuard}).Dial("tcp4", target)
+}
+
+// Who returns the member attached on sess, its tags and overlay VLAN.
+func (o *Overlay) Who(sess *mux.Session) egress.Who {
+	if o == nil {
+		return egress.Who{}
+	}
+	o.mu.Lock()
+	p := o.byS[sess]
+	member := ""
+	if p != nil {
+		member = p.member
+	}
+	o.mu.Unlock()
+	return o.whoMember(member)
+}
+
+// whoMember is the egress identity of a member id: the id, its tags and its
+// overlay VLAN, as the exit rules match them.
+func (o *Overlay) whoMember(member string) egress.Who {
+	w := egress.Who{Member: member}
+	if n := o.N(); member != "" && n != nil {
+		if m := n.MemberByID(member); m != nil {
+			w.Tags = m.Tags
+			w.VLAN = m.VLAN
+		}
+	}
+	return w
+}
+
+// Peer is one attached member session, for the status file.
+type Peer struct {
+	Member string    `json:"member"`
+	IP     string    `json:"ip"`
+	Inst   string    `json:"inst,omitempty"`
+	From   string    `json:"from,omitempty"`
+	Front  string    `json:"front,omitempty"` // live bulk mux front (get/ws/h2/quic/h3/l3)
+	Since  time.Time `json:"since"`
+	Rx     uint64    `json:"rx,omitempty"` // CmdData/CmdDgram from the member
+	Tx     uint64    `json:"tx,omitempty"` // CmdData/CmdDgram to the member
+	// Key is "current" when the member's client trusts this controller's key
+	// now, "old" when it still trusts another (during a key roll), empty when
+	// the client did not say.
+	Key string `json:"key,omitempty"`
+}
+
+// CurrentPin returns PinOf this controller's signing key; the node sets it.
+var CurrentPin func() []byte
+
+// setPin records which controller key the client of sess trusts.
+func (o *Overlay) setPin(sess *mux.Session, pin []byte) {
+	if o == nil || sess == nil {
+		return
+	}
+	o.mu.Lock()
+	if p := o.byS[sess]; p != nil {
+		p.pin = append([]byte(nil), pin...)
+	}
+	o.mu.Unlock()
+}
+
+// keyState is Peer.Key for a client pin.
+func keyState(pin []byte) string {
+	if len(pin) == 0 || CurrentPin == nil {
+		return ""
+	}
+	if string(pin) == string(CurrentPin()) {
+		return "current"
+	}
+	return "old"
+}
+
+// Peers lists the attached sessions.
+func (o *Overlay) Peers() []Peer {
+	if o == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	out := make([]Peer, 0, len(o.tab))
+	for _, p := range o.tab {
+		front := ""
+		if p.l3 != nil {
+			front = wire.FrontL3
+		} else {
+			front = sessionBulkFront(p.sess)
+		}
+		var rx, tx uint64
+		if p.sess != nil {
+			tx, rx = p.sess.Bytes()
+		}
+		out = append(out, Peer{Member: p.member, IP: p.ip, Inst: p.inst, From: p.seen, Front: front, Since: p.at, Rx: rx, Tx: tx, Key: keyState(p.pin)})
+	}
+	return out
+}

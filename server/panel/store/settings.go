@@ -1,0 +1,194 @@
+package store
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+// settings.go keeps the panel's settings (server name, certificates, update
+// mode, sign-in limits, language, notifications and so on) in settings.json
+// in the data directory. Users and roles live separately in users.json
+// (store.go).
+
+// Settings is the panel's own state besides users: the server name chosen
+// in the wizard, the ACME contact, where the wizard stopped.
+type Settings struct {
+	Domain    string    `json:"domain,omitempty"`
+	ACMEEmail string    `json:"acme_email,omitempty"`
+	CertUntil time.Time `json:"cert_until,omitempty"` // public certificate expiry; zero = self-signed / none
+	// PanelDomain is the panel's own name when it differs from Domain (the
+	// node's), with its own certificate.
+	PanelDomain    string    `json:"panel_domain,omitempty"`
+	PanelCertUntil time.Time `json:"panel_cert_until,omitempty"`
+	WizardDone     bool      `json:"wizard_done,omitempty"`
+	// The names and check the node's and the panel's certificates were last
+	// issued with (Domains may add names); empty = the domain, HTTP-01.
+	NodeCertNames   []string `json:"node_cert_names,omitempty"`
+	NodeCertMethod  string   `json:"node_cert_method,omitempty"`
+	PanelCertNames  []string `json:"panel_cert_names,omitempty"`
+	PanelCertMethod string   `json:"panel_cert_method,omitempty"`
+	Update          Update   `json:"update"`
+	// Sign-in: Idle is 30m | 8h | off (only Max ends a session), Max 7d | 30d.
+	SessionIdle string `json:"session_idle,omitempty"`
+	SessionMax  string `json:"session_max,omitempty"`
+	// Lang is the default interface language: ru | en | zh.
+	Lang   string `json:"lang,omitempty"`
+	Notify Notify `json:"notify"`
+	// LoftOutbound is which parts go into outbounds[].name in issued .loft
+	// files. Nil is the default: member id and front (bob-get).
+	LoftOutbound *LoftOutbound `json:"loft_outbound,omitempty"`
+	// PortActivity is two LEDs on the switch faceplate (link + activity).
+	// Off (default) is one link LED.
+	PortActivity bool `json:"port_activity,omitempty"`
+	// MemberProto is extra client protocols per overlay member id
+	// (vless, trojan, ss, plus loft). A missing key means loft only.
+	// Stored here, not in network.conf: loft-node has no proto field yet.
+	MemberProto map[string][]string `json:"member_proto,omitempty"`
+}
+
+// LoftOutbound is host, member id, and front as parts of outbounds[].name.
+type LoftOutbound struct {
+	Host   bool `json:"host"`
+	Member bool `json:"member"`
+	Front  bool `json:"front"`
+}
+
+// LoftOutboundView is the effective parts (nil storage → member+front).
+func (s Settings) LoftOutboundView() LoftOutbound {
+	if s.LoftOutbound == nil {
+		return LoftOutbound{Member: true, Front: true}
+	}
+	o := *s.LoftOutbound
+	if !o.Host && !o.Member && !o.Front {
+		o.Front = true
+	}
+	return o
+}
+
+// OutboundName builds outbounds[].name from the advertise host, member id
+// and front (get, ws, …). Empty parts are skipped; an empty result is the front.
+func (s Settings) OutboundName(host, member, front string) string {
+	o := s.LoftOutboundView()
+	var p []string
+	if o.Host {
+		if h := hostLabel(host); h != "" {
+			p = append(p, h)
+		}
+	}
+	if o.Member && member != "" {
+		p = append(p, member)
+	}
+	if o.Front && front != "" {
+		p = append(p, front)
+	}
+	if len(p) == 0 {
+		return front
+	}
+	return strings.Join(p, "-")
+}
+
+// hostLabel reduces an advertise address such as "https://Vpn.Example.net:443/"
+// to the bare lower-case host name ("vpn.example.net"): scheme, path, port,
+// IPv6 brackets and a trailing dot are removed.
+func hostLabel(host string) string {
+	h := strings.TrimSpace(host)
+	h = strings.TrimPrefix(h, "https://")
+	h = strings.TrimPrefix(h, "http://")
+	if i := strings.IndexByte(h, '/'); i >= 0 {
+		h = h[:i]
+	}
+	if strings.HasPrefix(h, "[") {
+		if i := strings.Index(h, "]"); i >= 0 {
+			h = h[1:i]
+		}
+	} else if i := strings.LastIndexByte(h, ':'); i >= 0 && strings.Count(h, ":") == 1 {
+		h = h[:i]
+	}
+	return strings.TrimSuffix(strings.ToLower(h), ".")
+}
+
+// Notify is where event letters go and through which SMTP server.
+type Notify struct {
+	To       string `json:"to,omitempty"`
+	Host     string `json:"host,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	Security string `json:"security,omitempty"` // starttls | tls | none
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"` // never sent to the page
+	From     string `json:"from,omitempty"`
+	// Events, all on by default (Off lists those switched off).
+	Off []string `json:"off,omitempty"`
+	// What was already reported, so a letter goes once.
+	SentCert   map[string]time.Time `json:"sent_cert,omitempty"` // domain → certificate expiry reported
+	SentJob    string               `json:"sent_job,omitempty"`  // update job id reported
+	NodeDownAt time.Time            `json:"node_down_at,omitempty"`
+}
+
+// Update is how the panel follows GitHub releases, and what it last saw.
+type Update struct {
+	Mode    string `json:"mode,omitempty"`    // auto | notify | off; empty = notify
+	Channel string `json:"channel,omitempty"` // stable | pre; empty = stable
+	Window  string `json:"window,omitempty"`  // daily | sunday | now; empty = daily (04:00–05:00 server time)
+
+	Checked    time.Time `json:"checked,omitempty"`
+	Latest     string    `json:"latest,omitempty"` // tag, e.g. v1.0.22
+	LatestDate time.Time `json:"latest_date,omitempty"`
+	CheckError string    `json:"check_error,omitempty"`
+	// Tried is the tag an automatic update last started, so a failing
+	// release is not retried every hour.
+	Tried   string    `json:"tried,omitempty"`
+	TriedAt time.Time `json:"tried_at,omitempty"`
+}
+
+// SettingsFile is settings.json under the data directory.
+type SettingsFile struct {
+	path string
+	mu   sync.Mutex
+}
+
+// OpenSettings returns dir/settings.json (it may not exist yet).
+func OpenSettings(dir string) *SettingsFile {
+	return &SettingsFile{path: filepath.Join(dir, "settings.json")}
+}
+
+// Get reads the file; missing is the zero value.
+func (f *SettingsFile) Get() (Settings, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.read()
+}
+
+// read loads settings.json; a missing file gives empty settings, not an
+// error, because a fresh panel has none yet.
+func (f *SettingsFile) read() (Settings, error) {
+	var s Settings
+	b, err := os.ReadFile(f.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return s, nil
+	}
+	if err != nil {
+		return s, err
+	}
+	return s, json.Unmarshal(b, &s)
+}
+
+// Update changes the settings with fn and writes them atomically (0600).
+func (f *SettingsFile) Update(fn func(*Settings)) (Settings, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, err := f.read()
+	if err != nil {
+		return s, err
+	}
+	fn(&s)
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return s, err
+	}
+	return s, WriteAtomic(f.path, append(b, '\n'), 0o600)
+}

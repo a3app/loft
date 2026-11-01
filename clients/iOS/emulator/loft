@@ -1,0 +1,106 @@
+#!/bin/bash
+# macOS loft.app payload. Boots Simulator loft-ios, installs the sibling
+# iphonesimulator/loft.app, launches app.loft.ios.
+set -euo pipefail
+
+BUNDLE=$(cd "$(dirname "$0")/../.." && pwd)
+DIR=$(cd "$BUNDLE/.." && pwd)
+SIM=${LOFT_SIM:-loft-ios}
+PKG=app.loft.ios
+TITLE=loft
+LOG="${HOME}/Library/Logs/loft-ios-simulator.log"
+
+mkdir -p "$(dirname "$LOG")"
+exec > >(tee -a "$LOG") 2>&1
+echo "---- $(date) sim=$SIM ----"
+
+alert() {
+	/usr/bin/osascript -e "display alert \"${TITLE}\" message \"$1\" as critical" >/dev/null 2>&1 || true
+}
+note() {
+	/usr/bin/osascript -e "display notification \"$1\" with title \"${TITLE}\"" >/dev/null 2>&1 || true
+}
+die() {
+	echo "error: $1" >&2
+	alert "$1"
+	exit 1
+}
+
+command -v xcrun >/dev/null || die "Xcode not found (xcrun). Install Xcode and reopen ${TITLE}."
+
+APP=""
+for cand in iphonesimulator/loft.app Debug-iphonesimulator/loft.app; do
+	if [ -d "$DIR/$cand" ]; then
+		APP="$DIR/$cand"
+		break
+	fi
+done
+[ -n "$APP" ] || die "No Simulator loft.app next to ${TITLE}.app (${DIR}). Run make ios first."
+
+have_sim() {
+	xcrun simctl list devices available 2>/dev/null | grep -q "${SIM} ("
+}
+
+pick_devtype() {
+	local n id
+	for n in "iPhone 16" "iPhone 16 Plus" "iPhone 15" "iPhone 14"; do
+		id=$(xcrun simctl list devicetypes 2>/dev/null | awk -v n="$n (" '
+			index($0, n) {
+				gsub(/.*\(/, "")
+				gsub(/\)$/, "")
+				print
+				exit
+			}')
+		if [ -n "$id" ]; then
+			echo "$id"
+			return 0
+		fi
+	done
+	return 1
+}
+
+pick_runtime() {
+	xcrun simctl list runtimes available 2>/dev/null | awk '
+		/iOS / {
+			id = $NF
+			gsub(/[()]/, "", id)
+		}
+		END { if (id != "") print id }
+	'
+}
+
+ensure_sim() {
+	have_sim && return 0
+	local dt rt
+	dt=$(pick_devtype) || die "No iPhone Simulator device type. Install an iOS Simulator runtime in Xcode."
+	rt=$(pick_runtime) || die "No iOS Simulator runtime. Xcode → Settings → Components, then reopen ${TITLE}."
+	note "Creating Simulator ${SIM}…"
+	xcrun simctl create "$SIM" "$dt" "$rt" >/dev/null
+	have_sim || die "Could not create Simulator ${SIM}."
+}
+
+ensure_sim
+
+open -a Simulator
+if ! xcrun simctl boot "$SIM" 2>/dev/null; then
+	# already booted, or name not unique — continue
+	true
+fi
+note "Waiting for Simulator ${SIM}…"
+xcrun simctl bootstatus "$SIM" -b >/dev/null
+
+note "Installing loft…"
+install_ok=0
+for i in 1 2 3 4 5 6; do
+	if xcrun simctl install "$SIM" "$APP"; then
+		install_ok=1
+		break
+	fi
+	sleep 2
+done
+[ "$install_ok" = 1 ] || die "simctl install failed for $(basename "$APP"). See ${LOG}."
+
+xcrun simctl launch "$SIM" "$PKG" >/dev/null || die "simctl launch failed for ${PKG}."
+/usr/bin/osascript -e 'tell application "Simulator" to activate' >/dev/null 2>&1 || true
+note "loft is running on ${SIM}."
+echo "ok sim=$SIM app=$APP"

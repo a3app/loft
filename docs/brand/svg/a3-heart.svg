@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 6" width="7" height="6" shape-rendering="crispEdges">
+  <!-- A³ colophon heart: 7×6 cells, loft lamp. Same grid as HeartView. -->
+  <g fill="#E8B84A">
+    <rect x="1" y="0" width="2" height="1"/>
+    <rect x="4" y="0" width="2" height="1"/>
+    <rect x="0" y="1" width="7" height="2"/>
+    <rect x="1" y="3" width="5" height="1"/>
+    <rect x="2" y="4" width="3" height="1"/>
+    <rect x="3" y="5" width="1" height="1"/>
+  </g>
+</svg>
