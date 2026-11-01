@@ -131,7 +131,12 @@ func TestOSAuth(t *testing.T) {
 	if err != nil || u != "http://192.168.1.1/auth" {
 		t.Fatalf("os5 %q %v", u, err)
 	}
-	u, err = SessionURL(ParseOS("release: 5.01.C.8.0-2\ntitle: 5.1.8\n"), "http://127.0.0.1/auth", "192.168.1.1")
+	shown := "          release: 5.01.C.8.0-2\n            title: 5.1.8\n              version: 5.1.17.1\n              version: 5.1.C.8.0\n       hw_version: 10278000\n"
+	got := ParseOS(shown)
+	if got.Release != "5.01.C.8.0-2" || got.Title != "5.1.8" || got.Major != 5 || got.Minor != 1 {
+		t.Fatalf("show version %+v", got)
+	}
+	u, err = SessionURL(got, "http://127.0.0.1/auth", "192.168.1.1")
 	if err != nil || u != "http://192.168.1.1/auth" {
 		t.Fatalf("text %q %v", u, err)
 	}
@@ -157,6 +162,14 @@ func TestOSAuth(t *testing.T) {
 	ips := PrivateAuthIPs(body)
 	if len(ips) != 2 || ips[0] != "192.168.1.1" || ips[1] != "192.168.88.1" {
 		t.Fatalf("%v", ips)
+	}
+	text := "address: 10.0.2.15\nsecurity-level: public\naddress: 192.168.1.1\nsecurity-level: private\naddress: fe80::1\n"
+	ips = PrivateAuthText(text)
+	if len(ips) != 1 || ips[0] != "192.168.1.1" {
+		t.Fatalf("text %v", ips)
+	}
+	if got := preferLAN([]string{"10.0.2.15", "192.168.1.1", "172.16.0.1"}); got != "192.168.1.1" {
+		t.Fatal(got)
 	}
 	if err := LocalAuth("http://192.168.1.1/auth", []string{"192.168.1.1"}); err != nil {
 		t.Fatal(err)

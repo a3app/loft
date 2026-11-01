@@ -314,21 +314,84 @@ func ReadOS(ctx context.Context, rci string) OS {
 }
 
 // AuthIPv4 is the address whose /auth is the real admin on KeeneticOS 5.
-// RCI show/interface is preferred, because a protected guest segment is
-// also a private IPv4 and its listener is the stub. PrivateIPv4 is the
-// fallback when RCI does not answer.
+// RCI show/interface is preferred, then ndmc text. A protected guest
+// segment is also a private IPv4 and its listener is the stub, so the
+// security-level is what selects the address. The local address list is
+// only the last resort, and a 192.168/16 wins over 10/8 so a CGNAT or
+// slirp WAN does not take the check.
 func AuthIPv4(ctx context.Context, rci string) string {
 	if b := rciJSON(ctx, rci, "show/interface"); len(b) > 0 {
 		if ips := PrivateAuthIPs(b); len(ips) > 0 {
 			return ips[0]
 		}
 	}
-	p := PrivateIPv4()
-	if len(p) == 0 {
-		return ""
+	if text, err := ndmcText(ctx, Bin{}, "show interface"); err == nil {
+		if ips := PrivateAuthText(text); len(ips) > 0 {
+			return ips[0]
+		}
 	}
-	sort.Strings(p)
-	return p[0]
+	return preferLAN(PrivateIPv4())
+}
+
+// PrivateAuthText reads "show interface". The IPv4 on the same object as
+// security-level private is kept. A later IPv6 address is not.
+func PrivateAuthText(s string) []string {
+	seen := map[string]bool{}
+	var out []string
+	pending := ""
+	for _, line := range strings.Split(s, "\n") {
+		f := strings.Fields(line)
+		if len(f) != 2 {
+			continue
+		}
+		key := strings.TrimSuffix(f[0], ":")
+		if key == "address" {
+			if ip, ok := ipv4Field(f[1]); ok {
+				pending = ip
+			}
+			continue
+		}
+		if key == "security-level" {
+			if strings.EqualFold(f[1], "private") && pending != "" && !seen[pending] {
+				seen[pending] = true
+				out = append(out, pending)
+			}
+			pending = ""
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// preferLAN picks one local private address. 192.168/16, then 172.16/12,
+// then anything else PrivateIPv4 returned.
+func preferLAN(ips []string) string {
+	in := append([]string(nil), ips...)
+	sort.Strings(in)
+	best := ""
+	bestRank := 9
+	for _, s := range in {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			continue
+		}
+		ip = ip.To4()
+		if ip == nil || !ip.IsPrivate() {
+			continue
+		}
+		rank := 3
+		switch {
+		case ip[0] == 192 && ip[1] == 168:
+			rank = 0
+		case ip[0] == 172 && ip[1] >= 16 && ip[1] <= 31:
+			rank = 1
+		}
+		if rank < bestRank || (rank == bestRank && (best == "" || s < best)) {
+			best = s
+			bestRank = rank
+		}
+	}
+	return best
 }
 
 // rciJSON GETs <rci-base><leaf>, then POSTs {} if that was not JSON.
