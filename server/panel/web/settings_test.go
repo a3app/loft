@@ -55,7 +55,10 @@ func TestSettingsAPI(t *testing.T) {
 	if r := e.do("POST", "/api/settings/panel", map[string]any{"session_idle": "30m", "session_max": "7d", "lang": "zh", "port_activity": true}, c, csrf); r.code != 200 || r.body["port_activity"] != true {
 		t.Fatalf("port_activity on %d %v", r.code, r.body)
 	}
-	if r := e.do("GET", "/api/state", nil, nil, ""); r.body["port_activity"] != true {
+	if r := e.do("GET", "/api/state", nil, nil, ""); r.body["port_activity"] != nil || r.body["wizard"] != nil {
+		t.Fatalf("unauth state leak %v", r.body)
+	}
+	if r := e.do("GET", "/api/state", nil, c, ""); r.body["port_activity"] != true {
 		t.Fatalf("state port_activity %v", r.body)
 	}
 	if r := e.do("POST", "/api/settings/panel", map[string]string{"session_idle": "30m", "session_max": "7d", "lang": "zh"}, c, csrf); r.code != 200 || r.body["port_activity"] != true {

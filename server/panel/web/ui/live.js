@@ -475,7 +475,7 @@
     loadPackages().then(() => { if (S.route !== 'packages') render(); }); // the menu shows Mail only with the mail server
     $('#userBtn').textContent = me.login + ' · ' + ({ owner: 'владелец', operator: 'оператор', viewer: 'наблюдатель' }[me.role] || me.role_name || me.role);
     await loadData();
-    if (me.role === 'owner' && (st ? st.wizard : !(L.wz && L.wz.done))) {
+    if (me.role === 'owner' && !(L.wz && L.wz.done)) {
       // Resume at the first step not done yet (names, certificate, member).
       const w = L.wz || {};
       const certs = w.cert_until && (!w.panel_domain || w.panel_cert_until);

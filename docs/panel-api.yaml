@@ -510,7 +510,7 @@ paths:
     get:
       operationId: state
       tags: [auth]
-      summary: "First UI call. No sign-in. setup, wizard, lang, port_activity; me+version when the loft_panel cookie is valid."
+      summary: "First UI call. No sign-in: setup and lang. wizard, port_activity, me, version only with a valid loft_panel cookie."
       x-loft-perm: "public"
       security: []
       responses:

@@ -566,31 +566,35 @@ func (s *Server) me(u store.User, csrf string) *meJSON {
 	return &meJSON{Login: u.Login, Name: u.Name, Role: u.Role, RoleName: r.Name, Perms: perms, CSRF: csrf}
 }
 
-// state is the first call the UI makes on load. It needs no sign-in and says
-// whether the panel still needs an owner (setup), whether the wizard is
-// unfinished, the default language, and, if the cookie is valid, who is
-// signed in.
+// state is the first call the UI makes on load. Unauthenticated: setup and
+// lang only. wizard, port_activity, version and me need a valid cookie.
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		Setup        bool    `json:"setup"`
 		Me           *meJSON `json:"me,omitempty"`
-		Wizard       bool    `json:"wizard"`            // the owner has not finished the wizard
-		Lang         string  `json:"lang"`              // the panel's default language
-		Version      string  `json:"version,omitempty"` // signed in only: the footer shows it
-		PortActivity bool    `json:"port_activity"`     // two LEDs on the switch (link + activity)
+		Wizard       *bool   `json:"wizard,omitempty"`        // signed in: the owner has not finished the wizard
+		Lang         string  `json:"lang"`                    // the panel's default language
+		Version      string  `json:"version,omitempty"`       // signed in only: the footer shows it
+		PortActivity *bool   `json:"port_activity,omitempty"` // signed in: two LEDs on the switch
 	}{Setup: s.Store.Empty(), Lang: "ru"}
-	if s.Settings != nil {
-		if st, err := s.Settings.Get(); err == nil {
-			out.Wizard = !st.WizardDone
-			out.Lang = firstOf(st.Lang, "ru")
-			out.PortActivity = st.PortActivity
-		}
-	}
+	authed := false
 	if c, err := r.Cookie(cookieName); err == nil {
 		if ss := s.Sessions.Get(c.Value); ss != nil {
 			if u, err := s.Store.Get(ss.User); err == nil && !u.Disabled {
 				out.Me = s.me(u, ss.CSRF)
 				out.Version = version.Version
+				authed = true
+			}
+		}
+	}
+	if s.Settings != nil {
+		if st, err := s.Settings.Get(); err == nil {
+			out.Lang = firstOf(st.Lang, "ru")
+			if authed {
+				wzd := !st.WizardDone
+				out.Wizard = &wzd
+				pa := st.PortActivity
+				out.PortActivity = &pa
 			}
 		}
 	}
