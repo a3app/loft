@@ -28,10 +28,12 @@ var siteTmpl = template.Must(template.New("site").Parse(`# Written by loft-panel
 # Node: {{.Node}}   Panel: {{.Panel}}
 
 # :80 is nginx's own: Let's Encrypt HTTP-01 goes to the panel, the rest to https.
+# default_server + _ catch unmatched Host (loft.cx) so they 301 instead of
+# the distro welcome page. Disable sites-enabled/default first.
 server {
-	listen 80;
-	listen [::]:80;
-	server_name {{.Names80}};
+	listen 80 default_server;
+	listen [::]:80 default_server;
+	server_name {{.Names80}} _;
 
 	location /.well-known/acme-challenge/ {
 		proxy_pass http://{{.Listen}};
@@ -96,7 +98,8 @@ server {
 	ssl_protocols TLSv1.2 TLSv1.3;
 
 	root /var/www/html;
-	index index.html index.nginx-debian.html;
+	index index.html;
+	location = /8m.bin { return 404; }
 	location / {
 		try_files $uri $uri/ =404;
 	}

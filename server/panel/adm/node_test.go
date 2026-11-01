@@ -110,7 +110,9 @@ func TestDomainSet(t *testing.T) {
 	}
 	nc, _ := os.ReadFile(filepath.Join(o.Etc, "node.conf"))
 	site, _ := os.ReadFile(o.NginxSite)
-	if !strings.Contains(string(nc), "advertise https://new.example.net\n# kept comment") || strings.Count(string(site), "server_name new.example.net;") != 2 {
+	if !strings.Contains(string(nc), "advertise https://new.example.net\n# kept comment") ||
+		!strings.Contains(string(site), "server_name new.example.net _;") ||
+		strings.Count(string(site), "server_name new.example.net;") != 1 {
 		t.Fatalf("files:\n%s\n%s", nc, site)
 	}
 	if !contains(fn.calls, "reload nginx") || !contains(fn.calls, "restart loft-node.service") {
@@ -230,10 +232,12 @@ func TestDomainSetSeparatePanel(t *testing.T) {
 	site, _ := os.ReadFile(o.NginxSite)
 	st := string(site)
 	for _, want := range []string{
-		"server_name api.example.net us.example.net;",                                      // :80 for both, Let's Encrypt
-		"server_name us.example.net;",                                                      // the panel only on its own name
+		"server_name api.example.net us.example.net _;", // :80 for both + unmatched Host
+		"listen 80 default_server;",
+		"server_name us.example.net;", // the panel only on its own name
 		"listen 127.0.0.1:8443 ssl http2 proxy_protocol default_server;\n\tserver_name _;", // probes of the node
 		"root /var/www/html;",
+		"location = /8m.bin { return 404; }",
 	} {
 		if !strings.Contains(st, want) {
 			t.Fatalf("site lacks %q:\n%s", want, st)
@@ -271,7 +275,7 @@ func TestDomainSetSeparatePanel(t *testing.T) {
 
 func TestRenderSiteSingle(t *testing.T) {
 	s := RenderSite(Site{Node: "vpn.example.net", Listen: "127.0.0.1:8091", NodeCert: "/c", NodeKey: "/k", PanelCert: "/c", PanelKey: "/k"})
-	if strings.Count(s, "server {") != 2 || !strings.Contains(s, "server_name vpn.example.net;") || !strings.Contains(s, "proxy_pass http://127.0.0.1:8091;") {
+	if strings.Count(s, "server {") != 2 || !strings.Contains(s, "server_name vpn.example.net _;") || !strings.Contains(s, "proxy_pass http://127.0.0.1:8091;") {
 		t.Fatal(s)
 	}
 }
