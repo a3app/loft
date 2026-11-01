@@ -156,6 +156,7 @@ export LOFT_TOKEN='long-secret'
 | Поле | Смысл |
 |------|--------|
 | `listen` | `:443` |
+| `metrics` | Слушатель Prometheus. По умолчанию `127.0.0.1:9101`, путь `/metrics`. `off` выключает. На публичный origin не вешается. |
 | `cert` `key` | Сертификат ноды. При decoy+mask клиент loft видит лист в форме dest. |
 | `token` | Секрет ноды (`LOFT_TOKEN`): mask. Ключи участников лежат в `members.keys`. |
 | `get_path` `ws_path` `h2_path` `h3_path` | Пути фронтов |

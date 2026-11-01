@@ -43,6 +43,7 @@ import (
 	"github.com/a3app/loft/internal/cdn"
 	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
+	"github.com/a3app/loft/internal/metrics"
 	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/netconf"
 	"github.com/a3app/loft/internal/wire"
@@ -1921,6 +1922,9 @@ func (s *GETServer) Match(p string) bool {
 // A GET that is not Puller in time answers with just a Report and pad.
 // While attach lanes carry the mux, GET only feeds uplink.
 func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	metrics.GETEnter()
+	t0 := time.Now()
+	defer metrics.GETLeave(time.Since(t0))
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -1941,6 +1945,7 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// A wrong key is an ordinary miss, as the protocol requires.
 				// A sealed reject lets a prober that chose eph_c confirm a
 				// loft node.
+				metrics.IncHTTP(http.StatusNotFound)
 				http.NotFound(w, r)
 				traceMISS(sid, seq, "auth", r)
 				return
@@ -1951,6 +1956,7 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				ss = s.hs[string(a.Nonce)]
 				s.mu.Unlock()
 				if ss == nil || len(ss.hello) == 0 {
+					metrics.IncHTTP(http.StatusNotFound)
 					http.NotFound(w, r)
 					traceMISS(sid, seq, "auth", r)
 					return
@@ -2021,6 +2027,7 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ss == nil {
 		ss = s.get(sid)
 		if ss == nil {
+			metrics.IncHTTP(http.StatusNotFound)
 			http.NotFound(w, r)
 			traceMISS(sid, seq, "nosid", r)
 			return
@@ -2623,6 +2630,17 @@ func (ss *serverSess) pushUplinkLocked(seq uint64, frames []wire.Frame) {
 		ss.mux.Push(extra)
 		ss.nextSeq++
 	}
+}
+
+// NSessions is the live GET sid table size.
+func (s *GETServer) NSessions() int {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	n := len(s.sessions)
+	s.mu.Unlock()
+	return n
 }
 
 // drop forgets the GET HTTP sid. CapHold parks the mux (WS dropServerMux)

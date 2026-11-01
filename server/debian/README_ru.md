@@ -14,7 +14,7 @@
 |------|------|
 | `/usr/local/bin/loft-node` | бинарник (установщик из tarball) |
 | `/usr/bin/loft-node` | бинарник (`.deb`) |
-| `/etc/loft/node.conf` | роль, фронты, decoy, advertise |
+| `/etc/loft/node.conf` | роль, фронты, decoy, advertise, metrics |
 | `/etc/loft/loft.env` | `LOFT_TOKEN` (mode 0640, группа `loft`) |
 | `/etc/loft/tls/fullchain.pem` | публичный сертификат |
 | `/etc/loft/tls/privkey.pem` | закрытый ключ |

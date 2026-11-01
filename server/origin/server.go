@@ -20,6 +20,7 @@ import (
 	"github.com/a3app/loft/internal/cdn"
 	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
+	"github.com/a3app/loft/internal/metrics"
 	"github.com/a3app/loft/internal/netconf"
 	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/internal/wire"
@@ -82,6 +83,16 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 	if n := advertisedH2(cfg.GetH2, edge); n > 1 {
 		getFront.H2Conns = n
 	}
+	metrics.SetLive(&metrics.Live{
+		Sessions: func() int {
+			if o := transport.NetSwitch(); o != nil {
+				return o.Len()
+			}
+			return 0
+		},
+		GETSessions: getFront.NSessions,
+		HoldParked:  transport.HoldParked,
+	})
 	wss := &transport.WSSServer{Token: []byte(cfg.Token), Decoy: append([]string(nil), cfg.Decoy...), Info: info}
 	h2s := &transport.H2Server{Info: info, Path: cfg.H2Path}
 	if getFront.Seen == nil {

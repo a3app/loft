@@ -14,7 +14,7 @@ The Debian layout of the node is collected here: a POSIX installer, a systemd un
 |------|------|
 | `/usr/local/bin/loft-node` | binary (tarball installer) |
 | `/usr/bin/loft-node` | binary (`.deb`) |
-| `/etc/loft/node.conf` | role, fronts, decoy, advertise |
+| `/etc/loft/node.conf` | role, fronts, decoy, advertise, metrics |
 | `/etc/loft/loft.env` | `LOFT_TOKEN` (mode 0640, group `loft`) |
 | `/etc/loft/tls/fullchain.pem` | public certificate |
 | `/etc/loft/tls/privkey.pem` | private key |

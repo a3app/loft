@@ -90,6 +90,37 @@ func TestRenderCommandsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMetricsCommand(t *testing.T) {
+	c, err := ParseCommands("listen :443\nrole controller\nmetrics 127.0.0.1:9101\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Metrics != "127.0.0.1:9101" || c.MetricsAddr() != "127.0.0.1:9101" {
+		t.Fatalf("metrics %q addr %q", c.Metrics, c.MetricsAddr())
+	}
+	out := RenderCommands(*c)
+	if !strings.Contains(out, "metrics 127.0.0.1:9101\n") {
+		t.Fatal(out)
+	}
+	c, err = ParseCommands("listen :443\nrole controller\nmetrics off\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Metrics != "off" || c.MetricsAddr() != "" {
+		t.Fatalf("off %q addr %q", c.Metrics, c.MetricsAddr())
+	}
+	c, err = ParseCommands("listen :443\nrole controller\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Metrics != "" || c.MetricsAddr() != "127.0.0.1:9101" {
+		t.Fatalf("default %q addr %q", c.Metrics, c.MetricsAddr())
+	}
+	if _, err := ParseCommands("listen :443\nmetrics 9101\n"); err == nil {
+		t.Fatal("want metrics parse error")
+	}
+}
+
 func TestAuthSharedCommand(t *testing.T) {
 	c, err := ParseCommands("listen :443\nrole controller\nauth shared enable\n")
 	if err != nil {

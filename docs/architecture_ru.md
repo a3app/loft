@@ -10,7 +10,7 @@
 
 ## 1. Кратко
 
-Эталонная нода — один двоичный файл `loft-node`, который работает в двух ролях: контроллер и relay. Эталонный клиент — `loft` (CLI: SOCKS5 и, по желанию, TUN). `loft-front` поднимает ту же сессию без флагов CLI, для системных маршрутов; приложение macOS в строке меню запускает его как помощник. `loft-probe` проверяет ICMP/TCP/UDP/DNS/HTTP через сессию. Общий код лежит в `internal/`.
+Эталонная нода — один двоичный файл `loft-node`, который работает в двух ролях: контроллер и relay. Эталонный клиент — `loft` (CLI: SOCKS5 и, по желанию, TUN). `loft-front` поднимает ту же сессию без флагов CLI, для системных маршрутов; приложение macOS в строке меню запускает его как помощник. `loft-probe` проверяет ICMP/TCP/UDP/DNS/HTTP через сессию. `loft-node` отдаёт текст Prometheus на `/metrics` на loopback (`127.0.0.1:9101`, если не `metrics off`). Общий код лежит в `internal/`.
 
 ---
 
@@ -30,6 +30,7 @@ internal/
   ifcfg/              адрес, линк и маршруты TUN на Linux через netlink (без программы `ip`); LOFT_NETCFG=ip — через `ip`
   cdn/                профили края (Yandex, Cloudflare); не возможности протокола. Оператор: docs/yandex-cdn_ru.md
   version/            имя программы, semver, диапазон протокола
+  metrics/            Prometheus /metrics (loopback)
 server/
   cmd/loft-node
   origin/             страница прикрытия, GET, WebSocket, HTTP/2 CONNECT, публичный roster/списки

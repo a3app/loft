@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/a3app/loft/internal/metrics"
 	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/netconf"
 	"github.com/a3app/loft/internal/wire"
@@ -173,6 +174,7 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 			st.Code = wire.OK
 			st.IP = ip
 			st.InstanceID = inst2
+			noteAdmit(wire.OK)
 			o.stampL3(st, 0)
 			o.attachTo(ip, 0, sess, nil, remote, "", inst2)
 			st.PeerHints = o.hints(ip)
@@ -195,6 +197,7 @@ func (o *Overlay) Bind(st *wire.Status, hello wire.Hello, sess *mux.Session, rem
 	st.Code = code
 	st.IP = ip
 	st.InstanceID = inst2
+	noteAdmit(code)
 	o.stampL3(st, vlan)
 	o.attachTo(ip, vlan, sess, nil, remote, member, inst2)
 	st.PeerHints = o.hints(ip)
@@ -240,6 +243,7 @@ func (o *Overlay) BindL3(st *wire.Status, hello wire.Hello, sink l3Sink, remote 
 			st.Code = wire.OK
 			st.IP = ip
 			st.InstanceID = inst2
+			noteAdmit(wire.OK)
 			o.stampL3(st, 0)
 			o.attachTo(ip, 0, nil, sink, remote, "", inst2)
 			st.PeerHints = o.hints(ip)
@@ -260,6 +264,7 @@ func (o *Overlay) BindL3(st *wire.Status, hello wire.Hello, sink l3Sink, remote 
 	st.Code = code
 	st.IP = ip
 	st.InstanceID = inst2
+	noteAdmit(code)
 	o.stampL3(st, vlan)
 	o.attachTo(ip, vlan, nil, sink, remote, member, inst2)
 	st.PeerHints = o.hints(ip)
@@ -581,6 +586,26 @@ func (o *Overlay) attachTo(ip string, vlan int, sess *mux.Session, sink l3Sink, 
 	}
 	if sink != nil {
 		o.byL3[sink] = p
+	}
+}
+
+// Len is the number of attached overlay peers.
+func (o *Overlay) Len() int {
+	if o == nil {
+		return 0
+	}
+	o.mu.Lock()
+	n := len(o.tab)
+	o.mu.Unlock()
+	return n
+}
+
+func noteAdmit(code wire.Code) {
+	switch code {
+	case wire.OKResumed:
+		metrics.IncAdmit("ok_resumed")
+	case wire.OK:
+		metrics.IncAdmit("ok")
 	}
 }
 

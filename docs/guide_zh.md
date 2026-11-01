@@ -156,6 +156,7 @@ export LOFT_TOKEN='long-secret'
 | 字段 | 意思 |
 |-------|---------|
 | `listen` | `:443` |
+| `metrics` | Prometheus 抓取监听。默认 `127.0.0.1:9101`，路径 `/metrics`。`off` 关闭。不挂在公网 origin 上。 |
 | `cert` `key` | 节点证书。诱饵+伪装时，loft 客户端看到 dest 形状的叶子。 |
 | `token` | 节点密钥（`LOFT_TOKEN`）：伪装。成员密钥在 `members.keys`。 |
 | `get_path` `ws_path` `h2_path` `h3_path` | 前置路径 |

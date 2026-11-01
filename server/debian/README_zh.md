@@ -14,7 +14,7 @@
 |------|------|
 | `/usr/local/bin/loft-node` | 二进制（tarball 安装脚本） |
 | `/usr/bin/loft-node` | 二进制（`.deb`） |
-| `/etc/loft/node.conf` | 角色、前置、诱饵、advertise |
+| `/etc/loft/node.conf` | 角色、前置、诱饵、advertise、metrics |
 | `/etc/loft/loft.env` | `LOFT_TOKEN`（mode 0640，组 `loft`） |
 | `/etc/loft/tls/fullchain.pem` | 公网证书 |
 | `/etc/loft/tls/privkey.pem` | 私钥 |

@@ -31,6 +31,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
+
+	"github.com/a3app/loft/internal/metrics"
 )
 
 // prefixConn replays peeked ClientHello bytes before reading the conn.
@@ -485,6 +487,7 @@ func spliceDecoy(c net.Conn, hello []byte, origin string, proxy bool) {
 	if err != nil {
 		return
 	}
+	metrics.IncDecoySplice()
 	defer up.Close()
 	tuneTCP(up)
 	if proxy {

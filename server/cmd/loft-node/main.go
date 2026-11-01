@@ -18,6 +18,7 @@ import (
 	"github.com/a3app/loft/internal/config"
 	ecrypto "github.com/a3app/loft/internal/crypto"
 	"github.com/a3app/loft/internal/identity"
+	"github.com/a3app/loft/internal/metrics"
 	"github.com/a3app/loft/internal/netconf"
 	"github.com/a3app/loft/internal/transport"
 	"github.com/a3app/loft/internal/version"
@@ -296,6 +297,14 @@ func main() {
 		o.Reg.Persist(filepath.Join(*dir, "leases.json"))
 	}
 	log.Printf("%s network %s role=%s peers=%s listen %s", version.Line("loft-node"), n.ID, cfg.Role, n.Peers, cfg.Listen)
+	if addr := cfg.MetricsAddr(); addr != "" {
+		go func() {
+			log.Printf("metrics http://%s/metrics", addr)
+			if err := metrics.Listen(addr); err != nil {
+				log.Printf("metrics: %v", err)
+			}
+		}()
+	}
 	if err := loadEgress(*dir, cfg); err != nil {
 		log.Printf("%v: members leave directly until it is fixed", err)
 	}

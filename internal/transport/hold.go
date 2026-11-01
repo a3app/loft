@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/a3app/loft/internal/metrics"
 	"github.com/a3app/loft/internal/mux"
 	"github.com/a3app/loft/internal/netconf"
 	"github.com/a3app/loft/internal/wire"
@@ -65,6 +66,21 @@ func defaultGapHold() time.Duration {
 }
 
 func gapHoldDuration() time.Duration { return gapHoldFn() }
+
+// HoldParked is mux sessions currently parked for gap_hold.
+func HoldParked() int {
+	n := 0
+	now := time.Now()
+	serverPark.Range(func(_, v any) bool {
+		p, ok := v.(parkedMux)
+		if !ok || p.sess == nil || p.sess.Closed() || now.After(p.until) {
+			return true
+		}
+		n++
+		return true
+	})
+	return n
+}
 
 // rememberHold keeps gap_hold_ms, keepalive_ms and the node caps from Status.
 // Zero values mean "the node omitted the field"; we leave the last known
@@ -226,6 +242,7 @@ func adoptServerMux(rest, token []byte) (ms *mux.Session, reused bool) {
 			attachHello(p, rest)
 			p.SetOwner(owner)
 			bindServerLists(p)
+			metrics.IncHoldResume()
 			return p, true
 		}
 	}
@@ -282,6 +299,7 @@ func parkServer(ms *mux.Session) {
 	k := parkKey(ms.Owner(), inst)
 	d := gapHoldDuration()
 	serverPark.Store(k, parkedMux{sess: ms, until: time.Now().Add(d)})
+	metrics.IncHoldPark()
 	time.AfterFunc(d, func() {
 		v, ok := serverPark.Load(k)
 		if !ok {

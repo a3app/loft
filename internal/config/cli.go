@@ -50,6 +50,19 @@ func applyNode(c *ServerConfig, tok []string) error {
 			return fmt.Errorf("listen wants an address")
 		}
 		c.Listen = tok[1]
+	case "metrics":
+		if len(tok) < 2 {
+			return fmt.Errorf("metrics wants host:port or off")
+		}
+		v := tok[1]
+		if startup.Word(v) == "off" {
+			c.Metrics = "off"
+			break
+		}
+		if _, _, err := net.SplitHostPort(v); err != nil {
+			return fmt.Errorf("metrics wants host:port or off")
+		}
+		c.Metrics = v
 	case "advertise":
 		if len(tok) < 2 {
 			return fmt.Errorf("advertise wants a URL")
@@ -303,6 +316,9 @@ func RenderCommands(c ServerConfig) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "role %s\n", c.Role)
 	fmt.Fprintf(&b, "listen %s\n", c.Listen)
+	if c.Metrics != "" {
+		fmt.Fprintf(&b, "metrics %s\n", c.Metrics)
+	}
 	if c.CertFile != "" {
 		fmt.Fprintf(&b, "cert %s\n", c.CertFile)
 	}
