@@ -36,8 +36,8 @@ import (
 	"github.com/a3app/loft/internal/wire"
 )
 
-// frontDecoy and frontPBK are -decoy / -pbk for direct loft fronts.
-var frontDecoy, frontPBK string
+// frontDecoy, frontPBK and frontSNI are -decoy / -pbk / -sni for direct loft fronts.
+var frontDecoy, frontPBK, frontSNI string
 
 // Per-front CLI paths. Empty uses outboundFor defaults / GET-cover remap.
 var frontWSPath, frontH2Path, frontH3Path string
@@ -62,7 +62,7 @@ func main() {
 	user := flag.String("user", "", "SSTP username")
 	insecure := flag.Bool("insecure", false, "SSTP: skip TLS verify")
 	pap := flag.Bool("pap", false, "SSTP: allow PAP and CHAP-MD5")
-	sni := flag.String("sni", "", "SSTP/VLESS/Trojan TLS ServerName")
+	sni := flag.String("sni", "", "TLS ServerName for overlay and SSTP/VLESS/Trojan")
 	socks := flag.String("socks", config.DebugSOCKS5, "SOCKS5 listen; empty/off to disable")
 	cdnName := flag.String("cdn", "", "edge profile: yandex | cloudflare")
 	innerName := flag.String("inner", "", "data cipher ask: clear | chacha | aes | aegis | hiae; empty = chacha")
@@ -129,6 +129,7 @@ func main() {
 	}
 	frontDecoy = strings.TrimSpace(*decoy)
 	frontPBK = strings.TrimSpace(*pbk)
+	frontSNI = strings.TrimSpace(*sni)
 	frontWSPath = strings.TrimSpace(*wsPath)
 	frontH2Path = strings.TrimSpace(*h2Path)
 	frontH3Path = strings.TrimSpace(*h3Path)
@@ -589,6 +590,7 @@ func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 		CDN:          strings.TrimSpace(cdnName),
 		Decoy:        strings.TrimSpace(frontDecoy),
 		MaskPub:      strings.TrimSpace(frontPBK),
+		SNI:          strings.TrimSpace(frontSNI),
 		Fingerprint:  "chrome",
 		Insecure:     true,
 		HeaderBudget: 16 << 10,

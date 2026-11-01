@@ -71,3 +71,12 @@ func TestPinEdgeGETKeepsNodeFronts(t *testing.T) {
 		}
 	}
 }
+
+func TestOutboundForSNI(t *testing.T) {
+	t.Cleanup(func() { frontSNI = "" })
+	frontSNI = "hello.loft.cx"
+	o := outboundFor("https://198.46.252.46", "get", "/static/v3/build", "")
+	if o.SNI != "hello.loft.cx" {
+		t.Fatalf("sni %q", o.SNI)
+	}
+}

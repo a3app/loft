@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -22,6 +23,9 @@ import (
 
 // probePBK is -pbk / profile mask_pub. Empty: transport learns it via GET.
 var probePBK string
+
+// probeSNI is -sni / profile sni. Empty: URL hostname.
+var probeSNI string
 
 // datagram is one overlay or SOCKS UDP payload with its host:port.
 type datagram struct {
@@ -59,7 +63,11 @@ func openMux(ctx context.Context, token, rawURL, kind, path, cdnName string) (*m
 	}
 	v := &muxVia{d: d, front: front, ip: transport.OverlayIP(), ch: make(chan datagram, 64)}
 	if p, ok := d.(transport.IPPump); ok {
-		v.pump = p
+		// One ReadIP consumer. WrapL3 (TCP/UDP) and ICMP waitDgram both
+		// need every packet; sharing the raw pump raced and starved DNS/HTTPS.
+		fan := newFanPump(p)
+		v.pump = fan
+		v.d = &teeDialer{Dialer: d, fan: fan}
 		go v.drainIP()
 	} else if s := d.Session(); s != nil {
 		s.FilterDgram(func(addr string, data []byte) bool {
@@ -73,16 +81,87 @@ func openMux(ctx context.Context, token, rawURL, kind, path, cdnName string) (*m
 	return v, nil
 }
 
-// drainIP copies L3 packets into v.ch for ICMP waitDgram.
-// Shares ReadIP with WrapL3 — ICMP and TCP on one l3 muxVia race.
-func (v *muxVia) drainIP() {
+// teeDialer is the l3 Dialer WrapL3 type-asserts: ReadIP is the fan's TCP
+// side, so gVisor and ICMP no longer steal packets from each other.
+type teeDialer struct {
+	transport.Dialer
+	fan *fanPump
+}
+
+func (t *teeDialer) WriteIP(p []byte) error  { return t.fan.WriteIP(p) }
+func (t *teeDialer) ReadIP() ([]byte, error) { return t.fan.ReadIP() }
+
+// fanPump is the sole ReadIP caller of an l3 pump. Each packet is copied
+// onto icmp (ICMP waitDgram, drop-on-full 256) and tcp (WrapL3/gVisor,
+// drop-on-full until someone reads).
+type fanPump struct {
+	inner transport.IPPump
+	icmp  chan []byte
+	tcp   chan []byte
+	errc  chan error
+}
+
+func newFanPump(inner transport.IPPump) *fanPump {
+	f := &fanPump{
+		inner: inner,
+		icmp:  make(chan []byte, 256),
+		tcp:   make(chan []byte, 256),
+		errc:  make(chan error, 1),
+	}
+	go f.loop()
+	return f
+}
+
+func (f *fanPump) loop() {
 	for {
-		pkt, err := v.pump.ReadIP()
+		pkt, err := f.inner.ReadIP()
 		if err != nil {
+			select {
+			case f.errc <- err:
+			default:
+			}
+			close(f.icmp)
+			close(f.tcp)
 			return
 		}
 		select {
-		case v.ch <- datagram{data: append([]byte(nil), pkt...)}:
+		case f.icmp <- append([]byte(nil), pkt...):
+		default:
+		}
+		select {
+		case f.tcp <- append([]byte(nil), pkt...):
+		default:
+		}
+	}
+}
+
+func (f *fanPump) WriteIP(p []byte) error { return f.inner.WriteIP(p) }
+
+func (f *fanPump) ReadIP() ([]byte, error) {
+	pkt, ok := <-f.tcp
+	if !ok {
+		select {
+		case err := <-f.errc:
+			if err != nil {
+				return nil, err
+			}
+		default:
+		}
+		return nil, io.EOF
+	}
+	return pkt, nil
+}
+
+// drainIP copies the fan's ICMP side into v.ch. Matchers in waitDgram
+// filter; extra packets drop when ch is full.
+func (v *muxVia) drainIP() {
+	fan, ok := v.pump.(*fanPump)
+	if !ok {
+		return
+	}
+	for pkt := range fan.icmp {
+		select {
+		case v.ch <- datagram{data: pkt}:
 		default:
 		}
 	}
@@ -345,6 +424,7 @@ func outboundFor(raw, kind, path, cdnName string) config.Outbound {
 		Path:         path,
 		CDN:          strings.TrimSpace(cdnName),
 		MaskPub:      strings.TrimSpace(probePBK),
+		SNI:          strings.TrimSpace(probeSNI),
 		Fingerprint:  "chrome",
 		Insecure:     true,
 		HeaderBudget: 16 << 10,

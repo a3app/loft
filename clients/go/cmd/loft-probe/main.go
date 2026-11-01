@@ -29,7 +29,7 @@ func main() {
 	// given", so a node really serving /static/js could not be probed.)
 	path := flag.String("path", "", "front path; empty = the profile's, else the default for -type")
 	user := flag.String("user", "", "SSTP username")
-	sni := flag.String("sni", "", "SSTP TLS ServerName")
+	sni := flag.String("sni", "", "TLS ServerName for overlay and SSTP")
 	pap := flag.Bool("pap", false, "SSTP: allow PAP and CHAP-MD5")
 	cfgPath := flag.String("c", "", "client profile YAML (loft or SSTP)")
 	viaKind := flag.String("via", "auto", "mux | socks | sstp | auto")
@@ -49,6 +49,7 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 	probePBK = strings.TrimSpace(*pbk)
+	probeSNI = strings.TrimSpace(*sni)
 	if *instanceFile == "" && *rawURL != "" && !strings.EqualFold(*kind, "sstp") {
 		if u, err := url.Parse(*rawURL); err == nil {
 			*instanceFile = transport.DefaultInstanceFile(u.Hostname())
@@ -302,6 +303,14 @@ func openMuxFrom(ctx context.Context, token, rawURL, kind, path, cfgPath string)
 	}
 	if probePBK == "" {
 		probePBK = o.MaskPub
+	}
+	if probeSNI == "" {
+		probeSNI = o.SNI
+	}
+	if set, id, err := cfg.InnerAsk(); err != nil {
+		return nil, fmt.Errorf("%s: inner: %w", p, err)
+	} else {
+		transport.SetClientInner(set, id)
 	}
 	// The profile's path belongs to its own front type: a GET path is no
 	// use to h2 when -type overrides the type.
