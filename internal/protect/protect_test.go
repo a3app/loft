@@ -44,16 +44,16 @@ func TestNetDialerResolverFollowsProtector(t *testing.T) {
 }
 
 func TestBypassPoisonDNS(t *testing.T) {
-	if g := bypassDNS("udp4", "10.8.0.1:53"); g != "1.1.1.1:53" {
+	if g := bypassDNS("udp4", "10.8.0.1:53"); g != "8.8.4.4:53" {
 		t.Fatalf("overlay dns %s", g)
 	}
-	if g := bypassDNS("udp4", "127.0.0.53:53"); g != "1.1.1.1:53" {
+	if g := bypassDNS("udp4", "127.0.0.53:53"); g != "8.8.4.4:53" {
 		t.Fatalf("stub %s", g)
 	}
 	if g := bypassDNS("udp4", "8.8.8.8:53"); g != "8.8.8.8:53" {
 		t.Fatalf("public %s", g)
 	}
-	if g := bypassDNS("udp6", "[fd00::1]:53"); g != "[2606:4700:4700::1111]:53" {
+	if g := bypassDNS("udp6", "[fd00::1]:53"); g != "[2001:4860:4860::8844]:53" {
 		t.Fatalf("ula %s", g)
 	}
 }

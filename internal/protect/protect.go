@@ -12,6 +12,8 @@ package protect
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"syscall"
@@ -63,7 +65,27 @@ func DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	} else if ip := localIPv4(); ip != nil && strings.HasPrefix(network, "udp") {
 		d.LocalAddr = &net.UDPAddr{IP: ip}
 	}
-	return d.DialContext(ctx, network, addr)
+	c, err := d.DialContext(ctx, network, addr)
+	if err != nil {
+		return nil, wrapBindErr(addr, err)
+	}
+	return c, nil
+}
+
+// wrapBindErr names the -if pin on EHOSTUNREACH/ENETUNREACH. 0/1 via utun
+// swallows dests that have no ifscope /32 on the bound iface.
+func wrapBindErr(addr string, err error) error {
+	if err == nil || boundIndex() <= 0 || !isUnreachable(err) {
+		return err
+	}
+	if n := Bound(); n != "" {
+		return fmt.Errorf("%s: %w (bound %s)", addr, err, n)
+	}
+	return err
+}
+
+func isUnreachable(err error) bool {
+	return errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH)
 }
 
 // resolverDial is the Dial of the protected resolver. Bind and Android
@@ -83,6 +105,9 @@ func resolverDial(ctx context.Context, network, address string) (net.Conn, error
 
 // bypassDNS replaces overlay/private nameservers with a public resolver.
 // Public IPs (8.8.8.8, ISP) stay so a working physical DNS is reused.
+// Fallback is 8.8.4.4 (Google secondary): loft.app pins scutil DNS /32 on
+// the uplink, and 8.8.4.4 is the usual macOS resolver. 1.1.1.1 is often
+// unpinned and blackholes on a bound socket under 0/1.
 func bypassDNS(network, address string) string {
 	host, port, err := net.SplitHostPort(address)
 	if err == nil {
@@ -94,9 +119,9 @@ func bypassDNS(network, address string) string {
 		port = "53"
 	}
 	if strings.Contains(network, "6") {
-		return net.JoinHostPort("2606:4700:4700::1111", port)
+		return net.JoinHostPort("2001:4860:4860::8844", port)
 	}
-	return net.JoinHostPort("1.1.1.1", port)
+	return net.JoinHostPort("8.8.4.4", port)
 }
 
 // poisonDNS is a nameserver address that may sit behind the tunnel
