@@ -1,4 +1,4 @@
-# loft 1.0.40
+# loft 1.0.41
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,18 +10,18 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-1.0.40-macos-arm.dmg` | `loft-1.0.40-macos-intel.dmg` |
-| macOS CLI | `loft-1.0.40-darwin-arm64.tar.gz` | `loft-1.0.40-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-1.0.40-linux-arm64.tar.gz` | `loft-1.0.40-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.40-linux-arm64.tar.gz` · `loft-node_1.0.40_arm64.deb` | `loft-node-1.0.40-linux-amd64.tar.gz` · `loft-node_1.0.40_amd64.deb` |
-| Panel | `loft-panel-1.0.40-linux-arm64.tar.gz` · `loft-panel_1.0.40_arm64.deb` | `loft-panel-1.0.40-linux-amd64.tar.gz` · `loft-panel_1.0.40_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-1.0.40-android.apk` · `loft-1.0.40-android-tv.apk` | same fat APKs |
-| Windows portable (GitHub) | `loft-1.0.40-windows-arm64.zip` | `loft-1.0.40-windows-x86-64.zip` · `loft-1.0.40-windows-x86.zip` |
-| MikroTik container | `loft-mikrotik-1.0.40-arm64.tar` · `loft-mikrotik-1.0.40-armv7.tar` | `loft-mikrotik-1.0.40-amd64.tar` |
+| macOS app (10.13+, ad-hoc signed) | `loft-1.0.41-macos-arm.dmg` | `loft-1.0.41-macos-intel.dmg` |
+| macOS CLI | `loft-1.0.41-darwin-arm64.tar.gz` | `loft-1.0.41-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-1.0.41-linux-arm64.tar.gz` | `loft-1.0.41-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.41-linux-arm64.tar.gz` · `loft-node_1.0.41_arm64.deb` | `loft-node-1.0.41-linux-amd64.tar.gz` · `loft-node_1.0.41_amd64.deb` |
+| Panel | `loft-panel-1.0.41-linux-arm64.tar.gz` · `loft-panel_1.0.41_arm64.deb` | `loft-panel-1.0.41-linux-amd64.tar.gz` · `loft-panel_1.0.41_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-1.0.41-android.apk` · `loft-1.0.41-android-tv.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-1.0.41-windows-arm64.zip` | `loft-1.0.41-windows-x86-64.zip` · `loft-1.0.41-windows-x86.zip` |
+| MikroTik container | `loft-mikrotik-1.0.41-arm64.tar` · `loft-mikrotik-1.0.41-armv7.tar` | `loft-mikrotik-1.0.41-amd64.tar` |
 
-Checksums: `loft-clients-1.0.40-SHA256SUMS.txt`, `loft-node-1.0.40-SHA256SUMS.txt`, `loft-panel-1.0.40-SHA256SUMS.txt`, `loft-android-1.0.40-SHA256SUMS.txt`, `loft-windows-1.0.40-SHA256SUMS.txt`, `loft-mikrotik-1.0.40-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.41-SHA256SUMS.txt`, `loft-node-1.0.41-SHA256SUMS.txt`, `loft-panel-1.0.41-SHA256SUMS.txt`, `loft-android-1.0.41-SHA256SUMS.txt`, `loft-windows-1.0.41-SHA256SUMS.txt`, `loft-mikrotik-1.0.41-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.40`.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.41`.
 
 Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 
@@ -42,6 +42,24 @@ Not in Dist: iOS / Sailfish / Keenetic clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.41
+
+Protocol stays **loft/1.0**.
+
+Inner:
+
+- AEGIS-128L (RFC 10032) is data-plane id 3. Direct fronts may confirm it after Status. GET never confirms inner 0, 2, 3, 5, or 8.
+- Reel-256 is off main. Id 8 stays reserved for an experimental cipher.
+- ChaCha20-Poly1305 and AES-256-GCM AEAD objects are kept per session key.
+
+GET:
+
+- `plain` and `tight` numbers in the spec match the node: inflight 8 / 16, Cookie 16 KiB, handshake trip 20 s, data trip 15 s / 6 s, node mux hold at most 1 s. HTTP 413 halves the Cookie budget (floor 1024). An idle pad returns at once. Three retry 404s of the same GET sequence drop the sid.
+
+Node:
+
+- Prometheus text 0.0.4 at `127.0.0.1:9101/metrics`. `metrics off` turns it off. It is not on the public origin.
 
 ## 1.0.40
 
@@ -386,6 +404,8 @@ macOS:
 
 В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik. Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS, Sailfish, Keenetic в этот Dist не входят.
 
+1.0.41: внутренний AEGIS-128L (RFC 10032) — id 3, прямые фронты могут подтвердить после Status; GET не подтверждает 0, 2, 3, 5 и 8. Reel-256 убран с main, id 8 зарезервирован под экспериментальный шифр. AEAD ChaCha20-Poly1305 и AES-256-GCM кэшируются на ключ сессии. Спека GET `plain`/`tight` совпадает с нодой: inflight 8/16, Cookie 16 КиБ, handshake 20 с, data 15/6 с, hold mux не больше 1 с; HTTP 413 делит бюджет Cookie пополам (пол 1024); idle pad отвечает сразу; три повторных 404 одной GET-последовательности забывают sid. Нода отдаёт Prometheus text 0.0.4 на 127.0.0.1:9101/metrics (`metrics off` выключает). Протокол loft/1.0.
+
 1.0.40: панель — в окне участника вкладка «Подключения»: карточка на каждое живое устройство (instance_id, overlay IP, фронт, путь, адрес, с какого момента, трафик); имя устройства — instance_id, у overlay нет Ethernet, MAC не выдумывается. Вкладка брала макетную выборку, поэтому онлайн-участник выглядел пустым; `/api/presence` теперь отдаёт список устройств из node-status.json, а не схлопывает его в одну строку на участника. Программа и версия клиента пока пустые. Протокол loft/1.0.
 
 1.0.39: нода — контроллер или релей больше не теряет горутину на каждом HTTP/1.1 hub- или замаскированном соединении: одноразовый listener, который отдаёт соединение HTTP-серверу, не будил второй Accept, сервер парковался навсегда и держал соединение; теперь он возвращается при закрытии соединения (утечка росла без предела при переподключениях ws-клиентов). Конфиг — отклоняется больше одного резервного релея с `auto_promote`: два резерва одного поколения при простое контроллера оба повысились бы и дали split-brain, который fencing («новее поколение — побеждает») не разрешает. Протокол loft/1.0.
@@ -419,6 +439,8 @@ macOS:
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
 本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish / Keenetic 不在这次包里。
+
+1.0.41：数据面 AEGIS-128L（RFC 10032）为 id 3，直连前置可在 Status 后确认；GET 不确认 0、2、3、5、8。Reel-256 已离开 main，id 8 仍留给实验密码。ChaCha20-Poly1305 与 AES-256-GCM 的 AEAD 按会话密钥缓存。GET `plain`/`tight` 规格与节点一致：inflight 8/16，Cookie 16 KiB，握手 20 秒，数据 15/6 秒，节点 mux hold 最多 1 秒；HTTP 413 把 Cookie 预算减半（下限 1024）；空闲 pad 立刻返回；同一 GET 序号三次重试 404 则丢弃 sid。节点在 127.0.0.1:9101/metrics 提供 Prometheus text 0.0.4（`metrics off` 关闭）。协议仍是 loft/1.0。
 
 1.0.40：面板 — 成员窗口增加「连接」页：每台在线设备一张卡片（instance_id、overlay IP、前置、路径、地址、起始时间、流量）；设备名是 instance_id，overlay 没有以太网，不编造 MAC。该页原先用的是样例数据，在线成员看起来是空的；`/api/presence` 现在返回 node-status.json 里的逐设备列表，而不再压成每个成员一行。客户端程序与版本暂时留空。协议仍是 loft/1.0。
 
