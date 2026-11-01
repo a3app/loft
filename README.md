@@ -180,7 +180,7 @@ server/panel      loft-panel web admin
 clients/go        loft, loft-front, loft-probe, loft-bench
 lab/              public debug stands (panel-dev)
 clients/macOS     menu-bar app (launches loft-front)
-clients/NDMS  Entware / OpkgTun (loft-ndms)
+clients/NDMS      Entware / OpkgTun (loft-ndms)
 clients/MikroTik  RouterOS 7 container (image + .rsc)
 clients/iOS       Packet Tunnel (thin host + appex)
 clients/Android   VpnService (thin Java host)
