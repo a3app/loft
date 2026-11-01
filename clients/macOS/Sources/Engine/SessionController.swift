@@ -233,21 +233,36 @@ final class SessionController {
     }
 
     /// Host pins for live/connecting/error sessions. Empty list clears leftover /32s.
+    /// While any TUN is up, every saved profile URL is pinned too: unused
+    /// hello.loft.cx / node IPs otherwise fall into 0/1 and loft-probe -if en0
+    /// gets EHOSTUNREACH. 8.8.4.4 and 1.1.1.1 are the Go PreferGo fallbacks.
     private func rebuildPins(except: String? = nil) {
         var ips: [String] = []
         var seen = Set<String>()
+        var anyUp = false
         for s in lives.values {
             if s.id == except { continue }
             switch s.state {
             case .on, .connecting, .error: break
             default: continue
             }
+            anyUp = true
             let url: String = {
                 if !s.tunURL.isEmpty { return s.tunURL }
                 return store.profiles.first(where: { $0.id == s.id })?.url ?? ""
             }()
             if url.isEmpty { continue }
             for ip in Priv.excludeHosts(url: url, overlayIP: s.overlayIP, extra: edgeExtra(s.id)) {
+                if seen.insert(ip).inserted { ips.append(ip) }
+            }
+        }
+        if anyUp {
+            for p in store.profiles {
+                for ip in Priv.excludeHosts(url: p.url, overlayIP: "", extra: edgeExtra(p.id)) {
+                    if seen.insert(ip).inserted { ips.append(ip) }
+                }
+            }
+            for ip in ["8.8.4.4", "1.1.1.1"] {
                 if seen.insert(ip).inserted { ips.append(ip) }
             }
         }
