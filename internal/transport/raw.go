@@ -181,15 +181,15 @@ func (r *rawSess) readLoop() {
 }
 
 // writeLoop Pulls mux, seals, and writes length-prefixed batches.
+// recScratch is safe: gate is set, pumpGated seals then Writes on this goroutine.
 func (r *rawSess) writeLoop() {
+	var sc recScratch
 	pumpWS(r.sess, time.Second, r.done, r.deadConn, func(frames []wire.Frame) ([]byte, error) {
-		raw, err := wire.EncodeBatch(frames)
-		if err != nil {
-			return nil, err
-		}
-		return ecrypto.Seal(r.key, raw, nil)
-	}, func(sealed []byte) error {
-		return writeMsg(r.conn, sealed)
+		_, rec, err := sc.pack(r.key, nil, frames)
+		return rec, err
+	}, func(rec []byte) error {
+		_, err := r.conn.Write(rec)
+		return err
 	}, &r.gate)
 	r.die()
 }
@@ -206,6 +206,7 @@ func (r *rawSess) deadConn() bool {
 // pumpMux is the origin write path for h2/h3/quic: prefetch like WSS so
 // seal overlaps the previous write instead of Pull(48KiB, 200ms) one-at-a-time.
 func pumpMux(ms *mux.Session, conn io.Writer, key []byte, done <-chan struct{}, gate *pullGate) {
+	var sc recScratch
 	pumpWS(ms, 4*time.Millisecond, done, func() bool {
 		select {
 		case <-done:
@@ -214,13 +215,21 @@ func pumpMux(ms *mux.Session, conn io.Writer, key []byte, done <-chan struct{}, 
 			return false
 		}
 	}, func(frames []wire.Frame) ([]byte, error) {
-		raw, err := wire.EncodeBatch(frames)
-		if err != nil {
-			return nil, err
+		if gate == nil {
+			raw, err := wire.EncodeBatch(frames)
+			if err != nil {
+				return nil, err
+			}
+			return ecrypto.Seal(key, raw, nil)
 		}
-		return ecrypto.Seal(key, raw, nil)
-	}, func(sealed []byte) error {
-		return writeMsg(conn, sealed)
+		_, rec, err := sc.pack(key, nil, frames)
+		return rec, err
+	}, func(b []byte) error {
+		if gate == nil {
+			return writeMsg(conn, b)
+		}
+		_, err := conn.Write(b)
+		return err
 	}, gate)
 }
 

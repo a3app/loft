@@ -301,14 +301,13 @@ func (q *QUIC) readLoop() {
 // Pull takes the frames ready to send; only one writer (the Puller) may do
 // that at a time. The gate lets bulk lanes take over Pull (wss.go).
 func (q *QUIC) writeLoop() {
+	var sc recScratch
 	pumpWS(q.sess, time.Second, q.done, q.deadConn, func(frames []wire.Frame) ([]byte, error) {
-		raw, err := wire.EncodeBatch(frames)
-		if err != nil {
-			return nil, err
-		}
-		return ecrypto.Seal(q.key, raw, nil)
-	}, func(sealed []byte) error {
-		return writeMsg(q.stream, sealed)
+		_, rec, err := sc.pack(q.key, nil, frames)
+		return rec, err
+	}, func(rec []byte) error {
+		_, err := q.stream.Write(rec)
+		return err
 	}, &q.gate)
 	q.die()
 }

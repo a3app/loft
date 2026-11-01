@@ -42,6 +42,27 @@ func TestBatch(t *testing.T) {
 	}
 }
 
+// TestEncodeBatchIntoReuse keeps the backing array when cap is enough.
+func TestEncodeBatchIntoReuse(t *testing.T) {
+	in := []Frame{{Cmd: CmdData, StreamID: 1, Payload: []byte("xyz")}}
+	buf := make([]byte, 0, 64)
+	got, err := EncodeBatchInto(buf, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cap(got) != 64 {
+		t.Fatalf("realloc cap=%d", cap(got))
+	}
+	out, err := DecodeBatch(got)
+	if err != nil || len(out) != 1 || string(out[0].Payload) != "xyz" {
+		t.Fatalf("%+v %v", out, err)
+	}
+	got2, err := EncodeBatchInto(got[:0], in)
+	if err != nil || cap(got2) != 64 {
+		t.Fatalf("second cap=%d %v", cap(got2), err)
+	}
+}
+
 // TestEncodeBatchSplitsData chunks CmdData above MaxPayload into two frames.
 func TestEncodeBatchSplitsData(t *testing.T) {
 	big := make([]byte, MaxPayload+100)

@@ -169,6 +169,7 @@ type l3Sess struct {
 	corkN int
 	timer *time.Timer
 	werr  error
+	rec   []byte // writeSealed scratch; wmu
 
 	// shape is set when both sides agreed CapL3Shape (experimental, see
 	// l3shape.go); flows tracks TCP flows for it, and corkStart says the
@@ -350,11 +351,7 @@ func (s *l3Sess) sealWriteLocked(plain []byte) error {
 	if conn == nil || len(key) == 0 {
 		return io.ErrClosedPipe
 	}
-	sealed, err := ecrypto.Seal(key, plain, nil)
-	if err != nil {
-		return err
-	}
-	return writeMsg(conn, sealed)
+	return writeSealed(conn, &s.rec, key, plain, nil)
 }
 
 // ReadIP waits for one inbound datagram.

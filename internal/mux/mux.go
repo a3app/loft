@@ -1000,6 +1000,11 @@ func (st *Stream) pastDeadline(slot *atomic.Int64) error {
 const streamChunk = 12 << 10
 
 // Write sends CmdData in streamChunk pieces so a GET Cookie stays in budget.
+//
+// chunk is copied into Frame.Payload. The frame sits on Session.out until
+// the front Pulls and EncodeBatchInto copies it into AEAD plaintext; p is
+// the SOCKS/TUN Read buffer and is overwritten on the next packet. A pool
+// would need a put after EncodeBatch, which lives in the front, not here.
 func (st *Stream) Write(p []byte) (int, error) {
 	if st.dead.Load() {
 		return 0, io.ErrClosedPipe

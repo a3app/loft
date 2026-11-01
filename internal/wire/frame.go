@@ -64,17 +64,36 @@ type Frame struct {
 	Payload  []byte
 }
 
-// Encode writes u16be length || cmd || u32be stream || payload.
+// growBytes is dst[:n], reallocating when cap is short. The prefix of dst
+// is kept. Used by Append so EncodeBatchInto can reuse one plaintext buffer
+// across mux Pulls (streamChunk 12 KiB, stand pull 48 KiB).
+func growBytes(dst []byte, n int) []byte {
+	if cap(dst) >= n {
+		return dst[:n]
+	}
+	nb := make([]byte, n)
+	copy(nb, dst)
+	return nb
+}
+
+// Encode is Append(nil): u16be length || cmd || u32be stream || payload.
 func (f Frame) Encode() ([]byte, error) {
+	return f.Append(nil)
+}
+
+// Append writes one frame onto dst. Payload above MaxPayload is ErrTooLarge
+// here; EncodeBatchInto splits CmdData instead of failing the whole batch.
+func (f Frame) Append(dst []byte) ([]byte, error) {
 	if len(f.Payload) > MaxPayload {
 		return nil, ErrTooLarge
 	}
-	buf := make([]byte, HeaderSize+len(f.Payload))
-	binary.BigEndian.PutUint16(buf[0:2], uint16(len(f.Payload)))
-	buf[2] = f.Cmd
-	binary.BigEndian.PutUint32(buf[3:7], f.StreamID)
-	copy(buf[7:], f.Payload)
-	return buf, nil
+	off := len(dst)
+	dst = growBytes(dst, off+HeaderSize+len(f.Payload))
+	binary.BigEndian.PutUint16(dst[off:off+2], uint16(len(f.Payload)))
+	dst[off+2] = f.Cmd
+	binary.BigEndian.PutUint32(dst[off+3:off+7], f.StreamID)
+	copy(dst[off+7:], f.Payload)
+	return dst, nil
 }
 
 // Decode reads one frame from buf. n is bytes consumed.
@@ -132,14 +151,20 @@ func ReadFrame(r io.Reader) (Frame, error) {
 // front seals into a single encrypted message (AEAD: authenticated
 // encryption, so a changed byte makes the whole message fail to open).
 func EncodeBatch(frames []Frame) ([]byte, error) {
-	var out []byte
+	return EncodeBatchInto(nil, frames)
+}
+
+// EncodeBatchInto is EncodeBatch writing into dst[:0] (keeps cap).
+// dst and Frame.Payload may alias; each Append copies the payload.
+func EncodeBatchInto(dst []byte, frames []Frame) ([]byte, error) {
+	dst = dst[:0]
 	for _, f := range frames {
 		if f.Cmd != CmdData || len(f.Payload) <= MaxPayload {
-			b, err := f.Encode()
+			var err error
+			dst, err = f.Append(dst)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, b...)
 			continue
 		}
 		// io.Copy writes 32 KiB; a single CmdData used to blow MaxPayload
@@ -150,15 +175,15 @@ func EncodeBatch(frames []Frame) ([]byte, error) {
 			if n > len(p) {
 				n = len(p)
 			}
-			b, err := Frame{Cmd: CmdData, StreamID: f.StreamID, Payload: p[:n]}.Encode()
+			var err error
+			dst, err = Frame{Cmd: CmdData, StreamID: f.StreamID, Payload: p[:n]}.Append(dst)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, b...)
 			p = p[n:]
 		}
 	}
-	return out, nil
+	return dst, nil
 }
 
 // DecodeBatch reads concatenated frames until buf is empty.

@@ -266,12 +266,10 @@ const wsPrefetch = 2
 // 4 ms = node pumpWS. 1 s wait HOL'd inner ACKs; 1 MiB GET leftover ~58 KiB.
 func (w *WSS) writeLoop() {
 	ctx := context.Background()
+	var sc recScratch
 	pumpWS(w.sess, 4*time.Millisecond, w.done, w.closedConn, func(frames []wire.Frame) ([]byte, error) {
-		raw, err := wire.EncodeBatch(frames)
-		if err != nil {
-			return nil, err
-		}
-		return ecrypto.Seal(w.key, raw, nil)
+		blob, _, err := sc.pack(w.key, nil, frames)
+		return blob, err
 	}, func(sealed []byte) error {
 		return w.conn.Write(ctx, websocket.MessageBinary, sealed)
 	}, &w.gate)
@@ -312,6 +310,10 @@ func (g *pullGate) resume() {
 // so 0x04 can take the Puller without a second writer.
 // 0x04 is attach: another front joining this session by its ticket. Despite
 // the name, quic, h2 and h3 use this pump too.
+//
+// recScratch in the seal closure is only valid with a gate (pumpGated:
+// seal, Write, next seal). Prefetch (gate == nil) holds sealed slices on
+// `out` while the sealer runs ahead — those sites allocate per batch.
 func pumpWS(sess *mux.Session, pullWait time.Duration, done <-chan struct{}, dead func() bool, seal func([]wire.Frame) ([]byte, error), write func([]byte) error, gate *pullGate) {
 	if gate != nil {
 		pumpGated(sess, pullWait, done, dead, seal, write, gate)
@@ -500,12 +502,10 @@ func (s *WSSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		go serveMux(ms)
 		go serveDgrams(ms)
 	}
+	var sc recScratch
 	go pumpWS(ms, 4*time.Millisecond, ctx.Done(), func() bool { return ctx.Err() != nil }, func(frames []wire.Frame) ([]byte, error) {
-		raw, err := wire.EncodeBatch(frames)
-		if err != nil {
-			return nil, err
-		}
-		return ecrypto.Seal(key, raw, nil)
+		blob, _, err := sc.pack(key, nil, frames)
+		return blob, err
 	}, func(sealed []byte) error {
 		return c.Write(ctx, websocket.MessageBinary, sealed)
 	}, gate)

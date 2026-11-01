@@ -255,6 +255,8 @@ func (s *H2Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // corkBuf / corkWait match SSTP: coalesce DATA frames instead of Flush
 // after every mux write (that ping-ponged a 64–48 KiB window per RTT).
+// recScratch Write of one u32be||Seal lands here; bufio copies, then the
+// ticker Flush emits one HTTP/2 DATA. 16 KiB ≈ one streamChunk after AEAD.
 const corkBuf = 16 << 10
 const corkWait = 2 * time.Millisecond
 
