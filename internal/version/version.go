@@ -28,6 +28,22 @@ const (
 // semver; not git, OS, or Go.
 var Version = "dev"
 
+// Channel is the update source, baked at link time. An installed package
+// cannot change it. Dist and the NDMS package default to github.
+//
+//	-X github.com/a3app/loft/internal/version.Channel=github
+//
+// github reads GitHub Releases. web reads https://loft.cx/dist/latest.json.
+// oem reads UpdateBase. store and any other value do not poll. The value
+// stays out of Hello and Status.
+var Channel = "github"
+
+// UpdateBase is the OEM catalog: a latest.json URL, or a directory that
+// contains one. Read only when Channel is oem.
+//
+//	-X github.com/a3app/loft/internal/version.UpdateBase=https://updates.example/loft/
+var UpdateBase = ""
+
 // Protocol is the wire version string ("1.0").
 func Protocol() string { return wire.ProtoString(wire.Proto) }
 

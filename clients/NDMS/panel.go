@@ -28,8 +28,8 @@ type Panel struct {
 	Store *Store
 	Sup   *Sup
 	Allow Allow
-	// Check and Install replace the GitHub and opkg calls in tests.
-	// Nil uses LatestRelease and DownloadIPK plus OpkgInstall.
+	// Check and Install replace the channel check and opkg in tests.
+	// Nil uses LatestRelease and installPackage.
 	Check   func(context.Context) (Update, error)
 	Install func(context.Context, Update) error
 
@@ -441,9 +441,9 @@ func (p *Panel) log(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, lines)
 }
 
-// check asks GitHub and stores the result. Current is overwritten with
-// this binary's version after the call, so a dev build is not compared
-// as the empty string.
+// check asks the channel baked into this binary and stores the result.
+// Current is overwritten with this binary's version after the call, so a
+// dev build is not compared as the empty string.
 func (p *Panel) check(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -467,7 +467,7 @@ func (p *Panel) check(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, up)
 }
 
-// auto stores the six-hour check switch. It does not install a package.
+// auto stores the six-hour switch. The switch installs; this request only saves it.
 func (p *Panel) auto(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST", http.StatusMethodNotAllowed)
@@ -520,13 +520,7 @@ func (p *Panel) install(w http.ResponseWriter, r *http.Request) {
 	}
 	fn := p.Install
 	if fn == nil {
-		fn = func(ctx context.Context, u Update) error {
-			dst := "/opt/tmp/loft-ndms.ipk"
-			if err := DownloadIPK(ctx, u, dst); err != nil {
-				return err
-			}
-			return OpkgInstall(ctx, dst)
-		}
+		fn = installPackage
 	}
 	if err := fn(r.Context(), up); err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)

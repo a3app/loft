@@ -5,7 +5,11 @@
 # make dist     those three ipk, a .sha256 sidecar each, and
 #               dist/ndms/loft-ndms-<ver>-SHA256SUMS.txt
 VERSION ?= $(shell cat ../../VERSION)
-LDFLAGS := -s -w -X github.com/a3app/loft/internal/version.Version=$(VERSION)
+# CHANNEL is github, web, store, or oem. An installed ipk cannot change it.
+# UPDATE_BASE is the OEM catalog (latest.json, or a directory that has one).
+CHANNEL ?= github
+UPDATE_BASE ?=
+LDFLAGS := -s -w -X github.com/a3app/loft/internal/version.Version=$(VERSION) -X github.com/a3app/loft/internal/version.Channel=$(CHANNEL) -X github.com/a3app/loft/internal/version.UpdateBase=$(UPDATE_BASE)
 ROOT := $(abspath ../..)
 PACK := $(ROOT)/clients/NDMS/pack
 DIST := $(ROOT)/dist/ndms

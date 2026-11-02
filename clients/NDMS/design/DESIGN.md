@@ -33,7 +33,7 @@ No second password. No SSTP form: SSTP stays the stock Keenetic client.
 | Connection · Trojan | Same frame. Link: `trojan://`. Manual: password, host and port, security TLS / REALITY, transport TCP / XHTTP, TLS host name, TLS fingerprint, public key, short ID. |
 | Import | Drop or pick one or more files (`client.yaml`, `.loft`, `.vpn`, a QR picture) or paste text. Creates a new connection with the next free OpkgTun. |
 | Journal | Last 80 lines from all connections, prefixed by name. Keys are shortened. |
-| Package | Version, architecture, GitHub latest. “Check for updates on its own” switch, “Check for updates”, “Update to X”: downloads the `.ipk` for this architecture from the latest `a3app/loft` release, checks SHA256, installs with opkg; sessions restart. |
+| Package | Version, architecture, latest. “Install updates on its own” installs a newer package from the channel baked in at build time. “Check” and “Update” use that same channel: download the `.ipk` for this architecture, check SHA256, install with opkg; sessions restart. |
 
 ## 3. Keenetic chrome
 

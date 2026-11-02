@@ -99,9 +99,13 @@ type Sup struct {
 	Exe   string
 	Ring  *Ring
 
-	mu     sync.Mutex
-	kids   map[string]*kid
-	update Update
+	// Install replaces the opkg call. Nil downloads the ipk and reinstalls it.
+	Install func(context.Context, Update) error
+
+	mu       sync.Mutex
+	kids     map[string]*kid
+	update   Update
+	checking bool
 }
 
 // Reconcile matches children to the YAML: enabled connections run, the
@@ -260,9 +264,9 @@ func (s *Sup) startLocked(c Conn, delay time.Duration) {
 	log.Printf("%s session", c.Name)
 }
 
-// Loop reconciles every few seconds and, when the YAML asks, checks
-// GitHub about once every six hours. The check only stores the latest
-// version. Install stays on the package button.
+// Loop reconciles every few seconds. When the YAML asks, it checks the
+// channel baked at build time about once every six hours and installs a
+// newer package.
 func (s *Sup) Loop(ctx context.Context) {
 	s.Reconcile()
 	tick := time.NewTicker(5 * time.Second)
@@ -283,7 +287,7 @@ func (s *Sup) Loop(ctx context.Context) {
 	}
 }
 
-// wantsCheck is the YAML auto-check switch. A read error skips the check.
+// wantsCheck is the YAML auto-update switch. A read error skips the check.
 func (s *Sup) wantsCheck() bool {
 	if s.Store == nil {
 		return false
@@ -295,16 +299,38 @@ func (s *Sup) wantsCheck() bool {
 	return f.Keenetic.CheckUpdates
 }
 
-// checkOnce stores the latest release. It does not install.
+// checkOnce checks the build channel and installs when a newer package
+// is published. A failed check leaves the previous result in place.
+// The opkg reinstall stops this process from prerm.
 func (s *Sup) checkOnce(ctx context.Context) {
-	up, err := LatestRelease(ctx, AssetArch())
+	s.mu.Lock()
+	if s.checking {
+		s.mu.Unlock()
+		return
+	}
+	s.checking = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.checking = false
+		s.mu.Unlock()
+	}()
+	up, err := LatestRelease(ctx, packageArch())
 	if err != nil {
 		log.Printf("update: %v", err)
 		return
 	}
 	s.SetUpdate(up)
-	if up.Ready {
-		log.Printf("update %s available", up.Latest)
+	if !up.Ready {
+		return
+	}
+	log.Printf("update %s", up.Latest)
+	install := s.Install
+	if install == nil {
+		install = installPackage
+	}
+	if err := install(ctx, up); err != nil {
+		log.Printf("update: %v", err)
 	}
 }
 
@@ -331,14 +357,14 @@ func (s *Sup) stateDir() string {
 	return DefaultStateDir()
 }
 
-// SetUpdate remembers the last GitHub check.
+// SetUpdate remembers the last channel check.
 func (s *Sup) SetUpdate(u Update) {
 	s.mu.Lock()
 	s.update = u
 	s.mu.Unlock()
 }
 
-// LastUpdate is the last GitHub check.
+// LastUpdate is the last channel check.
 func (s *Sup) LastUpdate() Update {
 	s.mu.Lock()
 	defer s.mu.Unlock()

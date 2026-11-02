@@ -287,8 +287,8 @@
       <div class="body">
         <div class="row"><span class="k" data-i="version">Version</span><span class="mono" id="pk-ver">—</span></div>
         <div class="row"><span class="k" data-i="arch">Arch</span><span class="mono" id="pk-arch">—</span></div>
-        <div class="row"><span class="k" data-i="latest">GitHub latest</span><span class="mono" id="pk-latest">—</span></div>
-        <label class="checks"><input id="pk-auto" type="checkbox" onchange="setAuto(this.checked)" /> <span data-i="auto">Check for updates</span></label>
+        <div class="row"><span class="k" data-i="latest">Latest</span><span class="mono" id="pk-latest">—</span></div>
+        <label class="checks"><input id="pk-auto" type="checkbox" onchange="setAuto(this.checked)" /> <span data-i="auto">Install updates on its own</span></label>
         <div class="btns">
           <button type="button" class="ghost" onclick="checkPkg()" data-i="check">Check</button>
           <button type="button" class="go" onclick="installPkg()" data-i="update">Update</button>
@@ -325,8 +325,8 @@
         security:"TLS", network:"Transport", advanced:"Advanced", tabMain:"Connection", path:"Path",
         up:"Up, Mbit/s", down:"Down, Mbit/s", fp:"Fingerprint", pbk:"Public key", sid:"Short ID",
         save:"Save", cancel:"Cancel", drop:"Drop client.yaml, .loft, .vpn or a QR picture", pick:"Choose file", paste:"Paste",
-        sstp:"SSTP is the stock Keenetic client", version:"Version", arch:"Arch", latest:"GitHub latest",
-        auto:"Check for updates", check:"Check", lan:"LAN only",
+        sstp:"SSTP is the stock Keenetic client", version:"Version", arch:"Arch", latest:"Latest",
+        auto:"Install updates on its own", check:"Check", lan:"LAN only",
         gate:"Checking Keenetic session…", signin:"Sign in",
         upS:"up", error:"error", off:"off", connecting:"connecting",
         reserve:"{n} more in reserve", imported:"Imported profile. Saving the form replaces it.",
@@ -346,8 +346,8 @@
         security:"TLS", network:"Транспорт", advanced:"Расширенные", tabMain:"Соединение", path:"Путь",
         up:"Вверх, Мбит/с", down:"Вниз, Мбит/с", fp:"Отпечаток", pbk:"Публичный ключ", sid:"Short ID",
         save:"Сохранить", cancel:"Отмена", drop:"Перетащите client.yaml, .loft, .vpn или QR", pick:"Выбрать файл", paste:"Вставить",
-        sstp:"SSTP — штатный клиент Keenetic", version:"Версия", arch:"Архитектура", latest:"Последний на GitHub",
-        auto:"Проверять обновления", check:"Проверить", lan:"только LAN",
+        sstp:"SSTP — штатный клиент Keenetic", version:"Версия", arch:"Архитектура", latest:"Последняя",
+        auto:"Ставить обновления самим", check:"Проверить", lan:"только LAN",
         gate:"Проверяем сессию Keenetic…", signin:"Войти",
         upS:"в сети", error:"ошибка", off:"выкл", connecting:"подключение",
         reserve:"ещё {n} в запасе", imported:"Профиль импортирован. Сохранение формы его заменит.",
@@ -367,8 +367,8 @@
         security:"TLS", network:"传输", advanced:"高级", tabMain:"连接", path:"路径",
         up:"上行，Mbit/s", down:"下行，Mbit/s", fp:"指纹", pbk:"公钥", sid:"Short ID",
         save:"保存", cancel:"取消", drop:"拖入 client.yaml、.loft、.vpn 或二维码", pick:"选择文件", paste:"粘贴",
-        sstp:"SSTP 是 Keenetic 原装客户端", version:"版本", arch:"架构", latest:"GitHub 最新",
-        auto:"检查更新", check:"检查", lan:"仅 LAN",
+        sstp:"SSTP 是 Keenetic 原装客户端", version:"版本", arch:"架构", latest:"最新",
+        auto:"自动安装更新", check:"检查", lan:"仅 LAN",
         gate:"正在检查 Keenetic 会话…", signin:"登录",
         upS:"在线", error:"错误", off:"关闭", connecting:"连接中",
         reserve:"另有 {n} 个备用", imported:"已导入配置。保存表单会替换它。",
@@ -806,12 +806,12 @@
         document.getElementById("log").textContent = e.message;
       }
     }
-    // setAuto stores the six-hour GitHub check. The check does not install.
+    // setAuto stores the six-hour switch. When it is on, a newer package from the build channel is installed.
     async function setAuto(on) {
       try { await api("/api/package/auto", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({on: !!on})}); }
       catch (e) { document.getElementById("pk-msg").textContent = e.message; }
     }
-    // checkPkg asks GitHub for this arch. ready means a newer dotted tag that has an ipk and a sha256 sidecar.
+    // checkPkg asks the build channel for this arch. ready means a newer dotted release that has an ipk and a sha256 sidecar.
     async function checkPkg() {
       const msg = document.getElementById("pk-msg");
       msg.className = "msg";

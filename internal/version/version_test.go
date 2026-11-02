@@ -32,6 +32,13 @@ func TestStamp(t *testing.T) {
 	}
 }
 
+// TestChannelDefault keeps the link-time source on GitHub until a build sets another.
+func TestChannelDefault(t *testing.T) {
+	if Channel != "github" || UpdateBase != "" {
+		t.Fatalf("channel %q base %q", Channel, UpdateBase)
+	}
+}
+
 // TestWanted accepts --version/-V and ignores unrelated flags.
 func TestWanted(t *testing.T) {
 	if !Wanted([]string{"--version"}) || !Wanted([]string{"-V"}) {

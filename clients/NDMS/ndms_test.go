@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/a3app/loft/internal/config"
+	"github.com/a3app/loft/internal/version"
 )
 
 // TestUpLinesOrder locks the ndmc order: host pins before "up", no default
@@ -343,6 +344,156 @@ func TestUpdatePick(t *testing.T) {
 	}
 	if !Newer("1.0.32", "") || !Newer("1.0.32", "dev") {
 		t.Fatal("empty current")
+	}
+}
+
+// roundTripper stubs the update client.
+type roundTripper func(*http.Request) (*http.Response, error)
+
+func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestUpdateChannel locks the build-time source: github skips drafts,
+// pre-releases, and releases without this arch; web ignores next and
+// prefers an asset list over base; oem reads UpdateBase; store does not dial.
+// The six-hour path installs only when the check is Ready.
+func TestUpdateChannel(t *testing.T) {
+	oldCh, oldBase := version.Channel, version.UpdateBase
+	oldAPI, oldWeb, oldHTTP, oldVer := githubAPI, webIndex, updateHTTP, version.Version
+	oldArch := packageArch
+	t.Cleanup(func() {
+		version.Channel, version.UpdateBase = oldCh, oldBase
+		githubAPI, webIndex, updateHTTP, version.Version = oldAPI, oldWeb, oldHTTP, oldVer
+		packageArch = oldArch
+	})
+	packageArch = func() string { return "aarch64" }
+	version.Version = "1.0.32"
+
+	ghBody := `[
+	  {"tag_name":"v1.0.50","draft":true,"assets":[
+	    {"name":"loft-ndms-1.0.50-aarch64.ipk","browser_download_url":"http://ex/draft"},
+	    {"name":"loft-ndms-1.0.50-aarch64.ipk.sha256","browser_download_url":"http://ex/draft.sha"}]},
+	  {"tag_name":"v1.0.49","prerelease":true,"assets":[
+	    {"name":"loft-ndms-1.0.49-aarch64.ipk","browser_download_url":"http://ex/pre"},
+	    {"name":"loft-ndms-1.0.49-aarch64.ipk.sha256","browser_download_url":"http://ex/pre.sha"}]},
+	  {"tag_name":"v1.0.48","assets":[
+	    {"name":"loft-ndms-armv7.ipk","browser_download_url":"http://ex/arm"},
+	    {"name":"loft-ndms-armv7.ipk.sha256","browser_download_url":"http://ex/arm.sha"}]},
+	  {"tag_name":"v1.0.40-rc1","assets":[
+	    {"name":"loft-ndms-aarch64.ipk","browser_download_url":"http://ex/rc"},
+	    {"name":"loft-ndms-aarch64.ipk.sha256","browser_download_url":"http://ex/rc.sha"}]},
+	  {"tag_name":"v1.0.33","assets":[
+	    {"name":"loft-ndms-1.0.33-aarch64.ipk","browser_download_url":"http://ex/ipk"},
+	    {"name":"loft-ndms-1.0.33-aarch64.ipk.sha256","browser_download_url":"http://ex/sum"}]}
+	]`
+	var webBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/releases":
+			io.WriteString(w, ghBody)
+		case strings.HasSuffix(r.URL.Path, "/latest.json"):
+			io.WriteString(w, webBody)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	githubAPI = srv.URL + "/releases"
+	webIndex = srv.URL + "/latest.json"
+	updateHTTP = srv.Client()
+
+	version.Channel = "github"
+	up, err := LatestRelease(context.Background(), "aarch64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if up.Latest != "1.0.33" || up.IPK != "http://ex/ipk" || up.SHA != "http://ex/sum" || !up.Ready {
+		t.Fatalf("github %+v", up)
+	}
+	arm, err := LatestRelease(context.Background(), "armv7")
+	if err != nil || arm.Latest != "1.0.48" || arm.IPK != "http://ex/arm" {
+		t.Fatalf("arm %+v %v", arm, err)
+	}
+	version.Version = "1.0.33"
+	same, err := LatestRelease(context.Background(), "aarch64")
+	if err != nil || same.Ready || same.IPK == "" {
+		t.Fatalf("current %+v %v", same, err)
+	}
+	version.Version = "1.0.32"
+
+	webBody = `{"version":"1.0.40","base":"` + srv.URL + `/files/","next":{"channel":"github","base":"https://evil.example/"}}`
+	version.Channel = "web"
+	up, err = LatestRelease(context.Background(), "aarch64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantIPK := srv.URL + "/files/loft-ndms-1.0.40-aarch64.ipk"
+	if up.Latest != "1.0.40" || up.IPK != wantIPK || up.SHA != wantIPK+".sha256" || !up.Ready {
+		t.Fatalf("web %+v", up)
+	}
+	webBody = `{"version":"dev","base":"` + srv.URL + `/files/"}`
+	if _, err := LatestRelease(context.Background(), "aarch64"); err == nil {
+		t.Fatal("dev catalog")
+	}
+	webBody = `{"version":"1.0.41","base":"https://evil.example/","assets":[
+	  {"name":"loft-ndms-1.0.41-aarch64.ipk","url":"http://pkg.example/a.ipk"},
+	  {"name":"loft-ndms-1.0.41-aarch64.ipk.sha256","url":"http://pkg.example/a.ipk.sha256"}]}`
+	up, err = LatestRelease(context.Background(), "aarch64")
+	if err != nil || up.Latest != "1.0.41" || up.IPK != "http://pkg.example/a.ipk" {
+		t.Fatalf("assets %+v %v", up, err)
+	}
+
+	webBody = `{"version":"1.0.42","base":"` + srv.URL + `/oem/"}`
+	version.Channel = "oem"
+	version.UpdateBase = srv.URL + "/oem/"
+	up, err = LatestRelease(context.Background(), "mipsel")
+	if err != nil || up.Latest != "1.0.42" || !strings.Contains(up.IPK, "/oem/loft-ndms-1.0.42-mipsel.ipk") {
+		t.Fatalf("oem %+v %v", up, err)
+	}
+	version.UpdateBase = ""
+	if _, err := LatestRelease(context.Background(), "aarch64"); err == nil {
+		t.Fatal("oem without base")
+	}
+	version.UpdateBase = "file:///tmp/latest.json"
+	if _, err := LatestRelease(context.Background(), "aarch64"); err == nil {
+		t.Fatal("oem file url")
+	}
+
+	updateHTTP = &http.Client{Transport: roundTripper(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("dial %s", r.URL)
+		return nil, fmt.Errorf("dial")
+	})}
+	for _, ch := range []string{"", "store", "play"} {
+		version.Channel = ch
+		up, err = LatestRelease(context.Background(), "aarch64")
+		if err != nil || up.Ready || up.IPK != "" {
+			t.Fatalf("quiet %q %+v %v", ch, up, err)
+		}
+	}
+
+	updateHTTP = srv.Client()
+	version.Channel = "github"
+	version.Version = "1.0.32"
+	var installed Update
+	s := &Sup{Install: func(ctx context.Context, u Update) error {
+		installed = u
+		return nil
+	}}
+	s.checkOnce(context.Background())
+	if installed.Latest != "1.0.33" || !installed.Ready {
+		t.Fatalf("auto %+v", installed)
+	}
+	installed = Update{}
+	version.Version = "1.0.33"
+	s.checkOnce(context.Background())
+	if installed.IPK != "" {
+		t.Fatal("installed current")
+	}
+	installed = Update{}
+	version.Channel = "store"
+	version.Version = "1.0.1"
+	s.checkOnce(context.Background())
+	if installed.IPK != "" {
+		t.Fatal("store installed")
 	}
 }
 

@@ -63,7 +63,8 @@ func main() {
 }
 
 // sampleYAML is also pack/client.yaml.sample. check_updates is explicit:
-// a missing bool would stay false.
+// a missing bool would stay false. When it is true, a newer package from
+// the channel baked at build time is installed.
 const sampleYAML = `listen:
   http: ":8090"
 keenetic:

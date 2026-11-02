@@ -19,10 +19,11 @@ type File struct {
 		HTTP string `yaml:"http" json:"http"`
 	} `yaml:"listen" json:"listen"`
 	Keenetic struct {
-		Auth         string `yaml:"auth" json:"auth"`
-		ISP          string `yaml:"isp,omitempty" json:"isp,omitempty"`
-		RCI          string `yaml:"rci" json:"rci"`
-		CheckUpdates bool   `yaml:"check_updates" json:"check_updates"`
+		Auth string `yaml:"auth" json:"auth"`
+		ISP  string `yaml:"isp,omitempty" json:"isp,omitempty"`
+		RCI  string `yaml:"rci" json:"rci"`
+		// CheckUpdates installs a newer package from the build channel every six hours.
+		CheckUpdates bool `yaml:"check_updates" json:"check_updates"`
 	} `yaml:"keenetic" json:"keenetic"`
 	Connections []Conn `yaml:"connections" json:"connections"`
 }
