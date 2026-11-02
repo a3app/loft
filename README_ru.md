@@ -96,8 +96,6 @@ loft рассчитан на сети, где обычные VPN-протоко�
 | Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-mipsel.ipk) |
 | iOS | только исходники ([clients/iOS/](clients/iOS/)); in .dev | в Dist нет |
 
-Контрольные суммы: [клиенты](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt) · [Keenetic](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-SHA256SUMS.txt). В DMG — приложение для строки меню с подписью ad-hoc. В архивах CLI лежат `loft`, `loft-front`, `loft-probe`, `loft-bench`. Android с GitHub — sideload, обновляется из Dist; сборки для Play без встроенного обновления. Windows portable: x86-64 и x86 — Win7 SP1+; arm64 — Win10/11 ARM. MikroTik также `ghcr.io/a3app/loft-mikrotik:1.0.42`. Keenetic — пакет Entware (aarch64-3.10, armv7 soft-float, mipsel soft-float); у каждого ipk есть sidecar `.sha256`.
-
 ### Нода
 
 | | Apple Silicon / arm64 | Intel / amd64 |

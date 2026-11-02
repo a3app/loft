@@ -96,8 +96,6 @@ Binaries are published in the [latest GitHub Release](https://github.com/a3app/l
 | Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-mipsel.ipk) |
 | iOS | source only ([clients/iOS/](clients/iOS/)); in .dev | no Dist binary |
 
-Checksums: [clients](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt) · [Keenetic](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-SHA256SUMS.txt). The macOS DMG is the menu-bar application (ad-hoc signed). CLI archives contain `loft`, `loft-front`, `loft-probe`, and `loft-bench`. GitHub Android is sideload and self-updates from Dist; Play builds compile the updater out. Windows portable: x86-64 and x86 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik is also `ghcr.io/a3app/loft-mikrotik:1.0.42`. Keenetic is an Entware ipk (aarch64-3.10, armv7 soft-float, mipsel soft-float); each ipk has a `.sha256` sidecar.
-
 ### Node
 
 | | Apple Silicon / arm64 | Intel / amd64 |

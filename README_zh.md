@@ -96,8 +96,6 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 | Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-mipsel.ipk) |
 | iOS | 只有源码（[clients/iOS/](clients/iOS/)）；in .dev | Dist 没有包 |
 
-校验和：[客户端](https://github.com/a3app/loft/releases/download/v1.0.42/loft-clients-1.0.42-SHA256SUMS.txt) · [Android](https://github.com/a3app/loft/releases/download/v1.0.42/loft-android-1.0.42-SHA256SUMS.txt) · [Windows](https://github.com/a3app/loft/releases/download/v1.0.42/loft-windows-1.0.42-SHA256SUMS.txt) · [MikroTik](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-SHA256SUMS.txt) · [Keenetic](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-SHA256SUMS.txt)。macOS DMG 是菜单栏应用（ad-hoc 签名）。CLI 归档里是 `loft`、`loft-front`、`loft-probe`、`loft-bench`。GitHub Android 是旁路安装，从 Dist 自更新；Play 包不含应用内更新。Windows portable：x86-64 和 x86 为 Win7 SP1+；arm64 为 Win10/11 ARM。MikroTik 另有 `ghcr.io/a3app/loft-mikrotik:1.0.42`。Keenetic 是 Entware ipk（aarch64-3.10、armv7 soft-float、mipsel soft-float）；每个 ipk 带同名 `.sha256`。
-
 ### 节点
 
 | | Apple Silicon / arm64 | Intel / amd64 |
