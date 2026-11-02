@@ -209,7 +209,7 @@ sequenceDiagram
 
 **HTTP errors.** HTTP 413: the client MUST halve the Cookie budget, floor 1024, and split the uplink. HTTP 405: this front is not GET. A client that receives HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST back off on the same session and MAY send CmdTune event 1 on the next GET that already carries mux. The node MAY lower `header_budget` / `inflight` for that front and echo CmdTune event 0 in that GET body.
 
-**Idle and hold of a GET.** Empty idle uplink: the client MUST wait at least `keepalive_ms / 2` and not less than 1 s. A GET that already carries mux Data, Open, Dgram, or Leave is not idle. The node MUST return an idle pad without waiting for mux. The node MUST NOT hold a GET with mux Data, Open, or Dgram longer than 1 s. A non-Puller HTTP/2 GET waiting its turn MUST give up that wait by the profile's non-Puller wait. When the uplink already contains CmdData, the node MAY return as soon as downlink Data is queued. When that uplink has ≥ 2 KiB CmdData, the node MUST NOT wait for more mux; the body cap stays 256 KiB (192 KiB with several streams).
+**Idle and hold of a GET.** Empty idle uplink: the client MUST wait at least `keepalive_ms / 2` and not less than 1 s. A GET that already carries mux Data, Open, Dgram, or Leave is not idle. The node MUST return an idle pad without waiting for mux. The node MUST NOT hold a GET with mux Data, Open, or Dgram longer than 1 s. A non-Puller HTTP/2 GET waiting its turn MUST give up that wait by the profile's non-Puller wait. When the uplink already contains CmdData, the node MAY return as soon as downlink Data is queued. When that uplink has ≥ 2 KiB CmdData, the node MUST NOT wait for more mux; the body cap stays 1 MiB.
 
 Dropping HTTP/2 without Leave does not end the session. Before process exit the client MUST send one last GET whose uplink batch contains CmdLeave. The node then closes the mux session, forgets the GET session identifier, drops the overlay peer, and frees the lease. `lease_hold` still keeps the overlay IP for `ok_resumed`. *Informative, not normative.* One implementation names the drop Detach and the free Release.
 
@@ -792,7 +792,7 @@ Numbers already assigned do not move. A later revision adds a name in a reserved
 | GET data trip | `plain` 15 s; `tight` 6 s |
 | GET node mux hold | MUST NOT exceed 1 s |
 | GET non-Puller wait | `plain` 5 s; `tight` 1 s |
-| GET body | 256 KiB; 192 KiB with several streams |
+| GET body | 1 MiB |
 | streams per session | SHOULD ≤ 256 |
 | AEAD batch | ≤ 48 KiB (`ws`), ≤ header budget (`get`) |
 | GET padding plaintext | about 400 bytes before AEAD |

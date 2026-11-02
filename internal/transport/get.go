@@ -2270,14 +2270,12 @@ func (s *GETServer) get(id string) *serverSess {
 // GET Puller hold. Idle pads used to sit 250ms as exclusive Puller;
 // ICMP and TCP 1-byte then waited that plus an HTTP/2 waiter jump.
 const (
-	getDownlinkBytes = 256 << 10
-	// Several streams (Speedtest ping during download). 32 KiB rotated
-	// the Puller faster but on a CDN RTT (~240 ms) cut multi-stream
-	// download to ~1–3 Mbit. other-stream pri already lets ping jump
-	// mux.out; keep live bodies near the single-stream size.
-	getDownlinkLive = 192 << 10
-	getDownlinkMore = 15 * time.Millisecond
-	getDownlinkFill = 3 * time.Millisecond
+	// Yandex origin-fetch is HTTP/1.1: one body in flight per origin
+	// conn. 192 KiB / 139 ms is 11 Mbit (Speedtest download). 1 MiB is
+	// ~57 Mbit. Origin-fetch dies at 5s; 1 MiB stays under that.
+	getDownlinkBytes = 1 << 20
+	getDownlinkMore  = 15 * time.Millisecond
+	getDownlinkFill  = 3 * time.Millisecond
 	// Overlay ICMP is sync (FilterDgram). Internet ICMP with no live
 	// TCP stream is async: hold this GET so the echo-reply can ride
 	// the same body. pullHold skips this when StreamCount()>0.
@@ -2358,13 +2356,9 @@ func hasCmd(frames []wire.Frame, cmd byte) bool {
 	return false
 }
 
-// downlinkMax is the GET body cap. 256 KiB one stream, 192 KiB several.
-// Fat Cookie uplink does not shrink the body: pullHold already returns
-// at once (≥2 KiB CmdData), so the slot recycles without clipping download.
-func downlinkMax(ms *mux.Session, _ []wire.Frame) int {
-	if ms != nil && ms.StreamCount() > 1 {
-		return getDownlinkLive
-	}
+// downlinkMax is the GET body cap. Fat Cookie uplink does not shrink it:
+// pullHold already returns at once (≥2 KiB CmdData).
+func downlinkMax(*mux.Session, []wire.Frame) int {
 	return getDownlinkBytes
 }
 
