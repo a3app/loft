@@ -38,6 +38,10 @@ type Panel struct {
 	authOSOK  bool
 	authIP    string
 	authNoted string
+
+	capMu    sync.Mutex
+	capAt    time.Time
+	capTitle string
 }
 
 // Handler is the page and the JSON API. Mutations need header X-Loft: 1
@@ -274,6 +278,7 @@ func (p *Panel) status(w http.ResponseWriter, r *http.Request) {
 		"check_updates": f.Keenetic.CheckUpdates,
 		"update":        up,
 		"connections":   list,
+		"tab":           p.tabTitle(r.Context(), f.Keenetic.RCI),
 	})
 }
 

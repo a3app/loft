@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>loft</title>
+  <title>Loft</title>
   <style>
     :root {
       --ink: #1A1714;
@@ -478,6 +478,7 @@
       const foot = location.origin + "/ · " + t("lan");
       document.getElementById("foot").textContent = foot;
       if (!status) return;
+      document.title = status.tab || "Loft";
       document.getElementById("ver").textContent = status.version || "OpkgTun";
       const up = status.update || {};
       const strip = document.getElementById("strip");

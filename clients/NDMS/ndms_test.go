@@ -482,6 +482,43 @@ func TestPanel(t *testing.T) {
 	}
 }
 
+func TestTabTitle(t *testing.T) {
+	if got := TabTitle("Keenetic Viva", false, false); got != "Keenetic Viva"+tabSep+"Loft" {
+		t.Fatal(got)
+	}
+	if got := TabTitle("Keenetic Viva", false, true); got != "Loft"+tabSep+"Keenetic Viva" {
+		t.Fatal(got)
+	}
+	if got := TabTitle("Keenetic Viva", true, false); got != "Loft" {
+		t.Fatal(got)
+	}
+	if got := TabTitle("  \n", false, false); got != "Loft" {
+		t.Fatal(got)
+	}
+	v := captionValue([]byte(`{"template":"default","value":"Keenetic Viva"}`))
+	if v != "Keenetic Viva" {
+		t.Fatal(v)
+	}
+	text := "              template: default\n                 value: Keenetic Peak\n"
+	if captionValue([]byte(text)) != "Keenetic Peak" {
+		t.Fatal(captionValue([]byte(text)))
+	}
+	env := []byte(`{"NDW_HIDE_TITLE_PREFIX":"0","NDW_TITLE_REVERSE_PREFIX_SUFFIX":"1","OTHER":"1"}`)
+	if envOn(env, "NDW_HIDE_TITLE_PREFIX") || !envOn(env, "NDW_TITLE_REVERSE_PREFIX_SUFFIX") {
+		t.Fatal("flags")
+	}
+	rows := []byte(`[{"name":"NDW_HIDE_TITLE_PREFIX","value":"1"}]`)
+	if !envOn(rows, "NDW_HIDE_TITLE_PREFIX") {
+		t.Fatal("rows")
+	}
+	if !envOn([]byte("NDW_HIDE_TITLE_PREFIX: 1\n"), "NDW_HIDE_TITLE_PREFIX") {
+		t.Fatal("text")
+	}
+	if envOn([]byte("NDW_HIDE_TITLE_PREFIX: 0\n"), "NDW_HIDE_TITLE_PREFIX") {
+		t.Fatal("off")
+	}
+}
+
 // TestIPK writes a package whose binary is an odd number of bytes, so the
 // ar pad newline is outside the member size, and reads the three member names.
 func TestIPK(t *testing.T) {
