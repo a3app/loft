@@ -1,4 +1,4 @@
-# loft 1.0.44
+# loft 1.0.45
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,19 +10,19 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-macos-1.0.44-arm64.dmg` | `loft-macos-1.0.44-amd64.dmg` |
-| macOS CLI | `loft-clients-1.0.44-darwin-arm64.tar.gz` | `loft-clients-1.0.44-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-clients-1.0.44-linux-arm64.tar.gz` | `loft-clients-1.0.44-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.44-linux-arm64.tar.gz` · `loft-node_1.0.44_arm64.deb` | `loft-node-1.0.44-linux-amd64.tar.gz` · `loft-node_1.0.44_amd64.deb` |
-| Panel | `loft-panel-1.0.44-linux-arm64.tar.gz` · `loft-panel_1.0.44_arm64.deb` | `loft-panel-1.0.44-linux-amd64.tar.gz` · `loft-panel_1.0.44_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-android-1.0.44.apk` · `loft-androidtv-1.0.44.apk` | same fat APKs |
-| Windows portable (GitHub) | `loft-windows-1.0.44-arm64.zip` | `loft-windows-1.0.44-amd64.zip` · `loft-windows-1.0.44-386.zip` |
-| MikroTik container | `loft-mikrotik-1.0.44-arm64.tar` · `loft-mikrotik-1.0.44-armv7.tar` | `loft-mikrotik-1.0.44-amd64.tar` |
-| Keenetic Entware | `loft-ndms-1.0.44-aarch64.ipk` · `loft-ndms-1.0.44-armv7.ipk` | `loft-ndms-1.0.44-mipsel.ipk` |
+| macOS app (10.13+, ad-hoc signed) | `loft-macos-1.0.45-arm64.dmg` | `loft-macos-1.0.45-amd64.dmg` |
+| macOS CLI | `loft-clients-1.0.45-darwin-arm64.tar.gz` | `loft-clients-1.0.45-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-clients-1.0.45-linux-arm64.tar.gz` | `loft-clients-1.0.45-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.45-linux-arm64.tar.gz` · `loft-node_1.0.45_arm64.deb` | `loft-node-1.0.45-linux-amd64.tar.gz` · `loft-node_1.0.45_amd64.deb` |
+| Panel | `loft-panel-1.0.45-linux-arm64.tar.gz` · `loft-panel_1.0.45_arm64.deb` | `loft-panel-1.0.45-linux-amd64.tar.gz` · `loft-panel_1.0.45_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-android-1.0.45.apk` · `loft-androidtv-1.0.45.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-windows-1.0.45-arm64.zip` | `loft-windows-1.0.45-amd64.zip` · `loft-windows-1.0.45-386.zip` |
+| MikroTik container | `loft-mikrotik-1.0.45-arm64.tar` · `loft-mikrotik-1.0.45-armv7.tar` | `loft-mikrotik-1.0.45-amd64.tar` |
+| Keenetic Entware | `loft-ndms-1.0.45-aarch64.ipk` · `loft-ndms-1.0.45-armv7.ipk` | `loft-ndms-1.0.45-mipsel.ipk` |
 
-Checksums: `loft-clients-1.0.44-SHA256SUMS.txt`, `loft-node-1.0.44-SHA256SUMS.txt`, `loft-panel-1.0.44-SHA256SUMS.txt`, `loft-android-1.0.44-SHA256SUMS.txt`, `loft-windows-1.0.44-SHA256SUMS.txt`, `loft-mikrotik-1.0.44-SHA256SUMS.txt`, `loft-ndms-1.0.44-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.45-SHA256SUMS.txt`, `loft-node-1.0.45-SHA256SUMS.txt`, `loft-panel-1.0.45-SHA256SUMS.txt`, `loft-android-1.0.45-SHA256SUMS.txt`, `loft-windows-1.0.45-SHA256SUMS.txt`, `loft-mikrotik-1.0.45-SHA256SUMS.txt`, `loft-ndms-1.0.45-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows amd64 and 386 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.44`. Keenetic ipk arches are Entware aarch64-3.10, armv7-3.2 soft-float, and mipsel-3.4 soft-float. Each ipk has a `.sha256` sidecar of the same name.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows amd64 and 386 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.45`. Keenetic ipk arches are Entware aarch64-3.10, armv7-3.2 soft-float, and mipsel-3.4 soft-float. Each ipk has a `.sha256` sidecar of the same name.
 
 Not in Dist: iOS / Sailfish clients (catalog and mocks).
 
@@ -44,6 +44,14 @@ Not in Dist: iOS / Sailfish clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.45
+
+Protocol stays **loft/1.0**.
+
+GET:
+
+- Duplex no longer caps the GET body at 96 KiB. Fat Cookie uplink already returns without waiting for mux (`pullHold` 0). Download stays 256 KiB (192 KiB with several streams).
 
 ## 1.0.44
 
@@ -463,6 +471,8 @@ macOS:
 
 В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik, пакет Entware Keenetic (`loft-ndms` aarch64, armv7, mipsel, у каждого `.sha256`). Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS и Sailfish в этот Dist не входят.
 
+1.0.45: GET — дуплекс больше не режет тело до 96 КиБ; при жирном Cookie нода и так не ждёт mux, скачка 256 КиБ (192 при нескольких потоках). Протокол loft/1.0.
+
 1.0.44: Keenetic — ISP next hop ставится до dial (пин без шлюза был 0.0.0.0, ARP шёл на ноду в WAN). После down объект OpkgTun остаётся: persistent opkgtunN и IFF_UP до ip address. Dist — APK с версией в конце имени (`loft-android-1.0.44.apk`) попадают в GitHub Release. Протокол loft/1.0.
 
 1.0.43: macOS — unix-сокет TUN в `/tmp/loft-tun-<pid>-<fnv>.sock`, длинный id импорта больше не ломает bind (Darwin sun_path 104). Панель — inbound VLESS (Reality/Vision, TCP) на порту 4433, в диалоге ключа `vless://`. Dist — имена `loft-<продукт>-<ver>[-<os>]-<arch>`; апдейтеры ещё принимают имена 1.0.42. Keenetic — ndmc публикует OpkgTun до открытия tun, обновления с канала сборки. Протокол loft/1.0.
@@ -504,6 +514,8 @@ macOS:
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
 本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器、Keenetic Entware 包（`loft-ndms` aarch64、armv7、mipsel，各带 `.sha256`）。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish 不在这次包里。
+
+1.0.45：GET — 双向不再把 body 封顶 96 KiB；胖 Cookie 上行本来就不加 mux 等待，下载仍是 256 KiB（多流 192 KiB）。协议仍是 loft/1.0。
 
 1.0.44：Keenetic — 拨号前写入 ISP next hop（无网关的 pin 曾是 0.0.0.0，ARP 打到 WAN 上的节点）。down 之后 NDM OpkgTun 对象仍在：persistent opkgtunN，在 `ip address` 前 IFF_UP。Dist — 版本在文件名末尾的 APK（`loft-android-1.0.44.apk`）会进 GitHub Release。协议仍是 loft/1.0。
 
