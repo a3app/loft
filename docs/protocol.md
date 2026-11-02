@@ -211,6 +211,8 @@ sequenceDiagram
 
 **Idle and hold of a GET.** Empty idle uplink: the client MUST wait at least `keepalive_ms / 2` and not less than 1 s. A GET that already carries mux Data, Open, Dgram, or Leave is not idle. The node MUST return an idle pad without waiting for mux. The node MUST NOT hold a GET with mux Data, Open, or Dgram longer than 1 s. A non-Puller HTTP/2 GET waiting its turn MUST give up that wait by the profile's non-Puller wait. When the uplink already contains CmdData, the node MAY return as soon as downlink Data is queued. When that uplink has ≥ 2 KiB CmdData, the node MUST NOT wait for more mux; the body cap stays 1 MiB.
 
+The GET body is one AEAD seal written with Content-Length. On HTTP/1.1 origin-fetch (one body in flight per origin connection) an exclusive Puller that waits to fill toward 1 MiB holds that slot; inner TCP ACKs in later Cookies wait. *Informative, live Yandex cdn-get 2026-11-03, client 1.0.43, node 1.0.45, origin loft.iqos.help:444.* Keep-fill 15 ms: loaded latency 139→272 ms, download 11→8.7 Mbit. Drain of queued mux plus 3 ms: 12.11 / 65.80 Mbit, ping 97 ms, loaded 157 / 262 ms. The node drains queued mux plus 3 ms and does not wait for first mux on an idle pad.
+
 Dropping HTTP/2 without Leave does not end the session. Before process exit the client MUST send one last GET whose uplink batch contains CmdLeave. The node then closes the mux session, forgets the GET session identifier, drops the overlay peer, and frees the lease. `lease_hold` still keeps the overlay IP for `ok_resumed`. *Informative, not normative.* One implementation names the drop Detach and the free Release.
 
 ### 3.5 HTTP/2 CONNECT (`h2`)

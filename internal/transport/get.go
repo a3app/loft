@@ -2271,9 +2271,12 @@ func (s *GETServer) get(id string) *serverSess {
 // ICMP and TCP 1-byte then waited that plus an HTTP/2 waiter jump.
 const (
 	// Yandex origin-fetch is HTTP/1.1: one body in flight per origin
-	// conn. 192 KiB / 139 ms is 11 Mbit. Clients slurp LimitReader 1 MiB
-	// (1.0.43 still does); AEAD and a last mux frame must fit, so the
-	// mux cap is 992 KiB (~57 Mbit at 139 ms). Origin-fetch dies at 5s.
+	// conn. Clients slurp LimitReader 1 MiB (1.0.43 still does); AEAD
+	// and a last mux frame must fit, so the mux cap is 992 KiB.
+	// The body is one AEAD blob (Content-Length): a 15ms keep-fill
+	// toward that cap held the only origin slot, inner TCP ACKs
+	// waited, loaded latency 139→272 ms, download 11→8.7 Mbit.
+	// Drain queued + 3ms; do not wait for first mux.
 	getDownlinkBytes = (1 << 20) - 32<<10
 	getDownlinkMore  = 15 * time.Millisecond
 	getDownlinkFill  = 3 * time.Millisecond
@@ -2298,6 +2301,9 @@ func (s *GETServer) h2Turn() time.Duration {
 
 // pullHold is how long the exclusive Puller waits for mux downlink.
 // Empty keepalive pads return immediately so they do not stall ping/upload.
+// Do not keep-fill toward 992 KiB: the body is one AEAD with
+// Content-Length, and a wait holds the only HTTP/1.1 origin-fetch slot
+// (Yandex 2026-11-03: 15ms keep-fill 11→8.7 Mbit, loaded 139→272 ms).
 func pullHold(frames []wire.Frame, ms *mux.Session) (first, more time.Duration) {
 	if ms != nil && ms.OutQueued() > 0 {
 		return 0, getDownlinkFill
@@ -2439,16 +2445,11 @@ func (ss *serverSess) ingestAndPull(seq uint64, frames []wire.Frame, waitTurn ti
 			if jump && notTurn && seq > ss.replied {
 				ss.replied = seq
 			} else if notTurn {
-				if ss.skipPull == nil {
-					ss.skipPull = map[uint64]struct{}{}
-				}
-				if len(ss.skipPull) >= 256 {
-					ss.dropReason = "skip_overflow"
+				if !ss.skipPullLocked(seq) {
 					ss.mu.Unlock()
 					ss.mux.Close()
 					return nil, false
 				}
-				ss.skipPull[seq] = struct{}{}
 			}
 			if ss.cond != nil {
 				ss.cond.Broadcast()
@@ -2558,6 +2559,20 @@ func (ss *serverSess) withReport(down []wire.Frame) []wire.Frame {
 	}
 	ss.mu.Unlock()
 	return append([]wire.Frame{wire.ReportFrame(applied)}, down...)
+}
+
+// skipPullLocked marks seq as a GET that will not Pull. downSeq steps
+// over it. ss.mu must be held. false means the skip map overflowed.
+func (ss *serverSess) skipPullLocked(seq uint64) bool {
+	if ss.skipPull == nil {
+		ss.skipPull = map[uint64]struct{}{}
+	}
+	if len(ss.skipPull) >= 256 {
+		ss.dropReason = "skip_overflow"
+		return false
+	}
+	ss.skipPull[seq] = struct{}{}
+	return true
 }
 
 // drainSkipPullLocked advances downSeq over Data GETs that already

@@ -211,6 +211,8 @@ sequenceDiagram
 
 **GET 的空闲与保持。** 空闲上行：客户端必须至少等待 `keepalive_ms / 2`，且不少于 1 秒。已经携带 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点必须对空闲 Pad 立即返回，不等 mux。带有 mux Data、Open 或 Dgram 的 GET，节点不得保持超过 1 秒。尚未成为 Puller、正在排队的 HTTP/2 GET，必须在配置档的非 Puller 等待之内放弃该等待。上行已含 CmdData 时，节点可以在下行 Data 入队后立即返回。该上行有 ≥ 2 KiB CmdData 时，节点不得再等 mux；体上限仍是 1 MiB。
 
+GET 体是带 Content-Length 的一次 AEAD。HTTP/1.1 origin-fetch（每条 origin 连接同时只有一个体）上，为凑满 1 MiB 而等待的 exclusive Puller 占住该槽，后续 Cookie 里的 inner TCP ACK 跟着等。*说明，非规范。实测 Yandex cdn-get 2026-11-03，客户端 1.0.43，节点 1.0.45，origin loft.iqos.help:444。* keep-fill 15 ms：loaded latency 139→272 ms，下载 11→8.7 Mbit。排空已排队 mux 再加 3 ms：12.11 / 65.80 Mbit，ping 97 ms，loaded 157 / 262 ms。节点排空已排队 mux 再加 3 ms，空闲 Pad 不等第一个 mux。
+
 HTTP/2 断开但没有 Leave，会话不结束。进程退出前，客户端必须再发一个 GET，上行批次含 CmdLeave。节点于是关闭 mux 会话，忘记 GET 会话标识，卸下覆盖网对端，并释放租约。`lease_hold` 仍为 `ok_resumed` 保留覆盖网 IP。*说明，非规范。* 一种实现把卸下叫做 Detach，把释放租约叫做 Release。
 
 ### 3.5 HTTP/2 CONNECT (`h2`)
