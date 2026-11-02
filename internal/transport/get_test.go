@@ -1828,12 +1828,12 @@ func TestGETRadioGapKeepsSession(t *testing.T) {
 	}
 }
 
-func TestDownlinkMaxShrinksOnUplink(t *testing.T) {
+func TestDownlinkMaxIgnoresUplink(t *testing.T) {
 	if downlinkMax(nil, nil) != getDownlinkBytes {
 		t.Fatal("empty")
 	}
 	fat := []wire.Frame{{Cmd: wire.CmdData, Payload: make([]byte, 4<<10)}}
-	if downlinkMax(nil, fat) != getDownlinkUp {
+	if downlinkMax(nil, fat) != getDownlinkBytes {
 		t.Fatalf("up %d", downlinkMax(nil, fat))
 	}
 	pad := []wire.Frame{{Cmd: wire.CmdPad, Payload: make([]byte, 4<<10)}}

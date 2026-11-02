@@ -2276,9 +2276,6 @@ const (
 	// download to ~1–3 Mbit. other-stream pri already lets ping jump
 	// mux.out; keep live bodies near the single-stream size.
 	getDownlinkLive = 192 << 10
-	// Fat Cookie uplink: cap this GET body so the slot recycles. Download
-	// -only GETs keep 256/192 KiB. 32 KiB was too small on a 240 ms RTT.
-	getDownlinkUp   = 96 << 10
 	getDownlinkMore = 15 * time.Millisecond
 	getDownlinkFill = 3 * time.Millisecond
 	// Overlay ICMP is sync (FilterDgram). Internet ICMP with no live
@@ -2361,17 +2358,14 @@ func hasCmd(frames []wire.Frame, cmd byte) bool {
 	return false
 }
 
-// downlinkMax is the GET body cap. Download-only stays 256/192 KiB.
-// ≥2 KiB CmdData uplink shrinks to 96 KiB so Cookie GETs recycle.
-func downlinkMax(ms *mux.Session, up []wire.Frame) int {
-	max := getDownlinkBytes
+// downlinkMax is the GET body cap. 256 KiB one stream, 192 KiB several.
+// Fat Cookie uplink does not shrink the body: pullHold already returns
+// at once (≥2 KiB CmdData), so the slot recycles without clipping download.
+func downlinkMax(ms *mux.Session, _ []wire.Frame) int {
 	if ms != nil && ms.StreamCount() > 1 {
-		max = getDownlinkLive
+		return getDownlinkLive
 	}
-	if muxDataBytes(up) >= 2<<10 && max > getDownlinkUp {
-		max = getDownlinkUp
-	}
-	return max
+	return getDownlinkBytes
 }
 
 // pullDownlink holds up to first for mux, then more after useful data.

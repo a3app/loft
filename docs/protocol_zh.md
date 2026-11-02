@@ -209,7 +209,7 @@ sequenceDiagram
 
 **HTTP 错误。** HTTP 413：客户端必须把 Cookie 预算减半，下限 1024，再拆分上行。HTTP 405：该前置不是 GET。收到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` 的客户端必须在同一会话上退避，可以在下一条已经携带 mux 的 GET 上发送 CmdTune event 1。节点可以降低该前置的 `header_budget` / `inflight`，并在该 GET 体中回显 CmdTune event 0。
 
-**GET 的空闲与保持。** 空闲上行：客户端必须至少等待 `keepalive_ms / 2`，且不少于 1 秒。已经携带 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点必须对空闲 Pad 立即返回，不等 mux。带有 mux Data、Open 或 Dgram 的 GET，节点不得保持超过 1 秒。尚未成为 Puller、正在排队的 HTTP/2 GET，必须在配置档的非 Puller 等待之内放弃该等待。上行已含 CmdData 时，节点可以在下行 Data 入队后立即返回。该上行有 ≥ 2 KiB CmdData 时，节点必须将该 GET 体封顶 96 KiB，以便下一条 Cookie 周转；仅下载的 GET 仍为 256 KiB（多条流时 192 KiB）。
+**GET 的空闲与保持。** 空闲上行：客户端必须至少等待 `keepalive_ms / 2`，且不少于 1 秒。已经携带 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点必须对空闲 Pad 立即返回，不等 mux。带有 mux Data、Open 或 Dgram 的 GET，节点不得保持超过 1 秒。尚未成为 Puller、正在排队的 HTTP/2 GET，必须在配置档的非 Puller 等待之内放弃该等待。上行已含 CmdData 时，节点可以在下行 Data 入队后立即返回。该上行有 ≥ 2 KiB CmdData 时，节点不得再等 mux；体上限仍是 256 KiB（多条流时 192 KiB）。
 
 HTTP/2 断开但没有 Leave，会话不结束。进程退出前，客户端必须再发一个 GET，上行批次含 CmdLeave。节点于是关闭 mux 会话，忘记 GET 会话标识，卸下覆盖网对端，并释放租约。`lease_hold` 仍为 `ok_resumed` 保留覆盖网 IP。*说明，非规范。* 一种实现把卸下叫做 Detach，把释放租约叫做 Release。
 
@@ -790,7 +790,7 @@ loft 不是 mixnet。路径看得到一条 TLS 1.3 会话。控制器看得到�
 | GET 数据超时 | `plain` 15 s；`tight` 6 s |
 | GET 节点 mux 保持 | 不得超过 1 s |
 | GET 非 Puller 等待 | `plain` 5 s；`tight` 1 s |
-| GET 体 | 仅下载 256 KiB；多流 192 KiB；上行 ≥ 2 KiB CmdData 时 96 KiB |
+| GET 体 | 256 KiB；多流 192 KiB |
 | 每会话流数 | 应该 ≤ 256 |
 | AEAD 批次 | ≤ 48 KiB（`ws`），≤ 头预算（`get`） |
 | GET 填充明文 | AEAD 前约 400 字节 |
