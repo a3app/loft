@@ -36,7 +36,7 @@
 <a href="https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-arm64.zip">arm64</a>
 </p>
 <p align="center">
-<img src="docs/brand/platforms/android2.svg" width="24" height="24" align="absmiddle" alt="Android">
+<img src="docs/brand/platforms/android.svg" width="24" height="24" align="absmiddle" alt="Android">
 <strong>Android</strong>
 <a href="https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android.apk">Android</a>
 ·
@@ -90,11 +90,16 @@ loft 面向普通 VPN 协议效果差或根本用不了的网络：链路不稳�
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg"><img src="docs/brand/platforms/macos.svg" width="20" height="20" align="absmiddle" alt=""></picture> macOS 应用 | [DMG](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-macos-arm.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-macos-intel.dmg) |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg"><img src="docs/brand/platforms/macos.svg" width="20" height="20" align="absmiddle" alt=""></picture> macOS CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-darwin-amd64.tar.gz) |
 | <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-linux-amd64.tar.gz) |
-| <img src="docs/brand/platforms/android2.svg" width="20" height="20" align="absmiddle" alt=""> Android | [手机 APK](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android.apk) · [电视 APK](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android-tv.apk) | 同一套 fat APK |
+| <img src="docs/brand/platforms/android.svg" width="20" height="20" align="absmiddle" alt=""> Android | [手机 APK](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android.apk) · [电视 APK](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-android-tv.apk) | 同一套 fat APK |
 | <img src="docs/brand/platforms/windows.svg" width="20" height="20" align="absmiddle" alt=""> Windows | [arm64 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-arm64.zip) | [x86-64 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-x86-64.zip) · [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.42/loft-1.0.42-windows-x86.zip) |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/mikrotik-on-dark.svg"><img src="docs/brand/platforms/mikrotik.svg" width="20" height="20" align="absmiddle" alt=""></picture> MikroTik | [arm64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-arm64.tar) · [armv7 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-armv7.tar) | [amd64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-amd64.tar) |
-| Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-mipsel.ipk) |
 | iOS | 只有源码（[clients/iOS/](clients/iOS/)）；in .dev | Dist 没有包 |
+
+### 路由器
+
+| | ARM | x86 / MIPS |
+|--|--|--|
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/mikrotik-on-dark.svg"><img src="docs/brand/platforms/mikrotik.svg" width="20" height="20" align="absmiddle" alt=""></picture> MikroTik | [arm64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-arm64.tar) · [armv7 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-armv7.tar) | [amd64 tar](https://github.com/a3app/loft/releases/download/v1.0.42/loft-mikrotik-1.0.42-amd64.tar) |
+| <img src="docs/brand/platforms/keenetic.svg" width="20" height="20" align="absmiddle" alt=""> Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.42/loft-ndms-1.0.42-mipsel.ipk) |
 
 ### 节点
 
