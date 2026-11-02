@@ -153,6 +153,8 @@ dist-node: dist-clean-legacy dist-debian dist-deb
 	@echo $(NODE)
 
 # Cross-compiled CLI (CGO off). Windows is not a target: TUN uses unix.
+# Dist names: loft-<product>-<ver>[-<os>]-<arch>.<ext>. Channel is not in the
+# name. debian .deb keeps policy loft-node_<ver>_<arch>.deb.
 dist-clients:
 	mkdir -p $(CLIENTS)/go
 	rm -f $(CLIENTS)/go/*.tar.gz $(CLIENTS)/go/SHA256SUMS
@@ -160,7 +162,7 @@ dist-clients:
 		goos=$${pair%%-*}; \
 		goarch=$${pair#*-}; \
 		dest=$(CLIENTS)/go/$$goos-$$goarch; \
-		name=loft-$(VERSION)-$$goos-$$goarch; \
+		name=loft-clients-$(VERSION)-$$goos-$$goarch; \
 		rm -rf $$dest; \
 		mkdir -p $$dest; \
 		for b in $(CLIENT_CMDS); do \

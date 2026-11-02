@@ -43,11 +43,11 @@ GitHub portable zips:
 
 | File | What it is |
 |------|------------|
-| `loft-<version>-windows-x86-64.zip` and `loft-<version>-windows-x86.zip` | Portable. Windows 7 SP1 and later. Unzip and run. The first tunnel connect installs the service. |
-| `loft-<version>-windows-arm64.zip` | Portable. Windows 10 on ARM / Windows 11 ARM. Same layout. Not run on hardware here. |
+| `loft-windows-<version>-amd64.zip` and `loft-windows-<version>-386.zip` | Portable. Windows 7 SP1 and later. Unzip and run. The first tunnel connect installs the service. |
+| `loft-windows-<version>-arm64.zip` | Portable. Windows 10 on ARM / Windows 11 ARM. Same layout. Not run on hardware here. |
 | `loft-windows-x64-setup.exe` and `loft-windows-x86-setup.exe` | Installer. Program Files, the loft service, Start menu, uninstaller. No MSI. x86-64 and x86 only. |
 
-`make portable` writes those zips and `loft-windows-<version>-SHA256SUMS.txt`. The GitHub build checks the latest `a3app/loft` release at launch. A newer tag with the matching zip replaces the directory of the running exe and starts again. Dist on a `v*` tag builds the zips with `VER` from the repository `VERSION` and attaches them to the Release. `loft-front.exe` is included when `make front` has already produced it. The workflow builds that binary with the pinned XTLS/go-win7 SDK.
+`make portable` writes those zips and `loft-windows-<version>-SHA256SUMS.txt`. The GitHub build checks the latest `a3app/loft` release at launch. A newer tag with the matching zip replaces the directory of the running exe and starts again. The updater still accepts older `loft-<ver>-windows-x86-64.zip` / `x86` / `arm64` names. Dist on a `v*` tag builds the zips with `VER` from the repository `VERSION` and attaches them to the Release. `loft-front.exe` is included when `make front` has already produced it. The workflow builds that binary with the pinned XTLS/go-win7 SDK.
 
 Microsoft Store, Windows 10 version 1809 and later, x64 only: `dist/clients/Windows/store/x64`. No Wintun and no service. SOCKS works. The tunnel stays in the GitHub build. This machine writes the layout and `AppxManifest.xml`. Pack and sign on Windows:
 

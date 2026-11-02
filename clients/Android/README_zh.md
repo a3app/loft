@@ -42,4 +42,4 @@ make android                 # 在仓库根目录；需要 Android NDK
 
 电视 AVD 做一次：`make -C clients/Android avds`（`emulator/setup-avds`）。AOSP 没有 Chrome；手机镜像上的 Browser 是 WebView Shell。Intel Mac + AMD GPU 走 SwiftShader（`-gpu swiftshader_indirect`）；host GLES 会黑屏。日志：`~/Library/Logs/loft-emulator.log`、`loft-tv-emulator.log`、`loft-gtv-emulator.log`。
 
-Id：手机 `app.loft.android`，电视 `app.loft.android.tv`。VPN 类型：`VpnService`。每台设备一条系统 VPN。flavor `tv` 是 Leanback。渠道 `github`（默认）是 Dist/旁路安装，带应用内更新；`store` 是 Play，更新代码不编进包。`make -C clients/Android release` 用 `secrets/android-github.p12` 签名，写出 `loft-{ver}-android.apk` 和 `loft-{ver}-android-tv.apk`。第一次钥匙：`make -C clients/Android github-key`。
+Id：手机 `app.loft.android`，电视 `app.loft.android.tv`。VPN 类型：`VpnService`。每台设备一条系统 VPN。flavor `tv` 是 Leanback。渠道 `github`（默认）是 Dist/旁路安装，带应用内更新；`store` 是 Play，更新代码不编进包。`make -C clients/Android release` 用 `secrets/android-github.p12` 签名，写出 `loft-android-{ver}.apk` 和 `loft-androidtv-{ver}.apk`。第一次钥匙：`make -C clients/Android github-key`。

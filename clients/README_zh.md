@@ -25,12 +25,12 @@ make front         # dist/clients/go/loft-front
 make probe         # dist/clients/go/loft-probe
 make bench         # dist/clients/go/loft-bench
 make macos         # dist/clients/macOS/loft.app
-make macos-dmg     # dist/clients/macOS/loft-*-macos-<arch>.dmg
+make macos-dmg     # dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg
 make macos-dmgs    # arm64 和 x86_64 两份 DMG（CI）
 make android       # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios           # dist/clients/iOS/loft.app（macOS）+ iphonesimulator/loft.app
 make windows       # dist/clients/Windows/x64 和 x86
-make dist-clients  # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
+make dist-clients  # dist/clients/go/loft-clients-<ver>-<os>-<arch>.tar.gz
 ```
 
 协议：[docs/protocol_zh.md](../docs/protocol_zh.md)。跑起来：[docs/guide_zh.md](../docs/guide_zh.md)。

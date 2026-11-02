@@ -16,7 +16,7 @@
 # arm64 front uses stock Go (GOOS=windows GOARCH=arm64). With GO_WIN7 unset,
 # x86/x64 loft-front.exe is skipped. wintun.dll is not in git.
 #
-# Dist zip names: windows-x86-64, windows-x86, windows-arm64.
+# Dist zip names: loft-windows-$(VER)-{amd64,386,arm64}.zip.
 # Build dirs stay x64 / x86 / arm64.
 
 ROOT := $(abspath ../..)
@@ -182,11 +182,11 @@ portable: payload
 	zips=""; \
 	for a in x64 x86 arm64; do \
 	  [ -f $(DIST)/payload/$$a/loft.exe ] || continue; \
-	  case $$a in x64) tag=x86-64 ;; x86) tag=x86 ;; arm64) tag=arm64 ;; esac; \
-	  z=$(DIST)/github/loft-$(VER)-windows-$$tag.zip; \
+	  case $$a in x64) tag=amd64 ;; x86) tag=386 ;; arm64) tag=arm64 ;; esac; \
+	  z=$(DIST)/github/loft-windows-$(VER)-$$tag.zip; \
 	  rm -f "$$z"; \
 	  ( cd $(DIST)/payload/$$a && COPYFILE_DISABLE=1 zip -9 -X -r "$$z" . -x '.*' -x '*/.*' ); \
-	  zips="$$zips loft-$(VER)-windows-$$tag.zip"; \
+	  zips="$$zips loft-windows-$(VER)-$$tag.zip"; \
 	done; \
 	[ -n "$$zips" ]; \
 	cd $(DIST)/github && \

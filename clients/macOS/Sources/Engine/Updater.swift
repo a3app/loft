@@ -65,7 +65,7 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
         session.invalidateAndCancel()
     }
 
-    /// Asset name for the running slice.
+    /// Unversioned fallback name for the running slice (older Dist).
     static var dmgName: String {
         #if arch(arm64)
         return "loft-macos-arm.dmg"
@@ -282,13 +282,15 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
         try writeRelaunch(from: staged, onto: dest)
     }
 
-    /// Dist names `loft-1.0.33-macos-arm.dmg` / `macos-intel.dmg`, plus the
-    /// older arm64 / x86_64 / aarch64 / amd64 tails and the unversioned name.
+    /// Dist names `loft-macos-<ver>-arm64.dmg` / `amd64.dmg`, plus the older
+    /// `loft-<ver>-macos-arm.dmg` / `intel` tails and the unversioned name.
     private static func asset(_ name: String, matches want: String) -> Bool {
         if name == want { return true }
         #if arch(arm64)
+        if name.hasPrefix("loft-macos-") && name.hasSuffix("-arm64.dmg") { return true }
         let tails = ["-macos-arm.dmg", "-macos-arm64.dmg", "-macos-aarch64.dmg"]
         #else
+        if name.hasPrefix("loft-macos-") && name.hasSuffix("-amd64.dmg") { return true }
         let tails = ["-macos-intel.dmg", "-macos-x86_64.dmg", "-macos-amd64.dmg"]
         #endif
         return tails.contains { name.hasSuffix($0) }

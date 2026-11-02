@@ -25,12 +25,12 @@ make front         # dist/clients/go/loft-front
 make probe         # dist/clients/go/loft-probe
 make bench         # dist/clients/go/loft-bench
 make macos         # dist/clients/macOS/loft.app
-make macos-dmg     # dist/clients/macOS/loft-*-macos-<arch>.dmg
+make macos-dmg     # dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg
 make macos-dmgs    # both arm64 and x86_64 DMGs (CI)
 make android       # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios           # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
 make windows       # dist/clients/Windows/x64 and x86
-make dist-clients  # dist/clients/go/loft-<ver>-<os>-<arch>.tar.gz
+make dist-clients  # dist/clients/go/loft-clients-<ver>-<os>-<arch>.tar.gz
 ```
 
 Protocol: [docs/protocol.md](../docs/protocol.md). Run: [docs/guide.md](../docs/guide.md).

@@ -43,11 +43,11 @@ GitHub portable zip:
 
 | Файл | Что это |
 |------|---------|
-| `loft-<версия>-windows-x86-64.zip` и `loft-<версия>-windows-x86.zip` | Portable. Windows 7 SP1 и новее. Распаковать и запустить. Службу ставит первое включение туннеля. |
-| `loft-<версия>-windows-arm64.zip` | Portable. Windows 10 on ARM / Windows 11 ARM. Та же раскладка. На железе здесь не гоняли. |
+| `loft-windows-<версия>-amd64.zip` и `loft-windows-<версия>-386.zip` | Portable. Windows 7 SP1 и новее. Распаковать и запустить. Службу ставит первое включение туннеля. |
+| `loft-windows-<версия>-arm64.zip` | Portable. Windows 10 on ARM / Windows 11 ARM. Та же раскладка. На железе здесь не гоняли. |
 | `loft-windows-x64-setup.exe` и `loft-windows-x86-setup.exe` | Установщик. Program Files, служба loft, меню Пуск, удаление. MSI нет. Только x86-64 и x86. |
 
-`make portable` пишет эти zip и `loft-windows-<версия>-SHA256SUMS.txt`. Сборка GitHub при запуске читает последний релиз `a3app/loft`. Более новый тег с подходящим zip заменяет каталог запущенного exe и стартует снова. Dist на теге `v*` собирает zip с `VER` из корневого `VERSION` и кладёт их в Release. `loft-front.exe` попадает в пакет, если его уже собрал `make front`. Workflow собирает этот бинарь закреплённым SDK XTLS/go-win7.
+`make portable` пишет эти zip и `loft-windows-<версия>-SHA256SUMS.txt`. Сборка GitHub при запуске читает последний релиз `a3app/loft`. Более новый тег с подходящим zip заменяет каталог запущенного exe и стартует снова. Апдейтер ещё принимает старые имена `loft-<ver>-windows-x86-64.zip` / `x86` / `arm64`. Dist на теге `v*` собирает zip с `VER` из корневого `VERSION` и кладёт их в Release. `loft-front.exe` попадает в пакет, если его уже собрал `make front`. Workflow собирает этот бинарь закреплённым SDK XTLS/go-win7.
 
 Microsoft Store, Windows 10 версии 1809 и новее, только x64: `dist/clients/Windows/store/x64`. Без Wintun и без службы. SOCKS работает. Туннель остаётся в сборке GitHub. Здесь пишется раскладка и `AppxManifest.xml`. Упаковка и подпись — на Windows:
 

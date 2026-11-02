@@ -18,7 +18,7 @@ make node
 make client    # dist/clients/go/loft
 make probe     # dist/clients/go/loft-probe
 make macos     # dist/clients/macOS/loft.app
-make macos-dmg # dist/clients/macOS/loft-*-macos-<arch>.dmg  （Applications 符号链接）
+make macos-dmg # dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg  （Applications 符号链接）
 make macos-dmgs # arm64 和 x86_64 两份 DMG（CI）
 make android   # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios       # dist/clients/iOS/loft.app（macOS）+ iphonesimulator/loft.app
@@ -429,8 +429,8 @@ go test ./internal/wire ./internal/crypto ./internal/mux ./internal/netconf ./in
 
 - 节点 tarball 和 `.deb`（linux amd64、arm64）
 - CLI 归档（`loft`、`loft-front`、`loft-probe`、`loft-bench`，linux/darwin，amd64/arm64）
-- macOS DMG，ad-hoc 签名：`loft-*-macos-arm.dmg` 和 `loft-*-macos-intel.dmg`（`BUMP=0`，CI 不改写 `clients/macOS/VERSION`）。跑的是 Apple Silicon；Intel 是 Swift/Go 交叉编译（`ARCH=x86_64`）。
+- macOS DMG，ad-hoc 签名：`loft-macos-<ver>-arm64.dmg` 和 `loft-macos-<ver>-amd64.dmg`（`BUMP=0`，CI 不改写 `clients/macOS/VERSION`）。跑的是 Apple Silicon；Intel 是 Swift/Go 交叉编译（`ARCH=x86_64`）。
 
-然后发 GitHub Release。Dist 还会把标签拉进 [proxy.golang.org](https://proxy.golang.org)，并请求 [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft)，让模块页跟上这次发布。文件名带版本（`loft-1.0.42-macos-arm.dmg`、`loft-node_1.0.42_amd64.deb`）。同一标签再跑一遍工作流会替换文件。没有标签时，Actions → Dist → Run workflow 只上传产物。
+然后发 GitHub Release。Dist 还会把标签拉进 [proxy.golang.org](https://proxy.golang.org)，并请求 [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft)，让模块页跟上这次发布。文件名是 `loft-<product>-<ver>[-<os>]-<arch>.<ext>`（`loft-macos-<ver>-arm64.dmg`、`loft-node_1.0.42_amd64.deb`）。同一标签再跑一遍工作流会替换文件。没有标签时，Actions → Dist → Run workflow 只上传产物。
 
 本地打包：`make dist`。本地打 DMG 且不抬 macOS 市场版本：`make macos-dmg BUMP=0`。Developer ID 和公证留在有钥匙串的 Mac 上；不在 Actions 里。

@@ -264,16 +264,19 @@ static void post_upd(WPARAM kind, const char *text) {
     if (!g.msg || !PostMessageW(g.msg, WM_LOFT_UPD, kind, (LPARAM)d)) free(d);
 }
 
-/* find_zip picks the portable zip for this architecture. Prefers the Dist
-   names windows-x86-64 / windows-arm64; still accepts the older windows-x64.
+/* find_zip picks the portable zip for this architecture.
+   Dist: loft-windows-<ver>-{amd64,386,arm64}.zip.
+   Older: loft-<ver>-windows-{x86-64,x86,arm64}.zip and windows-x64.
    llvm-mingw clang defines __aarch64__, not MSVC _M_ARM64. */
 static int find_zip(const char *body, char *dst, int n) {
 #if defined(_M_ARM64) || defined(__aarch64__)
     return find_url(body, "-windows-arm64.zip", dst, n);
 #elif defined(_WIN64)
+    if (find_url(body, "-amd64.zip", dst, n)) return 1;
     if (find_url(body, "-windows-x86-64.zip", dst, n)) return 1;
     return find_url(body, "-windows-x64.zip", dst, n);
 #else
+    if (find_url(body, "-386.zip", dst, n)) return 1;
     return find_url(body, "-windows-x86.zip", dst, n);
 #endif
 }

@@ -120,9 +120,9 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 ## 7. 导入、导出、更新
 
 - 导入和导出使用 Windows 标准的“打开” / “另存为”对话框。样稿中的拖放区表示可以把文件拖到窗口上。
-- 更新窗口为“下载并替换这个副本”。检查方式同 macOS：GitHub latest。下载 `loft-<版本>-windows-x86-64.zip`（或旧名 `windows-x64`）、x86 zip 或 `windows-arm64.zip`，替换正在运行的 exe 所在目录，然后重新启动。Program Files 里的副本会请求管理员。服务文件在磁盘上被替换；正在运行的服务保持旧映像，直到重启。
+- 更新窗口为“下载并替换这个副本”。检查方式同 macOS：GitHub latest。下载 `loft-windows-<版本>-amd64.zip`（或旧名 `loft-<版本>-windows-x86-64.zip` / `windows-x64`）、`loft-windows-<版本>-386.zip` 或 `loft-windows-<版本>-arm64.zip`，替换正在运行的 exe 所在目录，然后重新启动。Program Files 里的副本会请求管理员。服务文件在磁盘上被替换；正在运行的服务保持旧映像，直到重启。
 - `v*` 标签上的 Dist 发布三份 portable zip 和 `loft-windows-<版本>-SHA256SUMS.txt`。`make release` 另外生成安装包和 Store 布局。
-  - Portable：`loft-<版本>-windows-x86-64.zip` 和 `loft-<版本>-windows-x86.zip`（Windows 7 SP1+）；`loft-<版本>-windows-arm64.zip`（Windows 10 on ARM / Windows 11 ARM）。解压即用。第一次打开隧道时安装服务。
+  - Portable：`loft-windows-<版本>-amd64.zip` 和 `loft-windows-<版本>-386.zip`（Windows 7 SP1+）；`loft-windows-<版本>-arm64.zip`（Windows 10 on ARM / Windows 11 ARM）。解压即用。第一次打开隧道时安装服务。
   - 安装程序：`loft-windows-x64-setup.exe` 和 `loft-windows-x86-setup.exe`。复制到 Program Files，注册服务，添加开始菜单快捷方式和卸载项。没有 MSI。系统下限相同。复选框“用 Loft 打开 .loft 和 loft://”默认勾选；取消则在 exe 旁写入 `assoc.off`，首次启动关闭这两项关联。
   - GitHub 渠道是 portable zip。应用读取 `a3app/loft` 的最新发布。安装包不是更新载荷。
   - Microsoft Store 是单独的 x64 包，Windows 10 版本 1809 及更高。没有 Wintun，也没有 `loft-svc`：商店包不能安装内核驱动和 LocalSystem 服务。SOCKS 可用。更新来自 Store。`make store` 写出带 `AppxManifest.xml` 的 `dist/clients/Windows/store/x64`。`makeappx` 和 Partner Center 签名在 Windows 上完成。`Publisher` 的 `CN=a3app` 由商店证书替换。
@@ -159,7 +159,7 @@ Windows 没有应用菜单栏。macOS 的 **Loft**、**连接** 和 **工具** �
 3. **TUN。** 只用 Wintun 0.14.1。不用 songgao/water，也不用 `netsh`。服务创建名为 `Loft`、类型为 `Loft` 的适配器，用 `CreateUnicastIpAddressEntry` 设地址，用 `SetIpInterfaceEntry` 设 MTU 1280，用 `CreateIpForwardEntry2` 设路由。数据包走 `\\.\pipe\loft-tun`，字节模式：u32le 长度加 IP 包，最大 65535。用户态栈由 `loft-front` 运行。`WintunDeleteDriver` 只在 `--uninstall-driver` 时调用。适配器 GUID 与 `wintun-check` 的 16 字节相同（`6c 6f 66 74 2d 77 69 6e 74 75 6e 2d 63 68 6b 01`）；Windows 显示为 `{74666F6C-772D-6E69-7475-6E2D63686B01}`。会话容量 `0x400000`。外壳把覆盖地址安装为 /32。默认路由关闭时，再发送覆盖网段 /24。
 4. **服务。** 名称 `loft`，显示名 `Loft`，独立进程，自动启动，依赖 Tcpip。二进制 `loft-svc.exe`。控制管道 `\\.\pipe\loft-ctl`（消息模式）。没有 MSI。需要时 `--install` 提权。SOCKS 不需要服务；第一次打开隧道时提议安装。管道 SDDL：`D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;IU)`。hold 打开时 `tun-close` 回复 `ok held`，不关适配器。`reset` 总是恢复保存的 IPv4 默认路由和 DNS。替换之前先快照物理 IPv4 默认路由。DNS 是适配器接口键上的 `NameServer`，然后调用 `DnsFlushResolverCache` 和 `DhcpNotifyConfigChange`。日志 `%ProgramData%\loft\svc.log`，上限 1 MB，崩溃后不自动重启。
 5. **密钥。** 当前用户的 DPAPI `CryptProtectData`，文件 `%APPDATA%\loft\keys\<id>.bin`。配置 YAML 不含 token、uuid 和密码。导出 `.loft` 会带上密钥并先警告。`loft-front` 仍在命令行收到 `-token`，与 macOS 相同。
-6. **存储和首选项。** 配置、当前 id、实例文件、首选项、路由和日志都在 `%APPDATA%\loft`，如 §8。默认值与 macOS 客户端相同（语言 ru、hold 关、failover 开、split 关、默认路由开、共享 SOCKS 1080、检查更新开）。Windows 另加当前用户对 `.loft` 和 `loft://` 的关联（默认开），以及登录启动（`HKCU\...\Run`，值 `Loft`，命令 `"exe" --tray`）。更新检查读取 GitHub `a3app/loft` 的最新发布；标签更新且发布里有 portable zip 时，用 `loft-<版本>-windows-x86-64.zip`（或旧名 `windows-x64`）、x86 zip 或 `windows-arm64.zip` 替换本副本。Dist 用仓库 `VERSION` 写入 `LOFT_VERSION`，以便和标签一致。Store 版本不查询 GitHub。
+6. **存储和首选项。** 配置、当前 id、实例文件、首选项、路由和日志都在 `%APPDATA%\loft`，如 §8。默认值与 macOS 客户端相同（语言 ru、hold 关、failover 开、split 关、默认路由开、共享 SOCKS 1080、检查更新开）。Windows 另加当前用户对 `.loft` 和 `loft://` 的关联（默认开），以及登录启动（`HKCU\...\Run`，值 `Loft`，命令 `"exe" --tray`）。更新检查读取 GitHub `a3app/loft` 的最新发布；标签更新且发布里有 portable zip 时，用 `loft-windows-<版本>-amd64.zip`（或旧名 `windows-x86-64` / `windows-x64`）、`loft-windows-<版本>-386.zip` 或 `loft-windows-<版本>-arm64.zip` 替换本副本。Dist 用仓库 `VERSION` 写入 `LOFT_VERSION`，以便和标签一致。Store 版本不查询 GitHub。
 7. **仍保留的限制。** 不删除 IPv6 默认路由。x86 和 arm64 的 Wintun 这里未做实机验证。服务日志超过上限后不再滚动。本树的界面已链接，未在 Windows 上运行。
 
 ---

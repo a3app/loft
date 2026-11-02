@@ -162,7 +162,7 @@ Protocol stays **loft/1.0**.
 
 Dist:
 
-- GUI assets: `macos-arm` / `macos-intel` DMG, `windows-x86-64` / `x86` / `arm64` zip. CLI and Debian names stay Go/ISA. The updater still accepts the old suffixes.
+- Dist names: `loft-<product>-<ver>[-<os>]-<arch>.<ext>` (channel not in the name). GUI: `loft-macos-<ver>-{arm64,amd64}.dmg`, `loft-windows-<ver>-{amd64,386,arm64}.zip`. CLI: `loft-clients-<ver>-{darwin,linux}-{arm64,amd64}.tar.gz`. Android: `loft-android-<ver>.apk` / `loft-androidtv-<ver>.apk`. debian `.deb` stays `loft-node_<ver>_<arch>.deb`. Updaters still accept the older filenames.
 - MikroTik container tarballs (amd64, arm64, armv7) and `ghcr.io/a3app/loft-mikrotik`.
 
 Android:

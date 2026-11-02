@@ -36,13 +36,11 @@ release: $(AAR)
 	LOFT_KEY_PASSWORD="$$(cat $(PASSFILE))" \
 	LOFT_ANDROID_CRASH_TOKEN="$${LOFT_ANDROID_CRASH_TOKEN}" \
 	$(GRADLE) --project-cache-dir $(DIST)/.gradle :app:assemblePhoneGithubRelease :app:assembleTvGithubRelease
-	cp $(DIST)/gradle/app/outputs/apk/phoneGithub/release/app-phone-github-release.apk $(DIST)/loft-$(VER)-android.apk
-	cp $(DIST)/gradle/app/outputs/apk/tvGithub/release/app-tv-github-release.apk $(DIST)/loft-$(VER)-android-tv.apk
-	cp $(DIST)/loft-$(VER)-android.apk $(DIST)/loft-android.apk
-	cp $(DIST)/loft-$(VER)-android-tv.apk $(DIST)/loft-android-tv.apk
-	cp $(DIST)/loft-$(VER)-android.apk $(DIST)/app-release.apk
-	cp $(DIST)/loft-$(VER)-android-tv.apk $(DIST)/app-tv-release.apk
-	cd $(DIST) && (command -v sha256sum >/dev/null && sha256sum loft-$(VER)-android.apk loft-$(VER)-android-tv.apk || shasum -a 256 loft-$(VER)-android.apk loft-$(VER)-android-tv.apk) > loft-android-$(VER)-SHA256SUMS.txt
+	cp $(DIST)/gradle/app/outputs/apk/phoneGithub/release/app-phone-github-release.apk $(DIST)/loft-android-$(VER).apk
+	cp $(DIST)/gradle/app/outputs/apk/tvGithub/release/app-tv-github-release.apk $(DIST)/loft-androidtv-$(VER).apk
+	cp $(DIST)/loft-android-$(VER).apk $(DIST)/app-release.apk
+	cp $(DIST)/loft-androidtv-$(VER).apk $(DIST)/app-tv-release.apk
+	cd $(DIST) && (command -v sha256sum >/dev/null && sha256sum loft-android-$(VER).apk loft-androidtv-$(VER).apk || shasum -a 256 loft-android-$(VER).apk loft-androidtv-$(VER).apk) > loft-android-$(VER)-SHA256SUMS.txt
 
 avds:
 	./emulator/setup-avds

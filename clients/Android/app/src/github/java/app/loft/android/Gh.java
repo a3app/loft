@@ -74,7 +74,9 @@ final class Gh {
     /**
      * Picks the newest published (not draft, not pre-release) release from the
      * GitHub API list, with the APK for this device type (phone or TV) and the
-     * SHA256SUMS file. Both unversioned and versioned asset names are accepted.
+     * SHA256SUMS file. Product-first names ({@code loft-android-<ver>.apk})
+     * win over older {@code loft-<ver>-android.apk} and unversioned
+     * {@code loft-android.apk}.
      * A release without these assets can still be returned (then
      * {@link Rel#hasApk} is false), so the caller can say "no APK yet".
      * Returns null when no release qualifies.
@@ -95,8 +97,9 @@ final class Gh {
             JSONArray assets = o.optJSONArray("assets");
             String apkName = null, apkUrl = null, sumsName = null, sumsUrl = null;
             if (assets != null) {
-                // Accept "loft-android.apk" and "loft-1.2.3-android.apk" (and
-                // the -tv variants), and both forms of the checksum file name.
+                // Product-first Dist: loft-android-<ver>.apk / loft-androidtv-<ver>.apk.
+                // Older: loft-<ver>-android.apk, loft-android.apk, and the -tv variants.
+                String apkNew = tv ? "loft-androidtv-" + ver + ".apk" : "loft-android-" + ver + ".apk";
                 String apk1 = tv ? "loft-android-tv.apk" : "loft-android.apk";
                 String apk2 = tv ? "loft-" + ver + "-android-tv.apk" : "loft-" + ver + "-android.apk";
                 String sums1 = "loft-android-SHA256SUMS.txt";
@@ -105,7 +108,10 @@ final class Gh {
                     JSONObject a = assets.getJSONObject(j);
                     String n = a.optString("name", "");
                     String url = a.optString("browser_download_url", "");
-                    if (n.equals(apk1) || n.equals(apk2)) {
+                    if (n.equals(apkNew)) {
+                        apkName = n;
+                        apkUrl = url;
+                    } else if (apkName == null && (n.equals(apk1) || n.equals(apk2))) {
                         apkName = n;
                         apkUrl = url;
                     } else if (n.equals(sums1) || n.equals(sums2)) {

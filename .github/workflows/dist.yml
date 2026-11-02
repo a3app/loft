@@ -142,14 +142,14 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: macOS DMGs arm + intel (ad-hoc, no VERSION bump)
+      - name: macOS DMGs arm64 + amd64 (ad-hoc, no VERSION bump)
         run: make macos-dmgs BUMP=0
       - name: Smoke DMGs
         run: |
           set -eu
           ver=$(tr -d ' \n' < clients/macOS/VERSION)
-          test -f "dist/clients/macOS/loft-${ver}-macos-arm.dmg"
-          test -f "dist/clients/macOS/loft-${ver}-macos-intel.dmg"
+          test -f "dist/clients/macOS/loft-macos-${ver}-arm64.dmg"
+          test -f "dist/clients/macOS/loft-macos-${ver}-amd64.dmg"
           ls -l dist/clients/macOS/*.dmg
       - name: Drop scratch images
         run: rm -f dist/clients/macOS/*.rw.dmg
@@ -211,11 +211,11 @@ jobs:
         run: |
           set -eu
           ver=$(tr -d ' \n' < VERSION)
-          test -f "dist/clients/Android/loft-${ver}-android.apk"
-          test -f "dist/clients/Android/loft-${ver}-android-tv.apk"
+          test -f "dist/clients/Android/loft-android-${ver}.apk"
+          test -f "dist/clients/Android/loft-androidtv-${ver}.apk"
           test -f "dist/clients/Android/loft-android-${ver}-SHA256SUMS.txt"
-          unzip -t "dist/clients/Android/loft-${ver}-android.apk" >/dev/null
-          unzip -t "dist/clients/Android/loft-${ver}-android-tv.apk" >/dev/null
+          unzip -t "dist/clients/Android/loft-android-${ver}.apk" >/dev/null
+          unzip -t "dist/clients/Android/loft-androidtv-${ver}.apk" >/dev/null
       - uses: actions/upload-artifact@v7
         if: env.skip != '1'
         with:
@@ -223,8 +223,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            dist/clients/Android/loft-*-android.apk
-            dist/clients/Android/loft-*-android-tv.apk
+            dist/clients/Android/loft-android-*.apk
+            dist/clients/Android/loft-androidtv-*.apk
             dist/clients/Android/loft-android-*-SHA256SUMS.txt
 
   windows:
@@ -286,8 +286,8 @@ jobs:
           sums="dist/clients/Windows/github/loft-windows-${ver}-SHA256SUMS.txt"
           test -f "$sums"
           (cd dist/clients/Windows/github && sha256sum -c "loft-windows-${ver}-SHA256SUMS.txt")
-          for a in x86-64 x86 arm64; do
-            z="dist/clients/Windows/github/loft-${ver}-windows-${a}.zip"
+          for a in amd64 386 arm64; do
+            z="dist/clients/Windows/github/loft-windows-${ver}-${a}.zip"
             test -f "$z"
             unzip -t "$z" >/dev/null
             unzip -l "$z" | grep -q 'loft.exe'
@@ -301,7 +301,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            dist/clients/Windows/github/loft-*-windows-*.zip
+            dist/clients/Windows/github/loft-windows-*.zip
             dist/clients/Windows/github/loft-windows-*-SHA256SUMS.txt
 
   # MikroTik RouterOS container (clients/MikroTik). Two outputs:
@@ -493,14 +493,14 @@ jobs:
           ver=$(tr -d ' \n' < VERSION)
           found() { find artifacts -type f -name "$1" | grep -q .; }
           for need in \
-            "loft-${ver}-macos-arm.dmg" "loft-${ver}-macos-intel.dmg" \
-            "loft-${ver}-darwin-arm64.tar.gz" "loft-${ver}-darwin-amd64.tar.gz" \
-            "loft-${ver}-linux-arm64.tar.gz" "loft-${ver}-linux-amd64.tar.gz" \
+            "loft-macos-${ver}-arm64.dmg" "loft-macos-${ver}-amd64.dmg" \
+            "loft-clients-${ver}-darwin-arm64.tar.gz" "loft-clients-${ver}-darwin-amd64.tar.gz" \
+            "loft-clients-${ver}-linux-arm64.tar.gz" "loft-clients-${ver}-linux-amd64.tar.gz" \
             "loft-node-${ver}-linux-arm64.tar.gz" "loft-node-${ver}-linux-amd64.tar.gz" \
             "loft-node_${ver}_arm64.deb" "loft-node_${ver}_amd64.deb" \
             "loft-panel-${ver}-linux-arm64.tar.gz" "loft-panel-${ver}-linux-amd64.tar.gz" \
             "loft-panel_${ver}_arm64.deb" "loft-panel_${ver}_amd64.deb" \
-            "loft-${ver}-windows-x86-64.zip" "loft-${ver}-windows-x86.zip" "loft-${ver}-windows-arm64.zip" \
+            "loft-windows-${ver}-amd64.zip" "loft-windows-${ver}-386.zip" "loft-windows-${ver}-arm64.zip" \
             "loft-mikrotik-${ver}-amd64.tar" "loft-mikrotik-${ver}-arm64.tar" "loft-mikrotik-${ver}-armv7.tar" \
             "loft-mikrotik-${ver}-SHA256SUMS.txt" \
             "loft-ndms-${ver}-aarch64.ipk" "loft-ndms-${ver}-armv7.ipk" "loft-ndms-${ver}-mipsel.ipk" \
@@ -511,8 +511,8 @@ jobs:
           do
             found "$need"
           done
-          if found "loft-${ver}-android.apk"; then
-            found "loft-${ver}-android-tv.apk"
+          if found "loft-android-${ver}.apk"; then
+            found "loft-androidtv-${ver}.apk"
             found "loft-android-${ver}-SHA256SUMS.txt"
           fi
           find artifacts -type f \( \

@@ -18,7 +18,7 @@ make node
 make client    # dist/clients/go/loft
 make probe     # dist/clients/go/loft-probe
 make macos     # dist/clients/macOS/loft.app
-make macos-dmg # dist/clients/macOS/loft-*-macos-<arch>.dmg  (симлинк Applications)
+make macos-dmg # dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg  (симлинк Applications)
 make macos-dmgs # оба DMG, arm64 и x86_64 (CI)
 make android   # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs
 make ios       # dist/clients/iOS/loft.app (macOS) + iphonesimulator/loft.app
@@ -429,8 +429,8 @@ Push и pull request в `main` запускают `make test`.
 
 - tarball и `.deb` ноды (linux amd64, arm64)
 - архивы CLI (`loft`, `loft-front`, `loft-probe`, `loft-bench` для linux/darwin, amd64/arm64)
-- macOS DMG с ad-hoc подписью: `loft-*-macos-arm.dmg` и `loft-*-macos-intel.dmg` (`BUMP=0`, CI не переписывает `clients/macOS/VERSION`). Раннер — Apple Silicon; для Intel Swift/Go собираются кросс-компиляцией (`ARCH=x86_64`).
+- macOS DMG с ad-hoc подписью: `loft-macos-<ver>-arm64.dmg` и `loft-macos-<ver>-amd64.dmg` (`BUMP=0`, CI не переписывает `clients/macOS/VERSION`). Раннер — Apple Silicon; для Intel Swift/Go собираются кросс-компиляцией (`ARCH=x86_64`).
 
-и публикует GitHub Release. Dist также отправляет тег в [proxy.golang.org](https://proxy.golang.org) и просит [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft) собрать страницу модуля для этого релиза. Версия входит в имя файла (`loft-1.0.42-macos-arm.dmg`, `loft-node_1.0.42_amd64.deb`). Повторный прогон на том же теге заменяет файлы. Без тега Actions → Dist → Run workflow только выкладывает артефакты.
+и публикует GitHub Release. Dist также отправляет тег в [proxy.golang.org](https://proxy.golang.org) и просит [pkg.go.dev](https://pkg.go.dev/github.com/a3app/loft) собрать страницу модуля для этого релиза. Имена файлов: `loft-<продукт>-<ver>[-<os>]-<arch>.<ext>` (`loft-macos-<ver>-arm64.dmg`, `loft-node_1.0.42_amd64.deb`). Повторный прогон на том же теге заменяет файлы. Без тега Actions → Dist → Run workflow только выкладывает артефакты.
 
 Локальные пакеты: `make dist`. Локальный DMG без повышения маркетинговой версии macOS: `make macos-dmg BUMP=0`. Developer ID и нотаризация остаются на Маке со связкой ключей; в Actions их нет.

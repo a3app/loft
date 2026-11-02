@@ -43,11 +43,11 @@ GitHub portable zip：
 
 | 文件 | 是什么 |
 |------|--------|
-| `loft-<版本>-windows-x86-64.zip` 和 `loft-<版本>-windows-x86.zip` | Portable。Windows 7 SP1 及更高。解压即用。第一次打开隧道时安装服务。 |
-| `loft-<版本>-windows-arm64.zip` | Portable。Windows 10 on ARM / Windows 11 ARM。同一套布局。这里没有在真机上跑过。 |
+| `loft-windows-<版本>-amd64.zip` 和 `loft-windows-<版本>-386.zip` | Portable。Windows 7 SP1 及更高。解压即用。第一次打开隧道时安装服务。 |
+| `loft-windows-<版本>-arm64.zip` | Portable。Windows 10 on ARM / Windows 11 ARM。同一套布局。这里没有在真机上跑过。 |
 | `loft-windows-x64-setup.exe` 和 `loft-windows-x86-setup.exe` | 安装程序。Program Files、loft 服务、开始菜单、卸载。没有 MSI。仅 x86-64 和 x86。 |
 
-`make portable` 写出这些 zip 和 `loft-windows-<版本>-SHA256SUMS.txt`。GitHub 版本启动时读取 `a3app/loft` 最新发布。更新的标签若带匹配的 zip，就替换正在运行的 exe 所在目录并重新启动。`v*` 标签上的 Dist 用仓库 `VERSION` 作为 `VER` 编译 zip，并挂到 Release。若已执行 `make front`，包内含 `loft-front.exe`。workflow 用固定的 XTLS/go-win7 SDK 编译这个二进制。
+`make portable` 写出这些 zip 和 `loft-windows-<版本>-SHA256SUMS.txt`。GitHub 版本启动时读取 `a3app/loft` 最新发布。更新的标签若带匹配的 zip，就替换正在运行的 exe 所在目录并重新启动。更新程序仍接受旧名 `loft-<ver>-windows-x86-64.zip` / `x86` / `arm64`。`v*` 标签上的 Dist 用仓库 `VERSION` 作为 `VER` 编译 zip，并挂到 Release。若已执行 `make front`，包内含 `loft-front.exe`。workflow 用固定的 XTLS/go-win7 SDK 编译这个二进制。
 
 Microsoft Store，Windows 10 版本 1809 及更高，仅 x64：`dist/clients/Windows/store/x64`。没有 Wintun，也没有服务。SOCKS 可用。隧道留在 GitHub 版本里。这里写出布局和 `AppxManifest.xml`。打包和签名在 Windows 上：
 
