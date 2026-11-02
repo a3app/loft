@@ -507,14 +507,11 @@ jobs:
             "loft-ndms-${ver}-aarch64.ipk.sha256" "loft-ndms-${ver}-armv7.ipk.sha256" "loft-ndms-${ver}-mipsel.ipk.sha256" \
             "loft-ndms-${ver}-SHA256SUMS.txt" \
             "loft-windows-${ver}-SHA256SUMS.txt" \
-            "loft-clients-${ver}-SHA256SUMS.txt" "loft-node-${ver}-SHA256SUMS.txt" "loft-panel-${ver}-SHA256SUMS.txt"
+            "loft-clients-${ver}-SHA256SUMS.txt" "loft-node-${ver}-SHA256SUMS.txt" "loft-panel-${ver}-SHA256SUMS.txt" \
+            "loft-android-${ver}.apk" "loft-androidtv-${ver}.apk" "loft-android-${ver}-SHA256SUMS.txt"
           do
             found "$need"
           done
-          if found "loft-android-${ver}.apk"; then
-            found "loft-androidtv-${ver}.apk"
-            found "loft-android-${ver}-SHA256SUMS.txt"
-          fi
           find artifacts -type f \( \
             -name '*.tar.gz' -o -name '*.tar' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*.ipk' -o -name '*.sha256' -o -name '*SHA256SUMS.txt' \
           \) | sort
@@ -527,7 +524,7 @@ jobs:
           ver=$(tr -d ' \n' < VERSION)
           mapfile -t files < <(find artifacts -type f \( \
             -name '*.tar.gz' -o -name '*.tar' -o -name '*.deb' -o -name '*.dmg' -o -name '*.apk' -o -name '*.zip' -o -name '*.ipk' -o -name '*.sha256' -o -name '*SHA256SUMS.txt' \
-          \) | grep -E -- "-${ver}-|_${ver}_" | sort)
+          \) | grep -E -- "-${ver}(-|\\.)|_${ver}_" | sort)
           [ "${#files[@]}" -gt 0 ]
           notes=GH_RELEASE.md
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
