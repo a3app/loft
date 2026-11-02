@@ -204,7 +204,7 @@ func (s *Sup) removeLocked(id string, k *kid) {
 	k.stop()
 	delete(s.kids, id)
 	snap := readSnap(snapPath(s.stateDir(), id))
-	lines, err := DeleteLines(Up{Index: k.opkg, ISP: snap.ISP, Hosts: snap.Hosts})
+	lines, err := DeleteLines(Up{Index: k.opkg, ISP: snap.ISP, Via: snap.Via, Hosts: snap.Hosts})
 	if err != nil {
 		log.Printf("ndmc %s: %v", id, err)
 		return

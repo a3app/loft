@@ -60,6 +60,33 @@ func TestUpLinesOrder(t *testing.T) {
 	if del[len(del)-2] != "no interface OpkgTun0" || del[len(del)-1] != "system configuration save" {
 		t.Fatalf("delete %v", del)
 	}
+	routed, err := UpLines(Up{
+		Index: 0, Desc: "Work", IP: "10.7.0.2", MTU: 1280,
+		ISP: "GigabitEthernet1", Via: "10.0.2.2", Hosts: []string{"198.46.252.46"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined = strings.Join(routed, "\n")
+	drop := strings.Index(joined, "no ip route 198.46.252.46/32 GigabitEthernet1")
+	withGW := strings.Index(joined, "ip route 198.46.252.46/32 10.0.2.2 GigabitEthernet1")
+	up = strings.Index(joined, "interface OpkgTun0 up")
+	if drop < 0 || withGW < 0 || up < 0 || !(drop < withGW && withGW < up) {
+		t.Fatalf("via pin:\n%s", joined)
+	}
+	for _, ln := range routed {
+		if ln == "ip route 198.46.252.46/32 GigabitEthernet1" {
+			t.Fatalf("on-link pin kept:\n%s", joined)
+		}
+	}
+	down, err = DownLines(Up{Index: 0, ISP: "GigabitEthernet1", Via: "0.0.0.0", Hosts: []string{"198.46.252.46"}})
+	if err != nil || len(down) != 3 || down[1] != "no ip route 198.46.252.46/32 GigabitEthernet1" {
+		t.Fatalf("zero via %v %v", down, err)
+	}
+	down, err = DownLines(Up{Index: 0, ISP: "GigabitEthernet1", Via: "10.0.2.2", Hosts: []string{"198.46.252.46"}})
+	if err != nil || len(down) != 4 || down[1] != "no ip route 198.46.252.46/32 10.0.2.2 GigabitEthernet1" || down[2] != "no ip route 198.46.252.46/32 GigabitEthernet1" {
+		t.Fatalf("via down %v %v", down, err)
+	}
 }
 
 // TestApplySkipsPin checks that a failed "ip route" does not stop "interface up",
@@ -302,16 +329,30 @@ func TestAuth(t *testing.T) {
 	}
 }
 
-// TestISP reads the default-route interface from RCI JSON and from ndmc text.
+// TestISP reads the default-route interface and next hop from RCI JSON
+// and from both ndmc text shapes. 0.0.0.0 is not a next hop.
 func TestISP(t *testing.T) {
-	body := []byte(`{"show":{"ip":{"route":[{"destination":"0.0.0.0/0","interface":"GigabitEthernet0/0"}]}}}`)
-	s, ok := ParseRoutes(body)
-	if !ok || s != "GigabitEthernet0/0" {
-		t.Fatalf("%q %v", s, ok)
+	body := []byte(`{"show":{"ip":{"route":[{"destination":"0.0.0.0/0","gateway":"10.0.2.2","interface":"GigabitEthernet1"},{"destination":"10.0.2.0/24","gateway":"0.0.0.0","interface":"GigabitEthernet1"}]}}}`)
+	s, via, ok := ParseRoutes(body)
+	if !ok || s != "GigabitEthernet1" || via != "10.0.2.2" {
+		t.Fatalf("%q %q %v", s, via, ok)
 	}
-	s, ok = ParseRouteText("S>* 0.0.0.0/0 [0/0] via 1.2.3.4 GigabitEthernet0/0\n")
-	if !ok || s != "GigabitEthernet0/0" {
-		t.Fatalf("text %q %v", s, ok)
+	body = []byte(`{"show":{"ip":{"route":[{"destination":"0.0.0.0/0","interface":"GigabitEthernet0/0"}]}}}`)
+	s, via, ok = ParseRoutes(body)
+	if !ok || s != "GigabitEthernet0/0" || via != "" {
+		t.Fatalf("no hop %q %q %v", s, via, ok)
+	}
+	s, via, ok = ParseRouteText("S>* 0.0.0.0/0 [0/0] via 1.2.3.4 GigabitEthernet0/0\n")
+	if !ok || s != "GigabitEthernet0/0" || via != "1.2.3.4" {
+		t.Fatalf("text %q %q %v", s, via, ok)
+	}
+	s, via, ok = ParseRouteText("0.0.0.0/0           10.0.2.2         ISP                              U  1000\n")
+	if !ok || s != "ISP" || via != "10.0.2.2" {
+		t.Fatalf("table %q %q %v", s, via, ok)
+	}
+	s, via, ok = ParseRouteText("0.0.0.0/0           0.0.0.0          ppp0                             U  0\n")
+	if !ok || s != "ppp0" || via != "" {
+		t.Fatalf("ppp %q %q %v", s, via, ok)
 	}
 }
 

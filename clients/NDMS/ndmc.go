@@ -3,6 +3,7 @@ package ndms
 import (
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -30,12 +31,16 @@ func Names(index int) (ndm, tun string, err error) {
 
 // Up is the ndmc script that publishes one OpkgTun. Host routes are pinned
 // on the ISP interface before "up". There is no default route: NDM owns it.
+// Via is the ISP default's next hop. On Ethernet, a pin with no next hop is
+// stored as gateway 0.0.0.0 and the kernel ARPs the host on the WAN. PPP
+// leaves Via empty.
 type Up struct {
 	Index int
 	Desc  string
 	IP    string
 	MTU   int
 	ISP   string
+	Via   string   // IPv4 next hop; empty or 0.0.0.0 means on-link
 	Hosts []string // IPv4, no mask
 }
 
@@ -69,7 +74,7 @@ func UpLines(u Up) ([]string, error) {
 		"interface " + ndm + " ip mtu " + strconv.Itoa(mtu),
 		"interface " + ndm + " ip tcp adjust-mss pmtu",
 	}
-	pins, err := pinLines(u.ISP, u.Hosts, false)
+	pins, err := pinLines(u.ISP, u.Via, u.Hosts, false)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +90,7 @@ func DownLines(u Up) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	pins, err := pinLines(u.ISP, u.Hosts, true)
+	pins, err := pinLines(u.ISP, u.Via, u.Hosts, true)
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +116,20 @@ func DeleteLines(u Up) ([]string, error) {
 	return out, nil
 }
 
-// pinLines is "ip route A.B.C.D/32 ISP", or "no ip route" when remove is set.
+// pinLines is the host pin. With a real Via it is
+// "ip route A.B.C.D/32 Via ISP". Without one (PPP, next hop 0.0.0.0) it is
+// "ip route A.B.C.D/32 ISP". remove emits "no ip route".
+//
+// An Ethernet pin that names only the interface is installed as gateway
+// 0.0.0.0. The kernel then ARPs the host on the WAN and the session gets
+// EHOSTUNREACH. The add therefore drops that on-link form before installing
+// the next hop, and the remove drops both forms so an older pin does not stay.
+//
 // An empty ISP or an empty host list yields no lines: the interface still
 // comes up, the session is just not protected from hairpin. Hosts are IPv4
 // literals. A space or a shell metacharacter is rejected so one line cannot
 // become two commands.
-func pinLines(isp string, hosts []string, remove bool) ([]string, error) {
+func pinLines(isp, via string, hosts []string, remove bool) ([]string, error) {
 	if len(hosts) == 0 {
 		return nil, nil
 	}
@@ -127,10 +140,7 @@ func pinLines(isp string, hosts []string, remove bool) ([]string, error) {
 	if !ispRe.MatchString(isp) {
 		return nil, fmt.Errorf("isp %q", isp)
 	}
-	verb := "ip route "
-	if remove {
-		verb = "no ip route "
-	}
+	via = viaHop(via)
 	var lines []string
 	seen := map[string]bool{}
 	for _, h := range hosts {
@@ -142,9 +152,33 @@ func pinLines(isp string, hosts []string, remove bool) ([]string, error) {
 		if strings.ContainsAny(h, " \t;/|&") {
 			return nil, fmt.Errorf("host %q", h)
 		}
-		lines = append(lines, verb+h+"/32 "+isp)
+		onlink := "ip route " + h + "/32 " + isp
+		if remove {
+			if via != "" {
+				lines = append(lines, "no ip route "+h+"/32 "+via+" "+isp)
+			}
+			lines = append(lines, "no "+onlink)
+			continue
+		}
+		if via != "" {
+			lines = append(lines, "no "+onlink)
+			lines = append(lines, "ip route "+h+"/32 "+via+" "+isp)
+			continue
+		}
+		lines = append(lines, onlink)
 	}
 	return lines, nil
+}
+
+// viaHop is an IPv4 next hop. 0.0.0.0 and anything that is not an address
+// are empty: the caller then pins on the interface alone.
+func viaHop(s string) string {
+	s = strings.TrimSpace(s)
+	ip := net.ParseIP(s).To4()
+	if ip == nil || ip.IsUnspecified() {
+		return ""
+	}
+	return ip.String()
 }
 
 // quoteDesc wraps a connection name for "interface … description".

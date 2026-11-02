@@ -36,6 +36,7 @@ type Snap struct {
 	TX      uint64   `json:"tx"`
 	Hosts   []string `json:"hosts,omitempty"` // IPv4 pins currently installed
 	ISP     string   `json:"isp,omitempty"`
+	Via     string   `json:"via,omitempty"`  // ISP next hop of those pins; empty on PPP
 	Opkg    string   `json:"opkg,omitempty"` // NDM name, OpkgTunN
 }
 
@@ -150,6 +151,7 @@ type live struct {
 	hosts   []string
 	pins    []string
 	isp     string
+	via     string
 	rci     string
 	path    string
 	state   string
@@ -161,10 +163,13 @@ type live struct {
 	dev     *inbound.Device
 }
 
-// runLoft supervises the loft session. The first outbound asks ndmc to
-// create OpkgTun and only then opens the tun. Later outbounds re-attach
-// the dialer, so the interface does not flap in the priority list.
+// runLoft supervises the loft session. The front pin is installed before
+// the first dial: an on-link pin left in the config makes that dial fail,
+// and publish would never run to replace it. The first outbound then asks
+// ndmc to create OpkgTun and only then opens the tun. Later outbounds
+// re-attach the dialer, so the interface does not flap in the priority list.
 func (lv *live) runLoft(ctx context.Context, rt Runtime) error {
+	lv.pin()
 	h := &transport.Holder{}
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, nil))
 	return transport.SuperviseOn(ctx, rt.Loft, pathCh, func(d transport.Dialer, o config.Outbound) {
@@ -182,6 +187,7 @@ func (lv *live) runLoft(ctx context.Context, rt Runtime) error {
 // After Probe succeeds the dialer stays up until ctx is cancelled.
 // A dead process is the parent's problem: Reconcile restarts the child.
 func (lv *live) runProxy(ctx context.Context, rt Runtime) error {
+	lv.pin()
 	delay := time.Second
 	for {
 		if ctx.Err() != nil {
@@ -289,6 +295,18 @@ func (lv *live) bring(h *transport.Holder) {
 			cidr = inbound.OverlayCIDR(ip, lv.tunAddr)
 		}
 		lv.overlay = strings.Split(cidr, "/")[0]
+		// The kernel device has to exist before "ip address". The first
+		// publish creates it inside ndmc. After "interface down" the NDM
+		// object stays and Initialize_ does not run again, so the address
+		// ioctl fails (0xcffd0217) until something else creates opkgtunN.
+		// Create it persistent and close the fd, so ndmc's own TUNSETIFF,
+		// if it still runs, finds a free queue.
+		if err := ensureTUN(lv.tun); err != nil {
+			lv.state, lv.err = "error", err.Error()
+			log.Printf("tun: %v", err)
+			lv.write()
+			return
+		}
 		if !lv.publish() {
 			return
 		}
@@ -312,13 +330,7 @@ func (lv *live) bring(h *transport.Holder) {
 // before "interface up", so the session's own packets leave via the ISP
 // and do not hairpin into the tun. The next callback tries again.
 func (lv *live) publish() bool {
-	if lv.isp == "" {
-		isp, err := DiscoverISP(context.Background(), lv.rci, Bin{})
-		if err != nil {
-			log.Printf("isp: %v", err)
-		}
-		lv.isp = isp
-	}
+	lv.learnISP()
 	pins := resolve4(context.Background(), lv.hosts)
 	lv.pins = pins
 	if lv.isp == "" && len(pins) > 0 {
@@ -326,7 +338,7 @@ func (lv *live) publish() bool {
 	}
 	lines, err := UpLines(Up{
 		Index: indexOf(lv.tun), Desc: lv.name, IP: lv.overlay,
-		MTU: lv.mtu, ISP: lv.isp, Hosts: pins,
+		MTU: lv.mtu, ISP: lv.isp, Via: lv.via, Hosts: pins,
 	})
 	if err != nil {
 		lv.state, lv.err = "error", err.Error()
@@ -345,6 +357,50 @@ func (lv *live) publish() bool {
 	return true
 }
 
+// pin repairs the front host routes before the dial. Caller does not hold mu.
+// An Ethernet pin with no next hop is gateway 0.0.0.0; the dial then ARPs
+// the node on the WAN and never comes up, so publish would not get to run.
+func (lv *live) pin() {
+	lv.mu.Lock()
+	defer lv.mu.Unlock()
+	lv.learnISP()
+	pins := resolve4(context.Background(), lv.hosts)
+	lv.pins = pins
+	if lv.isp == "" {
+		if len(pins) > 0 {
+			log.Printf("no ISP interface; front addresses are not pinned")
+		}
+		return
+	}
+	lines, err := pinLines(lv.isp, lv.via, pins, false)
+	if err != nil {
+		log.Printf("pin: %v", err)
+		return
+	}
+	if err := Apply(context.Background(), Bin{}, lines); err != nil {
+		log.Printf("pin: %v", err)
+	}
+}
+
+// learnISP fills the ISP interface and its next hop. Caller holds mu.
+// A configured interface is kept. The next hop is taken only when it
+// belongs to that same interface. 0.0.0.0 stays empty.
+func (lv *live) learnISP() {
+	if lv.isp != "" && lv.via != "" {
+		return
+	}
+	isp, via, err := DiscoverISP(context.Background(), lv.rci, Bin{})
+	if err != nil {
+		log.Printf("isp: %v", err)
+	}
+	if lv.isp == "" {
+		lv.isp = isp
+	}
+	if via != "" && (isp == "" || isp == lv.isp) {
+		lv.via = via
+	}
+}
+
 // down closes the tun and runs DownLines. The NDM object stays, so a
 // priority that names this OpkgTun is kept. DeleteLines is the parent's
 // job, and only when the connection itself is removed.
@@ -355,7 +411,7 @@ func (lv *live) down() {
 		_ = lv.dev.Close()
 		lv.dev = nil
 	}
-	lines, err := DownLines(Up{Index: indexOf(lv.tun), ISP: lv.isp, Hosts: lv.pins})
+	lines, err := DownLines(Up{Index: indexOf(lv.tun), ISP: lv.isp, Via: lv.via, Hosts: lv.pins})
 	if err == nil {
 		_ = Apply(context.Background(), Bin{}, lines)
 		log.Printf("ndmc %s down", lv.ndm)
@@ -399,7 +455,7 @@ func (lv *live) write() {
 		State: lv.state, Err: lv.err, Overlay: lv.overlay, Gateway: gw,
 		MTU: lv.mtu, Front: lv.front, Node: lv.node, Reserve: lv.reserve,
 		QUIC: q, RX: rx, TX: tx, Hosts: append([]string(nil), lv.pins...),
-		ISP: lv.isp, Opkg: lv.ndm,
+		ISP: lv.isp, Via: lv.via, Opkg: lv.ndm,
 	})
 }
 
