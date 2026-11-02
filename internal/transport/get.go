@@ -1607,7 +1607,7 @@ func (g *GET) roundTripAt(ctx context.Context, auth, uplink []byte, seq uint64) 
 		g.noteTrip(ttfb, time.Since(t0), len(blob), 0, fmt.Errorf("status"))
 		return nil, resp.Header, seq, fmt.Errorf("GET front: status %d: %s", resp.StatusCode, slurp)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	total := time.Since(t0)
 	if err != nil {
 		g.noteTrip(ttfb, total, len(blob), len(body), err)
@@ -2271,9 +2271,10 @@ func (s *GETServer) get(id string) *serverSess {
 // ICMP and TCP 1-byte then waited that plus an HTTP/2 waiter jump.
 const (
 	// Yandex origin-fetch is HTTP/1.1: one body in flight per origin
-	// conn. 192 KiB / 139 ms is 11 Mbit (Speedtest download). 1 MiB is
-	// ~57 Mbit. Origin-fetch dies at 5s; 1 MiB stays under that.
-	getDownlinkBytes = 1 << 20
+	// conn. 192 KiB / 139 ms is 11 Mbit. Clients slurp LimitReader 1 MiB
+	// (1.0.43 still does); AEAD and a last mux frame must fit, so the
+	// mux cap is 992 KiB (~57 Mbit at 139 ms). Origin-fetch dies at 5s.
+	getDownlinkBytes = (1 << 20) - 32<<10
 	getDownlinkMore  = 15 * time.Millisecond
 	getDownlinkFill  = 3 * time.Millisecond
 	// Overlay ICMP is sync (FilterDgram). Internet ICMP with no live
