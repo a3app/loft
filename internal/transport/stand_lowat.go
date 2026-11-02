@@ -9,10 +9,21 @@ import (
 )
 
 // standApplyLowat caps unsent bytes so a short write is not stuck behind the
-// send queue. standLowat zero leaves the kernel limit.
+// send queue. standLowat zero leaves the kernel limit (does not write).
 func standApplyLowat(t *net.TCPConn) {
 	n := standLowat()
-	if n <= 0 || t == nil {
+	if n <= 0 {
+		return
+	}
+	setLowat(t, n)
+}
+
+// standClearLowat writes TCP_NOTSENT_LOWAT 0 (kernel default, unlimited).
+// Accept already applied notsentLowat; standApplyLowat(0) does not undo it.
+func standClearLowat(t *net.TCPConn) { setLowat(t, 0) }
+
+func setLowat(t *net.TCPConn, n int) {
+	if t == nil {
 		return
 	}
 	raw, err := t.SyscallConn()

@@ -543,12 +543,14 @@ func (d *decoyListener) serveMask(c net.Conn, raw []byte, hello clientHello) {
 }
 
 // spliceDecoy writes hello to origin (after a PROXY v1 line when proxy) and
-// copies both directions.
+// copies both directions. Accept already set TCP_NOTSENT_LOWAT 16 KiB for
+// overlay ping; a site body needs the send queue (16 KiB / 330 ms ≈ 100 KB/s).
 func spliceDecoy(c net.Conn, hello []byte, origin string, proxy bool) {
 	defer c.Close()
 	if origin == "" {
 		return
 	}
+	standClearLowat(tcpOf(c))
 	up, err := net.DialTimeout("tcp", origin, 8*time.Second)
 	if err != nil {
 		return
@@ -556,6 +558,7 @@ func spliceDecoy(c net.Conn, hello []byte, origin string, proxy bool) {
 	metrics.IncDecoySplice()
 	defer up.Close()
 	tuneTCP(up)
+	standClearLowat(tcpOf(up))
 	if proxy {
 		if _, err := up.Write(proxyHeader(c)); err != nil {
 			return

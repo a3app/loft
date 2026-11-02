@@ -44,6 +44,19 @@ func TestTuneTCPPinStillSetsBuffer(t *testing.T) {
 	}
 }
 
+func TestStandClearLowatDropsCap(t *testing.T) {
+	t.Setenv("LOFT_STAND_TCPBUF", "")
+	t.Setenv("LOFT_STAND_LOWAT", "")
+
+	c := dialTCP(t)
+	defer c.Close()
+	tuneTCP(c)
+	standClearLowat(c)
+	if g := sockOpt(t, c, unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT); g != 0 {
+		t.Fatalf("unsent cap %d", g)
+	}
+}
+
 func dialTCP(t *testing.T) *net.TCPConn {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
