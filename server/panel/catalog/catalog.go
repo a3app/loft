@@ -147,9 +147,10 @@ var all = []Package{
 	// VLESS / Trojan / Shadowsocks inbounds share one Xray-core tree with the
 	// Xray client (GroupVPN "xray"). Installed means this package's unit file
 	// is on disk, not merely that the binary unpacked; remove keeps the tree
-	// while a sibling still uses it. The unit waits for its own config.
+	// while a sibling still uses it. VLESS listens on a dedicated port
+	// (default 4433); 443 stays loft-node. The unit waits for its own config.
 	{Key: "vless", Group: GroupProto, Method: MethodRelease, SizeMB: 32,
-		Release: xrayRel, Ports: "443 · SNI",
+		Release: xrayRel, Ports: "4433",
 		Unit:  "loft-vless.service",
 		Files: map[string]string{"/etc/systemd/system/loft-vless.service": xrayInUnit("VLESS inbound", "/etc/loft-panel/vless.json")}},
 	{Key: "trojan", Group: GroupProto, Method: MethodRelease, SizeMB: 0,

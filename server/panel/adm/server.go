@@ -54,7 +54,7 @@ func opDeadline(op string) time.Duration {
 	switch op {
 	case admproto.OpNetworkApply, admproto.OpNodeRestart, admproto.OpDomainSet, admproto.OpCertInstall:
 		return 90 * time.Second
-	case admproto.OpPackages, admproto.OpPackageUnit, admproto.OpMTProtoGet, admproto.OpMTProtoSet, admproto.OpNetState, admproto.OpNetChange, admproto.OpChannels:
+	case admproto.OpPackages, admproto.OpPackageUnit, admproto.OpMTProtoGet, admproto.OpMTProtoSet, admproto.OpVLESSGet, admproto.OpVLESSSet, admproto.OpVLESSClient, admproto.OpNetState, admproto.OpNetChange, admproto.OpChannels:
 		return 45 * time.Second
 	case admproto.OpChannelSave, admproto.OpChannelDelete, admproto.OpChannelSwitch, admproto.OpChannelRules,
 		admproto.OpChannelPrio, admproto.OpChannelPrioDelete, admproto.OpDirectCheck,
@@ -115,7 +115,7 @@ func (s *Server) serveConn(c net.Conn) {
 func mutating(op string) bool {
 	switch op {
 	case admproto.OpNetworkApply, admproto.OpMemberKey, admproto.OpNodeRestart, admproto.OpDomainSet, admproto.OpCertInstall,
-		admproto.OpPackagesApply, admproto.OpPackageUnit, admproto.OpMTProtoSet, admproto.OpUpdateApply, admproto.OpTimezoneSet,
+		admproto.OpPackagesApply, admproto.OpPackageUnit, admproto.OpMTProtoSet, admproto.OpVLESSSet, admproto.OpVLESSClient, admproto.OpUpdateApply, admproto.OpTimezoneSet,
 		admproto.OpNetChange, admproto.OpNetConfirm, admproto.OpNetRevert,
 		admproto.OpChannelSave, admproto.OpChannelDelete, admproto.OpChannelSwitch, admproto.OpChannelRules,
 		admproto.OpChannelPrio, admproto.OpChannelPrioDelete, admproto.OpDirectCheck,
@@ -200,6 +200,20 @@ func (s *Server) do(ctx context.Context, req admproto.Request) (any, error) {
 			return nil, err
 		}
 		return s.Ops.MTProtoSet(ctx, b)
+	case admproto.OpVLESSGet:
+		return s.Ops.VLESSGet()
+	case admproto.OpVLESSSet:
+		var b admproto.VLESSSet
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.VLESSSet(ctx, b)
+	case admproto.OpVLESSClient:
+		var b admproto.VLESSClient
+		if err := strict(req.Body, &b); err != nil {
+			return nil, err
+		}
+		return s.Ops.VLESSClient(ctx, b)
 	case admproto.OpUpdateApply:
 		var b admproto.UpdateApply
 		if err := strict(req.Body, &b); err != nil {

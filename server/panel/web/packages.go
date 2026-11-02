@@ -98,6 +98,34 @@ func (s *Server) mtprotoSet(w http.ResponseWriter, r *http.Request) {
 	ok(w, out)
 }
 
+// vlessGet returns the VLESS inbound's port, Reality dest and public key.
+func (s *Server) vlessGet(w http.ResponseWriter, r *http.Request) {
+	var out admproto.VLESS
+	if err := s.Adm(userOf(r).Login).Call(r.Context(), admproto.OpVLESSGet, nil, &out); err != nil {
+		admFail(w, err)
+		return
+	}
+	ok(w, out)
+}
+
+// vlessSet changes the inbound port or Reality dest, or rotates the keys.
+// A new key pair breaks the old vless:// links.
+func (s *Server) vlessSet(w http.ResponseWriter, r *http.Request) {
+	var req admproto.VLESSSet
+	if !readJSON(w, r, 4<<10, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 50*time.Second)
+	defer cancel()
+	var out admproto.VLESS
+	if err := s.Adm(userOf(r).Login).Call(ctx, admproto.OpVLESSSet, req, &out); err != nil {
+		admFail(w, err)
+		return
+	}
+	s.logf("vless settings by %s: port %d dest %s rotate %v", userOf(r).Login, req.Port, req.Dest, req.RotateKeys)
+	ok(w, out)
+}
+
 // packageUnit switches a package's service on (enabled and started) or off.
 func (s *Server) packageUnit(w http.ResponseWriter, r *http.Request) {
 	var req admproto.PackageUnit

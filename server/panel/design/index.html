@@ -1097,7 +1097,7 @@ const PKG=[
  ['Веб-сервер','nginx за нодой: панель по своему имени и проверка сертификатов Let’s Encrypt на :80.','run','1.26.3','80, 8443','4 MB',{base:1}],
  ['Серверы протоколов'],
  ['Прокси Telegram MTProto','Прокси MTProto для клиентов Telegram этого сервера. Ссылка tg://proxy — в настройках пакета.','run','2.2.8','8448 tcp','6 MB',{gear:1}],
- ['Сервер VLESS','VLESS + Reality/Vision на Xray-core, на 443 по имени vless.example.net.','run','25.9.11','443 · SNI','32 MB',{gear:1,upd:'25.10.2'}],
+ ['Сервер VLESS','VLESS + Reality/Vision на Xray-core. TCP, отдельный порт (по умолчанию 4433).','run','25.9.11','4433','32 MB',{gear:1,upd:'25.10.2'}],
  ['Сервер Trojan','Trojan поверх TLS на том же Xray-core, свой вход trojan.example.net.','none','—','443 · SNI','—'],
  ['Сервер Shadowsocks','Shadowsocks 2022 на том же Xray-core, на своём порту.','none','—','8388','—'],
  ['VPN-клиенты · вышестоящие каналы'],
@@ -1139,7 +1139,7 @@ function pkgRow(p){
  const o=p[6]||{},s=p[2];
  const st=s==='run'?(o.tool?pill('установлен','ok'):pill('работает','ok')):s==='busy'?pill('устанавливается…','busy'):'<span class="mute">не установлен</span>';
  let a='';
- if(o.gear&&s==='run')a+=`<button class="icb" type="button" aria-label="Настройки" onclick="${{'Нода loft':"go('node')",'Прокси Telegram MTProto':'openMTProto()','Почтовый сервер':"go('mail')",'Защитник':'openGuard()'}[p[0]]||''}">${ic('i-gear')}</button>`;
+ if(o.gear&&s==='run')a+=`<button class="icb" type="button" aria-label="Настройки" onclick="${{'Нода loft':"go('node')",'Прокси Telegram MTProto':'openMTProto()','Сервер VLESS':'openVLESS()','Почтовый сервер':"go('mail')",'Защитник':'openGuard()'}[p[0]]||''}">${ic('i-gear')}</button>`;
  if(o.upd&&s==='run')a+=`<button class="btn sm" type="button">Обновить до ${o.upd}</button>`;
  const par=PDEP[p[0]];
  if(s==='none'&&(!par||pState(par)==='run'))a+=`<button class="btn sm pri" type="button">Установить</button>`;
@@ -1200,6 +1200,17 @@ function openMTProto(){
   <div class="dlg-sec">Ссылка для Telegram</div>
   <div class="uri" id="mtp-link">tg://proxy?server=vpn.example.net&amp;port=8448&amp;secret=ee367a189aee18fa31c190054efd4a8e9573636c6f7564666c6172652e636f6d</div>
   <div class="acts" style="margin:0"><button class="btn sm pri" type="button" onclick="navigator.clipboard.writeText($('#mtp-link').textContent).then(()=>toast('Скопировано'))">Копировать ссылку</button></div>`,
+  `<button class="btn pri" type="button" onclick="closeDlg();toast('Сохранено')">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
+}
+function openVLESS(){
+ dialog('Сервер VLESS','Клиенты подключаются по ссылке vless://. UUID выдаётся в карточке участника. Ключи Reality общие на пакет.',`
+  <div class="fld"><label for="vl-host">Сервер</label><input id="vl-host" class="mono" value="vpn.example.net" readonly></div>
+  <div class="fgrid" style="grid-template-columns:1fr 1fr"><div class="fld"><label for="vl-port">Порт</label><input id="vl-port" class="num" value="4433"></div>
+   <div class="fld"><label for="vl-dest">Цель Reality (dest)</label><input id="vl-dest" class="mono" value="www.microsoft.com:443"></div></div>
+  <div class="hint">Порт не должен совпадать с 80, 443, 8091 и 8443 (веб-сервер, нода, панель). SNI берётся из dest. Клиент стучится на имя ноды.</div>
+  <div class="dlg-sec">Публичный ключ</div>
+  <div class="uri" id="vl-pbk">q3ucJuIkRdJYS8_N0Si4U7FA3Qo7jqcblDghyDUXIc8</div>
+  <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="navigator.clipboard.writeText($('#vl-pbk').textContent).then(()=>toast('Скопировано'))">Копировать ключ</button><button class="btn sm" type="button" onclick="toast('Ключи будут новыми после сохранения')">Новые ключи Reality</button></div>`,
   `<button class="btn pri" type="button" onclick="closeDlg();toast('Сохранено')">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
 }
 function pickToggle(n,on){if(on)S.pick.add(n);else{S.pick.delete(n);Object.entries(PDEP).forEach(([k,v])=>{if(v===n)S.pick.delete(k)})}openPicker()}
@@ -1973,7 +1984,10 @@ function openMember(id){
 function showStoredKey(id){dialog('Ключ участника '+id,'Ключ хранится на ноде — его можно показать снова.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
  <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div>${uriBox('loft://lt_8f3a…c21e@vpn.example.net/static/js?type=get&amp;fp=chrome#'+id)}<p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
  <div class="dlg-sec" style="margin:0">Ключ</div>${uriBox('lt_8f3a…c21e')}
- <div class="acts" style="margin:0"><button class="btn sm pri" type="button">Копировать ссылку</button><button class="btn sm" type="button">${ic('i-down',16)}Скачать .loft</button><button class="btn sm" type="button">Копировать ключ</button></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`)}
+ <div class="acts" style="margin:0"><button class="btn sm pri" type="button">Копировать ссылку</button><button class="btn sm" type="button">${ic('i-down',16)}Скачать .loft</button><button class="btn sm" type="button">Копировать ключ</button></div>
+ ${pkgOn('Сервер VLESS')?`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));margin-top:16px"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код VLESS (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
+ <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для клиента VLESS</div>${uriBox('vless://550e8400-e29b-41d4-a716-446655440000@vpn.example.net:4433?type=tcp&amp;security=reality&amp;sni=www.microsoft.com&amp;fp=chrome&amp;pbk=q3ucJuIkRdJYS8_N0Si4U7FA3Qo7jqcblDghyDUXIc8&amp;sid=01234567&amp;flow=xtls-rprx-vision#'+id)}<p class="hint" style="margin:0">Откройте клиент VLESS на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
+ <div class="acts" style="margin:0"><button class="btn sm pri" type="button">Копировать ссылку</button></div>`:''}`,`<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`)}
 function reissueKey(id){dialog('Ключ участника '+id,'После «Применить» нода начнёт пускать новый ключ, старый перестанет действовать.',`<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))"><div class="qr" style="align-self:start"><svg width="168" height="168" viewBox="0 0 21 21" role="img" aria-label="QR-код профиля (образец)" shape-rendering="crispEdges"><rect width="21" height="21" fill="#fff"/><g fill="#1A1714"><rect width="7" height="7"/><rect x="14" width="7" height="7"/><rect y="14" width="7" height="7"/></g></svg></div>
  <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div>${uriBox('loft://lt_8f3a…c21e@vpn.example.net/static/js?type=get&amp;fp=chrome#'+id)}<p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
  <div class="acts" style="margin:0"><button class="btn sm pri" type="button">Копировать ссылку</button><button class="btn sm" type="button">${ic('i-down',16)}Скачать .loft</button><button class="btn sm" type="button">Копировать ключ</button></div>`,`<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`)}

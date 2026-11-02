@@ -36,6 +36,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -162,6 +163,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("POST /api/packages/unit", s.need(area("packages", store.Change), s.packageUnit))
 	mux.HandleFunc("GET /api/packages/mtproto", s.need(area("packages", store.View), s.mtprotoGet))
 	mux.HandleFunc("POST /api/packages/mtproto", s.need(area("packages", store.Change), s.mtprotoSet))
+	mux.HandleFunc("GET /api/packages/vless", s.need(area("packages", store.View), s.vlessGet))
+	mux.HandleFunc("POST /api/packages/vless", s.need(area("packages", store.Change), s.vlessSet))
 	mux.HandleFunc("GET /api/update", s.need(area("packages", store.View), s.updateGet))
 	mux.HandleFunc("POST /api/update/settings", s.need(area("packages", store.Change), s.updateSettings))
 	mux.HandleFunc("POST /api/update/check", s.need(area("packages", store.Change), s.updateCheck))
@@ -804,40 +807,96 @@ func (s *Server) networkApply(w http.ResponseWriter, r *http.Request) {
 }
 
 // memberKeyOut is a member's key plus the ready-made ways to hand it over:
-// an import link, a config file and the link as a QR code.
+// an import link, a config file and the link as a QR code. vless/vless_qr
+// are set when the member's proto includes vless and the inbound has a UUID.
 type memberKeyOut struct {
 	admproto.IssuedKey
-	Link string `json:"link,omitempty"`
-	File string `json:"file,omitempty"`
-	QR   string `json:"qr,omitempty"`
+	Link    string `json:"link,omitempty"`
+	File    string `json:"file,omitempty"`
+	QR      string `json:"qr,omitempty"`
+	VLESS   string `json:"vless,omitempty"`
+	VLESSQR string `json:"vless_qr,omitempty"`
 }
 
-// wrapIssued adds the link, file and QR code to an issued key. They need the
-// node's host name; if it is unknown the key is returned bare.
-func (s *Server) wrapIssued(ctx context.Context, a Adm, k admproto.IssuedKey) memberKeyOut {
+// memberKeyIn is POST /api/members/key. Proto, when sent, is used to decide
+// whether to mint a VLESS UUID on first create (the proto flags are saved
+// separately by POST /api/members/proto, which runs after this on new members).
+type memberKeyIn struct {
+	ID    string    `json:"id"`
+	Proto *[]string `json:"proto,omitempty"`
+}
+
+// wrapIssued adds the loft link, file and QR code to an issued key. They need
+// the node's host name; if it is unknown the key is returned bare. proto, when
+// set, is used instead of the stored MemberProto map (first-create has not
+// saved flags yet).
+func (s *Server) wrapIssued(ctx context.Context, a Adm, k admproto.IssuedKey, proto []string) memberKeyOut {
 	out := memberKeyOut{IssuedKey: k}
 	var info admproto.NodeInfo
 	if err := a.Call(ctx, admproto.OpNodeInfo, nil, &info); err == nil && info.Host != "" {
 		out.Link, out.File = s.memberLink(info, k.Key, k.ID, k.ID)
 		out.QR, _ = qrSVG(out.Link)
 	}
+	s.attachVLESS(ctx, a, &out, proto)
 	return out
+}
+
+func (s *Server) storedMemberProto(id string) []string {
+	if s.Settings == nil {
+		return nil
+	}
+	st, err := s.Settings.Get()
+	if err != nil || st.MemberProto == nil {
+		return nil
+	}
+	return st.MemberProto[id]
+}
+
+func (s *Server) attachVLESS(ctx context.Context, a Adm, out *memberKeyOut, proto []string) {
+	if !slices.Contains(proto, "vless") {
+		return
+	}
+	var vc admproto.VLESSShare
+	if err := a.Call(ctx, admproto.OpVLESSClient, admproto.VLESSClient{ID: out.ID, Mint: true}, &vc); err != nil || vc.Link == "" {
+		return
+	}
+	out.VLESS = vc.Link
+	out.VLESSQR, _ = qrSVG(vc.Link)
+}
+
+func (s *Server) syncVLESS(ctx context.Context, by, id string, proto []string, del bool) {
+	req := admproto.VLESSClient{ID: id}
+	if del || !slices.Contains(proto, "vless") {
+		req.Drop = true
+	} else {
+		req.Mint = true
+	}
+	_ = s.Adm(by).Call(ctx, admproto.OpVLESSClient, req, nil)
 }
 
 // memberKey issues a new key for a member through panel-adm.
 func (s *Server) memberKey(w http.ResponseWriter, r *http.Request) {
-	var in admproto.MemberKey
+	var in memberKeyIn
 	if !readJSON(w, r, 4<<10, &in) {
 		return
 	}
 	auditTarget(r, in.ID)
+	proto := s.storedMemberProto(in.ID)
+	if in.Proto != nil {
+		p, err := normMemberProto(*in.Proto)
+		if err != nil {
+			fail(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		proto = p
+	}
 	a := s.Adm(userOf(r).Login)
 	var k admproto.IssuedKey
-	if err := a.Call(r.Context(), admproto.OpMemberKey, in, &k); err != nil {
+	if err := a.Call(r.Context(), admproto.OpMemberKey, admproto.MemberKey{ID: in.ID}, &k); err != nil {
 		admFail(w, err)
 		return
 	}
-	ok(w, s.wrapIssued(r.Context(), a, k))
+	ok(w, s.wrapIssued(r.Context(), a, k, proto))
 }
 
 // memberKeyGet shows a member's existing key again (404 if the node did not
@@ -858,7 +917,7 @@ func (s *Server) memberKeyGet(w http.ResponseWriter, r *http.Request) {
 		admFail(w, err)
 		return
 	}
-	ok(w, s.wrapIssued(r.Context(), s.Adm(userOf(r).Login), k))
+	ok(w, s.wrapIssued(r.Context(), s.Adm(userOf(r).Login), k, s.storedMemberProto(id)))
 }
 
 // lookupMemberKey reads the key the node already holds in members.keys; the

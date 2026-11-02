@@ -163,7 +163,7 @@ func TestPackagesState(t *testing.T) {
 	if p := by["nginx"]; !p.Base || !p.Installed || p.Active != "active" {
 		t.Fatalf("nginx %+v", p)
 	}
-	if p := by["vless"]; p.Installed || p.Group != "proto" || p.DiskMB != 32 || p.Ports != "443 · SNI" {
+	if p := by["vless"]; p.Installed || p.Group != "proto" || p.DiskMB != 32 || p.Ports != "4433" {
 		t.Fatalf("vless %+v", p)
 	}
 	if p := by["trojan"]; p.Installed || p.Group != "proto" || p.DiskMB != 32 {
@@ -527,6 +527,9 @@ func TestReleaseShareDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(o.Root, "etc/systemd/system/loft-vless.service")); err != nil {
 		t.Fatal("no vless unit")
+	}
+	if b, err := os.ReadFile(filepath.Join(o.PanelEtc, "vless.json")); err != nil || !bytes.Contains(b, []byte("realitySettings")) {
+		t.Fatalf("vless.json after install: %v %s", err, b)
 	}
 	o.StartPackages(ctx, "admin", catalog.Plan{Remove: []string{"xray"}})
 	o.RunJob(ctx)

@@ -132,11 +132,21 @@ func (r *runner) installRelease(ctx context.Context, p catalog.Package) error {
 			return err
 		}
 	}
+	if p.Key == "vless" {
+		if err := r.ensureVLESS(); err != nil {
+			return err
+		}
+	}
 	if p.Unit != "" {
 		r.cmd(ctx, "systemctl", "daemon-reload")
 		r.cmd(ctx, "systemctl", "enable", p.Unit)
-		// It starts once there is a config (ConditionPathExists); restart picks the new binary.
-		r.cmd(ctx, "systemctl", "try-restart", p.Unit)
+		// VLESS inbound has a config after ensureVLESS; start it. Other
+		// release units wait for their own file (ConditionPathExists).
+		if p.Key == "vless" {
+			r.cmd(ctx, "systemctl", "restart", p.Unit)
+		} else {
+			r.cmd(ctx, "systemctl", "try-restart", p.Unit)
+		}
 	}
 	return nil
 }

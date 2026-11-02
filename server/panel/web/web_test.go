@@ -59,6 +59,28 @@ func (f fakeAdm) Call(_ context.Context, op string, body, out any) error {
 			port = 8448
 		}
 		set(admproto.MTProto{Installed: true, Host: *f.host, Port: port, Domain: firstNonEmpty(in.Domain, "cloudflare.com"), Secret: "eenew"})
+	case admproto.OpVLESSGet:
+		set(admproto.VLESS{Installed: true, Host: *f.host, Port: 4433, Dest: "www.microsoft.com:443", SNI: "www.microsoft.com", PublicKey: "pbk1", ShortID: "abcd"})
+	case admproto.OpVLESSSet:
+		in := body.(admproto.VLESSSet)
+		port := in.Port
+		if port == 0 {
+			port = 4433
+		}
+		dest := firstNonEmpty(in.Dest, "www.microsoft.com:443")
+		pbk := "pbk1"
+		if in.RotateKeys {
+			pbk = "pbk2"
+		}
+		set(admproto.VLESS{Installed: true, Host: *f.host, Port: port, Dest: dest, SNI: "www.microsoft.com", PublicKey: pbk, ShortID: "abcd"})
+	case admproto.OpVLESSClient:
+		in := body.(admproto.VLESSClient)
+		if in.Drop {
+			set(admproto.VLESSShare{ID: in.ID})
+			break
+		}
+		set(admproto.VLESSShare{ID: in.ID, UUID: "550e8400-e29b-41d4-a716-446655440000",
+			Link: "vless://550e8400-e29b-41d4-a716-446655440000@" + *f.host + ":4433?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=pbk1&security=reality&sid=abcd&sni=www.microsoft.com&type=tcp#" + in.ID})
 	case admproto.OpPackagesApply, admproto.OpUpdateApply:
 		set(admproto.Job{ID: "j1", State: "running"})
 	case admproto.OpJobGet:

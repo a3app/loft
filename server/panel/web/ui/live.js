@@ -655,15 +655,21 @@
   }
   window.saveMember = async (id) => {
     if (id) {
+      const before = (L.mp && L.mp[id]) || [];
+      const proto = typeof readProto === 'function' ? readProto(findMember(id)[1] || { id }) : [];
       saveMember0(id);
       await saveMemberProto(id);
       await commitNet();
+      if (proto.includes('vless') && !before.includes('vless')) {
+        await L.viewKey(id);
+      }
       return;
     }
     const nid = $('#m2').value.trim();
     if (findMember(nid)[1]) { toast('Такой участник уже есть'); return; }
+    const proto = typeof readProto === 'function' ? readProto({ id: nid }) : [];
     let k;
-    try { k = await api('POST', '/api/members/key', { id: nid }); } catch (e) { toast(e.message); return; }
+    try { k = await api('POST', '/api/members/key', { id: nid, proto }); } catch (e) { toast(e.message); return; }
     saveMember0(null);
     const [, m] = findMember(nid);
     if (!m) return;
@@ -675,14 +681,21 @@
     showKey(nid, k, ok ? 'Нода уже пускает этот ключ.' : 'После «Применить» нода начнёт пускать этот ключ.');
   };
   // The key with its link, QR code (drawn by the panel) and .loft file.
+  // vless:// is a second block when the member's proto includes vless.
   function showKey(id, k, note) {
     L.kf = { id, file: k.file };
-    dialog('Ключ участника ' + esc(id), note, `
-      ${k.link ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))">${k.qr ? `<div class="qr" style="align-self:start">${k.qr}</div>` : ''}
+    const loft = k.link ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr))">${k.qr ? `<div class="qr" style="align-self:start">${k.qr}</div>` : ''}
         <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для приложения loft</div>${uriBox(esc(k.link), 'klink')}
-        <p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>` : ''}
+        <p class="hint" style="margin:0">Откройте приложение loft на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>` : '';
+    const vless = k.vless ? `<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));margin-top:16px">${k.vless_qr ? `<div class="qr" style="align-self:start">${k.vless_qr}</div>` : ''}
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="dlg-sec" style="margin:0">Ссылка для клиента VLESS</div>${uriBox(esc(k.vless), 'vlink')}
+        <p class="hint" style="margin:0">Откройте клиент VLESS на устройстве и отсканируйте код или вставьте ссылку.</p></div></div>
+        <div class="acts" style="margin:0"><button class="btn sm pri" type="button" onclick="LIVE.copy('#vlink')">Копировать ссылку</button></div>` : '';
+    dialog('Ключ участника ' + esc(id), note, `
+      ${loft}
       <div class="dlg-sec" style="margin:0">Ключ</div>${uriBox(esc(k.key), 'kkey')}
-      <div class="acts" style="margin:0">${k.link ? `<button class="btn sm pri" type="button" onclick="LIVE.copy('#klink')">Копировать ссылку</button>` : ''}${k.file ? `<button class="btn sm" type="button" onclick="LIVE.download(LIVE.kf.id + '.loft', LIVE.kf.file)">${ic('i-down', 16)}Скачать .loft</button>` : ''}<button class="btn sm" type="button" onclick="LIVE.copy('#kkey')">Копировать ключ</button></div>`,
+      <div class="acts" style="margin:0">${k.link ? `<button class="btn sm pri" type="button" onclick="LIVE.copy('#klink')">Копировать ссылку</button>` : ''}${k.file ? `<button class="btn sm" type="button" onclick="LIVE.download(LIVE.kf.id + '.loft', LIVE.kf.file)">${ic('i-down', 16)}Скачать .loft</button>` : ''}<button class="btn sm" type="button" onclick="LIVE.copy('#kkey')">Копировать ключ</button></div>
+      ${vless}`,
       `<button class="btn pri" type="button" onclick="closeDlg()">Готово</button>`);
   }
   // Show an existing member's key again: the panel reads it from the node's
@@ -871,6 +884,31 @@
       L.mtpOpen();
     } catch (e) { toast(e.message); }
   };
+  // VLESS inbound (owner only): dedicated port, Reality dest, pbk. Member
+  // UUIDs are issued on the member card, not here.
+  L.vlessOpen = async () => {
+    try { L.vl = await api('GET', '/api/packages/vless'); } catch (e) { toast(e.message); return; }
+    const s = L.vl || {};
+    if (!s.installed) { toast('VLESS не установлен'); return; }
+    dialog('Сервер VLESS', 'Клиенты подключаются по ссылке vless://. UUID выдаётся в карточке участника. Ключи Reality общие на пакет.', `
+      <div class="fld"><label for="vl-host">Сервер</label><input id="vl-host" class="mono" value="${esc(s.host || '')}" readonly></div>
+      <div class="fgrid" style="grid-template-columns:1fr 1fr"><div class="fld"><label for="vl-port">Порт</label><input id="vl-port" class="num" value="${s.port || 4433}"></div>
+       <div class="fld"><label for="vl-dest">Цель Reality (dest)</label><input id="vl-dest" class="mono" value="${esc(s.dest || '')}"></div></div>
+      <div class="hint">Порт не должен совпадать с 80, 443, 8091 и 8443 (веб-сервер, нода, панель). SNI берётся из dest. Клиент стучится на имя ноды.</div>
+      <div class="dlg-sec">Публичный ключ</div>
+      <div class="uri" id="vl-pbk">${esc(s.public_key || '')}</div>
+      <div class="uri" id="vl-sid" hidden>${esc(s.short_id || '')}</div>
+      <div class="acts" style="margin:0"><button class="btn sm" type="button" onclick="LIVE.copy('#vl-pbk')">Копировать ключ</button><button class="btn sm" type="button" onclick="LIVE.vlessSave(true)">Новые ключи Reality</button></div>`,
+      `<button class="btn pri" type="button" onclick="LIVE.vlessSave(false)">Сохранить</button><button class="btn" type="button" onclick="closeDlg()">Закрыть</button>`);
+  };
+  L.vlessSave = async rotate => {
+    const port = +($('#vl-port') && $('#vl-port').value || 0), dest = ($('#vl-dest') && $('#vl-dest').value || '').trim();
+    try {
+      L.vl = await api('POST', '/api/packages/vless', { port, dest, rotate_keys: !!rotate });
+      toast(rotate ? 'Ключи заменены' : 'Сохранено');
+      L.vlessOpen();
+    } catch (e) { toast(e.message); }
+  };
   // Switch a package's service on or off without removing it.
   L.pkgUnit = async (k, on) => {
     try {
@@ -898,6 +936,7 @@
     let a = '';
     if (p.key === 'node' || (p.key === 'mail' && p.installed)) a += `<button class="icb" type="button" aria-label="Настройки" onclick="go('${p.key === 'mail' ? 'mail' : 'node'}')">${ic('i-gear')}</button>`;
     if (p.key === 'mtproto' && p.installed && owner()) a += `<button class="icb" type="button" aria-label="Настройки" onclick="LIVE.mtpOpen()">${ic('i-gear')}</button>`;
+    if (p.key === 'vless' && p.installed && owner()) a += `<button class="icb" type="button" aria-label="Настройки" onclick="LIVE.vlessOpen()">${ic('i-gear')}</button>`;
     const parent = PREQ[p.key] && L.pk.packages.find(x => x.key === PREQ[p.key]);
     if (can && p.installed && p.candidate) a += `<button class="btn sm" type="button" onclick="LIVE.pkgUpgrade('${p.key}')">Обновить до ${esc(upstream(p.candidate) === upstream(p.version) ? p.candidate.replace(/^\d+:/, '') : upstream(p.candidate))}</button>`;
     if (can && !p.installed && (!parent || parent.installed)) a += `<button class="btn sm pri" type="button" onclick="LIVE.pkgInstall('${p.key}')">Установить</button>`;

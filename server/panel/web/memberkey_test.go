@@ -103,6 +103,36 @@ func TestMemberLinkQueryFronts(t *testing.T) {
 	}
 }
 
+func TestMemberKeyVLESS(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.owner()
+	issued := e.do("POST", "/api/members/key", map[string]any{"id": "alice", "proto": []string{"loft", "vless"}}, c, csrf)
+	if issued.code != 200 {
+		t.Fatalf("issue %d %v", issued.code, issued.body)
+	}
+	link, _ := issued.body["vless"].(string)
+	if !strings.HasPrefix(link, "vless://550e8400-e29b-41d4-a716-446655440000@") || !strings.Contains(link, "security=reality") {
+		t.Fatalf("vless link %v", issued.body)
+	}
+	if issued.body["vless_qr"] == nil {
+		t.Fatal("no vless_qr")
+	}
+	if r := e.do("POST", "/api/members/key", map[string]any{"id": "bob", "proto": []string{"nope"}}, c, csrf); r.code != 400 {
+		t.Fatalf("bad proto %d %v", r.code, r.body)
+	}
+	bare := e.do("POST", "/api/members/key", map[string]any{"id": "carol"}, c, csrf)
+	if bare.code != 200 || bare.body["vless"] != nil {
+		t.Fatalf("loft-only %d %v", bare.code, bare.body)
+	}
+	if r := e.do("POST", "/api/members/proto", map[string]any{"id": "carol", "proto": []string{"vless"}}, c, csrf); r.code != 200 {
+		t.Fatalf("proto %d %v", r.code, r.body)
+	}
+	view := e.do("GET", "/api/members/key?id=carol", nil, c, "")
+	if view.code != 200 || view.body["vless"] == nil {
+		t.Fatalf("view after proto %d %v", view.code, view.body)
+	}
+}
+
 func TestWizardMemberKeepsKey(t *testing.T) {
 	e := newEnv(t)
 	c, csrf := e.owner()

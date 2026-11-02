@@ -2450,5 +2450,16 @@ window.LOFT_EN = {
   "Направление": "Direction",
   "Направление списка входит в подпись.": "The list’s direction goes into the signature.",
   "Профиль сохранён — нода перечитала списки": "Profile saved — the node re-read its lists",
-  "Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24). Направление списка входит в подпись.": "An entry is a domain (example.com), a domain with all subdomains (.example.com), or a subnet (198.51.100.0/24). The list’s direction goes into the signature."
+  "Запись — домен (example.com), домен со всеми поддоменами (.example.com) или подсеть (198.51.100.0/24). Направление списка входит в подпись.": "An entry is a domain (example.com), a domain with all subdomains (.example.com), or a subnet (198.51.100.0/24). The list’s direction goes into the signature.",
+  "VLESS + Reality/Vision на Xray-core. TCP, отдельный порт (по умолчанию 4433).": "VLESS + Reality/Vision on Xray-core. TCP, dedicated port (default 4433).",
+  "Клиенты подключаются по ссылке vless://. UUID выдаётся в карточке участника. Ключи Reality общие на пакет.": "Clients connect with a vless:// link. The UUID is issued on the member card. Reality keys are shared for the package.",
+  "Цель Reality (dest)": "Reality dest",
+  "Порт не должен совпадать с 80, 443, 8091 и 8443 (веб-сервер, нода, панель). SNI берётся из dest. Клиент стучится на имя ноды.": "The port must not be 80, 443, 8091 or 8443 (web server, node, panel). SNI is taken from dest. The client dials the node name.",
+  "Ключи будут новыми после сохранения": "The keys will be new after save",
+  "Новые ключи Reality": "New Reality keys",
+  "Ссылка для клиента VLESS": "Link for the VLESS client",
+  "Откройте клиент VLESS на устройстве и отсканируйте код или вставьте ссылку.": "Open a VLESS client on the device and scan the code or paste the link.",
+  "QR-код VLESS (образец)": "VLESS QR code (sample)",
+  "VLESS не установлен": "VLESS is not installed",
+  "Ключи заменены": "Keys replaced"
 };

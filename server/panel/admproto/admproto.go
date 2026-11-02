@@ -42,6 +42,9 @@ const (
 	OpPackageUnit   = "package.unit"   // PackageUnit → Package
 	OpMTProtoGet    = "mtproto.get"    // → MTProto
 	OpMTProtoSet    = "mtproto.set"    // MTProtoSet → MTProto
+	OpVLESSGet      = "vless.get"      // → VLESS
+	OpVLESSSet      = "vless.set"      // VLESSSet → VLESS
+	OpVLESSClient   = "vless.client"   // VLESSClient → VLESSShare
 	OpUpdateApply   = "update.apply"   // UpdateApply → Job (started)
 	OpJobGet        = "job.get"        // → Job (the current or last one, with its log tail)
 
@@ -286,6 +289,43 @@ type MTProtoSet struct {
 	Port         int    `json:"port,omitempty"`
 	Domain       string `json:"domain,omitempty"`
 	RotateSecret bool   `json:"rotate_secret,omitempty"`
+}
+
+// VLESS is the VLESS+Reality inbound as it stands. PrivateKey never leaves
+// the helper. Share links for members are built by VLESSClient.
+type VLESS struct {
+	Installed bool   `json:"installed"`
+	Host      string `json:"host,omitempty"`
+	Port      int    `json:"port,omitempty"`
+	Dest      string `json:"dest,omitempty"` // Reality handshake target host:port
+	SNI       string `json:"sni,omitempty"`  // dest host; clients present this
+	PublicKey string `json:"public_key,omitempty"`
+	ShortID   string `json:"short_id,omitempty"`
+	Clients   int    `json:"clients,omitempty"`
+}
+
+// VLESSSet changes the inbound listen port, Reality dest, or rotates the
+// X25519 key pair and shortId. Old vless:// links die on rotate or dest/port
+// change.
+type VLESSSet struct {
+	Port       int    `json:"port,omitempty"`
+	Dest       string `json:"dest,omitempty"`
+	RotateKeys bool   `json:"rotate_keys,omitempty"`
+}
+
+// VLESSClient mints or drops one member's UUID. Mint keeps an existing UUID.
+// Drop removes it. Neither is a lookup: UUID empty means the member has none.
+type VLESSClient struct {
+	ID   string `json:"id"`
+	Mint bool   `json:"mint,omitempty"`
+	Drop bool   `json:"drop,omitempty"`
+}
+
+// VLESSShare is one member's VLESS UUID and vless:// link.
+type VLESSShare struct {
+	ID   string `json:"id"`
+	UUID string `json:"uuid,omitempty"`
+	Link string `json:"link,omitempty"`
 }
 
 // UpdateApply installs release Tag (v1.2.3) of node and panel from GitHub.

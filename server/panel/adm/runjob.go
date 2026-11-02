@@ -155,7 +155,15 @@ func (r *runner) packages(ctx context.Context, plan catalog.Plan) error {
 		r.say("remove %s", k)
 		rm := r.remove
 		if find(k).Method == catalog.MethodRelease {
-			rm = func(ctx context.Context, p catalog.Package, _ bool) error { return r.removeRelease(ctx, p) }
+			rm = func(ctx context.Context, p catalog.Package, purge bool) error {
+				if err := r.removeRelease(ctx, p); err != nil {
+					return err
+				}
+				if purge && p.Key == "vless" {
+					r.purgeVLESS()
+				}
+				return nil
+			}
 		}
 		if err := rm(ctx, find(k), plan.Purge); err != nil {
 			return fmt.Errorf("remove %s: %w", k, err)

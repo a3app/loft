@@ -73,6 +73,7 @@ func (s *Server) memberProtoSet(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.syncVLESS(r.Context(), userOf(r).Login, id, proto, in.Delete)
 	ok(w, memberProtoOut{Members: copyMemberProto(st.MemberProto)})
 }
 

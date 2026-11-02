@@ -203,6 +203,10 @@ components:
       required: [id]
       properties:
         id: {type: string}
+        proto:
+          type: array
+          items: {type: string}
+          description: optional on POST /api/members/key so first-create can mint VLESS
     IssuedKey:
       type: object
       additionalProperties: false
@@ -218,6 +222,12 @@ components:
         qr:
           type: string
           description: SVG
+        vless:
+          type: string
+          description: vless:// share when member proto includes vless
+        vless_qr:
+          type: string
+          description: SVG of vless
     MemberProtoIn:
       type: object
       additionalProperties: false
@@ -317,6 +327,13 @@ components:
         port: {type: integer}
         domain: {type: string}
         rotate_secret: {type: boolean}
+    VLESSSet:
+      type: object
+      additionalProperties: false
+      properties:
+        port: {type: integer}
+        dest: {type: string}
+        rotate_keys: {type: boolean}
     UpdateApply:
       type: object
       additionalProperties: false
@@ -784,7 +801,7 @@ paths:
     post:
       operationId: memberKeyIssue
       tags: [overlay]
-      summary: "Issue a new lt_ key into members.keys. Put key_sha256 into network.conf and apply."
+      summary: "Issue a new lt_ key into members.keys. Body proto may include vless to mint a UUID. Put key_sha256 into network.conf and apply."
       x-loft-perm: "members:change"
       security:
         - bearerAuth: []
@@ -1692,6 +1709,64 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/MTProtoSet"
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+  /api/packages/vless:
+    get:
+      operationId: vlessGet
+      tags: [packages]
+      summary: "VLESS+Reality inbound settings (port, dest, public key)."
+      x-loft-perm: "packages:view"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: JSON; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Object"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/AdmDown"
+    post:
+      operationId: vlessSet
+      tags: [packages]
+      summary: "Change VLESS port/dest or rotate Reality keys (old vless:// links die)."
+      x-loft-perm: "packages:change"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VLESSSet"
       responses:
         "200":
           description: JSON; Cache-Control no-store

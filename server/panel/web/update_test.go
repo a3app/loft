@@ -128,3 +128,21 @@ func TestMTProtoAPI(t *testing.T) {
 		t.Fatalf("unknown field: %d", r.code)
 	}
 }
+
+func TestVLESSAPI(t *testing.T) {
+	e := newEnv(t)
+	c, csrf := e.owner()
+	r := e.do("GET", "/api/packages/vless", nil, c, "")
+	if r.code != 200 || r.body["port"] != float64(4433) || r.body["public_key"] != "pbk1" {
+		t.Fatalf("get %d %v", r.code, r.body)
+	}
+	if r := e.do("POST", "/api/packages/vless", map[string]any{"port": 9443, "dest": "www.example.com:443"}, c, csrf); r.code != 200 || r.body["port"] != float64(9443) {
+		t.Fatalf("set %d %v", r.code, r.body)
+	}
+	if r := e.do("POST", "/api/packages/vless", map[string]any{"rotate_keys": true}, c, csrf); r.code != 200 || r.body["public_key"] != "pbk2" {
+		t.Fatalf("rotate %d %v", r.code, r.body)
+	}
+	if r := e.do("POST", "/api/packages/vless", map[string]any{"port": 9443, "shell": "x"}, c, csrf); r.code != 400 {
+		t.Fatalf("unknown field: %d", r.code)
+	}
+}

@@ -18,7 +18,8 @@
 //   - upstream channels and routing priorities: channels.go, prios.go, xray.go
 //   - host networking, nginx, time zone, Linux accounts, fail2ban:
 //     net.go, nginx.go, timezone.go, sysusers.go, guard.go
-//   - the mail server and the MTProto proxy: mail.go, mailcfg.go, mtproto.go
+//   - the mail server, the MTProto proxy and the VLESS inbound:
+//     mail.go, mailcfg.go, mtproto.go, vless.go
 //   - encrypted backups and restore: backup.go, archive.go
 //
 // This file holds Ops (the shared state and system hooks) and the
@@ -106,6 +107,7 @@ type Ops struct {
 	mEnvAt  time.Time
 	mSnap   mailViewSnap // du / service state, a few seconds
 	sysMu   sync.Mutex   // Linux accounts
+	vlessMu sync.Mutex   // vless-settings.json, vless-clients.json, vless.json
 	recMu   sync.Mutex   // one Reconcile at a time
 	extMu   sync.Mutex
 	ext     map[string]extIP
