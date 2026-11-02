@@ -2,7 +2,7 @@
 //
 // With no -session it serves the LAN page and starts one child per enabled
 // connection. A child is this binary again: loft-ndms -session <id>.
-// The child opens opkgtunN and does not install a default route.
+// The child asks ndmc for OpkgTunN, then opens opkgtunN. No default route.
 package main
 
 import (

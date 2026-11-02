@@ -161,9 +161,9 @@ type live struct {
 	dev     *inbound.Device
 }
 
-// runLoft supervises the loft session. Each time an outbound comes up,
-// bring opens the tun on the first call and only re-attaches the dialer
-// after that, so OpkgTun does not flap in the priority list.
+// runLoft supervises the loft session. The first outbound asks ndmc to
+// create OpkgTun and only then opens the tun. Later outbounds re-attach
+// the dialer, so the interface does not flap in the priority list.
 func (lv *live) runLoft(ctx context.Context, rt Runtime) error {
 	h := &transport.Holder{}
 	pathCh := transport.MergePath(ctx, transport.WatchPath(ctx), transport.WatchStall(ctx, h, nil))
@@ -262,8 +262,15 @@ func putDialer(h *transport.Holder, d transport.Dialer) {
 	h.Set(w)
 }
 
-// bring opens the TUN on the first call and registers it with ndmc.
-// Later calls only re-attach the dialer. The kernel gets no default route.
+// bring registers OpkgTunN with ndmc and then opens opkgtunN.
+// Later calls only re-attach the dialer and refresh the ndmc script.
+// The kernel gets no default route.
+//
+// This tun driver has one queue and ndmc does not set IFF_TUN_EXCL.
+// TUNSETIFF returns EBUSY (0xcffd003b) when that queue is already held,
+// Initialize_ fails, and the interface never enters the repository
+// (0xcffd00a9). ndmc creates the device, marks it persistent, and closes
+// its fd before this process opens the same name.
 func (lv *live) bring(h *transport.Holder) {
 	lv.mu.Lock()
 	defer lv.mu.Unlock()
@@ -281,6 +288,10 @@ func (lv *live) bring(h *transport.Holder) {
 		if lv.kind == "loft" {
 			cidr = inbound.OverlayCIDR(ip, lv.tunAddr)
 		}
+		lv.overlay = strings.Split(cidr, "/")[0]
+		if !lv.publish() {
+			return
+		}
 		dev, err := inbound.StartRoutedTUN(lv.tun, cidr, h)
 		if err != nil {
 			lv.state, lv.err = "error", err.Error()
@@ -289,18 +300,18 @@ func (lv *live) bring(h *transport.Holder) {
 			return
 		}
 		lv.dev = dev
-		lv.overlay = strings.Split(cidr, "/")[0]
+	} else {
+		lv.publish()
 	}
 	lv.dev.Attach(h)
-	lv.publish()
 }
 
 // publish asks ndmc to create or update OpkgTunN. Caller holds mu.
+// False means ndmc refused; the snap already records the error.
 // Front hostnames are resolved here and pinned on the ISP interface
 // before "interface up", so the session's own packets leave via the ISP
-// and do not hairpin into the tun. An ndmc error leaves the tun up and
-// is written on the snap; the next callback tries again.
-func (lv *live) publish() {
+// and do not hairpin into the tun. The next callback tries again.
+func (lv *live) publish() bool {
 	if lv.isp == "" {
 		isp, err := DiscoverISP(context.Background(), lv.rci, Bin{})
 		if err != nil {
@@ -320,17 +331,18 @@ func (lv *live) publish() {
 	if err != nil {
 		lv.state, lv.err = "error", err.Error()
 		lv.write()
-		return
+		return false
 	}
 	if err := Apply(context.Background(), Bin{}, lines); err != nil {
 		lv.state, lv.err = "error", err.Error()
 		log.Printf("%v", err)
 		lv.write()
-		return
+		return false
 	}
 	lv.state, lv.err = "up", ""
 	log.Printf("ndmc %s up", lv.ndm)
 	lv.write()
+	return true
 }
 
 // down closes the tun and runs DownLines. The NDM object stays, so a
