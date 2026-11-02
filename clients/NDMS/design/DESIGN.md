@@ -31,7 +31,7 @@ No second password. No SSTP form: SSTP stays the stock Keenetic client.
 | Connection · loft | Name; type segment loft / VLESS / Trojan; mode segment **Link / Manual** as in the desktop clients. Link: `loft://` address. Manual: access key, host and port, how to connect (GET · WS · H2 · QUIC · H3 · L3), path. Tab **Advanced**: fronts get / ws / h2 / quic / h3 / l3 as on/off ticks (loft picks the try order, `select: auto`), **QUIC mode** for quic, h3 and l3 (Off / BBR / Fixed rate with ↑ and ↓ Mbit/s; the node agrees in Status), live front and intersection with `caps`. Save, Back, Delete. |
 | Connection · VLESS | Same frame. Link: `vless://`. Manual: UUID, host and port, security TLS / REALITY, transport TCP / XHTTP, TLS host name, TLS fingerprint, public key, short ID, Vision. |
 | Connection · Trojan | Same frame. Link: `trojan://`. Manual: password, host and port, security TLS / REALITY, transport TCP / XHTTP, TLS host name, TLS fingerprint, public key, short ID. |
-| Import | Drop or pick `client.yaml`, `.loft`, `.vpn` or a QR picture. Creates a new connection with the next free OpkgTun. |
+| Import | Drop or pick one or more files (`client.yaml`, `.loft`, `.vpn`, a QR picture) or paste text. Creates a new connection with the next free OpkgTun. |
 | Journal | Last 80 lines from all connections, prefixed by name. Keys are shortened. |
 | Package | Version, architecture, GitHub latest. “Check for updates on its own” switch, “Check for updates”, “Update to X”: downloads the `.ipk` for this architecture from the latest `a3app/loft` release, checks SHA256, installs with opkg; sessions restart. |
 
@@ -55,6 +55,8 @@ The page is shared `lanui` v2 (`clients/go/lanui`): connection list, import, lof
 Same loft tokens as macOS: Ink `#1A1714`, Lamp `#E8B84A`, Paper `#E8DFD2`, Avenir Next. The Keenetic frame in the mock is light (their admin), so the operator sees both worlds.
 
 Type: headings Demi, body Regular, keys SF Mono. Connected = lamp on. Error = red lamp. Off = stone.
+
+Language is a select: English, Русский, 中文. The mock select is English / Русский.
 
 Listen address shown in the footer: `http://192.168.1.1:8090/` — LAN only.
 

@@ -31,7 +31,7 @@
 | 连接 · loft | 名称；类型切换 loft / VLESS / Trojan；模式切换 **链接 / 手动**，与桌面客户端一致。链接：`loft://` 地址。手动：访问密钥、地址和端口、连接方式（GET · WS · H2 · QUIC · H3 · L3）、路径。**高级**标签：前端 get / ws / h2 / quic / h3 / l3 用勾选开关（尝试顺序由 loft 决定，`select: auto`），quic、h3、l3 的 **QUIC 模式**（关闭 / BBR / 固定速率，带 ↑ 和 ↓ Mbit/s；节点在 Status 中同意），当前前端以及与 `caps` 的交集。保存、返回、删除。 |
 | 连接 · VLESS | 同一框架。链接：`vless://`。手动：UUID、地址和端口、安全 TLS / REALITY、传输 TCP / XHTTP、TLS 主机名、TLS 指纹、公钥、short ID、Vision。 |
 | 连接 · Trojan | 同一框架。链接：`trojan://`。手动：密码、地址和端口、安全 TLS / REALITY、传输 TCP / XHTTP、TLS 主机名、TLS 指纹、公钥、short ID。 |
-| 导入 | 拖入或选择 `client.yaml`、`.loft`、`.vpn` 或二维码图片。在下一个空闲 OpkgTun 上新建连接。 |
+| 导入 | 拖入或选择一个或多个文件（`client.yaml`、`.loft`、`.vpn`、二维码图片），或粘贴文本。在下一个空闲 OpkgTun 上新建连接。 |
 | 日志 | 所有连接的最近 80 行，行首带名称。密钥会缩短。 |
 | 软件包 | 版本、架构、GitHub latest。“自动检查更新”开关、“检查更新”、“更新到 X”：从 `a3app/loft` 最新发布下载本架构的 `.ipk`，校验 SHA256，用 opkg 安装；会话重启。 |
 
@@ -55,6 +55,8 @@
 与 macOS 相同的 loft 色板：Ink `#1A1714`、Lamp `#E8B84A`、Paper `#E8DFD2`、Avenir Next。模型里的 Keenetic 框是浅色（他们的后台），让操作者同时看到两边。
 
 字体：标题 Demi，正文 Regular，密钥 SF Mono。已连接 = 灯亮。错误 = 红灯。关闭 = 石头色。
+
+语言是下拉选择：English、Русский、中文。模型里是 English / Русский。
 
 底栏显示监听地址：`http://192.168.1.1:8090/` — 只在 LAN。
 

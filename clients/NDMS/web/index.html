@@ -28,13 +28,20 @@
       display: flex; justify-content: center; padding: 28px 16px 48px;
     }
     .wrap { width: 440px; max-width: 100%; }
-    .lang { display: flex; gap: 4px; margin: 0 0 12px; }
-    .lang button, nav button {
+    .lang { margin: 0 0 12px; }
+    .lang label { margin: 0; }
+    .lang select, label.file input {
+      display: block; width: 100%; margin-top: 4px;
+      background: #211c19; border: 1px solid #2e2824; color: var(--snow);
+      border-radius: 8px; padding: 8px 10px; font: 400 13px var(--ui);
+      color-scheme: dark;
+    }
+    nav { display: flex; gap: 4px; margin: 0 0 12px; }
+    nav button {
       flex: 1; border: 0; border-radius: 8px; padding: 6px 0; cursor: pointer;
       background: #1e1a17; color: var(--stone); font: 600 12px var(--ui);
     }
-    .lang button.on, nav button.on { background: var(--lamp); color: var(--ink); }
-    nav { display: flex; gap: 4px; margin: 0 0 12px; }
+    nav button.on { background: var(--lamp); color: var(--ink); }
     .card {
       background: #181512; border: 1px solid #2e2824; border-radius: 16px;
       overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.45); margin-bottom: 12px;
@@ -58,20 +65,33 @@
       border: 0; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px;
       font: 600 13px var(--ui);
     }
-    .item {
-      display: flex; align-items: center; gap: 10px; width: 100%;
-      background: transparent; border: 0; border-bottom: 1px solid var(--line);
-      color: inherit; text-align: left; padding: 10px 0; cursor: pointer;
+    .conn {
+      display: grid; grid-template-columns: 10px 1fr auto auto; gap: 10px; align-items: center;
+      width: 100%; padding: 10px 12px; margin: 0 0 8px; cursor: pointer; color: inherit; text-align: left;
+      background: #1d1916; border: 1px solid #2e2824; border-radius: 10px;
     }
-    .item:last-child { border-bottom: 0; }
-    .item .nm { font-weight: 600; font-size: 14px; }
-    .item .meta { color: var(--mute); font: 11px var(--mono); margin-top: 2px; }
-    .grow { flex: 1; min-width: 0; }
+    .conn .n { font-weight: 600; font-size: 13px; }
+    .conn .m { color: var(--mute); font: 11.5px var(--mono); margin-top: 2px; }
+    .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--mute); }
+    .dot.on { background: var(--lamp); box-shadow: 0 0 10px rgba(232,184,74,.55); }
+    .dot.err { background: var(--err); }
+    .conn > div { min-width: 0; }
+    .conn .n, .conn .m { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    input.sw {
+      -webkit-appearance: none; appearance: none; width: 34px; height: 20px; margin: 0; border: 0; border-radius: 10px;
+      background: #3a332e; position: relative; cursor: pointer;
+    }
+    input.sw::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+      border-radius: 50%; background: var(--stone);
+    }
+    input.sw:checked { background: var(--lamp); }
+    input.sw:checked::after { left: 16px; background: var(--ink); }
     .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #2a2420; color: var(--stone); white-space: nowrap; }
     .tag.ok { background: rgba(125,186,106,.15); color: var(--ok); }
     .tag.wait { background: rgba(232,184,74,.12); color: var(--lamp); }
     .tag.bad { background: rgba(226,75,75,.15); color: var(--err); }
-    .sw { width: 36px; height: 22px; accent-color: var(--lamp); cursor: pointer; flex: none; }
+    .pair { display: grid; grid-template-columns: 1fr 90px; gap: 10px; }
     .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 13px; }
     .row .k { color: var(--mute); font-size: 12px; }
     .mono { font-family: var(--mono); font-size: 12px; }
@@ -109,6 +129,7 @@
       border: 1px dashed #3a332e; border-radius: 12px; padding: 22px 12px; text-align: center;
       color: var(--stone); font-size: 13px; margin: 0 0 12px;
     }
+    .drop.over { border-color: var(--lamp); color: var(--snow); }
     .foot { padding: 4px 4px 0; color: var(--mute); font-size: 11px; font-family: var(--mono); }
     .hidden { display: none !important; }
     h2 { font-size: 13px; font-weight: 600; margin: 4px 0 10px; color: var(--paper); }
@@ -116,11 +137,13 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="lang">
-      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
-      <button type="button" id="lang-ru" onclick="setLang('ru')">RU</button>
-      <button type="button" id="lang-zh" onclick="setLang('zh')">中文</button>
-    </div>
+    <label class="field lang"><span data-i="language">Language</span>
+      <select id="lang" onchange="setLang(this.value)">
+        <option value="en">English</option>
+        <option value="ru">Русский</option>
+        <option value="zh">中文</option>
+      </select>
+    </label>
     <nav>
       <button type="button" id="nav-list" onclick="show('list')" data-i="connections">Connections</button>
       <button type="button" id="nav-log" onclick="show('log')" data-i="journal">Journal</button>
@@ -178,7 +201,7 @@
 
     <div class="card hidden" id="scr-edit">
       <header>
-        <div class="t" id="ed-title" data-i="add">Add</div>
+        <div class="t" id="ed-title">Add</div>
       </header>
       <div class="body">
         <label class="field"><span data-i="name">Name</span><input id="f-name" maxlength="32" /></label>
@@ -187,6 +210,11 @@
           <button type="button" data-kind="vless" onclick="setKind('vless')">VLESS</button>
           <button type="button" data-kind="trojan" onclick="setKind('trojan')">Trojan</button>
         </div>
+        <div class="seg" id="seg-tab">
+          <button type="button" data-tab="main" class="on" onclick="setTab('main')" data-i="tabMain">Connection</button>
+          <button type="button" data-tab="adv" onclick="setTab('adv')" data-i="advanced">Advanced</button>
+        </div>
+        <div id="pane-main">
         <div class="seg" id="seg-mode">
           <button type="button" data-mode="link" onclick="setMode('link')" data-i="link">Link</button>
           <button type="button" data-mode="manual" onclick="setMode('manual')" data-i="manual">Manual</button>
@@ -196,8 +224,10 @@
         <label class="field loft-m" id="box-token"><span data-i="key">Access key</span><input id="f-token" autocomplete="off" /></label>
         <label class="field vless-m"><span>UUID</span><input id="f-uuid" autocomplete="off" /></label>
         <label class="field trojan-m"><span data-i="password">Password</span><input id="f-password" type="password" autocomplete="off" /></label>
-        <label class="field manual"><span data-i="host">Host</span><input id="f-host" /></label>
-        <label class="field manual"><span data-i="port">Port</span><input id="f-port" inputmode="numeric" value="443" /></label>
+        <div class="pair manual" id="box-host">
+          <label class="field"><span data-i="host">Host</span><input id="f-host" /></label>
+          <label class="field"><span data-i="port">Port</span><input id="f-port" inputmode="numeric" value="443" /></label>
+        </div>
         <label class="field proxy-m"><span data-i="security">TLS</span>
           <select id="f-security"><option value="tls">TLS</option><option value="reality">REALITY</option><option value="none">none</option></select>
         </label>
@@ -205,21 +235,23 @@
           <select id="f-network"><option value="tcp">TCP</option><option value="xhttp">XHTTP</option></select>
         </label>
         <label class="field vless-m checks"><input id="f-vision" type="checkbox" /> Vision</label>
-        <h2 data-i="advanced">Advanced</h2>
-        <div class="loft-m" id="box-fronts">
+        <label class="field manual"><span data-i="path">Path</span><input id="f-path" /></label>
+        <label class="field proxy-m"><span>SNI</span><input id="f-sni" /></label>
+        <label class="field proxy-m"><span data-i="fp">Fingerprint</span><input id="f-fp" placeholder="chrome" /></label>
+        <label class="field proxy-m reality"><span data-i="pbk">Public key</span><input id="f-pbk" autocomplete="off" /></label>
+        <label class="field proxy-m reality"><span data-i="sid">Short ID</span><input id="f-sid" /></label>
+        </div>
+        <div id="pane-adv" class="hidden">
+        <div id="box-fronts">
           <div class="hint" data-i="how">How to connect</div>
           <div class="checks" id="fronts"></div>
         </div>
-        <label class="field"><span data-i="path">Path</span><input id="f-path" /></label>
         <label class="field loft-only"><span>QUIC</span>
           <select id="f-cc"><option value="off">off</option><option value="bbr">bbr</option><option value="fixed">fixed</option></select>
         </label>
         <label class="field loft-only cc-fixed"><span data-i="up">Up, Mbit/s</span><input id="f-up" inputmode="numeric" /></label>
         <label class="field loft-only cc-fixed"><span data-i="down">Down, Mbit/s</span><input id="f-down" inputmode="numeric" /></label>
-        <label class="field"><span>SNI</span><input id="f-sni" /></label>
-        <label class="field"><span data-i="fp">Fingerprint</span><input id="f-fp" placeholder="chrome" /></label>
-        <label class="field"><span data-i="pbk">Public key</span><input id="f-pbk" autocomplete="off" /></label>
-        <label class="field"><span data-i="sid">Short ID</span><input id="f-sid" /></label>
+        </div>
         <div class="btns">
           <button type="button" class="ghost" onclick="show(backTo)" data-i="cancel">Cancel</button>
           <button type="button" class="go" onclick="saveEdit()" data-i="save">Save</button>
@@ -232,7 +264,9 @@
       <header><div class="t" data-i="import">Import</div></header>
       <div class="body">
         <div class="drop" id="drop" data-i="drop">Drop client.yaml, .loft, .vpn or a QR picture</div>
-        <input id="file" type="file" class="hidden" />
+        <label class="field file"><span data-i="pick">Choose file</span>
+          <input id="file" type="file" multiple accept=".yaml,.yml,.loft,.vpn,.conf,.txt,.png,.jpg,.jpeg,.webp,.gif,image/*" />
+        </label>
         <label class="field"><span data-i="paste">Paste</span><textarea id="f-paste"></textarea></label>
         <p class="hint" data-i="sstp">SSTP is the stock Keenetic client</p>
         <div class="btns">
@@ -279,6 +313,7 @@
     const I18N = {
       en: {
         connections:"Connections", import:"Import", add:"Add", journal:"Journal", package:"Package",
+        language:"Language",
         hint:"Every enabled connection keeps its session up. Keenetic priorities pick which one carries traffic.",
         split:"Split routing and fallback live in Keenetic",
         empty:"No connections yet. Each connection is an OpkgTun.",
@@ -287,9 +322,9 @@
         back:"Back", delete:"Delete", name:"Name", link:"Link", manual:"Manual",
         loftAddr:"loft:// address", key:"Access key", how:"How to connect",
         vlessLink:"vless:// link", trojanLink:"trojan:// link", host:"Host", port:"Port", password:"Password",
-        security:"TLS", network:"Transport", advanced:"Advanced", path:"Path",
+        security:"TLS", network:"Transport", advanced:"Advanced", tabMain:"Connection", path:"Path",
         up:"Up, Mbit/s", down:"Down, Mbit/s", fp:"Fingerprint", pbk:"Public key", sid:"Short ID",
-        save:"Save", cancel:"Cancel", drop:"Drop client.yaml, .loft, .vpn or a QR picture", paste:"Paste",
+        save:"Save", cancel:"Cancel", drop:"Drop client.yaml, .loft, .vpn or a QR picture", pick:"Choose file", paste:"Paste",
         sstp:"SSTP is the stock Keenetic client", version:"Version", arch:"Arch", latest:"GitHub latest",
         auto:"Check for updates", check:"Check", lan:"LAN only",
         gate:"Checking Keenetic session…", signin:"Sign in",
@@ -299,6 +334,7 @@
       },
       ru: {
         connections:"Подключения", import:"Импорт", add:"Добавить", journal:"Журнал", package:"Пакет",
+        language:"Язык",
         hint:"Включённые подключения держат сессию все сразу. Какое из них использовать, решают приоритеты Keenetic.",
         split:"Раздельная маршрутизация и запасной канал — в Keenetic",
         empty:"Подключений нет. Каждое подключение — это OpkgTun.",
@@ -307,9 +343,9 @@
         back:"Назад", delete:"Удалить", name:"Имя", link:"Ссылка", manual:"Вручную",
         loftAddr:"Адрес loft://", key:"Ключ доступа", how:"Как подключаться",
         vlessLink:"Ссылка vless://", trojanLink:"Ссылка trojan://", host:"Хост", port:"Порт", password:"Пароль",
-        security:"TLS", network:"Транспорт", advanced:"Расширенные", path:"Путь",
+        security:"TLS", network:"Транспорт", advanced:"Расширенные", tabMain:"Соединение", path:"Путь",
         up:"Вверх, Мбит/с", down:"Вниз, Мбит/с", fp:"Отпечаток", pbk:"Публичный ключ", sid:"Short ID",
-        save:"Сохранить", cancel:"Отмена", drop:"Перетащите client.yaml, .loft, .vpn или QR", paste:"Вставить",
+        save:"Сохранить", cancel:"Отмена", drop:"Перетащите client.yaml, .loft, .vpn или QR", pick:"Выбрать файл", paste:"Вставить",
         sstp:"SSTP — штатный клиент Keenetic", version:"Версия", arch:"Архитектура", latest:"Последний на GitHub",
         auto:"Проверять обновления", check:"Проверить", lan:"только LAN",
         gate:"Проверяем сессию Keenetic…", signin:"Войти",
@@ -319,6 +355,7 @@
       },
       zh: {
         connections:"连接", import:"导入", add:"添加", journal:"日志", package:"软件包",
+        language:"语言",
         hint:"所有已启用的连接同时保持会话。走哪一条，由 Keenetic 优先级决定。",
         split:"分流和备用通道在 Keenetic",
         empty:"还没有连接。每个连接是一个 OpkgTun。",
@@ -327,9 +364,9 @@
         back:"返回", delete:"删除", name:"名称", link:"链接", manual:"手动",
         loftAddr:"loft:// 地址", key:"访问密钥", how:"如何连接",
         vlessLink:"vless:// 链接", trojanLink:"trojan:// 链接", host:"主机", port:"端口", password:"密码",
-        security:"TLS", network:"传输", advanced:"高级", path:"路径",
+        security:"TLS", network:"传输", advanced:"高级", tabMain:"连接", path:"路径",
         up:"上行，Mbit/s", down:"下行，Mbit/s", fp:"指纹", pbk:"公钥", sid:"Short ID",
-        save:"保存", cancel:"取消", drop:"拖入 client.yaml、.loft、.vpn 或二维码", paste:"粘贴",
+        save:"保存", cancel:"取消", drop:"拖入 client.yaml、.loft、.vpn 或二维码", pick:"选择文件", paste:"粘贴",
         sstp:"SSTP 是 Keenetic 原装客户端", version:"版本", arch:"架构", latest:"GitHub 最新",
         auto:"检查更新", check:"检查", lan:"仅 LAN",
         gate:"正在检查 Keenetic 会话…", signin:"登录",
@@ -346,6 +383,7 @@
     let cur = null;
     let kind = "loft";
     let mode = "link";
+    let tabName = "main";
     let backTo = "list";
     let loginURL = "";
     let poll;
@@ -356,7 +394,9 @@
       if (map) Object.keys(map).forEach(function (key) { s = s.replace("{"+key+"}", map[key]); });
       return s;
     }
-    // setLang stores the choice and rewrites every [data-i] node. English is first in the header, Chinese last.
+    // setLang stores the choice and rewrites every [data-i] node.
+    // Option labels stay native (English, Русский, 中文) and are not data-i nodes.
+    // English is the first option, Chinese the last. Setting the value does not fire onchange.
     function setLang(l) {
       lang = I18N[l] ? l : "en";
       try { localStorage.setItem("loft-lang", lang); } catch (e) {}
@@ -365,9 +405,8 @@
         const k = n.getAttribute("data-i");
         if (I18N.en[k]) n.textContent = t(k);
       });
-      document.querySelectorAll(".lang button").forEach(function (b) {
-        b.classList.toggle("on", b.id === "lang-"+lang);
-      });
+      const sel = document.getElementById("lang");
+      if (sel && sel.value !== lang) sel.value = lang;
       paint();
     }
     // pickLang uses the saved choice, else ru* / zh* from the navigator, else English.
@@ -455,17 +494,16 @@
         if (c.state === "up") any = "up";
         else if (any !== "up" && c.state === "error") any = "error";
         const b = document.createElement("div");
-        b.className = "item";
-        const mk = document.getElementById("mark-list").cloneNode(true);
-        mk.removeAttribute("id");
-        lamp(mk, c.state);
+        b.className = "conn";
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        lamp(dot, c.state);
         const g = document.createElement("div");
-        g.className = "grow";
         const nm = document.createElement("div");
-        nm.className = "nm";
+        nm.className = "n";
         nm.textContent = c.name || "";
         const meta = document.createElement("div");
-        meta.className = "meta";
+        meta.className = "m";
         meta.textContent = c.meta || "";
         g.appendChild(nm); g.appendChild(meta);
         const tg = document.createElement("span");
@@ -474,7 +512,7 @@
         sw.type = "checkbox"; sw.className = "sw"; sw.checked = !!c.enabled;
         sw.addEventListener("click", function (ev) { ev.stopPropagation(); });
         sw.addEventListener("change", function () { toggle(c.id, sw.checked); });
-        b.appendChild(mk); b.appendChild(g); b.appendChild(tg); b.appendChild(sw);
+        b.appendChild(dot); b.appendChild(g); b.appendChild(tg); b.appendChild(sw);
         b.addEventListener("click", function () { openStatus(c.id); });
         list.appendChild(b);
       });
@@ -596,8 +634,17 @@
       });
       setKind(kind);
       setMode(mode);
+      setTab(advanced && kind === "loft" ? "adv" : "main");
       show("edit");
-      if (advanced) document.getElementById("box-fronts").scrollIntoView();
+    }
+    // setTab shows Connection or Advanced. Advanced is the loft front list and QUIC mode.
+    function setTab(name) {
+      tabName = name === "adv" ? "adv" : "main";
+      document.querySelectorAll("#seg-tab button").forEach(function (b) {
+        b.classList.toggle("on", b.getAttribute("data-tab") === tabName);
+      });
+      document.getElementById("pane-main").classList.toggle("hidden", tabName !== "main");
+      document.getElementById("pane-adv").classList.toggle("hidden", tabName !== "adv");
     }
     // setKind selects loft, vless or trojan and shows only that kind's fields.
     function setKind(k) {
@@ -616,6 +663,8 @@
       applyMode();
     }
     // applyMode hides sections that do not apply. Fixed-rate inputs show only for loft with cc=fixed.
+    // Public key and short ID show only on a proxy manual form whose security is REALITY.
+    // The Advanced tab exists only for loft. Another kind is put back on Connection.
     function applyMode() {
       const link = mode === "link";
       document.getElementById("box-link").classList.toggle("hidden", !link);
@@ -626,13 +675,20 @@
       document.querySelectorAll(".vless-m").forEach(function (n) { n.classList.toggle("hidden", link || kind !== "vless"); });
       document.querySelectorAll(".trojan-m").forEach(function (n) { n.classList.toggle("hidden", link || kind !== "trojan"); });
       document.querySelectorAll(".proxy-m").forEach(function (n) { n.classList.toggle("hidden", link || kind === "loft"); });
+      const reality = document.getElementById("f-security").value === "reality";
+      document.querySelectorAll(".reality").forEach(function (n) {
+        n.classList.toggle("hidden", link || kind === "loft" || !reality);
+      });
       document.querySelectorAll(".loft-only").forEach(function (n) { n.classList.toggle("hidden", kind !== "loft"); });
       const fixed = document.getElementById("f-cc").value === "fixed";
       document.querySelectorAll(".cc-fixed").forEach(function (n) {
         n.classList.toggle("hidden", kind !== "loft" || !fixed);
       });
+      document.getElementById("seg-tab").classList.toggle("hidden", kind !== "loft");
+      if (kind !== "loft" && tabName === "adv") setTab("main");
     }
     document.getElementById("f-cc").addEventListener("change", applyMode);
+    document.getElementById("f-security").addEventListener("change", applyMode);
     // num reads an integer field. Empty or garbage is 0, which the server treats as "unset" for rates.
     function num(id) {
       const n = parseInt(document.getElementById(id).value, 10);
@@ -691,39 +747,54 @@
         const res = await api("/api/import", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text: document.getElementById("f-paste").value})});
         const n = (res.added || []).length;
         const skip = (res.skipped || []).join("; ");
-        msg.classList.add("ok");
+        msg.classList.add(n ? "ok" : "err");
         msg.textContent = String(n) + (skip ? " · " + skip : "");
-        if (n) show("list");
+        if (n && !skip) show("list");
       } catch (e) {
         msg.classList.add("err");
         msg.textContent = e.message;
       }
     }
-    // sendFile posts one dropped or picked file. The server decides QR versus YAML.
-    async function sendFile(file) {
+    // sendFiles posts each file as its own multipart field "file". One request is one file.
+    // The server decides QR versus YAML. The list opens only when something was stored and nothing was skipped.
+    async function sendFiles(files) {
+      const list = Array.prototype.slice.call(files || []);
+      if (!list.length) return;
       const msg = document.getElementById("im-msg");
-      const fd = new FormData();
-      fd.append("file", file);
-      try {
-        const res = await api("/api/import", {method:"POST", body: fd});
-        msg.className = "msg ok";
-        msg.textContent = String((res.added || []).length);
-        show("list");
-      } catch (e) {
-        msg.className = "msg err";
-        msg.textContent = e.message;
+      msg.className = "msg";
+      let n = 0;
+      const skipped = [];
+      for (let i = 0; i < list.length; i++) {
+        const fd = new FormData();
+        fd.append("file", list[i]);
+        try {
+          const res = await api("/api/import", {method:"POST", body: fd});
+          n += (res.added || []).length;
+          (res.skipped || []).forEach(function (s) { skipped.push(s); });
+        } catch (e) {
+          if (String(e.message) === "auth") return;
+          skipped.push((list[i].name || "file") + ": " + e.message);
+        }
       }
+      const skip = skipped.join("; ");
+      msg.classList.add(n ? "ok" : "err");
+      msg.textContent = String(n) + (skip ? " · " + skip : "");
+      const input = document.getElementById("file");
+      if (input) input.value = "";
+      if (n && !skip) show("list");
     }
-    // Click and drop both import the first file. dragover is cancelled so the browser does not navigate.
+    // The drop zone opens the same picker as the file field. dragover is cancelled so the browser does not navigate.
     const drop = document.getElementById("drop");
     drop.addEventListener("click", function () { document.getElementById("file").click(); });
-    drop.addEventListener("dragover", function (e) { e.preventDefault(); });
+    drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", function () { drop.classList.remove("over"); });
     drop.addEventListener("drop", function (e) {
       e.preventDefault();
-      if (e.dataTransfer.files[0]) sendFile(e.dataTransfer.files[0]);
+      drop.classList.remove("over");
+      sendFiles(e.dataTransfer.files);
     });
     document.getElementById("file").addEventListener("change", function () {
-      if (this.files[0]) sendFile(this.files[0]);
+      sendFiles(this.files);
     });
     // loadLog shows the last 80 redacted lines. Keys are already shortened on the server.
     async function loadLog() {
@@ -766,7 +837,7 @@
         msg.textContent = e.message;
       }
     }
-    // goLogin leaves for the stock admin, which sends the browser back via ?return=.
+    // goLogin opens the stock admin. This KeeneticOS ignores ?return=; the operator opens :8090 again after signing in.
     function goLogin() { if (loginURL) location.href = loginURL; }
     setLang(pickLang());
     document.getElementById("foot").textContent = location.origin + "/ · " + t("lan");

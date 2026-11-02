@@ -67,9 +67,8 @@
       margin: 14px 8px 4px; font-size: 0.65rem; letter-spacing: .1em;
       text-transform: uppercase; color: var(--mute); font-weight: 600;
     }
-    .lang { display: flex; gap: 4px; margin: 4px 8px 10px; }
-    .lang button { flex: 1; text-align: center; padding: 6px 0; font-weight: 600; font-size: 12px; }
-    .lang button.on { background: var(--lamp); color: var(--ink); }
+    .lang { margin: 4px 8px 12px; }
+    .drop.over { border-color: var(--lamp); color: var(--snow); }
 
     .stage-wrap {
       padding: 28px; display: flex; align-items: center; justify-content: center;
@@ -99,11 +98,12 @@
     .lamp.on { background: var(--lamp); box-shadow: 0 0 10px rgba(232,184,74,.55); }
     .lamp.err { background: var(--err); }
     label.field { display: block; margin: 0 0 12px; font-size: 12px; color: var(--mute); }
-    label.field input, label.field select {
+    label.field input, label.field select, label.field textarea {
       display: block; width: 100%; margin-top: 4px;
       background: #211c19; border: 1px solid #2e2824; color: var(--snow);
       border-radius: 8px; padding: 8px 10px; font: 400 13px var(--ui);
     }
+    label.field textarea { font-family: var(--mono); font-size: 12px; min-height: 72px; resize: vertical; }
     label.field input.mono { font-family: var(--mono); font-size: 12px; }
     .pair { display: grid; grid-template-columns: 1fr 90px; gap: 10px; }
     .btns { display: flex; gap: 8px; margin-top: 14px; }
@@ -240,10 +240,12 @@
       loft
     </div>
     <p data-i="navCap">Макет панели на Keenetic. Маршруты и приоритеты — у Keenetic, сессии — у нас.</p>
-    <div class="lang">
-      <button type="button" id="lang-en" onclick="setLang('en')">EN</button>
-      <button type="button" id="lang-ru" class="on" onclick="setLang('ru')">RU</button>
-    </div>
+    <label class="field lang"><span data-i="lang">Язык</span>
+      <select id="lang" onchange="setLang(this.value)">
+        <option value="en">English</option>
+        <option value="ru" selected>Русский</option>
+      </select>
+    </label>
     <h4 data-i="hKeen">Keenetic</h4>
     <button type="button" class="on" data-go="keenetic" data-i="nOther">Другие подключения</button>
     <button type="button" data-go="prio" data-i="nPrio">Приоритеты</button>
@@ -643,10 +645,16 @@
       </header>
       <div class="body">
         <p class="hint" style="margin-top:0" data-i="iBody">Файл с ключом и адресом, который вам выдали.</p>
-        <div class="drop" data-i="iDrop">Перетащите сюда client.yaml, .loft, .vpn или QR-картинку</div>
+        <div class="drop" id="mock-drop" data-i="iDrop">Перетащите сюда client.yaml, .loft, .vpn или QR-картинку</div>
+        <label class="field"><span data-i="iPick">Выбрать файл</span>
+          <input id="mock-file" type="file" multiple accept=".yaml,.yml,.loft,.vpn,.conf,.txt,.png,.jpg,.jpeg,.webp,.gif,image/*" />
+        </label>
+        <p class="hint" id="mock-picked"></p>
+        <label class="field"><span data-i="iPaste">Вставить</span><textarea rows="4"></textarea></label>
+        <p class="hint" data-i="iSstp">SSTP — штатный клиент Keenetic</p>
         <div class="btns">
           <button type="button" class="ghost" data-go="list" data-i="eBack">Назад</button>
-          <button type="button" class="go" data-go="list" data-i="iPick">Выбрать файл</button>
+          <button type="button" class="go" data-i="lImport">Импорт</button>
         </div>
       </div>
       <div class="foot">→ OpkgTun5</div>
@@ -730,7 +738,9 @@
         eBack: "Назад", eSave: "Сохранить", eDel: "Удалить",
         vUrl: "Ссылка vless://", vSec: "Защита", vNet: "Транспорт", vSni: "Имя хоста TLS", vFp: "Отпечаток TLS", vPbk: "Публичный ключ", vVisionD: "xtls-rprx-vision на TCP.",
         iTitle: "Импорт", iBody: "Файл с ключом и адресом, который вам выдали.",
+        lang: "Язык",
         iDrop: "Перетащите сюда client.yaml, .loft, .vpn или QR-картинку", iPick: "Выбрать файл",
+        iPaste: "Вставить", iSstp: "SSTP — штатный клиент Keenetic",
         fTitle: "Фронты", tMain: "Соединение", tAdv: "Расширенные",
         fHint: "Галочки включают фронты. Порядок попыток выбирает loft (select: auto).",
         fLive: "Живой",
@@ -774,7 +784,9 @@
         eBack: "Back", eSave: "Save", eDel: "Delete",
         vUrl: "vless:// link", vSec: "Security", vNet: "Transport", vSni: "TLS host name", vFp: "TLS fingerprint", vPbk: "Public key", vVisionD: "xtls-rprx-vision on TCP.",
         iTitle: "Import", iBody: "The file with the key and address you were given.",
+        lang: "Language",
         iDrop: "Drop client.yaml, .loft, .vpn or a QR picture here", iPick: "Choose file",
+        iPaste: "Paste", iSstp: "SSTP is the stock Keenetic client",
         fTitle: "Fronts", tMain: "Connection", tAdv: "Advanced",
         fHint: "Ticks turn fronts on. loft picks the try order (select: auto).",
         fLive: "Live",
@@ -793,10 +805,10 @@
     };
 
     function setLang(lang) {
-      document.documentElement.lang = lang;
-      document.getElementById("lang-ru").classList.toggle("on", lang === "ru");
-      document.getElementById("lang-en").classList.toggle("on", lang === "en");
-      const t = I[lang];
+      document.documentElement.lang = lang === "zh" ? "zh" : lang;
+      const sel = document.getElementById("lang");
+      if (sel && sel.value !== lang) sel.value = lang;
+      const t = I[lang] || I.en;
       document.querySelectorAll("[data-i]").forEach((el) => {
         const k = el.getAttribute("data-i");
         if (t[k]) el.textContent = t[k];
@@ -829,6 +841,22 @@
         b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
         document.querySelector("[data-cc-rates]").classList.toggle("hidden", b.dataset.cc !== "fixed");
       });
+    });
+
+    // Import: the file field stays on this screen. Drop must not navigate the browser away.
+    const mockFile = document.getElementById("mock-file");
+    const mockDrop = document.getElementById("mock-drop");
+    function showFiles(files) {
+      const names = Array.prototype.map.call(files || [], (f) => f.name);
+      document.getElementById("mock-picked").textContent = names.join(", ");
+    }
+    mockFile.addEventListener("change", () => showFiles(mockFile.files));
+    mockDrop.addEventListener("dragover", (e) => { e.preventDefault(); mockDrop.classList.add("over"); });
+    mockDrop.addEventListener("dragleave", () => mockDrop.classList.remove("over"));
+    mockDrop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      mockDrop.classList.remove("over");
+      showFiles(e.dataTransfer.files);
     });
 
     // Link / Manual switch on the edit screens.
