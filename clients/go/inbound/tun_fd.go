@@ -19,7 +19,12 @@ import (
 )
 
 // ListenTUNSock binds a unix socket at path (0600) for loft-priv to send a utun fd.
+// Darwin sockaddr_un.sun_path is 104 bytes including NUL; a longer path
+// fails bind with EINVAL and loft-priv then has nothing to connect to.
 func ListenTUNSock(path string) (net.Listener, error) {
+	if len(path) >= 104 {
+		return nil, fmt.Errorf("tun sock path %d >= 104", len(path))
+	}
 	_ = os.Remove(path)
 	ln, err := net.Listen("unix", path)
 	if err != nil {

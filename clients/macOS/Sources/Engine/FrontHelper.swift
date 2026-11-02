@@ -42,6 +42,18 @@ final class FrontHelper {
     private var outRest = ""
     private var errRest = ""
 
+    /// Darwin sockaddr_un.sun_path is 104 bytes including NUL. Import
+    /// fingerprints make profile.id longer than that, so the tag is FNV-1a
+    /// of the id and the socket lives in /tmp (NSTemporaryDirectory is ~50 B).
+    static func tunSockPath(id: String) -> String {
+        var h: UInt64 = 14_695_981_039_346_656_037
+        for b in (id.isEmpty ? "x" : id).utf8 {
+            h ^= UInt64(b)
+            h &*= 1_099_511_628_211
+        }
+        return String(format: "/tmp/loft-tun-%d-%016llx.sock", getpid(), h)
+    }
+
     /// SIGTERM leftover loft-front from this bundle. Leaves debug binaries (other paths) alone.
     /// Uses libproc so boot cannot stall on a full `ps` pipe (long argv of a live loft-front).
     static func reapOrphans() {
@@ -203,8 +215,7 @@ final class FrontHelper {
         }
         tunSock = ""
         if profile.tun && !probe {
-            let tag = profile.id.isEmpty ? "x" : profile.id
-            tunSock = NSTemporaryDirectory() + "loft-tun-\(getpid())-\(tag).sock"
+            tunSock = Self.tunSockPath(id: profile.id)
             try? FileManager.default.removeItem(atPath: tunSock)
             args += ["-tun-sock", tunSock]
         }
