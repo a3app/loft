@@ -184,6 +184,16 @@ func TestGET404MissForgetsSid(t *testing.T) {
 		t.Fatal("no handshake")
 	}
 	gs.drop(sid)
+	// Idle GET pace is keepalive/2 with jitter, about 5–7.2s at the
+	// default 15s keepalive. The same-seq 404 streak starts only on the
+	// next GET, so an 8s bound raced that probe (CI: three retries, no
+	// sid lost). Open queues a frame, Pull returns, and that GET is the
+	// nosid 404. The bound is the streak, not the idle timer.
+	if c, err := g.Open("203.0.113.1:80"); err != nil {
+		t.Fatal(err)
+	} else if c != nil {
+		defer c.Close()
+	}
 	select {
 	case <-g.Done():
 	case <-time.After(8 * time.Second):
