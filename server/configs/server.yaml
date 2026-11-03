@@ -7,6 +7,8 @@ token: "change-me-long-random"
 cover_dir: ""
 
 get_path: /static/v3/build
+# get_down: 262144   # GET body bytes (Status get_down). omit = 256 KiB. 16 KiB..1 MiB.
+# pad_max: 8         # idle pad GETs in flight (Status pad_max). omit = 8. 1..16.
 ws_path: /api/v1/sync
 h2_path: /api/v1/tunnel
 h3_path: /api/v1/tunnel

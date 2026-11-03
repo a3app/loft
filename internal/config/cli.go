@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/a3app/loft/internal/startup"
+	"github.com/a3app/loft/internal/wire"
 )
 
 // ParseCommands reads node config as switch-style commands.
@@ -169,6 +170,26 @@ func applyNode(c *ServerConfig, tok []string) error {
 			return fmt.Errorf("get_h2 wants 1-4")
 		}
 		c.GetH2 = n
+	case "get_down":
+		if len(tok) < 2 {
+			return fmt.Errorf("get_down wants bytes")
+		}
+		n := 0
+		fmt.Sscanf(tok[1], "%d", &n)
+		if n <= 0 {
+			return fmt.Errorf("get_down wants bytes")
+		}
+		c.GetDown = n
+	case "pad_max":
+		if len(tok) < 2 {
+			return fmt.Errorf("pad_max wants 1-16")
+		}
+		n := 0
+		fmt.Sscanf(tok[1], "%d", &n)
+		if n < 1 || n > 16 {
+			return fmt.Errorf("pad_max wants 1-16")
+		}
+		c.PadMax = n
 	case "ws_path":
 		if len(tok) >= 2 {
 			c.WSPath = tok[1]
@@ -333,6 +354,12 @@ func RenderCommands(c ServerConfig) string {
 	}
 	if c.GetH2 > 1 {
 		fmt.Fprintf(&b, "get_h2 %d\n", c.GetH2)
+	}
+	if c.GetDown > 0 && c.GetDown != int(wire.GetDownDefault) {
+		fmt.Fprintf(&b, "get_down %d\n", c.GetDown)
+	}
+	if c.PadMax > 0 && c.PadMax != int(wire.PadMaxDefault) {
+		fmt.Fprintf(&b, "pad_max %d\n", c.PadMax)
 	}
 	if c.WSPath != "" {
 		fmt.Fprintf(&b, "ws_path %s\n", c.WSPath)

@@ -81,7 +81,7 @@ func (o *Ops) NodeConfig(ctx context.Context) (admproto.NodeConfig, error) {
 		return admproto.NodeConfig{}, fmt.Errorf("node.conf: %w", err)
 	}
 	v := admproto.NodeConfig{Role: firstNonEmpty(c.Role, "controller"), Listen: c.Listen, Advertise: c.Advertise, Fronts: c.EnabledFronts(),
-		Inner: extraInner(c.Inner), GetH2: max(c.GetH2, 1), Decoy: c.Decoy, Mask: c.Mask, CoverDir: c.CoverDir, GetPath: c.GetPath, WSPath: c.WSPath, H2Path: c.H2Path,
+		Inner: extraInner(c.Inner), GetH2: max(c.GetH2, 1), GetDown: int(lwire.ClampGetDown(uint32(c.GetDown))), PadMax: int(lwire.ClampPadMax(byte(c.PadMax))), Decoy: c.Decoy, Mask: c.Mask, CoverDir: c.CoverDir, GetPath: c.GetPath, WSPath: c.WSPath, H2Path: c.H2Path,
 		RosterPath: c.RosterPath, ListsPath: c.ListsPath, AuthShared: c.AuthShared, Trace: c.Trace != "",
 		CDNPeers: c.CDNPeers, Relays: []admproto.Relay{}}
 	if v.Decoy == nil {
@@ -212,6 +212,16 @@ func (o *Ops) NodeSave(ctx context.Context, in admproto.NodeConfig) (admproto.No
 		return admproto.NodeConfig{}, errors.New("HTTP/2 connections for GET: 1–4")
 	}
 	c.GetH2 = in.GetH2
+	if in.GetDown == 0 || in.GetDown == int(lwire.GetDownDefault) {
+		c.GetDown = 0
+	} else {
+		c.GetDown = int(lwire.ClampGetDown(uint32(in.GetDown)))
+	}
+	if in.PadMax == 0 || in.PadMax == int(lwire.PadMaxDefault) {
+		c.PadMax = 0
+	} else {
+		c.PadMax = int(lwire.ClampPadMax(byte(in.PadMax)))
+	}
 	// The panel's nginx stays the first decoy: the panel is reached through it.
 	if len(prev.Decoy) > 0 && (len(in.Decoy) == 0 || in.Decoy[0] != prev.Decoy[0]) {
 		return admproto.NodeConfig{}, fmt.Errorf("the first web server (%s) is the panel's own and stays first", prev.Decoy[0])

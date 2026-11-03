@@ -35,6 +35,9 @@ import (
 //	LOFT_STAND_INNER     clear skips inner AEAD (both peers). unset/cache = production cache
 //	LOFT_STAND_FAN       affinity | rr | stripe | off
 //	LOFT_STAND_DISPATCH  sync | prefetch | queue
+//	LOFT_STAND_GETDOWN   GET body bytes (16 KiB..1 MiB). unset = node.conf get_down / 256 KiB
+//	LOFT_STAND_PADMAX    idle pad GETs in flight (client). unset = Status pad_max / slots/2, ≥8
+//	LOFT_STAND_PADFULL   1 = wantFull packs every inflight slot (download)
 //
 // stripe puts a per-frame sequence in the sealed batch (leading 0xA5, which a
 // normal length prefix cannot be: MaxPayload is 16 KiB). Both peers must set
@@ -84,6 +87,43 @@ func standPull() int {
 	}
 	return n
 }
+
+// standGetDown is the GET response body cap. def 0 is getDownlinkBytes
+// (node.conf get_down / Status get_down). LOFT_STAND_GETDOWN overrides.
+func standGetDown(def int) int {
+	if def <= 0 {
+		def = getDownlinkBytes
+	}
+	n := standEnvInt("LOFT_STAND_GETDOWN", def)
+	return int(wire.ClampGetDown(uint32(n)))
+}
+
+// standPadMax is how many idle pad GETs may sit in flight. want is Status
+// / Tune pad_max (0 = none). Unset env: want if set, else slots/2 at least 8.
+// 1.0.43 shipped slots/4, at least 4.
+func standPadMax(slots, want int) int {
+	n := standEnvInt("LOFT_STAND_PADMAX", 0)
+	if n <= 0 {
+		if want > 0 {
+			n = want
+		} else {
+			n = slots / 2
+			if n < 8 {
+				n = 8
+			}
+		}
+	}
+	n = int(wire.ClampPadMax(byte(n)))
+	if n > slots {
+		return slots
+	}
+	return n
+}
+
+// standPadFull is true when a live download may occupy every inflight
+// slot with pads. Unset is off: filling 16 stampeded Yandex (pad n≈180,
+// TTFB 2.4s, mux-down 8.8). Opt-in LOFT_STAND_PADFULL=1 for A/B.
+func standPadFull() bool { return os.Getenv("LOFT_STAND_PADFULL") == "1" }
 
 // notsentLowat is the shipping cap on unsent socket bytes.
 const notsentLowat = 16 << 10

@@ -161,6 +161,8 @@ export LOFT_TOKEN='long-secret'
 | `token` | Node secret (`LOFT_TOKEN`): mask. Member keys are `members.keys`. |
 | `get_path` `ws_path` `h2_path` `h3_path` | Front paths |
 | `get_h2` | GET HTTP/2 connections, 1–4 (default 1). Total inflight is shared across them. |
+| `get_down` | GET response body cap in bytes (Status `get_down`). Default 262144 (256 KiB). Floor 16 KiB, ceiling 1 MiB. The node Pulls at most this much mux into one GET. Omitted = 256 KiB. |
+| `pad_max` | Idle pad GETs in flight (Status `pad_max`, CmdTune 6th byte). Default 8. 1–16, clamped to `inflight`. Omitted = 8. |
 | `fronts` | Empty = `get`. List `ws`, `h2`, `quic`, `h3` to opt in. `connect` is mux-off HTTP CONNECT splice; off unless listed. `l3` is HTTP/2 CONNECT then IP datagrams; off unless listed |
 | `inner` | Extra data ciphers the node may confirm: `clear`, `aes`, `aegis`, `hiae`. Empty = ChaCha20-Poly1305 only. ChaCha20-Poly1305 stays allowed and cannot be disabled. `get` never confirms `clear`, `aes`, `aegis`, or `hiae`. A restart applies it. SIGHUP does not re-read `node.conf`. The panel Node screen lists the same boxes. |
 | `cc` | Congestion control clients may ask for: `bbr`, `fixed` (`off` or empty = every session stays on the system default). Each client decides whether to ask; the node only allows. Only sessions over QUIC switch (`quic`, `h3`, or `l3` over HTTP/3); TCP fronts keep the kernel's default. Not through a relay, not on `get`. A restart applies it. |

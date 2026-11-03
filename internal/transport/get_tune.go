@@ -24,8 +24,10 @@ type frontTune struct {
 	mu        sync.Mutex
 	budget    uint16
 	inflight  uint8
+	padMax    uint8
 	defBudget uint16
 	defIn     uint8
+	defPad    uint8
 	calmN     int
 	calmWin   time.Time
 	quietAt   time.Time
@@ -54,10 +56,36 @@ func newFrontTune(prof cdn.Profile) *frontTune {
 	return &frontTune{
 		budget:    uint16(b),
 		inflight:  uint8(in),
+		padMax:    wire.PadMaxDefault,
 		defBudget: uint16(b),
 		defIn:     uint8(in),
+		defPad:    wire.PadMaxDefault,
 		quietAt:   now,
 	}
+}
+
+// setPad is the configured pad_max (node.conf). Live Tune may lower it.
+func (t *frontTune) setPad(n uint8) {
+	if t == nil {
+		return
+	}
+	n = wire.ClampPadMax(n)
+	t.mu.Lock()
+	t.padMax = n
+	t.defPad = n
+	t.mu.Unlock()
+}
+
+func (t *frontTune) pad() uint8 {
+	if t == nil {
+		return wire.PadMaxDefault
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.padMax == 0 {
+		return wire.PadMaxDefault
+	}
+	return t.padMax
 }
 
 func (t *frontTune) advertised() (budget uint16, inflight uint8) {
@@ -108,6 +136,25 @@ func (t *frontTune) observe(ev byte) {
 			t.reply = true
 			t.quietAt = now
 		}
+		if t.padMax > 4 {
+			n := t.padMax / 2
+			if n < 4 {
+				n = 4
+			}
+			if n > t.inflight {
+				n = t.inflight
+			}
+			if n != t.padMax {
+				t.padMax = n
+				t.reply = true
+				t.quietAt = now
+			}
+		}
+	}
+	if t.padMax > t.inflight && t.inflight > 0 {
+		t.padMax = t.inflight
+		t.reply = true
+		t.quietAt = now
 	}
 }
 
@@ -120,6 +167,9 @@ func (t *frontTune) dropLocked() {
 			n = 8
 		}
 		t.inflight = n
+		if t.padMax > t.inflight {
+			t.padMax = t.inflight
+		}
 		t.reply = true
 		t.quietAt = time.Now()
 		return
@@ -136,6 +186,9 @@ func (t *frontTune) dropLocked() {
 	}
 	if t.inflight > 4 {
 		t.inflight = 4
+		if t.padMax > 4 {
+			t.padMax = 4
+		}
 		t.reply = true
 		t.quietAt = time.Now()
 	}
@@ -166,6 +219,22 @@ func (t *frontTune) recover() {
 		t.quietAt = time.Now()
 		return
 	}
+	if t.padMax < t.defPad {
+		n := t.padMax * 2
+		if n > t.defPad {
+			n = t.defPad
+		}
+		if n > t.inflight {
+			n = t.inflight
+		}
+		if n < 1 {
+			n = 1
+		}
+		t.padMax = n
+		t.reply = true
+		t.quietAt = time.Now()
+		return
+	}
 	if t.budget < t.defBudget {
 		n := uint16(int(t.budget) * 2)
 		if n > t.defBudget {
@@ -189,5 +258,11 @@ func (t *frontTune) takeReply() (wire.Frame, bool) {
 		return wire.Frame{}, false
 	}
 	t.reply = false
-	return wire.TuneFrame(wire.TuneSet, t.inflight, t.budget), true
+	p := wire.EncodeTuneAll(wire.Tune{
+		Event:    wire.TuneSet,
+		Inflight: t.inflight,
+		Budget:   t.budget,
+		PadMax:   t.padMax,
+	})
+	return wire.Frame{Cmd: wire.CmdTune, Payload: p}, true
 }

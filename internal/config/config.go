@@ -176,7 +176,9 @@ type ServerConfig struct {
 	Token         string              `yaml:"token"`
 	CoverDir      string              `yaml:"cover_dir"`
 	GetPath       string              `yaml:"get_path"`
-	GetH2         int                 `yaml:"get_h2"` // GET HTTP/2 connections, 1–4; 0 = one, or four when edge is tight
+	GetH2         int                 `yaml:"get_h2"`   // GET HTTP/2 connections, 1–4; 0 = one, or four when edge is tight
+	GetDown       int                 `yaml:"get_down"` // GET body bytes; 0 = 256 KiB. Floor 16 KiB, ceiling 1 MiB.
+	PadMax        int                 `yaml:"pad_max"`  // idle pad GETs in flight; 0 = 8. 1–16.
 	WSPath        string              `yaml:"ws_path"`
 	H2Path        string              `yaml:"h2_path"`
 	H3Path        string              `yaml:"h3_path"`
@@ -375,6 +377,12 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 	}
 	if c.GetH2 > 4 {
 		c.GetH2 = 4
+	}
+	if c.GetDown != 0 {
+		c.GetDown = int(wire.ClampGetDown(uint32(c.GetDown)))
+	}
+	if c.PadMax != 0 {
+		c.PadMax = int(wire.ClampPadMax(byte(c.PadMax)))
 	}
 	if _, err := c.EdgeByte(); err != nil {
 		return nil, err

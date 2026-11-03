@@ -39,6 +39,46 @@ func TestStatusCC(t *testing.T) {
 	}
 }
 
+func TestStatusGetDownOptionalTail(t *testing.T) {
+	st := Status{Code: OK, IP: "10.8.0.2", GetDown: 256 << 10}
+	got, err := DecodeStatus(st.Encode())
+	if err != nil || got.GetDown != 256<<10 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got.CC != CCDefault || got.Inner != InnerChaCha {
+		t.Fatalf("pad inner/cc %+v", got)
+	}
+	old := Status{Code: OK, IP: "10.8.0.2", CC: CCFixed, CCUp: 1, CCDown: 2}
+	got, err = DecodeStatus(old.Encode())
+	if err != nil || got.GetDown != 0 || got.CC != CCFixed {
+		t.Fatalf("cc without get_down %+v %v", got, err)
+	}
+	if ClampGetDown(0) != GetDownDefault || ClampGetDown(1024) != GetDownMin || ClampGetDown(2<<20) != GetDownMax {
+		t.Fatal("clamp")
+	}
+}
+
+func TestStatusPadMaxOptionalTail(t *testing.T) {
+	st := Status{Code: OK, IP: "10.8.0.2", GetDown: 256 << 10, PadMax: 8}
+	got, err := DecodeStatus(st.Encode())
+	if err != nil || got.PadMax != 8 || got.GetDown != 256<<10 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	old := Status{Code: OK, IP: "10.8.0.2", GetDown: 256 << 10}
+	got, err = DecodeStatus(old.Encode())
+	if err != nil || got.PadMax != 0 || got.GetDown != 256<<10 {
+		t.Fatalf("get_down without pad_max %+v %v", got, err)
+	}
+	only := Status{Code: OK, IP: "10.8.0.2", PadMax: 4}
+	got, err = DecodeStatus(only.Encode())
+	if err != nil || got.PadMax != 4 || got.GetDown != 0 {
+		t.Fatalf("pad_max pads get_down %+v %v", got, err)
+	}
+	if ClampPadMax(0) != PadMaxDefault || ClampPadMax(99) != PadMaxMax {
+		t.Fatal("clamp")
+	}
+}
+
 func TestAgreeCC(t *testing.T) {
 	tcp := CCOffer{Allow: []byte{CCBBR, CCFixed}, MaxDown: 50000}
 	all := CCOffer{Allow: []byte{CCBBR, CCFixed}, QUIC: true, MaxDown: 50000}

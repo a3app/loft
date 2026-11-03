@@ -161,6 +161,8 @@ export LOFT_TOKEN='long-secret'
 | `token` | 节点密钥（`LOFT_TOKEN`）：伪装。成员密钥在 `members.keys`。 |
 | `get_path` `ws_path` `h2_path` `h3_path` | 前置路径 |
 | `get_h2` | GET 的 HTTP/2 连接数，1–4（默认 1）。inflight 总数共用。 |
+| `get_down` | GET 响应体上限，字节（Status `get_down`）。默认 262144（256 KiB）。下限 16 KiB，上限 1 MiB。节点一次 GET 最多从 mux Pull 这么多。省略 = 256 KiB。 |
+| `pad_max` | 空闲 Pad GET 在途数（Status `pad_max`，CmdTune 第 6 字节）。默认 8。1–16，不超过 `inflight`。省略 = 8。 |
 | `fronts` | 空 = `get`。要 `ws`、`h2`、`quic`、`h3` 就列入。`connect` 是 mux-off 的 HTTP CONNECT 拼接；未列入则关。`l3` 为 HTTP/2 CONNECT 而后 IP 数据报；未列入则关 |
 | `inner` | 节点可以确认的额外数据密码：`clear`、`aes`、`aegis`、`hiae`。空 = 仅 ChaCha20-Poly1305。ChaCha20-Poly1305 始终允许，不能关掉。`get` 不确认 `clear`、`aes`、`aegis` 或 `hiae`。重启后生效。SIGHUP 不重读 `node.conf`。面板「节点」页是同一组勾选。 |
 | `cc` | 允许客户端请求的拥塞控制：`bbr`、`fixed`（`off` 或空 = 所有会话保持系统默认）。是否请求由各客户端决定；节点只负责允许。只有基于 QUIC 的会话会切换（`quic`、`h3`，或经 HTTP/3 的 `l3`）；TCP 前置保持内核默认。不经中继，不用于 `get`。重启后生效。 |

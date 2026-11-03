@@ -120,6 +120,48 @@ type Status struct {
 	CC           byte      // congestion control both sides use; 0 = system default
 	CCUp         uint32    // fixed: client sending rate, kbit/s; 0 = that direction stays default
 	CCDown       uint32    // fixed: node sending rate, kbit/s; 0 = that direction stays default
+	GetDown      uint32    // GET response body cap, bytes; 0 = 256 KiB default
+	PadMax       uint8     // idle pad GETs in flight; 0 = 8 default, clamp 1–16
+}
+
+// GET body cap (Status get_down, node.conf get_down). Floor is one mux
+// chunk; ceiling is the 1.0.43 1 MiB slurp. 0 on the wire means default.
+const (
+	GetDownDefault uint32 = 256 << 10
+	GetDownMin     uint32 = 16 << 10
+	GetDownMax     uint32 = 1 << 20
+)
+
+// ClampGetDown maps 0 to GetDownDefault and clips to [GetDownMin, GetDownMax].
+func ClampGetDown(n uint32) uint32 {
+	if n == 0 {
+		return GetDownDefault
+	}
+	if n < GetDownMin {
+		return GetDownMin
+	}
+	if n > GetDownMax {
+		return GetDownMax
+	}
+	return n
+}
+
+// Idle pad GETs in flight (Status pad_max, node.conf pad_max, CmdTune 6th byte).
+const (
+	PadMaxDefault byte = 8
+	PadMaxMin     byte = 1
+	PadMaxMax     byte = 16
+)
+
+// ClampPadMax maps 0 to PadMaxDefault and clips to [PadMaxMin, PadMaxMax].
+func ClampPadMax(n byte) byte {
+	if n == 0 {
+		return PadMaxDefault
+	}
+	if n > PadMaxMax {
+		return PadMaxMax
+	}
+	return n
 }
 
 // FrontEP is one Status front: name (get/ws/h2/h3/quic), HTTP path, optional URL.
@@ -403,7 +445,9 @@ func (s Status) Encode() []byte {
 	needRoutes := len(s.Routes) > 0
 	needPolicy := s.Policy.Present || len(s.Policy.OwnTags) > 0 || s.Policy.ACLDefault > 0 || len(s.Policy.Rules) > 0 || len(s.Policy.Peers) > 0
 	needTTL := s.SessionTTLMS > 0
-	needCC := s.CC != CCDefault
+	needPadMax := s.PadMax > 0
+	needGetDown := s.GetDown > 0 || needPadMax
+	needCC := s.CC != CCDefault || needGetDown
 	needRoll := len(s.KeyRoll) > 0 || needCC
 	needInner := s.InnerSet || needRoll
 	needFronts := len(s.Fronts) > 0 || s.Edge > 0 || needInner
@@ -466,6 +510,14 @@ func (s Status) Encode() []byte {
 														binary.BigEndian.PutUint32(cc[1:5], s.CCUp)
 														binary.BigEndian.PutUint32(cc[5:9], s.CCDown)
 														tail = append(tail, cc[:]...)
+														if needGetDown {
+															var gd [4]byte
+															binary.BigEndian.PutUint32(gd[:], s.GetDown)
+															tail = append(tail, gd[:]...)
+															if needPadMax {
+																tail = append(tail, s.PadMax)
+															}
+														}
 													}
 												}
 											}
@@ -737,6 +789,14 @@ func DecodeStatus(b []byte) (Status, error) {
 																s.CCUp = binary.BigEndian.Uint32(b[off+1 : off+5])
 																s.CCDown = binary.BigEndian.Uint32(b[off+5 : off+9])
 																off += 9
+																if off+4 <= len(b) {
+																	s.GetDown = binary.BigEndian.Uint32(b[off : off+4])
+																	off += 4
+																	if off < len(b) {
+																		s.PadMax = b[off]
+																		off++
+																	}
+																}
 															}
 														}
 													}

@@ -174,6 +174,37 @@ func TestApplyTuneH2Conns(t *testing.T) {
 	}
 }
 
+func TestApplyTunePadMax(t *testing.T) {
+	g := &GET{}
+	g.liveInflight.Store(16)
+	g.livePadMax.Store(8)
+	g.applyTune(wire.Tune{Event: wire.TuneSet, PadMax: 4})
+	if g.livePadMax.Load() != 4 {
+		t.Fatalf("lower %d", g.livePadMax.Load())
+	}
+	g.applyTune(wire.Tune{Event: wire.TuneSet, PadMax: 16})
+	if g.livePadMax.Load() != 4 {
+		t.Fatal("must not raise")
+	}
+	g.applyTune(wire.Tune{Event: wire.TuneSet, PadMax: 0})
+	if g.livePadMax.Load() != 4 {
+		t.Fatal("zero leaves")
+	}
+}
+
+func TestFrontTune429LowersPadMax(t *testing.T) {
+	ft := newFrontTune(cdn.Profile{HeaderBudget: 16 << 10, Inflight: 16})
+	ft.observe(wire.Tune429)
+	f, ok := ft.takeReply()
+	if !ok {
+		t.Fatal("reply")
+	}
+	got, _ := wire.ParseTune(f.Payload)
+	if got.Inflight != 8 || got.PadMax != 4 {
+		t.Fatalf("%+v", got)
+	}
+}
+
 // TestGETStatusAdvertisesYandexInflight: the node's Status ceiling is taken
 // as min(client, node). A Yandex-profile server must advertise 16, so a
 // client configured higher lands on 16, not the generic 8.
@@ -208,5 +239,11 @@ func TestGETStatusAdvertisesYandexInflight(t *testing.T) {
 	defer g.Close()
 	if v := g.liveInflight.Load(); v != 16 {
 		t.Fatalf("liveInflight=%d want 16 (yandex ceiling)", v)
+	}
+	if v := g.liveGetDown.Load(); v != wire.GetDownDefault {
+		t.Fatalf("get_down=%d want %d", v, wire.GetDownDefault)
+	}
+	if v := g.livePadMax.Load(); v != uint32(wire.PadMaxDefault) {
+		t.Fatalf("pad_max=%d want %d", v, wire.PadMaxDefault)
 	}
 }

@@ -57,10 +57,12 @@ func TestRenderCommandsRoundTrip(t *testing.T) {
 	in := ServerConfig{
 		Role: "controller", Listen: ":444", Advertise: "https://de1.example.com",
 		Decoy: []string{"origin.example:443"}, Mask: true,
-		Fronts: []string{"get", "ws", "h2"},
-		Relays: []RelayEntry{{ID: "ru1", URL: "https://ru1.example", KeySHA256: "ab12"}},
-		GetH2:  2,
-		Canary: CanaryConfig{SplitHello: false, Pad: 32},
+		Fronts:  []string{"get", "ws", "h2"},
+		Relays:  []RelayEntry{{ID: "ru1", URL: "https://ru1.example", KeySHA256: "ab12"}},
+		GetH2:   2,
+		GetDown: 128 << 10,
+		PadMax:  4,
+		Canary:  CanaryConfig{SplitHello: false, Pad: 32},
 	}
 	on := true
 	in.Canary.FatHello = &on
@@ -76,6 +78,12 @@ func TestRenderCommandsRoundTrip(t *testing.T) {
 	}
 	if got.GetH2 != 2 {
 		t.Fatalf("get_h2 %d", got.GetH2)
+	}
+	if got.GetDown != 128<<10 {
+		t.Fatalf("get_down %d", got.GetDown)
+	}
+	if got.PadMax != 4 {
+		t.Fatalf("pad_max %d", got.PadMax)
 	}
 	if got.AuthShared {
 		t.Fatal("default auth shared")

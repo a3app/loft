@@ -140,6 +140,21 @@ func TestTuneOptionalH2Conns(t *testing.T) {
 	}
 }
 
+func TestTuneOptionalPadMax(t *testing.T) {
+	b := EncodeTuneAll(Tune{Event: TuneSet, Inflight: 16, Budget: 16 << 10, PadMax: 8})
+	got, ok := ParseTune(b)
+	if !ok || got.PadMax != 8 || got.H2Conns != 0 || got.Inflight != 16 {
+		t.Fatalf("%+v %v", got, ok)
+	}
+	old, ok := ParseTune(b[:5])
+	if !ok || old.PadMax != 0 || old.H2Conns != 0 {
+		t.Fatalf("5-byte %+v", old)
+	}
+	if _, ok := ParseTune(b[:4]); !ok {
+		t.Fatal("4-byte still parses")
+	}
+}
+
 func TestStatusIPv6ThenBudget(t *testing.T) {
 	s := Status{
 		Code: OK, IP: "10.8.0.2", Gateway: "10.8.0.1", InstanceID: "b",

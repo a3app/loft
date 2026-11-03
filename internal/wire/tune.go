@@ -2,14 +2,16 @@ package wire
 
 import "encoding/binary"
 
-// CmdTune payload is 4 bytes. Client event ≠ 0 reports a front break
-// once; node event 0 sets live header_budget / inflight. Zero inflight
-// or budget means leave that field unchanged.
+// CmdTune payload is 4 bytes plus optional tail. Client event ≠ 0 reports
+// a front break once; node event 0 sets live header_budget / inflight /
+// h2_conns / pad_max. Zero inflight, budget, h2_conns, or pad_max means
+// leave that field unchanged.
 //
 // This lets the GET limits change during a session. The client tells the
 // node what went wrong (an HTTP 413, 404, 429, a GOAWAY from the CDN), and
 // the node can answer with smaller limits: header_budget is the size of
-// the Cookie per GET, inflight is how many GETs may be outstanding at once.
+// the Cookie per GET, inflight is how many GETs may be outstanding at once,
+// pad_max is how many of those may be idle pads.
 const (
 	TuneSet    byte = 0
 	TuneCalm   byte = 1 // H2 GOAWAY ENHANCE_YOUR_CALM
@@ -26,6 +28,7 @@ type Tune struct {
 	Inflight byte
 	Budget   uint16 // encoded Cookie / header budget, bytes
 	H2Conns  byte   // optional 5th byte; 0 = leave unchanged
+	PadMax   byte   // optional 6th byte; 0 = leave unchanged
 }
 
 // EncodeTune is event || inflight || u16be budget.
@@ -50,7 +53,23 @@ func ParseTune(p []byte) (Tune, bool) {
 	if len(p) >= 5 {
 		t.H2Conns = p[4]
 	}
+	if len(p) >= 6 {
+		t.PadMax = p[5]
+	}
 	return t, true
+}
+
+// EncodeTuneAll is EncodeTune plus optional h2_conns and pad_max.
+// pad_max writes h2_conns 0 first when that field is unset.
+func EncodeTuneAll(t Tune) []byte {
+	b := EncodeTune(t.Event, t.Inflight, t.Budget)
+	if t.H2Conns > 0 || t.PadMax > 0 {
+		b = append(b, t.H2Conns)
+		if t.PadMax > 0 {
+			b = append(b, t.PadMax)
+		}
+	}
+	return b
 }
 
 // TuneFrame is CmdTune on stream 0.

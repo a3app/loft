@@ -102,6 +102,8 @@ type GET struct {
 	lastOK       atomic.Int64  // unix nano of the last GET that returned a body
 	calmUntil    atomic.Int64  // unix nano; H2 ENHANCE_YOUR_CALM shared backoff
 	liveInflight atomic.Int32  // node Tune / Status; pump caps outstanding
+	liveGetDown  atomic.Uint32 // Status get_down; 0 = 256 KiB default
+	livePadMax   atomic.Uint32 // Status/Tune pad_max; 0 = slots/2, ≥8
 	note         atomic.Uint32 // packed CmdTune to send once on next GET
 	liveH2       atomic.Int32  // HTTP/2 connections; node Status/Tune
 	uplinkEnc    atomic.Int32  // wire.UplinkBase64 or UplinkCookie85
@@ -422,6 +424,12 @@ func (g *GET) applyStatusEdge(st wire.Status) {
 			g.cfg.Inflight = int(st.Inflight)
 		}
 	}
+	if st.GetDown > 0 {
+		g.liveGetDown.Store(st.GetDown)
+	}
+	if st.PadMax > 0 {
+		g.livePadMax.Store(uint32(wire.ClampPadMax(st.PadMax)))
+	}
 }
 
 // Session returns the live mux session.
@@ -597,8 +605,9 @@ type getJob struct {
 // one or more GETs (SplitUplink keeps resin, Data and Close apart). Empty
 // rounds become Pad GETs: paced keepalives when idle, back to back while
 // downlink is busy or a catch-up window is open. Pads never take more than
-// a quarter of the inflight slots (at least 4), so real uplink is not left
-// waiting a round trip for a free worker. While attach lanes carry the mux
+// standPadMax of the inflight slots (unset: half, at least 8; 1.0.43 was
+// a quarter / 4), so real uplink is not left waiting a round trip for a
+// free worker. While attach lanes carry the mux
 // it does not Pull at all; it only keeps GETs going so the node can still
 // reach the client.
 func (g *GET) pump(ctx context.Context, inflight int) {
@@ -636,15 +645,15 @@ func (g *GET) pump(ctx context.Context, inflight int) {
 			}
 			continue
 		}
-		// Pads must not occupy every worker: Open/Data uplink then
-		// waits a full RTT (TCP 1-byte went to ~8 RTT / 640ms).
-		slots := g.slots()
-		padMax := slots / 4
-		if padMax < 4 {
-			padMax = 4
-		}
-		if padMax > slots {
-			padMax = slots
+		// Pads must not occupy every worker while idle: Open/Data
+		// uplink then waits a full RTT (TCP 1-byte went to ~8 RTT).
+		// slots/4 (4 of 16) left only that many H1 origin Pullers;
+		// 128 KiB slices then paid TTFB 16 times (10 Mbit).
+		// wantFull + PADFULL packs every slot so download covers
+		// Yandex TTFB; uplink still wins because queued skips this.
+		padMax := standPadMax(g.slots(), int(g.livePadMax.Load()))
+		if standPadFull() && g.wantFull() {
+			padMax = g.slots()
 		}
 		if pullWait == 0 && !queued && g.outstanding() >= padMax {
 			if !g.sleepCtx(ctx, 5*time.Millisecond) {
@@ -1368,6 +1377,17 @@ func (g *GET) applyTune(t wire.Tune) {
 		g.liveH2.Store(int32(n))
 		fmt.Fprintf(os.Stderr, "get front tune h2=%d\n", n)
 	}
+	if t.PadMax > 0 {
+		n := uint32(wire.ClampPadMax(t.PadMax))
+		if cur := g.livePadMax.Load(); cur > 0 && n > cur {
+			n = cur
+		}
+		if s := uint32(g.slots()); n > s {
+			n = s
+		}
+		g.livePadMax.Store(n)
+		fmt.Fprintf(os.Stderr, "get front tune pad_max=%d\n", n)
+	}
 }
 
 // noteApplied records CmdReport applied-through. Workers drop retries at or below it.
@@ -1788,8 +1808,10 @@ type GETServer struct {
 	Decoy   []string
 	Info    NodeInfo
 	Seen    *ecrypto.Nonces
-	H2Conns byte // advertised Status h2_conns; 0 = client keeps one
-	Edge    byte // Status edge preset; 0 plain, 1 tight
+	H2Conns byte   // advertised Status h2_conns; 0 = client keeps one
+	Edge    byte   // Status edge preset; 0 plain, 1 tight
+	GetDown uint32 // GET body cap; 0 = getDownlinkBytes (256 KiB)
+	PadMax  uint8  // idle pad GETs; 0 = PadMaxDefault (8)
 
 	mu       sync.Mutex
 	sessions map[string]*serverSess
@@ -1834,6 +1856,7 @@ type serverSess struct {
 	linkSeq    int
 	pumping    bool
 	seen       *ecrypto.Nonces
+	getDown    uint32 // GET body cap copied from GETServer at spawn
 	// Owner socket of a non-GET 0x02. The write loop pauses when the first
 	// 0x04 lands and this socket becomes a lane, so one dispatcher Pulls.
 	ownerFront string
@@ -1930,6 +1953,7 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ClearOriginLowat(r)
 	setCDNHeaders(w)
 	sid, seqStr := parseGETPath(s.Path, r.URL.Path)
 	seq, _ := strconv.ParseUint(seqStr, 10, 64)
@@ -2003,6 +2027,8 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			st.Edge = s.Edge
 			st.UplinkEnc = wire.UplinkCookie85
 			st.H2Conns = s.H2Conns
+			st.GetDown = s.bodyCap()
+			st.PadMax = s.padCap()
 			applyInner(&st, wire.FrontGET, a.Rest)
 			sealed, err := ecrypto.Seal(ss.key, st.Encode(), []byte(ss.id))
 			if err != nil {
@@ -2066,10 +2092,14 @@ func (s *GETServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	turn := s.h2Turn()
 	jump := false
 	if r.ProtoMajor < 2 {
-		jump = true
 		if usefulMux(frames) {
+			// Same as H2 Data: skip at once if not Puller, but do
+			// not jump downSeq. Jump over the pad seqs left only
+			// padMax (4 of 16) as Puller and one origin conn
+			// carried ~910 KiB.
 			turn = 0
 		} else {
+			jump = true
 			turn = getTurnWait
 		}
 	} else if usefulMux(frames) {
@@ -2211,6 +2241,7 @@ func (s *GETServer) spawnWant(key, rest, token []byte, wantID string) *serverSes
 		held:     map[uint64][]wire.Frame{},
 		skipPull: map[uint64]struct{}{},
 		replies:  map[uint64][]byte{},
+		getDown:  s.bodyCap(),
 	}
 	ss.cond = sync.NewCond(&ss.mu)
 	s.mu.Lock()
@@ -2271,13 +2302,12 @@ func (s *GETServer) get(id string) *serverSess {
 // ICMP and TCP 1-byte then waited that plus an HTTP/2 waiter jump.
 const (
 	// Yandex origin-fetch is HTTP/1.1: one body in flight per origin
-	// conn. Clients slurp LimitReader 1 MiB (1.0.43 still does); AEAD
-	// and a last mux frame must fit, so the mux cap is 992 KiB.
-	// The body is one AEAD blob (Content-Length): a 15ms keep-fill
-	// toward that cap held the only origin slot, inner TCP ACKs
-	// waited, loaded latency 139→272 ms, download 11→8.7 Mbit.
-	// Drain queued + 3ms; do not wait for first mux.
-	getDownlinkBytes = (1 << 20) - 32<<10
+	// conn, pool ~10–12. 256 KiB × client padMax 8: mux-down mean
+	// 25.4 Mbit (2.4× vs 10.6), 5/5 complete. 128×pad4 (1.0.43) stays
+	// ~10; 256×pad4 ~14. padFull (16 slots) mean 34, 1/5 EOF.
+	// 384+ more EOFs. 992 vacuums onto one conn (cwnd 96).
+	// Do not keep-fill toward 1 MiB (15ms: loaded 139→272 ms, 11→8.7).
+	getDownlinkBytes = 256 << 10
 	getDownlinkMore  = 15 * time.Millisecond
 	getDownlinkFill  = 3 * time.Millisecond
 	// Overlay ICMP is sync (FilterDgram). Internet ICMP with no live
@@ -2301,9 +2331,10 @@ func (s *GETServer) h2Turn() time.Duration {
 
 // pullHold is how long the exclusive Puller waits for mux downlink.
 // Empty keepalive pads return immediately so they do not stall ping/upload.
-// Do not keep-fill toward 992 KiB: the body is one AEAD with
-// Content-Length, and a wait holds the only HTTP/1.1 origin-fetch slot
-// (Yandex 2026-11-03: 15ms keep-fill 11→8.7 Mbit, loaded 139→272 ms).
+// Live TCP: wait 3ms for first mux so a pad on another origin conn picks
+// up a 256 KiB slice instead of returning empty (app_limited cwnd 10).
+// Do not keep-fill toward 1 MiB (Yandex 2026-11-03: 15ms keep-fill
+// 11→8.7 Mbit, loaded 139→272 ms).
 func pullHold(frames []wire.Frame, ms *mux.Session) (first, more time.Duration) {
 	if ms != nil && ms.OutQueued() > 0 {
 		return 0, getDownlinkFill
@@ -2325,6 +2356,9 @@ func pullHold(frames []wire.Frame, ms *mux.Session) (first, more time.Duration) 
 			return 0, getDownlinkFill
 		}
 		return getDgramHold, getDownlinkFill
+	}
+	if ms != nil && ms.StreamCount() > 0 {
+		return getDownlinkFill, getDownlinkFill
 	}
 	return 0, 0
 }
@@ -2363,19 +2397,57 @@ func hasCmd(frames []wire.Frame, cmd byte) bool {
 	return false
 }
 
+// bodyCap is the live GET body cap: node.conf get_down, then stand override.
+func (s *GETServer) bodyCap() uint32 {
+	if s == nil {
+		return uint32(standGetDown(0))
+	}
+	return uint32(standGetDown(int(s.GetDown)))
+}
+
+// SetPadMax is node.conf pad_max. Handshake Status and live Tune start here.
+func (s *GETServer) SetPadMax(n uint8) {
+	if s == nil {
+		return
+	}
+	s.PadMax = wire.ClampPadMax(n)
+	if s.tune != nil {
+		s.tune.setPad(s.PadMax)
+	}
+}
+
+// padCap is the live idle-pad cap: node.conf pad_max, then stand override.
+func (s *GETServer) padCap() uint8 {
+	want := 0
+	if s != nil {
+		want = int(s.PadMax)
+	}
+	if s != nil && s.tune != nil {
+		if n := s.tune.pad(); n > 0 {
+			want = int(n)
+		}
+	}
+	return byte(standPadMax(int(wire.PadMaxMax), want))
+}
+
 // downlinkMax is the GET body cap. Fat Cookie uplink does not shrink it:
 // pullHold already returns at once (≥2 KiB CmdData).
-func downlinkMax(*mux.Session, []wire.Frame) int {
-	return getDownlinkBytes
+func downlinkMax(ss *serverSess, _ []wire.Frame) int {
+	n := 0
+	if ss != nil {
+		n = int(ss.getDown)
+	}
+	return standGetDown(n)
 }
 
 // pullDownlink holds up to first for mux, then more after useful data.
-func pullDownlink(ms *mux.Session, first, more time.Duration, up []wire.Frame) []wire.Frame {
+func pullDownlink(ss *serverSess, first, more time.Duration, up []wire.Frame) []wire.Frame {
 	deadline := time.Now()
 	if first > 0 {
 		deadline = time.Now().Add(first)
 	}
-	max := downlinkMax(ms, up)
+	max := downlinkMax(ss, up)
+	ms := ss.mux
 	var down []wire.Frame
 	n := 0
 	for n < max {
@@ -2414,7 +2486,7 @@ func (ss *serverSess) ingestAndPull(seq uint64, frames []wire.Frame, waitTurn ti
 			ss.mux.Push(frames)
 		}
 		first, more := pullHold(frames, ss.mux)
-		return pullDownlink(ss.mux, first, more, frames), false
+		return pullDownlink(ss, first, more, frames), false
 	}
 	ss.mu.Lock()
 	ss.pushUplinkLocked(seq, frames)
@@ -2440,7 +2512,11 @@ func (ss *serverSess) ingestAndPull(seq uint64, frames []wire.Frame, waitTurn ti
 			break
 		}
 		notTurn := seq != ss.downSeq
-		timedOut := (waitTurn <= 0 && notTurn) || (!deadline.IsZero() && time.Now().After(deadline))
+		// Deadline is only "I am not Puller yet". Once seq==downSeq,
+		// wait for the previous Pull to endPull; a 5ms fire while
+		// pulling is still true used to return empty and skip this
+		// seq (held-mux echo, H1 Data Cookies).
+		timedOut := notTurn && (waitTurn <= 0 || (!deadline.IsZero() && time.Now().After(deadline)))
 		if timedOut {
 			if jump && notTurn && seq > ss.replied {
 				ss.replied = seq
@@ -2489,7 +2565,7 @@ func (ss *serverSess) ingestAndPull(seq uint64, frames []wire.Frame, waitTurn ti
 	ss.pulling = true
 	ss.mu.Unlock()
 	first, more := pullHold(frames, ss.mux)
-	down := pullDownlink(ss.mux, first, more, frames)
+	down := pullDownlink(ss, first, more, frames)
 	return down, true
 }
 

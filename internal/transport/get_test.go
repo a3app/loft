@@ -1005,6 +1005,11 @@ func TestPullHoldIdleDoesNotPark(t *testing.T) {
 	if first != 0 || more != getDownlinkFill {
 		t.Fatalf("dgram with live TCP hold %s %s", first, more)
 	}
+	_ = ms.Pull(1<<20, 0) // drain Open so OutQueued is 0
+	first, more = pullHold(nil, ms)
+	if first != getDownlinkFill || more != getDownlinkFill {
+		t.Fatalf("idle pad with live TCP hold %s %s", first, more)
+	}
 }
 
 // TestGETGatewayPingFast answers overlay ICMP echo on the GET front.
@@ -1839,6 +1844,10 @@ func TestDownlinkMaxIgnoresUplink(t *testing.T) {
 	pad := []wire.Frame{{Cmd: wire.CmdPad, Payload: make([]byte, 4<<10)}}
 	if downlinkMax(nil, pad) != getDownlinkBytes {
 		t.Fatal("pad")
+	}
+	ss := &serverSess{getDown: 128 << 10}
+	if downlinkMax(ss, nil) != 128<<10 {
+		t.Fatalf("sess %d", downlinkMax(ss, nil))
 	}
 }
 

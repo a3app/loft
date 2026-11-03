@@ -190,7 +190,7 @@ sequenceDiagram
 
 **Budget and encoding.** Uplink MUST fit in one header. Status `uplink_enc` 1 is `~` plus Z85 of `u16be length || AEAD` (ZeroMQ Z85); 0 and omitted are base64url. The handshake Cookie remains base64url. A node MUST accept both. Status `h2_conns` (1–4) is the number of HTTP/2 connections to this front; 0 keeps one. Inflight is the total of outstanding GETs across those connections.
 
-**GET profiles.** Status `edge` selects the numeric contract for later GETs. The handshake GET is one request and MUST complete before the inflight pump. Inflight MUST be in 1–16. A vendor name is not a Status field. CmdTune (`header_budget`, `inflight`, `h2_conns`) is a live ceiling inside the active profile: it MUST NOT raise a field above that profile, and it MAY lower it. Status `header_budget` and `inflight`, when non-zero, are the same kind of ceiling, applied once after the handshake, before the pump. 0 in either field means the client keeps the profile default.
+**GET profiles.** Status `edge` selects the numeric contract for later GETs. The handshake GET is one request and MUST complete before the inflight pump. Inflight MUST be in 1–16. A vendor name is not a Status field. CmdTune (`header_budget`, `inflight`, `h2_conns`, `pad_max`) is a live ceiling inside the active profile: it MUST NOT raise a field above that profile, and it MAY lower it. Status `header_budget` and `inflight`, when non-zero, are the same kind of ceiling, applied once after the handshake, before the pump. Status `pad_max`, when non-zero, is the number of idle pad GETs the client MUST keep in flight, clamped to inflight; it MAY raise the client's local default. 0 in any of those fields means the client keeps the profile default.
 
 | | `plain` (`edge` 0 or omitted) | `tight` (`edge` 1) |
 |--|--|--|
@@ -207,9 +207,9 @@ sequenceDiagram
 
 **Socket change without session change.** A client MAY replace an HTTP/2 connection after a local max-age (omitted or 0: keep until error). Mux and the GET session identifier do not change. A client MAY also replace the HTTP/2 pool after a local egress change: mux, GET session identifier, sequence, and AEAD key remain; there is no new `0x02`. The node keys the session on the GET sid, not on the client address. CONNECT splices on the old pool end with those sockets.
 
-**HTTP errors.** HTTP 413: the client MUST halve the Cookie budget, floor 1024, and split the uplink. HTTP 405: this front is not GET. A client that receives HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST back off on the same session and MAY send CmdTune event 1 on the next GET that already carries mux. The node MAY lower `header_budget` / `inflight` for that front and echo CmdTune event 0 in that GET body.
+**HTTP errors.** HTTP 413: the client MUST halve the Cookie budget, floor 1024, and split the uplink. HTTP 405: this front is not GET. A client that receives HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` MUST back off on the same session and MAY send CmdTune event 1 on the next GET that already carries mux. The node MAY lower `header_budget` / `inflight` / `pad_max` for that front and echo CmdTune event 0 in that GET body.
 
-**Idle and hold of a GET.** Empty idle uplink: the client MUST wait at least `keepalive_ms / 2` and not less than 1 s. A GET that already carries mux Data, Open, Dgram, or Leave is not idle. The node MUST return an idle pad without waiting for mux. The node MUST NOT hold a GET with mux Data, Open, or Dgram longer than 1 s. A non-Puller HTTP/2 GET waiting its turn MUST give up that wait by the profile's non-Puller wait. When the uplink already contains CmdData, the node MAY return as soon as downlink Data is queued. When that uplink has ≥ 2 KiB CmdData, the node MUST NOT wait for more mux; the body cap stays 1 MiB.
+**Idle and hold of a GET.** Empty idle uplink: the client MUST wait at least `keepalive_ms / 2` and not less than 1 s. A GET that already carries mux Data, Open, Dgram, or Leave is not idle. The node MUST return an idle pad without waiting for mux. The node MUST NOT hold a GET with mux Data, Open, or Dgram longer than 1 s. A non-Puller HTTP/2 GET waiting its turn MUST give up that wait by the profile's non-Puller wait. When the uplink already contains CmdData, the node MAY return as soon as downlink Data is queued. When that uplink has ≥ 2 KiB CmdData, the node MUST NOT wait for more mux; the body cap is Status `get_down` (default 256 KiB, ceiling 1 MiB).
 
 The GET body is one AEAD seal written with Content-Length. On HTTP/1.1 origin-fetch (one body in flight per origin connection) an exclusive Puller that waits to fill toward 1 MiB holds that slot; inner TCP ACKs in later Cookies wait. *Informative, live Yandex cdn-get 2026-11-03, client 1.0.43, node 1.0.45, origin loft.iqos.help:444.* Keep-fill 15 ms: loaded latency 139→272 ms, download 11→8.7 Mbit. Drain of queued mux plus 3 ms: 12.11 / 65.80 Mbit, ping 97 ms, loaded 157 / 262 ms. The node drains queued mux plus 3 ms and does not wait for first mux on an idle pad.
 
@@ -379,7 +379,9 @@ Fields in order:
 | edge | optional after fronts: u8 GET profile (§3.4). `0` plain, omitted when `inner` is also absent. `1` tight. A present `inner` forces this byte even when it is `0`, and forces `fronts` (n MAY be 0) so the next byte is not read as `edge`. Old clients ignore the extra byte. |
 | inner | optional after edge: u8 data cipher for records after this Status. The node writes it only when Hello asked, the policy allows that id, and the front that completed `0x02` is not `get`. `0` no inner AEAD. `1` ChaCha20-Poly1305, the same as omitting the byte; a node MAY omit `1`. `2` AES-256-GCM. `3` AEGIS-128L. `5` HiAE. `4`, `7`, and `8` are reserved. Absence, an unknown id, or a refused ask is ChaCha20-Poly1305, and the session still comes up. Handshake Seal of this Status is ChaCha20-Poly1305 either way. Old clients ignore the extra byte. |
 | key_roll | optional after inner: u16be len \|\| bytes, a KeyRoll (§10.4) while the controller signing key changes. When it is present and no data cipher was negotiated, `inner` is `1` (ChaCha20-Poly1305), which changes nothing. |
-| cc, cc_up, cc_down | optional after key_roll: u8, u32be, u32be. The congestion control both sides use (§5.4) and, for `2`, the two rates in kbit/s. Present only when `cc` is not `0`; `key_roll` is then written with length 0 when there is none. Old clients ignore the extra bytes. |
+| cc, cc_up, cc_down | optional after key_roll: u8, u32be, u32be. The congestion control both sides use (§5.4) and, for `2`, the two rates in kbit/s. Present when `cc` is not `0` or `get_down` follows; `key_roll` is then written with length 0 when there is none. Old clients ignore the extra bytes. |
+| get_down | optional after cc: u32be, GET response body cap in bytes. 0 or omitted: 256 KiB. Floor 16 KiB, ceiling 1 MiB. When present, `inner` (1 if not negotiated), empty `key_roll`, and `cc` 0 are written first. Old clients ignore trailing bytes. |
+| pad_max | optional after get_down: u8, idle pad GETs in flight. 0 or omitted: 8. 1–16, clamped to inflight. When present, `get_down` (0 = 256 KiB) is written first. CmdTune 6th byte is the live ceiling: MUST NOT raise above this, MAY lower. Old clients ignore trailing bytes. |
 
 Selected protocol is the maximum of the intersection of the two ranges. Empty intersection yields code `protocol` (0x0203) and no mux.
 
@@ -457,7 +459,7 @@ Client stream identifiers are odd, starting at 1. Node identifiers are even, sta
 | 7 | Reset | u16be code |
 | 8 | Dgram | Open-target prefix then UDP payload |
 | 9 | Leave | empty; stream_id MUST be 0 |
-| 10 | Tune | 4 bytes: `u8 event \|\| u8 inflight \|\| u16be header_budget`, optional 5th byte `h2_conns`. Client event ≠ 0 is one front break (1 `ENHANCE_YOUR_CALM`, 2 HTTP 413, 3 HTTP 404, 4 connection reset, 5 HTTP 429, 6 other GOAWAY), sent once on the next GET that already carries mux. Node event 0 sets live GET `header_budget` / `inflight` / `h2_conns` (0 in a field = leave unchanged). The node replies only when those values change. stream_id MUST be 0. |
+| 10 | Tune | 4 bytes: `u8 event \|\| u8 inflight \|\| u16be header_budget`, optional 5th byte `h2_conns`, optional 6th byte `pad_max`. Client event ≠ 0 is one front break (1 `ENHANCE_YOUR_CALM`, 2 HTTP 413, 3 HTTP 404, 4 connection reset, 5 HTTP 429, 6 other GOAWAY), sent once on the next GET that already carries mux. Node event 0 sets live GET `header_budget` / `inflight` / `h2_conns` / `pad_max` (0 in a field = leave unchanged). `pad_max` writes `h2_conns` 0 first when that field is unset. The node replies only when those values change. stream_id MUST be 0. |
 | 11 | Report | `u64be applied` (highest contiguous GET sequence the node has ingested). stream_id MUST be 0. Old clients ignore unknown mux commands. |
 | 12 | Front | front name (`get`, `ws`, `h2`, `quic`, `h3`). stream_id MUST be 0. Client: bulk mux on this attached front. Node: ack. `get` returns bulk to GET. |
 | 13 | Lists | stream_id MUST be 0. From the client: `u64be have \|\| u32be offset` — the serial of the lists the client already holds (0 for none) and the body offset to answer from. From the node: `u64be serial \|\| u32be total \|\| u32be offset \|\| bytes` — a piece of this member's signed lists body (§10.3); `total` is the length of the whole body. `total` 0 means the node has nothing newer than `have`. Only with the `lists_inline` bit (§5.3). |
@@ -794,7 +796,7 @@ Numbers already assigned do not move. A later revision adds a name in a reserved
 | GET data trip | `plain` 15 s; `tight` 6 s |
 | GET node mux hold | MUST NOT exceed 1 s |
 | GET non-Puller wait | `plain` 5 s; `tight` 1 s |
-| GET body | 1 MiB |
+| GET body | default 256 KiB (Status `get_down`); floor 16 KiB, ceiling 1 MiB |
 | streams per session | SHOULD ≤ 256 |
 | AEAD batch | ≤ 48 KiB (`ws`), ≤ header budget (`get`) |
 | GET padding plaintext | about 400 bytes before AEAD |

@@ -190,7 +190,7 @@ sequenceDiagram
 
 **预算与编码。** 上行必须装进一个头。Status `uplink_enc` 为 1 时是 `~` 加 `u16be length || AEAD` 的 Z85（ZeroMQ Z85）；0 与省略为 base64url。握手 Cookie 仍为 base64url。节点必须两种都收。Status `h2_conns`（1–4）为到该前置的 HTTP/2 连接数；0 保持一条。Inflight 为这些连接上未完成 GET 的总数。
 
-**GET 配置档。** Status `edge` 为后续 GET 选定数值合同。握手 GET 是一次请求，必须在 inflight 泵之前完成。Inflight 必须在 1–16。厂商名不是 Status 字段。CmdTune（`header_budget`、`inflight`、`h2_conns`）是现行配置档内的存活上限：不得把字段抬到该配置档之上，可以下调。Status `header_budget` 与 `inflight` 非零时是同一种上限，在握手之后、泵之前应用一次。任一字段为 0 表示沿用配置档默认。
+**GET 配置档。** Status `edge` 为后续 GET 选定数值合同。握手 GET 是一次请求，必须在 inflight 泵之前完成。Inflight 必须在 1–16。厂商名不是 Status 字段。CmdTune（`header_budget`、`inflight`、`h2_conns`、`pad_max`）是现行配置档内的存活上限：不得把字段抬到该配置档之上，可以下调。Status `header_budget` 与 `inflight` 非零时是同一种上限，在握手之后、泵之前应用一次。Status `pad_max` 非零时，是客户端必须保持在途的空闲 Pad GET 数，不超过 inflight；它可以抬高客户端的本地默认。任一字段为 0 表示沿用配置档默认。
 
 | | `plain`（`edge` 为 0 或省略） | `tight`（`edge` 为 1） |
 |--|--|--|
@@ -207,9 +207,9 @@ sequenceDiagram
 
 **更换套接字而不更换会话。** 客户端可以在本地 max-age 之后更换一条 HTTP/2 连接（省略或 0：保留到出错）。Mux 与 GET 会话标识不变。客户端也可以在本机出口变更后更换 HTTP/2 池：mux、GET 会话标识、序号与 AEAD 密钥留下，不再发新的 `0x02`。节点按 GET sid 识别会话，不按客户端地址。旧池上的 CONNECT 拼接随这些套接字结束。
 
-**HTTP 错误。** HTTP 413：客户端必须把 Cookie 预算减半，下限 1024，再拆分上行。HTTP 405：该前置不是 GET。收到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` 的客户端必须在同一会话上退避，可以在下一条已经携带 mux 的 GET 上发送 CmdTune event 1。节点可以降低该前置的 `header_budget` / `inflight`，并在该 GET 体中回显 CmdTune event 0。
+**HTTP 错误。** HTTP 413：客户端必须把 Cookie 预算减半，下限 1024，再拆分上行。HTTP 405：该前置不是 GET。收到 HTTP/2 `GOAWAY ENHANCE_YOUR_CALM` 的客户端必须在同一会话上退避，可以在下一条已经携带 mux 的 GET 上发送 CmdTune event 1。节点可以降低该前置的 `header_budget` / `inflight` / `pad_max`，并在该 GET 体中回显 CmdTune event 0。
 
-**GET 的空闲与保持。** 空闲上行：客户端必须至少等待 `keepalive_ms / 2`，且不少于 1 秒。已经携带 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点必须对空闲 Pad 立即返回，不等 mux。带有 mux Data、Open 或 Dgram 的 GET，节点不得保持超过 1 秒。尚未成为 Puller、正在排队的 HTTP/2 GET，必须在配置档的非 Puller 等待之内放弃该等待。上行已含 CmdData 时，节点可以在下行 Data 入队后立即返回。该上行有 ≥ 2 KiB CmdData 时，节点不得再等 mux；体上限仍是 1 MiB。
+**GET 的空闲与保持。** 空闲上行：客户端必须至少等待 `keepalive_ms / 2`，且不少于 1 秒。已经携带 mux Data、Open、Dgram 或 Leave 的 GET 不算空闲。节点必须对空闲 Pad 立即返回，不等 mux。带有 mux Data、Open 或 Dgram 的 GET，节点不得保持超过 1 秒。尚未成为 Puller、正在排队的 HTTP/2 GET，必须在配置档的非 Puller 等待之内放弃该等待。上行已含 CmdData 时，节点可以在下行 Data 入队后立即返回。该上行有 ≥ 2 KiB CmdData 时，节点不得再等 mux；体上限为 Status `get_down`（默认 256 KiB，上限 1 MiB）。
 
 GET 体是带 Content-Length 的一次 AEAD。HTTP/1.1 origin-fetch（每条 origin 连接同时只有一个体）上，为凑满 1 MiB 而等待的 exclusive Puller 占住该槽，后续 Cookie 里的 inner TCP ACK 跟着等。*说明，非规范。实测 Yandex cdn-get 2026-11-03，客户端 1.0.43，节点 1.0.45，origin loft.iqos.help:444。* keep-fill 15 ms：loaded latency 139→272 ms，下载 11→8.7 Mbit。排空已排队 mux 再加 3 ms：12.11 / 65.80 Mbit，ping 97 ms，loaded 157 / 262 ms。节点排空已排队 mux 再加 3 ms，空闲 Pad 不等第一个 mux。
 
@@ -377,7 +377,9 @@ u8    cc || u32be cc_up || u32be cc_down   可选，位于 controller_pin 之后
 | edge | fronts 之后可选：u8，GET 配置档（§3.4）。`0` 为 plain，`inner` 也不存在时省略。`1` 为 tight。出现 `inner` 时，即使该字节为 `0` 也必须写出，并写出 `fronts`（n 可以为 0），以免下一字节被读成 `edge`。旧客户端忽略多余字节。 |
 | inner | edge 之后可选：u8，此 Status 之后记录的数据密码。仅当 Hello 请求过、策略允许该标识、且完成 `0x02` 的前置不是 `get` 时，节点才写它。`0` 无内部 AEAD。`1` 为 ChaCha20-Poly1305，与省略该字节相同；节点可以不写 `1`。`2` 为 AES-256-GCM。`3` 为 AEGIS-128L。`5` 为 HiAE。`4`、`7`、`8` 保留。没有该字节、未知标识或拒绝，都是 ChaCha20-Poly1305，会话仍然建立。此 Status 的握手 Seal 无论哪种都是 ChaCha20-Poly1305。旧客户端忽略多余字节。 |
 | key_roll | inner 之后可选：u16be len \|\| bytes，控制器签名密钥更换期间的 KeyRoll（§10.4）。出现该字段而未协商数据密码时，`inner` 为 `1`（ChaCha20-Poly1305），不改变任何东西。 |
-| cc, cc_up, cc_down | key_roll 之后可选：u8、u32be、u32be。双方使用的拥塞控制（§5.4），以及 `2` 时的两个速率（kbit/s）。仅当 `cc` 不为 `0` 时出现；此时若无 `key_roll`，则以长度 0 写出。旧客户端忽略多余字节。 |
+| cc, cc_up, cc_down | key_roll 之后可选：u8、u32be、u32be。双方使用的拥塞控制（§5.4），以及 `2` 时的两个速率（kbit/s）。当 `cc` 不为 `0` 或后面跟 `get_down` 时出现；此时若无 `key_roll`，则以长度 0 写出。旧客户端忽略多余字节。 |
+| get_down | cc 之后可选：u32be，GET 响应体上限，字节。0 或省略：256 KiB。下限 16 KiB，上限 1 MiB。出现时先写 `inner`（未协商则为 1）、空 `key_roll` 与 `cc` 0。旧客户端忽略尾部字节。 |
+| pad_max | get_down 之后可选：u8，空闲 Pad GET 在途数。0 或省略：8。1–16，不超过 inflight。出现时先写 `get_down`（0 = 256 KiB）。CmdTune 第 6 字节为存活上限：不得高于此值，可以下调。旧客户端忽略尾部字节。 |
 
 选定协议为两范围交集的最大值。交集为空则码为 `protocol`（0x0203），无 mux。
 
@@ -455,7 +457,7 @@ bytes payload
 | 7 | Reset | u16be 码 |
 | 8 | Dgram | Open 目标前缀再加 UDP 载荷 |
 | 9 | Leave | 空；stream_id 必须为 0 |
-| 10 | Tune | 4 字节：`u8 event \|\| u8 inflight \|\| u16be header_budget`，可选第 5 字节 `h2_conns`。客户端 event ≠ 0 为一次前置中断（1 `ENHANCE_YOUR_CALM`，2 HTTP 413，3 HTTP 404，4 连接复位，5 HTTP 429，6 其他 GOAWAY），在下一条已经携带 mux 的 GET 上发送一次。节点 event 0 设定存活 GET 的 `header_budget` / `inflight` / `h2_conns`（字段为 0 = 保持不变）。仅当这些值变化时节点才回复。stream_id 必须为 0。 |
+| 10 | Tune | 4 字节：`u8 event \|\| u8 inflight \|\| u16be header_budget`，可选第 5 字节 `h2_conns`，可选第 6 字节 `pad_max`。客户端 event ≠ 0 为一次前置中断（1 `ENHANCE_YOUR_CALM`，2 HTTP 413，3 HTTP 404，4 连接复位，5 HTTP 429，6 其他 GOAWAY），在下一条已经携带 mux 的 GET 上发送一次。节点 event 0 设定存活 GET 的 `header_budget` / `inflight` / `h2_conns` / `pad_max`（字段为 0 = 保持不变）。写 `pad_max` 时若无 `h2_conns` 则先写 0。仅当这些值变化时节点才回复。stream_id 必须为 0。 |
 | 11 | Report | `u64be applied`（节点已连续收下的最高 GET 序号）。stream_id 必须为 0。旧客户端忽略未知 mux 命令。 |
 | 12 | Front | 前置名（`get`、`ws`、`h2`、`quic`、`h3`）。stream_id 必须为 0。客户端：bulk mux 走该 attach 前置。节点：ack。`get` 把 bulk 交回 GET。 |
 | 13 | Lists | stream_id 必须为 0。客户端发：`u64be have \|\| u32be offset`——客户端已有列表的 serial（没有则 0）和要从哪个偏移开始应答。节点发：`u64be serial \|\| u32be total \|\| u32be offset \|\| bytes`——该成员已签名列表体（§10.3）的一段，`total` 为整个列表体的长度。`total` 为 0 表示节点没有比 `have` 更新的列表。仅在 `lists_inline` 位（§5.3）下使用。 |
@@ -792,7 +794,7 @@ loft 不是 mixnet。路径看得到一条 TLS 1.3 会话。控制器看得到�
 | GET 数据超时 | `plain` 15 s；`tight` 6 s |
 | GET 节点 mux 保持 | 不得超过 1 s |
 | GET 非 Puller 等待 | `plain` 5 s；`tight` 1 s |
-| GET 体 | 1 MiB |
+| GET 体 | 默认 256 KiB（Status `get_down`）；下限 16 KiB，上限 1 MiB |
 | 每会话流数 | 应该 ≤ 256 |
 | AEAD 批次 | ≤ 48 KiB（`ws`），≤ 头预算（`get`） |
 | GET 填充明文 | AEAD 前约 400 字节 |

@@ -58,7 +58,7 @@
 
 ## 5. 节点
 
-标签页：基本（角色、listen、advertise、来自域名的证书、前置默认 GET，ws/h2/quic/h3 需显式打开、`get_h2`）、伪装（decoy 列表、`mask` 与 `pbk`、掩护站点、请求路径）、中继与 CDN（`enrol`、`relays[]`、`cdn_peers`）、列表（下发给客户端的签名列表；出口规则复用）、访问（控制器公钥、共享令牌、更换令牌、trace）。
+标签页：基本（角色、listen、advertise、来自域名的证书、前置默认 GET，ws/h2/quic/h3 需显式打开、`get_h2`、`get_down`、`pad_max`）、伪装（decoy 列表、`mask` 与 `pbk`、掩护站点、请求路径）、中继与 CDN（`enrol`、`relays[]`、`cdn_peers`）、列表（下发给客户端的签名列表；出口规则复用）、访问（控制器公钥、共享令牌、更换令牌、trace）。
 
 启用 decoy 时 QUIC 与 HTTP/3 仍可勾选：节点通告 `quic_mark` / `h3_mark`。开启伪装时成员 `loft://` 带 query `pbk`。
 

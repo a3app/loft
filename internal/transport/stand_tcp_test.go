@@ -37,6 +37,67 @@ func TestStandCopiesClamp(t *testing.T) {
 	}
 }
 
+func TestStandGetDown(t *testing.T) {
+	t.Setenv("LOFT_STAND_GETDOWN", "")
+	if standGetDown(0) != getDownlinkBytes {
+		t.Fatalf("default %d", standGetDown(0))
+	}
+	if standGetDown(128<<10) != 128<<10 {
+		t.Fatal("conf")
+	}
+	t.Setenv("LOFT_STAND_GETDOWN", "262144")
+	if standGetDown(128<<10) != 262144 {
+		t.Fatal("env wins")
+	}
+	t.Setenv("LOFT_STAND_GETDOWN", "1024")
+	if standGetDown(0) != 16<<10 {
+		t.Fatal("floor")
+	}
+	t.Setenv("LOFT_STAND_GETDOWN", "2097152")
+	if standGetDown(0) != 1<<20 {
+		t.Fatal("ceiling")
+	}
+}
+
+func TestStandPadMax(t *testing.T) {
+	t.Setenv("LOFT_STAND_PADMAX", "")
+	if n := standPadMax(16, 0); n != 8 {
+		t.Fatalf("default 16 slots: %d", n)
+	}
+	if n := standPadMax(4, 0); n != 4 {
+		t.Fatalf("clamp to slots: %d", n)
+	}
+	if n := standPadMax(16, 4); n != 4 {
+		t.Fatalf("status: %d", n)
+	}
+	if n := standPadMax(4, 8); n != 4 {
+		t.Fatalf("status clamp to slots: %d", n)
+	}
+	t.Setenv("LOFT_STAND_PADMAX", "4")
+	if n := standPadMax(16, 8); n != 4 {
+		t.Fatalf("env wins: %d", n)
+	}
+	t.Setenv("LOFT_STAND_PADMAX", "99")
+	if n := standPadMax(16, 0); n != 16 {
+		t.Fatal("clamp")
+	}
+}
+
+func TestStandPadFull(t *testing.T) {
+	t.Setenv("LOFT_STAND_PADFULL", "")
+	if standPadFull() {
+		t.Fatal("unset")
+	}
+	t.Setenv("LOFT_STAND_PADFULL", "1")
+	if !standPadFull() {
+		t.Fatal("on")
+	}
+	t.Setenv("LOFT_STAND_PADFULL", "0")
+	if standPadFull() {
+		t.Fatal("0")
+	}
+}
+
 func TestStandLowatDefault(t *testing.T) {
 	t.Setenv("LOFT_STAND_LOWAT", "")
 	if g := standLowat(); g != notsentLowat {

@@ -83,6 +83,8 @@ func New(cfg *config.ServerConfig, n *netconf.Network) (http.Handler, error) {
 	if n := advertisedH2(cfg.GetH2, edge); n > 1 {
 		getFront.H2Conns = n
 	}
+	getFront.GetDown = wire.ClampGetDown(uint32(cfg.GetDown))
+	getFront.SetPadMax(byte(cfg.PadMax))
 	metrics.SetLive(&metrics.Live{
 		Sessions: func() int {
 			if o := transport.NetSwitch(); o != nil {

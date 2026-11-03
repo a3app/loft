@@ -638,6 +638,8 @@ type NodeConfig struct {
 	Fronts     []string `json:"fronts"`
 	Inner      []string `json:"inner"` // extra data ciphers: clear, aes, aegis, hiae. Empty = ChaCha only
 	GetH2      int      `json:"get_h2"`
+	GetDown    int      `json:"get_down"` // GET body bytes; 0 treated as 256 KiB
+	PadMax     int      `json:"pad_max"`  // idle pad GETs; 0 treated as 8
 	Decoy      []string `json:"decoy"`
 	Mask       bool     `json:"mask"`
 	CoverDir   string   `json:"cover_dir"`
