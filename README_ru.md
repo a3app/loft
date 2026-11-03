@@ -23,30 +23,30 @@
   <img src="docs/brand/platforms/macos.svg" width="24" height="24" align="absmiddle" alt="macOS">
 </picture>
 <strong>macOS</strong>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-macos-1.0.47-arm64.dmg">arm</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-macos-1.0.48-arm64.dmg">arm</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-macos-1.0.47-amd64.dmg">Intel</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-macos-1.0.48-amd64.dmg">Intel</a>
 &emsp;&emsp;
 <img src="docs/brand/platforms/windows.svg" width="24" height="24" align="absmiddle" alt="Windows">
 <strong>Windows</strong>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-windows-1.0.47-amd64.zip">x86-64</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-windows-1.0.48-amd64.zip">x86-64</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-windows-1.0.47-386.zip">x86</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-windows-1.0.48-386.zip">x86</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-windows-1.0.47-arm64.zip">arm64</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-windows-1.0.48-arm64.zip">arm64</a>
 </p>
 <p align="center">
 <img src="docs/brand/platforms/android.svg" width="24" height="24" align="absmiddle" alt="Android">
 <strong>Android</strong>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-android-1.0.47.apk">Android</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-android-1.0.48.apk">Android</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-androidtv-1.0.47.apk">Google TV</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-androidtv-1.0.48.apk">Google TV</a>
 &emsp;&emsp;
 <img src="docs/brand/platforms/linux.svg" width="24" height="24" align="absmiddle" alt="Linux">
 <strong>Linux</strong>
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-clients-1.0.47-linux-arm64.tar.gz">arm64</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-clients-1.0.48-linux-arm64.tar.gz">arm64</a>
 ·
-<a href="https://github.com/a3app/loft/releases/download/v1.0.47/loft-clients-1.0.47-linux-amd64.tar.gz">amd64</a>
+<a href="https://github.com/a3app/loft/releases/download/v1.0.48/loft-clients-1.0.48-linux-amd64.tar.gz">amd64</a>
 </p>
 
 </div>
@@ -61,7 +61,7 @@ loft рассчитан на сети, где обычные VPN-протоко�
 
 Протокол **loft/1.0**. Ссылка **`loft://`**. В YAML `kind: loft`.
 
-В этом репозитории лежат открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, клиент в трее Windows, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.47`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
+В этом репозитории лежат открытая спецификация, эталонная нода, веб-панель и клиенты (приложение для macOS, клиент в трее Windows, Android — телефон и TV, CLI для Linux и macOS). Версия ПО `1.0.48`. Свою реализацию можно писать по [docs/protocol_ru.md](docs/protocol_ru.md).
 
 ## Содержание
 
@@ -81,37 +81,37 @@ loft рассчитан на сети, где обычные VPN-протоко�
 
 ## Скачать
 
-Сборки опубликованы в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла указана версия (`loft-macos-1.0.47-arm64.dmg`).
+Сборки опубликованы в [последнем релизе](https://github.com/a3app/loft/releases/latest). В имени файла указана версия (`loft-macos-1.0.48-arm64.dmg`).
 
 ### Клиенты
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg"><img src="docs/brand/platforms/macos.svg" width="20" height="20" align="absmiddle" alt=""></picture> macOS, приложение | [DMG](https://github.com/a3app/loft/releases/download/v1.0.47/loft-macos-1.0.47-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.47/loft-macos-1.0.47-amd64.dmg) |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg"><img src="docs/brand/platforms/macos.svg" width="20" height="20" align="absmiddle" alt=""></picture> macOS, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.47/loft-clients-1.0.47-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.47/loft-clients-1.0.47-darwin-amd64.tar.gz) |
-| <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.47/loft-clients-1.0.47-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.47/loft-clients-1.0.47-linux-amd64.tar.gz) |
-| <img src="docs/brand/platforms/android.svg" width="20" height="20" align="absmiddle" alt=""> Android | [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.47/loft-android-1.0.47.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.47/loft-androidtv-1.0.47.apk) | те же fat APK |
-| <img src="docs/brand/platforms/windows.svg" width="20" height="20" align="absmiddle" alt=""> Windows | [arm64 zip](https://github.com/a3app/loft/releases/download/v1.0.47/loft-windows-1.0.47-arm64.zip) | [x86-64 zip](https://github.com/a3app/loft/releases/download/v1.0.47/loft-windows-1.0.47-amd64.zip) · [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.47/loft-windows-1.0.47-386.zip) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg"><img src="docs/brand/platforms/macos.svg" width="20" height="20" align="absmiddle" alt=""></picture> macOS, приложение | [DMG](https://github.com/a3app/loft/releases/download/v1.0.48/loft-macos-1.0.48-arm64.dmg) | [DMG](https://github.com/a3app/loft/releases/download/v1.0.48/loft-macos-1.0.48-amd64.dmg) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/macos-on-dark.svg"><img src="docs/brand/platforms/macos.svg" width="20" height="20" align="absmiddle" alt=""></picture> macOS, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.48/loft-clients-1.0.48-darwin-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.48/loft-clients-1.0.48-darwin-amd64.tar.gz) |
+| <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux, CLI | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.48/loft-clients-1.0.48-linux-arm64.tar.gz) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.48/loft-clients-1.0.48-linux-amd64.tar.gz) |
+| <img src="docs/brand/platforms/android.svg" width="20" height="20" align="absmiddle" alt=""> Android | [APK телефона](https://github.com/a3app/loft/releases/download/v1.0.48/loft-android-1.0.48.apk) · [APK TV](https://github.com/a3app/loft/releases/download/v1.0.48/loft-androidtv-1.0.48.apk) | те же fat APK |
+| <img src="docs/brand/platforms/windows.svg" width="20" height="20" align="absmiddle" alt=""> Windows | [arm64 zip](https://github.com/a3app/loft/releases/download/v1.0.48/loft-windows-1.0.48-arm64.zip) | [x86-64 zip](https://github.com/a3app/loft/releases/download/v1.0.48/loft-windows-1.0.48-amd64.zip) · [x86 zip](https://github.com/a3app/loft/releases/download/v1.0.48/loft-windows-1.0.48-386.zip) |
 | iOS | только исходники ([clients/iOS/](clients/iOS/)); in .dev | в Dist нет |
 
 ### Роутеры
 
 | | ARM | x86 / MIPS |
 |--|--|--|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/mikrotik-on-dark.svg"><img src="docs/brand/platforms/mikrotik.svg" width="20" height="20" align="absmiddle" alt=""></picture> MikroTik | [arm64 tar](https://github.com/a3app/loft/releases/download/v1.0.47/loft-mikrotik-1.0.47-arm64.tar) · [armv7 tar](https://github.com/a3app/loft/releases/download/v1.0.47/loft-mikrotik-1.0.47-armv7.tar) | [amd64 tar](https://github.com/a3app/loft/releases/download/v1.0.47/loft-mikrotik-1.0.47-amd64.tar) |
-| <img src="docs/brand/platforms/keenetic.svg" width="20" height="20" align="absmiddle" alt=""> Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.47/loft-ndms-1.0.47-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.47/loft-ndms-1.0.47-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.47/loft-ndms-1.0.47-mipsel.ipk) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/platforms/mikrotik-on-dark.svg"><img src="docs/brand/platforms/mikrotik.svg" width="20" height="20" align="absmiddle" alt=""></picture> MikroTik | [arm64 tar](https://github.com/a3app/loft/releases/download/v1.0.48/loft-mikrotik-1.0.48-arm64.tar) · [armv7 tar](https://github.com/a3app/loft/releases/download/v1.0.48/loft-mikrotik-1.0.48-armv7.tar) | [amd64 tar](https://github.com/a3app/loft/releases/download/v1.0.48/loft-mikrotik-1.0.48-amd64.tar) |
+| <img src="docs/brand/platforms/keenetic.svg" width="20" height="20" align="absmiddle" alt=""> Keenetic | [aarch64 ipk](https://github.com/a3app/loft/releases/download/v1.0.48/loft-ndms-1.0.48-aarch64.ipk) · [armv7 ipk](https://github.com/a3app/loft/releases/download/v1.0.48/loft-ndms-1.0.48-armv7.ipk) | [mipsel ipk](https://github.com/a3app/loft/releases/download/v1.0.48/loft-ndms-1.0.48-mipsel.ipk) |
 
 ### Нода
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.47/loft-node-1.0.47-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.47/loft-node_1.0.47_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.47/loft-node-1.0.47-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.47/loft-node_1.0.47_amd64.deb) |
+| <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.48/loft-node-1.0.48-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.48/loft-node_1.0.48_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.48/loft-node-1.0.48-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.48/loft-node_1.0.48_amd64.deb) |
 
 ### Панель
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.47/loft-panel-1.0.47-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.47/loft-panel_1.0.47_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.47/loft-panel-1.0.47-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.47/loft-panel_1.0.47_amd64.deb) |
+| <img src="docs/brand/platforms/linux.svg" width="20" height="20" align="absmiddle" alt=""> Linux | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.48/loft-panel-1.0.48-linux-arm64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.48/loft-panel_1.0.48_arm64.deb) | [tar.gz](https://github.com/a3app/loft/releases/download/v1.0.48/loft-panel-1.0.48-linux-amd64.tar.gz) · [deb](https://github.com/a3app/loft/releases/download/v1.0.48/loft-panel_1.0.48_amd64.deb) |
 
 ## Приложение
 

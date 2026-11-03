@@ -1,4 +1,4 @@
-# loft 1.0.47
+# loft 1.0.48
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,19 +10,19 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-macos-1.0.47-arm64.dmg` | `loft-macos-1.0.47-amd64.dmg` |
-| macOS CLI | `loft-clients-1.0.47-darwin-arm64.tar.gz` | `loft-clients-1.0.47-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-clients-1.0.47-linux-arm64.tar.gz` | `loft-clients-1.0.47-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.47-linux-arm64.tar.gz` · `loft-node_1.0.47_arm64.deb` | `loft-node-1.0.47-linux-amd64.tar.gz` · `loft-node_1.0.47_amd64.deb` |
-| Panel | `loft-panel-1.0.47-linux-arm64.tar.gz` · `loft-panel_1.0.47_arm64.deb` | `loft-panel-1.0.47-linux-amd64.tar.gz` · `loft-panel_1.0.47_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-android-1.0.47.apk` · `loft-androidtv-1.0.47.apk` | same fat APKs |
-| Windows portable (GitHub) | `loft-windows-1.0.47-arm64.zip` | `loft-windows-1.0.47-amd64.zip` · `loft-windows-1.0.47-386.zip` |
-| MikroTik container | `loft-mikrotik-1.0.47-arm64.tar` · `loft-mikrotik-1.0.47-armv7.tar` | `loft-mikrotik-1.0.47-amd64.tar` |
-| Keenetic Entware | `loft-ndms-1.0.47-aarch64.ipk` · `loft-ndms-1.0.47-armv7.ipk` | `loft-ndms-1.0.47-mipsel.ipk` |
+| macOS app (10.13+, ad-hoc signed) | `loft-macos-1.0.48-arm64.dmg` | `loft-macos-1.0.48-amd64.dmg` |
+| macOS CLI | `loft-clients-1.0.48-darwin-arm64.tar.gz` | `loft-clients-1.0.48-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-clients-1.0.48-linux-arm64.tar.gz` | `loft-clients-1.0.48-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.48-linux-arm64.tar.gz` · `loft-node_1.0.48_arm64.deb` | `loft-node-1.0.48-linux-amd64.tar.gz` · `loft-node_1.0.48_amd64.deb` |
+| Panel | `loft-panel-1.0.48-linux-arm64.tar.gz` · `loft-panel_1.0.48_arm64.deb` | `loft-panel-1.0.48-linux-amd64.tar.gz` · `loft-panel_1.0.48_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-android-1.0.48.apk` · `loft-androidtv-1.0.48.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-windows-1.0.48-arm64.zip` | `loft-windows-1.0.48-amd64.zip` · `loft-windows-1.0.48-386.zip` |
+| MikroTik container | `loft-mikrotik-1.0.48-arm64.tar` · `loft-mikrotik-1.0.48-armv7.tar` | `loft-mikrotik-1.0.48-amd64.tar` |
+| Keenetic Entware | `loft-ndms-1.0.48-aarch64.ipk` · `loft-ndms-1.0.48-armv7.ipk` | `loft-ndms-1.0.48-mipsel.ipk` |
 
-Checksums: `loft-clients-1.0.47-SHA256SUMS.txt`, `loft-node-1.0.47-SHA256SUMS.txt`, `loft-panel-1.0.47-SHA256SUMS.txt`, `loft-android-1.0.47-SHA256SUMS.txt`, `loft-windows-1.0.47-SHA256SUMS.txt`, `loft-mikrotik-1.0.47-SHA256SUMS.txt`, `loft-ndms-1.0.47-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.48-SHA256SUMS.txt`, `loft-node-1.0.48-SHA256SUMS.txt`, `loft-panel-1.0.48-SHA256SUMS.txt`, `loft-android-1.0.48-SHA256SUMS.txt`, `loft-windows-1.0.48-SHA256SUMS.txt`, `loft-mikrotik-1.0.48-SHA256SUMS.txt`, `loft-ndms-1.0.48-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows amd64 and 386 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.47`. Keenetic ipk arches are Entware aarch64-3.10, armv7-3.2 soft-float, and mipsel-3.4 soft-float. Each ipk has a `.sha256` sidecar of the same name.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows amd64 and 386 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.48`. Keenetic ipk arches are Entware aarch64-3.10, armv7-3.2 soft-float, and mipsel-3.4 soft-float. Each ipk has a `.sha256` sidecar of the same name.
 
 Not in Dist: iOS / Sailfish clients (catalog and mocks).
 
@@ -44,6 +44,20 @@ Not in Dist: iOS / Sailfish clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.48
+
+Protocol stays **loft/1.0**.
+
+macOS:
+
+- Dist bundle is `Loft.app`. `SetFile -a B` after sign and again on the DMG (Finder package bit).
+- Journal: Copy / Export above the log, Clear / Back below.
+- Journal stores loft-front English; the window, copy, and export show the UI language. GET reset keeps seq (`GET seq=12 · the front reset the connection`).
+
+GET:
+
+- `ClampGetDown` / `ClampPadMax` take int and clip before uint32/byte. `LOFT_STAND_PADMAX=256` no longer wraps to default 8.
 
 ## 1.0.47
 
@@ -490,6 +504,8 @@ macOS:
 
 В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik, пакет Entware Keenetic (`loft-ndms` aarch64, armv7, mipsel, у каждого `.sha256`). Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS и Sailfish в этот Dist не входят.
 
+1.0.48: macOS — бандл Loft.app, SetFile -a B. Журнал: Копировать/Экспорт сверху, Очистить/Назад снизу. loft-front пишет по-английски, окно показывает язык интерфейса (`GET seq=… · фронт сбросил соединение`). GET — ClampGetDown/ClampPadMax с int, без wrap uint32/byte. Протокол loft/1.0.
+
 1.0.47: macOS — журнал: Clear и отрисовка больше не роняют приложение (дыры NSLayoutManager → NSException → SIGILL). Кнопка «Экспорт» пишет журнал в .txt. Протокол loft/1.0.
 
 1.0.46: GET — Status get_down (node.conf) потолок тела, по умолчанию 256 КиБ (пол 16, потолок 1 МиБ). Status pad_max — idle-Pad в inflight, по умолчанию 8; 6-й байт CmdTune может снизить. Клиенты 1.0.43 хвост игнорируют (padMax 4). Origin HTTP снимает TCP_NOTSENT_LOWAT (16 КиБ держал GET/WS ~11 Мбит/с). Протокол loft/1.0.
@@ -537,6 +553,8 @@ macOS:
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
 本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器、Keenetic Entware 包（`loft-ndms` aarch64、armv7、mipsel，各带 `.sha256`）。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish 不在这次包里。
+
+1.0.48：macOS — 包名为 Loft.app，SetFile -a B。日志：上方复制/导出，下方清除/返回。loft-front 写英文，窗口按界面语言显示（`GET seq=… · 前置重置了连接`）。GET — ClampGetDown/ClampPadMax 收 int，不再经 uint32/byte 回绕。协议仍是 loft/1.0。
 
 1.0.47：macOS — 日志窗口：Clear 与绘制不再因 NSLayoutManager 填洞抛 NSException 而 SIGILL。导出按钮把日志写成 .txt。协议仍是 loft/1.0。
 
