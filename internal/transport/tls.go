@@ -141,6 +141,30 @@ func TuneListener(ln net.Listener) net.Listener {
 	return tcpTuneListener{ln}
 }
 
+type originConnKey struct{}
+
+// OriginConnContext stores c on ctx and drops TCP_NOTSENT_LOWAT.
+// TuneListener sets 16 KiB for overlay ping; that cap on a loft TCP
+// front (GET/WS/H2) held download at ~11 Mbit (Yandex GET 10.6, direct
+// GET 11.9, WS 11.0). QUIC/H3, which skip TCP LOWAT, ran 24/18 Mbit
+// on the same path. spliceDecoy already clears it; origin HTTP must too.
+func OriginConnContext(ctx context.Context, c net.Conn) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	standClearLowat(tcpOf(c))
+	return context.WithValue(ctx, originConnKey{}, c)
+}
+
+// ClearOriginLowat drops TCP_NOTSENT_LOWAT on the request's TCP conn.
+func ClearOriginLowat(r *http.Request) {
+	if r == nil {
+		return
+	}
+	c, _ := r.Context().Value(originConnKey{}).(net.Conn)
+	standClearLowat(tcpOf(c))
+}
+
 // dialTLS dials TCP, injects session HMAC, and completes uTLS. Mask is tried when advertised.
 func dialTLS(addr, sni, fingerprint string, insecure bool, token []byte) (net.Conn, error) {
 	return dialTLSALPN(addr, sni, fingerprint, insecure, token, []string{"h2", "http/1.1"})

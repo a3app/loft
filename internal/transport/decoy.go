@@ -16,6 +16,7 @@ package transport
 // "dest" and "origin" both mean the decoy website.
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -533,13 +534,20 @@ func (d *decoyListener) serveMask(c net.Conn, raw []byte, hello clientHello) {
 		alpn = cs.ConnectionState().NegotiatedProtocol
 	}
 	if alpn == "http/1.1" {
-		srv := &http.Server{Handler: d.handler, ReadHeaderTimeout: 10 * time.Second}
+		srv := &http.Server{
+			Handler:           d.handler,
+			ReadHeaderTimeout: 10 * time.Second,
+			ConnContext:       OriginConnContext,
+		}
 		ln := &onceLn{c: mc, ch: make(chan struct{})}
 		_ = srv.Serve(ln)
 		return
 	}
 	h2s := H2HTTPServer()
-	h2s.ServeConn(mc, &http2.ServeConnOpts{Handler: d.handler})
+	h2s.ServeConn(mc, &http2.ServeConnOpts{
+		Handler: d.handler,
+		Context: OriginConnContext(context.Background(), mc),
+	})
 }
 
 // spliceDecoy writes hello to origin (after a PROXY v1 line when proxy) and

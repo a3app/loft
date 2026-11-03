@@ -4,6 +4,7 @@ package transport
 
 import (
 	"net"
+	"net/http"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -41,6 +42,27 @@ func TestTuneTCPPinStillSetsBuffer(t *testing.T) {
 	}
 	if g := sockOpt(t, c, unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT); g != lowBefore {
 		t.Fatalf("unsent cap changed %d -> %d with the cap off", lowBefore, g)
+	}
+}
+
+func TestClearOriginLowatDropsCap(t *testing.T) {
+	t.Setenv("LOFT_STAND_TCPBUF", "")
+	t.Setenv("LOFT_STAND_LOWAT", "")
+
+	c := dialTCP(t)
+	defer c.Close()
+	tuneTCP(c)
+	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req = req.WithContext(OriginConnContext(req.Context(), c))
+	if g := sockOpt(t, c, unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT); g != 0 {
+		t.Fatalf("conncontext unsent cap %d", g)
+	}
+	ClearOriginLowat(req)
+	if g := sockOpt(t, c, unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT); g != 0 {
+		t.Fatalf("unsent cap %d", g)
 	}
 }
 
