@@ -43,7 +43,7 @@ BUMP ?= 1
 SWIFT_SRC := $(wildcard Sources/Engine/*.swift Sources/App/*.swift)
 LANG_SRC := $(wildcard lang/*.lang)
 LIST_CATALOG := $(ROOT)/lists/catalog.json
-C_OBJ := $(OBJ)/chacha.o $(OBJ)/utun.o
+C_OBJ := $(OBJ)/chacha.o $(OBJ)/utun.o $(OBJ)/loftcatch.o
 CARCH := -arch $(ARCH) -mmacosx-version-min=$(MIN) -O2 -isysroot $(SDK)
 
 .PHONY: all app dmg dmgs run clean test-crypto shot front-probe
@@ -99,6 +99,10 @@ $(OBJ)/utun.o: Sources/TUN/utun.c Sources/TUN/utun.h
 	mkdir -p $(OBJ)
 	$(CLANG) -c Sources/TUN/utun.c -o $@ $(CARCH)
 
+$(OBJ)/loftcatch.o: Sources/App/LoftCatch.m Sources/App/LoftCatch.h
+	mkdir -p $(OBJ)
+	$(CLANG) -c Sources/App/LoftCatch.m -o $@ $(CARCH) -fobjc-arc -I Sources/App
+
 $(OBJ)/target-arch:
 	mkdir -p $(OBJ)
 	echo $(ARCH) > $@
@@ -144,7 +148,7 @@ $(APP)/Contents/MacOS/loft: $(OBJ)/target-arch $(SWIFT_SRC) $(LANG_SRC) $(LIST_C
 		-import-objc-header Sources/Bridging-Header.h \
 		-I Sources \
 		-framework AppKit -framework Foundation -framework Security -framework QuartzCore -framework CoreImage -framework SystemConfiguration \
-		-Xlinker $(OBJ)/chacha.o -Xlinker $(OBJ)/utun.o \
+		-Xlinker $(OBJ)/chacha.o -Xlinker $(OBJ)/utun.o -Xlinker $(OBJ)/loftcatch.o \
 		-Xlinker -rpath -Xlinker @executable_path/../Frameworks \
 		$(SWIFT_SRC) \
 		-o $(MACOS)/loft

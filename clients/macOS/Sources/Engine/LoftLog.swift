@@ -85,7 +85,7 @@ final class LoftLog {
         }
     }
 
-    /// Joined in-memory lines for the journal window and copy.
+    /// Joined in-memory lines for the journal window, copy, and export.
     func dump() -> String {
         lock.lock(); defer { lock.unlock() }
         return lines.joined(separator: "\n")

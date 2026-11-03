@@ -1,6 +1,7 @@
 /* Swift bridging header: ChaCha20-Poly1305 AEAD into the loft macOS app. */
 
 #include "Crypto/chacha20poly1305.h"
+#include "App/LoftCatch.h"
 #include <CommonCrypto/CommonDigest.h>
 #include <libproc.h>
 #include <ifaddrs.h>

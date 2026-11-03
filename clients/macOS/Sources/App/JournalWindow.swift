@@ -1,4 +1,4 @@
-// Journal window: front and session log lines, copy/clear, rotating diag file path.
+// Journal window: front and session log lines, copy/export/clear, rotating diag file path.
 // The journal is the in-app event log kept by Engine/LoftLog.swift. With the
 // diagnostics option on, the same lines also go to a log file on disk.
 
@@ -17,18 +17,49 @@ final class JournalText: NSTextView {
         }
         super.copy(sender)
     }
+
+    /// Glyphs for 0..<storage.length. DrawRect still fills holes if this is skipped.
+    private func fillGlyphs() {
+        guard let lm = layoutManager, let st = textStorage else { return }
+        let n = st.length
+        if n > 0 {
+            lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: n))
+        }
+    }
+
+    /// Layout before CA display. NSException from hole-fill is caught; Swift cannot.
+    override func viewWillDraw() {
+        _ = LoftCatch { [unowned self] in self.fillGlyphs() }
+        super.viewWillDraw()
+    }
+
+    /// NSTextView.drawRect uses okToFillHoles:YES. Inconsistent glyphs →
+    /// _replaceElements NSException → AppKit _crashOnException SIGILL.
+    override func draw(_ dirtyRect: NSRect) {
+        let r = dirtyRect
+        _ = LoftCatch { [unowned self] in self.drawBody(r) }
+    }
+
+    /// Super draw; called only from LoftCatch so NSException stays in ObjC.
+    private func drawBody(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+    }
 }
 
-/// Journal window: front and session log lines, copy/clear, rotating diag file path.
+/// Journal window: front and session log lines, copy/export/clear, rotating diag file path.
 final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTextViewDelegate {
     private let titleLab = NSTextField(labelWithString: "")
     private let sub = NSTextField(wrappingLabelWithString: "")
     private let scroll = NSScrollView(frame: .zero)
     private let text = JournalText(frame: .zero)
     private let copyBtn = GhostButton(frame: .zero)
+    private let exportBtn = GhostButton(frame: .zero)
     private let clearBtn = GhostButton(frame: .zero)
     private let back = GhostButton(frame: .zero)
     private var painted = ""
+    /// True while reload() mutates NSTextStorage. textViewDidChangeSelection
+    /// would otherwise recurse into reload during the replace.
+    private var painting = false
 
     /// Builds the journal window and subscribes to log/state notifications.
     init() {
@@ -52,13 +83,13 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
 
     /// Reloads when a selection is cleared so a held update can land.
     func textViewDidChangeSelection(_ notification: Notification) {
-        guard text.selectedRange().length == 0 else { return }
+        guard !painting, text.selectedRange().length == 0 else { return }
         let body = LoftLog.shared.dump()
         let shown = body.isEmpty ? L10n.t("journal_empty") : body
         if shown != painted { reload() }
     }
 
-    /// Lays out title, log scroll, and copy/clear/back buttons.
+    /// Lays out title, log scroll, and copy/export/clear/back buttons.
     private func build() {
         let c = loftBody(window!)
         titleLab.font = Palette.font(20)
@@ -100,16 +131,29 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         text.isAutomaticTextReplacementEnabled = false
         text.enabledTextCheckingTypes = 0
         text.delegate = self
+        // Layer-backed NSTextView drawRect fills holes (okToFillHoles) on CA
+        // commit. Dist 1.0.46 died SIGILL there during GET hold/reset spam.
+        text.wantsLayer = false
+        // Holes from a longer previous string survive text.string=; ensureLayout
+        // then walks them and NSString _getBlockStart: raises → SIGSEGV (Clear).
+        text.layoutManager?.allowsNonContiguousLayout = false
         applyLogStyle()
         scroll.documentView = text
 
-        // Footer: Copy on the left, Clear in the middle, Back on the right.
+        // Footer: Copy · Export · Clear · Back, space-between in 520.
         copyBtn.font = Palette.body(12.5)
         copyBtn.tone = Palette.mute
         copyBtn.alignment = .left
         copyBtn.refusesFirstResponder = true
         copyBtn.target = self
         copyBtn.action = #selector(copyTap)
+
+        exportBtn.font = Palette.body(12.5)
+        exportBtn.tone = Palette.mute
+        exportBtn.alignment = .center
+        exportBtn.refusesFirstResponder = true
+        exportBtn.target = self
+        exportBtn.action = #selector(exportTap)
 
         clearBtn.font = Palette.body(12.5)
         clearBtn.tone = Palette.mute
@@ -125,7 +169,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         back.target = self
         back.action = #selector(backTap)
 
-        for v in [titleLab, sub, scroll, copyBtn, clearBtn, back] as [NSView] {
+        for v in [titleLab, sub, scroll, copyBtn, exportBtn, clearBtn, back] as [NSView] {
             c.addSubview(v)
         }
         layout()
@@ -175,9 +219,12 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         let inner = w - 40 - 20
         text.frame = NSRect(x: 0, y: 0, width: inner, height: scrollH)
         text.textContainer?.containerSize = NSSize(width: inner, height: CGFloat.greatestFiniteMagnitude)
-        copyBtn.frame = NSRect(x: 20, y: btnY, width: 140, height: btnH)
-        clearBtn.frame = NSRect(x: 190, y: btnY, width: 140, height: btnH)
-        back.frame = NSRect(x: 360, y: btnY, width: 140, height: btnH)
+        let btnW: CGFloat = 110
+        let span = (w - 40) - btnW
+        copyBtn.frame = NSRect(x: 20, y: btnY, width: btnW, height: btnH)
+        exportBtn.frame = NSRect(x: 20 + span / 3, y: btnY, width: btnW, height: btnH)
+        clearBtn.frame = NSRect(x: 20 + 2 * span / 3, y: btnY, width: btnW, height: btnH)
+        back.frame = NSRect(x: 20 + span, y: btnY, width: btnW, height: btnH)
         if let win = window {
             loftResize(win, bodyHeight: bodyH)
         }
@@ -192,6 +239,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
             sub.stringValue = L10n.t("journal_d")
         }
         copyBtn.title = L10n.t("copy")
+        exportBtn.title = L10n.t("export")
         clearBtn.title = L10n.t("clear_log")
         back.title = L10n.t("back")
         // Skip the redraw when hidden, unchanged, or while the user has a selection
@@ -201,43 +249,70 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         let shown = body.isEmpty ? L10n.t("journal_empty") : body
         if shown == painted { return }
         if text.selectedRange().length > 0 { return }
+        guard !painting else { return }
+        guard let storage = text.textStorage else { return }
+        painting = true
+        defer { painting = false }
         let old = painted
         painted = shown
         applyLogStyle()
         let inner = scroll.bounds.width > 1 ? scroll.bounds.width : 480
-        text.textContainer?.containerSize = NSSize(width: max(40, inner - 20), height: CGFloat.greatestFiniteMagnitude)
+        let width = max(40, inner - 20)
+        text.textContainer?.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
         let empty = L10n.t("journal_empty")
-        // New lines only appended: add just the tail. Anything else: replace all.
-        if shown.hasPrefix(old), !old.isEmpty, old != empty, let storage = text.textStorage, !body.isEmpty {
-            let extra = String(shown.dropFirst(old.count))
+        let style = logStyle()
+        let font = Palette.mono(11)
+        let color: NSColor = body.isEmpty ? Palette.mute : Palette.snow
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: style,
+        ]
+        // New lines only appended: add just the tail. Anything else: replace all
+        // in one processEditing so leftover glyph holes are dropped.
+        let mutated = LoftCatch {
             storage.beginEditing()
-            storage.append(NSAttributedString(string: extra, attributes: [
-                .font: Palette.mono(11),
-                .foregroundColor: Palette.snow,
-                .paragraphStyle: logStyle(),
-            ]))
-            storage.endEditing()
-        } else {
-            text.string = shown
-            text.textColor = body.isEmpty ? Palette.mute : Palette.snow
-            text.font = Palette.mono(11)
-            let style = logStyle()
-            text.defaultParagraphStyle = style
-            let n = (text.string as NSString).length
-            if n > 0 {
-                let r = NSRange(location: 0, length: n)
-                text.textStorage?.addAttribute(.paragraphStyle, value: style, range: r)
-                text.textStorage?.addAttribute(.font, value: Palette.mono(11), range: r)
+            if shown.hasPrefix(old), !old.isEmpty, old != empty, !body.isEmpty {
+                let extra = String(shown.dropFirst(old.count))
+                if !extra.isEmpty {
+                    storage.append(NSAttributedString(string: extra, attributes: attrs))
+                }
+            } else {
+                storage.setAttributedString(NSAttributedString(string: shown, attributes: attrs))
             }
+            storage.endEditing()
         }
-        // Size the text view to its content and scroll to the newest line.
-        text.layoutManager?.ensureLayout(for: text.textContainer!)
-        let used = text.layoutManager?.usedRect(for: text.textContainer!) ?? .zero
-        let h = max(scroll.bounds.height, used.height + 24)
-        text.frame = NSRect(x: 0, y: 0, width: inner, height: h)
+        if !mutated {
+            painted = old
+            return
+        }
+        text.defaultParagraphStyle = style
+        text.font = font
+        text.textColor = color
+        fitLog(inner)
         if !body.isEmpty {
-            let n = (text.string as NSString).length
+            let n = storage.length
             text.scrollRangeToVisible(NSRange(location: max(0, n - 1), length: 0))
+        }
+    }
+
+    /// Sizes the text view from glyphs of the live character range.
+    /// ensureLayout(for: container) fills holes past storage.length after a
+    /// long→short replace (Clear); NSString _getBlockStart: raises, Swift
+    /// does not catch NSException, loft dies SIGSEGV on the main thread.
+    private func fitLog(_ inner: CGFloat) {
+        guard let storage = text.textStorage, let lm = text.layoutManager, let tc = text.textContainer else { return }
+        let n = storage.length
+        if n > 0 {
+            var used = NSRect.zero
+            let laid = LoftCatch {
+                lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: n))
+                used = lm.usedRect(for: tc)
+            }
+            let h = laid ? max(scroll.bounds.height, used.height + 24) : max(scroll.bounds.height, 1)
+            text.frame = NSRect(x: 0, y: 0, width: inner, height: h)
+        } else {
+            text.frame = NSRect(x: 0, y: 0, width: inner, height: max(scroll.bounds.height, 1))
         }
     }
 
@@ -250,6 +325,26 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(s.isEmpty ? L10n.t("journal_empty") : s, forType: .string)
+    }
+
+    /// NSSavePanel of dump() as UTF-8 .txt. LoftLog.redact already ran on each line.
+    @objc private func exportTap() {
+        let p = NSSavePanel()
+        p.allowedFileTypes = ["txt"]
+        p.canCreateDirectories = true
+        p.isExtensionHidden = false
+        p.nameFieldStringValue = "loft-journal.txt"
+        let go: (NSApplication.ModalResponse) -> Void = { r in
+            guard r == .OK, let u = p.url else { return }
+            var s = LoftLog.shared.dump()
+            if !s.isEmpty, !s.hasSuffix("\n") { s.append("\n") }
+            try? s.write(to: u, atomically: true, encoding: .utf8)
+        }
+        if let w = window {
+            p.beginSheetModal(for: w, completionHandler: go)
+        } else {
+            p.begin(completionHandler: go)
+        }
     }
 
     /// Clears the in-memory journal and the diag file if diag is on.
