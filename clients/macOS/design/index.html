@@ -305,10 +305,13 @@
       white-space: pre-wrap; line-height: 1.45;
     }
     .win.journal .log.empty { color: var(--mute); }
+    .win.journal .jhead,
     .win.journal .jfoot {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 14px 0 18px;
     }
+    .win.journal .jhead { padding: 0 0 10px; }
+    .win.journal .jfoot { padding: 14px 0 18px; }
+    .win.journal .jhead button,
     .win.journal .jfoot button {
       background: none; border: 0; color: var(--mute);
       font: 500 12.5px var(--ui); cursor: pointer; padding: 4px 8px;
@@ -2031,13 +2034,15 @@ outbounds:
           <div class="body">
             <h1>${t("journal")}</h1>
             <p class="sub">${t("journal_d")}</p>
+            <div class="jhead">
+              <button type="button">${t("copy")}</button>
+              <button type="button">${t("export")}</button>
+            </div>
             <div class="log">21:14:02\tfront\tGET cdn.example.com /static/v3/build
 21:14:03\tsession\thello loft/1.0
 21:14:03\tsession\toverlay 10.8.17.4
 21:14:04\tfront\tmux up · mask</div>
             <div class="jfoot">
-              <button type="button">${t("copy")}</button>
-              <button type="button">${t("export")}</button>
               <button type="button">${t("clear_log")}</button>
               <button type="button" data-go="main">${t("back")}</button>
             </div>

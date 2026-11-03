@@ -89,7 +89,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         if shown != painted { reload() }
     }
 
-    /// Lays out title, log scroll, and copy/export/clear/back buttons.
+    /// Lays out title, Copy/Export above the log, Clear/Back below.
     private func build() {
         let c = loftBody(window!)
         titleLab.font = Palette.font(20)
@@ -140,7 +140,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         applyLogStyle()
         scroll.documentView = text
 
-        // Footer: Copy · Export · Clear · Back, space-between in 520.
+        // Copy · Export above the log; Clear · Back below. Space-between in 520.
         copyBtn.font = Palette.body(12.5)
         copyBtn.tone = Palette.mute
         copyBtn.alignment = .left
@@ -150,14 +150,14 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
 
         exportBtn.font = Palette.body(12.5)
         exportBtn.tone = Palette.mute
-        exportBtn.alignment = .center
+        exportBtn.alignment = .right
         exportBtn.refusesFirstResponder = true
         exportBtn.target = self
         exportBtn.action = #selector(exportTap)
 
         clearBtn.font = Palette.body(12.5)
         clearBtn.tone = Palette.mute
-        clearBtn.alignment = .center
+        clearBtn.alignment = .left
         clearBtn.refusesFirstResponder = true
         clearBtn.target = self
         clearBtn.action = #selector(clearTap)
@@ -203,7 +203,7 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         text.typingAttributes = attrs
     }
 
-    /// Positions title, scroll, and footer buttons; resizes the window.
+    /// Positions title, Copy/Export, scroll, Clear/Back; resizes the window.
     private func layout() {
         let w: CGFloat = 520
         let bodyH: CGFloat = 452
@@ -212,19 +212,20 @@ final class JournalWindowController: NSWindowController, NSWindowDelegate, NSTex
         let gap: CGFloat = 14
         titleLab.frame = NSRect(x: 20, y: 8, width: w - 40, height: 26)
         sub.frame = NSRect(x: 28, y: 36, width: w - 56, height: 32)
-        let btnY = bodyH - bottom - btnH
-        let scrollY: CGFloat = 76
-        let scrollH = btnY - gap - scrollY
+        let topY: CGFloat = 76
+        let botY = bodyH - bottom - btnH
+        let scrollY = topY + btnH + gap
+        let scrollH = botY - gap - scrollY
         scroll.frame = NSRect(x: 20, y: scrollY, width: w - 40, height: scrollH)
         let inner = w - 40 - 20
         text.frame = NSRect(x: 0, y: 0, width: inner, height: scrollH)
         text.textContainer?.containerSize = NSSize(width: inner, height: CGFloat.greatestFiniteMagnitude)
         let btnW: CGFloat = 110
         let span = (w - 40) - btnW
-        copyBtn.frame = NSRect(x: 20, y: btnY, width: btnW, height: btnH)
-        exportBtn.frame = NSRect(x: 20 + span / 3, y: btnY, width: btnW, height: btnH)
-        clearBtn.frame = NSRect(x: 20 + 2 * span / 3, y: btnY, width: btnW, height: btnH)
-        back.frame = NSRect(x: 20 + span, y: btnY, width: btnW, height: btnH)
+        copyBtn.frame = NSRect(x: 20, y: topY, width: btnW, height: btnH)
+        exportBtn.frame = NSRect(x: 20 + span, y: topY, width: btnW, height: btnH)
+        clearBtn.frame = NSRect(x: 20, y: botY, width: btnW, height: btnH)
+        back.frame = NSRect(x: 20 + span, y: botY, width: btnW, height: btnH)
         if let win = window {
             loftResize(win, bodyHeight: bodyH)
         }
