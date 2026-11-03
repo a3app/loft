@@ -5,7 +5,7 @@
 Menu-bar agent. Minimum OS: **macOS 10.13**. UX: [`design/DESIGN.md`](design/DESIGN.md). Mock: [`design/index.html`](design/index.html).
 
 ```
-make app          # ../../dist/clients/macOS/loft.app  (version patch +1)
+make app          # ../../dist/clients/macOS/Loft.app  (version patch +1)
 make app HIAE=1      # same, loft-front with HiAE (`-tags hiae`)
 make dmg          # ../../dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg
 make dmg BUMP=0   # same DMG, leave VERSION as-is (CI)
@@ -20,7 +20,7 @@ make front-probe  # one loft-front handshake, no TUN
 
 From the repo root: `make macos` / `make macos-dmg`.
 
-The DMG has `loft.app`, an **Applications** symlink (drag to install), and [`pack/README.txt`](pack/README.txt).
+The DMG has `Loft.app`, an **Applications** symlink (drag to install), and [`pack/README.txt`](pack/README.txt).
 
 Signing is ad-hoc until a Developer ID is in the keychain:
 

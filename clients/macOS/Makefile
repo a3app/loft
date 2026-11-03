@@ -30,7 +30,7 @@ ROOT := $(abspath ../..)
 # Intermediates per slice (.o, test_aead). Next to the .app, not in Sources.
 OBJ := $(ROOT)/dist/clients/macOS/obj/$(ARCH)
 HOSTOBJ := $(ROOT)/dist/clients/macOS/obj/$(HOSTARCH)
-APP := $(ROOT)/dist/clients/macOS/loft.app
+APP := $(ROOT)/dist/clients/macOS/Loft.app
 MACOS := $(APP)/Contents/MacOS
 RES := $(APP)/Contents/Resources
 FW := $(APP)/Contents/Frameworks
@@ -62,9 +62,12 @@ app: test-crypto $(APP)/Contents/MacOS/loft
 	fi; \
 	sed "s/__LOFT_VERSION__/$$v/g" Info.plist > $(APP)/Contents/Info.plist; \
 	sh pack/sign.sh $(APP); \
+	sf=$$(xcrun --find SetFile 2>/dev/null); \
+	[ -n "$$sf" ] || { echo "SetFile not found" >&2; exit 1; }; \
+	"$$sf" -a B $(APP); \
 	echo "built $(APP)  $$v  (macOS $(MIN)+ $(ARCH))"
 
-# Disk image: loft.app + Applications symlink + README.txt.
+# Disk image: Loft.app + Applications symlink + README.txt.
 # CODESIGN_IDENTITY / NOTARY_PROFILE as for `app`.
 dmg: app
 	ARCH=$(ARCH) sh pack/make-dmg.sh
@@ -137,7 +140,7 @@ $(MACOS)/loft-front: $(OBJ)/target-arch $(OVERLAY_JSON) $(OVERLAY_SRC) $(ROOT)/g
 		$(GOTAGS) \
 		-overlay $(OVERLAY_JSON) \
 		-ldflags="-s -w -X github.com/a3app/loft/internal/version.Version=$(ROOTVER)" \
-		-o dist/clients/macOS/loft.app/Contents/MacOS/loft-front ./clients/go/cmd/loft-front
+		-o $(MACOS)/loft-front ./clients/go/cmd/loft-front
 	@if nm -u $(MACOS)/loft-front | grep -E 'SecTrustCopyCertificateChain|SecTrustEvaluateWithError'; then \
 		echo 'loft-front: still binds 10.14+/12.0 Security APIs' >&2; exit 1; \
 	fi
@@ -179,4 +182,4 @@ front-probe: $(APP)/Contents/MacOS/loft
 	$(MACOS)/loft --probe
 
 clean:
-	rm -rf build $(ROOT)/dist/clients/macOS/obj $(APP)
+	rm -rf build $(ROOT)/dist/clients/macOS/obj $(APP) $(ROOT)/dist/clients/macOS/loft.app

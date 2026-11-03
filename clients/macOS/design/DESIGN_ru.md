@@ -4,7 +4,7 @@
 
 Агент в строке меню; окно вторично. Знак, палитра и Avenir Next: [`brand/`](../../../docs/brand/). Интерактивный макет: [`index.html`](index.html). Протокол: [docs/protocol_ru.md](../../../../docs/protocol_ru.md).
 
-Программа на Swift 5 + AppKit лежит в [`../Sources/`](../Sources/). Живая сессия — это Go-процесс `loft-front`, скопированный в `loft.app/Contents/MacOS/`. Встроенный в процесс `GETFront.swift` приложение для подключения не использует. Hello отправляет `loft-front` как Go-клиент (GET, WS, H2, QUIC, H3, протокол 1.0). SSTP — отдельный VPN PPP-over-HTTPS в том же GUI. VLESS — третий тип (TCP+TLS, REALITY, Vision, XHTTP). Редактор VLESS работает в двух режимах: **Ссылка** (`vless://`) или **Вручную** (поля); оба сохраняют URI в формате DuckSoft. Trojan/Shadowsocks войдут в то же семейство позже.
+Программа на Swift 5 + AppKit лежит в [`../Sources/`](../Sources/). Живая сессия — это Go-процесс `loft-front`, скопированный в `Loft.app/Contents/MacOS/`. Встроенный в процесс `GETFront.swift` приложение для подключения не использует. Hello отправляет `loft-front` как Go-клиент (GET, WS, H2, QUIC, H3, протокол 1.0). SSTP — отдельный VPN PPP-over-HTTPS в том же GUI. VLESS — третий тип (TCP+TLS, REALITY, Vision, XHTTP). Редактор VLESS работает в двух режимах: **Ссылка** (`vless://`) или **Вручную** (поля); оба сохраняют URI в формате DuckSoft. Trojan/Shadowsocks войдут в то же семейство позже.
 
 ---
 

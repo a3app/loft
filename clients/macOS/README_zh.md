@@ -5,7 +5,7 @@
 菜单栏客户端。最低系统：**macOS 10.13**。UX：[`design/DESIGN_zh.md`](design/DESIGN_zh.md)。模型：[`design/index.html`](design/index.html)。
 
 ```
-make app          # ../../dist/clients/macOS/loft.app  （版本 patch +1）
+make app          # ../../dist/clients/macOS/Loft.app  （版本 patch +1）
 make app HIAE=1      # 同上，loft-front 带 HiAE（`-tags hiae`）
 make dmg          # ../../dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg
 make dmg BUMP=0   # 同一份 DMG，VERSION 不动（CI）
@@ -20,7 +20,7 @@ make front-probe  # 一次 loft-front 握手，没有 TUN
 
 仓库根目录：`make macos` / `make macos-dmg`。
 
-DMG 里是 `loft.app`、**Applications** 符号链接（拖进去安装）和 [`pack/README.txt`](pack/README.txt)。
+DMG 里是 `Loft.app`、**Applications** 符号链接（拖进去安装）和 [`pack/README.txt`](pack/README.txt)。
 
 签名是 ad-hoc，直到钥匙串里有 Developer ID：
 

@@ -200,7 +200,7 @@ Go 1.24+. Из корня репозитория:
 make test
 make node       # ./loft-node
 make client     # dist/clients/go/loft
-make macos      # dist/clients/macOS/loft.app
+make macos      # dist/clients/macOS/Loft.app
 make macos-dmg  # dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg
 make macos-dmgs # оба DMG, arm и intel (CI)
 make android    # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs

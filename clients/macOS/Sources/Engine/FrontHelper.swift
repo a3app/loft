@@ -1,5 +1,5 @@
 // Spawns bundled loft-front, parses STATUS lines, and owns the TUN unix-socket path.
-// loft-front is a Go helper inside loft.app. It opens one session to a loft
+// loft-front is a Go helper inside Loft.app. It opens one session to a loft
 // node and serves it as a local SOCKS port (and a TUN network interface when
 // enabled). It reports progress as STATUS lines on its output; this class
 // starts it, reads those lines into properties and stops it.

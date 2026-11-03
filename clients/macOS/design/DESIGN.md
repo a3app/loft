@@ -4,7 +4,7 @@
 
 Menu-bar agent. The window is secondary. Mark, palette, and Avenir Next: [`brand/`](../../../docs/brand/). Interactive mock: [`index.html`](index.html). Protocol: [docs/protocol.md](../../../../docs/protocol.md).
 
-The Swift 5 + AppKit binary lives in [`../Sources/`](../Sources/). A live session is the Go process `loft-front` copied into `loft.app/Contents/MacOS/`. In-process `GETFront.swift` is not the path the app uses. Hello of `loft-front` is the Go client (GET, WS, H2, QUIC, H3, protocol 1.0). SSTP is a separate PPP-over-HTTPS VPN in the same GUI. VLESS is a third type (TCP+TLS, REALITY, Vision, XHTTP). The VLESS editor is Link (`vless://`) or Manual (fields); both store the DuckSoft URI. Trojan/Shadowsocks share that family later.
+The Swift 5 + AppKit binary lives in [`../Sources/`](../Sources/). A live session is the Go process `loft-front` copied into `Loft.app/Contents/MacOS/`. In-process `GETFront.swift` is not the path the app uses. Hello of `loft-front` is the Go client (GET, WS, H2, QUIC, H3, protocol 1.0). SSTP is a separate PPP-over-HTTPS VPN in the same GUI. VLESS is a third type (TCP+TLS, REALITY, Vision, XHTTP). The VLESS editor is Link (`vless://`) or Manual (fields); both store the DuckSoft URI. Trojan/Shadowsocks share that family later.
 
 ---
 

@@ -5,7 +5,7 @@
 Агент в строке меню. Минимальная версия ОС: **macOS 10.13**. UX: [`design/DESIGN_ru.md`](design/DESIGN_ru.md). Макет: [`design/index.html`](design/index.html).
 
 ```
-make app          # ../../dist/clients/macOS/loft.app  (patch версии +1)
+make app          # ../../dist/clients/macOS/Loft.app  (patch версии +1)
 make app HIAE=1      # то же, loft-front с HiAE (`-tags hiae`)
 make dmg          # ../../dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg
 make dmg BUMP=0   # тот же DMG, VERSION не трогать (CI)
@@ -20,7 +20,7 @@ make front-probe  # одно рукопожатие loft-front, без TUN
 
 Из корня репозитория: `make macos` / `make macos-dmg`.
 
-В DMG лежат `loft.app`, симлинк **Applications** (перетащить для установки) и [`pack/README.txt`](pack/README.txt).
+В DMG лежат `Loft.app`, симлинк **Applications** (перетащить для установки) и [`pack/README.txt`](pack/README.txt).
 
 Пока в связке ключей нет Developer ID, приложение подписывается ad-hoc:
 

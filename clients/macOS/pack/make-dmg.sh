@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build a UDZO disk image: loft.app, Applications symlink, README.txt.
+# Build a UDZO disk image: Loft.app, Applications symlink, README.txt.
 # Volume layout (Finder): app left, Applications right — drag to install.
 # Run after `make app` (the Makefile's dmg target calls it). Signs the app via
 # sign.sh, builds a writable image, lets Finder lay out the window, then
@@ -12,7 +12,7 @@ set -eu
 PACK=$(cd "$(dirname "$0")" && pwd)
 MACOS=$(cd "$PACK/.." && pwd)
 ROOT=$(cd "$MACOS/../.." && pwd)
-APP="$ROOT/dist/clients/macOS/loft.app"
+APP="$ROOT/dist/clients/macOS/Loft.app"
 OUTDIR="$ROOT/dist/clients/macOS"
 VER=$(tr -d ' \n' < "$MACOS/VERSION")
 ARCH=${ARCH:-$(uname -m)}
@@ -79,7 +79,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-ditto "$APP" "$STAGE/loft.app"
+ditto "$APP" "$STAGE/Loft.app"
+sf=$(xcrun --find SetFile 2>/dev/null) || true
+if [ -z "$sf" ]; then
+	echo "dmg: SetFile not found" >&2
+	exit 1
+fi
+"$sf" -a B "$STAGE/Loft.app"
 ln -s /Applications "$STAGE/Applications"
 cp "$PACK/README.txt" "$STAGE/README.txt"
 if [ -f "$MACOS/Resources/loft.icns" ]; then
@@ -106,8 +112,9 @@ if [ -z "$MOUNT" ] || [ ! -d "$MOUNT" ]; then
 fi
 
 if [ -f "$MOUNT/.VolumeIcon.icns" ]; then
-	SetFile -a C "$MOUNT" 2>/dev/null || true
+	"$sf" -a C "$MOUNT" 2>/dev/null || true
 fi
+"$sf" -a B "$MOUNT/Loft.app"
 # Hide README from the icon grid if Finder layout runs; keep the file visible.
 # Users still see README.txt in the window.
 
@@ -127,7 +134,7 @@ tell application "Finder"
 		set icon size of theView to 96
 		set text size of theView to 12
 		delay 0.4
-		set position of item "loft.app" of container window to {160, 180}
+		set position of item "Loft.app" of container window to {160, 180}
 		set position of item "Applications" of container window to {480, 180}
 		set position of item "README.txt" of container window to {320, 340}
 		close

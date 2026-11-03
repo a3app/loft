@@ -1,7 +1,7 @@
-// GitHub Releases: check, download, and swap loft.app.
+// GitHub Releases: check, download, and swap Loft.app.
 // Self-updater for the macOS client. It asks GitHub Releases whether a newer
 // loft build exists, downloads the DMG for this CPU (arm64 or x86_64), checks
-// its size and SHA-256, copies loft.app out of the mounted image and hands the
+// its size and SHA-256, copies Loft.app out of the mounted image and hands the
 // final swap to a small shell script that runs after this process quits.
 // The UI side (the offer window and progress) lives in App/UpdateOffer.swift.
 
@@ -31,7 +31,7 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
         case noAsset
         /// Downloaded size or SHA-256 does not match what the release promised.
         case checksum
-        /// The DMG could not be mounted, or it holds no loft.app.
+        /// The DMG could not be mounted, or it holds no Loft.app.
         case mount
         /// Copying the download or the app bundle failed, or the app folder is read-only.
         case copy
@@ -254,7 +254,7 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
     }
 
     /// Verifies and stages the update, then arms the relaunch script. Runs off the
-    /// main thread. Steps: check size and hash, mount the DMG, copy loft.app to a
+    /// main thread. Steps: check size and hash, mount the DMG, copy Loft.app to a
     /// temp folder, and make sure the current app's folder is writable. The DMG is
     /// detached and deleted on every exit path.
     private func swap(_ dmg: URL, offer: Offer) throws {
@@ -271,7 +271,10 @@ final class Updater: NSObject, URLSessionDownloadDelegate {
             _ = run("/usr/bin/hdiutil", ["detach", mount.path, "-quiet"])
             try? FileManager.default.removeItem(at: dmg)
         }
-        let srcApp = mount.appendingPathComponent("loft.app")
+        let capital = mount.appendingPathComponent("Loft.app")
+        let srcApp = FileManager.default.fileExists(atPath: capital.path)
+            ? capital
+            : mount.appendingPathComponent("loft.app")
         guard FileManager.default.fileExists(atPath: srcApp.path) else { throw Fail.mount }
         let staged = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("loft-update.app")
         try? FileManager.default.removeItem(at: staged)

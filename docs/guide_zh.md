@@ -17,7 +17,7 @@ make test
 make node
 make client    # dist/clients/go/loft
 make probe     # dist/clients/go/loft-probe
-make macos     # dist/clients/macOS/loft.app
+make macos     # dist/clients/macOS/Loft.app
 make macos-dmg # dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg  （Applications 符号链接）
 make macos-dmgs # arm64 和 x86_64 两份 DMG（CI）
 make android   # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs

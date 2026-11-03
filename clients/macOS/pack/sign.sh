@@ -1,6 +1,6 @@
 #!/bin/sh
-# Sign loft.app inside-out. Ad-hoc unless CODESIGN_IDENTITY is a Developer ID.
-# Usage: pack/sign.sh path/to/loft.app
+# Sign Loft.app inside-out. Ad-hoc unless CODESIGN_IDENTITY is a Developer ID.
+# Usage: pack/sign.sh path/to/Loft.app
 # Called by make-dmg.sh before packing. Code must be signed from the inside
 # out: a bundle's signature covers the already-signed files inside it, so
 # signing an inner file afterwards would break the outer signature. With a
@@ -8,7 +8,7 @@
 # which Apple's notarization requires.
 set -eu
 
-APP=${1:?usage: sign.sh loft.app}
+APP=${1:?usage: sign.sh Loft.app}
 PACK=$(cd "$(dirname "$0")" && pwd)
 # shellcheck disable=SC1091
 . "$PACK/identity.sh"

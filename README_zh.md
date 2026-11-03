@@ -200,7 +200,7 @@ Go 1.24+。在仓库根目录：
 make test
 make node       # ./loft-node
 make client     # dist/clients/go/loft
-make macos      # dist/clients/macOS/loft.app
+make macos      # dist/clients/macOS/Loft.app
 make macos-dmg  # dist/clients/macOS/loft-macos-<ver>-{arm64,amd64}.dmg
 make macos-dmgs # arm 和 intel 两份 DMG（CI）
 make android    # dist/clients/Android/loft.app + loft-tv.app + loft-gtv.app + APKs

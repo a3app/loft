@@ -4,7 +4,7 @@
 
 菜单栏客户端。窗口是次要的。标志、色板、Avenir Next：[`brand/`](../../../docs/brand/)。交互模型：[`index.html`](index.html)。协议：[docs/protocol_zh.md](../../../../docs/protocol_zh.md)。
 
-Swift 5 + AppKit 程序在 [`../Sources/`](../Sources/)。活着的会话是拷进 `loft.app/Contents/MacOS/` 的 Go 进程 `loft-front`。进程内的 `GETFront.swift` 不是应用走的那条路。`loft-front` 的 Hello 是 Go 客户端（GET、WS、H2、QUIC、H3，协议 1.0）。SSTP 是同一 GUI 里单独的 PPP-over-HTTPS。VLESS 是第三种类型（TCP+TLS、REALITY、Vision、XHTTP）。VLESS 编辑器是 **链接**（`vless://`）或 **手动**（字段）；两种都写成 DuckSoft URI。Trojan/Shadowsocks 同一家，以后再说。
+Swift 5 + AppKit 程序在 [`../Sources/`](../Sources/)。活着的会话是拷进 `Loft.app/Contents/MacOS/` 的 Go 进程 `loft-front`。进程内的 `GETFront.swift` 不是应用走的那条路。`loft-front` 的 Hello 是 Go 客户端（GET、WS、H2、QUIC、H3，协议 1.0）。SSTP 是同一 GUI 里单独的 PPP-over-HTTPS。VLESS 是第三种类型（TCP+TLS、REALITY、Vision、XHTTP）。VLESS 编辑器是 **链接**（`vless://`）或 **手动**（字段）；两种都写成 DuckSoft URI。Trojan/Shadowsocks 同一家，以后再说。
 
 ---
 
