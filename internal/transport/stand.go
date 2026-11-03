@@ -90,12 +90,11 @@ func standPull() int {
 
 // standGetDown is the GET response body cap. def 0 is getDownlinkBytes
 // (node.conf get_down / Status get_down). LOFT_STAND_GETDOWN overrides.
-func standGetDown(def int) int {
+func standGetDown(def int) uint32 {
 	if def <= 0 {
 		def = getDownlinkBytes
 	}
-	n := standEnvInt("LOFT_STAND_GETDOWN", def)
-	return int(wire.ClampGetDown(uint32(n)))
+	return wire.ClampGetDown(standEnvInt("LOFT_STAND_GETDOWN", def))
 }
 
 // standPadMax is how many idle pad GETs may sit in flight. want is Status
@@ -113,7 +112,7 @@ func standPadMax(slots, want int) int {
 			}
 		}
 	}
-	n = int(wire.ClampPadMax(byte(n)))
+	n = int(wire.ClampPadMax(n))
 	if n > slots {
 		return slots
 	}

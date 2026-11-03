@@ -69,7 +69,7 @@ func (t *frontTune) setPad(n uint8) {
 	if t == nil {
 		return
 	}
-	n = wire.ClampPadMax(n)
+	n = wire.ClampPadMax(int(n))
 	t.mu.Lock()
 	t.padMax = n
 	t.defPad = n

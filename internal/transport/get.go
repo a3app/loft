@@ -428,7 +428,7 @@ func (g *GET) applyStatusEdge(st wire.Status) {
 		g.liveGetDown.Store(st.GetDown)
 	}
 	if st.PadMax > 0 {
-		g.livePadMax.Store(uint32(wire.ClampPadMax(st.PadMax)))
+		g.livePadMax.Store(uint32(wire.ClampPadMax(int(st.PadMax))))
 	}
 }
 
@@ -1378,7 +1378,7 @@ func (g *GET) applyTune(t wire.Tune) {
 		fmt.Fprintf(os.Stderr, "get front tune h2=%d\n", n)
 	}
 	if t.PadMax > 0 {
-		n := uint32(wire.ClampPadMax(t.PadMax))
+		n := uint32(wire.ClampPadMax(int(t.PadMax)))
 		if cur := g.livePadMax.Load(); cur > 0 && n > cur {
 			n = cur
 		}
@@ -2400,13 +2400,13 @@ func hasCmd(frames []wire.Frame, cmd byte) bool {
 // bodyCap is the live GET body cap: node.conf get_down, then stand override.
 func (s *GETServer) bodyCap() uint32 {
 	if s == nil {
-		return uint32(standGetDown(0))
+		return standGetDown(0)
 	}
-	return uint32(standGetDown(int(s.GetDown)))
+	return standGetDown(int(s.GetDown))
 }
 
 // SetPadMax is node.conf pad_max. Handshake Status and live Tune start here.
-func (s *GETServer) SetPadMax(n uint8) {
+func (s *GETServer) SetPadMax(n int) {
 	if s == nil {
 		return
 	}
@@ -2427,7 +2427,7 @@ func (s *GETServer) padCap() uint8 {
 			want = int(n)
 		}
 	}
-	return byte(standPadMax(int(wire.PadMaxMax), want))
+	return wire.ClampPadMax(standPadMax(int(wire.PadMaxMax), want))
 }
 
 // downlinkMax is the GET body cap. Fat Cookie uplink does not shrink it:
@@ -2437,7 +2437,7 @@ func downlinkMax(ss *serverSess, _ []wire.Frame) int {
 	if ss != nil {
 		n = int(ss.getDown)
 	}
-	return standGetDown(n)
+	return int(standGetDown(n))
 }
 
 // pullDownlink holds up to first for mux, then more after useful data.

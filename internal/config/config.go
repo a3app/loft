@@ -379,10 +379,10 @@ func finishServer(c *ServerConfig) (*ServerConfig, error) {
 		c.GetH2 = 4
 	}
 	if c.GetDown != 0 {
-		c.GetDown = int(wire.ClampGetDown(uint32(c.GetDown)))
+		c.GetDown = int(wire.ClampGetDown(c.GetDown))
 	}
 	if c.PadMax != 0 {
-		c.PadMax = int(wire.ClampPadMax(byte(c.PadMax)))
+		c.PadMax = int(wire.ClampPadMax(c.PadMax))
 	}
 	if _, err := c.EdgeByte(); err != nil {
 		return nil, err

@@ -132,18 +132,18 @@ const (
 	GetDownMax     uint32 = 1 << 20
 )
 
-// ClampGetDown maps 0 to GetDownDefault and clips to [GetDownMin, GetDownMax].
-func ClampGetDown(n uint32) uint32 {
-	if n == 0 {
+// ClampGetDown maps n<=0 to GetDownDefault and clips to [GetDownMin, GetDownMax].
+func ClampGetDown(n int) uint32 {
+	if n <= 0 {
 		return GetDownDefault
 	}
-	if n < GetDownMin {
+	if n < int(GetDownMin) {
 		return GetDownMin
 	}
-	if n > GetDownMax {
+	if n > int(GetDownMax) {
 		return GetDownMax
 	}
-	return n
+	return uint32(n)
 }
 
 // Idle pad GETs in flight (Status pad_max, node.conf pad_max, CmdTune 6th byte).
@@ -153,15 +153,15 @@ const (
 	PadMaxMax     byte = 16
 )
 
-// ClampPadMax maps 0 to PadMaxDefault and clips to [PadMaxMin, PadMaxMax].
-func ClampPadMax(n byte) byte {
-	if n == 0 {
+// ClampPadMax maps n<=0 to PadMaxDefault and clips to [PadMaxMin, PadMaxMax].
+func ClampPadMax(n int) byte {
+	if n <= 0 {
 		return PadMaxDefault
 	}
-	if n > PadMaxMax {
+	if n > int(PadMaxMax) {
 		return PadMaxMax
 	}
-	return n
+	return byte(n)
 }
 
 // FrontEP is one Status front: name (get/ws/h2/h3/quic), HTTP path, optional URL.

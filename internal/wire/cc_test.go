@@ -56,6 +56,9 @@ func TestStatusGetDownOptionalTail(t *testing.T) {
 	if ClampGetDown(0) != GetDownDefault || ClampGetDown(1024) != GetDownMin || ClampGetDown(2<<20) != GetDownMax {
 		t.Fatal("clamp")
 	}
+	if ClampGetDown(-1) != GetDownDefault || ClampGetDown(1<<30) != GetDownMax {
+		t.Fatal("clamp overflow")
+	}
 }
 
 func TestStatusPadMaxOptionalTail(t *testing.T) {
@@ -76,6 +79,9 @@ func TestStatusPadMaxOptionalTail(t *testing.T) {
 	}
 	if ClampPadMax(0) != PadMaxDefault || ClampPadMax(99) != PadMaxMax {
 		t.Fatal("clamp")
+	}
+	if ClampPadMax(-1) != PadMaxDefault || ClampPadMax(256) != PadMaxMax || ClampPadMax(257) != PadMaxMax {
+		t.Fatal("clamp overflow")
 	}
 }
 

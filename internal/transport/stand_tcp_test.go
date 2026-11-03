@@ -57,6 +57,10 @@ func TestStandGetDown(t *testing.T) {
 	if standGetDown(0) != 1<<20 {
 		t.Fatal("ceiling")
 	}
+	t.Setenv("LOFT_STAND_GETDOWN", "1073741824")
+	if standGetDown(0) != 1<<20 {
+		t.Fatal("ceiling 1<<30")
+	}
 }
 
 func TestStandPadMax(t *testing.T) {
@@ -80,6 +84,14 @@ func TestStandPadMax(t *testing.T) {
 	t.Setenv("LOFT_STAND_PADMAX", "99")
 	if n := standPadMax(16, 0); n != 16 {
 		t.Fatal("clamp")
+	}
+	t.Setenv("LOFT_STAND_PADMAX", "256")
+	if n := standPadMax(16, 0); n != 16 {
+		t.Fatalf("wrap 256: %d", n)
+	}
+	t.Setenv("LOFT_STAND_PADMAX", "257")
+	if n := standPadMax(16, 0); n != 16 {
+		t.Fatalf("wrap 257: %d", n)
 	}
 }
 
