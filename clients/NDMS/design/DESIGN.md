@@ -87,7 +87,7 @@ It does not download Keenetic firmware components. If OPKG or TUN/TAP is off, th
 
 | Screen | What |
 |--------|------|
-| Start | loft 1.0.45. KeeneticOS 5.0+, OPKG, TUN/TAP, one LAN. |
+| Start | loft 1.0.46. KeeneticOS 5.0+, OPKG, TUN/TAP, one LAN. |
 | Router | Model, LAN address, KeeneticOS, arch. A 4.x row is refused. Manual address. |
 | Password | Web-admin password. Guest is refused. No second loft password. |
 | Check | OS, OPKG, TUN/TAP, Entware, ipk name. |
@@ -98,4 +98,4 @@ It does not download Keenetic firmware components. If OPKG or TUN/TAP is off, th
 | Password refused | Administrator, not a guest. |
 | Component missing | OPKG or TUN/TAP off. |
 | KeeneticOS 4 | OpkgTun in policies needs 5.0. |
-| Already installed | 1.0.35 → 1.0.45, interfaces kept. |
+| Already installed | 1.0.35 → 1.0.46, interfaces kept. |

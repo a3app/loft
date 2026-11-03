@@ -1,4 +1,4 @@
-# loft 1.0.45
+# loft 1.0.46
 
 **English** · [Русский](#русский) · [中文](#中文)
 
@@ -10,19 +10,19 @@ Typical use is operator access: a lab LAN from outside, a server fleet, site-to-
 
 | | Apple Silicon / arm64 | Intel / amd64 |
 |--|--|--|
-| macOS app (10.13+, ad-hoc signed) | `loft-macos-1.0.45-arm64.dmg` | `loft-macos-1.0.45-amd64.dmg` |
-| macOS CLI | `loft-clients-1.0.45-darwin-arm64.tar.gz` | `loft-clients-1.0.45-darwin-amd64.tar.gz` |
-| Linux CLI | `loft-clients-1.0.45-linux-arm64.tar.gz` | `loft-clients-1.0.45-linux-amd64.tar.gz` |
-| Node | `loft-node-1.0.45-linux-arm64.tar.gz` · `loft-node_1.0.45_arm64.deb` | `loft-node-1.0.45-linux-amd64.tar.gz` · `loft-node_1.0.45_amd64.deb` |
-| Panel | `loft-panel-1.0.45-linux-arm64.tar.gz` · `loft-panel_1.0.45_arm64.deb` | `loft-panel-1.0.45-linux-amd64.tar.gz` · `loft-panel_1.0.45_amd64.deb` |
-| Android (sideload, GitHub channel) | `loft-android-1.0.45.apk` · `loft-androidtv-1.0.45.apk` | same fat APKs |
-| Windows portable (GitHub) | `loft-windows-1.0.45-arm64.zip` | `loft-windows-1.0.45-amd64.zip` · `loft-windows-1.0.45-386.zip` |
-| MikroTik container | `loft-mikrotik-1.0.45-arm64.tar` · `loft-mikrotik-1.0.45-armv7.tar` | `loft-mikrotik-1.0.45-amd64.tar` |
-| Keenetic Entware | `loft-ndms-1.0.45-aarch64.ipk` · `loft-ndms-1.0.45-armv7.ipk` | `loft-ndms-1.0.45-mipsel.ipk` |
+| macOS app (10.13+, ad-hoc signed) | `loft-macos-1.0.46-arm64.dmg` | `loft-macos-1.0.46-amd64.dmg` |
+| macOS CLI | `loft-clients-1.0.46-darwin-arm64.tar.gz` | `loft-clients-1.0.46-darwin-amd64.tar.gz` |
+| Linux CLI | `loft-clients-1.0.46-linux-arm64.tar.gz` | `loft-clients-1.0.46-linux-amd64.tar.gz` |
+| Node | `loft-node-1.0.46-linux-arm64.tar.gz` · `loft-node_1.0.46_arm64.deb` | `loft-node-1.0.46-linux-amd64.tar.gz` · `loft-node_1.0.46_amd64.deb` |
+| Panel | `loft-panel-1.0.46-linux-arm64.tar.gz` · `loft-panel_1.0.46_arm64.deb` | `loft-panel-1.0.46-linux-amd64.tar.gz` · `loft-panel_1.0.46_amd64.deb` |
+| Android (sideload, GitHub channel) | `loft-android-1.0.46.apk` · `loft-androidtv-1.0.46.apk` | same fat APKs |
+| Windows portable (GitHub) | `loft-windows-1.0.46-arm64.zip` | `loft-windows-1.0.46-amd64.zip` · `loft-windows-1.0.46-386.zip` |
+| MikroTik container | `loft-mikrotik-1.0.46-arm64.tar` · `loft-mikrotik-1.0.46-armv7.tar` | `loft-mikrotik-1.0.46-amd64.tar` |
+| Keenetic Entware | `loft-ndms-1.0.46-aarch64.ipk` · `loft-ndms-1.0.46-armv7.ipk` | `loft-ndms-1.0.46-mipsel.ipk` |
 
-Checksums: `loft-clients-1.0.45-SHA256SUMS.txt`, `loft-node-1.0.45-SHA256SUMS.txt`, `loft-panel-1.0.45-SHA256SUMS.txt`, `loft-android-1.0.45-SHA256SUMS.txt`, `loft-windows-1.0.45-SHA256SUMS.txt`, `loft-mikrotik-1.0.45-SHA256SUMS.txt`, `loft-ndms-1.0.45-SHA256SUMS.txt`.
+Checksums: `loft-clients-1.0.46-SHA256SUMS.txt`, `loft-node-1.0.46-SHA256SUMS.txt`, `loft-panel-1.0.46-SHA256SUMS.txt`, `loft-android-1.0.46-SHA256SUMS.txt`, `loft-windows-1.0.46-SHA256SUMS.txt`, `loft-mikrotik-1.0.46-SHA256SUMS.txt`, `loft-ndms-1.0.46-SHA256SUMS.txt`.
 
-CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows amd64 and 386 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.45`. Keenetic ipk arches are Entware aarch64-3.10, armv7-3.2 soft-float, and mipsel-3.4 soft-float. Each ipk has a `.sha256` sidecar of the same name.
+CLI archives contain `loft`, `loft-front`, `loft-probe`, `loft-bench`. Windows amd64 and 386 are Win7 SP1+; arm64 is Win10/11 ARM. MikroTik image is also `ghcr.io/a3app/loft-mikrotik:1.0.46`. Keenetic ipk arches are Entware aarch64-3.10, armv7-3.2 soft-float, and mipsel-3.4 soft-float. Each ipk has a `.sha256` sidecar of the same name.
 
 Not in Dist: iOS / Sailfish clients (catalog and mocks).
 
@@ -44,6 +44,16 @@ Not in Dist: iOS / Sailfish clients (catalog and mocks).
 - **loft-node** — controller or relay. Debian package or POSIX tarball. Decoy splice, borrowed-cert mask, signed roster and address lists, member keys.
 - **loft-panel** — web admin on the node: wizard, members, packages, domains, release updates.
 - **loft-probe / loft-bench** — overlay ICMP/TCP/HTTP checks and GET/WS throughput.
+
+## 1.0.46
+
+Protocol stays **loft/1.0**.
+
+GET:
+
+- Status `get_down` (node.conf) is the GET body cap: default 256 KiB, floor 16 KiB, ceiling 1 MiB. Handshake GET advertises the live cap.
+- Status `pad_max` (default 8) is idle pad GETs in flight. CmdTune 6th byte MAY lower it. 1.0.43 clients ignore the trailing bytes (local padMax stays 4).
+- Origin HTTP drops TCP_NOTSENT_LOWAT. That 16 KiB cap on GET/WS held download at ~11 Mbit.
 
 ## 1.0.45
 
@@ -471,6 +481,8 @@ macOS:
 
 В Dist: приложение macOS (DMG `macos-arm` и `macos-intel`), CLI Linux/macOS (`loft`, `loft-front`, `loft-probe`, `loft-bench`), нода (tar.gz и .deb amd64/arm64), панель (tar.gz и .deb), Android sideload APK (телефон и TV), Windows portable (`windows-x86-64`, `windows-x86`, `windows-arm64`), контейнер MikroTik, пакет Entware Keenetic (`loft-ndms` aarch64, armv7, mipsel, у каждого `.sha256`). Сборка GitHub заменяет свой каталог из zip следующего релиза. iOS и Sailfish в этот Dist не входят.
 
+1.0.46: GET — Status get_down (node.conf) потолок тела, по умолчанию 256 КиБ (пол 16, потолок 1 МиБ). Status pad_max — idle-Pad в inflight, по умолчанию 8; 6-й байт CmdTune может снизить. Клиенты 1.0.43 хвост игнорируют (padMax 4). Origin HTTP снимает TCP_NOTSENT_LOWAT (16 КиБ держал GET/WS ~11 Мбит/с). Протокол loft/1.0.
+
 1.0.45: GET — дуплекс больше не режет тело до 96 КиБ; при жирном Cookie нода и так не ждёт mux, скачка 256 КиБ (192 при нескольких потоках). Протокол loft/1.0.
 
 1.0.44: Keenetic — ISP next hop ставится до dial (пин без шлюза был 0.0.0.0, ARP шёл на ноду в WAN). После down объект OpkgTun остаётся: persistent opkgtunN и IFF_UP до ip address. Dist — APK с версией в конце имени (`loft-android-1.0.44.apk`) попадают в GitHub Release. Протокол loft/1.0.
@@ -514,6 +526,8 @@ macOS:
 loft 是跑在 TLS 1.3 里面的覆盖网。应用走本机 SOCKS5 或 TUN。流复用，ChaCha20-Poly1305，外面是普通 HTTPS：GET、WebSocket、HTTP/2、QUIC、HTTP/3。节点前面可以接 CDN。协议 **loft/1.0**。分享 URI `loft://`。
 
 本 Dist：macOS 应用（`macos-arm` / `macos-intel` DMG）、Linux/macOS CLI（`loft`、`loft-front`、`loft-probe`、`loft-bench`）、节点（tar.gz 和 .deb）、面板（tar.gz 和 .deb）、Android 旁路 APK（手机和电视）、Windows portable（`windows-x86-64`、`windows-x86`、`windows-arm64`）、MikroTik 容器、Keenetic Entware 包（`loft-ndms` aarch64、armv7、mipsel，各带 `.sha256`）。GitHub 版本用下一份发布里的 zip 替换自己的目录。iOS / Sailfish 不在这次包里。
+
+1.0.46：GET — Status get_down（node.conf）为响应体上限，默认 256 KiB（下限 16 KiB，上限 1 MiB）。Status pad_max 为空闲 Pad 在途数，默认 8；CmdTune 第 6 字节可下调。1.0.43 客户端忽略尾部（本地 padMax 仍为 4）。Origin HTTP 去掉 TCP_NOTSENT_LOWAT（16 KiB 曾把 GET/WS 下载钉在约 11 Mbit）。协议仍是 loft/1.0。
 
 1.0.45：GET — 双向不再把 body 封顶 96 KiB；胖 Cookie 上行本来就不加 mux 等待，下载仍是 256 KiB（多流 192 KiB）。协议仍是 loft/1.0。
 
