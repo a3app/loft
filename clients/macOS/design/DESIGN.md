@@ -329,7 +329,8 @@ Main / Status        — always mark + pill + action + OVERLAY / FRONT / SOCKS5
                        cards; footer Journal / Reset / Lists / Settings
 Main / Connections   — list, action pill on the left, Several toggle, “+”;
                        footer Import / Export / Settings
-Journal              — 520×480 log, Copy / Export / Clear / Back
+Journal              — 520×480 log, Copy / Export above, Clear / Back below.
+                       loft-front writes English; the window shows the UI language.
 Edit                 — name, QR, kind, Connection / Advanced; no session chrome
 Onboarding           — key → address, or import a file
 Settings             — General: login, Dock, simple, rate, language, updates, diag

@@ -449,14 +449,14 @@ final class FrontHelper {
             handle(line)
             onLine?(line)
             if first || line.contains("state=error") || line.contains("state=connecting") {
-                LoftLog.shared.add("front", FrontExplain.display(line))
+                LoftLog.shared.add("front", line)
             }
             if line.contains("state=on") || line.contains("state=error") {
                 sem?.signal()
             }
             return
         }
-        LoftLog.shared.add("front", FrontExplain.display(line))
+        LoftLog.shared.add("front", line)
         onLine?(line)
         if !err {
             handle(line)
@@ -661,7 +661,7 @@ enum FrontExplain {
         }
     }
 
-    /// Human line for the journal and spark: STATUS, auth, GET, and net errors.
+    /// Short caption for spark and the error state. Journal uses `journal`.
     static func display(_ line: String) -> String {
         var s = line
         // STATUS lines: progress and "on" become short captions; an error keeps its
@@ -764,6 +764,94 @@ enum FrontExplain {
         if low == "ws" { return L10n.t("err_ws") }
         if low == "eof" || low.hasSuffix(" eof") { return L10n.t("err_eof") }
         return s
+    }
+
+    /// UI-language journal line. loft-front stderr stays English in LoftLog.
+    static func journal(_ line: String) -> String {
+        let s = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.isEmpty { return s }
+        if s.hasPrefix("STATUS ") { return display(s) }
+        let low = s.lowercased()
+        if low.hasPrefix("get front ") { return journalGET(String(s.dropFirst(10))) }
+        if low.hasPrefix("tun udp ") {
+            let m = kv(s)
+            if let d = m["dest"], let src = m["src"], let n = m["n"] {
+                return String(format: L10n.t("log.tun_udp"), d, src, n)
+            }
+        }
+        if low.hasPrefix("tun dns ") {
+            let m = kv(s)
+            if let d = m["dest"], let n = m["n"] {
+                return String(format: L10n.t("log.tun_dns"), d, n)
+            }
+        }
+        if low.hasPrefix("tun icmp dest=") {
+            let m = kv(s)
+            if let d = m["dest"], let src = m["src"] {
+                return String(format: L10n.t("log.tun_icmp"), d, src)
+            }
+        }
+        if low.hasPrefix("tun up ") {
+            return String(format: L10n.t("log.tun_up"), String(s.dropFirst(7)))
+        }
+        if low.hasPrefix("error ") {
+            return L10n.t("conn.err") + " · " + display(String(s.dropFirst(6)))
+        }
+        return display(s)
+    }
+
+    /// `get front reset seq=N …` and the other worker lines.
+    private static func journalGET(_ rest: String) -> String {
+        let low = rest.lowercased()
+        if let (seq, err) = after(rest, "reset seq=") {
+            return String(format: L10n.t("log.get_seq"), seq, display(err))
+        }
+        if let (seq, _) = after(rest, "404 seq=") {
+            return String(format: L10n.t("log.get_seq"), seq, "404")
+        }
+        if let (seq, err) = after(rest, "hold seq=") {
+            return String(format: L10n.t("log.get_hold"), seq, display(err))
+        }
+        if let (seq, err) = after(rest, "give up seq=") {
+            return String(format: L10n.t("log.get_seq"), seq, display(err))
+        }
+        if low.hasPrefix("sid lost seq=") {
+            let seq = String(rest.dropFirst("sid lost seq=".count))
+            return String(format: L10n.t("log.get_seq"), seq, L10n.t("log.sid_lost"))
+        }
+        if low.hasPrefix("413 ") {
+            let m = kv(rest)
+            if let seq = m["seq"], let b = m["budget"] {
+                return String(format: L10n.t("log.get_413"), seq, b)
+            }
+        }
+        if low.hasPrefix("tune ") {
+            return String(format: L10n.t("log.get_tune"), String(rest.dropFirst(5)))
+        }
+        return String(format: L10n.t("log.get_tune"), display(rest))
+    }
+
+    /// First token after `prefix`, remainder is the Go error.
+    private static func after(_ s: String, _ prefix: String) -> (String, String)? {
+        guard s.count >= prefix.count else { return nil }
+        let head = s.prefix(prefix.count)
+        guard String(head).lowercased() == prefix.lowercased() else { return nil }
+        let tail = String(s.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        guard !tail.isEmpty else { return nil }
+        if let sp = tail.firstIndex(of: " ") {
+            return (String(tail[..<sp]), String(tail[tail.index(after: sp)...]))
+        }
+        return (tail, "")
+    }
+
+    /// Space-separated `k=v` tokens.
+    private static func kv(_ s: String) -> [String: String] {
+        var m: [String: String] = [:]
+        for p in s.split(separator: " ") {
+            let pair = p.split(separator: "=", maxSplits: 1)
+            if pair.count == 2 { m[String(pair[0])] = String(pair[1]) }
+        }
+        return m
     }
 
     /// True when the line is only “front exited / did not start”, with no STATUS reason.

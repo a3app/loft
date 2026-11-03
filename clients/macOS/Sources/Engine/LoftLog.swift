@@ -86,9 +86,19 @@ final class LoftLog {
     }
 
     /// Joined in-memory lines for the journal window, copy, and export.
+    /// loft-front text is stored English; dump puts it in the UI language.
     func dump() -> String {
-        lock.lock(); defer { lock.unlock() }
-        return lines.joined(separator: "\n")
+        lock.lock()
+        let copy = lines
+        lock.unlock()
+        return copy.map { Self.show($0) }.joined(separator: "\n")
+    }
+
+    /// `HH:mm:ss\tsrc\ttext` → same with `text` through FrontExplain.journal.
+    private static func show(_ stored: String) -> String {
+        let parts = stored.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3 else { return stored }
+        return "\(parts[0])\t\(parts[1])\t\(FrontExplain.journal(String(parts[2])))"
     }
 
     /// Drops in-memory lines and the diag file if diag is on.

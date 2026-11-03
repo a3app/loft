@@ -631,8 +631,8 @@ final class SessionController {
                 let raw = error.localizedDescription
                 if raw == "cancelled" { return }
                 s.helper.stop()
+                LoftLog.shared.add("loft", "error \(raw)")
                 let shown = FrontExplain.display(raw)
-                LoftLog.shared.add("loft", "error \(shown)")
                 self.set(p.id, .error, err: shown, ip: "")
                 self.rebuildPins()
                 self.scheduleReconnect(s)
