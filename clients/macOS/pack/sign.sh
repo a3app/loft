@@ -19,6 +19,11 @@ if [ ! -d "$APP/Contents/MacOS" ]; then
 	exit 1
 fi
 
+# SetFile -a B writes com.apple.FinderInfo. codesign --force treats it as
+# detritus ("resource fork, Finder information, or similar detritus not
+# allowed") on the inner loft binary. Strip, sign, then SetFile again.
+xattr -cr "$APP"
+
 extra="--entitlements $ENT"
 if [ "$CODESIGN_ID" != "-" ]; then
 	extra="$extra --options runtime --timestamp"
